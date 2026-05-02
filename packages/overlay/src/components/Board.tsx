@@ -11,6 +11,7 @@ import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { deliveryGoalProgress } from "../utils/goal-workflow";
+import { orderedReachableCardIDs } from "../utils/card-tree";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
 import { ArchitectPanel } from "./ArchitectPanel";
@@ -619,7 +620,7 @@ export function Board(props: BoardProps) {
 
   /** Agent cards for a given stage, in chronological order. */
   function agentCardsForStage(stage: string): CardNode[] {
-    const ids = Object.keys(cardTreeStore.cards);
+    const ids = orderedReachableCardIDs();
     const matched: CardNode[] = [];
     for (const id of ids) {
       const card = cardTreeStore.cards[id];

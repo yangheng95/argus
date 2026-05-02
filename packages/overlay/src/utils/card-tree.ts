@@ -158,6 +158,27 @@ export function collectCardText(node: CardNode): string {
   return chunks.filter(Boolean).join("\n\n");
 }
 
+export function reachableCardIDsFromTree(
+  order: readonly string[],
+  cards: Record<string, Pick<CardNode, "childIDs"> | undefined>,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const visit = (id: string) => {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    out.push(id);
+    const card = cards[id];
+    for (const childID of card?.childIDs ?? []) visit(childID);
+  };
+  for (const id of order) visit(id);
+  return out;
+}
+
+export function orderedReachableCardIDs(): string[] {
+  return reachableCardIDsFromTree(cardTreeStore.order, cardTreeStore.cards);
+}
+
 // ── Latest-activity preview (collapsed header) ──
 // Walks the subtree and keeps only the single most recent activity by
 // (card.time, part-index). An activity is either:
