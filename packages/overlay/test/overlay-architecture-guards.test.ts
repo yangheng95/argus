@@ -58,8 +58,8 @@ const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
   "right-panel-tab": 3,
   "executor-chip": 1,
   "chat-toolbar-btn": 3,
-  "titlebar-menubar-trigger": 1,
-  "titlebar-status-icon": 1,
+  "titlebar-menubar-trigger": 0,
+  "titlebar-status-icon": 0,
 }
 
 function countThemeLayoutOverrides(css: string): number {
@@ -242,7 +242,7 @@ describe("overlay architecture guards", () => {
     for (const className of LEGACY_BUTTON_CLASSES) {
       expect(counts[className]).toBeLessThanOrEqual(LEGACY_BUTTON_CALLER_LIMITS[className]!)
     }
-    expect(Object.values(counts).reduce((total, value) => total + value, 0)).toBeLessThanOrEqual(75)
+    expect(Object.values(counts).reduce((total, value) => total + value, 0)).toBeLessThanOrEqual(73)
   })
 
   test("new component modules stay below the split threshold", () => {

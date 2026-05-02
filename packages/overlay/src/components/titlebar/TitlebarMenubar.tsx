@@ -15,6 +15,7 @@ import {
   setDirectory,
 } from "../../services/workspace";
 import { t } from "../../utils/i18n";
+import { Button } from "../ui/Button";
 
 type MenuID = "workspace" | "model" | "run" | "tools" | "view" | "help";
 
@@ -152,9 +153,12 @@ export function TitlebarStatusCluster(props: { onOpenLog: () => void }) {
   // indicator, and it has no other entry point on the titlebar.
   return (
     <div class="titlebar-status-cluster" data-no-drag="true">
-      <button
+      <Button
         type="button"
-        class="titlebar-status-icon"
+        variant="ghost"
+        size="icon"
+        tone="neutral"
+        data-ui="titlebar-status-icon"
         aria-label={t("titlebar.logs")}
         title={t("titlebar.logs")}
         onClick={props.onOpenLog}
@@ -163,7 +167,7 @@ export function TitlebarStatusCluster(props: { onOpenLog: () => void }) {
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
         </svg>
-      </button>
+      </Button>
     </div>
   );
 }
@@ -291,10 +295,13 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
       <For each={menus()}>
         {(menu) => (
           <div class="titlebar-menubar-slot">
-            <button
+            <Button
               type="button"
-              class="titlebar-menubar-trigger"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
               role="menuitem"
+              data-ui="titlebar-menubar-trigger"
               data-menu-trigger={menu.id}
               data-compact={menu.compact}
               data-active={openMenu() === menu.id ? "true" : "false"}
@@ -306,8 +313,9 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
               onClick={() => open(menu.id)}
               onKeyDown={(event) => triggerKey(event, menu.id)}
             >
-              {menu.label}
-            </button>
+              <span class="titlebar-menu-trigger-label">{menu.label}</span>
+              <span class="titlebar-menu-trigger-compact" aria-hidden="true">{menu.compact}</span>
+            </Button>
             <Show when={openMenu() === menu.id}>
               <div
                 id={`titlebar-menu-${menu.id}`}
