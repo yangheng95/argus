@@ -8,6 +8,24 @@ const { default: puppeteer } = await import(
 
 await ensureOverlayDist()
 
+async function clickVisible(tab: Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>["newPage"]>>, selector: string) {
+  await tab.waitForSelector(selector)
+  const point = await tab.evaluate((value) => {
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>(value))
+    const node = nodes.find((candidate) => {
+      const style = getComputedStyle(candidate)
+      const rect = candidate.getBoundingClientRect()
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
+    })
+    if (!node) return null
+    node.scrollIntoView({ block: "center", inline: "nearest" })
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }, selector)
+  if (!point) throw new Error(`No visible element for ${selector}`)
+  await tab.mouse.click(point.x, point.y)
+}
+
 async function browser() {
   const list = [
     "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -200,6 +218,7 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
               return {
                 serverUrl,
                 autoServer: false,
+                directory: "D:/overlay/workspace/app",
               }
             }
             if (command === "overlay_settings_save") {
@@ -237,7 +256,7 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
     await tab.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)
 
     await tab.waitForSelector('[data-testid="provider-auth-openai"]')
-    await tab.click('[data-testid="provider-auth-openai"]')
+    await clickVisible(tab, '[data-testid="provider-auth-openai"]')
     await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
     await tab.click("#btnAppDialogOk")
     for (let i = 0; i < 50 && callbackCalls === 0; i += 1) {

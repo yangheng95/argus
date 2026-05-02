@@ -3,7 +3,7 @@
 // clickable badge. Double-clicking triggers a server restart then reloads the
 // page, exactly mirroring lines 9394–9408 and setConnStatus (3817–3826).
 
-import { Show, createMemo } from "solid-js";
+import { createMemo } from "solid-js";
 import { messageStore } from "../store/messages";
 import { appStore, setConnectionStatus } from "../store/app";
 import { settingsStore } from "../store/settings";
@@ -87,8 +87,8 @@ export function ConnectionBadge(props: ConnectionBadgeProps) {
     const p = port();
     const pidValue = pid();
     const parts = [label()];
-    if (p) parts.push(`:${p}`);
-    if (pidValue) parts.push(`pid ${pidValue}`);
+    if (p) parts.push(`${t("titlebar.connection.port")} ${p}`);
+    if (pidValue) parts.push(`${t("titlebar.connection.pid")} ${pidValue}`);
     return parts.join(" · ");
   });
 
@@ -105,12 +105,6 @@ export function ConnectionBadge(props: ConnectionBadgeProps) {
       }}
     >
       <span class="conn-badge__label">{label()}</span>
-      <Show when={status() === "online" && port()}>
-        <span class="conn-badge__port">:{port()}</span>
-      </Show>
-      <Show when={status() === "online" && pid()}>
-        <span class="conn-badge__pid">pid {pid()}</span>
-      </Show>
     </span>
   );
 }

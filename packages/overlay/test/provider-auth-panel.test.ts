@@ -148,6 +148,7 @@ async function withOverlay(data: HarnessData, handler: (input: {
               return {
                 serverUrl,
                 autoServer: false,
+                directory: "D:/overlay/workspace/app",
               }
             }
             if (command === "overlay_settings_save") {
@@ -191,6 +192,24 @@ async function openProviderSettings(tab: Page) {
   await tab.click('[data-testid="titlebar-open-providers"]')
   await tab.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)
   await tab.waitForSelector('[data-config-panel="providers"].active')
+}
+
+async function clickVisible(tab: Page, selector: string) {
+  await tab.waitForSelector(selector)
+  const point = await tab.evaluate((value) => {
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>(value))
+    const node = nodes.find((candidate) => {
+      const style = getComputedStyle(candidate)
+      const rect = candidate.getBoundingClientRect()
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
+    })
+    if (!node) return null
+    node.scrollIntoView({ block: "center", inline: "nearest" })
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }, selector)
+  if (!point) throw new Error(`No visible element for ${selector}`)
+  await tab.mouse.click(point.x, point.y)
 }
 
 async function dialogState(tab: Page) {
@@ -401,7 +420,7 @@ test("overlay oauth auth handles prompt-driven authorize flow and pasted redirec
     async (tab, state) => {
       await openProviderSettings(tab)
       await tab.waitForSelector('[data-testid="provider-auth-openai-codex"]')
-      await tab.click('[data-testid="provider-auth-openai-codex"]')
+      await clickVisible(tab, '[data-testid="provider-auth-openai-codex"]')
       const firstDialog = await dialogState(tab)
       if (!firstDialog.inputVisible && !firstDialog.selectVisible) await acceptDialog(tab)
       await submitDialogSelect(tab, "manual")
@@ -559,7 +578,7 @@ test("overlay executes prompt-driven api auth methods without relying on tui", a
     async (tab, state) => {
       await openProviderSettings(tab)
       await tab.waitForSelector('[data-testid="provider-auth-custom-api"]')
-      await tab.click('[data-testid="provider-auth-custom-api"]')
+      await clickVisible(tab, '[data-testid="provider-auth-custom-api"]')
       await submitDialogInput(tab, "team-a")
       await submitDialogSelect(tab, "eu")
 

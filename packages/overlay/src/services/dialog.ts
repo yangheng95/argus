@@ -95,6 +95,7 @@ export function renderAboutVersion(): void {
     [t("about.rt_overlay"), "v" + OVERLAY_VERSION],
     [t("about.rt_core"), (config as any)?.version || t("about.rt_unavailable")],
     [t("about.rt_server"), settingsStore.serverUrl || "-"],
+    [t("about.rt_pid"), typeof appStore.serverPid === "number" ? String(appStore.serverPid) : "-"],
     [t("about.rt_connection"), connected ? t("about.rt_connected") : t("about.rt_disconnected")],
     [t("about.rt_directory"), settingsStore.directory || "-"],
     [t("about.rt_executor"), settingsStore.executor || "-"],

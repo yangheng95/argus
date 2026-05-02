@@ -38,6 +38,10 @@ test("closed titlebar menus do not block inspector interactions", async () => {
 
   try {
     const tab = await page.newPage()
+    await tab.evaluateOnNewDocument((portValue) => {
+      localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+      localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
+    }, server.port)
     await tab.goto(`${app}/ui/index.html`, { waitUntil: "domcontentloaded" })
 
     expect(await tab.$("[data-testid^='titlebar-menu-']")).toBeNull()
