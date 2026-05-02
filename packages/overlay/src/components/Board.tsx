@@ -19,6 +19,7 @@ import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel";
 import { InteractionCardList, type InteractionData } from "./InteractionCard";
 import { BoardIntro } from "./BoardIntro";
 import { taskScopeSectionVisibility } from "../utils/task-scope-sections";
+import { Button } from "./ui/Button";
 
 // ── Status utilities ──
 
@@ -411,28 +412,32 @@ export function TaskActionsPanel(props: TaskActionsPanelProps) {
     <Show when={hasButtons()}>
       <div class="task-actions-buttons">
         <Show when={controls().canRetry}>
-          <button
+          <Button
             type="button"
-            class="btn btn-primary"
+            variant="solid"
+            size="md"
+            tone="accent"
             data-task-action="retry"
             title={t("task.action.retry_title")}
             aria-label={t("task.action.retry_title")}
             onClick={() => props.onRetry?.()}
           >
             {t("task.action.retry")}
-          </button>
+          </Button>
         </Show>
         <Show when={controls().canReplan}>
-          <button
+          <Button
             type="button"
-            class="btn btn-ghost"
+            variant="ghost"
+            size="md"
+            tone="neutral"
             data-task-action="replan"
             title={t("task.action.replan_title")}
             aria-label={t("task.action.replan_title")}
             onClick={() => props.onReplan?.()}
           >
             {t("task.action.replan")}
-          </button>
+          </Button>
         </Show>
       </div>
     </Show>

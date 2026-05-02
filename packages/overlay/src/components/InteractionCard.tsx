@@ -21,6 +21,7 @@ import {
   replyInteraction,
   rejectInteraction,
 } from "../services/interaction-reply";
+import { Button } from "./ui/Button";
 
 export interface InteractionQuestion {
   header?: string;
@@ -212,8 +213,11 @@ export function InteractionCard(props: { interaction: InteractionData }) {
           when={isPermission()}
           fallback={
             <>
-              <button
-                class="btn btn-primary"
+              <Button
+                type="button"
+                variant="solid"
+                size="md"
+                tone="accent"
                 data-action="answer"
                 disabled={busy()}
                 title={t("interaction.answer_title")}
@@ -221,9 +225,12 @@ export function InteractionCard(props: { interaction: InteractionData }) {
                 onClick={submitAnswers}
               >
                 {t("interaction.answer")}
-              </button>
-              <button
-                class="btn btn-ghost"
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="md"
+                tone="neutral"
                 data-action="skip"
                 disabled={busy()}
                 title={t("interaction.skip_title")}
@@ -231,12 +238,15 @@ export function InteractionCard(props: { interaction: InteractionData }) {
                 onClick={reject}
               >
                 {t("interaction.skip")}
-              </button>
+              </Button>
             </>
           }
         >
-          <button
-            class="btn btn-primary"
+          <Button
+            type="button"
+            variant="solid"
+            size="md"
+            tone="accent"
             data-action="always"
             disabled={busy()}
             title={t("interaction.always_allow_title")}
@@ -244,9 +254,12 @@ export function InteractionCard(props: { interaction: InteractionData }) {
             onClick={() => resolvePermission("always")}
           >
             {t("interaction.always_allow")}
-          </button>
-          <button
-            class="btn btn-ghost"
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="md"
+            tone="neutral"
             data-action="once"
             disabled={busy()}
             title={t("interaction.allow_once_title")}
@@ -254,9 +267,12 @@ export function InteractionCard(props: { interaction: InteractionData }) {
             onClick={() => resolvePermission("once")}
           >
             {t("interaction.allow_once")}
-          </button>
-          <button
-            class="btn btn-ghost"
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="md"
+            tone="neutral"
             data-action="reject"
             disabled={busy()}
             title={t("interaction.reject_title")}
@@ -264,7 +280,7 @@ export function InteractionCard(props: { interaction: InteractionData }) {
             onClick={reject}
           >
             {t("interaction.reject")}
-          </button>
+          </Button>
         </Show>
       </div>
     </div>
