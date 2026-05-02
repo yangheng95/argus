@@ -10731,6 +10731,112 @@
         ]
       }
     },
+    "/preview/frontend": {
+      "get": {
+        "operationId": "preview.frontend",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ports",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "allowUnowned",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "summary": "Resolve live frontend preview URL",
+        "description": "Resolve a loopback HTTP frontend page for the active project without serving static HTML.",
+        "responses": {
+          "200": {
+            "description": "Frontend preview resolution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "port_probe"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "port": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "checkedPorts": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "source",
+                    "port",
+                    "checkedPorts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.preview.frontend({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/shutdown": {
       "post": {
         "operationId": "server.shutdown",
@@ -32345,6 +32451,22 @@
               },
               "schedule": {
                 "$ref": "#/components/schemas/PermissionActionConfig"
+              }
+            }
+          },
+          "preview": {
+            "description": "Frontend preview configuration.",
+            "type": "object",
+            "properties": {
+              "ports": {
+                "description": "Loopback ports to probe when resolving the embedded live frontend preview.",
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                }
               }
             }
           },

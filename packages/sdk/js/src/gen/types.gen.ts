@@ -2366,6 +2366,15 @@ export type Config = {
     task?: PermissionActionConfig
     schedule?: PermissionActionConfig
   }
+  /**
+   * Frontend preview configuration.
+   */
+  preview?: {
+    /**
+     * Loopback ports to probe when resolving the embedded live frontend preview.
+     */
+    ports?: Array<number>
+  }
   compaction?: {
     /**
      * Enable automatic compaction when context is full
@@ -7250,6 +7259,32 @@ export type GatewayChannelMessageResponses = {
 }
 
 export type GatewayChannelMessageResponse = GatewayChannelMessageResponses[keyof GatewayChannelMessageResponses]
+
+export type PreviewFrontendData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    ports?: string
+    allowUnowned?: "true" | "false"
+  }
+  url: "/preview/frontend"
+}
+
+export type PreviewFrontendResponses = {
+  /**
+   * Frontend preview resolution
+   */
+  200: {
+    url: string | null
+    source: "port_probe" | null
+    port: number | null
+    checkedPorts: Array<number>
+    reason?: string
+  }
+}
+
+export type PreviewFrontendResponse = PreviewFrontendResponses[keyof PreviewFrontendResponses]
 
 export type ServerShutdownData = {
   body?: never
