@@ -8,8 +8,17 @@ Trigger: user feedback (2026-05-03):
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
 > CSS 和面板组件。你觉得最大的问题在哪儿，应该如何设计方案？
 
-This doc captures the proposed architecture so the user can
-review the full plan before iter56+ starts moving code.
+Latest user clarification:
+
+> God CSS 只能存档不能删除，作为备份参考。最终目的是设计语言统一，
+> 例如不要圆角和非圆角大范围混用，各个栏 header 要统一风格，
+> 不要大小不一、形式各异。必须彻底根除所有技术债，不留后患。
+
+This doc is the active implementation contract for the overlay
+UI/UX refactor. It is not only a file-layout cleanup. The end
+state must make design language enforceable: one set of
+primitive shapes, one header grammar, one spacing/density scale,
+one theme contract, and no runtime God CSS path left behind.
 
 ## Quantified current state
 
@@ -88,6 +97,31 @@ editing all three. iter31 caught a real bug here:
 `syncSectionPhases` to silently no-op and the operator never
 saw the delivery phase highlight transition.
 
+### 7. Design language has no enforceable contract
+
+The current UI mixes rounded and square treatments, multiple
+header heights, unrelated tab/button shapes, and theme-specific
+chrome differences. That makes a surface look "fixed" in one
+theme while still drifting in another. The refactor is not done
+until these visual decisions are encoded as shared primitives
+and tests, not as scattered selector overrides.
+
+Concrete acceptance targets:
+
+- Column headers use one shared surface/header grammar: same
+  height scale, typography, alignment, border treatment, and
+  action placement across titlebar/sidebar/conversation/right
+  panel/settings where the semantic role is the same.
+- Radius policy is global and explicit. Large-scale mixing of
+  rounded and non-rounded chrome is forbidden; exceptions must
+  be named primitive variants, not ad hoc per-surface CSS.
+- Control density is tokenized. Buttons, tabs, pills, inputs,
+  chips, and menus must derive size from primitive tokens so
+  one theme cannot silently change layout.
+- Theme files only swap palette tokens. They cannot change
+  layout, spacing, radius, borders, shadows, display, or
+  responsive behavior.
+
 ## Proposed architecture
 
 ```
@@ -147,13 +181,13 @@ packages/overlay/src/components/
 
 ## Migration phases
 
-| Phase | Scope                                                                                                                          | Estimated iters |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------ | --------------- |
-| **1** | Land empty directory tree, the 5 lint rules, and an empty `App.tsx` shell. Existing code untouched.                            | 1 iter          |
-| **2** | Button primitive ships first. Migrate 8+ existing button-like impls one at a time, each its own commit.                        | 8–12            |
-| **3** | Pill / Tab / Card / Menu / Input / EmptyHint primitives ship. Existing surfaces consume them progressively.                    | 30+             |
-| **4** | Surface migration — Titlebar → Sidebar → Conversation → Inspector → Composer → Settings, each surface one PR.                  | 50+             |
-| **5** | Delete legacy `styles.css` residue. Collapse `main.tsx` 18 mounts into single `App.tsx`. Remove `index.html` placeholder divs. | 5–10            |
+| Phase | Scope                                                                                                                                                                     | Estimated iters |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| **1** | Land empty directory tree, the 5 lint rules, and an empty `App.tsx` shell. Existing code untouched.                                                                       | 1 iter          |
+| **2** | Button primitive ships first. Migrate 8+ existing button-like impls one at a time, each its own commit.                                                                   | 8–12            |
+| **3** | Pill / Tab / Card / Menu / Input / EmptyHint primitives ship. Existing surfaces consume them progressively.                                                               | 30+             |
+| **4** | Surface migration — Titlebar → Sidebar → Conversation → Inspector → Composer → Settings, each surface one PR.                                                             | 50+             |
+| **5** | Retire legacy God CSS from runtime imports, archive it as reference-only backup, collapse `main.tsx` 18 mounts into single `App.tsx`, and remove dead mount placeholders. | 5–10            |
 
 Total: **100–120 iters** within the 1000-iter target.
 
@@ -161,25 +195,49 @@ Total: **100–120 iters** within the 1000-iter target.
 
 Phases 2–4 must not leave parallel runtime sources. Each primitive
 migration replaces one caller group in the same commit that removes
-the matching legacy CSS selectors. The temporary coexistence is only
-file-level scaffolding: empty directories and unused primitives may
-exist before a surface consumes them, but once a runtime caller moves,
-its old selector path is deleted with a regression test proving the
-old class is no longer referenced.
+the matching legacy CSS selectors from the runtime stylesheet. The
+temporary coexistence is only file-level scaffolding: empty
+directories and unused primitives may exist before a surface consumes
+them, but once a runtime caller moves, its old runtime selector path
+is removed with a regression test proving the old class is no longer
+referenced.
 
 - Each primitive ships with a regression test that asserts the
   matching legacy classes have zero JSX callers.
-- The same commit that switches a caller to the primitive deletes
-  the legacy selectors for that caller group.
+- The same commit that switches a caller to the primitive removes
+  the legacy runtime selectors for that caller group.
 - Pre-push checks track legacy `styles.css` debt so the count cannot
   increase between iterations.
 
+## God CSS Archive Rule
+
+`packages/overlay/src/styles.css` and other God CSS sources must not
+be physically deleted as historical artifacts. They must be retired
+from all runtime imports and moved to an archive/reference location
+with an explicit name such as
+`docs/archive/overlay-god-css/styles.legacy-YYYY-MM-DD.css`.
+
+The archive has exactly one purpose: backup and comparison during
+review. It is forbidden for production code, tests, Vite, or any
+runtime import path to consume archived CSS. The archive therefore
+does not create a dual source of truth: the active source remains the
+token/primitive/surface/theme tree, while the God CSS is a read-only
+reference.
+
+Completion requires all of the following:
+
+- No runtime import of archived God CSS.
+- No new selector may be added to archived God CSS.
+- Tests prove migrated legacy classes have zero runtime callers.
+- The active styles tree encodes every surviving visual decision via
+  tokens, primitives, surfaces, and palette-only themes.
+
 ## What this is NOT
 
-- **Not** a full UI redesign. The visual contract is the
-  iter15-54 calm/flat trajectory the user has signed off on
-  via screenshots. This refactor preserves the rendered
-  visual; only the code structure changes.
+- **Not** a decorative redesign pass. The goal is deeper:
+  normalize the design language so headers, radius, density,
+  borders, shadows, and interaction states are consistent and
+  testable across surfaces and themes.
 - **Not** a runtime behavior change. Same DOM contract for
   external integrations (`dom.ts` accessors stay live during
   Phase 1–4; deleted in Phase 5 per the migration map).
@@ -192,9 +250,14 @@ old class is no longer referenced.
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | 17K line CSS rewrite blast radius                                    | Per-selector / per-primitive iters; never bulk rewrite                                                 |
 | Visual regression during phase migration                             | Each iter runs `agent-models-panel` puppeteer e2e + adds visual snapshot tests for the touched surface |
-| Temporary rule-8 violation (legacy + new co-existing)                | Bounded by Phase 5 deletion + per-iter regression tests asserting legacy callers reach zero            |
+| Temporary rule-8 violation (legacy + new co-existing)                | Bounded by Phase 5 runtime retirement + per-iter regression tests asserting legacy callers reach zero  |
 | `index.html` 18-mount → single `App.tsx` breaking `dom.ts` consumers | Phase 5 only; `dom.ts` accessors stay live through Phase 4                                             |
 | 100+ iters of refactor competing with user feature requests          | User feature feedback preempts refactor iter; refactor runs as background autonomous-loop work         |
+
+Update: Phase 5 does not delete God CSS artifacts. It archives them
+outside runtime imports. The risk is therefore stale archive
+confusion, not data loss; mitigation is a test that fails if archived
+CSS is imported by app code.
 
 ## Recommendation
 
