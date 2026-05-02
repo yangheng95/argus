@@ -3391,11 +3391,10 @@ body[data-theme="light"] .section-badge {
   min-width: 0;
 }
 
+/* iter12: change-row subline (path / context). Plain subtitle. */
 .change-subline {
   font-size: var(--ui-font-control);
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .change-meta {
@@ -4257,11 +4256,10 @@ body[data-resizing="row"] * {
   gap: 2px;
 }
 
+/* iter12: diff-preview file-scope tag — plain context label. */
 .diff-preview-scope {
   font-size: var(--ui-font-control);
   color: var(--text-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .diff-preview-path {
@@ -4779,11 +4777,11 @@ code .file-link:hover {
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
 }
+/* iter12: todo-card label ("In progress", "Pending", …). Plain
+   subtitle, no pill chrome. */
 .msg-todo-card__label {
   color: var(--text-soft);
   font-size: var(--ui-font-small);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .msg-todo-card__meta {
   flex: 0 0 auto;
@@ -4952,12 +4950,11 @@ code .file-link:hover {
   background: color-mix(in srgb, var(--subtle-2) 88%, transparent);
   border: 1px solid var(--subtle-4);
 }
+/* iter12: read-reminder label — plain content subtitle. */
 .msg-read-reminder__label {
   color: var(--text-muted);
   font-size: var(--ui-font-small);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .msg-read-reminder__body .msg-text {
   font-size: var(--ui-font-control);
@@ -9361,12 +9358,11 @@ body[data-theme="light"] .config-close-btn:hover {
 .log-detail-block + .log-detail-block {
   margin-top: 8px;
 }
+/* iter12: log-viewer detail block title. Plain subtitle. */
 .log-detail-title {
   margin-bottom: 4px;
   color: var(--text-muted);
   font-size: var(--ui-font-control);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .log-detail-pre {
   margin: 0;
@@ -13071,12 +13067,13 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   background: var(--subtle-1);
   border: 1px solid var(--border);
 }
+/* iter12: board-intro section title ("Modes", "Agents"). Plain
+   subtitle, sits in the same Title Case register as section
+   titles elsewhere on the board. */
 .board-intro__section-title {
   margin: 0;
   font-size: var(--ui-font-control);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--text-muted);
 }
 .board-intro__modes,
