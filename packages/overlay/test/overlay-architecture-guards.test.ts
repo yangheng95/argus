@@ -27,6 +27,10 @@ function count(pattern: RegExp, text: string): number {
   return Array.from(text.matchAll(pattern)).length
 }
 
+function withoutComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")
+}
+
 const THEME_LAYOUT_PROPERTIES =
   /^(?:display|position|inset|top|right|bottom|left|z-index|overflow|box-sizing|grid(?:-.+)?|flex(?:-.+)?|align-.+|justify-.+|place-.+|gap|row-gap|column-gap|margin(?:-.+)?|padding(?:-.+)?|width|height|min-width|min-height|max-width|max-height|border(?:-.+)?|border-radius|box-shadow|transform|translate|scale)$/
 const THEME_CHROME_TOKEN =
@@ -246,6 +250,15 @@ describe("overlay architecture guards", () => {
     const providersPanel = readText(join(OVERLAY_ROOT, "src/components/settings/ProvidersPanel.tsx"))
     expect(count(/<SurfaceHeader/g, providersPanel)).toBe(1)
     expect(providersPanel).not.toContain("config-panel-group-title")
+  })
+
+  test("config writers do not re-fetch config after updateConfig writes through the store", () => {
+    const providersPanel = withoutComments(readText(join(OVERLAY_ROOT, "src/components/settings/ProvidersPanel.tsx")))
+    const channelsPanel = withoutComments(readText(join(OVERLAY_ROOT, "src/components/settings/ChannelsPanel.tsx")))
+    expect(providersPanel).not.toContain('apiJson("config")')
+    expect(providersPanel).not.toContain('setAppStore("config"')
+    expect(channelsPanel).not.toContain('apiJson("config")')
+    expect(channelsPanel).not.toContain("loadConfigInfo")
   })
 
   test("new primitive style files use data attributes for variants and never use important", () => {

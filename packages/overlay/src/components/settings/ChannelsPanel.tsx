@@ -12,10 +12,8 @@ import {
   Show,
 } from "solid-js";
 import { t } from "../../utils/i18n";
-import { apiJson } from "../../services/api";
 import { appStore } from "../../store/app";
 import { updateConfig } from "../../services/config";
-import { loadConfigInfo } from "../../services/init";
 import { nativeOpen } from "../../utils/native";
 import { Button } from "../ui/Button";
 
@@ -132,27 +130,21 @@ export default function ChannelsPanel() {
     if (!entry) return;
     setSaving(true);
     try {
-      // Mirrors original: GET /config → patch channel[id] → PATCH /config
-      const config = await apiJson("config");
-      config.channel = config.channel || {};
-      const next: Record<string, any> = {};
-      for (const field of entry.fields) {
-        if (field.type === "boolean") {
-          next[field.key] = fieldValues()[field.key] !== false;
-        } else {
-          const value = String(fieldValues()[field.key] ?? "").trim();
-          if (value) next[field.key] = value;
+      await updateConfig((config) => {
+        config.channel = config.channel || {};
+        const next: Record<string, any> = {};
+        for (const field of entry.fields) {
+          if (field.type === "boolean") {
+            next[field.key] = fieldValues()[field.key] !== false;
+          } else {
+            const value = String(fieldValues()[field.key] ?? "").trim();
+            if (value) next[field.key] = value;
+          }
         }
-      }
-      config.channel[entry.id] = next;
-      await apiJson("config", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+        config.channel[entry.id] = next;
       });
       showNotice(t("common.saved"), "active");
       closeEdit();
-      await loadConfigInfo();
     } catch (e) {
       showNotice(e instanceof Error ? e.message : String(e), "error");
     } finally {
@@ -170,7 +162,6 @@ export default function ChannelsPanel() {
         if (Object.keys(current.server).length === 0) delete current.server;
       });
       showNotice(t("common.saved"), "active");
-      await loadConfigInfo();
     } catch (e) {
       showNotice(e instanceof Error ? e.message : String(e), "error");
     } finally {
