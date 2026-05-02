@@ -147,10 +147,11 @@ export namespace DeliveryAgent {
       buildUserParts: () => buildPromptParts(textPrompt),
     })
 
-    const verdict = out.collector.verdict
-    if (!verdict) {
+    const rawVerdict = out.collector.verdict
+    if (!rawVerdict) {
       throw new Error("delivery: runAgentSessionWithRetry returned without a verdict")
     }
+    const verdict = DeliveryVerdict.parse(rawVerdict)
 
     log.info("delivery agent output", {
       verdict: verdict.verdict,

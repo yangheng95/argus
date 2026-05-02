@@ -30,7 +30,8 @@ import {
 } from "./verdict"
 
 export interface DeliveryCollector {
-  verdict?: DeliveryVerdictType
+  /** Raw collector slot. Callers must parse with DeliveryVerdict before using it. */
+  verdict?: unknown
   finalized: boolean
 }
 
@@ -90,7 +91,11 @@ export function createDeliveryOutputTools(input?: {
         "verdict='rejected' with rejection_details instead of fabricating success signals.",
       inputSchema: DeliveryVerdict,
       execute: async (input) => {
-        const obj: DeliveryVerdictType = input
+        const parsed = DeliveryVerdict.safeParse(input)
+        if (!parsed.success) {
+          return `Error: submit_verdict payload failed DeliveryVerdict schema validation: ${parsed.error.message}`
+        }
+        const obj: DeliveryVerdictType = parsed.data
 
         if (obj.verdict === "accepted") {
           if (typeof obj.launch_command === "string") {

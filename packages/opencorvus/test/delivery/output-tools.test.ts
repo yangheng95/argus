@@ -21,10 +21,32 @@ describe("delivery output tools", () => {
     const kit = createDeliveryOutputTools()
 
     const result = await kit.tools.submit_verdict.execute!(acceptedBase, {} as any)
+    const verdict = DeliveryVerdict.parse(kit.getCollector().verdict)
 
     expect(result).toContain("verdict=accepted")
-    expect(kit.getCollector().verdict?.verdict).toBe("accepted")
-    expect(kit.getCollector().verdict?.startup_verification).toBeUndefined()
+    expect(verdict.verdict).toBe("accepted")
+    expect(verdict.startup_verification).toBeUndefined()
+  })
+
+  test("applies DeliveryVerdict schema defaults before collecting payloads", async () => {
+    const kit = createDeliveryOutputTools()
+
+    const result = await kit.tools.submit_verdict.execute!(
+      {
+        verdict: "accepted",
+        summary: "Verified with direct evidence.",
+        tool_call_evidence: [{
+          tool: "query_metric_trajectory",
+          passed: true,
+          detail: "trajectory checked",
+        }],
+      },
+      {} as any,
+    )
+    const verdict = DeliveryVerdict.parse(kit.getCollector().verdict)
+
+    expect(result).toContain("verdict=accepted")
+    expect(verdict.deferred_checks).toEqual([])
   })
 
   test("requires startup evidence only when startup facet is required", async () => {
@@ -48,7 +70,7 @@ describe("delivery output tools", () => {
     )
 
     expect(accepted).toContain("startup=ok")
-    expect(kit.getCollector().verdict?.verdict).toBe("accepted")
+    expect(DeliveryVerdict.parse(kit.getCollector().verdict).verdict).toBe("accepted")
   })
 
   test("rejects accepted verdict while manifest gate is failed", async () => {
@@ -124,6 +146,6 @@ describe("delivery output tools", () => {
 
     expect(affectedGoalIDs(parsed)).toEqual([])
     expect(result).toContain("1 rejection_details across 0 goal(s)")
-    expect(kit.getCollector().verdict?.verdict).toBe("rejected")
+    expect(DeliveryVerdict.parse(kit.getCollector().verdict).verdict).toBe("rejected")
   })
 })

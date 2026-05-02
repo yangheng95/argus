@@ -49,6 +49,12 @@
    - manifest/runtime/visual host gate failed 时只接受 LLM rejected verdict，并追加 host evidence 到 `deferred_checks` / `tool_call_evidence` 供审计。
    - host gate failed 且没有 LLM rejected verdict 时返回 `undefined`，由 service 抛错。
 
+6. `packages/opencorvus/src/delivery/output-tools.ts` / `agent.ts`
+   - `DeliveryVerdict` schema 是模型 verdict 进入 delivery 管线的唯一结构来源。
+   - `submit_verdict.execute` 显式解析 tool payload，collector 只记录 schema 解析后的对象。
+   - `DeliveryAgent.verify` 出口再次用同一 schema 收紧 collector，防止测试、mock 或异常工具边界绕过解析。
+   - 下游 arbiter 不做 `?? []` 或合成默认值；缺失字段必须在 schema parse 时兑现，`null` 等非法 payload 必须 fail loud。
+
 ## 4. 边界行为
 
 | 场景 | 行为 |
@@ -66,6 +72,7 @@
 - `delivery/agent.test.ts`：DeliveryAgent prompt 包含 `finalGate.status=failed`、failed IDs、`owned_paths`、executor `files_changed`，并把 manifest gate 传给 output tool。
 - `delivery/service.test.ts`：manifest failed 时仍调用 DeliveryAgent，并把 agent 返回的 `goal_id` 归因保留到最终 verdict。
 - `delivery/arbiter.test.ts`：manifest/runtime/visual failed 不再合成归因；只保留 agent rejection，并追加 host gate evidence。
+- `delivery/verdict.test.ts`：`DeliveryVerdict.parse` 会兑现 `deferred_checks=[]` 默认值，并拒绝 `null`。
 
 ## 6. 验证命令
 
