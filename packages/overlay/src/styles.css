@@ -3610,7 +3610,11 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .criteria-summary-item--failed { color: var(--bad); }
 .criteria-summary-item--skipped { color: var(--text-muted); }
 .criteria-family { display: flex; flex-direction: column; gap: calc(4px * var(--ui-scale)); }
-.criteria-family-head { font-size: var(--ui-font-small); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+/* Tier-2 section subtitle — Title Case is produced by familyLabel() in
+   utils/criteria.ts, so the CSS does NOT force-uppercase. Keeping this
+   parallel with .gwg-objective-label / .gwg-done-definition-label so the
+   right panel reads as a single typographic hierarchy. */
+.criteria-family-head { font-size: var(--ui-font-control); font-weight: 600; color: var(--text-muted); letter-spacing: 0.01em; }
 .criteria-item { display: grid; grid-template-columns: auto 1fr; column-gap: calc(8px * var(--ui-scale)); padding: calc(4px * var(--ui-scale)) 0; border-bottom: 1px solid var(--subtle-3); list-style: none; }
 .criteria-item:last-child { border-bottom: none; }
 .criteria-item .criteria-name { font-family: var(--mono); font-size: var(--ui-font-small); color: var(--text); }
@@ -10546,11 +10550,15 @@ body[data-resizing="true"] * {
   border: 1px solid var(--subtle-4);
   border-radius: calc(12px * var(--ui-scale));
 }
+/* Tier-2 section subtitle inside a goal card. Was a tier-3 ALL-CAPS pill
+   (font-tiny / weight 700 / 0.08em letter-spacing), which clashed with
+   the surrounding Title-Case section titles ("Goals", "Files") and made
+   the right panel read as two competing design languages. Now matches
+   .gwg-done-definition-label and .criteria-family-head. */
 .gwg-objective-label {
-  font-size: var(--ui-font-tiny);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-muted);
   margin-bottom: 3px;
 }
@@ -10596,11 +10604,11 @@ body[data-resizing="true"] * {
   border: 1px solid var(--subtle-4);
   border-radius: calc(12px * var(--ui-scale));
 }
+/* Tier-2 section subtitle — see .gwg-objective-label for the rationale. */
 .gwg-done-definition-label {
-  font-size: var(--ui-font-tiny);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-muted);
   margin-bottom: 3px;
 }
