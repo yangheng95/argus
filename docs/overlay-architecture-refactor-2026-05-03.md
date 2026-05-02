@@ -145,6 +145,10 @@ Progress log:
 - 2026-05-03: Migrated `AgentModelsPanel` to `SurfaceHeader` with an
   action slot for the Hexin refresh button, retiring its local
   `.config-panel-group-head` / `.config-panel-group-title` header markup.
+- 2026-05-03: Migrated `ProvidersPanel` toolbar chrome to
+  `SurfaceHeader`. Provider count remains part of the title content, while
+  refresh/add controls now use the shared header action slot and the search
+  field stays below the canonical header row.
 
 Trigger: user feedback (2026-05-03):
 
