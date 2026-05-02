@@ -17,6 +17,7 @@ import { appStore } from "../../store/app";
 import { updateConfig } from "../../services/config";
 import { loadConfigInfo } from "../../services/init";
 import { nativeOpen } from "../../utils/native";
+import { Button } from "../ui/Button";
 
 // ── Tutorial docs (matches pre-Solid OPENCLAW_DOCS constant) ──
 
@@ -221,14 +222,16 @@ export default function ChannelsPanel() {
           />
         </label>
         <div class="dialog-actions compact">
-          <button
+          <Button
             type="button"
-            class="btn btn-ghost mini"
+            variant="ghost"
+            size="sm"
+            tone="neutral"
             onClick={handleSavePublicUrl}
             disabled={saving()}
           >
             {t("common.save")}
-          </button>
+          </Button>
         </div>
       </div>
       <div class="empty-hint">{t("channel.public_url_hint")}</div>
@@ -255,24 +258,28 @@ export default function ChannelsPanel() {
                 >
                   {channelStatusLabel(item.status)}
                 </span>
-                <button
+                <Button
                   type="button"
-                  class="btn btn-ghost mini"
+                  variant="ghost"
+                  size="sm"
+                  tone="neutral"
                   title={t("channel.tutorial_hint")}
                   aria-label={t("channel.tutorial_hint")}
                   onClick={() => nativeOpen(channelTutorialUrl(item.id))}
                 >
                   {t("channel.tutorial")}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  class="btn btn-primary mini"
+                  variant="solid"
+                  size="sm"
+                  tone="accent"
                   title={t("channel.edit_title")}
                   aria-label={t("channel.edit_title")}
                   onClick={() => openEdit(item.id)}
                 >
                   {t("common.edit")}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -304,15 +311,17 @@ export default function ChannelsPanel() {
                       {t("channel.tutorial_credit", { source: OPENCLAW_DOCS.credit })}
                     </small>
                   </div>
-                  <button
+                  <Button
                     type="button"
-                    class="btn btn-ghost"
+                    variant="ghost"
+                    size="md"
+                    tone="neutral"
                     title={t("channel.tutorial_hint")}
                     aria-label={t("channel.tutorial_hint")}
                     onClick={() => nativeOpen(channelTutorialUrl(entry.id))}
                   >
                     {t("channel.tutorial")}
-                  </button>
+                  </Button>
                 </div>
 
                 <For each={entry.fields}>
@@ -363,22 +372,26 @@ export default function ChannelsPanel() {
                 </For>
 
                 <div class="dialog-actions">
-                  <button
+                  <Button
                     type="button"
-                    class="btn btn-ghost"
+                    variant="ghost"
+                    size="md"
+                    tone="neutral"
                     onClick={closeEdit}
                     disabled={saving()}
                   >
                     {t("common.cancel")}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    class="btn btn-primary"
+                    variant="solid"
+                    size="md"
+                    tone="accent"
                     onClick={handleSaveChannel}
                     disabled={saving()}
                   >
                     {saving() ? t("common.saving") : t("common.save")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </dialog>

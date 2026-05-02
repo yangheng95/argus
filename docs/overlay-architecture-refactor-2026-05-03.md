@@ -84,6 +84,10 @@ Progress log:
   through `Button` (`ghost`, small) instead of `.btn.btn-ghost.mini`.
   This drops `.btn` callers from 51 to 49 and the aggregate legacy
   button budget from 64 to 62.
+- 2026-05-03: `ChannelsPanel` public URL, tutorial, edit, cancel,
+  and save actions now render through `Button`. This drops `.btn`
+  callers from 49 to 43, `.btn-primary` callers from 10 to 8, and the
+  aggregate legacy button budget from 62 to 54.
 
 Trigger: user feedback (2026-05-03):
 
