@@ -4415,6 +4415,15 @@ code .file-link:hover {
   }
 }
 
+/* `.chat-empty` is the flat placeholder shown when a task has no
+   messages yet ("Conversation updates will appear here"). This used
+   to be defined three times (a rich card here at the top, then two
+   later blocks at lines ~12715/12896 that knocked out the chrome with
+   !important and shrank the box). Merged into a single source per
+   CLAUDE.md rule 8 — same treatment that was already applied to
+   `.empty-hint`. The richer task-aware variant is `.chat-empty--task`
+   below; that one keeps its own bordered card because it surfaces
+   live task status, not just "no data". */
 .chat-empty {
   flex: 0 0 auto;
   display: flex;
@@ -4422,40 +4431,28 @@ code .file-link:hover {
   gap: calc(12px * var(--ui-scale));
   align-items: center;
   justify-content: center;
-  width: min(100%, calc(420px * var(--ui-scale)));
-  min-height: calc(220px * var(--ui-scale));
+  width: min(100%, calc(360px * var(--ui-scale)));
+  min-height: calc(150px * var(--ui-scale));
   margin: auto;
-  padding: calc(24px * var(--ui-scale)) calc(20px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: calc(24px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(84, 138, 247, 0.016) 72%, transparent),
-    color-mix(in srgb, var(--surface-strong) 72%, transparent);
-  box-shadow:
-    0 14px 24px rgba(6, 10, 16, 0.11),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  padding: 0;
   color: var(--text-soft);
   text-align: center;
+  opacity: 0.9;
 }
 
 .chat-empty-icon {
-  opacity: 0.9;
-  color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
-  width: calc(56px * var(--ui-scale));
-  height: calc(56px * var(--ui-scale));
-  padding: calc(12px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: calc(18px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-strong) 76%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  width: calc(34px * var(--ui-scale));
+  height: calc(34px * var(--ui-scale));
   flex-shrink: 0;
+  color: var(--accent);
+  opacity: 0.8;
 }
 
 .chat-empty-text {
   max-width: 28ch;
   color: var(--text-soft);
   font-size: var(--ui-font-body);
-  font-weight: 600;
+  font-weight: 650;
   text-align: center;
   line-height: 1.5;
 }
@@ -12712,36 +12709,14 @@ body[data-theme="light"] .btn-primary {
   }
 }
 
-.chat-empty {
-  width: min(100%, calc(360px * var(--ui-scale)));
-  min-height: calc(180px * var(--ui-scale));
-  padding: 0;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: var(--text-soft);
-}
-
-.chat-empty-icon {
-  width: calc(34px * var(--ui-scale));
-  height: calc(34px * var(--ui-scale));
-  color: var(--accent);
-  opacity: 0.8;
-}
-
-.chat-empty-text {
-  font-size: var(--ui-font-body);
-  font-weight: 650;
-  color: var(--text-soft);
-}
-
-/* (rule 8: single source) — the empty-hint vocabulary used to be defined
-   twice: once at the top of the file with a gradient + drop shadow, then
-   overridden at the file's tail with !important to flatten back to a
-   plain --surface fill + a smaller --accent dot. The two definitions
-   were merged into the original block above so there's one source of
-   truth and no !important hacks. */
+/* (rule 8: single source) — `.empty-hint` was defined twice (rich
+   gradient at the top, flat-via-!important at the tail); both are
+   now merged into the canonical block above. `.chat-empty` had the
+   same dual-source pattern — three definitions plus !important
+   overrides — also collapsed into the canonical block above as of
+   iter5 of the design-language sweep. Don't reintroduce the
+   override stack: regression test
+   `test/chat-empty-single-source.test.ts` will fail. */
 
 .chat-compose-row {
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -12893,10 +12868,10 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
 }
 
-.chat-empty {
-  min-height: calc(150px * var(--ui-scale));
-  opacity: 0.9;
-}
+/* iter5: the prior `.chat-empty` mini-block here (min-height 150px,
+   opacity 0.9) was folded into the canonical rule near line ~4418
+   so there's a single source. `.chat-empty--task` keeps its own
+   bordered-card chrome because it is a live task-status surface. */
 
 .chat-empty--task {
   display: grid;
@@ -12996,10 +12971,14 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   white-space: nowrap;
 }
 
-.chat-empty-icon {
+/* Inside the task-aware variant the icon sits in `.chat-empty-marker`,
+   a 38px box, so the SVG shrinks one notch and gets a slightly muted
+   accent. Properly scoped (was a top-level `.chat-empty-icon` rule
+   before iter5, which clobbered the canonical 34px definition for
+   the plain variant too — classic dual-source). */
+.chat-empty--task .chat-empty-marker .chat-empty-icon {
   width: calc(30px * var(--ui-scale));
   height: calc(30px * var(--ui-scale));
-  border-color: var(--border-strong);
   color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
 }
 
