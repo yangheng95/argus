@@ -93,6 +93,10 @@ Progress log:
   former `.knowledge-delete` label constraint is not a one-off class.
   This drops `.btn` callers from 43 to 38 and the aggregate legacy
   button budget from 54 to 49.
+- 2026-05-03: `LogViewer` load, refresh, copy, clear, and close actions
+  now render through `Button`, preserving stable ids for copy/log tests.
+  This drops `.btn` callers from 38 to 33 and the aggregate legacy
+  button budget from 49 to 44.
 
 Trigger: user feedback (2026-05-03):
 

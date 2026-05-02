@@ -19,6 +19,7 @@ import { appStore, setAppStore, filteredLogEntries } from "../store/app";
 import type { LogEntry, LogLevel, LogSource } from "../store/app";
 import { t } from "../utils/i18n";
 import { apiJson } from "../services/api";
+import { Button } from "./ui/Button";
 
 // ── Re-export types so callers can use them without importing store/app ──
 export type { LogEntry, LogLevel, LogSource };
@@ -490,52 +491,62 @@ export function LogViewer(props: LogViewerProps) {
               <option value="warn">WARN</option>
               <option value="error">ERROR</option>
             </select>
-            <button
+            <Button
               type="button"
               id="btnLogServerLogs"
-              class="btn btn-ghost mini"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
               onClick={() => void refresh()}
               disabled={loading()}
             >
               {t("log.load_server")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               id="btnLogRefresh"
-              class="btn btn-ghost mini"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
               onClick={() => void refresh()}
               disabled={loading()}
             >
               {t("common.refresh")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               id="btnLogCopy"
-              class="btn btn-ghost mini"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
               onClick={() => void handleCopy()}
               disabled={loading() || entries().length === 0}
             >
               {t("common.copy")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               id="btnLogClear"
-              class="btn btn-ghost mini danger"
+              variant="ghost"
+              size="sm"
+              tone="danger"
               onClick={handleClear}
             >
               {t("common.clear")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               id="btnCloseLog"
-              class="btn btn-ghost mini"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
               onClick={() => {
                 dialogRef?.close();
                 props.onClose?.();
               }}
             >
               {t("common.close")}
-            </button>
+            </Button>
           </div>
         </div>
 
