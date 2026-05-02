@@ -17,11 +17,11 @@
 // and collapsed prompt cache.
 
 import { createSignal, createMemo, createResource, For, Show } from "solid-js";
+import { apiJsonWithTimeout } from "../../services/api";
 import { patchConfig } from "../../services/config";
 import { appStore } from "../../store/app";
 import { t } from "../../utils/i18n";
 import {
-  apiJsonWithTimeout,
   HEXIN_REFRESH_TIMEOUT_MILLISECONDS,
   loadAgentModelsData,
   type ProvidersPayload,

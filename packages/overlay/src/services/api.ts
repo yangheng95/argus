@@ -337,6 +337,35 @@ export async function apiJson(path: string, init?: RequestInit): Promise<any> {
   return res.body;
 }
 
+function mergeAbortSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
+  if (a.aborted) return a;
+  if (b.aborted) return b;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  a.addEventListener("abort", abort, { once: true });
+  b.addEventListener("abort", abort, { once: true });
+  return controller.signal;
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return String(error);
+}
+
+export async function apiJsonWithTimeout<T = unknown>(
+  path: string,
+  timeoutMilliseconds: number,
+  init?: RequestInit,
+): Promise<T> {
+  const timeoutSignal = AbortSignal.timeout(timeoutMilliseconds);
+  const signal = init?.signal ? mergeAbortSignals(init.signal, timeoutSignal) : timeoutSignal;
+  try {
+    return (await apiJson(path, { ...init, signal })) as T;
+  } catch (error) {
+    throw new Error(`${path}: ${errorMessage(error)}`);
+  }
+}
+
 // ── Resource URL resolution ──
 // Server-side writers (AttachmentStore, etc.) persist URLs as
 // server-relative paths like "/attachment/<projectID>/<sha>.<ext>". These

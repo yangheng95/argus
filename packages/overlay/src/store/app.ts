@@ -78,6 +78,8 @@ export interface AppState {
   providerCatalog: any;
   /** Current provider authentication status */
   providerAuth: any;
+  /** Route-keyed errors from the latest config/provider bootstrap load. */
+  configLoadErrors: Record<string, string>;
   /** Map of provider IDs whose auth prompt has been dismissed this session */
   providerAuthDismissed: Record<string, boolean>;
   /** In-progress provider connectivity test state */
@@ -130,6 +132,7 @@ const DEFAULT_APP_STATE: AppState = {
   executors: [],
   providerCatalog: null,
   providerAuth: null,
+  configLoadErrors: {},
   providerAuthDismissed: {},
   providerTest: null,
   channels: [],

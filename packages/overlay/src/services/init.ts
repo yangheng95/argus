@@ -8,7 +8,7 @@
 // - Restore last workspace
 // - Set up a periodic reconnect loop
 
-import { configure as configureApi, apiJson } from "./api";
+import { configure as configureApi, apiJsonWithTimeout } from "./api";
 import { getHostTransport } from "./host-transport";
 import { installComposerAttachSubscription } from "./composer-attach";
 import {
@@ -31,7 +31,7 @@ import {
   DEFAULT_SETTINGS,
   type ToolPermissions,
 } from "../store/settings";
-import { setAppStore } from "../store/app";
+import { appStore, setAppStore } from "../store/app";
 import { boardStore, setBoardStore, loadTasks, clearTasksForMissingDirectory } from "../store/board";
 import { loadMeta } from "./meta";
 import { loadExtensions } from "./extensions";
@@ -214,26 +214,66 @@ export function persistAndSyncSettings(): void {
 
 // ── Config loading ──
 
+const CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS = 20_000;
+
+function loadErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return String(error);
+}
+
+function settledValue<T>(
+  key: string,
+  result: PromiseSettledResult<T>,
+  fallback: T,
+  errors: Record<string, string>,
+): T {
+  if (result.status === "fulfilled") return result.value;
+  errors[key] = loadErrorMessage(result.reason);
+  return fallback;
+}
+
 /**
  * Load server-side config, provider catalog, provider auth, channel list and
  * prompt entries from the API, then push everything into the Solid stores.
  * Pushes config, provider, channel, and prompt data into the Solid stores.
  */
-export async function loadConfigInfo(): Promise<void> {
+export async function loadConfigInfo(
+  timeoutMilliseconds = CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS,
+): Promise<void> {
   try {
-    const [config, catalog, auth, channels, prompts] = await Promise.all([
-      apiJson("config"),
-      apiJson("provider"),
-      apiJson("provider/auth"),
-      apiJson("channel"),
-      apiJson("config/prompt").catch(() => []),
+    const [configResult, catalogResult, authResult, channelsResult, promptsResult] = await Promise.allSettled([
+      apiJsonWithTimeout("config", timeoutMilliseconds),
+      apiJsonWithTimeout("provider", timeoutMilliseconds),
+      apiJsonWithTimeout("provider/auth", timeoutMilliseconds),
+      apiJsonWithTimeout("channel", timeoutMilliseconds),
+      apiJsonWithTimeout("config/prompt", timeoutMilliseconds),
     ]);
+    const errors: Record<string, string> = {};
+    const config = settledValue("config", configResult, appStore.config ?? null, errors);
+    const catalog = settledValue("provider", catalogResult, appStore.providerCatalog ?? null, errors);
+    const auth = settledValue("provider/auth", authResult, appStore.providerAuth ?? null, errors);
+    const channels = settledValue(
+      "channel",
+      channelsResult,
+      Array.isArray(appStore.channels) ? appStore.channels : [],
+      errors,
+    );
+    const prompts = settledValue(
+      "config/prompt",
+      promptsResult,
+      Array.isArray(appStore.promptEntries) ? appStore.promptEntries : [],
+      errors,
+    );
+    if (Object.keys(errors).length > 0) {
+      console.warn("[init] loadConfigInfo partial failure", errors);
+    }
 
- // Push into appStore
+    // Push into appStore
     setAppStore({
       config: config ?? null,
       providerCatalog: catalog ?? null,
       providerAuth: auth ?? null,
+      configLoadErrors: errors,
       channels: Array.isArray(channels) ? channels : [],
       promptEntries: Array.isArray(prompts) ? prompts : [],
     });
@@ -254,6 +294,7 @@ export async function loadConfigInfo(): Promise<void> {
     }
   } catch (e) {
     console.warn("[init] loadConfigInfo failed", e);
+    setAppStore("configLoadErrors", { loadConfigInfo: loadErrorMessage(e) });
   }
 }
 
