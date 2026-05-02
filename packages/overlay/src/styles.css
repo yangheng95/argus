@@ -12325,10 +12325,16 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .criteria-group,
 .eval-error,
 .extension-row,
+/* iter28: `.config-subsection` dropped from this multi-selector
+   reset — its canonical block at line ~8379 already declares
+   the same values (--surface-inset bg, var(--section-corner)
+   = var(--radius) radius, 1px var(--border) border, no shadow).
+   The other siblings (.extension-row, .channel-doc-card,
+   .detail-card, .config-section) keep the !important reset
+   until they get the same single-source treatment. */
 .channel-doc-card,
 .detail-card,
-.config-section,
-.config-subsection {
+.config-section {
   background: var(--surface-inset) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important;
@@ -13014,10 +13020,14 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .delivery-panel,
 .criteria-group,
 .eval-error,
+/* iter28: `.config-subsection` dropped — canonical at ~8379
+   already sets `border: 1px solid var(--border)`, so this
+   border-color !important reset was a redundant copy. The
+   other siblings keep the reset (same reason as the
+   multi-selector block above). */
 .extension-row,
 .channel-doc-card,
-.detail-card,
-.config-subsection {
+.detail-card {
   border-color: var(--border) !important;
 }
 
