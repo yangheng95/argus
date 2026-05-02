@@ -7,7 +7,9 @@ import { Instance } from "../../src/project/instance"
 import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project-gate"
 import { runtimeInteractionViolations } from "../../src/delivery/checks/runtime-evidence"
 import {
+  countPriorRepeatedDeliveryFailureEscalates,
   repeatedDeliveryFailureSignatures,
+  shouldHardFailRepeatedDelivery,
   validateDeliveryEvidenceManifest,
   type DeliveryEvidenceManifest,
 } from "../../src/delivery/manifest"
@@ -547,6 +549,24 @@ function manifestWithFailures(input: {
     timeCreated: Date.now(),
   }
 }
+
+describe("delivery loop hard-fail escalation", () => {
+  test("countPriorRepeatedDeliveryFailureEscalates counts only matching keys", () => {
+    expect(countPriorRepeatedDeliveryFailureEscalates([])).toBe(0)
+    expect(countPriorRepeatedDeliveryFailureEscalates([
+      { key: "delivery_repeated_failure_signature_1" },
+      { key: "delivery_other" },
+      { key: "delivery_repeated_failure_signature_2" },
+      { key: "delivery_budget_exhausted_3" },
+    ])).toBe(2)
+  })
+
+  test("shouldHardFailRepeatedDelivery flips at second escalate", () => {
+    expect(shouldHardFailRepeatedDelivery({ priorEscalateCount: 0 })).toBe(false)
+    expect(shouldHardFailRepeatedDelivery({ priorEscalateCount: 1 })).toBe(true)
+    expect(shouldHardFailRepeatedDelivery({ priorEscalateCount: 5 })).toBe(true)
+  })
+})
 
 function goalInput(id: string) {
   return {

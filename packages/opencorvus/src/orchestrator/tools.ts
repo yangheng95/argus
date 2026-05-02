@@ -3261,9 +3261,28 @@ export function createOrchestratorTools(input: {
               iteration,
               signatures: repeatedFailure.signatures.length,
             })
+            // Count prior soft-escalates so we can hard-fail when the
+            // orchestrator ignored the previous warning. Soft escalate alone
+            // is advisory (yieldResult headline says "MUST change strategy"),
+            // but the orchestrator LLM has discretion and r38 showed it can
+            // call modify_goal cosmetically and dispatch deliver again with
+            // an identical manifest signature. Per CLAUDE.md rule 7 (no
+            // fallback) and the task-revivable rule, we hard-fail the task
+            // on the 2nd consecutive identical signature; the user can
+            // revive with a fresh operator message + restart_from_stage.
+            let priorEscalateCount = 0
+            const decisionLogModule = await import("@/decision-log")
+            const { countPriorRepeatedDeliveryFailureEscalates, shouldHardFailRepeatedDelivery } =
+              await import("@/delivery/manifest")
             try {
-              const { createDecisionLog } = await import("@/decision-log")
-              createDecisionLog(taskID).append({
+              priorEscalateCount = countPriorRepeatedDeliveryFailureEscalates(
+                decisionLogModule.createDecisionLog(taskID).readByPhase("delivery"),
+              )
+            } catch {
+              /* best effort */
+            }
+            try {
+              decisionLogModule.createDecisionLog(taskID).append({
                 phase: "delivery",
                 key: `delivery_repeated_failure_signature_${iteration}`,
                 value: `Repeated delivery failure signatures: ${repeatedFailure.signatures.join(" | ")}`,
@@ -3273,9 +3292,61 @@ export function createOrchestratorTools(input: {
               /* best effort */
             }
             await trackStepComplete("deliver", undefined, true)
+
+            if (shouldHardFailRepeatedDelivery({ priorEscalateCount })) {
+              const totalEscalates = priorEscalateCount + 1
+              const hardFailReason =
+                `Delivery loop hard fail: ${totalEscalates} consecutive identical-signature delivery rejections ` +
+                `(${repeatedFailure.signatures.join(" | ")}). Prior soft escalate(s) returned a directive to ` +
+                `change strategy but the next delivery produced the same manifest signature. Refusing further ` +
+                `deliver/build dispatch — operator must inspect, then restart_from_stage or send a fresh ` +
+                `message describing the strategy change.`
+              try {
+                decisionLogModule.createDecisionLog(taskID).append({
+                  phase: "delivery",
+                  key: `delivery_loop_hard_fail_${iteration}`,
+                  value: hardFailReason,
+                  reason:
+                    "rule 7: prior soft escalate(s) ignored; hard-fail to surface to operator. " +
+                    "Task remains revivable per feedback_task_terminal_state_revivable.",
+                })
+              } catch {
+                /* best effort */
+              }
+              try {
+                const task = requireTask(taskID)
+                await updateTask(
+                  task,
+                  { status: "failed", error: hardFailReason, time_completed: Date.now() },
+                  `Failed: delivery_repeated_loop_hard_escalation`,
+                )
+              } catch (err) {
+                log.warn("deliver: hard-fail updateTask threw (continuing with stop signal)", {
+                  taskID,
+                  error: String(err),
+                })
+              }
+              await cleanupTerminalGoalWorkspaces("delivery_loop_hard_fail")
+              requestStopAfterCurrentStep("delivery_loop_hard_fail")
+              return SubAgentProtocol.yieldResult({
+                headline:
+                  `Task hard-failed: ${totalEscalates} consecutive identical delivery failures ` +
+                  `(${repeatedFailure.signatures.join(" | ")}). Operator intervention required: ` +
+                  `restart_from_stage or send a new message describing the strategy change.`,
+                fields: [
+                  ["failure_signatures", repeatedFailure.signatures],
+                  ["manifest_failures", manifestFailureDetails],
+                  ["iteration", String(iteration)],
+                  ["soft_escalates_before_hard_fail", String(priorEscalateCount)],
+                  ["agent_summary", verdict.summary],
+                ],
+                pointer: `task auto-failed; revive with operator message + restart_from_stage`,
+              })
+            }
+
             requestStopAfterCurrentStep("delivery_repeated_failure_signature")
             return SubAgentProtocol.yieldResult({
-              headline: `Delivery rejected with repeated failure signatures (iteration=${iteration}). No identical delivery_rework attempt opened; orchestrator MUST change strategy with modify_goal/restart_from_stage or fail the task.`,
+              headline: `Delivery rejected with repeated failure signatures (iteration=${iteration}). No identical delivery_rework attempt opened; orchestrator MUST change strategy with modify_goal/restart_from_stage or fail the task. Next identical-signature rejection will hard-fail the task.`,
               fields: [
                 ["failure_signatures", repeatedFailure.signatures],
                 ["manifest_failures", manifestFailureDetails],
