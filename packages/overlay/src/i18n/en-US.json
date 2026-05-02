@@ -399,8 +399,6 @@
   "goal.context.list": "**Goals** ({{total}})",
   "goal.context.origin": "   Origin: {{value}}",
   "goal.context.results": "**Goal Results** ({{passed}}/{{total}} passed, {{failed}} failed, {{pending}} pending)",
-  "goal.delete_button_title": "Double-click to remove this goal (cascade-rebuilds the dependency chain; may invalidate completed downstream goals).",
-  "goal.edit_button_title": "Edit this goal's title and details.",
   "goal.field.acceptance": "Acceptance Criteria",
   "goal.field.acceptance_placeholder": "What must be true for this goal to be considered done",
   "goal.field.objective": "Objective",
