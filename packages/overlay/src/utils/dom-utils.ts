@@ -16,7 +16,7 @@
 import { boardStore } from "../store/board";
 import { selectTask } from "../services/task";
 import { settingsStore } from "../store/settings";
-import { hasWorkspaceSelection } from "../services/workspace";
+import { hasWorkspaceSelection, QUICK_PROJECT_EDITORS } from "../services/workspace";
 import { t } from "./i18n";
 import { escapeHtml } from "./markdown";
 
@@ -370,9 +370,14 @@ export function pathIcon(kind: string): string {
 export function pathBreadcrumb(value: string): string {
   const browse = escapeHtml(t("cwd.browse"));
   const create = escapeHtml(t("cwd.new"));
+  const editorActions = QUICK_PROJECT_EDITORS.map((editor) => {
+    const label = escapeHtml(t("cwd.open_in_editor", { name: editor.label }));
+    return `<button type="button" class="task-dir-tool task-dir-editor" data-path-editor=${jsonAttr(editor.id)} title="${label}" aria-label="${label}"><span class="task-dir-tool-label">${escapeHtml(editor.shortLabel)}</span></button>`;
+  });
   const actions = [
     `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
     `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
+    ...editorActions,
   ].join("");
   if (!value) {
     return `

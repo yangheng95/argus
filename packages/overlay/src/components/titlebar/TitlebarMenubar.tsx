@@ -5,7 +5,15 @@ import { settingsStore, setSettingsStore, saveSettings } from "../../store/setti
 import { patchConfig, reloadProjectScope } from "../../services/config";
 import { openConfigDialog } from "../../services/dialog";
 import { applyOpacity, applyTheme, applyZoom, sanitizeOpacity, sanitizeZoom, toggleDevtools } from "../../services/theme";
-import { browseDirectory, createDirectory, loadRecentDirectories, openDirectory, setDirectory } from "../../services/workspace";
+import {
+  PROJECT_EDITORS,
+  browseDirectory,
+  createDirectory,
+  loadRecentDirectories,
+  openDirectory,
+  openDirectoryInEditor,
+  setDirectory,
+} from "../../services/workspace";
 import { t } from "../../utils/i18n";
 
 type MenuID = "workspace" | "model" | "run" | "tools" | "view" | "help";
@@ -352,6 +360,18 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                     <MenuItem onClick={() => void browseDirectory().finally(closeMenu)}>{t("cwd.browse")}</MenuItem>
                     <MenuItem onClick={() => void createDirectory().finally(closeMenu)}>{t("cwd.create")}</MenuItem>
                     <MenuItem onClick={() => void openDirectory().finally(closeMenu)} disabled={!settingsStore.directory}>{t("cwd.open")}</MenuItem>
+                  </MenuGroup>
+                  <MenuGroup title={t("cwd.open_with")}>
+                    <For each={PROJECT_EDITORS}>
+                      {(editor) => (
+                        <MenuItem
+                          onClick={() => void openDirectoryInEditor(editor.id).finally(closeMenu)}
+                          disabled={!settingsStore.directory}
+                        >
+                          {editor.label}
+                        </MenuItem>
+                      )}
+                    </For>
                   </MenuGroup>
                   <Show when={recentDirs().length > 0}>
                     <MenuGroup title={t("cwd.recent")}>

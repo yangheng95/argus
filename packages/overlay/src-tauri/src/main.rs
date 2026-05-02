@@ -280,6 +280,70 @@ fn overlay_open_url<R: Runtime>(app: AppHandle<R>, url: String) -> Result<bool, 
         .map_err(|err| err.to_string())
 }
 
+#[derive(Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum ProjectEditor {
+    Vscode,
+    Pycharm,
+    Webstorm,
+    Intellij,
+    Cursor,
+}
+
+impl ProjectEditor {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Vscode => "VS Code",
+            Self::Pycharm => "PyCharm",
+            Self::Webstorm => "WebStorm",
+            Self::Intellij => "IntelliJ IDEA",
+            Self::Cursor => "Cursor",
+        }
+    }
+
+    fn command(self) -> &'static str {
+        #[cfg(windows)]
+        {
+            match self {
+                Self::Vscode => "code.cmd",
+                Self::Pycharm => "pycharm64.exe",
+                Self::Webstorm => "webstorm64.exe",
+                Self::Intellij => "idea64.exe",
+                Self::Cursor => "cursor.cmd",
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            match self {
+                Self::Vscode => "code",
+                Self::Pycharm => "pycharm",
+                Self::Webstorm => "webstorm",
+                Self::Intellij => "idea",
+                Self::Cursor => "cursor",
+            }
+        }
+    }
+}
+
+#[tauri::command]
+fn overlay_open_project_editor(editor: ProjectEditor, path: String) -> Result<bool, String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Ok(false);
+    }
+
+    let mut cmd = Command::new(editor.command());
+    cmd.arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.spawn()
+        .map(|_| true)
+        .map_err(|err| format!("{}: {}", editor.label(), err))
+}
+
 #[tauri::command]
 fn overlay_create_dir(path: String) -> Result<bool, String> {
     let path = path.trim();
@@ -1092,6 +1156,7 @@ fn main() {
             overlay_server_restart,
             overlay_open_path,
             overlay_open_url,
+            overlay_open_project_editor,
             overlay_create_dir,
             overlay_write_file,
             overlay_pick_dir,
