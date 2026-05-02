@@ -1991,37 +1991,27 @@ body[data-theme="light"] .section-badge {
   border-color: transparent;
 }
 
-/* ── Sections Container (right column) ── */
+/* ── Sections Container (right column) ──
+   Single source after iter15. Used to be four blocks: a chromed
+   canonical here (border + gradient + 14px-deep shadow + hover
+   chrome), plus three !important overrides at the file tail
+   that knocked out border / border-radius / background /
+   box-shadow so the rendered `.sections` was actually flat —
+   the canonical lied about the visual. Folded into one flat
+   block matching the calm/flat direction shipped in iter4 /
+   iter5 / iter14. The hover state is gone with the chrome
+   (no border to color, no shadow to lift). */
 .sections {
   width: var(--ui-sections-width);
   min-width: min(100%, var(--ui-rail-min-width));
   max-width: var(--ui-sections-width);
   flex: 0 1 var(--ui-sections-width);
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--panel-radius);
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.022), rgba(84, 138, 247, 0.01) 62%, transparent),
-    color-mix(in srgb, var(--surface) 95%, var(--surface-inset) 5%);
-  box-shadow:
-    0 14px 28px rgba(6, 10, 16, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.025);
-  transition: border-color 120ms, background 140ms ease, box-shadow 120ms;
-}
-
-.sections:hover,
-.sections:focus-within {
-  border-color: var(--hover-accent-border);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(84, 138, 247, 0.014) 64%, transparent),
-    color-mix(in srgb, var(--surface) 94%, var(--surface-inset) 6%);
-  box-shadow:
-    0 18px 34px rgba(6, 10, 16, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.028);
+  background: var(--inspector-surface);
 }
 
 .sections,
@@ -12252,9 +12242,12 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   box-shadow: none !important;
 }
 
+/* iter15: `.sections` no longer rides on this multi-selector
+   flat reset because its canonical block is already flat.
+   `.sidebar` + `.chat` keep the !important reset until they
+   get the same single-source treatment. */
 .sidebar,
-.chat,
-.sections {
+.chat {
   background: var(--surface) !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -12795,13 +12788,12 @@ body[data-theme="light"] .btn-primary {
   background: var(--chat-canvas) !important;
 }
 
-.sections {
-  background: var(--inspector-surface) !important;
-}
-
+/* iter15: `.sections` background + chrome resets folded into
+   the canonical block near line ~1995. `.sidebar` + `.chat` keep
+   their flat reset here (no inspector-surface background — they
+   stay on `--surface` from the earlier reset). */
 .sidebar,
-.chat,
-.sections {
+.chat {
   border: 0 !important;
   border-radius: 0 !important;
 }
