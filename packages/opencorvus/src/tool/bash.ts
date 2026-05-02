@@ -18,6 +18,7 @@ import { BashArity } from "@/permission/arity"
 import { Truncate } from "./truncation"
 import { Plugin } from "@/plugin"
 import { PidGuard } from "@/shell/pid-guard"
+import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 
 const MAX_METADATA_LENGTH = 30_000
 const DEFAULT_TIMEOUT = Flag.OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -235,7 +236,11 @@ export const BashTool = Tool.define("bash", async () => {
       const proc = spawn(params.command, {
         shell,
         cwd,
-        env: sanitizeChildEnv(process.env, { ...shellEnv.env, ...guardEnv }),
+        env: sanitizeChildEnv(process.env, {
+          ...shellEnv.env,
+          ...gitCeilingEnvForWorktree(cwd, { ...process.env, ...shellEnv.env }),
+          ...guardEnv,
+        }),
         stdio: ["ignore", "pipe", "pipe"],
         detached: process.platform !== "win32",
       })

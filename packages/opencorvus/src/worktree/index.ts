@@ -75,6 +75,7 @@ export namespace Worktree {
         status: "merged"
         primaryBranch: string
         primaryHead: string
+        primaryRecoveryCommit?: string
       }
     | {
         status: "conflict"
@@ -179,6 +180,18 @@ export namespace Worktree {
       return withGitLock(async () => {
         const primaryDir = primary.directory
         const primaryBranch = primary.branch
+        let primaryRecoveryCommit: string | undefined
+        if (primaryDir !== input.worktreeDir) {
+          const validity = await isValid(input.worktreeDir)
+          if (!validity.valid) {
+            throw new MergeFailedError({
+              message:
+                `mergeWithMerge(${input.branch}): worktree git linkage is invalid at ${input.worktreeDir}: ` +
+                `${validity.reason ?? "unknown reason"}. Reattach or recreate the goal worktree before merge_back.`,
+              branch: input.branch,
+            })
+          }
+        }
 
         // Pre-flight: refuse to start a new merge if the worktree still has
         // an unfinished one (MERGE_HEAD present) or uncommitted changes.
@@ -205,6 +218,24 @@ export namespace Worktree {
               `before retrying merge_back.`,
             branch: input.branch,
           })
+        }
+        if (primaryDir !== input.worktreeDir) {
+          const primaryState = await inspectBlockedMergeWorktree(primaryDir)
+          if (primaryState.mergeHead) {
+            throw new MergeFailedError({
+              message:
+                `mergeWithMerge(${input.branch}): primary worktree ${primaryDir} is in an unfinished ` +
+                `MERGING state. Resolve that merge and commit it before retrying merge_back.`,
+              branch: input.branch,
+            })
+          }
+          if (primaryState.dirtyPaths.length > 0) {
+            primaryRecoveryCommit = await commitPrimaryDirtyWorktree({
+              branch: input.branch,
+              primaryDir,
+              dirtyPaths: primaryState.dirtyPaths,
+            })
+          }
         }
 
         // Step 1 — merge primary into the goal worktree. ff is allowed (when
@@ -256,7 +287,7 @@ export namespace Worktree {
 
         const headProbe = await $`git rev-parse HEAD`.quiet().nothrow().cwd(primaryDir)
         const primaryHead = outputText(headProbe.stdout)
-        return { primaryBranch, primaryHead }
+        return { primaryBranch, primaryHead, primaryRecoveryCommit }
       })
     },
   )
@@ -275,6 +306,7 @@ export namespace Worktree {
         status: "merged",
         primaryBranch: result.primaryBranch,
         primaryHead: result.primaryHead,
+        ...(result.primaryRecoveryCommit ? { primaryRecoveryCommit: result.primaryRecoveryCommit } : {}),
       }
     } catch (err) {
       if (MergeConflictError.isInstance(err)) {
@@ -538,6 +570,43 @@ export namespace Worktree {
       )
       .catch(() => [])
     return { mergeHead, dirtyPaths }
+  }
+
+  async function commitPrimaryDirtyWorktree(input: { branch: string; primaryDir: string; dirtyPaths: string[] }) {
+    const add = await $`git add -A`.quiet().nothrow().cwd(input.primaryDir)
+    if (add.exitCode !== 0) {
+      throw new MergeFailedError({
+        message:
+          `mergeWithMerge(${input.branch}): primary worktree is dirty but could not be staged ` +
+          `for merge_back recovery: ${errorText(add)}`,
+        branch: input.branch,
+        stderr: errorText(add),
+      })
+    }
+    const commit = await $`git -c user.name=opencorvus -c user.email=opencorvus@local commit -m ${"chore(opencorvus): preserve primary worktree changes before merge_back"}`
+      .quiet()
+      .nothrow()
+      .cwd(input.primaryDir)
+    if (commit.exitCode !== 0) {
+      throw new MergeFailedError({
+        message:
+          `mergeWithMerge(${input.branch}): primary worktree is dirty but recovery commit failed ` +
+          `for ${input.dirtyPaths.length} path(s): ${errorText(commit)}`,
+        branch: input.branch,
+        stderr: errorText(commit),
+      })
+    }
+    const head = await $`git rev-parse HEAD`.quiet().nothrow().cwd(input.primaryDir)
+    if (head.exitCode !== 0) {
+      throw new MergeFailedError({
+        message:
+          `mergeWithMerge(${input.branch}): primary recovery commit succeeded but HEAD could not ` +
+          `be resolved: ${errorText(head)}`,
+        branch: input.branch,
+        stderr: errorText(head),
+      })
+    }
+    return outputText(head.stdout)
   }
 
   function failed(result: { stdout?: Uint8Array; stderr?: Uint8Array }) {
@@ -975,6 +1044,56 @@ export namespace Worktree {
       if (entryKey === target) return { valid: true }
     }
     return { valid: false, reason: `directory not registered in 'git worktree list'` }
+  }
+
+  export async function recoverRecorded(input: {
+    directory: string
+    branch: string
+  }): Promise<{ status: "recovered"; directory: string; branch: string } | { status: "unrecoverable"; reason: string }> {
+    const validity = await isValid(input.directory)
+    if (validity.valid) return { status: "recovered", directory: input.directory, branch: input.branch }
+
+    const branchCheck = await $`git show-ref --verify --quiet refs/heads/${input.branch}`
+      .quiet()
+      .nothrow()
+      .cwd(Instance.worktree)
+    if (branchCheck.exitCode !== 0) {
+      return { status: "unrecoverable", reason: `branch ${input.branch} does not exist` }
+    }
+
+    const gitLink = path.join(input.directory, ".git")
+    const gitLinkExists = await exists(gitLink)
+    if (gitLinkExists) {
+      return { status: "unrecoverable", reason: validity.reason ?? "worktree registration is invalid" }
+    }
+
+    const dirExists = await exists(input.directory)
+    if (dirExists) {
+      const entries = await fs.readdir(input.directory).catch(() => [])
+      if (entries.length > 0) {
+        return {
+          status: "unrecoverable",
+          reason:
+            `missing .git linkage at ${gitLink}, but directory contains ${entries.length} item(s); ` +
+            `preserving it instead of reclaiming automatically`,
+        }
+      }
+    }
+
+    await fs.mkdir(path.dirname(input.directory), { recursive: true })
+    const added = await $`git worktree add --force ${input.directory} ${input.branch}`
+      .quiet()
+      .nothrow()
+      .cwd(Instance.worktree)
+    if (added.exitCode !== 0) {
+      return { status: "unrecoverable", reason: errorText(added) || "git worktree add failed" }
+    }
+
+    const nextValidity = await isValid(input.directory)
+    if (!nextValidity.valid) {
+      return { status: "unrecoverable", reason: nextValidity.reason ?? "reattached worktree is still invalid" }
+    }
+    return { status: "recovered", directory: input.directory, branch: input.branch }
   }
 
   export const remove = fn(RemoveInput, async (input) => {

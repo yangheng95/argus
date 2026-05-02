@@ -83,6 +83,51 @@ describe("Worktree.isValid", () => {
     expect(result.valid).toBe(false)
   })
 
+  test("reattaches an empty workspace directory to its recorded branch", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: `reattach-${Date.now().toString(36)}` }),
+    })
+
+    await fs.rm(path.join(info.directory, ".git"), { force: true })
+    await fs.rm(path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)), { recursive: true, force: true })
+    await fs.rm(info.directory, { recursive: true, force: true })
+    await fs.mkdir(info.directory, { recursive: true })
+
+    const recovered = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.recoverRecorded({ directory: info.directory, branch: info.branch }),
+    })
+
+    expect(recovered.status).toBe("recovered")
+    const valid = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.isValid(info.directory),
+    })
+    expect(valid.valid).toBe(true)
+  })
+
+  test("does not reclaim a missing-git workspace that still contains files", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: `preserve-zombie-${Date.now().toString(36)}` }),
+    })
+    await fs.rm(path.join(info.directory, ".git"), { force: true })
+    await fs.rm(path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)), { recursive: true, force: true })
+    await fs.writeFile(path.join(info.directory, "uncommitted-progress.txt"), "keep me\n")
+
+    const recovered = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.recoverRecorded({ directory: info.directory, branch: info.branch }),
+    })
+
+    expect(recovered.status).toBe("unrecoverable")
+    expect(recovered.reason).toContain("preserving")
+    expect(await fs.readFile(path.join(info.directory, "uncommitted-progress.txt"), "utf8")).toBe("keep me\n")
+  })
+
   test("primary worktree is valid", async () => {
     await using tmp = await tmpdir({ git: true })
 
