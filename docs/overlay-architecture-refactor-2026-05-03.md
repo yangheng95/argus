@@ -156,6 +156,9 @@ Progress log:
 - 2026-05-03: Hardened `loadConfigInfo` against overlapping SSE refreshes.
   A monotonic load sequence now prevents an older, slower config refresh from
   overwriting a newer completed refresh.
+- 2026-05-03: Coalesced `config.changed` SSE bursts before calling
+  `loadConfigInfo`, so config event storms trigger one refresh wave instead
+  of stacking identical five-route reloads.
 
 Trigger: user feedback (2026-05-03):
 
