@@ -15,6 +15,7 @@ import {
 import { t } from "../utils/i18n";
 import { apiJson } from "../services/api";
 import { nativeMessage } from "../services/app-dialog";
+import { Button } from "./ui/Button";
 
 // ── Types ──
 
@@ -182,17 +183,21 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
         </Show>
 
         <div class="dialog-actions">
-          <button
+          <Button
             type="button"
-            class="btn btn-ghost mini danger"
+            variant="ghost"
+            size="sm"
+            tone="danger"
             onClick={() => void handleDelete()}
             disabled={loading() || deleting() || !!errorMsg()}
           >
             {deleting() ? t("common.loading") : t("common.delete")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            class="btn btn-ghost"
+            variant="ghost"
+            size="md"
+            tone="neutral"
             disabled={deleting()}
             onClick={() => {
               if (deleting()) return;
@@ -201,7 +206,7 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
             }}
           >
             {t("common.close")}
-          </button>
+          </Button>
         </div>
       </div>
     </dialog>
@@ -346,24 +351,28 @@ export function MemoryPanel(props: MemoryPanelProps) {
             }
           }}
         />
-        <button
+        <Button
           type="button"
           id="btnMemorySearch"
-          class="btn btn-ghost mini"
+          variant="ghost"
+          size="sm"
+          tone="neutral"
           disabled={loading()}
           onClick={handleSearchSubmit}
         >
           {t("common.search")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           id="btnMemoryRefresh"
-          class="btn btn-ghost mini"
+          variant="ghost"
+          size="sm"
+          tone="neutral"
           onClick={handleRefresh}
           disabled={loading()}
         >
           {t("common.refresh")}
-        </button>
+        </Button>
       </div>
 
       {/* List */}
@@ -405,9 +414,11 @@ export function MemoryPanel(props: MemoryPanelProps) {
                     <span class="knowledge-scope" data-scope={f.scope}>
                       {knowledgeScopeLabel(f.scope)}
                     </span>
-                    <button
+                    <Button
                       type="button"
-                      class="btn btn-ghost mini danger knowledge-delete"
+                      variant="ghost"
+                      size="sm"
+                      tone="danger"
                       data-action="delete-memory"
                       data-id={f.id}
                       title={t("memory.delete_button_title")}
@@ -418,7 +429,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
                       }}
                     >
                       {t("common.delete")}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );

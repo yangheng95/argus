@@ -88,6 +88,11 @@ Progress log:
   and save actions now render through `Button`. This drops `.btn`
   callers from 49 to 43, `.btn-primary` callers from 10 to 8, and the
   aggregate legacy button budget from 62 to 54.
+- 2026-05-03: `MemoryPanel` search, refresh, close, and delete actions
+  now render through `Button`; nowrap moved into the primitive so the
+  former `.knowledge-delete` label constraint is not a one-off class.
+  This drops `.btn` callers from 43 to 38 and the aggregate legacy
+  button budget from 54 to 49.
 
 Trigger: user feedback (2026-05-03):
 
