@@ -6,6 +6,7 @@ import { checkConnection } from "../../services/connection";
 import { reloadProjectScope } from "../../services/config";
 import { requestNotificationPermission, notificationPermissionState } from "../../services/notify";
 import { nativeMessage } from "../../services/app-dialog";
+import { Button } from "../ui/Button";
 
 export default function GeneralPanel() {
   const [saved, setSaved] = createSignal(false);
@@ -78,13 +79,15 @@ export default function GeneralPanel() {
           </label>
 
           <div class="dialog-actions compact">
-            <button
+            <Button
               type="button"
-              class="btn btn-primary mini"
+              variant="solid"
+              size="sm"
+              tone="accent"
               onClick={handleSaveServer}
             >
               {saved() ? t("common.saved") : t("common.save")}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

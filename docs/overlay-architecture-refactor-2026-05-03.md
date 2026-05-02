@@ -72,6 +72,10 @@ Progress log:
   `Button`; `TitlebarMenubar` focuses it via `data-ui="executor-chip"`
   instead of the legacy class. This removes the final `executor-chip`
   TSX caller and drops the aggregate legacy button budget from 70 to 69.
+- 2026-05-03: `GeneralPanel` settings save now renders through the
+  canonical `Button` primitive instead of `.btn.btn-primary.mini`.
+  This drops `.btn` callers from 54 to 53, `.btn-primary` callers from
+  12 to 11, and the aggregate legacy button budget from 69 to 67.
 
 Trigger: user feedback (2026-05-03):
 
