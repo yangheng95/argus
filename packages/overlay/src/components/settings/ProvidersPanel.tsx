@@ -449,16 +449,16 @@ export default function ProvidersPanel() {
               <div class="provider-card-meta">
                 {t("provider.label.api")}: {provider.api}
               </div>
-              <Show when={providerAuthMethods(id).length > 0}>
-                {() => {
+              {providerAuthMethods(id).length > 0
+                ? (() => {
                   const status = providerState(id, undefined);
                   return (
                     <div class="provider-card-meta" data-tone={status.tone}>
                       {status.label}: {status.detail}
                     </div>
                   );
-                }}
-              </Show>
+                })()
+                : null}
               <Show when={provider.env?.length}>
                 <div class="provider-card-meta">
                   {t("provider.label.env")}: {provider.env.join(", ")}

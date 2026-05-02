@@ -34,10 +34,10 @@ export interface FileReaderLike {
 
 export type FileReaderFactory = () => FileReaderLike
 
-let factory: FileReaderFactory = () => new FileReader() as FileReaderLike
+let factory: FileReaderFactory = () => new FileReader() as unknown as FileReaderLike
 
 export function __setFileReaderFactoryForTest(f: FileReaderFactory | undefined): void {
-  factory = f ?? (() => new FileReader() as FileReaderLike)
+  factory = f ?? (() => new FileReader() as unknown as FileReaderLike)
 }
 
 export function fileToDataUrl(file: unknown): Promise<string> {
