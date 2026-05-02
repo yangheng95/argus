@@ -15,6 +15,7 @@
  * criterion (delivery agent, benchmark, etc).
  */
 import { For, Show } from "solid-js";
+import { familyOrder, familyLabel } from "../utils/criteria";
 
 interface CriteriaCheck {
   name: string;
@@ -26,18 +27,6 @@ interface CriteriaCheck {
 
 interface Props {
   checks: CriteriaCheck[];
-}
-
-const FAMILY_ORDER = ["command", "runtime", "artifact", "review", "acceptance", "custom", "other"] as const;
-
-function familyOrder(family: string | undefined): number {
-  const key = (family || "other").toLowerCase();
-  const idx = FAMILY_ORDER.indexOf(key as (typeof FAMILY_ORDER)[number]);
-  return idx === -1 ? FAMILY_ORDER.length : idx;
-}
-
-function familyLabel(family: string | undefined): string {
-  return (family || "other").toLowerCase();
 }
 
 function statusIcon(status: string): string {
