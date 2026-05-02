@@ -378,21 +378,33 @@ a { color: inherit; text-decoration: none; }
   background-clip: padding-box;
 }
 
-/* ── Titlebar ── */
+/* ── Titlebar ──
+   Single source after iter14. Used to be three blocks:
+   1) flex layout + 12px gap + gradient bg + 12px-deep shadow
+      (canonical at this site)
+   2) layout switcher near line ~11597 that flipped display:flex
+      to display:grid with a 3-column template (titlebar-left,
+      spacer, titlebar-utility)
+   3) calm/flat override near line ~12149 that clobbered padding,
+      min-height, background, box-shadow with !important so the
+      titlebar dropped the gradient + deep shadow
+   The override stack made the canonical block lie about the
+   final visual; tweaks at any one site silently lost to the
+   late !important. Folded into one block below — grid layout
+   + chrome live together. The two duplicate blocks are gone. */
 .titlebar {
   position: relative;
   z-index: 10000;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(calc(16px * var(--ui-scale)), 1fr) auto;
   align-items: center;
-  gap: calc(12px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  min-height: calc(48px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 70%),
-    var(--chrome);
-  border-bottom: 1px solid transparent;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  min-height: var(--ui-titlebar-height);
+  background: var(--chrome);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  box-shadow: 0 12px 30px rgba(4, 8, 14, 0.18);
+  box-shadow: none;
 }
 
 .titlebar::after {
@@ -625,8 +637,17 @@ a { color: inherit; text-decoration: none; }
   -webkit-app-region: no-drag;
 }
 
+/* iter14: the .titlebar narrow-width tweaks used to live in
+   three separate @media (max-width: 760px) blocks scattered
+   across styles.css (lines ~641 / ~11634 / ~12618). Folded into
+   a single @media block here so a contributor sees the full
+   narrow-width treatment in one place. */
 @media (max-width: 760px) {
   .titlebar {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    height: auto;
     gap: calc(8px * var(--ui-scale));
   }
 
@@ -11593,12 +11614,11 @@ body[data-resizing="true"] * {
   }
 }
 
-/* Keep the titlebar menu in the same top-left cluster as the product mark. */
-.titlebar {
-  display: grid;
-  grid-template-columns: minmax(0, auto) minmax(calc(16px * var(--ui-scale)), 1fr) auto;
-  align-items: center;
-}
+/* iter14: the `.titlebar` rule that lived here (grid layout
+   switcher) was folded into the canonical block near line ~382.
+   The grid-column placements for `.titlebar-left` /
+   `.titlebar-spacer` / `.titlebar-utility` stay because they
+   only apply once the parent's grid is in effect. */
 
 .titlebar-left {
   grid-column: 1;
@@ -11620,10 +11640,10 @@ body[data-resizing="true"] * {
 }
 
 @media (max-width: 760px) {
-  .titlebar {
-    display: flex;
-  }
-
+  /* `.titlebar` narrow-width tweaks live in the consolidated
+     block near line ~641 (iter14). Sibling selectors stay here
+     so the grid-column/justify-self resets sit alongside the
+     other titlebar children. */
   .titlebar-left,
   .titlebar-brand,
   .titlebar-utility {
@@ -12146,16 +12166,15 @@ body::after,
   animation: none !important;
 }
 
-.titlebar {
-  min-height: var(--ui-titlebar-height);
-  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  background: var(--chrome) !important;
-  border-bottom: 1px solid var(--border);
-  box-shadow: none !important;
-  gap: calc(10px * var(--ui-scale));
-}
+/* iter14: the `.titlebar` calm/flat override that lived here
+   was folded into the canonical block near line ~382. Without
+   the `!important` chain, tweaks at the canonical site take
+   effect again. */
 
-.brand-name,
+/* iter6 dropped `<span class="brand-name">`. The selector is
+   removed from the casing-reset list below — the remaining
+   selectors still need their `letter-spacing: 0; text-transform:
+   none;` to override historical theme tracking. */
 .sections-title,
 .sidebar-title,
 .chat-title {
@@ -12605,12 +12624,9 @@ body[data-theme="light"] .btn-primary {
 }
 
 @media (max-width: 760px) {
-  .titlebar {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    height: auto;
-  }
-
+  /* `.titlebar` narrow-width tweaks live in the consolidated
+     block near line ~641 (iter14). Sibling selectors stay
+     here for the layout reset (flex-basis 100%, etc.). */
   .titlebar-left,
   .titlebar-utility {
     flex-basis: 100%;
@@ -12679,7 +12695,6 @@ body[data-theme="light"] .btn-primary {
     max-height: calc(100vh - calc(var(--ui-titlebar-height) + calc(28px * var(--ui-scale))));
   }
 
-  .brand-name,
   .conn-badge__label {
     display: none;
   }
@@ -13309,8 +13324,7 @@ body[data-theme="light"] .sections-header {
 
 body[data-theme="light"] .sidebar-title,
 body[data-theme="light"] .chat-title,
-body[data-theme="light"] .sections-title,
-body[data-theme="light"] .brand-name {
+body[data-theme="light"] .sections-title {
   color: var(--text-strong);
   font-weight: 760;
 }
@@ -13588,8 +13602,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-header {
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-title,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-title,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-title,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .brand-name {
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-title {
   color: var(--text-strong);
   font-weight: 760;
 }
