@@ -77,7 +77,7 @@
   </div>
 
   <!-- 编排器 (running) -->
-  <article class="card card--collapsed" data-kind="agent" data-stage="orchestrator" data-status="running" data-depth="0" style="--card-stage: var(--card-stage-orchestrator);">
+  <article class="card card--collapsed" data-kind="agent" data-stage="orchestrator" data-status="running" data-depth="0" data-role="system">
     <div class="card__head" role="button" tabindex="0" aria-expanded="false">
       <span class="card__badge card__badge--running" title="running"><span class="card__spinner"></span></span>
       <div class="card__main">
@@ -99,7 +99,7 @@
   </article>
 
   <!-- 助手 (cancelled — Fix B: outline ⊘ instead of red ✗) -->
-  <article class="card card--collapsed" data-kind="agent" data-stage="assistant" data-status="error" data-depth="0" style="--card-stage: var(--card-stage-assistant);">
+  <article class="card card--collapsed" data-kind="agent" data-stage="assistant" data-status="error" data-depth="0" data-role="user">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
       <span class="card__badge card__badge--cancelled" title="cancelled">⊘</span>
       <div class="card__main">
@@ -125,7 +125,7 @@
   </article>
 
   <!-- 设计分析师 (completed clean) -->
-  <article class="card card--collapsed" data-kind="agent" data-stage="design-analyst" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-design-analyst);">
+  <article class="card card--collapsed" data-kind="agent" data-stage="design-analyst" data-status="completed" data-depth="0" data-role="system">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
       <span class="card__badge card__badge--done" title="completed">✓</span>
       <div class="card__main">
@@ -149,7 +149,7 @@
   </article>
 
   <!-- 需求 (completed clean) -->
-  <article class="card card--collapsed" data-kind="agent" data-stage="requirements" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-requirements);">
+  <article class="card card--collapsed" data-kind="agent" data-stage="requirements" data-status="completed" data-depth="0" data-role="system">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
       <span class="card__badge card__badge--done" title="completed">✓</span>
       <div class="card__main">
@@ -173,7 +173,7 @@
   </article>
 
   <!-- 架构师 (completed clean — emits 6 goals) -->
-  <article class="card card--collapsed" data-kind="agent" data-stage="architect" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-architect);">
+  <article class="card card--collapsed" data-kind="agent" data-stage="architect" data-status="completed" data-depth="0" data-role="system">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
       <span class="card__badge card__badge--done" title="completed">✓</span>
       <div class="card__main">
@@ -197,7 +197,7 @@
   </article>
 
   <!-- 完整性审查 (Fix B: concerns ⚠ amber) -->
-  <article class="card card--collapsed" data-kind="integrity" data-stage="integrity" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-architect);">
+  <article class="card card--collapsed" data-kind="integrity" data-stage="integrity" data-status="completed" data-depth="0" data-role="system">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
       <span class="card__badge card__badge--concerns" title="completed with concerns">⚠</span>
       <div class="card__main">
@@ -221,7 +221,7 @@
   </article>
 
   <!-- #G1V4 (Fix A: shows goal title in preview, not "Bash: rg --files") -->
-  <article class="card card--collapsed" data-kind="step" data-stage="executor" data-status="error" data-depth="0" style="--card-stage: var(--card-stage-executor);">
+  <article class="card card--collapsed" data-kind="step" data-stage="executor" data-status="error" data-depth="0" data-role="execution">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
       <span class="card__badge card__badge--error" title="failed">✗</span>
       <div class="card__main">
@@ -246,7 +246,7 @@
   </article>
 
   <!-- #G3V4 (Fix A: shows goal title in preview, not "Bash: rg --files") -->
-  <article class="card card--collapsed" data-kind="step" data-stage="executor" data-status="error" data-depth="0" style="--card-stage: var(--card-stage-executor);">
+  <article class="card card--collapsed" data-kind="step" data-stage="executor" data-status="error" data-depth="0" data-role="execution">
     <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
       <span class="card__badge card__badge--error" title="failed">✗</span>
       <div class="card__main">

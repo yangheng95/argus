@@ -97,8 +97,6 @@ export interface CardNode {
   kind: CardKind;
   /** Session kind / stage name (assistant / executor / build / planner / goal / ...). */
   stage?: string;
-  /** Resolved accent colour for this card's stage. */
-  accent?: string;
   status?: CardStatus;
   role?: string;
   title: string;

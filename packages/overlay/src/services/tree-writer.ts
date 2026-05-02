@@ -22,7 +22,7 @@ import { produce } from "solid-js/store";
 import { cardTreeStore, setCardTreeStore, type CardNode, type CardStatus } from "../store/card-tree";
 import { boardStore, setBoardProjectionHandler } from "../store/board";
 import { agentStageLabel, normalizeAgentRole, roleLabel } from "../utils/message";
-import { stageAccent } from "../utils/card-color";
+import { roleOf } from "../utils/card-color";
 import { t } from "../utils/i18n";
 import { normalizeToolPartRecord } from "../utils/tool";
 
@@ -287,9 +287,8 @@ function createSessionCardNode(
   return {
     id: cardID,
     kind: userStage ? "message" : "agent",
-    role: userStage ? "user" : undefined,
+    role: roleOf(stage),
     stage,
-    accent: !userStage && stage ? stageAccent(stage) : undefined,
     status: "running",
     title: userStage
       ? roleTitleKey("user")
@@ -772,7 +771,7 @@ function materializeRunningIntegrity(p: RunningIntegrityPayload): void {
       status: "running",
       subtitle,
       stage: "integrity",
-      accent: stageAccent("integrity"),
+      role: roleOf("integrity"),
       title: roleTitleKey("integrity"),
     });
     return;
@@ -891,7 +890,7 @@ function materializeIntegrity(session: SessionInfo, p: PendingIntegrityPayload):
   setCardTreeStore("cards", cardID, {
     ...existing,
     stage: "integrity",
-    accent: stageAccent("integrity"),
+    role: roleOf("integrity"),
     status,
     title: roleTitleKey("integrity"),
     subtitle: undefined,
@@ -1010,7 +1009,7 @@ function resolvePhaseOrSessionCardID(
           id: phaseCardID,
           kind: "phase",
           stage,
-          accent: stageAccent(stage),
+          role: roleOf(stage),
           status: "running",
           title: phase.phaseID,
           parts: [],
@@ -1089,7 +1088,7 @@ function ensureSessionCard(
                 id: newCardID,
                 kind: "phase",
                 stage: stageForResolve,
-                accent: stageAccent(stageForResolve),
+                role: roleOf(stageForResolve),
                 status: phase?.status ?? "running",
                 title: phase?.title ?? stageForResolve,
                 parts: phaseParts,
@@ -1479,7 +1478,7 @@ function rebuildGoalStepCards(board: any): void {
             const prev = cards[phaseCardID];
             if (prev) {
               prev.stage = sessionKind || pid;
-              prev.accent = stageAccent(sessionKind || pid);
+              prev.role = roleOf(sessionKind || pid);
               prev.status = status;
               prev.title = label;
               prev.phaseID = pid;
@@ -1492,7 +1491,7 @@ function rebuildGoalStepCards(board: any): void {
                 id: phaseCardID,
                 kind: "phase",
                 stage: sessionKind || pid,
-                accent: stageAccent(sessionKind || pid),
+                role: roleOf(sessionKind || pid),
                 status,
                 title: label,
                 parts: [],
@@ -1544,7 +1543,7 @@ function rebuildGoalStepCards(board: any): void {
         id: stepCardID,
         kind: "step",
         stage: stepID,
-        accent: stageAccent(stepID),
+        role: roleOf(stepID),
         status: stepStatus,
         title: String(gw.goalTitle || step.label || agentStageLabel(stepID) || stepID),
         subtitle: undefined,

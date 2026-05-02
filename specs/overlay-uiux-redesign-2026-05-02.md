@@ -97,11 +97,13 @@ type CardRole = "user" | "system" | "execution" | "review";
 | `user` | `user`, `assistant` |
 | `system` | `orchestrator`, `spec`, `requirements`, `design-analyst`, `architect`, `planner`, unknown |
 | `execution` | `goal`, `executor`, `build`, `tool` |
-| `review` | `evaluator`, `delivery` |
+| `review` | `evaluator`, `delivery`, `integrity` |
 
 ## 2. 实施阶段
 
 ### Phase A - Token 与角色色单源
+
+状态：已实施。代码提交范围包括 roleOf 角色归类、状态 token 单源、`--card-stage-*` 删除、`!important` 降到 7 处，以及 `theme-tokens.test.ts` / `no-important.test.ts` 回归测试。
 
 文件：
 
@@ -338,8 +340,8 @@ A token/role -> B IA/layout -> C task status -> D cards -> E composer -> F panel
 
 ## 4. 不变量
 
-- [ ] 不存在 `--card-stage-*` / inline `--card-stage`。
-- [ ] `!important` <= 30。
+- [x] 不存在 `--card-stage-*` / inline `--card-stage`。
+- [x] `!important` <= 30。
 - [ ] 不存在 `workspace-mount[hidden]`。
 - [ ] `solidWorkspaceMount` 不在 `chatSection` 内。
 - [ ] `RightPanelTab` 只包含 `plan / evaluation / changes / preview`。
@@ -348,7 +350,7 @@ A token/role -> B IA/layout -> C task status -> D cards -> E composer -> F panel
 - [ ] 无 `.chat-compose-meta` / `.chat-icon-col`。
 - [ ] ChangesPanel tab 切换不销毁 group chunk。
 - [ ] MemoryPanel / LogViewer 不在本方案中误删。
-- [ ] 所有新增/修改行为有测试。
+- [x] Phase A 新增/修改行为有测试。
 
 ## 5. 风险与拦截
 

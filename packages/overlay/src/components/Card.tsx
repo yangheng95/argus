@@ -7,6 +7,7 @@ import { boardStore, rootTaskSessionID } from "../store/board";
 import { cancelAgentSession, replyToAgentSession } from "../services/task";
 import { apiRequest } from "../services/api";
 import { normalizeAgentRole } from "../utils/message";
+import { roleOf } from "../utils/card-color";
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox";
 import { CardHeader } from "./CardHeader";
 import { CardParts } from "./CardParts";
@@ -179,7 +180,6 @@ export function Card(props: { node: CardNode; depth: number }) {
 
   const articleStyle = createMemo<Record<string, string> | undefined>(() => {
     const style: Record<string, string> = {};
-    if (props.node.accent) style["--card-stage"] = props.node.accent;
     const stickyWidth = stickyInlineSize();
     if (stickyWidth && shouldLockInlineSize()) {
       style["--card-sticky-inline-size"] = `${stickyWidth}px`;
@@ -221,7 +221,7 @@ export function Card(props: { node: CardNode; depth: number }) {
       class="card"
       data-card-id={props.node.id}
       data-kind={props.node.kind}
-      data-role={props.node.role || undefined}
+      data-role={props.node.role || (props.node.stage ? roleOf(props.node.stage) : undefined)}
       data-stage={props.node.stage || undefined}
       data-status={props.node.status || "none"}
       data-depth={props.depth}

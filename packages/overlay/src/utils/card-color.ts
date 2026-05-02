@@ -1,39 +1,28 @@
-// Resolve an accent colour for a card's stage. Known stages reference the
-// per-stage CSS variables defined in card.css so theme switches keep working;
-// unknown stages (custom subagents, new built-ins not yet hard-coded in CSS)
-// fall back to a deterministic HSL derived from the stage name, so any given
-// stage stays the same colour across sessions.
+// Collapse arbitrary stage names into the four card visual roles. Stage text
+// remains on the card; only colour selection is constrained to this single
+// role taxonomy.
 
-const KNOWN_STAGES = new Set([
-  "user",
-  "assistant",
-  "orchestrator",
-  "spec",
-  "requirements",
-  "design-analyst",
-  "architect",
-  "planner",
-  "goal",
-  "executor",
-  "build",
-  "evaluator",
-  "delivery",
-  "tool",
+export type CardRole = "user" | "system" | "execution" | "review";
+
+const ROLE_BY_STAGE = new Map<string, CardRole>([
+  ["user", "user"],
+  ["assistant", "user"],
+  ["orchestrator", "system"],
+  ["spec", "system"],
+  ["requirements", "system"],
+  ["design-analyst", "system"],
+  ["architect", "system"],
+  ["planner", "system"],
+  ["goal", "execution"],
+  ["executor", "execution"],
+  ["build", "execution"],
+  ["tool", "execution"],
+  ["evaluator", "review"],
+  ["delivery", "review"],
+  ["integrity", "review"],
 ]);
 
-function hashString(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (h * 31 + s.charCodeAt(i)) | 0;
-  }
-  return h;
-}
-
-export function stageAccent(stage: string | undefined | null): string | undefined {
-  if (!stage) return undefined;
-  const s = String(stage).trim();
-  if (!s) return undefined;
-  if (KNOWN_STAGES.has(s)) return `var(--card-stage-${s})`;
-  const hue = Math.abs(hashString(s)) % 360;
-  return `hsl(${hue} 58% 66%)`;
+export function roleOf(stage: string | undefined | null): CardRole {
+  const key = String(stage || "").trim();
+  return ROLE_BY_STAGE.get(key) ?? "system";
 }
