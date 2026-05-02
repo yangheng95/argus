@@ -18,6 +18,7 @@ import {
 } from "../../services/llm";
 import { nativeConfirm, nativeOpen, nativePrompt, nativeSelect } from "../../utils/native";
 import { nativeMessage } from "../../services/app-dialog";
+import { Button } from "../ui/Button";
 
 function describeFailure(e: unknown): string {
   if (e instanceof ApiError) return e.message;
@@ -431,15 +432,17 @@ export default function ProvidersPanel() {
             data-testid={`provider-api-key-input-${id()}`}
           />
         </label>
-        <button
+        <Button
           type="button"
-          class="btn mini"
+          variant="outline"
+          size="sm"
+          tone="neutral"
           onClick={() => void handleSaveApiKey(id())}
           disabled={savingKey().has(id()) || !apiKeyInput(id()).trim()}
           data-testid={`provider-api-key-save-${id()}`}
         >
           {savingKey().has(id()) ? t("common.loading") : t("provider.api_key.save")}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -552,9 +555,12 @@ export default function ProvidersPanel() {
                 </span>
               )}
             </Show>
-            <button
+            <Button
               type="button"
-              class="btn mini provider-refresh-btn"
+              variant="outline"
+              size="sm"
+              tone="neutral"
+              data-ui="provider-refresh-button"
               onClick={() => void handleRefreshCatalog()}
               disabled={refreshing()}
               title={t("provider.refresh.title")}
@@ -562,14 +568,16 @@ export default function ProvidersPanel() {
             >
               <span class="provider-refresh-icon" aria-hidden="true">↻</span>
               {refreshing() ? t("provider.refresh.refreshing") : t("provider.refresh.button")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              class="btn btn-primary mini"
+              variant="solid"
+              size="sm"
+              tone="accent"
               onClick={startAdd}
             >
               + Add
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -621,41 +629,49 @@ export default function ProvidersPanel() {
                     </div>
                     <div class="provider-row-actions">
                       <Show when={providerAuthMethods(id).length > 0}>
-                        <button
+                        <Button
                           type="button"
-                          class="btn mini"
+                          variant="outline"
+                          size="sm"
+                          tone="neutral"
                           onClick={() => void handleAuth(id)}
                           disabled={authing().has(id)}
                           title={t("llm.auth_connect_title")}
                           data-testid={`provider-auth-${id}`}
                         >
                           {authing().has(id) ? t("common.loading") : t("llm.auth_connect")}
-                        </button>
+                        </Button>
                       </Show>
-                      <button
+                      <Button
                         type="button"
-                        class="btn mini"
+                        variant="outline"
+                        size="sm"
+                        tone="neutral"
                         onClick={() => void handleTest(id, provider.models || {})}
                         disabled={testing().has(id)}
                         title={t("provider.test.button_title")}
                       >
                         {testing().has(id) ? t("provider.test.testing") : t("provider.test.button")}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        class="btn mini"
+                        variant="outline"
+                        size="sm"
+                        tone="neutral"
                         onClick={() => startEdit(id)}
                       >
                         {t("common.edit")}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        class="btn mini danger"
+                        variant="outline"
+                        size="sm"
+                        tone="danger"
                         onClick={() => handleDelete(id)}
                         disabled={saving()}
                       >
                         {t("common.delete")}
-                      </button>
+                      </Button>
                     </div>
                     <div class="provider-row-key">
                       <ApiKeyEditor providerId={id} />
@@ -788,17 +804,19 @@ export default function ProvidersPanel() {
             </Show>
 
             <div class="dialog-actions compact provider-form-actions">
-              <button type="button" class="btn mini" onClick={cancel}>
+              <Button type="button" variant="outline" size="sm" tone="neutral" onClick={cancel}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                class="btn btn-primary mini"
+                variant="solid"
+                size="sm"
+                tone="accent"
                 onClick={handleSave}
                 disabled={saving() || (!editing() && !formId().trim()) || !formApi().trim()}
               >
                 {saving() ? "Saving..." : editing() ? "Update" : "Add Provider"}
-              </button>
+              </Button>
             </div>
           </div>
         </Show>
@@ -827,16 +845,18 @@ export default function ProvidersPanel() {
                     </div>
                     <div class="provider-row-actions">
                       <Show when={p.authMethods > 0}>
-                        <button
+                        <Button
                           type="button"
-                          class="btn mini"
+                          variant="outline"
+                          size="sm"
+                          tone="neutral"
                           onClick={() => void handleAuth(p.id)}
                           disabled={authing().has(p.id)}
                           title={t("llm.auth_connect_title")}
                           data-testid={`provider-auth-${p.id}`}
                         >
                           {authing().has(p.id) ? t("common.loading") : t("llm.auth_connect")}
-                        </button>
+                        </Button>
                       </Show>
                     </div>
                     <div class="provider-row-key">

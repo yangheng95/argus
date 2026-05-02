@@ -102,6 +102,11 @@ Progress log:
   `Button`, while preserving `data-task-action` / `data-action` hooks.
   This drops `.btn` callers from 33 to 26, `.btn-primary` callers from
   8 to 5, and the aggregate legacy button budget from 44 to 34.
+- 2026-05-03: `ProvidersPanel` refresh, add, auth, test, edit,
+  delete, API-key save, and form actions now render through `Button`,
+  preserving provider auth test ids. This drops `.btn` callers from 26
+  to 16, `.btn-primary` callers from 5 to 3, and the aggregate legacy
+  button budget from 34 to 22.
 
 Trigger: user feedback (2026-05-03):
 
