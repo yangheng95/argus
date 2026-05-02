@@ -159,6 +159,10 @@ Progress log:
 - 2026-05-03: Coalesced `config.changed` SSE bursts before calling
   `loadConfigInfo`, so config event storms trigger one refresh wave instead
   of stacking identical five-route reloads.
+- 2026-05-03: Retired the dead `.right-panel-tablist` /
+  `.right-panel-tab` rules and theme overrides from runtime CSS. The right
+  panel tab chrome is now owned only by the `Tabs` primitive and
+  `styles/primitives/tabs.css`.
 
 Trigger: user feedback (2026-05-03):
 
