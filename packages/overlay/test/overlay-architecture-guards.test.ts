@@ -242,6 +242,10 @@ describe("overlay architecture guards", () => {
     expect(count(/<SurfaceHeader/g, agentModelsPanel)).toBe(1)
     expect(agentModelsPanel).not.toContain("config-panel-group-head")
     expect(agentModelsPanel).not.toContain("config-panel-group-title")
+
+    const providersPanel = readText(join(OVERLAY_ROOT, "src/components/settings/ProvidersPanel.tsx"))
+    expect(count(/<SurfaceHeader/g, providersPanel)).toBe(1)
+    expect(providersPanel).not.toContain("config-panel-group-title")
   })
 
   test("new primitive style files use data attributes for variants and never use important", () => {

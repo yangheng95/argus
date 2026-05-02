@@ -19,6 +19,7 @@ import {
 import { nativeConfirm, nativeOpen, nativePrompt, nativeSelect } from "../../utils/native";
 import { nativeMessage } from "../../services/app-dialog";
 import { Button } from "../ui/Button";
+import { SurfaceHeader } from "../ui/SurfaceHeader";
 
 function describeFailure(e: unknown): string {
   if (e instanceof ApiError) return e.message;
@@ -517,12 +518,51 @@ export default function ProvidersPanel() {
     <div class="general-panel">
       <div class="config-panel-group provider-settings-flat">
         <div class="provider-toolbar">
-          <div class="provider-toolbar-title">
-            <h4 class="config-panel-group-title">{t("provider.title")}</h4>
-            <span class="provider-toolbar-count">
-              {t("provider.search.count", { shown: visibleProviderCount(), total: totalProviderCount() })}
-            </span>
-          </div>
+          <SurfaceHeader
+            variant="settings-group"
+            title={
+              <span class="provider-toolbar-title">
+                <span>{t("provider.title")}</span>
+                <span class="provider-toolbar-count">
+                  {t("provider.search.count", { shown: visibleProviderCount(), total: totalProviderCount() })}
+                </span>
+              </span>
+            }
+            actions={
+              <div class="provider-head-actions">
+                <Show when={lastRefreshedAt()}>
+                  {(ts) => (
+                    <span class="provider-refresh-meta" title={new Date(ts()).toLocaleString()}>
+                      {t("provider.refresh.last", { when: formatRelative(ts()) })}
+                    </span>
+                  )}
+                </Show>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  tone="neutral"
+                  data-ui="provider-refresh-button"
+                  onClick={() => void handleRefreshCatalog()}
+                  disabled={refreshing()}
+                  title={t("provider.refresh.title")}
+                  data-spinning={refreshing() ? "true" : "false"}
+                >
+                  <span class="provider-refresh-icon" aria-hidden="true">↻</span>
+                  {refreshing() ? t("provider.refresh.refreshing") : t("provider.refresh.button")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="solid"
+                  size="sm"
+                  tone="accent"
+                  onClick={startAdd}
+                >
+                  + Add
+                </Button>
+              </div>
+            }
+          />
           <label class="provider-search-field">
             <span class="provider-search-icon" aria-hidden="true">⌕</span>
             <input
@@ -547,38 +587,6 @@ export default function ProvidersPanel() {
               </button>
             </Show>
           </label>
-          <div class="provider-head-actions">
-            <Show when={lastRefreshedAt()}>
-              {(ts) => (
-                <span class="provider-refresh-meta" title={new Date(ts()).toLocaleString()}>
-                  {t("provider.refresh.last", { when: formatRelative(ts()) })}
-                </span>
-              )}
-            </Show>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              tone="neutral"
-              data-ui="provider-refresh-button"
-              onClick={() => void handleRefreshCatalog()}
-              disabled={refreshing()}
-              title={t("provider.refresh.title")}
-              data-spinning={refreshing() ? "true" : "false"}
-            >
-              <span class="provider-refresh-icon" aria-hidden="true">↻</span>
-              {refreshing() ? t("provider.refresh.refreshing") : t("provider.refresh.button")}
-            </Button>
-            <Button
-              type="button"
-              variant="solid"
-              size="sm"
-              tone="accent"
-              onClick={startAdd}
-            >
-              + Add
-            </Button>
-          </div>
         </div>
 
         <Show when={providerEntries().length === 0 && catalogEntries().length === 0 && !showAdd()}>

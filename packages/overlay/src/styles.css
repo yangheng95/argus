@@ -2946,7 +2946,6 @@ body[data-theme="light"] .section-badge {
    sits to the left of `+ Add` and shows a spinning ↻ glyph + relative
    "Updated 3 min ago" hint while keeping the panel header compact. */
 .provider-head-actions {
-  grid-area: actions;
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -3070,26 +3069,18 @@ body[data-theme="light"] .section-badge {
   gap: calc(14px * var(--ui-scale));
 }
 .provider-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "title actions"
-    "search search";
-  align-items: start;
-  gap: var(--ui-gap-md);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--ui-gap-sm);
   padding-bottom: var(--ui-gap-sm);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 .provider-toolbar-title {
-  grid-area: title;
   min-width: 0;
   display: flex;
   align-items: baseline;
   gap: var(--ui-gap-sm);
-}
-.provider-toolbar-title .config-panel-group-title {
-  flex: none;
-  padding: 0;
 }
 .provider-toolbar-count {
   min-width: 0;
@@ -3098,7 +3089,6 @@ body[data-theme="light"] .section-badge {
   white-space: nowrap;
 }
 .provider-search-field {
-  grid-area: search;
   min-width: 0;
   width: min(100%, calc(560px * var(--ui-scale)));
   position: relative;
@@ -3285,14 +3275,6 @@ body[data-theme="light"] .section-badge {
   margin-bottom: var(--ui-gap-sm);
 }
 @media (max-width: 820px) {
-  .provider-toolbar {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "title"
-      "search"
-      "actions";
-    align-items: stretch;
-  }
   .provider-search-field {
     width: 100%;
   }
