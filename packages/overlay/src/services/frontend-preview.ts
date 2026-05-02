@@ -1,6 +1,6 @@
 import { apiJson, getServerUrl } from "./api";
 
-export type RightPanelTab = "inspector" | "preview";
+export type RightPanelTab = "workflow" | "inspector" | "preview";
 
 export type FrontendPreviewSource = "delivery" | "port_probe";
 

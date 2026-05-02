@@ -16,6 +16,7 @@ import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/Ti
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { FilesSection } from "./components/FilesSection";
 import { FrontendPreviewPanel } from "./components/FrontendPreviewPanel";
+import { AgentWorkflowPanel } from "./components/AgentWorkflowPanel";
 import { DeliveryPanel, deliveryPanelDelivery } from "./components/Board";
 import { LogViewer } from "./components/LogViewer";
 import {
@@ -951,6 +952,16 @@ if (rightPanelTabsEl) {
           type="button"
           class="right-panel-tab"
           role="tab"
+          aria-selected={rightPanelTab() === "workflow"}
+          data-active={rightPanelTab() === "workflow" ? "true" : "false"}
+          onClick={() => selectRightPanelTab("workflow")}
+        >
+          {t("right_panel.workflow")}
+        </button>
+        <button
+          type="button"
+          class="right-panel-tab"
+          role="tab"
           aria-selected={rightPanelTab() === "inspector"}
           data-active={rightPanelTab() === "inspector" ? "true" : "false"}
           onClick={() => selectRightPanelTab("inspector")}
@@ -990,11 +1001,18 @@ if (frontendPreviewMountEl) {
 
 createEffect(() => {
   const active = rightPanelTab();
+  const workflow = document.getElementById("rightPanelWorkflow");
   const inspector = document.getElementById("rightPanelInspector");
   const preview = document.getElementById("rightPanelPreview");
+  workflow?.setAttribute("data-active", active === "workflow" ? "true" : "false");
   inspector?.setAttribute("data-active", active === "inspector" ? "true" : "false");
   preview?.setAttribute("data-active", active === "preview" ? "true" : "false");
 });
+
+const agentWorkflowMountEl = document.getElementById("solidAgentWorkflowMount");
+if (agentWorkflowMountEl) {
+  render(() => <AgentWorkflowPanel />, agentWorkflowMountEl);
+}
 
 let lastFrontendPreviewKey = "";
 createEffect(() => {

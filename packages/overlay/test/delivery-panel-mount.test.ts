@@ -29,6 +29,8 @@ test("index.html declares the #solidDeliveryMount node so DeliveryPanel has a pl
 test("index.html declares the right-panel Preview tab mount beside Inspector", async () => {
   const html = await readSrc("src/index.html");
   expect(html).toContain('id="solidRightPanelTabs"');
+  expect(html).toContain('id="rightPanelWorkflow"');
+  expect(html).toContain('id="solidAgentWorkflowMount"');
   expect(html).toContain('id="rightPanelInspector"');
   expect(html).toContain('id="rightPanelPreview"');
   expect(html).toContain('id="solidFrontendPreviewMount"');
@@ -48,6 +50,16 @@ test("main.tsx imports DeliveryPanel and mounts it at #solidDeliveryMount", asyn
   expect(main).toMatch(/import\s+\{\s*DeliveryPanel,\s*deliveryPanelDelivery\s*\}\s+from "\.\/components\/Board"/);
   expect(main).toContain('document.getElementById("solidDeliveryMount")');
   expect(main).toContain("<DeliveryPanel");
+});
+
+test("main.tsx mounts AgentWorkflowPanel as a root right-panel tab", async () => {
+  const main = await readSrc("src/main.tsx");
+  const frontendPreview = await readSrc("src/services/frontend-preview.ts");
+  expect(frontendPreview).toContain('export type RightPanelTab = "workflow" | "inspector" | "preview"');
+  expect(main).toContain('import { AgentWorkflowPanel } from "./components/AgentWorkflowPanel"');
+  expect(main).toContain('onClick={() => selectRightPanelTab("workflow")}');
+  expect(main).toContain('document.getElementById("solidAgentWorkflowMount")');
+  expect(main).toContain("<AgentWorkflowPanel");
 });
 
 test("DeliveryPanel and DeliveryEvidenceGroup are exported from components/Board.tsx", async () => {
@@ -138,6 +150,9 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "delivery.show_less",
     "delivery.empty.hint",
     "delivery.inflight.hint",
+    "right_panel.workflow",
+    "agent_workflow.title",
+    "agent_workflow.output_report",
   ];
   // i18n keys are flat strings with literal dots, not nested paths — use
   // `key in obj` instead of toHaveProperty (which would mis-traverse).

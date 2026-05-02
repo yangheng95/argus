@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "ea7c696617f7b9f2"
+    "panel_revision": "031d7b08da5d3882"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -539,8 +539,22 @@
   "section.criteria": "Evaluation Criteria",
   "section.files": "Files",
   "right_panel.tabs": "Workspace and preview tabs",
+  "right_panel.workflow": "Workflow",
   "right_panel.inspector": "Workspace",
   "right_panel.preview": "Preview",
+  "agent_workflow.title": "Agent Workflow",
+  "agent_workflow.count": "{{count}} agents",
+  "agent_workflow.refresh": "Refresh agent workflow trace",
+  "agent_workflow.loading": "Loading agent workflow...",
+  "agent_workflow.empty": "No agent workflow has been recorded for this task yet.",
+  "agent_workflow.trace_disabled": "Agent trace is disabled on the server, so only live cards can be shown.",
+  "agent_workflow.no_report": "No output report has been recorded for this card yet.",
+  "agent_workflow.attempt": "try {{current}}/{{total}}",
+  "agent_workflow.report_title": "Agent output report",
+  "agent_workflow.report_meta": "{{status}} · {{time}}",
+  "agent_workflow.output_summary": "Summary",
+  "agent_workflow.output_report": "Report",
+  "agent_workflow.model": "Model",
   "frontend_preview.title": "Frontend Preview",
   "frontend_preview.loading": "Resolving live frontend preview...",
   "frontend_preview.empty": "No running local frontend page was detected for this workspace.",

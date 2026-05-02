@@ -2129,7 +2129,17 @@ body[data-theme="light"] .section-badge {
   display: none;
 }
 
+.sections-tab-body[data-panel-tab="workflow"] {
+  min-height: 0;
+}
+
 .sections-tab-body[data-panel-tab="preview"] {
+  min-height: 0;
+}
+
+#solidAgentWorkflowMount,
+.agent-workflow-panel {
+  height: 100%;
   min-height: 0;
 }
 
@@ -6589,6 +6599,307 @@ select.field-input option {
   border-left-color: var(--border);
   background: transparent;
   border-color: transparent;
+}
+
+/* ── Agent Workflow Root Tab ── */
+.agent-workflow-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
+}
+
+.agent-workflow-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-md);
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  flex-shrink: 0;
+}
+
+.agent-workflow-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.agent-workflow-title {
+  color: var(--text-strong);
+  font-size: var(--ui-font-small);
+  font-weight: 720;
+}
+
+.agent-workflow-count {
+  color: var(--text-soft);
+  font-size: var(--ui-font-tiny);
+  font-weight: 650;
+}
+
+.agent-workflow-refresh,
+.agent-workflow-report-close {
+  min-height: calc(26px * var(--ui-scale));
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  border-radius: calc(7px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  color: var(--text-base);
+  font-size: var(--ui-font-control);
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.agent-workflow-refresh {
+  padding: 0 calc(10px * var(--ui-scale));
+}
+
+.agent-workflow-refresh:hover,
+.agent-workflow-report-close:hover {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  color: var(--text-strong);
+}
+
+.agent-workflow-empty,
+.agent-workflow-warning {
+  margin: calc(12px * var(--ui-scale));
+  padding: calc(12px * var(--ui-scale));
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: calc(8px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  line-height: 1.45;
+}
+
+.agent-workflow-warning {
+  border-color: color-mix(in srgb, var(--warn) 38%, var(--border));
+  color: var(--warn);
+}
+
+.agent-workflow-canvas {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale)) calc(24px * var(--ui-scale));
+}
+
+.agent-workflow-row {
+  --workflow-indent: calc(var(--workflow-depth, 0) * 18px * var(--ui-scale));
+  position: relative;
+  display: grid;
+  grid-template-columns: calc(14px * var(--ui-scale)) minmax(0, 1fr);
+  gap: calc(6px * var(--ui-scale));
+  margin-left: var(--workflow-indent);
+  margin-bottom: calc(10px * var(--ui-scale));
+}
+
+.agent-workflow-rail {
+  position: relative;
+  min-height: calc(72px * var(--ui-scale));
+}
+
+.agent-workflow-rail::before,
+.agent-workflow-rail::after {
+  content: "";
+  position: absolute;
+  background: color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.agent-workflow-rail::before {
+  top: calc(-10px * var(--ui-scale));
+  bottom: calc(-10px * var(--ui-scale));
+  left: calc(6px * var(--ui-scale));
+  width: 1px;
+}
+
+.agent-workflow-rail::after {
+  top: calc(28px * var(--ui-scale));
+  left: calc(6px * var(--ui-scale));
+  width: calc(12px * var(--ui-scale));
+  height: 1px;
+}
+
+.agent-workflow-stack {
+  position: relative;
+  min-width: 0;
+  padding-bottom: var(--stack-pad, 0);
+}
+
+.agent-workflow-card {
+  position: relative;
+  z-index: calc(10 + var(--stack-index, 0));
+  display: flex;
+  width: calc(100% - var(--stack-offset, 0));
+  min-height: calc(72px * var(--ui-scale));
+  transform: translate(var(--stack-offset, 0), var(--stack-offset, 0));
+  margin-top: calc(var(--stack-index, 0) * -54px * var(--ui-scale));
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-left: calc(3px * var(--ui-scale)) solid var(--accent);
+  border-radius: calc(8px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--text-base);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 calc(6px * var(--ui-scale)) calc(18px * var(--ui-scale)) rgba(0, 0, 0, 0.12);
+}
+
+.agent-workflow-card:first-child {
+  margin-top: 0;
+}
+
+.agent-workflow-card[data-status="running"] {
+  border-left-color: var(--accent);
+}
+
+.agent-workflow-card[data-status="completed"] {
+  border-left-color: var(--good);
+}
+
+.agent-workflow-card[data-status="error"] {
+  border-left-color: var(--bad);
+}
+
+.agent-workflow-card[data-status="idle"] {
+  border-left-color: var(--warn);
+}
+
+.agent-workflow-card:hover,
+.agent-workflow-card:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  outline: none;
+}
+
+.agent-workflow-card-head,
+.agent-workflow-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  min-width: 0;
+}
+
+.agent-workflow-agent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+  font-size: var(--ui-font-small);
+  font-weight: 730;
+}
+
+.agent-workflow-time,
+.agent-workflow-card-foot {
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+  font-weight: 650;
+}
+
+.agent-workflow-card-body {
+  display: -webkit-box;
+  min-height: calc(30px * var(--ui-scale));
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  line-height: 1.35;
+}
+
+.agent-workflow-attempt {
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: calc(999px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale));
+  color: var(--accent);
+}
+
+.agent-workflow-report-popover {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(12px * var(--ui-scale));
+  background: color-mix(in srgb, var(--dialog-backdrop) 72%, transparent);
+}
+
+.agent-workflow-report {
+  width: min(100%, calc(640px * var(--ui-scale)));
+  max-height: min(76vh, calc(720px * var(--ui-scale)));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: calc(8px * var(--ui-scale));
+  background: var(--dialog-bg);
+  box-shadow: 0 calc(18px * var(--ui-scale)) calc(42px * var(--ui-scale)) rgba(0, 0, 0, 0.28);
+}
+
+.agent-workflow-report-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+
+.agent-workflow-report-head h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--ui-font-medium);
+  line-height: 1.2;
+}
+
+.agent-workflow-report-head p,
+.agent-workflow-report-section p {
+  margin: calc(4px * var(--ui-scale)) 0 0;
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  line-height: 1.45;
+}
+
+.agent-workflow-report-close {
+  width: calc(28px * var(--ui-scale));
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.agent-workflow-report-section {
+  padding: calc(12px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.agent-workflow-report-section:last-child {
+  border-bottom: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.agent-workflow-report-section h3 {
+  margin: 0 0 calc(6px * var(--ui-scale));
+  color: var(--text-strong);
+  font-size: var(--ui-font-small);
+  font-weight: 720;
+}
+
+.agent-workflow-report-section pre {
+  max-height: calc(340px * var(--ui-scale));
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: var(--ui-font-mono);
+  line-height: 1.45;
+  color: var(--text-base);
 }
 
 .delivery-panel-header {
