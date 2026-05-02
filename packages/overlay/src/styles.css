@@ -5866,12 +5866,20 @@ body[data-theme="light"] .chat-send { color: #ffffff; }
   accent-color: var(--accent);
 }
 
+/* Form-label primitive used across every settings panel. iter7
+   dropped `text-transform: uppercase` so the i18n strings (already
+   Title Case: "Server URL", "API Key", "Default Model", …) render
+   as written. The wider --subhead-track was paired with all-caps
+   to keep tracking readable; with Title Case the wide tracking
+   just looks loose, so the rule simply omits letter-spacing and
+   inherits 0 from the cascade. Tier-3 status pills (req-type,
+   req-status, gwg-step-status, verdict-pill, …) keep their own
+   uppercase styling — those are short single-word color-coded
+   chips where the all-caps pill convention reads as a status tag. */
 .field-label {
   font-size: var(--subhead-size);
   font-weight: var(--subhead-weight);
   color: var(--text-soft);
-  text-transform: uppercase;
-  letter-spacing: var(--subhead-track);
 }
 .field-label em {
   color: var(--bad);
