@@ -63,9 +63,16 @@
   --dialog-bg: #2b2d30;
   --menu-panel-bg: #1c1d20;
   --divider-soft: rgba(255, 255, 255, 0.08);
-  --ui-font-display: clamp(13px, calc(14px * var(--ui-scale)), 15px);
-  --ui-font-heading: clamp(12px, calc(13px * var(--ui-scale)), 14px);
-  --ui-font-title: clamp(11px, calc(12px * var(--ui-scale)), 13px);
+  /* iter48: user feedback (2026-05-03) "以标题栏菜单的字体大小
+     为准，任何其余字体都不允许比他字体更大". The titlebar
+     menubar trigger uses var(--ui-font-body) (≈12px). Cap
+     display/heading/title to body so no surface in the overlay
+     renders text larger than the menubar. Single-source — every
+     selector that consumed --ui-font-display / --ui-font-heading
+     / --ui-font-title now resolves to the body value. */
+  --ui-font-display: clamp(11px, calc(11.5px * var(--ui-scale)), 12px);
+  --ui-font-heading: clamp(11px, calc(11.5px * var(--ui-scale)), 12px);
+  --ui-font-title: clamp(11px, calc(11.5px * var(--ui-scale)), 12px);
   --ui-font-body: clamp(11px, calc(11.5px * var(--ui-scale)), 12px);
   --ui-font-control: clamp(10px, calc(10.5px * var(--ui-scale)), 11px);
   --ui-font-meta: clamp(10px, calc(10px * var(--ui-scale)), 11px);
@@ -12191,8 +12198,11 @@ body[data-theme="dark"] {
   --title-track: 0;
   --subhead-weight: 700;
   --subhead-track: 0;
-  --ui-font-display: calc(14px * var(--ui-scale));
-  --ui-font-heading: calc(13px * var(--ui-scale));
+  /* iter48: cap display/heading/title to body (12px). Same
+     reason as the :root block — no overlay text larger than
+     the titlebar menubar font (--ui-font-body). */
+  --ui-font-display: calc(12px * var(--ui-scale));
+  --ui-font-heading: calc(12px * var(--ui-scale));
   --ui-font-title: calc(12px * var(--ui-scale));
   --ui-font-body: calc(12px * var(--ui-scale));
   --ui-font-control: calc(11px * var(--ui-scale));
