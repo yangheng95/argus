@@ -3848,16 +3848,13 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   overflow: hidden;
 }
 
-.chat:hover,
-.chat:focus-within {
-  border-color: var(--hover-accent-border);
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 62%, transparent),
-    var(--surface);
-  box-shadow:
-    0 0 0 1px rgba(91, 141, 239, 0.06),
-    var(--hover-accent-shadow);
-}
+/* iter16 follow-up: hover/focus chrome dropped — calm/flat
+   .chat has no border to color and no shadow to lift, so the
+   hover state was a no-op once the !important resets clobbered
+   it. The symmetric `.sidebar:hover` rule was deleted in
+   iter16; this one was missed in the same pass and would have
+   re-introduced gradient+shadow on hover. CRON self-audit
+   caught it. */
 
 .task-switch-progress {
   position: relative;
@@ -13269,15 +13266,11 @@ body[data-theme="light"] .sections {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(249, 251, 255, 0.86)) !important;
 }
 
-body[data-theme="light"] .sidebar:hover,
-body[data-theme="light"] .sidebar:focus-within,
-body[data-theme="light"] .chat:hover,
-body[data-theme="light"] .chat:focus-within,
-body[data-theme="light"] .sections:hover,
-body[data-theme="light"] .sections:focus-within {
-  border-color: rgba(91, 95, 240, 0.22) !important;
-  box-shadow: none !important;
-}
+/* iter16 follow-up: light-theme hover-chrome flatteners removed.
+   The canonical .sidebar / .chat / .sections blocks have no
+   border + no shadow now, so this entire hover override has
+   nothing to override (border-color targets a non-existent
+   border, box-shadow:none is already the canonical value). */
 
 body[data-theme="light"] .sidebar-header,
 body[data-theme="light"] .chat-header,
@@ -13547,15 +13540,10 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
   background: var(--inspector-surface) !important;
 }
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar:focus-within,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat:focus-within,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--border)) !important;
-  box-shadow: none !important;
-}
+/* iter16 follow-up: dark-theme hover-chrome flatteners removed
+   for the same reason the light-theme block above was removed —
+   canonical containers carry no border + no shadow, so this
+   override has nothing left to override. */
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-header,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-header,

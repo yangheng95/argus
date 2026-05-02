@@ -82,8 +82,28 @@ describe("`.sidebar, .chat { … !important }` reset chains are gone", () => {
     // The flat resets used to spell out
     // `.sidebar,\n.chat { … !important }` near the file tail.
     // With both canonicals already flat, no chain should still
-    // clobber them. Allow `.sidebar:hover, .chat:hover, …` etc
-    // since pseudo states are a separate concern.
+    // clobber them.
     expect(STYLES).not.toMatch(/\n\.sidebar,[\s\n]*\.chat\s*\{[^}]*!important/)
+  })
+})
+
+describe("hover/focus chrome on the shell columns is gone", () => {
+  // CRON self-audit on iter16 caught a leftover `.chat:hover,
+  // .chat:focus-within { border-color, gradient, shadow }`
+  // rule near line ~3851 that would have re-introduced gradient
+  // chrome on hover the moment the !important resets were
+  // removed. The symmetric `.sidebar:hover` block was deleted
+  // in iter16 itself; this one was missed. Pin both so a
+  // future contributor can't reintroduce the regression.
+  test("no top-level `.chat:hover` rule reintroduces gradient or border chrome", () => {
+    // A top-level `.chat:hover { … }` block is forbidden. Theme-
+    // scoped blocks (`body[data-theme="..."] .chat:hover { … }`)
+    // also caused dead-override leaks (canonical has no border /
+    // shadow to override) so they got removed too — assert that.
+    expect(STYLES).not.toMatch(/\n\.chat:hover\b/)
+  })
+
+  test("no top-level `.sidebar:hover` rule reintroduces chrome either", () => {
+    expect(STYLES).not.toMatch(/\n\.sidebar:hover\b/)
   })
 })
