@@ -1819,6 +1819,16 @@ a { color: inherit; text-decoration: none; }
   max-width: calc(120px * var(--ui-scale));
 }
 
+/* iter41: when the project default model is unset, the orchestrator
+   model span shows a `— not set —` placeholder. Distinguish it
+   visually from a real model name (italic + dimmer) so the user
+   sees it as a call-to-action, not a real model identifier. */
+.executor-chip-model[data-empty="true"] {
+  font-style: italic;
+  opacity: 0.62;
+  font-variant-numeric: normal;
+}
+
 /* iter35: subtle visual differentiation — external executor model gets
    a 2px accent dot prefix to mark it as the "execution" model. */
 .executor-chip-model[data-source="external"]::before {
