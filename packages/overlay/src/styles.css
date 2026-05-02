@@ -5459,25 +5459,31 @@ code .file-link:hover {
    1.4s on every visible composer, keeping the WebView2 compositor awake
    even when the user was nowhere near the window. Static dot is enough. */
 
+/* Single source after iter20. Was defined six times — a
+   chromed canonical here (16px radius + gradient bg + drop
+   shadow + 72px min-height + transition) plus five later
+   blocks that overrode `border-radius` to 10px, `background`
+   and `box-shadow` with !important, and re-set min-height
+   four times (64px → 68px → 62px). After iter17 made the
+   parent `.chat-input` flat (border-radius: 0), the inner
+   textarea was still rendering with a 10px radius — a
+   rounded textarea nested in a flat container. Folded into
+   one canonical flat block: 0 radius matches the parent,
+   no shadow, no gradient, no transition (the chrome that
+   the transition animated is gone). */
 .chat-textarea {
   flex: 1;
   min-width: 0;
-  min-height: calc(72px * var(--ui-scale) * var(--chat-compose-scale));
+  min-height: calc(62px * var(--ui-scale));
   resize: none;
-  border: 1px solid color-mix(in srgb, var(--subtle-4) 92%, transparent);
-  border-radius: calc(16px * var(--ui-scale) * var(--chat-compose-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 64%),
-    color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface-inset);
   color: var(--text-strong);
-  padding: calc(10px * var(--ui-scale) * var(--chat-compose-scale)) calc(12px * var(--ui-scale) * var(--chat-compose-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
   font-size: var(--ui-font-body);
   line-height: 1.45;
   overflow-y: auto;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.025),
-    0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: min-height 0.2s ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
 .chat-textarea[data-expanded="true"] {
   min-height: calc(220px * var(--ui-scale) * var(--chat-compose-scale));
@@ -12486,18 +12492,10 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   gap: calc(8px * var(--ui-scale));
 }
 
-.chat-textarea-wrap,
-.chat-textarea {
-  min-height: calc(64px * var(--ui-scale));
-}
-
-.chat-textarea {
-  border-radius: var(--radius);
-  border-color: var(--border);
-  background: var(--surface-inset) !important;
-  box-shadow: none !important;
-  font-size: var(--ui-font-body);
-}
+/* iter20: the duplicate `.chat-textarea-wrap, .chat-textarea
+   { min-height: ... }` and the !important `.chat-textarea`
+   override that lived here are folded into the canonical
+   block near line ~5462. */
 
 .chat-textarea:focus {
   border-color: var(--accent);
@@ -12709,11 +12707,10 @@ body[data-theme="light"] .btn-primary {
   align-items: end;
 }
 
-.chat-textarea-wrap,
-.chat-textarea {
-  min-height: calc(68px * var(--ui-scale));
-}
-
+/* iter20: this duplicate min-height pair was folded into the
+   canonical block near line ~5462 (which now declares the
+   final 62px min-height directly). The expanded-state
+   override below stays — it's a different state. */
 .chat-textarea[data-expanded="true"] {
   min-height: calc(210px * var(--ui-scale));
 }
@@ -12962,14 +12959,9 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border-strong));
 }
 
-.chat-textarea {
-  background: color-mix(in srgb, var(--bg) 72%, var(--surface-inset)) !important;
-}
-
-.chat-textarea-wrap,
-.chat-textarea {
-  min-height: calc(62px * var(--ui-scale));
-}
+/* iter20: the late `.chat-textarea` background !important
+   override and the third min-height duplicate were folded
+   into the canonical block near line ~5462. */
 
 .chat-icon-col {
   background: color-mix(in srgb, var(--surface) 52%, transparent);
