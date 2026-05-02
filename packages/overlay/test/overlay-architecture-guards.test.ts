@@ -31,6 +31,21 @@ const THEME_LAYOUT_PROPERTIES =
   /^(?:display|position|inset|top|right|bottom|left|z-index|overflow|box-sizing|grid(?:-.+)?|flex(?:-.+)?|align-.+|justify-.+|place-.+|gap|row-gap|column-gap|margin(?:-.+)?|padding(?:-.+)?|width|height|min-width|min-height|max-width|max-height|border(?:-.+)?|border-radius|box-shadow|transform|translate|scale)$/
 const THEME_CHROME_TOKEN =
   /^--(?:oc-)?(?:radius|space|spacing|size|height|width|shadow|border|layout|motion|duration|easing|font|type|z|gap|inset|padding|margin)(?:-|$)/
+const LEGACY_BUTTON_CLASSES = [
+  "btn",
+  "btn-primary",
+  "chat-send",
+  "chat-interrupt",
+  "titlebar-btn",
+  "sidebar-btn",
+  "sidebar-tool",
+  "workspace-toggle",
+  "right-panel-tab",
+  "executor-chip",
+  "chat-toolbar-btn",
+  "titlebar-menubar-trigger",
+  "titlebar-status-icon",
+]
 
 function countThemeLayoutOverrides(css: string): number {
   let total = 0
@@ -41,6 +56,26 @@ function countThemeLayoutOverrides(css: string): number {
     for (const declaration of body.split(/;|\n/)) {
       const prop = declaration.match(/^\s*([a-zA-Z-]+)\s*:/)?.[1]
       if (prop && THEME_LAYOUT_PROPERTIES.test(prop)) total += 1
+    }
+  }
+  return total
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function countLegacyButtonClassCallers(): number {
+  let total = 0
+  const files = walkFiles(join(OVERLAY_ROOT, "src"), (path) => path.endsWith(".tsx"))
+  for (const file of files) {
+    const text = readText(file)
+    for (const className of LEGACY_BUTTON_CLASSES) {
+      const pattern = new RegExp(
+        `(?:class|className)=\\{?["']([^"']*\\b${escapeRegExp(className)}\\b[^"']*)["']`,
+        "g",
+      )
+      total += Array.from(text.matchAll(pattern)).length
     }
   }
   return total
@@ -190,6 +225,10 @@ describe("overlay architecture guards", () => {
       expect(css).not.toMatch(/body\[|body:is\(|data-theme/)
       expect(css).not.toMatch(rawValue)
     }
+  })
+
+  test("legacy button class callers cannot increase during primitive migration", () => {
+    expect(countLegacyButtonClassCallers()).toBeLessThanOrEqual(95)
   })
 
   test("new component modules stay below the split threshold", () => {
