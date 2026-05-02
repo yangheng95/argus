@@ -1988,12 +1988,11 @@ body[data-theme="light"] .elapsed {
 
 /* Light theme: reasoning blocks */
 body[data-theme="light"] .msg-reasoning {
-  background: rgba(37, 99, 235, 0.06);
-  border-color: rgba(37, 99, 235, 0.14);
-  color: var(--text-strong);
+  background: color-mix(in srgb, var(--status-info) 8%, var(--surface));
+  color: var(--text-muted);
 }
 body[data-theme="light"] .reasoning-text {
-  color: var(--text-strong);
+  color: var(--text-muted);
 }
 
 /* Light theme: section badges */
@@ -4878,11 +4877,11 @@ code .file-link:hover {
   gap: calc(6px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: calc(14px * var(--ui-scale));
-  background: linear-gradient(180deg, rgba(122, 167, 245, 0.16), rgba(122, 167, 245, 0.08));
-  border: 1px solid rgba(122, 167, 245, 0.22);
-  font-size: var(--ui-font-control);
+  background: color-mix(in srgb, var(--status-info) 8%, var(--surface));
+  border: 0;
+  font-size: var(--ui-font-meta);
   line-height: 1.55;
-  color: var(--text-strong);
+  color: var(--text-muted);
   font-style: normal;
   white-space: pre-wrap;
   word-break: break-word;
@@ -4894,20 +4893,20 @@ code .file-link:hover {
   min-height: calc(20px * var(--ui-scale));
   padding: calc(1px * var(--ui-scale)) calc(7px * var(--ui-scale));
   border-radius: 999px;
-  background: rgba(91, 141, 239, 0.12);
-  color: var(--accent);
-  font-size: var(--ui-font-small);
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  background: color-mix(in srgb, var(--status-info) 12%, transparent);
+  color: var(--status-info);
+  font-size: var(--ui-font-meta);
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: 1.5;
   white-space: nowrap;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .reasoning-text {
   display: block;
-  color: var(--text-strong);
-  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
   white-space: pre-wrap;
   min-width: 0;
 }

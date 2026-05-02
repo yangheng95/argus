@@ -530,19 +530,19 @@ body[data-theme="light"] .card__round {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-muted);
 }
-.card__badge--done { background: rgba(95, 173, 86, 0.28); color: #7cc373; box-shadow: 0 0 0 1px rgba(95, 173, 86, 0.35) inset; }
-.card__badge--error { background: rgba(247, 84, 100, 0.28); color: #ff8896; box-shadow: 0 0 0 1px rgba(247, 84, 100, 0.35) inset; }
+.card__badge--done { background: rgba(95, 173, 86, 0.28); color: #7cc373; box-shadow: 0 1px 2px rgba(95, 173, 86, 0.18); }
+.card__badge--error { background: rgba(247, 84, 100, 0.28); color: #ff8896; box-shadow: 0 1px 2px rgba(247, 84, 100, 0.18); }
 /* "concerns" — completed but the integrity / fidelity verdict surfaced
  * non-blocking issues. Distinct from `done` (clean pass) so the operator
  * sees at a glance which finished cards still need attention. Amber. */
-.card__badge--concerns { background: rgba(242, 178, 79, 0.28); color: #f5c46c; box-shadow: 0 0 0 1px rgba(242, 178, 79, 0.4) inset; }
+.card__badge--concerns { background: rgba(242, 178, 79, 0.28); color: #f5c46c; box-shadow: 0 1px 2px rgba(242, 178, 79, 0.18); }
 /* "cancelled" — finished without producing a result (operator stop, replan
  * superseded, etc.). Distinct from `error` (real failure) so a red ✗ no
  * longer collapses three different terminal reasons into one icon.
  * Outline ⊘ on muted tone. */
-.card__badge--cancelled { background: rgba(255, 255, 255, 0.04); color: var(--text-muted); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18) inset; }
-.card__badge--running { background: rgba(242, 153, 74, 0.28); box-shadow: 0 0 0 1px rgba(242, 153, 74, 0.35) inset; }
-.card__badge--pending { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset; }
+.card__badge--cancelled { background: rgba(255, 255, 255, 0.04); color: var(--text-muted); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10); }
+.card__badge--running { background: rgba(242, 153, 74, 0.28); box-shadow: 0 1px 2px rgba(242, 153, 74, 0.18); }
+.card__badge--pending { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10); }
 .card__badge--skipped { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
 .card__badge--neutral { background: transparent; color: transparent; width: 6px; height: 6px; }
 
@@ -561,9 +561,11 @@ body[data-theme="light"] .card__round {
 /* ── Role accent ──────────────────────────── */
 /* Top-level cards derive colour from data-role; stage remains text only. */
 
-.card[data-depth="0"][data-kind="agent"][data-stage] { border-left: 3px solid var(--card-role, var(--card-border-strong)); }
-.card[data-depth="0"][data-kind="goal"]              { border-left: 3px solid var(--card-role, var(--role-execution)); }
-.card[data-depth="0"][data-kind="step"][data-stage]  { border-left: 3px solid var(--card-role, var(--role-execution)); }
+.card[data-depth="0"][data-kind="agent"][data-stage],
+.card[data-depth="0"][data-kind="goal"],
+.card[data-depth="0"][data-kind="step"][data-stage] {
+  border-left: 0;
+}
 
 /* role colour also tints the title at top level */
 .card[data-depth="0"][data-kind="agent"][data-stage] > .card__head .card__title { color: var(--card-role, var(--text-strong)); }
@@ -878,11 +880,11 @@ body[data-theme="light"] .card__round {
   padding-top: 0;
 }
 
-/* User: accent bubble — solid left rail, stronger tint, accent title. */
+/* User: accent bubble — stronger tint, accent title. */
 .card[data-kind="message"][data-role="user"] {
   background: color-mix(in srgb, var(--accent-dim) 76%, transparent);
   border-color: color-mix(in srgb, var(--accent) 18%, var(--card-border));
-  border-left: 3px solid var(--accent);
+  border-left: 0;
   box-shadow: 0 10px 20px rgba(45, 92, 164, 0.12);
 }
 .card[data-kind="message"][data-role="user"] > .card__head {
@@ -903,11 +905,11 @@ body[data-theme="light"] .card__round {
   color: var(--text-strong);
 }
 
-/* System: muted meta-note — dashed left rail, faint amber tint, tiny uppercase title. */
+/* System: muted meta-note — faint amber tint, compact title. */
 .card[data-kind="message"][data-role="system"] {
   background: color-mix(in srgb, var(--card-system-bg) 82%, transparent);
   border-color: color-mix(in srgb, var(--card-system-border) 92%, transparent);
-  border-left: 2px dashed var(--card-system-rail);
+  border-left: 0;
   box-shadow: none;
 }
 .card[data-kind="message"][data-role="system"] > .card__head {
@@ -915,8 +917,8 @@ body[data-theme="light"] .card__round {
 }
 .card[data-kind="message"][data-role="system"] > .card__head .card__title {
   font-size: var(--ui-font-tiny);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--card-system-rail);
   font-weight: 600;
 }
@@ -1066,7 +1068,7 @@ body[data-theme="light"] .card__round {
   border-radius: var(--card-radius);
   background: color-mix(in srgb, var(--accent-dim) 76%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--card-border));
-  border-left: 3px solid var(--card-role, var(--card-border-strong));
+  border-left: 0;
   padding: var(--card-pad-y) var(--card-pad-x);
   margin: var(--card-gap) 0;
   font-size: var(--card-title-size);
@@ -1644,7 +1646,7 @@ body[data-theme="light"] .card__round {
 .card[data-depth="0"][data-kind="phase"],
 .card[data-depth="0"][data-kind="step"],
 .card[data-depth="0"][data-kind="tool"] {
-  border-left: 3px solid var(--card-role, var(--card-line));
+  border-left: 0;
   background: var(--card-bg-0);
 }
 
@@ -1807,7 +1809,7 @@ body[data-theme="light"] .card__round {
 .card[data-kind="message"][data-role="user"] {
   background: var(--accent-dim);
   border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  border-left: 3px solid var(--accent);
+  border-left: 0;
   box-shadow: none;
 }
 
@@ -1818,7 +1820,7 @@ body[data-theme="light"] .card__round {
 .card[data-kind="message"][data-role="system"] {
   background: var(--card-system-bg);
   border-color: var(--card-system-border);
-  border-left: 2px solid var(--card-system-rail);
+  border-left: 0;
 }
 
 .card[data-depth="0"][data-kind="message"] > .card__head,
@@ -1829,7 +1831,7 @@ body[data-theme="light"] .card__round {
 .interaction-card {
   border-radius: var(--card-radius);
   border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--card-border));
-  border-left: 3px solid var(--card-role, var(--accent));
+  border-left: 0;
   background: var(--surface-inset);
   box-shadow: none;
   padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x);

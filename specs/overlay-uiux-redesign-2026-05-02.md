@@ -205,6 +205,8 @@ type CardRole = "user" | "system" | "execution" | "review";
 
 ### Phase D - Card / Conversation 视觉降噪
 
+状态：已实施。代码提交范围包括删除消息卡、顶层 agent/goal/step/phase/tool 与 interaction card 的左边条，badge 去掉 inset shadow，reasoning 块改为低噪 metadata 样式，并新增 `card-visual.test.ts` 锁定这些视觉约束。
+
 文件：
 
 - `packages/overlay/src/styles/card.css`
