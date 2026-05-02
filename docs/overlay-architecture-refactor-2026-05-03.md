@@ -37,6 +37,11 @@ Progress log:
   `.chat-send`, `.executor-chip`, and `.right-panel-tab` cannot rise
   even if another family falls, and the `Button` primitive test rejects
   legacy class leakage into the new wrapper.
+- 2026-05-03: Button primitive variants are now single-sourced as
+  exported const tuples (`BUTTON_VARIANTS`, `BUTTON_SIZES`,
+  `BUTTON_TONES`) with types derived from them. Tests compare those
+  tuples against `button.css` `[data-variant]`, `[data-size]`, and
+  `[data-tone]` selectors so TS API and CSS variants cannot drift.
 
 Trigger: user feedback (2026-05-03):
 

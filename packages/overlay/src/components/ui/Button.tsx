@@ -1,9 +1,13 @@
 import { splitProps } from "solid-js";
 import type { JSX } from "solid-js";
 
-export type ButtonVariant = "solid" | "outline" | "ghost";
-export type ButtonSize = "sm" | "md" | "icon";
-export type ButtonTone = "neutral" | "accent" | "danger";
+export const BUTTON_VARIANTS = ["solid", "outline", "ghost"] as const;
+export const BUTTON_SIZES = ["sm", "md", "icon"] as const;
+export const BUTTON_TONES = ["neutral", "accent", "danger"] as const;
+
+export type ButtonVariant = (typeof BUTTON_VARIANTS)[number];
+export type ButtonSize = (typeof BUTTON_SIZES)[number];
+export type ButtonTone = (typeof BUTTON_TONES)[number];
 
 export interface ButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
   variant: ButtonVariant;
