@@ -15,7 +15,7 @@ import { WindowControls } from "./components/WindowControls";
 import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/TitlebarMenubar";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { FilesSection } from "./components/FilesSection";
-import { DeliveryPanel } from "./components/Board";
+import { DeliveryPanel, deliveryPanelDelivery } from "./components/Board";
 import { LogViewer } from "./components/LogViewer";
 import {
   WorkspacePanel,
@@ -913,12 +913,7 @@ if (deliveryMountEl) {
   render(
     () => (
       <DeliveryPanel
-        delivery={
-          (boardStore.board as any)?.candidateDelivery ||
-          (boardStore.board as any)?.acceptedDelivery ||
-          (boardStore.board as any)?.delivery ||
-          null
-        }
+        delivery={deliveryPanelDelivery(boardStore.board as any)}
       />
     ),
     deliveryMountEl,

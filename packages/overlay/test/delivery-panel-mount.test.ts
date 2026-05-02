@@ -37,7 +37,7 @@ test("index.html mounts the delivery panel BEFORE the files panel — verdict is
 
 test("main.tsx imports DeliveryPanel and mounts it at #solidDeliveryMount", async () => {
   const main = await readSrc("src/main.tsx");
-  expect(main).toContain('import { DeliveryPanel }');
+  expect(main).toMatch(/import\s+\{\s*DeliveryPanel,\s*deliveryPanelDelivery\s*\}\s+from "\.\/components\/Board"/);
   expect(main).toContain('document.getElementById("solidDeliveryMount")');
   expect(main).toContain("<DeliveryPanel");
 });
@@ -46,6 +46,18 @@ test("DeliveryPanel and DeliveryEvidenceGroup are exported from components/Board
   const board = await readSrc("src/components/Board.tsx");
   expect(board).toMatch(/export\s+function\s+DeliveryPanel/);
   expect(board).toMatch(/export\s+function\s+DeliveryEvidenceGroup/);
+  expect(board).toMatch(/export\s+function\s+deliveryPanelDelivery/);
+});
+
+test("DeliveryPanel has an in-flight projection while the run is in deliver before a delivery row exists", async () => {
+  const board = await readSrc("src/components/Board.tsx");
+  const main = await readSrc("src/main.tsx");
+  expect(board).toContain('const DELIVERY_PHASES = new Set(["deliver", "refine"])');
+  expect(board).toContain('const LIVE_RUN_STATUSES = new Set(["queued", "accepted", "running", "blocked"])');
+  expect(board).toContain('pending: true');
+  expect(board).toContain('t("delivery.inflight.hint")');
+  expect(board).toContain("if (hasActiveDeliveryRun(board())) return \"delivery\";");
+  expect(main).toContain("deliveryPanelDelivery(boardStore.board as any)");
 });
 
 test("DeliveryPanel drives chrome via [data-verdict] (not the lifecycle status mapping)", async () => {
@@ -117,6 +129,7 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "delivery.show_more",
     "delivery.show_less",
     "delivery.empty.hint",
+    "delivery.inflight.hint",
   ];
   // i18n keys are flat strings with literal dots, not nested paths — use
   // `key in obj` instead of toHaveProperty (which would mis-traverse).
