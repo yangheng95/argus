@@ -436,29 +436,21 @@ a { color: inherit; text-decoration: none; }
   flex-shrink: 0;
 }
 
-.brand-heading {
-  display: flex;
-  align-items: center;
-  gap: calc(8px * var(--ui-scale));
-  min-width: 0;
-  flex-shrink: 0;
-}
-
-.brand-name {
-  font-size: calc(var(--ui-font-control) + 0.5px);
-  font-weight: 650;
-  color: var(--text-strong);
-  letter-spacing: 0.08em;
-  flex-shrink: 0;
-  text-transform: uppercase;
-}
+/* iter6: the OpenCorvus wordmark used to live in the titlebar next
+   to the logo (`<span class="brand-name">`), and the connection
+   badge sat right after it inside `.brand-heading`. The wordmark is
+   gone (the logo carries the brand) and the badge moved to
+   `.titlebar-utility` on the far right. So `.brand-heading` and
+   `.brand-name` have no DOM consumers any more — both removed.
+   `.brand-guide` now wraps the logo directly and stays the
+   quick-guide popover anchor. */
 
 .brand-guide {
   position: relative;
   display: inline-flex;
   align-items: center;
   min-width: 0;
-  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border: 1px solid transparent;
   border-radius: calc(10px * var(--ui-scale));
   cursor: help;
@@ -468,10 +460,6 @@ a { color: inherit; text-decoration: none; }
   -webkit-app-region: no-drag;
 }
 
-.brand-guide .brand-name {
-  transition: color 120ms;
-}
-
 .brand-guide:hover,
 .brand-guide:focus-visible,
 .brand-guide:focus-within {
@@ -479,12 +467,6 @@ a { color: inherit; text-decoration: none; }
   background: var(--hover-accent-wash);
   box-shadow: var(--hover-accent-shadow);
   transform: translateY(calc(-1px * var(--ui-scale)));
-}
-
-.brand-guide:hover .brand-name,
-.brand-guide:focus-visible .brand-name,
-.brand-guide:focus-within .brand-name {
-  color: var(--accent);
 }
 
 .brand-guide:focus-visible {
