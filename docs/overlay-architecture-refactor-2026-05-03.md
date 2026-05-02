@@ -27,6 +27,11 @@ Progress log:
   literals, theme selectors, and non-`data-*` variant drift. Overlay
   tsconfig validation also uncovered and fixed the existing missing
   `AgentInfo` type import in `AgentModelsPanel`.
+- 2026-05-03: Button migration now has a caller budget guard:
+  legacy static button-class callers (`.btn`, `.chat-send`,
+  `.titlebar-btn`, `.right-panel-tab`, `.executor-chip`, etc.) are
+  capped at the measured baseline of 95 and must move downward as
+  each caller group migrates to the `Button` primitive.
 
 Trigger: user feedback (2026-05-03):
 
