@@ -8,6 +8,8 @@
   --oc-density-control-height: calc(24px * var(--ui-scale, 1));
   --oc-density-icon-button: calc(24px * var(--ui-scale, 1));
   --oc-density-chip-height: calc(20px * var(--ui-scale, 1));
+  --oc-border-width: 1px;
+  --oc-disabled-opacity: 0.55;
 
   --oc-header-height: calc(42px * var(--ui-scale, 1));
   --oc-header-padding-x: calc(12px * var(--ui-scale, 1));
@@ -17,6 +19,6 @@
   --oc-header-title-letter-spacing: 0;
   --oc-header-title-transform: none;
   --oc-header-bg: var(--surface-strong);
-  --oc-header-border: 1px solid var(--border);
+  --oc-header-border: var(--oc-border-width) solid var(--border);
   --oc-header-shadow: none;
 }

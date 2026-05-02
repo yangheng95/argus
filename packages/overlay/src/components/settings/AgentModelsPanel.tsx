@@ -24,6 +24,7 @@ import { t } from "../../utils/i18n";
 import {
   HEXIN_REFRESH_TIMEOUT_MILLISECONDS,
   loadAgentModelsData,
+  type AgentInfo,
   type ProvidersPayload,
 } from "./agent-models-data";
 
