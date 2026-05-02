@@ -232,8 +232,7 @@ describe("overlay architecture guards", () => {
     }
 
     const skillMarket = readText(join(OVERLAY_ROOT, "src/components/settings/SkillMarketPanel.tsx"))
-    expect(count(/ext-group-head oc-surface-header/g, skillMarket)).toBe(3)
-    expect(count(/ext-group-head-title oc-surface-header__title/g, skillMarket)).toBe(3)
+    expect(count(/<SurfaceHeader/g, skillMarket)).toBe(3)
   })
 
   test("new primitive style files use data attributes for variants and never use important", () => {

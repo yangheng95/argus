@@ -25,6 +25,7 @@ import {
   loadSkillMarket,
 } from "../../services/extensions";
 import { Button } from "../ui/Button";
+import { SurfaceHeader } from "../ui/SurfaceHeader";
 
 // ── Types ──
 
@@ -329,36 +330,39 @@ export default function SkillMarketPanel() {
 
       {/* ── Installed Skills ── */}
       <section class="ext-group">
-        <header class="ext-group-head oc-surface-header">
-          <span class="ext-group-head-title oc-surface-header__title">{t("skill.title")}</span>
-          <span class="ext-group-head-actions oc-surface-header__actions">
-            <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={handleReloadSkills}>
-              {t("common.reload")}
-            </Button>
-            <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={handleOpenSkillDir}>
-              {t("skill.open_dir")}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              tone="neutral"
-              onClick={() => setShowAddSkill(!showAddSkill())}
-            >
-              {t("skill.add")}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              tone="danger"
-              disabled={removableSkills().length === 0}
-              onClick={handleDeleteAllSkills}
-            >
-              {t("skill.delete_all")}
-            </Button>
-          </span>
-        </header>
+        <SurfaceHeader
+          variant="settings-group"
+          title={t("skill.title")}
+          actions={
+            <>
+              <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={handleReloadSkills}>
+                {t("common.reload")}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={handleOpenSkillDir}>
+                {t("skill.open_dir")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                tone="neutral"
+                onClick={() => setShowAddSkill(!showAddSkill())}
+              >
+                {t("skill.add")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                tone="danger"
+                disabled={removableSkills().length === 0}
+                onClick={handleDeleteAllSkills}
+              >
+                {t("skill.delete_all")}
+              </Button>
+            </>
+          }
+        />
         <div class="ext-group-body">
 
         {/* Add Skill inline form */}
@@ -482,30 +486,33 @@ export default function SkillMarketPanel() {
 
       {/* ── MCP Servers ── */}
       <section class="ext-group">
-        <header class="ext-group-head oc-surface-header">
-          <span class="ext-group-head-title oc-surface-header__title">{t("mcp.title")}</span>
-          <span class="ext-group-head-actions oc-surface-header__actions">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              tone="neutral"
-              onClick={() => setShowAddMcp(!showAddMcp())}
-            >
-              {t("mcp.add_action")}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              tone="danger"
-              disabled={mcpEntries().length === 0}
-              onClick={handleDeleteAllMcp}
-            >
-              {t("mcp.delete_all")}
-            </Button>
-          </span>
-        </header>
+        <SurfaceHeader
+          variant="settings-group"
+          title={t("mcp.title")}
+          actions={
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                tone="neutral"
+                onClick={() => setShowAddMcp(!showAddMcp())}
+              >
+                {t("mcp.add_action")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                tone="danger"
+                disabled={mcpEntries().length === 0}
+                onClick={handleDeleteAllMcp}
+              >
+                {t("mcp.delete_all")}
+              </Button>
+            </>
+          }
+        />
         <div class="ext-group-body">
         {/* Add MCP inline form */}
         <Show when={showAddMcp()}>
@@ -612,9 +619,7 @@ export default function SkillMarketPanel() {
       {/* ── Skill Market ── hidden when empty to avoid a standalone header bar */}
       <Show when={market().length > 0}>
         <section class="ext-group">
-          <header class="ext-group-head oc-surface-header">
-            <span class="ext-group-head-title oc-surface-header__title">{t("skill.market.title")}</span>
-          </header>
+          <SurfaceHeader variant="settings-group" title={t("skill.market.title")} />
           <div class="ext-group-body">
             <div class="extension-list" id="skillMarketList">
               <For each={market()}>
