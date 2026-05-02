@@ -10,7 +10,7 @@
 //   * Settings tabs (openConfigDialog + switchConfigTab)
 //   * Theme switcher (settingsStore.theme + applyTheme)
 //   * Locale switcher
-//   * New Task (focus composer)
+//   * New Chat (focus composer)
 //
 // Filtering: case-insensitive substring on command label + description +
 // keywords. Up/Down navigate, Enter runs, Esc closes. The selected

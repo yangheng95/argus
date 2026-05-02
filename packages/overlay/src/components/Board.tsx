@@ -654,11 +654,8 @@ export function Board(props: BoardProps) {
         />
       </div>
 
-      {/* Empty-state intro: when no task is selected the right panel was
-          a blank box. Show a brief explainer of the two task modes
-          (workflow / build) and the main agents in the pipeline so the
-          operator knows what they're about to invoke. Disappears the
-          moment a task is selected. */}
+      {/* Empty-state intro: when no conversation is selected, keep the
+          workspace useful without opening a blocking first-run modal. */}
       <Show when={!boardStore.selectedTaskID && !board()?.task?.id}>
         <BoardIntro />
       </Show>

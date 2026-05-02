@@ -1,10 +1,7 @@
 // ── BoardIntro ──
 //
-// Right-panel empty state shown when no task is selected. Briefly explains
-// the two task kinds (workflow / build) and the main agents in the pipeline,
-// so a first-time operator (or a returning one staring at a blank panel) sees
-// what each mode is for and what each agent contributes. Replaces what was
-// otherwise an empty <div id="taskActionsBar"> + collapsed Show on Board.tsx.
+// Right-panel empty state shown when no conversation is selected. It keeps
+// the default workspace useful without opening a blocking first-run modal.
 //
 // Mounted by Board.tsx via <Show when={!boardStore.selectedTaskID}>.
 //
@@ -46,9 +43,8 @@ export function BoardIntro() {
       </header>
 
       {/* Cold-start blocker: when no working directory is set, the
-          composer is silently disabled and there's no other signal
-          telling the operator what to do. Surface a high-contrast
-          callout here pointing at the cwd dropdown in the title bar. */}
+          composer is disabled until a directory is set. Surface the setup
+          action inside the workspace instead of covering the full app. */}
       <Show when={!settingsStore.directory}>
         <div
           class="board-intro__cta board-intro__cta--directory"

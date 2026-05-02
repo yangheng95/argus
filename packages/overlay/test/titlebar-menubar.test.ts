@@ -268,7 +268,7 @@ test("titlebar menubar fits documented responsive widths and locales", async () 
   }
 }, { timeout: 120_000 })
 
-test("startup workspace dialog is the default project picker when no directory is set", async () => {
+test("workspace intro owns first-run directory setup when no directory is set", async () => {
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -292,10 +292,6 @@ test("startup workspace dialog is the default project picker when no directory i
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_locale", "en-US")
       localStorage.removeItem("oc_directory")
-      localStorage.setItem("oc_recent_directories", JSON.stringify([
-        "D:/work/opencorvus",
-        "D:/work/customer-portal",
-      ]))
       window.__TAURI__ = {
         core: {
           invoke: async (command: string) => {
@@ -327,26 +323,23 @@ test("startup workspace dialog is the default project picker when no directory i
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
-    await page.waitForSelector('[data-testid="startup-workspace-dialog"]', { visible: true })
-    const dialog = await page.evaluate(() => {
-      const root = document.querySelector<HTMLElement>('[data-testid="startup-workspace-dialog"]')
-      const buttons = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="startup-recent-project"]'))
-      const browse = document.querySelector<HTMLElement>('[data-testid="startup-open-folder"]')
-      const create = document.querySelector<HTMLElement>('[data-testid="startup-create-folder"]')
+    await page.waitForSelector('[data-testid="board-intro-open-folder"]', { visible: true })
+    const intro = await page.evaluate(() => {
+      const startup = document.querySelector<HTMLElement>('[data-testid="startup-workspace-dialog"]')
+      const openFolder = document.querySelector<HTMLElement>('[data-testid="board-intro-open-folder"]')
+      const title = document.querySelector<HTMLElement>(".board-intro__title")
+      const sections = document.querySelector<HTMLElement>(".sections-title")
       return {
-        title: root?.querySelector("h1")?.textContent || "",
-        browseText: browse?.textContent || "",
-        hasCreate: !!create,
-        recent: buttons.map((node) => node.textContent || ""),
-        modal: root?.querySelector("[role='dialog']")?.getAttribute("aria-modal") || "",
+        hasStartup: !!startup,
+        openFolderText: openFolder?.textContent || "",
+        title: title?.textContent || "",
+        sections: sections?.textContent || "",
       }
     })
-    expect(dialog.title).toBe("Choose a project to work in")
-    expect(dialog.browseText).toBe("Open Folder")
-    expect(dialog.hasCreate).toBe(false)
-    expect(dialog.recent.join("\n")).toContain("opencorvus")
-    expect(dialog.recent.join("\n")).toContain("customer-portal")
-    expect(dialog.modal).toBe("true")
+    expect(intro.hasStartup).toBe(false)
+    expect(intro.openFolderText).toBe("Open Folder")
+    expect(intro.title).toBe("OpenCorvus workspace")
+    expect(intro.sections).toBe("Workspace")
     await page.close()
   } finally {
     await browser.close().catch(() => undefined)
