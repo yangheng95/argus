@@ -18,6 +18,7 @@ import { AppLog } from "../utils/log";
 import { t } from "../utils/i18n";
 import { apiJson, configure as configureApi } from "./api";
 import { getHostTransport } from "./host-transport";
+import type { ProjectEditorID } from "./host-transport";
 import { nativeMessage } from "./app-dialog";
 import { nativeOpen, nativePrompt } from "../utils/native";
 import { checkConnection } from "./connection";
@@ -27,6 +28,28 @@ import { initGitCurrent } from "../utils/git";
 // ── Types ──
 
 export type WorkspaceMode = "offline" | "task" | "empty";
+
+export interface ProjectEditor {
+  id: ProjectEditorID;
+  label: string;
+  shortLabel: string;
+}
+
+// IDE means Integrated Development Environment; these IDs are the public
+// choices surfaced by the workspace UI and handled by the native host.
+export const PROJECT_EDITORS: ProjectEditor[] = [
+  { id: "vscode", label: "VS Code", shortLabel: "VS" },
+  { id: "pycharm", label: "PyCharm", shortLabel: "Py" },
+  { id: "webstorm", label: "WebStorm", shortLabel: "WS" },
+  { id: "intellij", label: "IntelliJ IDEA", shortLabel: "IJ" },
+  { id: "cursor", label: "Cursor", shortLabel: "Cu" },
+];
+
+export const QUICK_PROJECT_EDITORS: ProjectEditor[] = PROJECT_EDITORS.slice(0, 2);
+
+export function isProjectEditorID(value: string): value is ProjectEditorID {
+  return PROJECT_EDITORS.some((item) => item.id === value);
+}
 
 export interface ClearWorkspaceRuntimeOptions {
   /** When true, the in-flight chat request is NOT cancelled. */
@@ -597,6 +620,37 @@ export async function openDirectory(target?: string): Promise<void> {
     AppLog.error("ui", "Failed to open working directory", { error: String(e) });
     await nativeMessage(errorText("cwd.open_failed", e), {
       title: t("cwd.title"),
+      kind: "error",
+    });
+  }
+}
+
+// ── openDirectoryInEditor ──
+
+/**
+ * Open the given directory (or the current active directory) with the selected
+ * project editor.
+ */
+export async function openDirectoryInEditor(
+  editor: ProjectEditorID,
+  target?: string,
+): Promise<void> {
+  const dir = target ?? activeDirectory();
+  if (!dir) return;
+  try {
+    await getHostTransport().native({
+      kind: "workspace.openProjectEditor",
+      editor,
+      path: dir,
+    });
+  } catch (e) {
+    const label = PROJECT_EDITORS.find((item) => item.id === editor)?.label ?? editor;
+    AppLog.error("ui", "Failed to open working directory in editor", {
+      editor,
+      error: String(e),
+    });
+    await nativeMessage(errorText("cwd.open_editor_failed", e), {
+      title: t("cwd.open_in_editor", { name: label }),
       kind: "error",
     });
   }

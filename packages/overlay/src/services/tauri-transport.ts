@@ -433,6 +433,11 @@ export function createTauriTransport(): HostTransport {
           })
         case "workspace.createDir":
           return invokeTauri("overlay_create_dir", { path: command.path })
+        case "workspace.openProjectEditor":
+          return invokeTauri("overlay_open_project_editor", {
+            editor: command.editor,
+            path: command.path,
+          })
         default: {
           // Exhaustiveness — TypeScript narrows `command` to `never` here.
           // If a new NativeCommand kind is added without a case above, the

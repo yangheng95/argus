@@ -115,6 +115,13 @@ export interface PickFilesOptions {
   multiple?: boolean
 }
 
+export type ProjectEditorID =
+  | "vscode"
+  | "pycharm"
+  | "webstorm"
+  | "intellij"
+  | "cursor"
+
 export type NativeCommand =
   // utils/native.ts
   | { kind: "open-url"; url: string }
@@ -135,6 +142,7 @@ export type NativeCommand =
   | { kind: "workspace.pickDir"; start?: string }
   | { kind: "workspace.pickFiles"; start?: string; multiple?: boolean }
   | { kind: "workspace.createDir"; path: string }
+  | { kind: "workspace.openProjectEditor"; editor: ProjectEditorID; path: string }
 
 export class UnsupportedNativeCommandError extends Error {
   override readonly name: string = "UnsupportedNativeCommandError"

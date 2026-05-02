@@ -81,7 +81,9 @@ import {
   applyDirectory,
   browseDirectory,
   createDirectory,
+  isProjectEditorID,
   openDirectory,
+  openDirectoryInEditor,
   setDirectory,
   activeDirectory,
   loadRecentDirectories,
@@ -1378,7 +1380,7 @@ function closeRecentDirPanel(): void {
 document.getElementById("taskCwdDropdown")?.addEventListener("click", (event) => {
   const target = event.target as HTMLElement | null;
   if (!target) return;
-  if (target.closest("[data-path-action],[data-path-open],[data-path-set]")) return;
+  if (target.closest("[data-path-action],[data-path-open],[data-path-set],[data-path-editor]")) return;
   event.stopPropagation();
   openRecentDirPanel();
 });
@@ -1386,19 +1388,23 @@ document.getElementById("taskCwdDropdown")?.addEventListener("keydown", (event) 
   const e = event as KeyboardEvent;
   if (e.key !== "Enter" && e.key !== " ") return;
   const target = event.target as HTMLElement | null;
-  if (target && target.closest("[data-path-action],[data-path-open],[data-path-set]")) return;
+  if (target && target.closest("[data-path-action],[data-path-open],[data-path-set],[data-path-editor]")) return;
   e.preventDefault();
   openRecentDirPanel();
 });
 
 document.getElementById("taskDir")?.addEventListener("click", async (event) => {
-  const button = eventClosest(event, "[data-path-action],[data-path-open],[data-path-set]");
+  const button = eventClosest(event, "[data-path-action],[data-path-open],[data-path-set],[data-path-editor]");
   if (!button || (button as HTMLButtonElement).disabled) return;
   const el = button as HTMLElement;
   const action = el.dataset.pathAction || "";
   if (action === "browse") { await browseDirectory(); return; }
   if (action === "create") { await createDirectory(); return; }
   if (el.dataset.pathOpen) { await openDirectory(el.dataset.pathOpen); return; }
+  if (el.dataset.pathEditor && isProjectEditorID(el.dataset.pathEditor)) {
+    await openDirectoryInEditor(el.dataset.pathEditor);
+    return;
+  }
   const target = el.dataset.pathSet || "";
   if (!target) return;
   try { await setDirectory(target); } catch (e) {
