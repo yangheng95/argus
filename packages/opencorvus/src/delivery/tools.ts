@@ -21,10 +21,31 @@ import { EngineService } from "@/task-api"
 import { findTask } from "@/engine/store"
 import { renderPage, findBrowserExecutable } from "@/delivery/checks/visual"
 import { buildMultimodalToolResult } from "@/delivery/tool-result"
+import { AttachmentStore } from "@/storage/attachment-store"
+import { buildTaskUpstreamAgentContextSections } from "@/prompt/upstream-context"
+import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 
 const TASK_CHAIN_DEPTH_LIMIT = 3
 
 const log = Log.create({ service: "delivery-tools" })
+
+type DeliveryToolAttachment = {
+  sha: string
+  url: string
+  mime: string
+  size: number
+  filename?: string
+  intent?: string
+  source?: string
+}
+
+type DeliveryToolContext = {
+  sessionID?: string
+  taskID?: string
+  goals?: GoalInfo[]
+  delivery?: DeliveryInfo
+  attachments?: DeliveryToolAttachment[]
+}
 
 /**
  * Creates the tool set for the DeliveryAgent.
@@ -34,14 +55,105 @@ const log = Log.create({ service: "delivery-tools" })
  * - 2 memory tools: memory_search, memory_write
  * - 1 execution tool: run_command (for builds, startup checks)
  */
-export function createDeliveryTools(input?: { sessionID?: string; taskID?: string }) {
+export function createDeliveryTools(input?: DeliveryToolContext) {
   const codebase = createCodebaseTools()
   const projectId = Instance.project.id
   const projectDir = Filesystem.resolve(Instance.directory)
   const taskID = input?.taskID
+  const deliveryContext = {
+    taskID,
+    goals: input?.goals ?? [],
+    delivery: input?.delivery,
+    attachments: input?.attachments ?? [],
+  }
 
   return {
     ...codebase,
+
+    inspect_delivery_context: tool({
+      description:
+        "Fetch detailed delivery context on demand. The startup prompt is intentionally compact to avoid " +
+        "provider input overflow; use this tool when you need full goal acceptance details, upstream contracts, " +
+        "manifest failures, host gate evidence, executor claims, changed files, diffs, or attachment inventory. " +
+        "Do not ask for sections you do not need.",
+      inputSchema: z.object({
+        section: z.enum([
+          "overview",
+          "goals",
+          "upstream_context",
+          "manifest",
+          "host_gate_failures",
+          "runtime_failures",
+          "visual_failures",
+          "executor_reports",
+          "changed_files",
+          "diffs",
+          "attachments",
+        ]),
+        max_chars: z.number().int().min(1_000).max(40_000).default(12_000),
+      }),
+      execute: async ({ section, max_chars }) => {
+        const text = renderDeliveryContextSection(deliveryContext, section)
+        return truncateToolText(text, max_chars)
+      },
+    }),
+
+    compare_visual_artifacts: tool({
+      description:
+        "Load visual artifacts only when visual comparison is needed. Returns the selected rendered output " +
+        "and reference image(s) as multimodal tool-result attachments plus a small JSON inventory. This is " +
+        "the only delivery path that loads task image bytes; the startup prompt deliberately does not inline screenshots.",
+      inputSchema: z.object({
+        rendered: z.string().optional().describe("Optional rendered output filename or sha. Defaults to the first rendered_output attachment."),
+        reference: z.string().optional().describe("Optional reference filename or sha. Defaults to the first non-rendered image attachment."),
+        include_all_references: z.boolean().default(false).describe("Attach every reference image instead of one selected reference."),
+      }),
+      execute: async ({ rendered, reference, include_all_references }) => {
+        const images = deliveryContext.attachments.filter((item) => item.mime.startsWith("image/"))
+        if (images.length === 0) return "compare_visual_artifacts: no image artifacts are available for this delivery."
+
+        const renderedImages = images.filter((item) => item.intent === "rendered_output")
+        const referenceImages = images.filter((item) => item.intent !== "rendered_output")
+        const renderedMatch = selectVisualArtifact(renderedImages, rendered) ?? renderedImages[0]
+        const referenceMatches = include_all_references
+          ? referenceImages
+          : [selectVisualArtifact(referenceImages, reference) ?? referenceImages[0]].filter((item): item is DeliveryToolAttachment => Boolean(item))
+
+        const selected = [renderedMatch, ...referenceMatches].filter((item): item is DeliveryToolAttachment => Boolean(item))
+        if (selected.length === 0) {
+          return [
+            "compare_visual_artifacts: no selectable visual pair.",
+            `rendered_outputs=${renderedImages.length}`,
+            `references=${referenceImages.length}`,
+          ].join("\n")
+        }
+
+        const imageFiles = selected.map((item) => {
+          const located = AttachmentStore.nameFromUrl(item.url)
+          if (!located) throw new Error(`compare_visual_artifacts: attachment ${item.filename ?? item.sha} has no resolvable url`)
+          const absPath = AttachmentStore.resolveAbsolute(located.projectID, located.name)
+          if (!absPath) throw new Error(`compare_visual_artifacts: attachment ${located.projectID}/${located.name} is not resolvable on disk`)
+          return {
+            path: absPath,
+            mime: item.mime,
+            filename: item.filename ?? `${item.intent ?? "visual"}-${item.sha.slice(0, 12)}`,
+          }
+        })
+
+        return await buildMultimodalToolResult({
+          text: JSON.stringify({
+            rendered_output: renderedMatch ? describeVisualArtifact(renderedMatch) : null,
+            references: referenceMatches.map(describeVisualArtifact),
+            instructions: [
+              "Compare rendered output against the reference image(s) directly.",
+              "Reject obvious blank/error/mismatched layouts with category='visual'.",
+              "Cite concrete layout, spacing, color, typography, component, or text differences in rejection_details.",
+            ],
+          }, null, 2),
+          images: imageFiles,
+        })
+      },
+    }),
 
     query_metric_trajectory: tool({
       description:
@@ -623,6 +735,229 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
     }),
 
   }
+}
+
+type DeliveryContextSection =
+  | "overview"
+  | "goals"
+  | "upstream_context"
+  | "manifest"
+  | "host_gate_failures"
+  | "runtime_failures"
+  | "visual_failures"
+  | "executor_reports"
+  | "changed_files"
+  | "diffs"
+  | "attachments"
+
+function renderDeliveryContextSection(
+  input: {
+    taskID?: string
+    goals: GoalInfo[]
+    delivery?: DeliveryInfo
+    attachments: DeliveryToolAttachment[]
+  },
+  section: DeliveryContextSection,
+): string {
+  const delivery = input.delivery
+  switch (section) {
+    case "overview":
+      return [
+        "# Delivery Context Overview",
+        `task_id=${input.taskID ?? "(none)"}`,
+        `goals=${input.goals.length}`,
+        `changed_files=${delivery?.changedFiles.length ?? 0}`,
+        `executor_reports=${delivery?.goalReports?.length ?? 0}`,
+        `diffs=${delivery?.diffs?.length ?? 0}`,
+        `attachments=${input.attachments.length}`,
+        `manifest_status=${delivery?.manifestGate?.status ?? "(none)"}`,
+      ].join("\n")
+
+    case "goals":
+      return "# Goals\n\n" + input.goals.map(renderGoalDetail).join("\n\n---\n\n")
+
+    case "upstream_context":
+      if (!input.taskID) return "No task_id is available; upstream context cannot be loaded."
+      return buildTaskUpstreamAgentContextSections(input.taskID).join("\n\n---\n\n") || "No upstream context found."
+
+    case "manifest":
+      return renderManifestContext(delivery)
+
+    case "host_gate_failures":
+      return renderHostGateFailures(delivery)
+
+    case "runtime_failures":
+      return "# Runtime Evidence Failures\n\n" + ((delivery?.runtimeEvidenceFailures ?? []).map((item) => `- ${item}`).join("\n") || "(none)")
+
+    case "visual_failures":
+      return "# Visual Metric Failures\n\n" + ((delivery?.visualMetricFailures ?? []).map((item) => `- ${item}`).join("\n") || "(none)")
+
+    case "executor_reports":
+      return renderExecutorReports(delivery)
+
+    case "changed_files":
+      return "# Changed Files\n\n" + ((delivery?.changedFiles ?? []).map((file) => `- ${file}`).join("\n") || "(none)")
+
+    case "diffs":
+      return "# Code Diffs\n\n" + ((delivery?.diffs ?? [])
+        .filter((item) => item.diff)
+        .map((item) => `--- ${item.file} ---\n${item.diff}`)
+        .join("\n\n") || "(none)")
+
+    case "attachments":
+      return renderAttachmentToolInventory(input.attachments)
+  }
+}
+
+function renderGoalDetail(goal: GoalInfo): string {
+  return [
+    `## ${goal.title}`,
+    `id=${goal.id}`,
+    `priority=${goal.priority}`,
+    `acceptance_spec_count=${goal.acceptance_spec_count ?? 0}`,
+    `runtime_scenario_count=${goal.runtime_scenario_count ?? 0}`,
+    goal.requirement_ids.length > 0 ? `requirement_ids=${goal.requirement_ids.join(", ")}` : "requirement_ids=(none)",
+    goal.depends_on.length > 0 ? `depends_on=${goal.depends_on.join(", ")}` : "depends_on=(none)",
+    goal.imports.length > 0 ? `imports=${goal.imports.join(", ")}` : "imports=(none)",
+    goal.exports.length > 0 ? `exports=${goal.exports.join(", ")}` : "exports=(none)",
+    goal.owned_paths.length > 0 ? `owned_paths=${goal.owned_paths.join(", ")}` : "owned_paths=(none)",
+    "",
+    "Objective:",
+    goal.description,
+    "",
+    "Acceptance specs:",
+    goal.criteria,
+  ].join("\n")
+}
+
+function renderManifestContext(delivery: DeliveryInfo | undefined): string {
+  if (!delivery?.manifestGate) return "No DeliveryEvidenceManifest gate is available."
+  const gate = delivery.manifestGate
+  const lines = [
+    "# DeliveryEvidenceManifest Gate",
+    `finalGate.status=${gate.status}`,
+    `summary=${gate.summary}`,
+    `failedCheckIds=${gate.failedCheckIds.join(", ") || "(none)"}`,
+    `failedCoverageIds=${gate.failedCoverageIds.join(", ") || "(none)"}`,
+    `failedRuntimeFlowIds=${gate.failedRuntimeFlowIds.join(", ") || "(none)"}`,
+    `failedReviewIds=${gate.failedReviewIds.join(", ") || "(none)"}`,
+  ]
+  const details = delivery.manifestFailureDetails ?? []
+  if (details.length > 0) {
+    lines.push("", "Failure details:")
+    for (const item of details) {
+      const status = item.status ? ` status=${item.status}` : ""
+      const exitCode = item.exitCode === undefined ? "" : ` exit=${item.exitCode}`
+      const command = item.command ? ` command=${item.command}` : ""
+      lines.push(`- [${item.kind}] ${item.id} ${item.name}${status}${exitCode}${command}: ${item.evidence}`)
+    }
+  }
+  return lines.join("\n")
+}
+
+function renderHostGateFailures(delivery: DeliveryInfo | undefined): string {
+  const failures = delivery?.hostGateFailures ?? []
+  if (failures.length === 0) return "No host hard gate failures."
+  const lines = ["# Host Hard Gate Failures"]
+  for (const failure of failures) {
+    lines.push("", `## ${failure.kind}:${failure.id}`, `Summary: ${failure.summary}`)
+    if (failure.evidence.length > 0) {
+      lines.push("Evidence:")
+      for (const item of failure.evidence) lines.push(`- ${item}`)
+    }
+  }
+  return lines.join("\n")
+}
+
+function renderExecutorReports(delivery: DeliveryInfo | undefined): string {
+  const reports = delivery?.goalReports ?? []
+  if (reports.length === 0) return "No executor reports."
+  const blocks: string[] = []
+  for (const entry of reports) {
+    const r = entry.report
+    const parts: string[] = []
+    parts.push(`## Goal: ${entry.goalTitle}`)
+    parts.push("")
+    parts.push("### Implementation Approach")
+    parts.push(r.implementation_approach.trim())
+    if (r.design_decisions.length > 0) {
+      parts.push("", "### Design Decisions")
+      for (const d of r.design_decisions) {
+        parts.push(`- ${d.choice}`)
+        if (d.alternatives.length > 0) parts.push(`  - Alternatives considered: ${d.alternatives.join(", ")}`)
+        parts.push(`  - Reason: ${d.reason}`)
+      }
+    }
+    if (r.files_changed.length > 0) {
+      parts.push("", "### Files Claimed Changed")
+      for (const f of r.files_changed) parts.push(`- ${f.path} — ${f.summary}`)
+    }
+    if (r.checks_run.length > 0) {
+      parts.push("", "### Checks the Executor Ran")
+      for (const c of r.checks_run) {
+        const forbidden = forbiddenCheckReason(c.command)
+        const suffix = forbidden ? ` [FORBIDDEN: ${forbidden}; not acceptance evidence]` : ""
+        const output = c.output_excerpt ? `\n  output_excerpt: ${c.output_excerpt}` : ""
+        parts.push(`- ${c.name} \`${c.command}\` -> exit ${c.exit_code}${suffix}${output}`)
+      }
+    }
+    if (r.blockers.length > 0) {
+      parts.push("", "### Blockers Reported")
+      for (const b of r.blockers) parts.push(`- ${b}`)
+    }
+    blocks.push(parts.join("\n"))
+  }
+  return "# Executor Reports\n\n" + blocks.join("\n\n---\n\n")
+}
+
+function renderAttachmentToolInventory(attachments: DeliveryToolAttachment[]): string {
+  if (attachments.length === 0) return "No attachments."
+  return "# Attachments\n\n" + attachments.map((item) => {
+    const sizeKb = `${Math.max(1, Math.round(item.size / 1024))} KB`
+    return `- ${item.filename ?? item.sha} mime=${item.mime} intent=${item.intent ?? "(none)"} size=${sizeKb} sha=${item.sha} url=${item.url}`
+  }).join("\n")
+}
+
+function selectVisualArtifact(
+  artifacts: DeliveryToolAttachment[],
+  selector: string | undefined,
+): DeliveryToolAttachment | undefined {
+  if (!selector) return undefined
+  const wanted = selector.trim()
+  if (!wanted) return undefined
+  return artifacts.find((item) => item.sha === wanted || item.sha.startsWith(wanted) || item.filename === wanted)
+}
+
+function describeVisualArtifact(item: DeliveryToolAttachment) {
+  return {
+    filename: item.filename,
+    sha: item.sha,
+    mime: item.mime,
+    size: item.size,
+    intent: item.intent,
+    source: item.source,
+  }
+}
+
+function truncateToolText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+  return text.slice(0, maxChars) + `\n... (truncated by inspect_delivery_context at ${maxChars} chars; request a narrower section for more detail)`
+}
+
+function forbiddenCheckReason(rawCommand: string): string | undefined {
+  const command = rawCommand.trim()
+  if (!command) return
+  const stripped = command
+    .replace(/^bash\s+-c\s+(['"])(.+)\1\s*$/, "$2")
+    .replace(/^sh\s+-c\s+(['"])(.+)\1\s*$/, "$2")
+    .trim()
+  if (/^\[?\s*test\s+-[fdeLhsr]\b/.test(stripped)) return "test -f / file-existence is not acceptance evidence"
+  if (/^\[\s+-[fdeLhsr]\b/.test(stripped)) return "[ -f ] / file-existence is not acceptance evidence"
+  if (/^(?:grep|egrep|fgrep|rg|ripgrep)\b/.test(stripped)) return "self-keyword grep on own artifacts is not acceptance evidence"
+  if (/^find\b[^|;&]*-name\b/.test(stripped)) return "find -name / file-discovery is not acceptance evidence"
+  if (/^ls\b\s+(-[a-zA-Z]+\s+)?\S+/.test(stripped) && !/[|;&]/.test(stripped)) return "ls / file-listing is not acceptance evidence"
+  if (/^cat\b/.test(stripped) && !/[|;&]/.test(stripped)) return "cat of own artifact is not acceptance evidence"
+  return
 }
 
 /** Stride-sampled luminance variance on a PNG buffer. A blank page, a JSON

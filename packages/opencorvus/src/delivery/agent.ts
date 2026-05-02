@@ -14,7 +14,6 @@ import { createDeliveryOutputTools } from "./output-tools"
 import DELIVERY_CORE from "@/prompt/core/delivery-core.txt"
 import { runAgentSessionWithRetry } from "@/agent/runner"
 import { resolveAgentModel } from "@/agent/model"
-import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
@@ -24,11 +23,6 @@ import { deliveryUserPromptCharBudget, PromptBudget } from "@/llm/prompt-budget"
 import { Config } from "@/config/config"
 import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { deriveUrlSignals, resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
-import { buildTaskUpstreamAgentContextSections } from "@/prompt/upstream-context"
-import { findActiveSpecForTask, findRequirements } from "@/engine/store"
-import type { RequirementRow } from "@/engine/store"
-import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
-import { AttachmentStore } from "@/storage/attachment-store"
 import { Provider } from "@/provider/provider"
 import type { GoalInfo, DeliveryInfo } from "@/delivery/checks"
 import {
@@ -60,10 +54,9 @@ type VerifyInput = {
   task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
   goals: GoalInfo[]
   delivery: DeliveryInfo
-  /** Visual-reference attachments (already materialized under the attachment store).
-   *  When provided, the delivery agent receives the image bytes as a multimodal
-   *  `file` content part so it can actually see the target — text-only read_file
-   *  on a PNG returns UTF-8 garbage and is not a substitute. */
+  /** Visual-reference attachments already materialized under the attachment store.
+   *  Delivery receives only a small inventory in the startup prompt. The image
+   *  bytes are loaded on demand through the visual comparison tool. */
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
   /** Explicit model override (provider/model). Skips `resolveAgentModel`. */
   model?: { providerID: string; modelID: string }
@@ -78,11 +71,9 @@ export namespace DeliveryAgent {
     const model = input.model
       ? await Provider.getModel(input.model.providerID, input.model.modelID)
       : await resolveAgentModel("delivery", { taskID: input.task.id, sessionID: input.task.sessionID })
-    const context = prefetchDeliveryContext(input)
     const requiredEvidenceFacets = deriveRequiredEvidenceFacets(input)
     const textPrompt = buildUserPrompt(
       { ...input, attachments: input.attachments, requiredEvidenceFacets },
-      context,
       { maxChars: deliveryUserPromptCharBudget(model) },
     )
     const taskSignals: TaskSignals = {
@@ -126,7 +117,13 @@ export namespace DeliveryAgent {
       signal: input.signal,
       maxRetries: deliveryCfg.max_retries,
       toolKitFactory: () => {
-        const reviewTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
+        const reviewTools = createDeliveryTools({
+          sessionID: input.task.sessionID,
+          taskID: input.task.id,
+          goals: input.goals,
+          delivery: input.delivery,
+          attachments: input.attachments,
+        })
         const outputToolKit = createDeliveryOutputTools({
           requiredTools: systemResolved.requiredTools,
           requiredEvidenceFacets,
@@ -147,7 +144,7 @@ export namespace DeliveryAgent {
         }
       },
       buildUserPrompt: () => textPrompt,
-      buildUserParts: () => buildPromptParts(textPrompt, input.attachments),
+      buildUserParts: () => buildPromptParts(textPrompt),
     })
 
     const verdict = out.collector.verdict
@@ -167,57 +164,18 @@ export namespace DeliveryAgent {
 }
 
 // ---------------------------------------------------------------------------
-// Pre-fetch context
-// ---------------------------------------------------------------------------
-
-function prefetchDeliveryContext(input: {
-  task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
-  delivery: DeliveryInfo
-}): string {
-  const sections: string[] = []
-
-  try {
-    const projectId = Instance.project.id
-    const query = `delivery startup runtime ${input.task.title}`
-    const recalled = Memory.promptSection({
-      query,
-      projectId,
-      sessionID: input.task.sessionID,
-      scope: "all",
-      limit: 3,
-      minScore: 0.15,
-      heading: "Historical Context (Auto-Recalled)",
-      includeEpisodes: true,
-    })
-    if (recalled) sections.push(recalled)
-  } catch (err) {
-    log.warn("delivery: memory prefetch failed", { error: err instanceof Error ? err.message : String(err) })
-  }
-
-  return sections.length > 0 ? sections.join("\n\n") : ""
-}
-
-// ---------------------------------------------------------------------------
 // Prompt building
 // ---------------------------------------------------------------------------
 
 /**
- * Build SessionPrompt-compatible message parts. Text first, then inline
- * multimodal attachments (images / audio / video / PDFs) so delivery can
- * actually see the visual reference. Post-phase-3-b migration the shape
- * matches PromptInput.parts — FilePart uses data URLs instead of Buffer
- * so Session.saveMessage can persist without re-resolving a local path.
+ * Build SessionPrompt-compatible message parts. Delivery starts text-only:
+ * visual bytes are intentionally not inlined because screenshots can dominate
+ * provider input length. The compare_visual_artifacts tool is the only path
+ * that loads image bytes into the delivery session, and only when the agent
+ * elects to inspect them.
  */
-async function buildPromptParts(
-  text: string,
-  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
-) {
-  const inlineParts = await AttachmentStore.inlineFileParts(attachments)
-  const enrichedText = text + AttachmentStore.renderAttachmentInventory(attachments)
-  const parts: Array<
-    | { type: "text"; text: string }
-    | { type: "file"; url: string; mime: string; filename?: string }
-  > = [{ type: "text", text: enrichedText }, ...inlineParts]
+async function buildPromptParts(text: string) {
+  const parts: Array<{ type: "text"; text: string }> = [{ type: "text", text }]
   return parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 }
 
@@ -229,7 +187,6 @@ function buildUserPrompt(
     attachments?: Array<{ sha: string; mime: string; filename?: string; intent?: string }>
     requiredEvidenceFacets?: DeliveryEvidenceFacetType[]
   },
-  context?: string,
   budgetInput?: { maxChars: number },
 ): string {
   const budget = new PromptBudget(budgetInput?.maxChars ?? 128_000)
@@ -251,10 +208,8 @@ function buildUserPrompt(
 
   pushRequired("# Required Delivery Evidence Facets", renderRequiredEvidenceFacets(input.requiredEvidenceFacets ?? []))
 
-  // Design Contract — visual specs from design-analyst.
-  // Not auto-scored. Delivery treats them as a checklist during its own
-  // visual review and cites `visual_spec_id` in rejection_details when a
-  // specific spec is violated.
+  // Design Contract — keep only the compact checklist in the startup prompt.
+  // Visual bytes and side-by-side review live behind compare_visual_artifacts.
   const designSpecs = input.task.design_specs ?? []
   if (designSpecs.length > 0) {
     const byCategory = new Map<string, typeof designSpecs>()
@@ -265,17 +220,12 @@ function buildUserPrompt(
       byCategory.set(s.category, group)
     }
     const lines: string[] = []
-    lines.push("# Design Contract (verify yourself during visual review)")
+    lines.push("# Design Contract")
     lines.push("")
     lines.push(
-      "Design-analyst extracted these visual constraints from the reference(s). Every entry " +
-      "is GATING — BOTH severities ('must' AND 'should') must be verified-satisfied for " +
-      "acceptance; 'should' is NOT a soft preference that lets you accept a miss. Look at the " +
-      "rendered output yourself and judge each spec. When a spec is unmet, set " +
-      "`rejection_details[].category = 'visual'` and cite the spec id in `visual_spec_id`. " +
-      "Severity labels only tune attention: 'must' = exact hex / precise layout (highest " +
-      "specificity); 'should' = structural / proportional preference (still required, just " +
-      "less pixel-exact). A miss on either severity = reject.",
+      "Design-analyst extracted these visual constraints. Treat them as gating. " +
+      "When visual evidence is needed, call compare_visual_artifacts instead of relying on prompt context. " +
+      "If a spec is unmet, use category='visual' and cite visual_spec_id.",
     )
     for (const cat of order) {
       const group = byCategory.get(cat)
@@ -284,90 +234,22 @@ function buildUserPrompt(
       lines.push(`## ${cat}`)
       for (const s of group) {
         const rat = s.rationale ? ` — ${s.rationale}` : ""
-        lines.push(`- \`${s.id}\` [${s.severity}] **${s.title}**: ${s.requirement} @ ${s.applies_to}${rat}`)
+        lines.push(`- \`${s.id}\` [${s.severity}] ${truncate(s.title, 160)}: ${truncate(s.requirement, 260)} @ ${truncate(s.applies_to, 120)}${truncate(rat, 180)}`)
       }
     }
-    pushOptional("# Design Contract", lines.join("\n"), 12_000)
+    pushOptional("# Design Contract", lines.join("\n"), 6_000)
   }
 
-  if (input.task.id) {
-    const upstreamContext = buildTaskUpstreamAgentContextSections(input.task.id)
-    for (let i = 0; i < upstreamContext.length; i += 1) {
-      pushOptional(`# Upstream Agent Context ${i + 1}`, upstreamContext[i], 4_000)
-    }
-  }
-
-  // Mirror cache + pipeline steering — delivery must never re-fetch a URL
-  // the pipeline has already captured; it reads artifacts off disk instead.
-  try {
-    const mirrorSection = buildMirrorToolsPromptSection({ cwd: Instance.directory })
-    if (mirrorSection.trim().length > 0) pushOptional("# Mirror Tools", mirrorSection, 4_000)
-  } catch {
-    // Instance not initialised — advisory, skip.
-  }
-
-  // Inline hint: when the user message carries image attachments (attached
-  // as file parts alongside this text), steer the model to reason over them
-  // visually instead of trying to read_file on the binary path.
   const images = (input.attachments ?? []).filter((a) => typeof a?.mime === "string" && a.mime.startsWith("image/"))
   if (images.length > 0) {
     const rendered = images.filter((a) => a.intent === "rendered_output")
     const references = images.filter((a) => a.intent !== "rendered_output")
-    const renderedList = rendered.map((a) => `- ${a.filename ?? a.sha} (${a.mime})`).join("\n")
-    const referenceList = references.map((a) => `- ${a.filename ?? a.sha} (${a.mime})`).join("\n")
     pushOptional(
-      "# Visual Comparison",
-      `# Visual Comparison\n\n` +
-      `This task ships with multimodal image attachments. Both the reference(s) AND the ` +
-      `just-rendered screenshot of the delivered output are attached to this message as ` +
-      `image content — you can see them directly, you do NOT need read_file.\n\n` +
-      (rendered.length > 0
-        ? `**Rendered output** (the actual delivery, puppeteer-screenshot of the built merged worktree):\n${renderedList}\n\n`
-        : `**Rendered output**: no rendered.png was produced for this delivery — either the build failed or no index.html was found. Treat this as a visual failure: the user cannot see any output.\n\n`) +
-      (references.length > 0
-        ? `**Reference(s)** (what the delivery was supposed to look like):\n${referenceList}\n\n`
-        : ``) +
-      `**You MUST perform the visual comparison yourself, adversarially — AND you must ` +
-      `not trust the attached rendered.png as a substitute for your own screenshot of ` +
-      `the running app.** There is no SSIM gate anymore — a single similarity number was ` +
-      `a lazy proxy that let delivery rubber-stamp "close enough" without really looking. ` +
-      `Two-stage visual review, BOTH stages required before you may accept:\n\n` +
-      `**Stage A — first-look discipline on the attachments.** Open the rendered.png and ` +
-      `the reference side-by-side mentally. If any of the following is true on first ` +
-      `glance, REJECT immediately with category="visual" and do NOT spend more context ` +
-      `pretending it's salvageable:\n` +
-      `  - Rendered output is mostly white / mostly empty / a single error page.\n` +
-      `  - Layout skeleton is unrecognizable vs reference (e.g. reference is a dense grid ` +
-      `    of cards, rendered is a single vertical stack).\n` +
-      `  - Brand colors, logo, or signature elements are absent or clearly wrong.\n` +
-      `  - Text content is placeholder / lorem ipsum / English when the reference is in ` +
-      `    another language.\n` +
-      `A first-look reject costs one prompt; a charitable "let me list 30 micro-issues" ` +
-      `on an obvious miss wastes an iteration.\n\n` +
-      `**Stage B — your own screenshot (Phase 3 Runtime Verification).** The attached ` +
-      `rendered.png is the PIPELINE's shot of the worktree before your review session. ` +
-      `After your runtime verification succeeds, take your own screenshot with the ` +
-      `screenshot tool or an equivalent runtime command. Compare YOUR screenshot ` +
-      `against the reference. If your screenshot differs from the pipeline's rendered.png, trust yours — that is the current ` +
-      `truth.\n\n` +
-      `For every concrete difference surfaced in either stage, write one ` +
-      `\`rejection_details\` entry with enough specificity that an executor reading only ` +
-      `your feedback can fix it:\n` +
-      `  - **Layout**: element positions, alignment, proportions, grid/flex direction\n` +
-      `  - **Spacing**: margins between sections, inner padding, gaps between components\n` +
-      `  - **Colors**: background, text, accents, borders, hover/active states — name ` +
-      `    the semantic role, not just "this is lighter"\n` +
-      `  - **Typography**: font size, weight, family, line-height, letter-spacing\n` +
-      `  - **Components**: missing or extra elements (buttons, toggles, icons, badges, ` +
-      `    progress bars, sidebar sections)\n` +
-      `  - **Text**: wrong labels, missing headings, placeholder text not replaced\n\n` +
-      `"Sidebar is slightly off" is useless; "Sidebar width should be 240px not 320px, ` +
-      `and the 'Billing' row is missing the info icon on its right" is actionable. ` +
-      `Pickiness is the point — you are the last human-proxy line before the user sees ` +
-      `the delivery, and users notice every layout drift, every wrong color, every ` +
-      `missing component. A delivery that looks 70% right is not 70% accepted; it is ` +
-      `rejected with 30 specific bullets.`,
-      9_000,
+      "# Visual Materials",
+      `# Visual Materials\n\n` +
+        `Image bytes are not attached to this startup prompt. Call compare_visual_artifacts when visual evidence is relevant.\n` +
+        `rendered_outputs=${rendered.length}; references=${references.length}; total_images=${images.length}`,
+      1_000,
     )
   }
 
@@ -384,54 +266,24 @@ function buildUserPrompt(
     if (notes) pushOptional("# Operator Notes", notes, 4_000)
   }
 
-  // Build a REQ-id → row map once so each goal's requirement_ids can be
-  // expanded inline (P1 of req/arch evaluation tightening). Source of truth:
-  // engine_requirement keyed off the active spec snapshot (rule 22).
-  const requirementsByID = new Map<string, RequirementRow>()
-  if (input.task.id) {
-    const snap = findActiveSpecForTask(input.task.id)
-    if (snap) {
-      for (const r of findRequirements(snap.id)) requirementsByID.set(r.id, r)
-    }
-  }
-
   pushOptional(
     "# Goals",
-    `# Goals — Acceptance Specs (semantic contract)\n\n` +
-    `Each goal below carries its \`acceptance_specs\` rendered as text. ` +
-    `The host has already run the deterministic DeliveryEvidenceManifest gates ` +
-    `before this session: project commands, forbidden shell-success coercion, ` +
-    `blocking-goal acceptance coverage, and linked requirement coverage. If any ` +
-    `of those gates failed, their structured evidence is included below; your ` +
-    `submit_verdict tool will reject verdict='accepted' until the gate is clean. ` +
-    `Your job here is to inspect the evidence and return ` +
-    `concrete residual findings.\n\n` +
-    `Your verdict is a semantic judgment layered on top of the manifest, not a ` +
-    `replacement for it. Use ` +
-    `\`query_metric_trajectory\` to ground yourself in prior iterations and current ` +
-    `metric results, but do NOT outsource the acceptance decision to the trajectory. ` +
-    `What matters is that your \`rejection_details\` are concrete and evidence-backed: ` +
-    `if you reject, the orchestrator reads your findings to decide what to change next.\n\n` +
-    `Cross-check every linked requirement (see "Linked requirements" under each ` +
-    `goal): the acceptance_specs MUST collectively satisfy the REQ acceptance ` +
-    `criteria. A goal whose acceptance_specs all PASS but whose linked REQ ` +
-    `acceptance is unmet = reject with category="quality" and cite the REQ id ` +
-    `inside the error text; do not invent fields or category values outside the ` +
-    `submit_verdict schema.\n\n` +
+    `# Goal Index\n\n` +
+    `This is a compact index only. Call inspect_delivery_context with section='goals' before making goal-level attribution.\n\n` +
       input.goals
         .map(
           (g, i) =>
-            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id only when this goal owns the rejection)\n\n**Objective:** ${truncate(g.description, 1200)}${renderGoalContractDetails(g, requirementsByID)}\n\n**Acceptance specs:**\n${truncate(g.criteria, 2500)}\n\nPriority: ${g.priority}`,
+            `- ${i + 1}. \`${g.id}\` ${truncate(g.title, 180)} priority=${g.priority} acceptance_specs=${g.acceptance_spec_count ?? 0} runtime_scenarios=${g.runtime_scenario_count ?? 0} owned_paths=${g.owned_paths.slice(0, 8).join(", ") || "(none)"}`,
         )
-        .join("\n\n---\n\n"),
-    36_000,
+        .join("\n"),
+    12_000,
   )
 
   // Cap the changed-files list so a wide refactor (hundreds of touched files)
   // does not flood the prompt. The diff section below already shows up to 8
   // representative files; the full path list is reference material, not the
   // signal delivery reasons over.
-  const CHANGED_FILES_PROMPT_CAP = 80
+  const CHANGED_FILES_PROMPT_CAP = 30
   const filesShown = input.delivery.changedFiles.slice(0, CHANGED_FILES_PROMPT_CAP)
   const filesOmitted = input.delivery.changedFiles.length - filesShown.length
   const filesHeader = filesOmitted > 0
@@ -440,8 +292,9 @@ function buildUserPrompt(
   pushOptional(
     "# Delivery",
     `# Delivery\n\nSummary: ${input.delivery.summary}\n\n${filesHeader}\n` +
-      filesShown.map((f) => `- ${f}`).join("\n"),
-    10_000,
+      filesShown.map((f) => `- ${f}`).join("\n") +
+      `\n\nFor full diffs or executor claims, call inspect_delivery_context.`,
+    5_000,
   )
 
   if (input.delivery.manifestGate) {
@@ -454,11 +307,11 @@ function buildUserPrompt(
       `failedRuntimeFlowIds=${gate.failedRuntimeFlowIds.join(", ") || "(none)"}`,
       `failedReviewIds=${gate.failedReviewIds.join(", ") || "(none)"}`,
     ]
-    const detailLines = (input.delivery.manifestFailureDetails ?? []).map((item) => {
+    const detailLines = (input.delivery.manifestFailureDetails ?? []).slice(0, 10).map((item) => {
       const status = item.status ? ` status=${item.status}` : ""
       const exitCode = item.exitCode === undefined ? "" : ` exit=${item.exitCode}`
       const command = item.command ? ` command=${item.command}` : ""
-      return `- [${item.kind}] ${item.id} ${item.name}${status}${exitCode}${command}: ${item.evidence}`
+      return `- [${item.kind}] ${item.id} ${item.name}${status}${exitCode}${command}: ${truncate(item.evidence, 300)}`
     })
     pushOptional(
       "# DeliveryEvidenceManifest Gate",
@@ -473,7 +326,7 @@ function buildUserPrompt(
           `owned_paths, files_changed, or report evidence identify it as responsible; otherwise ` +
           `leave the entry task-scoped and explain the project-level blocker.`
         : ""),
-      24_000,
+      8_000,
     )
   }
 
@@ -484,7 +337,8 @@ function buildUserPrompt(
       lines.push(`Summary: ${failure.summary}`)
       if (failure.evidence.length > 0) {
         lines.push("Evidence:")
-        for (const item of failure.evidence) lines.push(`- ${item}`)
+        for (const item of failure.evidence.slice(0, 3)) lines.push(`- ${truncate(item, 300)}`)
+        if (failure.evidence.length > 3) lines.push(`- ... ${failure.evidence.length - 3} more evidence item(s); call inspect_delivery_context.`)
       }
       lines.push("")
     }
@@ -495,7 +349,7 @@ function buildUserPrompt(
       `but attribution still belongs to your submit_verdict rejection_details. Do not drop any ` +
       `runtime or visual gate evidence when writing the rejected verdict.\n\n` +
       lines.join("\n").trim(),
-      20_000,
+      8_000,
     )
   }
 
@@ -505,8 +359,8 @@ function buildUserPrompt(
       `# Runtime Evidence Failures\n\n` +
       `The host runtime probe found blocking runtime failures. Analyze them as delivery evidence ` +
       `and reject with concrete reproduction details unless you can prove the probe is invalid.\n\n` +
-      input.delivery.runtimeEvidenceFailures.map((item) => `- ${item}`).join("\n"),
-      12_000,
+      input.delivery.runtimeEvidenceFailures.slice(0, 10).map((item) => `- ${truncate(item, 400)}`).join("\n"),
+      5_000,
     )
   }
 
@@ -517,106 +371,18 @@ function buildUserPrompt(
       `The host visual metric found blocking visual failures. Use these as evidence, inspect the ` +
       `rendered output and reference yourself, and reject with concrete visual rejection_details ` +
       `unless you can prove the metric is invalid.\n\n` +
-      input.delivery.visualMetricFailures.map((item) => `- ${item}`).join("\n"),
-      12_000,
+      input.delivery.visualMetricFailures.slice(0, 10).map((item) => `- ${truncate(item, 400)}`).join("\n"),
+      5_000,
     )
   }
 
-  // Structured per-goal reports — the executor's first-person implementation
-  // claims. Rendered verbatim for adversarial cross-check against the diff.
-  if (input.delivery.goalReports && input.delivery.goalReports.length > 0) {
-    const blocks: string[] = []
-    for (const entry of input.delivery.goalReports) {
-      const r = entry.report
-      const parts: string[] = []
-      parts.push(`## Goal: ${entry.goalTitle}`)
-      parts.push("")
-      parts.push("### Implementation Approach (executor claim)")
-      parts.push(truncate(r.implementation_approach.trim(), 1200))
-      if (r.design_decisions.length > 0) {
-        parts.push("")
-        parts.push("### Design Decisions (executor claim)")
-        for (const d of r.design_decisions.slice(0, 10)) {
-          parts.push(`- **${truncate(d.choice, 300)}**`)
-          if (d.alternatives.length > 0) {
-            parts.push(`  - Alternatives considered: ${truncate(d.alternatives.join(", "), 500)}`)
-          }
-          parts.push(`  - Reason: ${truncate(d.reason, 800)}`)
-        }
-      }
-      if (r.files_changed.length > 0) {
-        parts.push("")
-        parts.push("### Files Claimed Changed")
-        const fileClaims = r.files_changed.slice(0, 40)
-        for (const f of fileClaims) parts.push(`- \`${f.path}\` — ${truncate(f.summary, 300)}`)
-        if (r.files_changed.length > fileClaims.length) {
-          parts.push(`- ... ${r.files_changed.length - fileClaims.length} more file claim(s) omitted`)
-        }
-      }
-      if (r.checks_run.length > 0) {
-        parts.push("")
-        parts.push("### Checks the Executor Ran")
-        let forbiddenSeen = 0
-        const checksRun = r.checks_run.slice(0, 20)
-        for (const c of checksRun) {
-          // P1-B / Stream F.2 — flag self-fabricated acceptance evidence
-          // (test -f path, grep keyword, ls -l, find … -name) inline so the
-          // delivery LLM cannot count them as evidence. The pipeline ainvest
-          // event hinged on goal-agent self-passing via `test -f` — it must
-          // never be a positive signal again.
-          const forbidden = forbiddenCheckReason(c.command)
-          if (forbidden) {
-            forbiddenSeen += 1
-            parts.push(`- ❌ **${c.name}** \`${truncate(c.command, 400)}\` → exit ${c.exit_code}  _[FORBIDDEN: ${forbidden}; not acceptance evidence]_`)
-          } else {
-            parts.push(`- **${c.name}** \`${truncate(c.command, 400)}\` → exit ${c.exit_code}`)
-          }
-        }
-        if (r.checks_run.length > checksRun.length) {
-          parts.push(`- ... ${r.checks_run.length - checksRun.length} more check(s) omitted`)
-        }
-        if (forbiddenSeen > 0) {
-          parts.push("")
-          parts.push(
-            `> ${forbiddenSeen} of ${r.checks_run.length} check(s) above are self-fabricated acceptance evidence (file-existence / keyword grep). Treat this goal as acceptance-unverified and REJECT with category="quality"; cite the forbidden command(s) in rejection_details so the executor's next attempt rewrites the spec to use external anchors (reference_strings / palette / layout from CaptureManifest).`,
-          )
-        }
-      }
-      if (r.blockers.length > 0) {
-        parts.push("")
-        parts.push("### Blockers Reported")
-        for (const b of r.blockers.slice(0, 10)) parts.push(`- ${truncate(b, 800)}`)
-      }
-      blocks.push(parts.join("\n"))
-    }
+  if (input.delivery.goalReports?.length || input.delivery.diffs?.length) {
     pushOptional(
-      "# Executor Reports",
-      `# Executor Reports — ADVERSARIAL INPUT\n\n` +
-      `The blocks below are first-person claims by the executor(s). They are NOT evidence — they are hypotheses to test.\n\n` +
-      `**Mandatory cross-checks:**\n` +
-      `1. For each \`implementation_approach\`, read enough of the diff to confirm the claim is backed by the code. A claim the diff does not support (missing layer, unused API, unmentioned file) is a REJECTION — report it under Rejection Details with category="quality".\n` +
-      `2. For each \`design_decisions[].reason\`, challenge the reasoning. If the reason restates the choice without explaining why it won over the alternative, it's a REJECTION. If the code contradicts the stated reason (e.g. reason says "avoided shared state" but diff adds shared state), it's a REJECTION.\n` +
-      `3. Every file in \`Files Claimed Changed\` must appear in the actual Changed files list; every file in the actual Changed files list that does real work must be acknowledged in a claim (silent scope creep is a REJECTION).\n` +
-      `4. Executor claims never override deterministic check results. Passing claims cannot rescue a failed Core Check.\n` +
-      `5. Any \`checks_run\` entry rendered with **❌ FORBIDDEN** is self-fabricated acceptance evidence (file-existence / self-keyword grep). It is NOT evidence — the goal is acceptance-unverified until a real external-anchor check (CaptureManifest reference_strings / palette / layout, runtime DOM observation, behavioural test) replaces it. REJECT with category="quality" and cite the forbidden command(s).\n\n` +
-      blocks.join("\n\n---\n\n"),
-      28_000,
+      "# Exploration Tools",
+      "# Exploration Tools\n\n" +
+        "Initial context is intentionally compact. Use inspect_delivery_context to fetch goals, upstream context, executor reports, diffs, manifest details, host failures, runtime failures, visual failures, or attachments only when needed.",
+      1_500,
     )
-  }
-
-  if (input.delivery.diffs && input.delivery.diffs.length > 0) {
-    const diffText = input.delivery.diffs
-      .filter((d) => d.diff)
-      .slice(0, 8)
-      .map((d) => `--- ${d.file} ---\n${truncate(d.diff!, 1200)}`)
-      .join("\n\n")
-    if (diffText) {
-      pushOptional("# Code Diffs", `# Code Diffs (up to 8 files)\n\n${diffText}`, 20_000)
-    }
-  }
-
-  if (context) {
-    pushOptional("# Pre-fetched Context", `# Pre-fetched Context\n\n${context}`, 6_000)
   }
 
   pushRequired(
@@ -695,84 +461,9 @@ export function deriveRequiredEvidenceFacets(input: {
   return [...facets].sort()
 }
 
-function renderGoalContractDetails(
-  goal: GoalInfo,
-  requirementsByID: ReadonlyMap<string, RequirementRow>,
-): string {
-  const lines: string[] = []
-  // Linked requirements — expand id → title + acceptance so delivery can
-  // verify the goal's acceptance_specs actually cover the linked REQ. Falls
-  // through to bare ID listing only when the requirement row is missing
-  // (writer/reader race or stale snapshot — surfaces as a visible gap rather
-  // than a silently-truncated label).
-  if (goal.requirement_ids.length > 0) {
-    lines.push("- Linked requirements:")
-    for (const reqID of goal.requirement_ids) {
-      const r = requirementsByID.get(reqID)
-      if (r) {
-        lines.push(`  - **${r.id}** [${r.priority}] ${truncate(r.title, 300)} — acceptance: ${truncate(r.acceptance, 500)}`)
-      } else {
-        lines.push(`  - **${reqID}** (requirement row not found in active spec snapshot)`)
-      }
-    }
-  }
-  if (goal.depends_on.length > 0) lines.push(`- Depends on goal IDs: ${goal.depends_on.join(", ")}`)
-  if (goal.imports.length > 0) lines.push(`- Imports: ${goal.imports.join(", ")}`)
-  if (goal.exports.length > 0) lines.push(`- Exports: ${goal.exports.join(", ")}`)
-  if (goal.owned_paths.length > 0) {
-    const owned = goal.owned_paths.slice(0, 40)
-    const omitted = goal.owned_paths.length - owned.length
-    lines.push(`- Owned paths: ${owned.join(", ")}${omitted > 0 ? `, ... ${omitted} more` : ""}`)
-  }
-  return lines.length > 0 ? `\n\n**Goal contract:**\n${lines.join("\n")}` : ""
-}
-
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text
   return text.slice(0, maxLen) + "\n... (truncated)"
-}
-
-/**
- * P1-B / Stream F.2 — `checks_run` allowlist (negative form).
- *
- * The acceptance contract demands evidence drawn from external anchors
- * (CaptureManifest.{reference_strings, palette, layout} after Stream B,
- * runtime-evidence after Stream E) — NOT from "the file I wrote exists" or
- * "my own keyword appears in my own scaffold". When the executor reports a
- * check whose command matches one of these self-fabrication patterns, return
- * a short reason string so the renderer can flag it inline; the delivery LLM
- * is instructed to treat the entire goal as acceptance-unverified.
- *
- * Pattern matching is deliberately narrow — we only flag the ainvest-class
- * smoking guns. A real `bun test`, `vitest`, `pytest`, `cargo test`, etc.
- * passes through untouched. False positives are worse than false negatives
- * here: an over-broad regex would block legitimate verification commands.
- */
-function forbiddenCheckReason(rawCommand: string): string | undefined {
-  const command = rawCommand.trim()
-  if (!command) return
-  // Drop leading wrappers like `bash -c "..."` so the pattern check sees the
-  // actual program. Single layer is enough — nested wrapping is rare and the
-  // outer wrapper rarely changes the verdict.
-  const stripped = command
-    .replace(/^bash\s+-c\s+(['"])(.+)\1\s*$/, "$2")
-    .replace(/^sh\s+-c\s+(['"])(.+)\1\s*$/, "$2")
-    .trim()
-  // `test -f|-d|-e ...` — file existence is not acceptance evidence.
-  if (/^\[?\s*test\s+-[fdeLhsr]\b/.test(stripped)) return "test -f / file-existence is not acceptance evidence"
-  if (/^\[\s+-[fdeLhsr]\b/.test(stripped)) return "[ -f ] / file-existence is not acceptance evidence"
-  // `grep "<self-chosen keyword>" path/to/own/file` — keyword self-grep
-  // against the executor's own output rounds back to "I wrote what I wrote".
-  if (/^(?:grep|egrep|fgrep|rg|ripgrep)\b/.test(stripped)) return "self-keyword grep on own artifacts is not acceptance evidence"
-  // `find ... -name '...'` — file discovery is the same shape as `test -f`,
-  // it only proves a path exists, never that the artifact is correct.
-  if (/^find\b[^|;&]*-name\b/.test(stripped)) return "find -name / file-discovery is not acceptance evidence"
-  // `ls -l path/to/file` — ditto, presence not behaviour.
-  if (/^ls\b\s+(-[a-zA-Z]+\s+)?\S+/.test(stripped) && !/[|;&]/.test(stripped)) return "ls / file-listing is not acceptance evidence"
-  // `cat path/to/own/file` to "show it works" — content of a file the
-  // executor itself wrote does not verify acceptance against external anchors.
-  if (/^cat\b/.test(stripped) && !/[|;&]/.test(stripped)) return "cat of own artifact is not acceptance evidence"
-  return
 }
 
 // ---------------------------------------------------------------------------

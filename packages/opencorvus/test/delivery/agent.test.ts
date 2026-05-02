@@ -118,7 +118,9 @@ test("DeliveryAgent budgets large auxiliary evidence while preserving hard gates
   expect(capturedPrompt).toContain("finalGate.status=failed")
   expect(capturedPrompt).toContain("failedCheckIds=build#1")
   expect(capturedPrompt).toContain("TypeScript failed in src/App.tsx")
-  expect(capturedPrompt).toContain("# Prompt Truncation Notice")
+  expect(capturedPrompt).toContain("inspect_delivery_context")
+  expect(capturedPrompt).not.toContain("# Executor Reports")
+  expect(capturedPrompt).not.toContain("# Code Diffs")
 })
 
 test("DeliveryAgent prompt includes manifest gate, ownership, and executor changed files", async () => {
@@ -228,9 +230,95 @@ test("DeliveryAgent prompt includes manifest gate, ownership, and executor chang
   expect(capturedPrompt).toContain("finalGate.status=failed")
   expect(capturedPrompt).toContain("failedCheckIds=check:build")
   expect(capturedPrompt).toContain("Cannot find module './missing'")
-  expect(capturedPrompt).toContain("Owned paths: src/App.tsx, package.json")
-  expect(capturedPrompt).toContain("`src/App.tsx`")
+  expect(capturedPrompt).toContain("owned_paths=src/App.tsx, package.json")
+  expect(capturedPrompt).toContain("- src/App.tsx")
   expect(acceptedBlocked).toContain("host hard gate")
+})
+
+test("DeliveryAgent keeps visual images out of startup prompt and exposes exploration tools", async () => {
+  await using tmp = await tmpdir({ git: true, config: { model: "test/mock" } })
+  let capturedPrompt = ""
+  let capturedParts: any[] = []
+  let toolNames: string[] = []
+  spyOn(Provider, "getModel").mockResolvedValue(testDeliveryModel())
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      runnerImpl = async (input: any) => {
+        capturedPrompt = input.buildUserPrompt()
+        capturedParts = await input.buildUserParts()
+        const kit = input.toolKitFactory()
+        toolNames = Object.keys(kit.tools)
+        const collector = kit.getCollector()
+        collector.verdict = {
+          verdict: "rejected",
+          summary: "Visual review pending.",
+          startup_verification: { attempted: false },
+          frontend_check: { attempted: false },
+          deferred_checks: [],
+          tool_call_evidence: [{ tool: "compare_visual_artifacts", passed: false, detail: "visual pair not inspected in test" }],
+          rejection_details: [{
+            category: "visual",
+            error: "Visual comparison was not executed in this mocked run.",
+            suggestion: "Run visual comparison during real delivery.",
+          }],
+        }
+        collector.finalized = true
+        return { collector, attempts: 1 }
+      }
+
+      await DeliveryAgent.verify({
+        task: {
+          id: "tsk_visual_prompt",
+          title: "Visual prompt",
+          request: "Verify the UI against the screenshot.",
+        },
+        goals: [{
+          id: "gol_visual",
+          title: "Visual UI",
+          description: "Match the screenshot.",
+          criteria: "Rendered UI matches the reference.",
+          priority: "blocking",
+          acceptance_spec_count: 1,
+          runtime_scenario_count: 1,
+          check_selector: [],
+          requirement_ids: [],
+          depends_on: [],
+          imports: [],
+          exports: [],
+          owned_paths: ["src/App.tsx"],
+        }],
+        delivery: {
+          summary: "Merged UI changes.",
+          changedFiles: ["src/App.tsx"],
+        },
+        attachments: [{
+          sha: "renderedsha",
+          url: "/attachment/project/rendered.png",
+          mime: "image/png",
+          size: 500_000,
+          filename: "rendered.png",
+          intent: "rendered_output",
+        }, {
+          sha: "referencesha",
+          url: "/attachment/project/reference.png",
+          mime: "image/png",
+          size: 500_000,
+          filename: "reference.png",
+          intent: "visual_reference",
+        }],
+      })
+    },
+  })
+
+  expect(capturedPrompt).toContain("# Visual Materials")
+  expect(capturedPrompt).toContain("compare_visual_artifacts")
+  expect(capturedPrompt).not.toContain("# Visual Comparison")
+  expect(capturedPrompt).not.toContain("data:image")
+  expect(capturedParts.every((part) => part.type === "text")).toBe(true)
+  expect(toolNames).toContain("compare_visual_artifacts")
+  expect(toolNames).toContain("inspect_delivery_context")
 })
 
 function testDeliveryModel(input?: { id?: string; providerID?: string; context?: number }) {
