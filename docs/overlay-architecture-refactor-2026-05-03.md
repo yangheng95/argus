@@ -76,6 +76,10 @@ Progress log:
   canonical `Button` primitive instead of `.btn.btn-primary.mini`.
   This drops `.btn` callers from 54 to 53, `.btn-primary` callers from
   12 to 11, and the aggregate legacy button budget from 69 to 67.
+- 2026-05-03: `PromptCatalog` reset/save actions now render through
+  `Button` (`ghost` reset, `solid` save) instead of `.btn` variants.
+  This drops `.btn` callers from 53 to 51, `.btn-primary` callers from
+  11 to 10, and the aggregate legacy button budget from 67 to 64.
 
 Trigger: user feedback (2026-05-03):
 

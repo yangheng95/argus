@@ -19,6 +19,7 @@ import {
   resetPromptEntry as serviceReset,
   loadPromptCatalog,
 } from "../../services/config";
+import { Button } from "../ui/Button";
 
 // ── Types ──
 
@@ -241,22 +242,26 @@ export default function PromptCatalog() {
                       {promptHelper(entry)}
                     </span>
                     <div class="dialog-actions compact">
-                      <button
+                      <Button
                         type="button"
-                        class="btn btn-ghost mini"
+                        variant="ghost"
+                        size="sm"
+                        tone="neutral"
                         disabled={saving() || (entry.configured_prompt === null && !dirty())}
                         onClick={() => handleReset(entry)}
                       >
                         {t("prompt.reset")}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        class="btn btn-primary mini"
+                        variant="solid"
+                        size="sm"
+                        tone="accent"
                         disabled={saving() || !dirty()}
                         onClick={() => handleSave(entry)}
                       >
                         {t("common.save")}
-                      </button>
+                      </Button>
                     </div>
                   </div>
 
