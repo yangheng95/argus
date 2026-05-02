@@ -118,7 +118,7 @@
   --ui-chat-min-width: calc(420px * var(--ui-scale));
   --ui-sidebar-width: var(--ui-rail-width);
   --ui-sections-width: var(--ui-rail-width);
-  --ui-resizer-width: calc(14px * var(--ui-scale));
+  --ui-resizer-width: calc(6px * var(--ui-scale));
   --title-size: var(--ui-font-title);
   --title-weight: 700;
   --title-track: 0.08em;
@@ -3903,7 +3903,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   width: auto;
   transform: translateY(-50%);
   height: 1px;
-  background: var(--subtle-3);
+  background: color-mix(in srgb, var(--border) 42%, transparent);
   border-radius: 999px;
   transition: background 80ms ease, box-shadow 80ms ease;
 }
@@ -3911,7 +3911,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .pane-resizer.pane-resizer-workspace[data-active="true"]::before {
   background: var(--accent);
   height: 2px;
-  box-shadow: 0 0 0 1px rgba(91, 141, 239, 0.18);
+  box-shadow: none;
 }
 
 body[data-resizing="row"] {
@@ -8913,8 +8913,9 @@ body[data-theme="light"] .config-close-btn:hover {
   z-index: 10;
 }
 
-/* Persistent visible rail centered inside the (wider) hit area. The hit area
-   is var(--ui-resizer-width) (~14px) so users can grab the resizer easily;
+/* Persistent visible rail centered inside the hit area. The hit area
+   is var(--ui-resizer-width) so users can grab the resizer without a
+   visually heavy divider;
    the visible rail itself is 2px. pointer-events:none on the pseudo so all
    clicks land on .pane-resizer (where the listener lives), not the rail. */
 .pane-resizer::before {
@@ -8924,18 +8925,18 @@ body[data-theme="light"] .config-close-btn:hover {
   top: calc(8px * var(--ui-scale));
   bottom: calc(8px * var(--ui-scale));
   left: 50%;
-  width: 2px;
+  width: 1px;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--border, rgba(255,255,255,0.18)) 92%, transparent);
+  background: color-mix(in srgb, var(--border, rgba(255,255,255,0.18)) 42%, transparent);
   transition: background 80ms ease, box-shadow 80ms ease, width 80ms ease;
 }
 
 .pane-resizer:hover::before,
 .pane-resizer[data-active="true"]::before {
   background: var(--accent);
-  width: 3px;
-  box-shadow: 0 0 0 1px rgba(91, 141, 239, 0.22);
+  width: 2px;
+  box-shadow: none;
 }
 
 body[data-resizing="true"] {
@@ -11454,9 +11455,9 @@ body[data-theme="dark"] {
   --radius: calc(12px * var(--ui-scale));
   --radius-lg: calc(18px * var(--ui-scale));
   --panel-radius: calc(18px * var(--ui-scale));
-  --shadow: 0 18px 45px rgba(3, 7, 24, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --shadow-md: 0 14px 36px rgba(3, 7, 24, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --shadow-lg: 0 26px 70px rgba(3, 7, 24, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --scrollbar-thumb: rgba(170, 183, 236, 0.22);
   --scrollbar-thumb-hover: rgba(123, 131, 255, 0.36);
   --session-scrollbar-track: rgba(255, 255, 255, 0.04);
@@ -11498,40 +11499,40 @@ body[data-theme="dark"] {
   --ui-chat-min-width: calc(500px * var(--ui-scale));
   --ui-panel-header-height: calc(42px * var(--ui-scale));
   --ui-capsule-height: calc(28px * var(--ui-scale));
-  --ui-resizer-width: calc(14px * var(--ui-scale));
+  --ui-resizer-width: calc(6px * var(--ui-scale));
 }
 
 body[data-theme="vscode-dark"] {
   color-scheme: dark;
-  --bg: #151829;
-  --surface: rgba(31, 35, 57, 0.88);
-  --surface-hover: rgba(41, 47, 75, 0.96);
-  --surface-inset: rgba(23, 26, 43, 0.94);
-  --surface-strong: rgba(37, 42, 67, 0.94);
-  --rail-surface: rgba(27, 31, 51, 0.9);
-  --chat-canvas: rgba(22, 25, 41, 0.86);
-  --inspector-surface: rgba(27, 31, 51, 0.92);
-  --chrome: rgba(27, 31, 51, 0.84);
-  --border: rgba(178, 190, 235, 0.13);
-  --border-hover: rgba(92, 141, 255, 0.38);
-  --border-strong: rgba(190, 201, 242, 0.22);
-  --text: #c9d1ea;
-  --text-strong: #f5f7ff;
-  --text-soft: #9fa9ca;
-  --text-muted: #737d9f;
-  --accent: #5c8dff;
-  --accent-dim: rgba(92, 141, 255, 0.15);
-  --accent-hover: #7a7cff;
-  --accent-start: #3f8cff;
-  --accent-mid: #5c8dff;
-  --accent-end: #855fff;
-  --accent-gradient: linear-gradient(135deg, var(--accent-start), var(--accent-mid) 52%, var(--accent-end));
-  --accent-gradient-hover: linear-gradient(135deg, #5298ff, #737eff 52%, #986fff);
-  --accent-ring: rgba(92, 141, 255, 0.28);
-  --hover-accent-border: rgba(92, 141, 255, 0.34);
-  --hover-accent-wash: rgba(92, 141, 255, 0.1);
-  --info: #6ba8ff;
-  --info-dim: rgba(107, 168, 255, 0.12);
+  --bg: #1e1e1e;
+  --surface: rgba(37, 37, 38, 0.92);
+  --surface-hover: rgba(45, 45, 48, 0.98);
+  --surface-inset: rgba(30, 30, 30, 0.96);
+  --surface-strong: rgba(51, 51, 51, 0.94);
+  --rail-surface: rgba(32, 32, 32, 0.92);
+  --chat-canvas: rgba(30, 30, 30, 0.9);
+  --inspector-surface: rgba(37, 37, 38, 0.94);
+  --chrome: rgba(60, 60, 60, 0.84);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(0, 122, 204, 0.42);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text: #cccccc;
+  --text-strong: #f0f0f0;
+  --text-soft: #a6a6a6;
+  --text-muted: #7a7a7a;
+  --accent: #007acc;
+  --accent-dim: rgba(0, 122, 204, 0.16);
+  --accent-hover: #3794ff;
+  --accent-start: #007acc;
+  --accent-mid: #0e639c;
+  --accent-end: #3794ff;
+  --accent-gradient: linear-gradient(135deg, #007acc, #0e639c 62%, #3794ff);
+  --accent-gradient-hover: linear-gradient(135deg, #118bd8, #1177bb 62%, #4da0ff);
+  --accent-ring: rgba(0, 122, 204, 0.3);
+  --hover-accent-border: rgba(0, 122, 204, 0.36);
+  --hover-accent-wash: rgba(0, 122, 204, 0.1);
+  --info: #3794ff;
+  --info-dim: rgba(55, 148, 255, 0.12);
   --good: #73c991;
   --good-dim: rgba(115, 201, 145, 0.14);
   --warn: #cca700;
@@ -11556,9 +11557,9 @@ body[data-theme="vscode-dark"] {
   --radius: calc(12px * var(--ui-scale));
   --radius-lg: calc(18px * var(--ui-scale));
   --panel-radius: calc(18px * var(--ui-scale));
-  --shadow: 0 18px 45px rgba(3, 7, 24, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --shadow-md: 0 14px 36px rgba(3, 7, 24, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --shadow-lg: 0 26px 70px rgba(3, 7, 24, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --ui-titlebar-height: calc(44px * var(--ui-scale));
   --ui-panel-header-height: calc(42px * var(--ui-scale));
   --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
@@ -11600,9 +11601,9 @@ body[data-theme="light"] {
   --warn-dim: rgba(201, 137, 36, 0.12);
   --bad: #d85666;
   --bad-dim: rgba(216, 86, 102, 0.12);
-  --shadow: 0 18px 45px rgba(76, 91, 151, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  --shadow-md: 0 12px 30px rgba(76, 91, 151, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --shadow-lg: 0 26px 70px rgba(76, 91, 151, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --scrollbar-thumb: rgba(95, 111, 162, 0.24);
   --scrollbar-thumb-hover: rgba(91, 95, 240, 0.34);
   --session-scrollbar-track: rgba(255, 255, 255, 0.48);
@@ -12731,12 +12732,14 @@ body[data-theme="light"] {
 }
 
 body[data-theme="light"] .titlebar {
-  margin: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale)) 0;
+  margin: 0;
   border: 1px solid rgba(116, 133, 184, 0.16);
   border-bottom-color: rgba(116, 133, 184, 0.16);
-  border-radius: calc(20px * var(--ui-scale)) calc(20px * var(--ui-scale)) 0 0;
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.72) !important;
-  box-shadow: 0 18px 50px rgba(73, 86, 145, 0.12) !important;
+  box-shadow: none !important;
   backdrop-filter: blur(18px);
 }
 
@@ -12764,12 +12767,12 @@ body[data-theme="light"] .titlebar-btn:hover {
 }
 
 body[data-theme="light"] .panel {
-  padding: 0 calc(12px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  padding: 0;
 }
 
 body[data-theme="light"] .task-bar {
-  margin: 0 calc(12px * var(--ui-scale));
-  border-width: 0 1px 1px;
+  margin: 0;
+  border-width: 0 0 1px;
   border-color: rgba(116, 133, 184, 0.14);
   border-radius: 0;
   background: rgba(255, 255, 255, 0.62) !important;
@@ -12777,14 +12780,14 @@ body[data-theme="light"] .task-bar {
 }
 
 body[data-theme="light"] .panel-body {
-  gap: calc(7px * var(--ui-scale));
-  padding: calc(7px * var(--ui-scale));
-  margin: 0 calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border: 1px solid rgba(116, 133, 184, 0.14);
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
   border-top: 0;
-  border-radius: 0 0 calc(20px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.44);
-  box-shadow: 0 24px 80px rgba(73, 86, 145, 0.15);
+  box-shadow: none;
   backdrop-filter: blur(20px);
 }
 
@@ -12793,8 +12796,8 @@ body[data-theme="light"] .chat,
 body[data-theme="light"] .sections {
   border: 1px solid rgba(116, 133, 184, 0.16) !important;
   background: var(--surface) !important;
-  box-shadow: var(--shadow-md) !important;
-  backdrop-filter: blur(20px);
+  box-shadow: none !important;
+  backdrop-filter: blur(12px);
 }
 
 body[data-theme="light"] .sidebar {
@@ -12815,8 +12818,8 @@ body[data-theme="light"] .chat:hover,
 body[data-theme="light"] .chat:focus-within,
 body[data-theme="light"] .sections:hover,
 body[data-theme="light"] .sections:focus-within {
-  border-color: rgba(91, 95, 240, 0.28) !important;
-  box-shadow: var(--shadow-lg) !important;
+  border-color: rgba(91, 95, 240, 0.22) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="light"] .sidebar-header,
@@ -12841,7 +12844,7 @@ body[data-theme="light"] .board-intro__cta-action {
   border: 0 !important;
   background: var(--accent-gradient) !important;
   color: #ffffff !important;
-  box-shadow: 0 10px 24px rgba(91, 95, 240, 0.24) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="light"] .sidebar-btn-primary:hover,
@@ -12849,7 +12852,7 @@ body[data-theme="light"] .chat-send:hover,
 body[data-theme="light"] .btn-primary:hover,
 body[data-theme="light"] .board-intro__cta-action:hover {
   background: var(--accent-gradient-hover) !important;
-  box-shadow: 0 12px 28px rgba(91, 95, 240, 0.28) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="light"] .sidebar-tool,
@@ -12909,7 +12912,7 @@ body[data-theme="light"] .chat-scroll > .card,
 body[data-theme="light"] .chat-scroll > .interaction-card {
   border-color: rgba(116, 133, 184, 0.14) !important;
   background: rgba(255, 255, 255, 0.9) !important;
-  box-shadow: 0 12px 30px rgba(73, 86, 145, 0.1) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="light"] .chat-scroll > .card[data-kind="message"][data-role="user"] {
@@ -12929,14 +12932,13 @@ body[data-theme="light"] .chat-input {
   border: 1px solid rgba(91, 95, 240, 0.28);
   border-radius: calc(18px * var(--ui-scale));
   background: rgba(255, 255, 255, 0.9) !important;
-  box-shadow: 0 18px 42px rgba(73, 86, 145, 0.16) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="light"] .chat-input:focus-within {
   border-color: rgba(91, 95, 240, 0.48);
   box-shadow:
-    0 0 0 3px rgba(91, 95, 240, 0.12),
-    0 18px 42px rgba(73, 86, 145, 0.18) !important;
+    0 0 0 2px rgba(91, 95, 240, 0.1) !important;
 }
 
 body[data-theme="light"] .chat-textarea {
@@ -12989,7 +12991,7 @@ body[data-theme="light"] .board-intro,
 body[data-theme="light"] .chat-empty--task {
   background: rgba(255, 255, 255, 0.72) !important;
   border-color: rgba(116, 133, 184, 0.16) !important;
-  box-shadow: 0 12px 30px rgba(73, 86, 145, 0.1) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="light"] .board-intro__section,
@@ -13002,23 +13004,22 @@ body[data-theme="light"] .board-intro__cta {
 
 /* ── Reference Dark Variants ──
    The dark themes keep their contrast, but share the same workbench shell:
-   translucent rounded panels, softened borders, blue-purple primary actions,
-   and a single framed canvas instead of the old flat dark chrome. */
+   rounded panels, softened borders, theme-native primary actions, and a
+   single quiet canvas instead of stacked divider chrome. */
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) {
-  background:
-    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 34%),
-    radial-gradient(circle at 85% 8%, color-mix(in srgb, var(--accent-end) 14%, transparent), transparent 30%),
-    linear-gradient(135deg, color-mix(in srgb, var(--bg) 92%, #26365f), var(--bg) 58%, #0f1322) !important;
+  background: var(--bg) !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar {
-  margin: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale)) 0;
+  margin: 0;
   border: 1px solid color-mix(in srgb, var(--border-strong) 82%, transparent);
   border-bottom-color: color-mix(in srgb, var(--border) 86%, transparent);
-  border-radius: calc(20px * var(--ui-scale)) calc(20px * var(--ui-scale)) 0 0;
-  background: color-mix(in srgb, var(--chrome) 84%, transparent) !important;
-  box-shadow: var(--shadow-lg) !important;
-  backdrop-filter: blur(18px);
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  background: var(--chrome) !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .brand-guide,
@@ -13027,7 +13028,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-status-chip,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-setup-cta,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-status-icon,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-btn {
-  background: color-mix(in srgb, var(--surface-strong) 74%, transparent) !important;
+  background: var(--surface-strong) !important;
   border: 1px solid color-mix(in srgb, var(--border) 90%, transparent) !important;
   color: var(--text-strong);
 }
@@ -13045,49 +13046,49 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-btn:hover {
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel {
-  padding: 0 calc(12px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  padding: 0;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
-  margin: 0 calc(12px * var(--ui-scale));
-  border-width: 0 1px 1px;
+  margin: 0;
+  border-width: 0 0 1px;
   border-color: color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 0;
-  background: color-mix(in srgb, var(--chrome) 72%, transparent) !important;
-  backdrop-filter: blur(18px);
+  background: var(--chrome) !important;
+  backdrop-filter: none;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body {
-  gap: calc(7px * var(--ui-scale));
-  padding: calc(7px * var(--ui-scale));
-  margin: 0 calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
   border-top: 0;
-  border-radius: 0 0 calc(20px * var(--ui-scale)) calc(20px * var(--ui-scale));
-  background: color-mix(in srgb, var(--chrome) 44%, transparent);
-  box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(20px);
+  border-radius: 0;
+  background: var(--bg);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
-  border: 1px solid color-mix(in srgb, var(--border-strong) 78%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 64%, transparent) !important;
   background: var(--surface) !important;
-  box-shadow: var(--shadow-md) !important;
-  backdrop-filter: blur(20px);
+  box-shadow: none !important;
+  backdrop-filter: none;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--rail-surface) 94%, transparent), color-mix(in srgb, var(--surface) 84%, transparent)) !important;
+  background: var(--rail-surface) !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat {
-  background: color-mix(in srgb, var(--chat-canvas) 94%, transparent) !important;
+  background: var(--chat-canvas) !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--inspector-surface) 94%, transparent), color-mix(in srgb, var(--surface) 84%, transparent)) !important;
+  background: var(--inspector-surface) !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar:hover,
@@ -13096,8 +13097,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat:hover,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat:focus-within,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections:hover,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent) !important;
-  box-shadow: var(--shadow-lg) !important;
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border)) !important;
+  box-shadow: none !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-header,
@@ -13122,7 +13123,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__cta-actio
   border: 0 !important;
   background: var(--accent-gradient) !important;
   color: #ffffff !important;
-  box-shadow: var(--accent-shadow) !important;
+  box-shadow: none !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-btn-primary:hover,
@@ -13130,7 +13131,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-send:hover,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .btn-primary:hover,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__cta-action:hover {
   background: var(--accent-gradient-hover) !important;
-  box-shadow: 0 12px 30px color-mix(in srgb, var(--accent) 22%, transparent) !important;
+  box-shadow: none !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-tool,
@@ -13177,8 +13178,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .diff-dialog-stat {
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-scroll {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--chat-canvas) 78%, transparent), color-mix(in srgb, var(--surface-inset) 88%, transparent)) !important;
+  background: var(--chat-canvas) !important;
   padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
 }
 
@@ -13186,11 +13186,11 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-scroll > .card,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-scroll > .interaction-card {
   border-color: color-mix(in srgb, var(--border) 82%, transparent) !important;
   background: color-mix(in srgb, var(--surface) 92%, transparent) !important;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18) !important;
+  box-shadow: none !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-scroll > .card[data-kind="message"][data-role="user"] {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), color-mix(in srgb, var(--surface-strong) 90%, transparent)) !important;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface)) !important;
   border-color: color-mix(in srgb, var(--accent) 28%, transparent) !important;
 }
 
@@ -13206,14 +13206,13 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-input {
   border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
   border-radius: calc(18px * var(--ui-scale));
   background: color-mix(in srgb, var(--surface) 94%, transparent) !important;
-  box-shadow: var(--shadow-md) !important;
+  box-shadow: none !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-input:focus-within {
   border-color: color-mix(in srgb, var(--accent) 54%, transparent);
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent),
-    var(--shadow-md) !important;
+    0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent) !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-textarea {
@@ -13258,7 +13257,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-empty--task {
   background: color-mix(in srgb, var(--surface) 82%, transparent) !important;
   border-color: color-mix(in srgb, var(--border-strong) 78%, transparent) !important;
-  box-shadow: var(--shadow-md) !important;
+  box-shadow: none !important;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__section,
@@ -13267,4 +13266,155 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__agent,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__cta {
   background: color-mix(in srgb, var(--surface-inset) 80%, transparent);
   border-color: color-mix(in srgb, var(--border) 84%, transparent);
+}
+
+body[data-theme="vscode-dark"] .titlebar {
+  background: #3c3c3c !important;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body[data-theme="vscode-dark"] .task-bar,
+body[data-theme="vscode-dark"] .sidebar,
+body[data-theme="vscode-dark"] .sections {
+  background: #252526 !important;
+}
+
+body[data-theme="vscode-dark"] .panel-body,
+body[data-theme="vscode-dark"] .chat,
+body[data-theme="vscode-dark"] .chat-scroll {
+  background: #1e1e1e !important;
+}
+
+body[data-theme="vscode-dark"] .brand-guide,
+body[data-theme="vscode-dark"] .titlebar-menubar-trigger,
+body[data-theme="vscode-dark"] .titlebar-status-chip,
+body[data-theme="vscode-dark"] .titlebar-setup-cta,
+body[data-theme="vscode-dark"] .titlebar-status-icon,
+body[data-theme="vscode-dark"] .titlebar-btn,
+body[data-theme="vscode-dark"] .sidebar-tool,
+body[data-theme="vscode-dark"] .sidebar-toolset,
+body[data-theme="vscode-dark"] .task-dir-shell,
+body[data-theme="vscode-dark"] .task-cwd-dropdown,
+body[data-theme="vscode-dark"] .workspace-toggle,
+body[data-theme="vscode-dark"] .btn.mini,
+body[data-theme="vscode-dark"] .executor-chip {
+  background: #2d2d30 !important;
+}
+
+body[data-theme="vscode-dark"] .sidebar-header,
+body[data-theme="vscode-dark"] .chat-header,
+body[data-theme="vscode-dark"] .sections-header,
+body[data-theme="vscode-dark"] .section-head,
+body[data-theme="vscode-dark"] .config-section-head,
+body[data-theme="vscode-dark"] .config-subsection-head,
+body[data-theme="vscode-dark"] .gwg-header {
+  background: #2d2d30 !important;
+}
+
+body[data-theme="vscode-dark"] .chat-input,
+body[data-theme="vscode-dark"] .chat-scroll > .card,
+body[data-theme="vscode-dark"] .chat-scroll > .interaction-card,
+body[data-theme="vscode-dark"] .section,
+body[data-theme="vscode-dark"] .gwg,
+body[data-theme="vscode-dark"] .delivery-panel,
+body[data-theme="vscode-dark"] .criteria-group,
+body[data-theme="vscode-dark"] .eval-error,
+body[data-theme="vscode-dark"] .extension-row,
+body[data-theme="vscode-dark"] .channel-doc-card,
+body[data-theme="vscode-dark"] .detail-card,
+body[data-theme="vscode-dark"] .config-section,
+body[data-theme="vscode-dark"] .config-subsection,
+body[data-theme="vscode-dark"] .board-intro,
+body[data-theme="vscode-dark"] .chat-empty--task {
+  background: #252526 !important;
+}
+
+body[data-theme="light"] :is(
+  .brand-guide,
+  .titlebar-menubar-trigger,
+  .titlebar-status-chip,
+  .titlebar-setup-cta,
+  .titlebar-status-icon,
+  .titlebar-btn,
+  .sidebar-btn,
+  .sidebar-btn-primary,
+  .sidebar-tool,
+  .sidebar-toolset,
+  .task-status,
+  .task-dir-shell,
+  .task-cwd-dropdown,
+  .workspace-toggle,
+  .btn,
+  .btn.mini,
+  .btn-primary,
+  .btn-ghost,
+  .btn-terminate,
+  .executor-chip,
+  .engine-chip,
+  .chat-input,
+  .chat-toolbar-btn,
+  .chat-send,
+  .board-intro__cta-action
+),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
+  .brand-guide,
+  .titlebar-menubar-trigger,
+  .titlebar-status-chip,
+  .titlebar-setup-cta,
+  .titlebar-status-icon,
+  .titlebar-btn,
+  .sidebar-btn,
+  .sidebar-btn-primary,
+  .sidebar-tool,
+  .sidebar-toolset,
+  .task-status,
+  .task-dir-shell,
+  .task-cwd-dropdown,
+  .workspace-toggle,
+  .btn,
+  .btn.mini,
+  .btn-primary,
+  .btn-ghost,
+  .btn-terminate,
+  .executor-chip,
+  .engine-chip,
+  .chat-input,
+  .chat-toolbar-btn,
+  .chat-send,
+  .board-intro__cta-action
+) {
+  margin: 0 !important;
+}
+
+body[data-theme="light"] .panel-body,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body,
+body[data-theme="light"] .workspace-main,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
+  gap: 0 !important;
+}
+
+@media (max-width: 520px) {
+  body[data-theme="light"] .titlebar,
+  body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar {
+    margin: 0;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+
+  body[data-theme="light"] .panel,
+  body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel {
+    padding: 0;
+  }
+
+  body[data-theme="light"] .task-bar,
+  body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar,
+  body[data-theme="light"] .panel-body,
+  body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body {
+    margin-left: 0;
+    margin-right: 0;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
 }

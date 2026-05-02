@@ -346,3 +346,209 @@ test("workspace intro owns first-run directory setup when no directory is set", 
     server.stop(true)
   }
 }, { timeout: 60_000 })
+
+test("column resizers allow broad widths without wide visual dividers", async () => {
+  const server = Bun.serve({
+    idleTimeout: 255,
+    port: 0,
+    async fetch(req) {
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs") return send({ branch: "dev", clean: true, dirty: false, staged: 0, modified: 0, untracked: 0, conflicts: 0, ahead: 0, behind: 0 })
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [], default: {} })
+      if (path === "/config/prompt") return send([])
+      if (path === "/config") return send({})
+      if (path === "/agent") return send([])
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+    },
+  })
+
+  const browser = await launchBrowser(["--disable-dev-shm-usage"])
+  try {
+    const page = await browser.newPage()
+    await page.setViewport({ width: 1600, height: 900 })
+    await page.evaluateOnNewDocument((portValue) => {
+      localStorage.setItem("oc_locale", "en-US")
+      localStorage.setItem("oc_theme", "vscode-dark")
+      localStorage.removeItem("oc_sidebar_width")
+      localStorage.removeItem("oc_sections_width")
+      window.__TAURI__ = {
+        core: {
+          invoke: async (command: string) => {
+            if (command === "overlay_settings_load") {
+              return {
+                serverUrl: `http://127.0.0.1:${portValue}`,
+                autoServer: false,
+                locale: "en-US",
+                theme: "vscode-dark",
+                directory: "D:/overlay/workspace/app",
+              }
+            }
+            if (command === "overlay_settings_save") return true
+            if (command === "overlay_create_temp_dir") return "D:/overlay/temp"
+            return null
+          },
+        },
+        window: {
+          getCurrentWindow() {
+            return {
+              close: async () => undefined,
+              hide: async () => undefined,
+              minimize: async () => undefined,
+              startDragging: async () => undefined,
+              isMaximized: async () => false,
+              onResized: async () => ({ unlisten: async () => undefined }),
+            }
+          },
+        },
+      }
+    }, server.port)
+
+    await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
+    await page.waitForSelector("#leftPaneResizer", { visible: true })
+    await page.waitForSelector("#rightPaneResizer", { visible: true })
+
+    const initial = await page.evaluate(() => {
+      const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
+      const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
+      return {
+        leftHandleWidth: left.width,
+        rightHandleWidth: right.width,
+        leftCenterX: left.left + left.width / 2,
+        leftCenterY: left.top + left.height / 2,
+        rightCenterX: right.left + right.width / 2,
+        rightCenterY: right.top + right.height / 2,
+      }
+    })
+    expect(initial.leftHandleWidth).toBeLessThanOrEqual(8)
+    expect(initial.rightHandleWidth).toBeLessThanOrEqual(8)
+
+    const controlsWithMargins = await page.evaluate(() => {
+      const selectors = [
+        ".brand-guide",
+        ".titlebar-menubar-trigger",
+        ".titlebar-btn",
+        ".sidebar-btn-primary",
+        ".sidebar-tool",
+        ".task-dir-shell",
+        ".task-cwd-dropdown",
+        ".workspace-toggle",
+        ".btn.mini",
+        ".executor-chip",
+        ".chat-input",
+        ".chat-toolbar-btn",
+        ".chat-send",
+        ".board-intro__cta-action",
+      ]
+      return selectors.flatMap((selector) => {
+        const node = document.querySelector<HTMLElement>(selector)
+        if (!node) return []
+        const style = getComputedStyle(node)
+        const margins = [
+          style.marginTop,
+          style.marginRight,
+          style.marginBottom,
+          style.marginLeft,
+        ]
+        return margins.every((value) => value === "0px") ? [] : [{ selector, margins }]
+      })
+    })
+    expect(controlsWithMargins).toEqual([])
+
+    const rightDrag = await page.evaluate(() => {
+      const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
+      const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
+      return {
+        centerX: right.left + right.width / 2,
+        centerY: right.top + right.height / 2,
+        targetX: workspace.right - 620,
+      }
+    })
+    await page.mouse.move(rightDrag.centerX, rightDrag.centerY)
+    await page.mouse.down()
+    await page.mouse.move(rightDrag.targetX, rightDrag.centerY, { steps: 10 })
+    await page.mouse.up()
+
+    const afterRightDrag = await page.evaluate(() => {
+      const sidebar = document.querySelector<HTMLElement>(".sidebar")!.getBoundingClientRect()
+      const chat = document.querySelector<HTMLElement>(".chat")!.getBoundingClientRect()
+      const sections = document.querySelector<HTMLElement>(".sections")!.getBoundingClientRect()
+      const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
+      const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
+      return {
+        sidebar: sidebar.width,
+        chat: chat.width,
+        sections: sections.width,
+        leftDivider: chat.left - sidebar.right,
+        rightDivider: sections.left - chat.right,
+        leftHandleWidth: left.width,
+        rightHandleWidth: right.width,
+      }
+    })
+
+    expect(afterRightDrag.sections).toBeGreaterThan(560)
+    expect(afterRightDrag.chat).toBeGreaterThan(300)
+    expect(afterRightDrag.leftDivider).toBeLessThanOrEqual(8)
+    expect(afterRightDrag.rightDivider).toBeLessThanOrEqual(8)
+    expect(afterRightDrag.leftHandleWidth).toBeLessThanOrEqual(8)
+    expect(afterRightDrag.rightHandleWidth).toBeLessThanOrEqual(8)
+
+    await page.evaluate(() => {
+      localStorage.removeItem("oc_sidebar_width")
+      localStorage.removeItem("oc_sections_width")
+    })
+    await page.reload({ waitUntil: "load" })
+    await page.waitForSelector("#leftPaneResizer", { visible: true })
+
+    const leftDrag = await page.evaluate(() => {
+      const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
+      return {
+        centerX: left.left + left.width / 2,
+        centerY: left.top + left.height / 2,
+        targetX: 700,
+      }
+    })
+    await page.mouse.move(leftDrag.centerX, leftDrag.centerY)
+    await page.mouse.down()
+    await page.mouse.move(leftDrag.targetX, leftDrag.centerY, { steps: 10 })
+    await page.mouse.up()
+
+    const afterLeftDrag = await page.evaluate(() => {
+      const sidebar = document.querySelector<HTMLElement>(".sidebar")!.getBoundingClientRect()
+      const chat = document.querySelector<HTMLElement>(".chat")!.getBoundingClientRect()
+      const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
+      const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
+      return {
+        sidebar: sidebar.width,
+        chat: chat.width,
+        leftHandleWidth: left.width,
+        rightHandleWidth: right.width,
+      }
+    })
+    expect(afterLeftDrag.sidebar).toBeGreaterThan(600)
+    expect(afterLeftDrag.chat).toBeGreaterThan(300)
+    expect(afterLeftDrag.leftHandleWidth).toBeLessThanOrEqual(8)
+    expect(afterLeftDrag.rightHandleWidth).toBeLessThanOrEqual(8)
+    await page.close()
+  } finally {
+    await browser.close().catch(() => undefined)
+    server.stop(true)
+  }
+}, { timeout: 60_000 })
