@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { createRoot } from "solid-js"
-import { performSseReconnect, startSSE, stopSSE, type SseReconnectDeps } from "../src/services/sse"
+import { performSseReconnect, startSSE, startTaskListSSE, stopSSE, stopTaskListSSE, type SseReconnectDeps } from "../src/services/sse"
 import {
   __setHostTransportForTest,
   type HostTransport,
@@ -10,6 +10,7 @@ import {
 } from "../src/services/host-transport"
 import { setBoardStore } from "../src/store/board"
 import { messageStore } from "../src/store/messages"
+import { setSettingsStore } from "../src/store/settings"
 
 /**
  * audit-2026-04-29 W2-V10 — regression for two latent P1s in the
@@ -193,8 +194,10 @@ describe("performSseReconnect (audit W2-V10)", () => {
 describe("startSSE stream error handling", () => {
   afterEach(() => {
     stopSSE()
+    stopTaskListSSE()
     __setHostTransportForTest(undefined)
     setBoardStore("selectedTaskID", "")
+    setSettingsStore("directory", "")
   })
 
   test("stream error closes the handle so hydrate-and-resume reconnect can run from onClose", () => {
@@ -230,6 +233,39 @@ describe("startSSE stream error handling", () => {
       expect(closeCalls).toBe(1)
 
       stopSSE()
+      dispose()
+    })
+  })
+
+  test("task-list stream error closes the handle so sidebar refresh reconnect can run from onClose", () => {
+    createRoot((dispose) => {
+      let handlers: StreamHandlers | undefined
+      let closeCalls = 0
+      const transport = {
+        kind: "tauri",
+        request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
+        openStream: (_input: StreamOpenRequest, h: StreamHandlers) => {
+          handlers = h
+          return {
+            close: () => {
+              closeCalls++
+              h.onClose?.("test-task-list-error-close")
+            },
+          }
+        },
+        native: async () => null,
+        subscribeUiCommand: () => ({ unsubscribe() {} }),
+      } satisfies HostTransport
+
+      __setHostTransportForTest(transport)
+      setSettingsStore("directory", "D:\\workspace")
+
+      startTaskListSSE()
+      handlers!.onError?.(new Error("task list stream interrupted"))
+
+      expect(closeCalls).toBe(1)
+
+      stopTaskListSSE()
       dispose()
     })
   })

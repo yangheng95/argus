@@ -12,6 +12,10 @@ Progress log:
   `--oc-color-*` tokens only. Architecture tests reject chrome
   tokens such as radius, spacing, shadow, border, size, and motion
   inside new theme files.
+- 2026-05-03: SSE refresh guard extended to the global task-list
+  stream. Transport errors now close the task-list handle so the
+  existing `onClose` reconnect path restarts sidebar refresh instead
+  of leaving non-selected task changes stale until manual reload.
 
 Trigger: user feedback (2026-05-03):
 
