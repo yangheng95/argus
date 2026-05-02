@@ -4,7 +4,6 @@ import { appStore } from "../store/app";
 import { settingsStore } from "../store/settings";
 import {
   browseDirectory,
-  createDirectory,
   loadRecentDirectories,
   setDirectory,
 } from "../services/workspace";
@@ -63,17 +62,6 @@ export function StartupWorkspaceDialog() {
     }
   }
 
-  async function create() {
-    setBusy(true);
-    try {
-      await createDirectory();
-      if (settingsStore.directory) setOpen(false);
-    } finally {
-      setBusy(false);
-      setRecentDirs(loadRecentDirectories());
-    }
-  }
-
   return (
     <Show when={visible()}>
       <div class="startup-workspace" role="presentation" data-testid="startup-workspace-dialog">
@@ -101,15 +89,6 @@ export function StartupWorkspaceDialog() {
               data-testid="startup-open-folder"
             >
               {t("startup.open_folder")}
-            </button>
-            <button
-              type="button"
-              class="startup-workspace-secondary"
-              disabled={busy()}
-              onClick={() => void create()}
-              data-testid="startup-create-folder"
-            >
-              {t("startup.create_folder")}
             </button>
           </div>
 
