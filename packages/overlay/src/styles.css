@@ -3853,14 +3853,21 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   gap: calc(8px * var(--ui-scale));
 }
 
+/* iter52: canonical bg switched from `transparent` to
+   `var(--surface-inset)` to match what the !important reset
+   chain actually rendered. Border-radius switched from
+   hardcoded 8px to var(--radius) (≈10px) for the same
+   reason — the reset's var(--radius) won via !important.
+   `.criteria-group` now drops out of the reset chain at
+   ~12648; only `.gwg` + `.delivery-panel` remain. */
 .criteria-group {
   display: flex;
   flex-direction: column;
   gap: calc(4px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale));
-  border-radius: calc(8px * var(--ui-scale));
+  border-radius: var(--radius);
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--surface-inset);
   transition: border-color 120ms, background 120ms;
   flex: 1 1 calc(180px * var(--ui-scale));
   min-width: calc(160px * var(--ui-scale));
@@ -12645,9 +12652,11 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
    semantic intent. Now `.eval-error` keeps its red error
    palette directly. The remaining 3 siblings stay until each
    canonical is verified. */
+/* iter52 dropped `.criteria-group`. Reset chain now down to 2
+   shell-level siblings (.gwg / .delivery-panel) for future
+   single-source passes. */
 .gwg,
-.delivery-panel,
-.criteria-group {
+.delivery-panel {
   background: var(--surface-inset) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important;
