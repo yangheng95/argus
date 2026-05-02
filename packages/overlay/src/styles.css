@@ -5329,19 +5329,33 @@ code .file-link:hover {
 
 /* ── Chat icon column + toolbar buttons ── */
 
+/* Single source after iter22. Was four sites — a chromed
+   canonical here (16px radius, gradient bg, inset shadow)
+   and three later overrides at lines ~12515 / ~12728 /
+   ~12976 that flipped radius to 10px, swapped backgrounds,
+   and re-asserted `align-self: stretch`. The canonical lied
+   about radius (16px in source, 10px rendered) — same
+   pattern collapsed for the chat-input shell in iter17 and
+   the chat-textarea in iter20.
+
+   Visually: after iter17/iter20 the parent `.chat-input` and
+   the inner textarea were both flat (border-radius: 0); the
+   icon column was the last rounded chip in the row, which
+   read as a leftover bolted-on island. Drop the radius so
+   the column reads as a flush slice of the same flat
+   composer surface. */
 .chat-icon-col {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   align-self: stretch;
-  gap: calc(2px * var(--ui-scale) * var(--chat-compose-scale));
+  gap: calc(2px * var(--ui-scale));
   flex-shrink: 0;
-  padding: calc(4px * var(--ui-scale) * var(--chat-compose-scale)) calc(3px * var(--ui-scale) * var(--chat-compose-scale));
-  border: 1px solid color-mix(in srgb, var(--subtle-4) 88%, transparent);
-  border-radius: calc(16px * var(--ui-scale) * var(--chat-compose-scale));
-  background: color-mix(in srgb, var(--surface-inset) 76%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  padding: calc(4px * var(--ui-scale)) calc(3px * var(--ui-scale));
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface-inset);
 }
 
 .chat-toolbar-btn {
@@ -12512,12 +12526,9 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   box-shadow: 0 0 0 2px var(--accent-ring) !important;
 }
 
-.chat-icon-col {
-  border-radius: var(--radius);
-  background: var(--surface-inset);
-  border-color: var(--border);
-  box-shadow: none;
-}
+/* iter22: this `.chat-icon-col` override block was folded
+   into the canonical block near line ~5347 (flat
+   border-radius: 0). */
 
 .chat-toolbar-btn:hover {
   transform: none;
@@ -12725,9 +12736,8 @@ body[data-theme="light"] .btn-primary {
   min-height: calc(210px * var(--ui-scale));
 }
 
-.chat-icon-col {
-  align-self: stretch;
-}
+/* iter22: `.chat-icon-col { align-self: stretch }` folded —
+   the canonical near line ~5347 already declares it. */
 
 /* .chat-send / .chat-interrupt now live as the canonical rule near
  * line 4727 — duplicate height/min-width overrides removed. Keep
@@ -12973,9 +12983,10 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
    override and the third min-height duplicate were folded
    into the canonical block near line ~5462. */
 
-.chat-icon-col {
-  background: color-mix(in srgb, var(--surface) 52%, transparent);
-}
+/* iter22: late `.chat-icon-col { background: ... }` override
+   here was folded into the canonical near line ~5347.
+   Theme-scoped overrides at lines ~13400 (light) and ~13673
+   (dark) still apply per-theme palettes. */
 
 /* .chat-send / .chat-send:hover canonical rule lives near line 4727.
  * The deeper-theme tint that was here is now folded into the canonical
