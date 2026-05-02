@@ -206,6 +206,21 @@ export function createOrchestratorTools(input: {
     return cleaned
   }
 
+  async function cleanupCompletedGoalWorkspace(goalID: string, goalRunID: string): Promise<string> {
+    const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
+    try {
+      const cleaned = await cleanupGoalWorkspaceForGoal(goalID)
+      if (cleaned) {
+        updateGoalRun(goalRunID, { workspace_dir: null })
+      }
+      return cleaned ? "goal worktree cleaned after successful merge" : "goal worktree already absent"
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      log.warn("goal workspace cleanup after success failed", { taskID, goalID, error: message })
+      return `goal worktree cleanup failed: ${message}`
+    }
+  }
+
   function taskLevelBuildEligibility(task: TaskRow): { allowed: true } | { allowed: false; reason: string } {
     if (task.kind === "build") return { allowed: true }
     const latestDelivery = findLatestDeliveryVerdictArtifact(task.id)
@@ -4160,6 +4175,7 @@ export function createOrchestratorTools(input: {
           let buildOutcome:
             | { kind: "ok"; result: Awaited<ReturnType<typeof BuildAgent.run>> }
             | { kind: "throw"; error: unknown }
+          let goalWorkspaceCleanup: string | undefined
           try {
             const ok = await BuildAgent.run({
               target,
@@ -4269,6 +4285,9 @@ export function createOrchestratorTools(input: {
                   const { updateGoalRun } = await import("@/engine/persist")
                   updateGoalRun(goalRunID, { session_id: sessionID })
                 }
+                if (result.status === "passed") {
+                  goalWorkspaceCleanup = await cleanupCompletedGoalWorkspace(attachedGoalID, goalRunID)
+                }
               } else {
                 const errMsg =
                   buildOutcome.error instanceof Error
@@ -4326,12 +4345,13 @@ export function createOrchestratorTools(input: {
           const commitLine = result.commit_ref ? `- commit_ref: ${result.commit_ref}` : "- commit_ref: (none)"
           const errorLine = result.status === "failed" ? `\n- error: ${result.error}` : ""
           const worktreeLine = worktreeDir ? `\n- worktreeDir: ${worktreeDir}` : ""
+          const cleanupLine = goalWorkspaceCleanup ? `\n- cleanup: ${goalWorkspaceCleanup}` : ""
           return (
             `Build agent finished (status=${result.status}, session ${sessionID}).\n\n` +
             `### Build report\n` +
             `- summary: ${result.summary}\n` +
             `- patch_summary: ${result.patch_summary || "(empty)"}\n` +
-            `${commitLine}${errorLine}${worktreeLine}\n` +
+            `${commitLine}${errorLine}${worktreeLine}${cleanupLine}\n` +
             `- tests:\n${testLines}\n\n` +
             `### Next step\n` +
             `Call \`deliver\` to run the adversarial verification + Arbiter.\n` +
