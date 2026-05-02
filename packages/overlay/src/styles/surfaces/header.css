@@ -35,6 +35,12 @@
   gap: var(--oc-header-gap);
 }
 
+.sections-tabs.oc-surface-header__actions {
+  width: 100%;
+  gap: var(--oc-header-actions-padding);
+  padding: var(--oc-header-actions-padding);
+}
+
 .oc-surface-header__title {
   min-width: var(--oc-radius-none);
   overflow: hidden;
