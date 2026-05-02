@@ -7080,10 +7080,21 @@ select.field-input option {
    on `.delivery-panel`; lifecycle status (publishing) is folded in via a
    subtle pulsing border later if needed. Row + group styling pulls on the
    shared `.verdict-pill` primitive — no per-row color rules here. */
+/* iter53: canonical bg switched from `var(--surface, …)` to
+   `var(--surface-inset)` to match the rendered value the
+   !important reset was forcing. Crucially, the 4px left
+   accent rail (`border-left: 4px solid var(--text-muted)`
+   plus the verdict-tone overrides at lines below) WAS
+   being killed by the reset's `border: 1px solid
+   var(--border) !important` shorthand — the !important
+   shorthand overwrote ALL four border sides including
+   border-left, so the verdict-accent rail never rendered
+   despite being declared. Dropping `.delivery-panel` from
+   the reset chain restores the accent rail. */
 .delivery-panel {
   padding: 12px;
   border-radius: var(--radius);
-  background: var(--surface, var(--surface-inset));
+  background: var(--surface-inset);
   border: 1px solid var(--border);
   border-left: 4px solid var(--text-muted);
   margin-top: 4px;
@@ -12655,8 +12666,12 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 /* iter52 dropped `.criteria-group`. Reset chain now down to 2
    shell-level siblings (.gwg / .delivery-panel) for future
    single-source passes. */
-.gwg,
-.delivery-panel {
+/* iter53 dropped `.delivery-panel` — the reset's `border: 1px
+   solid !important` shorthand was inadvertently overwriting
+   the verdict-accent border-left rail declared on the
+   canonical. With .delivery-panel out, the rail renders
+   again. Reset chain now down to .gwg only. */
+.gwg {
   background: var(--surface-inset) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important;
