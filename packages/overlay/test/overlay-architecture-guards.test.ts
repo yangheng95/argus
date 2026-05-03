@@ -370,6 +370,15 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("shared header background resolves from root palette tokens, not legacy body palette", () => {
+    const tokenText = readText(join(OVERLAY_ROOT, "src/styles/tokens/design-language.css"))
+    const headerText = readText(join(OVERLAY_ROOT, "src/styles/surfaces/header.css"))
+
+    expect(tokenText).toMatch(/--oc-header-bg:\s*var\(--oc-color-surface-strong\)/)
+    expect(tokenText).not.toMatch(/--oc-header-bg:\s*var\(--surface-strong\)/)
+    expect(headerText).toMatch(/background:\s*var\(--oc-header-bg\)/)
+  })
+
   test("new surface style files do not introduce raw color or pixel literals", () => {
     const files = walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) => path.endsWith(".css"))
     const rawValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|(?<![\w-])-?\d+(?:\.\d+)?px\b/i

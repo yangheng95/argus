@@ -20,7 +20,7 @@
   --oc-header-title-line-height: 1;
   --oc-header-title-letter-spacing: 0;
   --oc-header-title-transform: none;
-  --oc-header-bg: var(--surface-strong);
+  --oc-header-bg: var(--oc-color-surface-strong);
   --oc-header-border: 0 solid transparent;
   --oc-header-shadow: none;
 }

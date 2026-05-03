@@ -220,6 +220,13 @@ Progress log:
   theme reset lists, and retired the local `.config-content .config-subsection`
   background/border/radius override. Settings containers now share the same
   shape contract across themes.
+- 2026-05-03: Screenshot review caught a real light-theme regression: shared
+  column headers rendered as dark bars because `--oc-header-bg` was defined on
+  `:root` as `var(--surface-strong)`, capturing the legacy dark root palette
+  before `body[data-theme="light"]` overrides. `--oc-header-bg` now resolves
+  from the root-scoped `--oc-color-surface-strong` palette token, and the guard
+  forbids routing shared header background through legacy body-scoped palette
+  variables.
 
 Trigger: user feedback (2026-05-03):
 
@@ -340,6 +347,9 @@ Concrete acceptance targets:
 - Theme files only swap palette tokens. They cannot change
   layout, spacing, radius, borders, shadows, display, or
   responsive behavior.
+- Visual UI work requires a rendered screenshot before delivery. CSS count
+  reductions and structural tests are not enough; computed styles and screenshots
+  must confirm the active theme renders the intended design language.
 
 ## Proposed architecture
 
