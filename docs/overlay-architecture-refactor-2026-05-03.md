@@ -435,6 +435,11 @@ Progress log:
   re-color the sidebar directory tree for light mode — the new canonical
   resolves correctly via palette tokens in every theme. `body[data-theme]`
   guard ceiling drops to `<= 110`.
+- 2026-05-03: Folded card header action control sizing, radius, and opacity
+  from the `styles/card.css` final override layer into the first-owner
+  `.card__copy`, `.card__rewind`, `.card__trace`, `.card__agent-cancel`, and
+  `.card__agent-reply-toggle` rules. `card.css` duplicate-selector guard
+  drops from `<= 27` to `<= 14`.
 
 Trigger: user feedback (2026-05-03):
 
@@ -468,7 +473,7 @@ one theme contract, and no runtime God CSS path left behind.
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
-| `packages/overlay/src/styles/card.css` | **1,612 lines**                                                                         |
+| `packages/overlay/src/styles/card.css` | **1,589 lines**                                                                         |
 | Total `!important` in stylesheets      | **183** current guard baseline                                                          |
 | `body[data-theme="…"]` theme overrides | **110**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
