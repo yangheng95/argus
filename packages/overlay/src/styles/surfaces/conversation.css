@@ -39,3 +39,90 @@
 .chat-follow-label {
   white-space: nowrap;
 }
+
+/* Task-aware empty-state children. The shell `.chat-empty--task` itself
+   + its theme overrides still live in styles.css until those overrides
+   are reworked through palette-aware tokens. */
+
+.chat-empty-marker {
+  display: grid;
+  place-items: center;
+  width: calc(38px * var(--ui-scale));
+  height: calc(38px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--radius);
+  color: var(--accent);
+  background: var(--surface);
+}
+
+.chat-empty-copy {
+  display: grid;
+  gap: calc(5px * var(--ui-scale));
+  min-width: 0;
+}
+
+.chat-empty-kicker {
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  line-height: 1.2;
+}
+
+.chat-empty-title {
+  color: var(--text-strong);
+  font-size: var(--ui-font-heading);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-empty-meta {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+}
+
+.chat-empty-status {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.chat-empty-status::before {
+  content: "";
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: currentColor;
+}
+
+.chat-empty-status[data-status="queued"] {
+  color: var(--warn);
+}
+
+.chat-empty-status[data-status="failed"],
+.chat-empty-status[data-status="cancelled"] {
+  color: var(--bad);
+}
+
+.chat-empty-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Inside the task-aware variant the icon sits in `.chat-empty-marker`,
+   a 38px box, so the SVG shrinks one notch and uses a slightly muted
+   accent. */
+.chat-empty--task .chat-empty-marker .chat-empty-icon {
+  width: calc(30px * var(--ui-scale));
+  height: calc(30px * var(--ui-scale));
+  color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
+}

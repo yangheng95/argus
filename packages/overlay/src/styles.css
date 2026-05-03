@@ -12525,90 +12525,12 @@ body::after,
   border-left-color: var(--bad) !important;
 }
 
-.chat-empty-marker {
-  display: grid;
-  place-items: center;
-  width: calc(38px * var(--ui-scale));
-  height: calc(38px * var(--ui-scale));
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--accent);
-  background: var(--surface);
-}
-
-.chat-empty-copy {
-  display: grid;
-  gap: calc(5px * var(--ui-scale));
-  min-width: 0;
-}
-
-.chat-empty-kicker {
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-  line-height: 1.2;
-}
-
-.chat-empty-title {
-  color: var(--text-strong);
-  font-size: var(--ui-font-heading);
-  font-weight: 720;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-empty-meta {
-  display: flex;
-  align-items: center;
-  gap: calc(8px * var(--ui-scale));
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-}
-
-.chat-empty-status {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  color: var(--accent);
-  white-space: nowrap;
-}
-
-.chat-empty-status::before {
-  content: "";
-  width: calc(6px * var(--ui-scale));
-  height: calc(6px * var(--ui-scale));
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.chat-empty-status[data-status="queued"] {
-  color: var(--warn);
-}
-
-.chat-empty-status[data-status="failed"],
-.chat-empty-status[data-status="cancelled"] {
-  color: var(--bad);
-}
-
-.chat-empty-path {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Inside the task-aware variant the icon sits in `.chat-empty-marker`,
-   a 38px box, so the SVG shrinks one notch and gets a slightly muted
-   accent. Properly scoped (was a top-level `.chat-empty-icon` rule
-   before iter5, which clobbered the canonical 34px definition for
-   the plain variant too — classic dual-source). */
-.chat-empty--task .chat-empty-marker .chat-empty-icon {
-  width: calc(30px * var(--ui-scale));
-  height: calc(30px * var(--ui-scale));
-  color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
-}
+/* `.chat-empty-marker`, `-copy`, `-kicker`, `-title`, `-meta`,
+   `-status` (+ ::before + [data-status] tones), `-path`, and the
+   nested marker icon scope live in `styles/surfaces/conversation.css`
+   now. The `.chat-empty--task` shell + `[data-status]` border-color
+   variants stay in styles.css until their theme overrides are
+   reworked in a follow-up. */
 
 /* `.chat-input:focus-within` ring lives in
    `styles/surfaces/composer.css` now. */

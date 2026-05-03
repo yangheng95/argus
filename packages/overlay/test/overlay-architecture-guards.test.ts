@@ -243,6 +243,32 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("conversation chat-empty task-children are owned by surfaces/conversation.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const conversationSurface = readText(
+      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
+    )
+
+    for (const className of [
+      "chat-empty-marker",
+      "chat-empty-copy",
+      "chat-empty-kicker",
+      "chat-empty-title",
+      "chat-empty-meta",
+      "chat-empty-status",
+      "chat-empty-path",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(conversationSurface).toMatch(/\.chat-empty-status::before\s*\{/)
+    expect(conversationSurface).toMatch(/\.chat-empty-status\[data-status="queued"\]/)
+    expect(conversationSurface).toMatch(
+      /\.chat-empty--task \.chat-empty-marker \.chat-empty-icon\s*\{/,
+    )
+  })
+
   test("conversation chat-empty placeholder is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const conversationSurface = readText(
@@ -542,7 +568,7 @@ describe("overlay architecture guards", () => {
     ]
     const text = sources.join("\n")
     const boldDecls = count(/font-weight\s*:\s*(?:700|720|750|760|780|800|900|bold)\b/g, text)
-    expect(boldDecls).toBeLessThanOrEqual(41)
+    expect(boldDecls).toBeLessThanOrEqual(40)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
