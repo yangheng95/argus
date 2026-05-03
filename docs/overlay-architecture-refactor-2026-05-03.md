@@ -293,6 +293,12 @@ Progress log:
   compact panel hint shape is no longer theme-dependent, tightening guard
   ceilings to `!important <= 259`, `body[data-theme] <= 174`, and theme
   layout/chrome overrides <= 147.
+- 2026-05-03: Consolidated `.agent-workflow-panel` shell chrome and its grid
+  backdrop pseudo-element into the canonical workflow panel rule, removing both
+  the early compact theme reset and the later Calm workflow map panel override.
+  Themes no longer own workflow panel display, spacing, padding, overflow,
+  isolation, or backdrop geometry; guard ceilings are now `!important <= 259`,
+  `body[data-theme] <= 171`, and theme layout/chrome overrides <= 137.
 
 Trigger: user feedback (2026-05-03):
 

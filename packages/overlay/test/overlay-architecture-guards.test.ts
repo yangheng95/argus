@@ -158,13 +158,13 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(259)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(174)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(171)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(147)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(137)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -433,6 +433,46 @@ describe("overlay architecture guards", () => {
       "border-radius: calc(4px * var(--ui-scale))",
     ]) {
       expect(body).toContain(declaration)
+    }
+  })
+
+  test("workflow panel shell is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.agent-workflow-panel\b/.test(selector)) continue
+
+      expect(selector).not.toMatch(/\.agent-workflow-panel\b/)
+    }
+
+    const panelBody = soloRuleBody(styles, ".agent-workflow-panel")
+    for (const declaration of [
+      "isolation: isolate",
+      "display: flex",
+      "flex-direction: column",
+      "gap: 0",
+      "padding: 0",
+      "overflow: hidden",
+      "background: color-mix(in srgb, var(--surface-inset) 92%, var(--surface))",
+    ]) {
+      expect(panelBody).toContain(declaration)
+    }
+
+    const beforeBody = soloRuleBody(styles, ".agent-workflow-panel::before")
+    for (const declaration of [
+      'content: ""',
+      "position: absolute",
+      "inset: 0",
+      "z-index: -1",
+      "opacity: 0.18",
+      "background-size: calc(26px * var(--ui-scale)) calc(26px * var(--ui-scale))",
+      "mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 84%, transparent)",
+    ]) {
+      expect(beforeBody).toContain(declaration)
     }
   })
 
