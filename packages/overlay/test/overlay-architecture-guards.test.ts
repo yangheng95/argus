@@ -157,8 +157,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(233)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(148)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(183)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(147)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
@@ -1105,6 +1105,34 @@ describe("overlay architecture guards", () => {
       "--oc-titlebar-gap",
     ]) {
       expect(tokenText).toContain(token)
+    }
+  })
+
+  test("icon button padding is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const iconButtonClasses = [".titlebar-btn", ".titlebar-status-icon", ".chat-toolbar-btn"]
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      const targetsIconButton = iconButtonClasses.some((cls) =>
+        new RegExp(`\\${cls}\\b`).test(selector),
+      )
+      if (!isThemeSelector || !targetsIconButton) continue
+
+      expect(body).not.toMatch(/\bpadding(?:-[a-z]+)?\s*:/)
+    }
+
+    for (const className of iconButtonClasses) {
+      const escaped = className.replace(".", "\\.")
+      const ruleBodies = Array.from(
+        styles.matchAll(new RegExp(`(^|[\\n,])\\s*${escaped}[^{},]*\\{([^{}]*)\\}`, "g")),
+      ).map((match) => match[2] ?? "")
+      const bodyText = ruleBodies.join("\n")
+      expect(bodyText).toContain("padding: 0")
     }
   })
 
