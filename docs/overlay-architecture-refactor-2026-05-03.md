@@ -173,6 +173,10 @@ Progress log:
   `.sections-header` base chrome blocks from God CSS. The three primary
   column headers now share the runtime `styles/surfaces/header.css`
   surface contract for height, padding, border, background, radius, and shadow.
+- 2026-05-03: Moved primary header action spacing fully under
+  `.oc-surface-header__actions`, removing local `.sidebar-header-actions` /
+  `.chat-header-meta` gap declarations and the theme-scoped
+  `.sidebar-header-actions` gap reset.
 
 Trigger: user feedback (2026-05-03):
 

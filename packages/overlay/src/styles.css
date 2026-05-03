@@ -4409,7 +4409,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   justify-self: end;
   display: inline-flex;
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
   min-width: 0;
   justify-content: flex-end;
 }
@@ -10334,7 +10333,6 @@ body[data-resizing="true"] * {
 .sidebar-header-actions {
   display: flex;
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
   flex-wrap: nowrap;
   justify-content: flex-end;
   flex-shrink: 0;
@@ -12687,10 +12685,6 @@ body[data-resizing="true"] * {
   flex-shrink: 0;
 }
 
-.chat-header-meta {
-  gap: calc(8px * var(--ui-scale));
-}
-
 .chat-header-meta #btnChatCopyAll {
   min-height: auto;
   padding: 0 0 0 var(--ui-btn-mini-padding-x);
@@ -14867,8 +14861,7 @@ body[data-theme="light"]
     .titlebar-utility,
     .titlebar-actions,
     .titlebar-status-cluster,
-    .titlebar-window-controls,
-    .sidebar-header-actions
+    .titlebar-window-controls
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
@@ -14879,8 +14872,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .titlebar-utility,
     .titlebar-actions,
     .titlebar-status-cluster,
-    .titlebar-window-controls,
-    .sidebar-header-actions
+    .titlebar-window-controls
   ) {
   gap: calc(2px * var(--ui-scale)) !important;
 }

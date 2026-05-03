@@ -31,3 +31,10 @@ test("legacy God CSS no longer owns base surface header chrome", () => {
 
   expect(css).not.toMatch(/(^|\n)\.(?:sidebar-header|chat-header|sections-header)\s*\{/);
 });
+
+test("surface header actions own action spacing outside theme resets", () => {
+  const css = readFileSync(LEGACY_CSS, "utf8");
+
+  expect(css).not.toMatch(/(^|\n)\.(?:sidebar-header-actions|chat-header-meta)\s*\{[^}]*\bgap\s*:/);
+  expect(css).not.toMatch(/body[^{]*\.sidebar-header-actions(?![-\w])[^{}]*\{[^}]*\bgap\s*:/);
+});
