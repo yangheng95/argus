@@ -1,0 +1,80 @@
+/* Inspector surface — owns the right panel column shell + the
+   workflow / inspector / preview tab body containers. The richer
+   `.section` / `.gwg` card chrome and the per-section variants
+   stay in styles.css until they are reworked through palette tokens
+   (their hover states + theme overrides need a deliberate sweep). */
+
+.sections {
+  width: var(--ui-sections-width);
+  min-width: min(100%, var(--ui-rail-min-width));
+  max-width: var(--ui-sections-width);
+  flex: 0 1 var(--ui-sections-width);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--inspector-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.sections-title {
+  display: inline-flex;
+  align-items: center;
+  min-height: calc(16px * var(--ui-scale));
+}
+
+/* Section card stack: scrollable body that holds inspector cards. The
+   scrollbar is hidden because the panel uses a reflow-based scroll
+   indicator instead of a visual gutter. The 4px gap + 4px padding
+   below fold the late override that lived at the styles.css tail
+   (canonical was 14/10-8-14 — late wins, surface declares the
+   rendered values). */
+.sections-stack {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale));
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.sections-stack::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Tab body container: each top-level inspector tab (workflow,
+   inspector, preview) renders inside one of these. Inactive tabs
+   collapse via `[data-active="false"]`. */
+.sections-tab-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sections-tab-body[data-active="false"] {
+  display: none;
+}
+
+.sections-tab-body[data-panel-tab="inspector"] {
+  display: flex;
+  min-height: 0;
+}
+
+.sections-tab-body[data-panel-tab="inspector"][data-active="false"] {
+  display: none;
+}
+
+.sections-tab-body[data-panel-tab="workflow"] {
+  min-height: 0;
+}
+
+.sections-tab-body[data-panel-tab="preview"] {
+  min-height: 0;
+}

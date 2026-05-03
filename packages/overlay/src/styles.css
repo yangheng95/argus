@@ -1391,22 +1391,11 @@ body[data-theme="light"] .msg-reasoning {
    block matching the calm/flat direction shipped in iter4 /
    iter5 / iter14. The hover state is gone with the chrome
    (no border to color, no shadow to lift). */
-.sections {
-  width: var(--ui-sections-width);
-  min-width: min(100%, var(--ui-rail-min-width));
-  max-width: var(--ui-sections-width);
-  flex: 0 1 var(--ui-sections-width);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: var(--inspector-surface);
-  box-shadow: none;
-  backdrop-filter: none;
-}
+/* `.sections` shell + `.sections-title` / `-stack` / `-tab-body` family
+   live in `styles/surfaces/inspector.css` now. The shared `.sections,
+   .config-dialog-layout` CSS-var declaration stays here because the
+   variables are consumed inside .section internals across both
+   surfaces (right-panel inspector and config dialog). */
 
 .sections,
 .config-dialog-layout {
@@ -1422,55 +1411,6 @@ body[data-theme="light"] .msg-reasoning {
   --section-body-padding-y: calc(10px * var(--ui-scale));
   --section-input-padding-y: calc(7px * var(--ui-scale));
   --section-input-padding-x: calc(11px * var(--ui-scale));
-}
-
-.sections-title {
-  display: inline-flex;
-  align-items: center;
-  min-height: calc(16px * var(--ui-scale));
-}
-
-.sections-stack {
-  display: flex;
-  flex: 1 1 0;
-  min-height: 0;
-  flex-direction: column;
-  gap: calc(14px * var(--ui-scale));
-  padding: calc(10px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.sections-stack::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
-.sections-tab-body {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.sections-tab-body[data-active="false"] {
-  display: none;
-}
-
-.sections-tab-body[data-panel-tab="inspector"] {
-  display: flex;
-  min-height: 0;
-}
-
-.sections-tab-body[data-panel-tab="inspector"][data-active="false"] {
-  display: none;
-}
-
-.sections-tab-body[data-panel-tab="workflow"] {
-  min-height: 0;
-}
-
-.sections-tab-body[data-panel-tab="preview"] {
-  min-height: 0;
 }
 
 #solidAgentWorkflowMount,
@@ -11377,10 +11317,8 @@ body::after,
   padding: 0 calc(12px * var(--ui-scale));
 }
 
-.sections-stack {
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale));
-}
+/* `.sections-stack` late override (gap 4px / padding 4px) folded into
+   surfaces/inspector.css canonical. */
 
 /* iter28 dropped `.config-subsection`; iter30 started the
    `.extension-row` extraction by moving rendered background /
