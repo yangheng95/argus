@@ -8778,36 +8778,8 @@ body[data-theme="light"] .config-close-btn:hover {
    flat with the rail-surface background baked in. Width
    transition stays because the sidebar collapses on user
    action and that animation is part of the layout, not chrome. */
-.sidebar {
-  width: var(--ui-sidebar-width);
-  min-width: min(100%, var(--ui-rail-min-width));
-  max-width: var(--ui-sidebar-width);
-  flex: 0 1 var(--ui-sidebar-width);
-  display: flex;
-  flex-direction: column;
-  border: 0;
-  border-radius: 0;
-  background: var(--rail-surface);
-  box-shadow: none;
-  backdrop-filter: none;
-  transition:
-    width 140ms ease,
-    min-width 140ms ease;
-  overflow: hidden;
-}
-
-/* iter16: hover/focus chrome dropped — calm/flat sidebar has
-   no border to color and no shadow to lift, so the hover
-   state was a no-op once the !important resets at the file
-   tail clobbered it. Now the canonical is honest about that. */
-
-.sidebar[data-collapsed="true"] {
-  width: calc(62px * var(--ui-scale));
-  min-width: calc(62px * var(--ui-scale));
-  max-width: calc(62px * var(--ui-scale));
-  flex-basis: calc(62px * var(--ui-scale));
-  flex-shrink: 0;
-}
+/* `.sidebar` shell + `[data-collapsed="true"]` width override live in
+   `styles/surfaces/sidebar.css` now. */
 
 .pane-resizer {
   position: relative;
@@ -8866,67 +8838,14 @@ body[data-resizing="true"] * {
   cursor: col-resize !important;
 }
 
-.sidebar-toolset {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--oc-control-border);
-  border-radius: var(--oc-radius-control);
-  background: var(--oc-control-bg);
-  box-shadow: var(--oc-control-shadow);
-}
+/* `.sidebar-toolset`, `.sidebar-tool` (+ :hover + :focus-visible),
+   `.sidebar-title`, `.sidebar-subtitle`, and `.sidebar-header-actions`
+   live in `styles/surfaces/sidebar.css` now. The `.sidebar-btn` family
+   stays in styles.css until its gradient/rgba chrome is reworked. */
 
-.sidebar-tool {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(28px * var(--ui-scale));
-  height: calc(28px * var(--ui-scale));
-  border-radius: var(--oc-radius-control);
-  border: var(--oc-border-width) solid transparent;
-  background: transparent;
-  color: var(--text-soft);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    border-color 80ms,
-    background 80ms,
-    color 80ms,
-    transform 80ms;
-  box-shadow: none;
-}
-
-.sidebar-tool:hover {
-  border-color: var(--oc-control-border-hover);
-  background: var(--oc-control-bg-hover);
-  color: var(--text-strong);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
-
-.sidebar-tool:focus-visible,
 .sidebar-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--oc-control-focus-ring);
-}
-
-.sidebar-title {
-  flex: 1 1 auto;
-}
-
-.sidebar-subtitle {
-  font-size: var(--ui-font-meta);
-  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-soft));
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebar-header-actions {
-  flex-wrap: nowrap;
-  justify-content: flex-end;
-  flex-shrink: 0;
 }
 
 .sidebar-btn {
@@ -9558,9 +9477,8 @@ body[data-resizing="true"] * {
   padding-inline: calc(10px * var(--ui-scale));
 }
 
-.sidebar[data-collapsed="true"] .sidebar-toggle svg {
-  transform: rotate(180deg);
-}
+/* `.sidebar[data-collapsed="true"] .sidebar-toggle svg` lives in
+   `styles/surfaces/sidebar.css` now. */
 
 .sidebar[data-collapsed="true"] + .pane-resizer-left {
   flex-basis: 0;

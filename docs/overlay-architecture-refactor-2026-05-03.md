@@ -808,6 +808,20 @@ Progress log:
   re-enable does not need to re-derive the design (rule 17: dead
   code retire deferred to user review). Guard ceiling drops to
   `!important <= 137`.
+- 2026-05-03: Seeded `styles/surfaces/sidebar.css` and extracted the
+  rail column shell (`.sidebar`, `.sidebar[data-collapsed="true"]`,
+  collapsed-state `.sidebar-toggle svg` rotation), the control cluster
+  (`.sidebar-toolset`, `.sidebar-tool` + `:hover` + `:focus-visible`),
+  and the header text lanes (`.sidebar-title`, `.sidebar-subtitle`,
+  `.sidebar-header-actions`) from `styles.css` into the new file.
+  `index.html` loads the surface between composer/conversation and
+  the legacy `styles.css`. The `.sidebar-btn` family (with its
+  gradient + rgba chrome) stays until the gradient is reworked.
+  Updated two guards ("primary column shell chrome", "directory,
+  sidebar, and workspace controls") to read sidebar selectors from
+  the surface file. New extraction guard pins six classes plus the
+  collapsed-state selectors and asserts `index.html` loads the
+  surface before legacy styles.css.
 
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
