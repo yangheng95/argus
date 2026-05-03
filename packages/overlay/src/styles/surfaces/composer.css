@@ -1,3 +1,27 @@
+/* Composer shell: the chat-input is the operator's primary input surface.
+   Flat — border-radius 0, no gradient, no shadow — matched to the chat
+   column. The :focus-within ring is the only chrome it keeps active. */
+.chat-input {
+  --chat-compose-scale: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+  margin: 0;
+  padding: calc(4px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 34%, transparent);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
+  box-shadow: none;
+  flex-shrink: 0;
+  container-type: inline-size;
+}
+
+.chat-input:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 54%, transparent);
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 /* Composer icon column: the small attach / web-search / expand stack on
    the left edge of the chat input. Flat slice that visually merges with
    the chat-input shell. */
@@ -21,74 +45,6 @@
 .chat-icon-col[data-disabled="true"] {
   opacity: 0.4;
   pointer-events: none;
-}
-
-/* Dead static `.chat-toolbar-btn` rules retained because Button primitive
-   wraps them via `.oc-button[data-ui="chat-toolbar-button"]` below; the
-   raw class has zero JSX callers but keeping the geometry sidesteps
-   surprise width/height shifts when a future caller forgets the wrapper. */
-.chat-toolbar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(26px * var(--ui-scale) * var(--chat-compose-scale));
-  height: calc(26px * var(--ui-scale) * var(--chat-compose-scale));
-  border: 0 solid transparent;
-  border-radius: calc(9px * var(--ui-scale) * var(--chat-compose-scale));
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0;
-  transition:
-    color 120ms,
-    background 120ms,
-    transform 120ms;
-}
-
-.chat-toolbar-btn:hover {
-  color: var(--text-strong);
-  background: color-mix(in srgb, var(--surface-strong) 90%, transparent);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
-
-.chat-toolbar-btn[data-active] {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.chat-toolbar-btn[data-active]:hover {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-.chat-cancel-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  min-width: var(--ui-chat-send-size);
-  min-height: var(--ui-chat-send-size);
-  background: transparent;
-  border: var(--oc-border-width) solid var(--border-muted);
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: calc(10px * var(--ui-scale));
-  padding: 0 calc(6px * var(--ui-scale));
-  transition:
-    color 80ms,
-    background 80ms,
-    border-color 80ms;
-}
-
-.chat-cancel-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-  pointer-events: none;
-}
-
-.chat-cancel-btn:hover:not(:disabled) {
-  color: var(--bad);
-  background: color-mix(in srgb, var(--bad) 10%, transparent);
-  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
 }
 
 .chat-icon-col .oc-button[data-ui="chat-toolbar-button"] {

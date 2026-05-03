@@ -4894,21 +4894,8 @@ code .file-link:hover {
    here instead of in light/dark body[data-theme] blocks. The
    focus-within ring stays as the only chrome — it's the
    active-state affordance the user needs to see when typing. */
-.chat-input {
-  --chat-compose-scale: 1;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-  margin: 0;
-  padding: calc(4px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
-  border-radius: 0;
-  background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
-  box-shadow: none;
-  flex-shrink: 0;
-  container-type: inline-size;
-}
+/* `.chat-input` shell + `:focus-within` ring live in
+   `styles/surfaces/composer.css` now. */
 
 /* ── Chat Attachments ── */
 .chat-attachments {
@@ -4987,9 +4974,9 @@ code .file-link:hover {
    read as a leftover bolted-on island. Drop the radius so
    the column reads as a flush slice of the same flat
    composer surface. */
-/* `.chat-icon-col`, the dead `.chat-toolbar-btn` rules, and
-   `.chat-cancel-btn` (rest, disabled, hover) live in
-   `styles/surfaces/composer.css` now. */
+/* `.chat-icon-col` lives in `styles/surfaces/composer.css` now.
+   The dead `.chat-toolbar-btn` / `.chat-cancel-btn` static class rules
+   were retired after composer toolbar actions moved to Button. */
 
 .chat-input[data-dragover] .chat-compose-row {
   outline: 2px dashed rgba(59, 130, 246, 0.5);
@@ -12266,7 +12253,6 @@ body::after,
 .sidebar-btn,
 .sidebar-toolset,
 .sidebar-tool,
-.chat-toolbar-btn,
 .field-input,
 .field-input-group,
 .custom-select {
@@ -12606,13 +12592,9 @@ body::after,
   box-shadow: 0 0 0 2px var(--accent-ring) !important;
 }
 
-/* iter22: this `.chat-icon-col` override block was folded
-   into the canonical block near line ~5347 (flat
-   border-radius: 0). */
-
-.chat-toolbar-btn:hover {
-  transform: none;
-}
+/* iter22: the `.chat-icon-col` override block was folded into its
+   canonical surface rule (flat border-radius: 0). The dead static
+   `.chat-toolbar-btn:hover` reset was retired with the old class. */
 
 /* .chat-send / .chat-interrupt now live as the canonical rule near
  * line 4727; this block carried the stale duplicate. .btn-primary
@@ -13018,14 +13000,8 @@ body::after,
   color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
 }
 
-/* iter17: `.chat-input` body declarations folded into the
-   canonical block near line ~5253. The :focus-within ring
-   stays — that's the only chrome the flat input keeps so
-   the user can see when it's active. */
-.chat-input:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 54%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
-}
+/* `.chat-input:focus-within` ring lives in
+   `styles/surfaces/composer.css` now. */
 
 /* iter20: the late `.chat-textarea` background !important
    override and the third min-height duplicate were folded
@@ -13549,8 +13525,6 @@ body[data-theme="light"]
     .engine-chip-caret,
     .workspace-tab,
     .section-icon-btn,
-    .chat-toolbar-btn,
-    .chat-cancel-btn,
     .chat-send,
     .conn-banner__action,
     .board-intro__cta-action
@@ -13572,8 +13546,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .engine-chip-caret,
     .workspace-tab,
     .section-icon-btn,
-    .chat-toolbar-btn,
-    .chat-cancel-btn,
     .chat-send,
     .conn-banner__action,
     .board-intro__cta-action
@@ -13630,8 +13602,6 @@ body[data-theme="light"]
     .engine-chip-caret,
     .workspace-tab,
     .section-icon-btn,
-    .chat-toolbar-btn,
-    .chat-cancel-btn,
     .chat-send,
     .conn-banner__action,
     .board-intro__cta-action
@@ -13653,8 +13623,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .engine-chip-caret,
     .workspace-tab,
     .section-icon-btn,
-    .chat-toolbar-btn,
-    .chat-cancel-btn,
     .chat-send,
     .conn-banner__action,
     .board-intro__cta-action
@@ -13676,9 +13644,6 @@ body[data-theme="light"]
     .workspace-tab[data-active="true"],
     .section-icon-btn:hover,
     .section-icon-btn:focus-visible,
-    .chat-toolbar-btn:hover,
-    .chat-toolbar-btn[data-active],
-    .chat-cancel-btn:hover:not(:disabled),
     .chat-send:hover,
     .conn-banner__action:hover,
     .board-intro__cta-action:hover
@@ -13696,9 +13661,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .workspace-tab[data-active="true"],
     .section-icon-btn:hover,
     .section-icon-btn:focus-visible,
-    .chat-toolbar-btn:hover,
-    .chat-toolbar-btn[data-active],
-    .chat-cancel-btn:hover:not(:disabled),
     .chat-send:hover,
     .conn-banner__action:hover,
     .board-intro__cta-action:hover
@@ -13758,8 +13720,6 @@ body[data-theme="light"]
     .engine-chip-caret,
     .workspace-tab,
     .section-icon-btn,
-    .chat-toolbar-btn,
-    .chat-cancel-btn,
     .conn-banner__action
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
@@ -13777,8 +13737,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .engine-chip-caret,
     .workspace-tab,
     .section-icon-btn,
-    .chat-toolbar-btn,
-    .chat-cancel-btn,
     .conn-banner__action
   ) {
   background: transparent !important;
@@ -13805,9 +13763,6 @@ body[data-theme="light"]
     .workspace-tab[data-active="true"],
     .section-icon-btn:hover,
     .section-icon-btn:focus-visible,
-    .chat-toolbar-btn:hover,
-    .chat-toolbar-btn[data-active],
-    .chat-cancel-btn:hover:not(:disabled),
     .conn-banner__action:hover
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
@@ -13829,9 +13784,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .workspace-tab[data-active="true"],
     .section-icon-btn:hover,
     .section-icon-btn:focus-visible,
-    .chat-toolbar-btn:hover,
-    .chat-toolbar-btn[data-active],
-    .chat-cancel-btn:hover:not(:disabled),
     .conn-banner__action:hover
   ) {
   background: transparent !important;

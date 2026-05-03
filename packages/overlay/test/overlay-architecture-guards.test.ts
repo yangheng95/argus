@@ -216,22 +216,28 @@ describe("overlay architecture guards", () => {
     expect(titlebarSurface).toMatch(/\.titlebar-status-value\s*\{/)
   })
 
-  test("composer icon column and cancel button are owned by surfaces/composer.css", () => {
+  test("composer icon column is owned by surfaces/composer.css", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
-    for (const className of [
-      "chat-icon-col",
-      "chat-toolbar-btn",
-      "chat-cancel-btn",
-    ]) {
+    for (const className of ["chat-icon-col"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
     expect(composerSurface).toMatch(/\.chat-icon-col\[data-disabled="true"\]/)
-    expect(composerSurface).toMatch(/\.chat-toolbar-btn\[data-active\]/)
-    expect(composerSurface).toMatch(/\.chat-cancel-btn:hover:not\(:disabled\)/)
+    expect(composerSurface).toMatch(/\.chat-icon-col \.oc-button\[data-ui="chat-toolbar-button"\]/)
+  })
+
+  test("dead static composer toolbar button classes stay retired", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const composerSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")),
+    )
+    const combined = `${styles}\n${composerSurface}`
+
+    expect(combined).not.toMatch(/(^|\n)\.chat-toolbar-btn\b/)
+    expect(combined).not.toMatch(/(^|\n)\.chat-cancel-btn\b/)
   })
 
   test("titlebar theme picker is owned by surfaces/titlebar.css", () => {
@@ -1368,7 +1374,7 @@ describe("overlay architecture guards", () => {
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")),
     )
     const combined = `${styles}\n${titlebarSurface}\n${composerSurface}`
-    const iconButtonClasses = [".titlebar-status-icon", ".chat-toolbar-btn"]
+    const iconButtonClasses = [".titlebar-status-icon"]
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""

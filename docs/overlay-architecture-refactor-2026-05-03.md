@@ -597,6 +597,14 @@ Progress log:
   them for menubar/status/window-control dimensions. New guard blocks the
   dead static classes from returning to either God CSS or the titlebar
   surface, and the icon-button padding guard now tracks only live classes.
+- 2026-05-03: Moved live `.chat-icon-col` composer icon-column chrome
+  from God CSS into `styles/surfaces/composer.css` and retired the dead
+  `.chat-toolbar-btn` / `.chat-cancel-btn` static classes entirely.
+  Toolbar buttons are now styled only through
+  `.chat-icon-col .oc-button[data-ui="chat-toolbar-button"]`, so future
+  composer controls must use the Button primitive instead of reintroducing
+  static class geometry. New guard pins the icon column to composer.css
+  and rejects both dead static classes across God CSS and composer surface.
 - 2026-05-03: Extracted the `.titlebar-theme-options*` picker family
   (grid wrapper, option button, hover/active states, label,
   preview-swatch base, four `[data-theme]` swatch variants) from
@@ -653,7 +661,7 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **12,892 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles.css`      | **12,792 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
 | Total `!important` in stylesheets      | **152** current guard baseline                                                          |
 | `body[data-theme="…"]` theme overrides | **82**                                                                                  |
