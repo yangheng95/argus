@@ -244,13 +244,9 @@ describe("overlay architecture guards", () => {
   })
 
   test("sidebar task-row-mini + badge family are owned by surfaces/sidebar.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const sidebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css"))
 
-    /* The surface declares the canonical task-row family. Some late
-       overrides (.task-row-main / -meta / -badge alternate-shape
-       dupes) still live in styles.css and will be folded into the
-       canonical in a follow-up — for now this guard just verifies
-       that the surface owns the canonical declarations. */
     for (const className of [
       "task-row-mini",
       "task-row-drag-handle",
@@ -261,6 +257,7 @@ describe("overlay architecture guards", () => {
       "task-row-badge",
       "task-row-badge-text",
     ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(sidebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
