@@ -2118,43 +2118,6 @@ body[data-resizing="true"] * {
   color: var(--warn);
 }
 
-.verdict-pill {
-  align-self: flex-start;
-  padding: calc(3px * var(--ui-scale)) var(--ui-gap-md);
-  border-radius: var(--oc-radius-pill);
-  font-size: var(--ui-font-tiny);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  line-height: 1.4;
-}
-.verdict-pill[data-verdict="pass"],
-.verdict-pill[data-verdict="accepted"] {
-  background: var(--good-dim);
-  color: var(--good);
-  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--good) 35%, transparent) inset;
-}
-.verdict-pill[data-verdict="concerns"] {
-  background: var(--warn-dim);
-  color: var(--warn);
-  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--warn) 35%, transparent) inset;
-}
-.verdict-pill[data-verdict="needs_correction"],
-.verdict-pill[data-verdict="rejected"] {
-  background: var(--bad-dim);
-  color: var(--bad);
-  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 35%, transparent) inset;
-}
-.verdict-pill[data-verdict="inflight"] {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent);
-  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 35%, transparent) inset;
-}
-.verdict-pill[data-verdict="empty"] {
-  background: var(--surface-inset);
-  color: var(--text-muted);
-  box-shadow: 0 0 0 var(--oc-border-width) var(--border) inset;
-}
 
 @media (prefers-reduced-motion: reduce) {
 
