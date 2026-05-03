@@ -7,9 +7,8 @@ import { Instance } from "../../src/project/instance"
 import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project-gate"
 import { runtimeInteractionViolations } from "../../src/delivery/checks/runtime-evidence"
 import {
-  countPriorRepeatedDeliveryFailureEscalates,
+  countPriorRepeatedDeliveryFailureSignals,
   repeatedDeliveryFailureSignatures,
-  shouldHardFailRepeatedDelivery,
   validateDeliveryEvidenceManifest,
   type DeliveryEvidenceManifest,
 } from "../../src/delivery/manifest"
@@ -562,10 +561,10 @@ function manifestWithFailures(input: {
   }
 }
 
-describe("delivery loop hard-fail escalation", () => {
-  test("countPriorRepeatedDeliveryFailureEscalates counts only matching keys", () => {
-    expect(countPriorRepeatedDeliveryFailureEscalates([])).toBe(0)
-    expect(countPriorRepeatedDeliveryFailureEscalates([
+describe("delivery repeated failure tracking", () => {
+  test("countPriorRepeatedDeliveryFailureSignals counts only matching keys", () => {
+    expect(countPriorRepeatedDeliveryFailureSignals([])).toBe(0)
+    expect(countPriorRepeatedDeliveryFailureSignals([
       { key: "delivery_repeated_failure_signature_1" },
       { key: "delivery_other" },
       { key: "delivery_repeated_failure_signature_2" },
@@ -573,10 +572,20 @@ describe("delivery loop hard-fail escalation", () => {
     ])).toBe(2)
   })
 
-  test("shouldHardFailRepeatedDelivery flips at second escalate", () => {
-    expect(shouldHardFailRepeatedDelivery({ priorEscalateCount: 0 })).toBe(false)
-    expect(shouldHardFailRepeatedDelivery({ priorEscalateCount: 1 })).toBe(true)
-    expect(shouldHardFailRepeatedDelivery({ priorEscalateCount: 5 })).toBe(true)
+  test("repeated delivery signatures remain non-terminal strategy feedback", async () => {
+    const orchestratorTools = await fs.readFile(
+      path.join(import.meta.dir, "../../src/orchestrator/tools.ts"),
+      "utf8",
+    )
+
+    expect(orchestratorTools).toContain("delivery_repeated_failure_signature_")
+    expect(orchestratorTools).not.toContain("delivery_loop_hard_fail")
+    expect(orchestratorTools).not.toContain("delivery_repeated_loop_hard_escalation")
+    expect(orchestratorTools).not.toContain("Task hard-failed")
+    expect(orchestratorTools).not.toContain("shouldHardFailRepeatedDelivery")
+    expect(orchestratorTools).not.toContain("countPriorRepeatedDeliveryFailureEscalates")
+    expect(orchestratorTools).not.toContain("requestStopAfterCurrentStep(\"delivery_repeated_failure_signature\")")
+    expect(orchestratorTools).not.toContain("status: \"failed\", error: hardFailReason")
   })
 })
 

@@ -81,6 +81,30 @@ either make the threshold part of the acceptance contract, or replace the fixed
 DOM-thinness hard gate with visual/functional evidence reviewed in the delivery
 completion path.
 
+## 2026-05-04 Follow-up: Repeated Signatures Are Strategy Feedback
+
+The r42 event chain showed that the repeated-signature guard still created a
+terminal task failure via `delivery_loop_hard_fail_2` after `review:integrity`
+repeated. That did not solve non-convergence: it converted a recoverable
+delivery-completeness gap into `task.failed`, `run.aborted`, and
+`task.cancelled`, so unattended iteration stopped before the orchestrator could
+use the persisted verdict and manifest facts to change strategy.
+
+The corrected behavior is:
+
+1. Repeated failure signatures are recorded in the delivery decision log for
+   context and audit only.
+2. The guard refuses another identical `delivery_rework` prompt, but does not
+   write `status=failed`, does not clean terminal goal workspaces, and does not
+   stop the current orchestrator step.
+3. The orchestrator must stay in the same task context and choose a different
+   strategy before the next `deliver`: `restart_from_stage(plan|executor)`,
+   `modify_goal`, or integrated `build({ request })` based on the canonical
+   delivery verdict and `DeliveryEvidenceManifest`.
+4. A repeated signature cannot become an automatic hard-fail threshold. Operator
+   intervention remains possible through normal user messages, but the system
+   must not require a manual retry to keep a recoverable task alive.
+
 ## Out Of Scope
 
 - Do not add a new blocked task state or state-machine gate for repeated delivery failures. The existing guard stops identical rework; this refactor verifies and strengthens that path rather than adding a second source.

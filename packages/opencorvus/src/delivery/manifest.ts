@@ -517,33 +517,14 @@ export function createManifestId() {
 
 /**
  * Count how many `delivery_repeated_failure_signature_*` decisions exist in
- * a task's decision-log slice. Used by the deliver tool to escalate from
- * "soft" (yieldResult directive only) to "hard" (auto-fail the task) when
- * the orchestrator ignored the prior soft escalate and produced another
- * delivery rejection with the same manifest signature.
- *
- * Single source of truth for the threshold lives in
- * `shouldHardFailRepeatedDelivery` below.
+ * a task's decision-log slice. Used only for operator and orchestrator
+ * context: repeated delivery signatures are strategy-change feedback, not
+ * authorization to terminal-fail a task.
  */
-export function countPriorRepeatedDeliveryFailureEscalates(
+export function countPriorRepeatedDeliveryFailureSignals(
   decisions: ReadonlyArray<{ key: string }>,
 ): number {
   return decisions.filter((entry) =>
     entry.key.startsWith("delivery_repeated_failure_signature_"),
   ).length
-}
-
-/**
- * Threshold for switching from soft escalate to hard task fail.
- * `priorEscalateCount` is the count of prior `delivery_repeated_failure_signature_*`
- * decisions BEFORE the current one is logged. When ≥1, the current rejection
- * is at least the 2nd consecutive identical-signature rejection — soft
- * directive was already issued and ignored, so hard-fail per CLAUDE.md
- * rule 7 (no fallback). Operator can revive the task with a fresh message
- * per `feedback_task_terminal_state_revivable`.
- */
-export function shouldHardFailRepeatedDelivery(input: {
-  priorEscalateCount: number
-}): boolean {
-  return input.priorEscalateCount >= 1
 }
