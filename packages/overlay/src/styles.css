@@ -548,10 +548,17 @@ body[data-resizing="row"] * {
 #appDialog {
   z-index: 200;
 }
+/* Single canonical for `.dialog::backdrop`: previously this rule
+ * lived TWICE in styles.css — first as a 3-layer gradient
+ * (radial accent halo + vertical dim wash + var(--dialog-backdrop)
+ * fallback) and then later as a flat `rgba(0, 0, 0, 0.46)`. The
+ * second occurrence won via cascade order, killing the gradient.
+ * Rule 8 cleanup: merged into one rule using a token-only flat
+ * overlay that matches the cascade winner without the dead artwork
+ * underneath.
+ */
 .dialog::backdrop {
-  background:
-    radial-gradient(circle at 50% 20%, rgba(91, 141, 239, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(7, 12, 18, 0.52), rgba(7, 12, 18, 0.68)), var(--dialog-backdrop);
+  background: color-mix(in srgb, black 46%, transparent);
 }
 
 .dialog-form {
@@ -559,12 +566,14 @@ body[data-resizing="row"] * {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: calc(100% - 32px);
+  width: calc(100% - calc(32px * var(--ui-scale)));
   max-width: var(--ui-dialog-width);
-  max-height: calc(100vh - (80px * var(--ui-scale)));
+  max-height: calc(100vh - calc(80px * var(--ui-scale)));
   overflow-y: auto;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, rgba(91, 141, 239, 0.16));
-  border-radius: calc(24px * var(--ui-scale));
+  background: var(--dialog-bg);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--panel-radius);
+  box-shadow: none;
   padding: calc(18px * var(--ui-scale)) calc(20px * var(--ui-scale));
   display: flex;
   flex-direction: column;
@@ -591,12 +600,12 @@ body[data-resizing="row"] * {
   flex-direction: column;
   gap: calc(10px * var(--ui-scale));
   padding: calc(14px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: calc(18px * var(--ui-scale));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.038), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
+    linear-gradient(180deg, color-mix(in srgb, white 3.8%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 94%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, white 3%, transparent);
 }
 
 
@@ -631,11 +640,11 @@ body[data-resizing="row"] * {
 .dialog-form > .dialog-header {
   margin: calc(-18px * var(--ui-scale)) calc(-20px * var(--ui-scale)) 0;
   padding: calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 72%),
+    linear-gradient(180deg, color-mix(in srgb, white 5%, transparent), color-mix(in srgb, white 0%, transparent) 72%),
     color-mix(in srgb, var(--surface-strong) 74%, transparent);
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 calc(-1px * var(--ui-scale)) 0 color-mix(in srgb, white 2%, transparent);
   flex-shrink: 0;
 }
 
@@ -709,9 +718,9 @@ body[data-resizing="row"] * {
 .dialog-form > .dialog-actions:not(.compact) {
   margin: auto calc(-20px * var(--ui-scale)) calc(-18px * var(--ui-scale));
   padding: calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
-  border-top: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
   background:
-    linear-gradient(0deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 76%),
+    linear-gradient(0deg, color-mix(in srgb, white 4%, transparent), color-mix(in srgb, white 0%, transparent) 76%),
     color-mix(in srgb, var(--surface-strong) 72%, transparent);
 }
 
@@ -2296,17 +2305,6 @@ body {
 .engine-model-panel {
   background: var(--surface-inset);
   border-color: var(--border);
-  box-shadow: none;
-}
-
-.dialog::backdrop {
-  background: rgba(0, 0, 0, 0.46);
-}
-
-.dialog-form {
-  background: var(--dialog-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--panel-radius);
   box-shadow: none;
 }
 
