@@ -23,4 +23,5 @@
   --oc-header-bg: var(--oc-color-surface-strong);
   --oc-header-border: 0 solid transparent;
   --oc-header-shadow: none;
+  --oc-titlebar-menu-text: #000000;
 }

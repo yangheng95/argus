@@ -1092,6 +1092,7 @@ describe("overlay architecture guards", () => {
       "--oc-header-padding-x",
       "--oc-header-gap",
       "--oc-header-title-line-height",
+      "--oc-titlebar-menu-text",
       "--oc-radius-panel",
       "--oc-radius-card",
       "--oc-radius-control",
@@ -1108,6 +1109,7 @@ describe("overlay architecture guards", () => {
     const headerText = readText(join(OVERLAY_ROOT, "src/styles/surfaces/header.css"))
 
     expect(tokenText).toMatch(/--oc-header-bg:\s*var\(--oc-color-surface-strong\)/)
+    expect(tokenText).toMatch(/--oc-titlebar-menu-text:\s*#000000/)
     expect(tokenText).not.toMatch(/--oc-header-bg:\s*var\(--surface-strong\)/)
     expect(headerText).toMatch(/background:\s*var\(--oc-header-bg\)/)
   })
