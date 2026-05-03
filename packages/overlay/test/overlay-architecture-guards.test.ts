@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(332)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(216)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(324)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(213)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(243)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(239)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -303,6 +303,34 @@ describe("overlay architecture guards", () => {
       expect(body).toContain("background: var(--surface-inset)")
       expect(body).toContain("border: 0")
     }
+  })
+
+  test("composer shell does not rely on theme chrome resets", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const hasChatInput = /(?:^|\s|:is\([^)]*)\.chat-input(?:\b|[:.[#])/.test(selector)
+      if (!hasChatInput) continue
+
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      const usesChromeImportant =
+        /(margin|padding|gap|background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(
+          body,
+        )
+
+      expect(isThemeSelector).toBe(false)
+      expect(usesChromeImportant).toBe(false)
+    }
+
+    const body = soloRuleBody(styles, ".chat-input")
+    expect(body).toContain("margin: 0")
+    expect(body).toContain("padding: calc(4px * var(--ui-scale))")
+    expect(body).toContain("gap: calc(2px * var(--ui-scale))")
+    expect(body).toContain("border-radius: 0")
   })
 
   test("new theme files only write root-scoped tokens", () => {

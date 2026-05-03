@@ -227,6 +227,11 @@ Progress log:
   from the root-scoped `--oc-color-surface-strong` palette token, and the guard
   forbids routing shared header background through legacy body-scoped palette
   variables.
+- 2026-05-03: Folded `.chat-input` composer shell chrome into the canonical
+  block. Margin, compact gap/padding, accent border, palette background, and
+  focus ring no longer live in light/dark/vscode theme selectors or broad
+  `!important` compact-reset lists. This lowers `!important` to 324,
+  `body[data-theme]` to 213, and theme layout/chrome override count to 239.
 
 Trigger: user feedback (2026-05-03):
 
@@ -252,9 +257,9 @@ one theme contract, and no runtime God CSS path left behind.
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `packages/overlay/src/styles.css`      | **15,212 lines / 2,070 top-level rules / 490 nested rules**                             |
 | `packages/overlay/src/styles/card.css` | 2,022 lines / 336 top-level rules                                                       |
-| Total `!important` in stylesheets      | **332** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **216**                                                                                 |
-| Theme layout/chrome overrides          | **243** current guard baseline                                                          |
+| Total `!important` in stylesheets      | **324** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **213**                                                                                 |
+| Theme layout/chrome overrides          | **239** current guard baseline                                                          |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | TaskList 696 / LogViewer 579 / CardHeader 544 / MemoryPanel 444 / GoalWorkflowGroup 206 |
 | Total `.tsx` LOC across overlay        | 28,700                                                                                  |
