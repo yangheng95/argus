@@ -183,9 +183,9 @@ function appendRuntimeEvidence(
   verdict: DeliveryVerdictType,
   report: RuntimeEvidenceReport,
 ): DeliveryVerdictType {
-  const buildArtifactDetail = report.evidence.buildArtifactPath
-    ? `index.html=${report.evidence.buildArtifactPath} dom.textLength=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`
-    : "no build artifact"
+  const runtimeDetail = report.evidence.previewUrl
+    ? `previewUrl=${report.evidence.previewUrl} dom.textLength=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`
+    : "no live preview URL"
   const violations = report.violations.map((v) => `${v.kind}: ${v.detail}`)
   return {
     ...verdict,
@@ -195,7 +195,7 @@ function appendRuntimeEvidence(
         name: "runtime_evidence",
         result: report.passed ? "passed" : "failed",
         evidence: [
-          buildArtifactDetail,
+          runtimeDetail,
           ...violations,
         ].join("\n"),
       },
@@ -205,7 +205,7 @@ function appendRuntimeEvidence(
       {
         tool: "runtime_evidence",
         passed: report.passed,
-        detail: `${report.violations.length} violation(s): ${buildArtifactDetail}`,
+        detail: `${report.violations.length} violation(s): ${runtimeDetail}`,
       },
     ],
   }

@@ -251,7 +251,7 @@ describe("delivery arbiter", () => {
       violations: [{ kind: "empty_root_shell" as const, detail: "root contains no hydrated children" }],
       evidence: {
         projectDir: ".",
-        buildArtifactPath: "dist/index.html",
+        previewUrl: "http://127.0.0.1:4173/",
         renderedPngPath: "rendered.png",
         dom: {
           textLength: 0,
@@ -375,7 +375,7 @@ function manifestWithMixedFunctionalAndAuxiliaryFailures(): DeliveryEvidenceMani
       id: "runtime:web:.",
       name: "Web Runtime Render",
       status: "failed",
-      evidence: ["no_build_artifact: no index.html found"],
+      evidence: ["no_live_preview: no live frontend preview URL resolved"],
     }],
     reviewEvidence: [{
       id: "specialist:frontend",

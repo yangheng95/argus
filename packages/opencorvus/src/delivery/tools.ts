@@ -476,7 +476,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
 
     screenshot: tool({
       description:
-        "Capture a PNG screenshot of a URL or a local HTML file via the delivery runtime capture engine and write it to the " +
+        "Capture a PNG screenshot of an already running app URL via the delivery runtime capture engine and write it to the " +
         "project's .opencorvus/delivery-screenshots/ directory. Use this to produce visual evidence " +
         "that the running application actually renders, or to capture before/after images around a " +
         "fix. The screenshot is saved to disk; reference the returned absolute path and sha when " +
@@ -487,7 +487,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "inside Puppeteer only; it never changes the host display resolution. The PNG bytes are not attached to the delivery " +
         "context; use compare_visual_artifacts when a visual comparison needs image bytes.",
       inputSchema: z.object({
-        url: z.string().describe("Absolute http(s) URL, file:// URL, or absolute local path to an HTML file. The file path form launches a short-lived static/project server so ES-module scripts resolve correctly — same logic as the pipeline's visual-diff helper."),
+        url: z.string().describe("Absolute http(s) URL for an already running app. If you only have files, start the app with run_command or use the frontend preview resolver first; this tool never starts servers or serves static files."),
         viewport_width: z.number().int().min(100).max(4096).default(1440).describe("Viewport width in CSS pixels."),
         viewport_height: z.number().int().min(100).max(4096).default(1080).describe("Viewport height in CSS pixels."),
         label: z.string().optional().describe("Short label used in the output filename, e.g. 'after-fix-1' or 'chart-area'. Alphanum / dash only."),

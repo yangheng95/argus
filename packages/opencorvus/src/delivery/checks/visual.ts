@@ -9,8 +9,8 @@
  *
  * Behaviour matches the CLI (single source of truth for thresholds and the
  * SSIM map analysis):
- *   - Render the target HTML/URL with puppeteer at the reference's natural
- *     viewport (or a caller-supplied size).
+ *   - Render a live http(s) target URL with Chromium at the reference's
+ *     natural viewport (or a caller-supplied size).
  *   - Compare against the reference PNG using SSIM. Fail when either
  *     `mean SSIM < threshold` OR the worst-5% window SSIM (`p5`) drops below
  *     `worstThreshold` — protects against partial structural collapse that
@@ -18,23 +18,14 @@
  *   - No fallback: missing browser, missing reference, or size-mismatched
  *     images all produce explicit failures.
  */
-import { spawn, spawnSync, type ChildProcess } from "node:child_process"
-import { existsSync } from "node:fs"
 import fs from "node:fs/promises"
-import http from "node:http"
 import path from "node:path"
-import { Shell } from "@/shell/shell"
-import { Log } from "@/util/log"
 import puppeteer, { type Page } from "puppeteer-core"
 import { PNG } from "pngjs"
 import ssim from "ssim.js"
 
-const log = Log.create({ service: "delivery.visual" })
-const RENDER_COMMAND_OUTPUT_TAIL_BYTES = 2_000
-const BUN_BINARY = process.platform === "win32" ? "bun.exe" : "bun"
-
 export interface VisualDiffOptions {
-  /** Either an absolute file path to an html file, or http(s)/file URL. */
+  /** Live http(s) URL. File paths are intentionally rejected by renderPage. */
   rendered: string
   /** Absolute path to the reference PNG. */
   reference: string
@@ -94,388 +85,6 @@ export async function findBrowserExecutable(override?: string): Promise<string> 
   )
 }
 
-function toFileUrl(p: string): string {
-  const abs = path.resolve(p).replace(/\\/g, "/")
-  return `file:///${abs.replace(/^\/+/, "")}`
-}
-
-/**
- * Spawn a minimal static HTTP server rooted at `rootDir` and resolve when it
- * is listening. Returns `{ url, close }` so callers can hand `url` to
- * puppeteer and tear the server down in a finally block.
- *
- * Why an HTTP server at all: Vite / CRA / Next build outputs reference
- * scripts as ES modules (`<script type="module" src="/assets/…js">`).
- * Browsers refuse to resolve those imports over `file://` (CORS + opaque
- * module loader behaviour), so the rendered page is blank. A localhost
- * static server gives puppeteer a real origin, matches how users preview
- * the build (`vite preview`, `serve`), and keeps SSIM honest.
- */
-/**
- * Look upward from `startDir` for a package.json. Returns the directory that
- * contains it (the project root), or undefined if none is found before the
- * filesystem root. Needed because the rendered file path typically sits one
- * level deep (e.g. `project/dist/index.html`) — the scripts live at the
- * project root.
- */
-async function findProjectRoot(startDir: string): Promise<string | undefined> {
-  let current = path.resolve(startDir)
-  while (true) {
-    try {
-      const stat = await fs.stat(path.join(current, "package.json"))
-      if (stat.isFile()) return current
-    } catch {}
-    const parent = path.dirname(current)
-    if (parent === current) return undefined
-    current = parent
-  }
-}
-
-/**
- * Prefer a project-owned launch script (`server`, `start`, `preview`, `dev`)
- * over the static-file fallback when the delivered app ships both a frontend
- * and a backend — typically an Express/Hono server that serves the built dist
- * AND answers `/api/*` fetches. Static-only serving leaves the frontend
- * stuck on loading states (bench7 rendered a sidebar but "Loading usage
- * data…" froze the main panel).
- *
- * Resolution order mirrors "what a user would actually run to preview":
- *   1. `server` — convention in benchmark PRDs for a backend that also hosts
- *      the built SPA on a single port.
- *   2. `start` — traditional Node entry that boots the production server.
- *   3. `preview` — Vite's "serve built output" script when the app is
- *      frontend-only AND a `bun run build` has produced `dist/`.
- *   4. `dev` — last-resort full-stack runner. Most full-stack benchmark
- *      deliverables (vite frontend on :3000 + backend on :3001 with a
- *      vite proxy) only declare `dev` because that's the script a developer
- *      runs. The earlier exclusion was rooted in SSIM determinism concerns
- *      that no longer apply: the delivery agent now scores via vision
- *      comparison (renderPage) rather than pixel-perfect SSIM, so HMR
- *      reflows between paints are tolerable.
- */
-interface ProjectLaunchScript {
-  script: string
-  command: string
-  buildScript?: string
-}
-
-export async function resolveProjectLaunchScript(projectRoot: string): Promise<ProjectLaunchScript | undefined> {
-  let pkg: { scripts?: Record<string, string> }
-  try {
-    pkg = JSON.parse(await fs.readFile(path.join(projectRoot, "package.json"), "utf8"))
-  } catch {
-    return undefined
-  }
-  const scripts = pkg.scripts ?? {}
-  const buildCommand = scripts.build
-  const canBuild = typeof buildCommand === "string" && buildCommand.trim().length > 0
-  for (const name of ["server", "start", "preview", "dev"] as const) {
-    const command = scripts[name]
-    if (typeof command === "string" && command.trim().length > 0) {
-      return {
-        script: name,
-        command,
-        buildScript: name !== "dev" && canBuild ? "build" : undefined,
-      }
-    }
-  }
-  return undefined
-}
-
-const ANSI_ESCAPE_PATTERN = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g
-const ANNOUNCED_LOCAL_URL_PATTERN = /https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d{1,5})\/?/i
-
-export function announcedLocalUrlFromOutput(output: string): string | undefined {
-  const plain = output.replace(ANSI_ESCAPE_PATTERN, "")
-  const match = plain.match(ANNOUNCED_LOCAL_URL_PATTERN)
-  if (!match) return undefined
-  const host = match[1]?.toLowerCase()
-  const port = Number(match[2])
-  if (!Number.isInteger(port) || port <= 0 || port > 65_535) return undefined
-  const connectHost = host === "0.0.0.0" ? "127.0.0.1" : host
-  return `http://${connectHost}:${port}`
-}
-
-export function renderWorkspaceCommandFailureMessage(input: {
-  command: string
-  projectRoot: string
-  status?: number | null
-  error?: Error
-  stdout?: Buffer | string | null
-  stderr?: Buffer | string | null
-}) {
-  const status = input.status === undefined || input.status === null
-    ? "spawn_error"
-    : `exit code=${input.status}`
-  const outputTail = renderCommandOutputTail(input)
-  return `${input.command} pre-launch failed (${status}) in ${input.projectRoot}: ${outputTail}`
-}
-
-function renderCommandOutputTail(input: {
-  error?: Error
-  stdout?: Buffer | string | null
-  stderr?: Buffer | string | null
-}) {
-  const stdout = bufferText(input.stdout)
-  const stderr = bufferText(input.stderr)
-  const sections = [
-    stdout ? `stdout:\n${stdout.slice(-RENDER_COMMAND_OUTPUT_TAIL_BYTES)}` : "",
-    stderr ? `stderr:\n${stderr.slice(-RENDER_COMMAND_OUTPUT_TAIL_BYTES)}` : "",
-  ].filter(Boolean)
-  const text = sections.join("\n\n").trim()
-  const tail = text.length > 0 ? text : "<no output>"
-  return input.error ? `error: ${input.error.message}\n${tail}` : tail
-}
-
-function bufferText(value: Buffer | string | null | undefined) {
-  if (!value) return ""
-  return typeof value === "string" ? value : value.toString()
-}
-
-/**
- * Spawn `bun run <script>` from `projectRoot`, then poll every 500ms up to
- * `timeoutMs` for an HTTP listener on the returned URL candidates (app
- * server typically picks 3000/3001/8000/5173). Returns `{ url, close }` when
- * the first successful GET lands; otherwise throws so the caller can fall
- * back to the static server.
- *
- * Spawned process gets its own process group (detached: true on POSIX,
- * shell: false everywhere) so `close()` can kill the whole tree including
- * child Node/Bun workers — otherwise a bare `child.kill()` leaves orphans
- * holding the port on retries.
- */
-async function startProjectServer(
-  projectRoot: string,
-  script: ProjectLaunchScript,
-  opts: { timeoutMs?: number } = {},
-): Promise<{ url: string; close: () => Promise<void> }> {
-  const timeoutMs = opts.timeoutMs ?? 90_000
-
-  // Install + build run directly in projectRoot. node_modules/dist are
-  // gitignored by every scaffold we generate, so they never round-trip into
-  // upstream commits — and projectRoot is itself a per-task ephemeral
-  // worktree, not a user source tree. Reusing the same directory across
-  // delivery retries keeps node_modules warm and removes the cold-install
-  // 3-min ceiling that the old "isolated render workspace" copy imposed.
-  // Cross-platform: spawn the bun binary directly with shell:false. On
-  // Windows the historical `shell: true` path wraps every call in cmd.exe,
-  // which serializes against conhost / antivirus and can hang for tens of
-  // minutes (the old `spawnSync C:\WINDOWS\system32\cmd.exe ETIMEDOUT`
-  // signature). Node's spawn does not auto-append .exe on Windows, so we
-  // pick the right filename per platform; both forms resolve through the
-  // OS PATH lookup (execvp on POSIX, CreateProcess+PATH on Windows).
-  const hasPackageJson = existsSync(`${projectRoot}/package.json`)
-  const hasNodeModules = existsSync(`${projectRoot}/node_modules`)
-  if (hasPackageJson && !hasNodeModules) {
-    const install = spawnSync(BUN_BINARY, ["install"], {
-      cwd: projectRoot,
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: false,
-      timeout: 600_000,
-    })
-    if (install.error) {
-      throw new Error(renderWorkspaceCommandFailureMessage({
-        command: "bun install",
-        projectRoot,
-        error: install.error,
-        stdout: install.stdout,
-        stderr: install.stderr,
-      }))
-    }
-    if (install.status !== 0) {
-      throw new Error(renderWorkspaceCommandFailureMessage({
-        command: "bun install",
-        projectRoot,
-        status: install.status,
-        stdout: install.stdout,
-        stderr: install.stderr,
-      }))
-    }
-  }
-  if (script.buildScript) {
-    // `vite preview` serves compiled output; integration only carries
-    // tracked files into projectRoot, so delivery must materialize dist/
-    // before launch. The build is idempotent — repeated delivery rounds
-    // re-run it cheaply because Vite caches its own analysis.
-    const build = spawnSync(BUN_BINARY, ["run", script.buildScript], {
-      cwd: projectRoot,
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: false,
-      timeout: 600_000,
-    })
-    if (build.error) {
-      throw new Error(
-        `bun run ${script.buildScript} pre-launch failed in ${projectRoot}: ${build.error.message}`,
-      )
-    }
-    if (build.status !== 0) {
-      const output = `${build.stdout?.toString() ?? ""}${build.stderr?.toString() ?? ""}`.slice(-1200) || "<no output>"
-      throw new Error(
-        `bun run ${script.buildScript} pre-launch exited code=${build.status} in ${projectRoot}: ${output}`,
-      )
-    }
-  }
-
-  // Run via `bun run`; inherits PATH so npx/vite/tsx on the project lockfile resolve.
-  const child: ChildProcess = spawn(BUN_BINARY, ["run", script.script], {
-    cwd: projectRoot,
-    stdio: ["ignore", "pipe", "pipe"],
-    shell: false,
-    detached: process.platform !== "win32",
-  })
-  const captured: string[] = []
-  // Parse spawned launch script's stdout for the bound URL it advertises
-  // (vite/CRA/Next/Hono all print "Local:   http://localhost:NNNN/" on
-  // startup). Polling a hardcoded port list returned ANY responding port —
-  // including the developer's own dev server on 5173 — and the harness
-  // ended up screenshotting the wrong app entirely (rule 25: no hardcoded
-  // resource lists). Capturing the launch script's own URL announcement
-  // is the only honest way to identify "the port THIS process bound".
-  let detectedUrl: string | undefined
-  const onChunk = (chunk: Buffer) => {
-    const text = chunk.toString("utf8")
-    captured.push(text)
-    if (!detectedUrl) {
-      // Vite colorizes the port itself (`localhost:\x1b[1m4180`), and
-      // stdout may split the URL across chunks. Parse the recent captured
-      // window after stripping terminal control codes; never infer port 80.
-      detectedUrl = announcedLocalUrlFromOutput(captured.join("").slice(-4_000))
-    }
-  }
-  child.stdout?.on("data", onChunk)
-  child.stderr?.on("data", onChunk)
-  let exited = false
-  const closed = new Promise<void>((resolve) => child.once("exit", () => {
-    exited = true
-    resolve()
-  }))
-
-  const close = async () => {
-    if (child.exitCode !== null) return
-    try {
-      await Shell.killTree(child, { exited: () => exited })
-      const raced = await Promise.race([
-        closed,
-        new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 2_000)),
-      ])
-      if (raced === "timeout") await Shell.killTree(child, { exited: () => exited })
-    } catch {
-      /* ignore */
-    }
-    await closed.catch(() => {})
-  }
-
-  const deadline = Date.now() + timeoutMs
-  try {
-    while (Date.now() < deadline) {
-      if (child.exitCode !== null) {
-        const tail = captured.join("").slice(-800)
-        throw new Error(
-          `project server exited early (code=${child.exitCode}): ${tail || "<no output>"}`,
-        )
-      }
-      if (detectedUrl) {
-        // URL announced; verify it actually accepts HTTP before returning so
-        // we don't hand puppeteer a port that hasn't bound yet (vite often
-        // prints "Local:" a few hundred ms before the listener is live).
-        const ok = await probeHttp(detectedUrl)
-        if (ok) return { url: detectedUrl, close }
-      }
-      await new Promise((r) => setTimeout(r, 500))
-    }
-    const tail = captured.join("").slice(-800)
-    throw new Error(
-      detectedUrl
-        ? `project server announced ${detectedUrl} but did not accept HTTP within ${timeoutMs}ms. Last output: ${tail || "<no output>"}`
-        : `project server did not announce a localhost URL on stdout within ${timeoutMs}ms. Last output: ${tail || "<no output>"}`,
-    )
-  } catch (err) {
-    await close()
-    throw err
-  }
-}
-
-function probeHttp(url: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const req = http.get(url, { timeout: 1_000 }, (res) => {
-      res.resume()
-      resolve(res.statusCode !== undefined)
-    })
-    req.on("error", () => resolve(false))
-    req.on("timeout", () => {
-      req.destroy()
-      resolve(false)
-    })
-  })
-}
-
-function startStaticServer(rootDir: string): Promise<{ url: string; close: () => Promise<void> }> {
-  const resolvedRoot = path.resolve(rootDir)
-  const MIME: Record<string, string> = {
-    ".html": "text/html; charset=utf-8",
-    ".js": "application/javascript; charset=utf-8",
-    ".mjs": "application/javascript; charset=utf-8",
-    ".css": "text/css; charset=utf-8",
-    ".json": "application/json; charset=utf-8",
-    ".svg": "image/svg+xml",
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-    ".ico": "image/x-icon",
-    ".woff": "font/woff",
-    ".woff2": "font/woff2",
-    ".map": "application/json; charset=utf-8",
-  }
-  return new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      const reqPath = decodeURIComponent((req.url || "/").split("?")[0])
-      const safePath = path.posix.normalize(reqPath).replace(/^\/+/, "")
-      const absPath = path.join(resolvedRoot, safePath)
-      // Path traversal guard — `..` segments after normalize would escape
-      // the root; refuse rather than reading arbitrary files.
-      if (!absPath.startsWith(resolvedRoot)) {
-        res.writeHead(403).end("forbidden")
-        return
-      }
-      ;(async () => {
-        let targetPath = absPath
-        try {
-          const stat = await fs.stat(targetPath)
-          if (stat.isDirectory()) targetPath = path.join(targetPath, "index.html")
-        } catch {
-          res.writeHead(404).end("not found")
-          return
-        }
-        try {
-          const body = await fs.readFile(targetPath)
-          const ext = path.extname(targetPath).toLowerCase()
-          res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" })
-          res.end(body)
-        } catch {
-          res.writeHead(404).end("not found")
-        }
-      })()
-    })
-    server.on("error", reject)
-    server.listen(0, "127.0.0.1", () => {
-      const addr = server.address()
-      if (!addr || typeof addr === "string") {
-        reject(new Error("static server bound to non-TCP address"))
-        return
-      }
-      resolve({
-        url: `http://127.0.0.1:${addr.port}`,
-        close: () =>
-          new Promise<void>((done) => {
-            server.close(() => done())
-          }),
-      })
-    })
-  })
-}
-
 async function decodePNG(filePath: string): Promise<PNG> {
   const buf = await fs.readFile(filePath)
   return new Promise<PNG>((resolve, reject) => {
@@ -499,92 +108,6 @@ function pngLuminanceVariance(png: PNG): number {
   if (samples === 0) return 0
   const mean = sum / samples
   return sumSq / samples - mean * mean
-}
-
-const DISCOVERY_SKIP_DIRS = new Set([
-  ".git",
-  // `.opencorvus` covers both our scratch (attachments, visual-diff) AND
-  // goal worktrees (now at `<primary>/.opencorvus/worktrees/`). One entry
-  // replaces the prior pair of `.opencorvus` + `.opencorvus-worktrees`.
-  ".opencorvus",
-  "node_modules",
-  "references",
-  "visual-diff-out",
-  // `dist` / `build` / `.next` are the compiled outputs — those are what we
-  // actually want to screenshot for Vite / CRA / Next projects. Keeping them
-  // in the skip list caused findRenderedIndex to pick up the pre-build
-  // source stub (Vite's `<script type="module" src="/src/main.tsx">` shell),
-  // which puppeteer renders as a blank page when loaded via file://.
-  // Scoring from a blank render produced false "visual diff failed" rejects
-  // even when the built app was correct (bench7 usage-replica-vague).
-  ".turbo",
-  "coverage",
-])
-
-/**
- * Build output directories we actively PREFER over any source `index.html`.
- * A project that has shipped a Vite/CRA/Next build emits a self-contained
- * `dist/index.html` (or equivalent) with inlined hashed asset URLs — that's
- * the artifact users see, and therefore the one SSIM must score against.
- */
-const PREFERRED_DIST_DIRS = ["dist", "build", ".next/static", "out"]
-
-/**
- * Walk a directory and find the `index.html` to screenshot. Preference order:
- *  1. A PREFERRED_DIST_DIRS match (`dist/index.html`, `build/index.html`, …) —
- *     that's the compiled, self-contained build artifact that matches what
- *     users actually see. Source-tree `index.html` for Vite/CRA/Next is a
- *     stub that imports `/src/main.tsx`, which puppeteer can't resolve over
- *     file://; scoring against it produced a blank render.
- *  2. Most-recent `index.html` anywhere else, tie-broken by shallowest depth.
- *
- * Returns undefined only when neither category yields a candidate. Callers
- * should surface "no index.html found" rather than fall back silently.
- */
-export async function findRenderedIndex(rootDir: string): Promise<string | undefined> {
-  const candidates: Array<{ path: string; depth: number; mtime: number; preferred: boolean }> = []
-  async function walk(current: string, depth: number, insidePreferred: boolean) {
-    let entries: import("node:fs").Dirent[] = []
-    try {
-      entries = await fs.readdir(current, { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        if (DISCOVERY_SKIP_DIRS.has(entry.name)) continue
-        // Hidden dirs are generally tooling artifacts (.git, .opencorvus, …).
-        // One exception: `.next` is Next.js's build output and is PREFERRED.
-        if (entry.name.startsWith(".") && !PREFERRED_DIST_DIRS.some((p) => p === entry.name || p.startsWith(`${entry.name}/`))) continue
-        const childPath = path.join(current, entry.name)
-        const isPreferredHere = insidePreferred || PREFERRED_DIST_DIRS.includes(entry.name)
-        await walk(childPath, depth + 1, isPreferredHere)
-        continue
-      }
-      if (entry.name.toLowerCase() === "index.html") {
-        const abs = path.join(current, entry.name)
-        const stat = await fs.stat(abs).catch(() => null)
-        candidates.push({
-          path: abs,
-          depth,
-          mtime: stat?.mtimeMs ?? 0,
-          preferred: insidePreferred,
-        })
-      }
-    }
-  }
-  await walk(rootDir, 0, false)
-  if (candidates.length === 0) return undefined
-  // Preferred (under dist/build/...) wins over any source tree match, then
-  // freshest mtime, then shallowest, then stable path sort for determinism.
-  candidates.sort(
-    (a, b) =>
-      Number(b.preferred) - Number(a.preferred) ||
-      b.mtime - a.mtime ||
-      a.depth - b.depth ||
-      a.path.localeCompare(b.path),
-  )
-  return candidates[0].path
 }
 
 export interface RenderPageCapture {
@@ -660,47 +183,14 @@ export async function renderPage(opts: {
   await fs.mkdir(opts.outDir, { recursive: true })
 
   const executablePath = await findBrowserExecutable(opts.browserExecutable)
-  // Decide how to serve the rendered target:
-  //   - http(s) / existing file:// URL → use as-is
-  //   - local file path → spawn a static HTTP server rooted at the file's
-  //     parent directory. `file://` breaks ES-module script tags that Vite /
-  //     CRA / Next builds emit, which made pre-dist index.html render blank.
-  let staticServer: { url: string; close: () => Promise<void> } | undefined
-  let target: string
-  if (/^https?:\/\//i.test(opts.rendered) || /^file:\/\//i.test(opts.rendered)) {
-    target = opts.rendered
-  } else {
-    const absFile = path.resolve(opts.rendered)
-    const serveRoot = path.dirname(absFile)
-    // Delivered apps often ship a backend (Express/bun) that serves both the
-    // built SPA *and* its own `/api/*` endpoints. A static file server would
-    // 404 every data fetch and leave the UI stuck on loading states — use
-    // the project's own launch script when one is declared.
-    //
-    // No silent static fallback when a launch script is declared but fails
-    // (rule 1): a failure means the merged worktree's build/server is
-    // genuinely broken — surfacing the spawn error gives the delivery agent
-    // an actionable signal ("server exited code=1, missing module foo")
-    // instead of silently rendering an unbuilt index.html that puppeteer
-    // hangs on. The static server is only used when the project does not
-    // declare any of `server` / `start` / `preview`.
-    const projectRoot = await findProjectRoot(serveRoot)
-    const launchScript = projectRoot ? await resolveProjectLaunchScript(projectRoot) : undefined
-    if (projectRoot && launchScript) {
-      staticServer = await startProjectServer(projectRoot, launchScript)
-      target = `${staticServer.url}/`
-    } else {
-      staticServer = await startStaticServer(serveRoot)
-      const fileName = path.basename(absFile)
-      target = fileName.toLowerCase() === "index.html"
-        ? `${staticServer.url}/`
-        : `${staticServer.url}/${encodeURIComponent(fileName)}`
-    }
+  if (!/^https?:\/\//i.test(opts.rendered)) {
+    throw new Error(`renderPage: delivery rendering is URL-only; start the app or use the frontend preview resolver, then pass its http(s) URL. Received: ${opts.rendered}`)
   }
+  const target = opts.rendered
 
   const browser = await puppeteer.launch({
     executablePath,
-    headless: true,
+    headless: false,
     args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
   })
   const renderedPath = path.join(opts.outDir, "rendered.png")
@@ -754,16 +244,13 @@ export async function renderPage(opts: {
         globalWindow.__opencorvusCaptureUnhandledRejection?.(message)
       })
     })
-    // Same reasoning as startProjectServer's 90s budget — a cold merged
-    // worktree can need a non-trivial first-paint window once the server
-    // accepts connections, especially when `vite preview` still triggers a
-    // build on first request. Configurable via opts.navigationTimeoutMs so
-    // benchmarks with slower runners can override without editing source.
+    // A live preview URL can still need a non-trivial first-paint window once
+    // the server accepts connections. Configurable via opts.navigationTimeoutMs
+    // so benchmarks with slower runners can override without editing source.
     const navigationTimeoutMs = opts.navigationTimeoutMs ?? 90_000
-    // `load` (window.onload) instead of `networkidle0`: most benchmark
-    // deliverables run via `bun run dev` where vite keeps an HMR websocket
-    // open indefinitely — networkidle0 would NEVER settle and the entire
-    // navigation budget would expire even when the page rendered fine.
+    // `load` (window.onload) instead of `networkidle0`: live frontend previews
+    // commonly keep websockets open indefinitely, so network-idle is not a
+    // faithful completion signal for a rendered interactive page.
     // `load` fires when DOM + initial CSS/JS/fonts are loaded, which is
     // sufficient for a faithful screenshot. The settle wait below covers
     // React hydration that runs after the load event.
@@ -881,7 +368,6 @@ export async function renderPage(opts: {
     }
   } finally {
     await browser.close()
-    if (staticServer) await staticServer.close()
   }
   if (!capture) {
     throw new Error("renderPage: capture was not produced")

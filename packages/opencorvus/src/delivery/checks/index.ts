@@ -25,7 +25,6 @@ export {
   autoArtifact,
 } from "./discovery"
 export {
-  findRenderedIndex,
   findBrowserExecutable,
   runVisualDiff,
   summarizeVisualReport,

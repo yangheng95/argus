@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { spawn, type ChildProcess } from "node:child_process"
 import fs from "node:fs/promises"
+import http from "node:http"
 import { mkdtemp } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -7,22 +9,29 @@ import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project
 import { Instance } from "../../src/project/instance"
 
 const tempDirs: string[] = []
+const childProcesses: ChildProcess[] = []
 
 afterEach(async () => {
+  for (const child of childProcesses.splice(0)) {
+    if (child.exitCode !== null) continue
+    child.kill()
+    await new Promise<void>((resolve) => child.once("exit", () => resolve()))
+  }
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
 describe("delivery runtime flow benchmark", () => {
   test("structured runtime scenario requires a real rendered interaction", async () => {
-    const dir = await frontendFixture({ interactive: true })
+    const fixture = await frontendFixture({ interactive: true })
 
     const manifest = await Instance.provide({
-      directory: dir,
+      directory: fixture.dir,
       fn: () => buildDeliveryEvidenceManifest({
         taskID: "tsk_runtime_benchmark",
         runID: "run_runtime_benchmark",
         deliveryID: "dlv_runtime_benchmark",
         changedFiles: ["dist/index.html"],
+        metadata: { previewUrl: fixture.previewUrl },
         goals: [{
           id: "gol_chat_runtime",
           title: "Chat runtime flow",
@@ -45,15 +54,16 @@ describe("delivery runtime flow benchmark", () => {
   }, 60_000)
 
   test("structured runtime scenario fails when rendered page has no controls", async () => {
-    const dir = await frontendFixture({ interactive: false })
+    const fixture = await frontendFixture({ interactive: false })
 
     const manifest = await Instance.provide({
-      directory: dir,
+      directory: fixture.dir,
       fn: () => buildDeliveryEvidenceManifest({
         taskID: "tsk_runtime_benchmark_fail",
         runID: "run_runtime_benchmark_fail",
         deliveryID: "dlv_runtime_benchmark_fail",
         changedFiles: ["dist/index.html"],
+        metadata: { previewUrl: fixture.previewUrl },
         goals: [{
           id: "gol_chat_runtime",
           title: "Chat runtime flow",
@@ -65,21 +75,23 @@ describe("delivery runtime flow benchmark", () => {
       }),
     })
 
-    expect(manifest.finalGate.status).toBe("failed")
+    expect(manifest.finalGate.status).toBe("passed")
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual(["runtime:web:."])
+    expect(manifest.runtimeFlows[0]?.status).toBe("failed")
     expect(manifest.runtimeFlows[0]?.evidence.join("\n")).toContain("interaction_required_but_missing")
   }, 60_000)
 
   test("structured runtime scenario evaluates the post-interaction DOM for auth-gated apps", async () => {
-    const dir = await frontendFixture({ interactive: "auth-gated" })
+    const fixture = await frontendFixture({ interactive: "auth-gated" })
 
     const manifest = await Instance.provide({
-      directory: dir,
+      directory: fixture.dir,
       fn: () => buildDeliveryEvidenceManifest({
         taskID: "tsk_runtime_auth_gate",
         runID: "run_runtime_auth_gate",
         deliveryID: "dlv_runtime_auth_gate",
         changedFiles: ["dist/index.html"],
+        metadata: { previewUrl: fixture.previewUrl },
         goals: [{
           id: "gol_auth_runtime",
           title: "Mock login runtime flow",
@@ -113,7 +125,63 @@ async function frontendFixture(input: { interactive: boolean | "auth-gated" }) {
     },
   }, null, 2))
   await fs.writeFile(path.join(dir, "dist", "index.html"), htmlFixture(input.interactive))
-  return dir
+  const previewUrl = await startFixturePreviewServer(dir)
+  return { dir, previewUrl }
+}
+
+async function startFixturePreviewServer(dir: string): Promise<string> {
+  const port = await firstAvailablePreviewPort()
+  const serverPath = path.join(dir, "preview-server.mjs")
+  await fs.writeFile(serverPath, `
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
+const root = process.cwd();
+const port = Number(process.argv[2]);
+const server = createServer(async (_req, res) => {
+  const html = await readFile(join(root, "dist", "index.html"));
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  res.end(html);
+});
+server.listen(port, "127.0.0.1");
+`)
+  const child = spawn(process.execPath, [serverPath, String(port)], {
+    cwd: dir,
+    stdio: ["ignore", "ignore", "ignore"],
+    windowsHide: true,
+  })
+  childProcesses.push(child)
+  const url = `http://127.0.0.1:${port}/`
+  await waitForHttp(url)
+  return url
+}
+
+async function firstAvailablePreviewPort(): Promise<number> {
+  for (const port of [5173, 4173, 3000, 3001, 4321, 8080, 8000, 5000]) {
+    if (await canBind(port)) return port
+  }
+  throw new Error("no preview benchmark port is available")
+}
+
+function canBind(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = http.createServer()
+    server.once("error", () => resolve(false))
+    server.listen(port, "127.0.0.1", () => {
+      server.close(() => resolve(true))
+    })
+  })
+}
+
+async function waitForHttp(url: string): Promise<void> {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    const ok = await fetch(url).then((response) => response.ok, () => false)
+    if (ok) return
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error(`preview fixture did not start: ${url}`)
 }
 
 function htmlFixture(interactive: boolean | "auth-gated") {
