@@ -181,6 +181,10 @@ Progress log:
   `.oc-surface-header__title`, removing local `.sidebar-title` /
   `.chat-title` / `.sections-title` font, weight, color, line-height, casing,
   and theme typography overrides from God CSS.
+- 2026-05-03: Moved primary header main/action flex primitives fully under
+  `.oc-surface-header__main` / `.oc-surface-header__actions`, removing local
+  `display`, `align-items`, `min-width`, and `gap` declarations from
+  `.chat-header-main`, `.chat-header-meta`, and `.sidebar-header-actions`.
 
 Trigger: user feedback (2026-05-03):
 
