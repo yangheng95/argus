@@ -474,8 +474,29 @@ Progress log:
   (`.provider-test-result-icon`, `.provider-section-label`,
   `.goal-priority`, `.dialog-subtitle`) from 700 to 600. Bold-weight
   guard ceiling drops to `<= 45`.
-
-Trigger: user feedback (2026-05-03):
+- 2026-05-03: Retired the light and dark/vscode-dark task-row
+  hover/active theme overrides. The canonical `.task-row-mini` state
+  rules already resolve through `--surface-hover`, `--accent`, and
+  `--text-strong`, so themes now only provide palette tokens instead
+  of owning row backgrounds, borders, or active rails. Guard ceilings
+  drop to `!important <= 179`, `body[data-theme] <= 103`, and
+  theme layout/chrome `<= 70`.
+- 2026-05-03: First real surface extraction landed. Moved the
+  `.titlebar-task-status` family (canonical, hover, four data-status
+  state variants, child label/elapsed display:none) and the
+  `.status-icon` family (svg geometry + six data-status color tones)
+  from `styles.css` into `styles/surfaces/titlebar.css`. State chrome
+  used to use raw rgba literals (`rgba(91, 141, 239, ...)` info,
+  `rgba(52, 211, 153, ...)` good, `rgba(248, 113, 113, ...)` bad);
+  surface guard required palette tokens, so the move converts each
+  literal into `color-mix(in srgb, var(--info|good|bad) NN%, transparent)`.
+  Two new design-language tokens `--oc-titlebar-status-radius` and
+  `--oc-titlebar-status-icon` carry the previously-inline pixel
+  geometry so the surface stays palette-token clean. New guard
+  asserts `styles.css` no longer owns either selector and that the
+  surface declares the migrated rules. **Why:** styles.css must end
+  empty so it can leave the runtime import graph; this is the first
+  full extraction rather than another internal fold.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
@@ -506,11 +527,11 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles.css`      | **13,777 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
-| Total `!important` in stylesheets      | **183** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **108**                                                                                 |
-| Theme layout/chrome overrides          | **84** current guard baseline                                                           |
+| Total `!important` in stylesheets      | **179** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **103**                                                                                 |
+| Theme layout/chrome overrides          | **70** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
 | Total `.tsx` LOC under `packages/overlay/src` | **15,108**                                                                      |
@@ -698,6 +719,33 @@ Required workflow for both agents:
   debt inventory.
 - Every slice must run the relevant targeted tests, the architecture guard,
   docs check when this file changes, and push without bypassing hooks.
+
+## Slice direction: extract, do not just fold
+
+The end state is `packages/overlay/src/styles.css` removed from the
+runtime import graph and archived. Every slice should therefore aim to
+**move rules out of `styles.css` and into the new tree** (`styles/
+{tokens,primitives,surfaces,themes}/*.css`), not merely tighten or
+consolidate rules in place. Internal folds (deduplicating selectors,
+canonicalizing values, retiring `body[data-theme]` overrides) remain
+useful — but only as preparation for an extraction. A slice that only
+collapses rules inside `styles.css` without advancing the extraction
+boundary should be the exception, not the default.
+
+Concrete heuristic for picking the next slice:
+
+1. Identify a surface family whose rules are mostly self-contained
+   (titlebar, composer, sidebar tree, sections inspector, settings shell).
+2. Confirm canonical rules already use palette tokens (do internal
+   token folds first if needed).
+3. Move the rule set verbatim into the matching `styles/surfaces/*.css`
+   file (or create a new one), update `index.html` to load it after
+   `styles.css`, delete the rules from `styles.css`, and add a guard
+   asserting both that the surface file owns the rules and that the
+   matching `styles.css` selectors are gone.
+4. The architecture guards (`!important`, `body[data-theme]`, theme
+   chrome overrides, bold-weight density) drop naturally as rules
+   leave `styles.css` and the new files stay palette-token clean.
 
 ## Replacement strategy
 

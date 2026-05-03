@@ -25,4 +25,6 @@
   --oc-header-shadow: none;
   --oc-titlebar-menu-text: var(--oc-color-text-strong);
   --oc-titlebar-gap: calc(2px * var(--ui-scale, 1));
+  --oc-titlebar-status-radius: calc(10px * var(--ui-scale, 1));
+  --oc-titlebar-status-icon: calc(14px * var(--ui-scale, 1));
 }

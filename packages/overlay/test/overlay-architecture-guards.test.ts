@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(183)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(108)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(179)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(103)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,21 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(84)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(70)
+  })
+
+  test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
+
+    expect(styles).not.toMatch(/^\.titlebar-task-status\b/m)
+    expect(styles).not.toMatch(/^\.status-icon\b/m)
+    expect(titlebarSurface).toMatch(/\.titlebar-task-status\s*\{/)
+    expect(titlebarSurface).toMatch(/\.titlebar-task-status\[data-status="active"\]/)
+    expect(titlebarSurface).toMatch(/\.status-icon\s*\{/)
+    expect(titlebarSurface).toMatch(/\.status-icon\[data-status="completed"\]/)
+    expect(titlebarSurface).toContain("var(--oc-titlebar-status-radius)")
+    expect(titlebarSurface).toContain("var(--oc-titlebar-status-icon)")
   })
 
   test("bold font-weight declarations cannot increase across overlay stylesheets", () => {
@@ -1140,6 +1154,8 @@ describe("overlay architecture guards", () => {
       "--oc-density-control-height",
       "--oc-density-icon-button",
       "--oc-titlebar-gap",
+      "--oc-titlebar-status-radius",
+      "--oc-titlebar-status-icon",
     ]) {
       expect(tokenText).toContain(token)
     }

@@ -1187,104 +1187,9 @@ a {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.titlebar-task-status {
-  width: var(--ui-titlebar-btn-width);
-  min-width: var(--ui-titlebar-btn-width);
-  height: var(--ui-titlebar-btn-height);
-  min-height: var(--ui-titlebar-btn-height);
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-  border-radius: calc(10px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
-  cursor: help;
-  transition:
-    border-color 100ms,
-    background 100ms,
-    color 100ms,
-    box-shadow 100ms;
-}
-
-.titlebar-task-status:hover {
-  border-color: var(--border-hover);
-  background: var(--surface-hover);
-}
-
-.titlebar-task-status[data-status="queued"] {
-  background: var(--subtle-4);
-}
-
-.titlebar-task-status[data-status="active"] {
-  border-color: rgba(91, 141, 239, 0.24);
-  background: rgba(91, 141, 239, 0.12);
-}
-
-.titlebar-task-status[data-status="completed"] {
-  border-color: rgba(52, 211, 153, 0.24);
-  background: rgba(52, 211, 153, 0.1);
-}
-
-.titlebar-task-status[data-status="failed"] {
-  border-color: rgba(248, 113, 113, 0.24);
-  background: rgba(248, 113, 113, 0.1);
-}
-
-.titlebar-task-status .status-label,
-.titlebar-task-status .elapsed {
-  display: none;
-}
-
-.status-icon {
-  width: calc(14px * var(--ui-scale));
-  height: calc(14px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
-.status-icon svg {
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.status-icon svg [data-stroke="true"] {
-  vector-effect: non-scaling-stroke;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.status-icon svg [data-fill="true"] {
-  fill: currentColor;
-  stroke: none;
-}
-
-.status-icon[data-status="idle"] {
-  color: var(--text-muted);
-}
-.status-icon[data-status="queued"] {
-  color: var(--text-soft);
-}
-.status-icon[data-status="active"] {
-  color: var(--accent);
-}
-.status-icon[data-status="completed"] {
-  color: var(--good);
-}
-.status-icon[data-status="failed"] {
-  color: var(--bad);
-}
-.status-icon[data-status="cancelled"] {
-  color: var(--text-muted);
-}
-/* Removed `pulse` infinite animation: idle frame compositing in
-   Tauri/WebView2 transparent overlay dominated battery. Status colour +
-   the in-card spinner already convey live state. */
+/* `.titlebar-task-status` and `.status-icon` extracted into
+   `styles/surfaces/titlebar.css` (the surface owns these rules now;
+   nothing else in the runtime references either class). */
 
 .status-label {
   font-size: var(--ui-font-small);
@@ -14230,24 +14135,9 @@ body[data-theme="light"] .workspace-toggle {
    gone entirely — none of its declarations were
    theme-specific. */
 
-body[data-theme="light"] .task-row-mini:hover,
-body[data-theme="light"] .task-row-mini:focus-within {
-  background: rgba(244, 247, 255, 0.92) !important;
-  border-color: rgba(91, 95, 240, 0.16);
-}
-
-body[data-theme="light"] .task-row-mini[data-active="true"] {
-  background: linear-gradient(90deg, rgba(91, 95, 240, 0.14), rgba(255, 255, 255, 0.68)) !important;
-  border-color: rgba(91, 95, 240, 0.24);
-}
-
-body[data-theme="light"] .task-row-mini[data-active="true"]::before {
-  background: var(--accent-gradient);
-}
-
-body[data-theme="light"] .task-row-main strong {
-  color: var(--text-strong);
-}
+/* iter58: task-row hover/active chrome is canonical. Themes swap
+   `--surface-hover`, `--accent`, and `--text-strong`; they no longer
+   own row backgrounds, borders, or active rails. */
 
 body[data-theme="light"] .task-row-badge,
 body[data-theme="light"] .section-badge,
@@ -14416,28 +14306,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-toggle {
   color: var(--text-soft);
 }
 
-/* iter25: dark/vscode-dark override mirror — folded into
-   canonical for the same reason as the light override
-   above. */
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-row-mini:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-row-mini:focus-within {
-  background: color-mix(in srgb, var(--surface-hover) 88%, transparent) !important;
-  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-row-mini[data-active="true"] {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--accent) 18%, transparent),
-    color-mix(in srgb, var(--surface-strong) 64%, transparent)
-  ) !important;
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-row-mini[data-active="true"]::before {
-  background: var(--accent-gradient);
-}
+/* iter58: dark/vscode-dark task-row hover and active states now use
+   the same canonical row state grammar as light mode. */
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-row-badge,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section-badge,
