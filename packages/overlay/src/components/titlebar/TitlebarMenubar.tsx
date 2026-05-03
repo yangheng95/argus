@@ -23,6 +23,7 @@ type MenuDef = {
   id: MenuID;
   label: string;
   compact: string;
+  accessKey: string;
 };
 
 type TitlebarMenubarProps = {
@@ -30,6 +31,19 @@ type TitlebarMenubarProps = {
 };
 
 const MENU_IDS: MenuID[] = ["workspace", "model", "run", "tools", "view", "help"];
+const MENU_ACCESS_KEYS: Record<MenuID, string> = {
+  workspace: "w",
+  model: "m",
+  run: "r",
+  tools: "t",
+  view: "v",
+  help: "h",
+};
+
+function menuIDForAccessKey(key: string): MenuID | null {
+  const normalized = key.toLowerCase();
+  return MENU_IDS.find((id) => MENU_ACCESS_KEYS[id] === normalized) ?? null;
+}
 
 function clampInt(value: unknown, min: number, max: number): number | null {
   const n = Number(value);
@@ -176,14 +190,15 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
   const [openMenu, setOpenMenu] = createSignal<MenuID | null>(null);
   const [recentDirs, setRecentDirs] = createSignal<string[]>([]);
   let rootRef: HTMLDivElement | undefined;
+  let altPressedOnly = false;
 
   const menus = createMemo<MenuDef[]>(() => [
-    { id: "workspace", label: t("titlebar.menu.workspace"), compact: "W" },
-    { id: "model", label: t("titlebar.menu.model"), compact: "M" },
-    { id: "run", label: t("titlebar.menu.run"), compact: "R" },
-    { id: "tools", label: t("titlebar.menu.tools"), compact: "T" },
-    { id: "view", label: t("titlebar.menu.view"), compact: "V" },
-    { id: "help", label: t("titlebar.menu.help"), compact: "?" },
+    { id: "workspace", label: t("titlebar.menu.workspace"), compact: "W", accessKey: MENU_ACCESS_KEYS.workspace },
+    { id: "model", label: t("titlebar.menu.model"), compact: "M", accessKey: MENU_ACCESS_KEYS.model },
+    { id: "run", label: t("titlebar.menu.run"), compact: "R", accessKey: MENU_ACCESS_KEYS.run },
+    { id: "tools", label: t("titlebar.menu.tools"), compact: "T", accessKey: MENU_ACCESS_KEYS.tools },
+    { id: "view", label: t("titlebar.menu.view"), compact: "V", accessKey: MENU_ACCESS_KEYS.view },
+    { id: "help", label: t("titlebar.menu.help"), compact: "?", accessKey: MENU_ACCESS_KEYS.help },
   ]);
 
   function closeMenu() {
@@ -193,6 +208,22 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
   function open(id: MenuID) {
     setRecentDirs(loadRecentDirectories());
     setOpenMenu((current) => current === id ? null : id);
+  }
+
+  function focusTrigger(id: MenuID) {
+    document.querySelector<HTMLButtonElement>(`[data-menu-trigger="${id}"]`)?.focus();
+  }
+
+  function focusFirstMenuItem(id: MenuID) {
+    queueMicrotask(() => {
+      document.querySelector<HTMLElement>(`#titlebar-menu-${id} [role="menuitem"]:not([disabled])`)?.focus();
+    });
+  }
+
+  function openFromKeyboard(id: MenuID) {
+    setRecentDirs(loadRecentDirectories());
+    setOpenMenu(id);
+    focusFirstMenuItem(id);
   }
 
   function openConfig(section: string) {
@@ -254,16 +285,47 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
       closeMenu();
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
+      if (event.key === "Alt" && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        altPressedOnly = true;
+        event.preventDefault();
+        return;
+      }
+      if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        const id = menuIDForAccessKey(event.key);
+        altPressedOnly = false;
+        if (id) {
+          event.preventDefault();
+          openFromKeyboard(id);
+          return;
+        }
+      } else if (event.key !== "Alt") {
+        altPressedOnly = false;
+      }
       if (!openMenu()) return;
       if (event.key === "Escape" || event.key === "Tab") {
         closeMenu();
       }
     };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== "Alt" || !altPressedOnly) return;
+      altPressedOnly = false;
+      event.preventDefault();
+      const current = openMenu();
+      if (current) {
+        closeMenu();
+        focusTrigger(current);
+      } else {
+        focusTrigger("workspace");
+      }
+    };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keyup", onKeyUp);
     onCleanup(() => {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keyup", onKeyUp);
     });
   });
 
@@ -272,9 +334,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
     if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       setOpenMenu(id);
-      queueMicrotask(() => {
-        document.querySelector<HTMLElement>(`#titlebar-menu-${id} [role="menuitem"]:not([disabled])`)?.focus();
-      });
+      focusFirstMenuItem(id);
       return;
     }
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -304,9 +364,11 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
               data-ui="titlebar-menubar-trigger"
               data-menu-trigger={menu.id}
               data-compact={menu.compact}
+              data-access-key={menu.accessKey}
               data-active={openMenu() === menu.id ? "true" : "false"}
               title={menu.label}
               aria-label={menu.label}
+              aria-keyshortcuts={`Alt+${menu.accessKey.toUpperCase()}`}
               aria-haspopup="menu"
               aria-expanded={openMenu() === menu.id ? "true" : "false"}
               aria-controls={`titlebar-menu-${menu.id}`}
