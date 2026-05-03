@@ -333,6 +333,18 @@ describe("overlay architecture guards", () => {
     expect(body).toContain("border-radius: 0")
   })
 
+  test("chat task-switch progress overlays the header instead of creating a hidden gap", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const chatBody = soloRuleBody(styles, ".chat")
+    const progressBody = soloRuleBody(styles, ".task-switch-progress")
+
+    expect(chatBody).toContain("position: relative")
+    expect(progressBody).toContain("position: absolute")
+    expect(progressBody).toContain("inset-block-start: 0")
+    expect(progressBody).toContain("inset-inline: 0")
+    expect(progressBody).not.toContain("flex-shrink")
+  })
+
   test("new theme files only write root-scoped tokens", () => {
     const files = walkFiles(join(OVERLAY_ROOT, "src/styles/themes"), (path) => path.endsWith(".css"))
     for (const file of files) {

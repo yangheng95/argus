@@ -232,6 +232,11 @@ Progress log:
   focus ring no longer live in light/dark/vscode theme selectors or broad
   `!important` compact-reset lists. This lowers `!important` to 324,
   `body[data-theme]` to 213, and theme layout/chrome override count to 239.
+- 2026-05-03: Removed the visible 2px gap above the conversation header.
+  Root cause was `.task-switch-progress`: it was visually hidden with
+  `opacity: 0` but still occupied `height: 2px` in the `.chat` flex flow.
+  The progress indicator now overlays the chat header via absolute positioning,
+  and a guard pins it out of layout so hidden loading chrome cannot move headers.
 
 Trigger: user feedback (2026-05-03):
 
