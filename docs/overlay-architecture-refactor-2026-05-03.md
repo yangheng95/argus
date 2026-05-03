@@ -399,6 +399,12 @@ Progress log:
   background, hover, border, and color overrides were noise. The dark
   variant of `.chat-toolbar-btn:hover` was retired alongside the light
   variants. `body[data-theme]` guard ceiling drops to `<= 140`.
+- 2026-05-03: Pruned dead static-class callers (`.titlebar-menubar-trigger`,
+  `.titlebar-status-icon`, `.titlebar-btn`, `.executor-chip`) from the
+  remaining multi-selector light/dark/vscode-dark theme blocks that paint
+  titlebar control chrome and sidebar tool surfaces. The Button primitive
+  already owns those visual states, so the legacy theme entries cannot
+  render anything. `body[data-theme]` guard ceiling drops to `<= 128`.
 
 Trigger: user feedback (2026-05-03):
 
@@ -434,7 +440,7 @@ one theme contract, and no runtime God CSS path left behind.
 | `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,698 lines**                                                                         |
 | Total `!important` in stylesheets      | **183** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **140**                                                                                 |
+| `body[data-theme="…"]` theme overrides | **128**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |

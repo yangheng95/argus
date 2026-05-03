@@ -14221,23 +14221,16 @@ body[data-theme="light"] .titlebar {
 }
 
 body[data-theme="light"] .brand-guide,
-body[data-theme="light"] .titlebar-menubar-trigger,
 body[data-theme="light"] .titlebar-status-chip,
-body[data-theme="light"] .titlebar-setup-cta,
-body[data-theme="light"] .titlebar-status-icon,
-body[data-theme="light"] .titlebar-btn {
+body[data-theme="light"] .titlebar-setup-cta {
   background: rgba(255, 255, 255, 0.74) !important;
   border: 1px solid rgba(116, 133, 184, 0.16) !important;
   color: var(--text-strong);
 }
 
 body[data-theme="light"] .brand-guide:hover,
-body[data-theme="light"] .titlebar-menubar-trigger:hover,
-body[data-theme="light"] .titlebar-menubar-trigger:focus-visible,
 body[data-theme="light"] .titlebar-status-chip:hover,
-body[data-theme="light"] .titlebar-setup-cta:hover,
-body[data-theme="light"] .titlebar-status-icon:hover,
-body[data-theme="light"] .titlebar-btn:hover {
+body[data-theme="light"] .titlebar-setup-cta:hover {
   background: rgba(246, 248, 255, 0.94) !important;
   border-color: rgba(91, 95, 240, 0.26) !important;
   color: var(--accent);
@@ -14294,8 +14287,7 @@ body[data-theme="light"] .sidebar-tool,
 body[data-theme="light"] .sidebar-toolset,
 body[data-theme="light"] .task-dir-shell,
 body[data-theme="light"] .task-cwd-dropdown,
-body[data-theme="light"] .workspace-toggle,
-body[data-theme="light"] .executor-chip {
+body[data-theme="light"] .workspace-toggle {
   background: rgba(255, 255, 255, 0.7) !important;
   border-color: rgba(116, 133, 184, 0.16) !important;
   color: var(--text-soft);
@@ -14418,23 +14410,16 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar {
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .brand-guide,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-menubar-trigger,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-status-chip,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-setup-cta,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-status-icon,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-btn {
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-setup-cta {
   background: var(--surface-strong) !important;
   border: 1px solid color-mix(in srgb, var(--border) 90%, transparent) !important;
   color: var(--text-strong);
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .brand-guide:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-menubar-trigger:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-menubar-trigger:focus-visible,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-status-chip:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-setup-cta:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-status-icon:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-btn:hover {
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-setup-cta:hover {
   background: color-mix(in srgb, var(--surface-hover) 92%, transparent) !important;
   border-color: color-mix(in srgb, var(--accent) 32%, transparent) !important;
   color: var(--accent);
@@ -14497,8 +14482,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-tool,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-toolset,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-dir-shell,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-cwd-dropdown,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-toggle,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .executor-chip {
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-toggle {
   background: color-mix(in srgb, var(--surface-strong) 70%, transparent) !important;
   border-color: color-mix(in srgb, var(--border) 88%, transparent) !important;
   color: var(--text-soft);
@@ -14613,16 +14597,12 @@ body[data-theme="vscode-dark"] .chat-scroll {
 }
 
 body[data-theme="vscode-dark"] .brand-guide,
-body[data-theme="vscode-dark"] .titlebar-menubar-trigger,
 body[data-theme="vscode-dark"] .titlebar-status-chip,
 body[data-theme="vscode-dark"] .titlebar-setup-cta,
-body[data-theme="vscode-dark"] .titlebar-status-icon,
-body[data-theme="vscode-dark"] .titlebar-btn,
 body[data-theme="vscode-dark"] .sidebar-tool,
 body[data-theme="vscode-dark"] .sidebar-toolset,
 body[data-theme="vscode-dark"] .task-dir-shell,
-body[data-theme="vscode-dark"] .task-cwd-dropdown,
-body[data-theme="vscode-dark"] .executor-chip {
+body[data-theme="vscode-dark"] .task-cwd-dropdown {
   background: #2d2d30 !important;
 }
 
