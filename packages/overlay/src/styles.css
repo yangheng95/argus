@@ -9090,143 +9090,16 @@ body[data-resizing="true"] * {
    `calc(3px * --ui-scale)`. */
 
 /* ── Step row ────────────────────────────────────────────── */
-.gwg-step {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  padding: calc(var(--ui-gap-xs) + 1px) var(--ui-gap-sm);
-  font-size: var(--ui-font-control);
-  border-radius: calc(var(--radius) / 2);
-  transition: background 150ms ease;
-}
-.gwg-step-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(16px * var(--ui-scale));
-  height: calc(16px * var(--ui-scale));
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--subtle-2);
-  color: var(--text-muted);
-  font-size: clamp(10px, calc(10px * var(--ui-scale)), 11px);
-  font-weight: 700;
-  line-height: 1;
-  box-shadow: 0 0 0 1px var(--subtle-3) inset;
-}
-.gwg-step-label {
-  flex: 1;
-  font-weight: 500;
-  color: var(--text);
-  letter-spacing: 0.005em;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.gwg-step-summary {
-  font-size: var(--ui-font-small);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-.gwg-step-status {
-  font-size: calc(var(--ui-font-tiny) + 0.5px);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: var(--subtle-2);
-  color: var(--text-muted);
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Status-tinted styles */
-.gwg-step--pending .gwg-step-icon {
-  background: var(--subtle-2);
-  color: var(--text-muted);
-}
-.gwg-step--pending .gwg-step-status {
-  background: var(--subtle-2);
-  color: var(--text-muted);
-}
-
-.gwg-step--running {
-  background: linear-gradient(90deg, var(--accent-dim), transparent 92%);
-}
-.gwg-step--running .gwg-step-icon {
-  background: var(--accent-dim);
-  color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(84, 138, 247, 0.4) inset;
-}
-.gwg-step--running .gwg-step-status {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-
-.gwg-step--done .gwg-step-icon {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: color-mix(in srgb, var(--accent) 68%, var(--text-soft));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent) inset;
-}
-.gwg-step--done .gwg-step-status {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: color-mix(in srgb, var(--accent) 68%, var(--text-soft));
-}
-
-.gwg-step--failed {
-  background: linear-gradient(90deg, var(--bad-dim), transparent 92%);
-}
-.gwg-step--failed .gwg-step-icon {
-  background: var(--bad-dim);
-  color: var(--bad);
-  box-shadow: 0 0 0 1px rgba(247, 84, 100, 0.35) inset;
-}
-.gwg-step--failed .gwg-step-status {
-  background: var(--bad-dim);
-  color: var(--bad);
-}
-
-.gwg-step--skipped .gwg-step-icon {
-  background: var(--subtle-1);
-  color: var(--text-muted);
-}
-.gwg-step--skipped .gwg-step-label {
-  text-decoration: line-through;
-  color: var(--text-muted);
-}
-.gwg-step--skipped .gwg-step-status {
-  background: var(--subtle-1);
-  color: var(--text-muted);
-}
-
-/* ── Expandable step (details/summary) ───────────────────── */
-.gwg-step-detail {
-  border-radius: calc(var(--radius) / 2);
-  overflow: hidden;
-}
-.gwg-step-detail > .gwg-step {
-  cursor: pointer;
-  list-style: none;
-}
-.gwg-step-detail[open] > .gwg-step {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-.gwg-step-detail > .gwg-step:hover {
-  filter: brightness(1.08);
-}
-.gwg-step-detail > .gwg-step::-webkit-details-marker,
-.gwg-step-detail > .gwg-step::marker {
-  display: none;
-}
-.gwg-step-count {
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  padding: 0 4px;
-}
+/* `.gwg-step` family + 5 status modifiers + `.gwg-step-detail`
+   <details> shell + `.gwg-step-count` live in
+   `styles/surfaces/inspector.css` now. The unscaled `1px` bias on
+   the row's vertical padding wrapped via `calc(... + 1px * --ui-
+   scale)`; `clamp(10px, …, 11px)` font cap on the icon dropped
+   (same rationale as the goal-card status icon); `box-shadow`
+   inset rings' raw rgba(84, 138, 247) / rgba(247, 84, 100) routed
+   through color-mix on `--accent` / `--bad`; the `1px 6px /
+   3px` status pill pad/radius and the `0 4px` step-count pad
+   wrapped in `calc(N * --ui-scale)`. */
 
 .gwg-step-body {
   padding: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);

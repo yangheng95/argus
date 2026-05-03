@@ -935,3 +935,172 @@
 .gwg-eval-summary .msg-text > :last-child {
   margin-bottom: 0;
 }
+
+/* GWG step row: icon + label + status pill, repeated inside the
+   goal body to render the agent's ordered todo list. The 1px-bias
+   on the vertical padding keeps the row visually centered against
+   the 16-tall icon. Status modifiers retint icon + status pill
+   based on `[--pending|--running|--done|--failed|--skipped]`. */
+.gwg-step {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: calc(1px * var(--ui-scale) + var(--ui-gap-xs)) var(--ui-gap-sm);
+  font-size: var(--ui-font-control);
+  border-radius: calc(var(--radius) / 2);
+  transition: background 150ms ease;
+}
+
+/* Step icon: small round chip carrying the per-step glyph. The
+   absolute-bounded font-size clamp that used to sit here was
+   dropped for the same reason it was dropped on the goal-card
+   status icon — the bounds escaped `--ui-scale` and the glyph
+   never overflows. */
+.gwg-step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--subtle-2);
+  color: var(--text-muted);
+  font-size: calc(10px * var(--ui-scale));
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 var(--oc-border-width) var(--subtle-3) inset;
+}
+
+.gwg-step-label {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: 0.005em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwg-step-summary {
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.gwg-step-status {
+  font-size: calc(0.5px * var(--ui-scale) + var(--ui-font-tiny));
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: calc(3px * var(--ui-scale));
+  background: var(--subtle-2);
+  color: var(--text-muted);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status-tinted variants — `--pending` / `--running` / `--done` /
+   `--failed` / `--skipped`. The previous raw rgba fills on the
+   running/failed inset rings routed through color-mix on
+   var(--accent) and var(--bad). */
+.gwg-step--pending .gwg-step-icon {
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+.gwg-step--pending .gwg-step-status {
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+.gwg-step--running {
+  background: linear-gradient(90deg, var(--accent-dim), transparent 92%);
+}
+
+.gwg-step--running .gwg-step-icon {
+  background: var(--accent-dim);
+  color: var(--accent);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 40%, transparent) inset;
+}
+
+.gwg-step--running .gwg-step-status {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.gwg-step--done .gwg-step-icon {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 68%, var(--text-soft));
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 22%, transparent) inset;
+}
+
+.gwg-step--done .gwg-step-status {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 68%, var(--text-soft));
+}
+
+.gwg-step--failed {
+  background: linear-gradient(90deg, var(--bad-dim), transparent 92%);
+}
+
+.gwg-step--failed .gwg-step-icon {
+  background: var(--bad-dim);
+  color: var(--bad);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 35%, transparent) inset;
+}
+
+.gwg-step--failed .gwg-step-status {
+  background: var(--bad-dim);
+  color: var(--bad);
+}
+
+.gwg-step--skipped .gwg-step-icon {
+  background: var(--subtle-1);
+  color: var(--text-muted);
+}
+
+.gwg-step--skipped .gwg-step-label {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.gwg-step--skipped .gwg-step-status {
+  background: var(--subtle-1);
+  color: var(--text-muted);
+}
+
+/* Expandable step (details/summary) — wraps a step row in a
+   <details> shell so the agent log/diff can collapse beneath it. */
+.gwg-step-detail {
+  border-radius: calc(var(--radius) / 2);
+  overflow: hidden;
+}
+
+.gwg-step-detail > .gwg-step {
+  cursor: pointer;
+  list-style: none;
+}
+
+.gwg-step-detail[open] > .gwg-step {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.gwg-step-detail > .gwg-step:hover {
+  filter: brightness(1.08);
+}
+
+.gwg-step-detail > .gwg-step::-webkit-details-marker,
+.gwg-step-detail > .gwg-step::marker {
+  display: none;
+}
+
+.gwg-step-count {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  padding: 0 calc(4px * var(--ui-scale));
+}

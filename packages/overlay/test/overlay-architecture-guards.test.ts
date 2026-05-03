@@ -429,6 +429,39 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
   })
 
+  test("gwg step row family is owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "gwg-step",
+      "gwg-step-icon",
+      "gwg-step-label",
+      "gwg-step-summary",
+      "gwg-step-status",
+      "gwg-step-detail",
+      "gwg-step-count",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const status of ["pending", "running", "done", "failed", "skipped"]) {
+      expect(styles).not.toMatch(
+        new RegExp(`(^|\\n)\\.gwg-step--${status}(?:\\s+\\.gwg-step-(?:icon|label|status))?\\s*\\{`),
+      )
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.gwg-step--${status}(?:\\s+\\.gwg-step-(?:icon|label|status))?\\s*\\{`),
+      )
+    }
+
+    expect(inspectorSurface).toMatch(/\.gwg-step-detail \> \.gwg-step:hover\s*\{/)
+    expect(inspectorSurface).toMatch(/\.gwg-step-detail \> \.gwg-step::-webkit-details-marker,/)
+    expect(inspectorSurface).not.toMatch(/clamp\(10px,/)
+    expect(inspectorSurface).not.toMatch(/rgba\(84,\s*138,\s*247,\s*0\.4\)/)
+    expect(inspectorSurface).not.toMatch(/rgba\(247,\s*84,\s*100,\s*0\.35\)/)
+  })
+
   test("gwg header + status icon are owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
