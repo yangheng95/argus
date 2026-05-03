@@ -142,7 +142,7 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(333)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(332)
     expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(220)
   })
 
