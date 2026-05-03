@@ -205,6 +205,9 @@ Progress log:
   to a pseudo-element rail, preserving verdict scanability while keeping
   right-panel card chrome borderless, and removed all delivery panel selectors
   from legacy theme reset blocks.
+- 2026-05-03: Folded `.eval-error` into canonical borderless semantic error
+  chrome and removed it from legacy theme reset selector lists so error state
+  color is no longer overwritten by theme surface resets.
 
 Trigger: user feedback (2026-05-03):
 
@@ -231,7 +234,7 @@ one theme contract, and no runtime God CSS path left behind.
 | `packages/overlay/src/styles.css`      | **15,212 lines / 2,070 top-level rules / 490 nested rules**                             |
 | `packages/overlay/src/styles/card.css` | 2,022 lines / 336 top-level rules                                                       |
 | Total `!important` in stylesheets      | **333** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **228**                                                                                 |
+| `body[data-theme="…"]` theme overrides | **226**                                                                                 |
 | Theme layout/chrome overrides          | **243** current guard baseline                                                          |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | TaskList 696 / LogViewer 579 / CardHeader 544 / MemoryPanel 444 / GoalWorkflowGroup 206 |
