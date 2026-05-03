@@ -362,10 +362,14 @@ Progress log:
   `Alt+W/M/R/T/V/H` opens Workspace, Model, Run, Tools, View, or Help
   directly. The shortcut contract is exposed through `aria-keyshortcuts`
   and covered by a browser E2E test.
-- 2026-05-03: Titlebar menu text is now pinned to black through the
-  `--oc-titlebar-menu-text` design token instead of inheriting theme
-  palette text. The E2E assertion checks the rendered color is
-  `rgb(0, 0, 0)`.
+- 2026-05-03: Titlebar menu text was originally pinned to `#000000`
+  through the `--oc-titlebar-menu-text` design token, which made the
+  menu text invisible against dark theme backgrounds. The token now
+  resolves through `var(--oc-color-text-strong)` so the rendered color
+  adapts per palette (`#1a1a1a` light, `#dfe1e5` dark, `#d4d4d4`
+  vscode-dark). E2E assertions cover both the light render (`rgb(26,
+  26, 26)`) and the dark render (`rgb(223, 225, 229)`) of the workspace
+  menu trigger.
 - 2026-05-03: User confirmed Claude Code will work in parallel with Codex.
   This document is now also the cross-agent coordination source: both agents
   must update this log, respect file ownership, run the same guard/test gates,

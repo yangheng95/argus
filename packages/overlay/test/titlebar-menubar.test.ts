@@ -291,7 +291,7 @@ test(
 )
 
 test(
-  "titlebar menubar uses black menu text and supports Alt access keys",
+  "titlebar menubar uses theme-adaptive text color and supports Alt access keys",
   async () => {
     const server = Bun.serve({
       idleTimeout: 255,
@@ -379,7 +379,7 @@ test(
       await page.waitForSelector('[data-menu-trigger="workspace"]', { visible: true })
       await page.waitForFunction(() => document.documentElement.dataset.theme === "light")
 
-      const triggerState = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
+      const lightTriggerState = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
         const el = node as HTMLElement
         return {
           color: getComputedStyle(el).color,
@@ -387,11 +387,21 @@ test(
           ariaKeyshortcuts: el.getAttribute("aria-keyshortcuts"),
         }
       })
-      expect(triggerState).toEqual({
-        color: "rgb(0, 0, 0)",
+      expect(lightTriggerState).toEqual({
+        color: "rgb(26, 26, 26)",
         accessKey: "w",
         ariaKeyshortcuts: "Alt+W",
       })
+
+      await page.evaluate(() => {
+        document.documentElement.dataset.theme = "dark"
+        document.body.dataset.theme = "dark"
+      })
+      const darkTriggerColor = await page.$eval(
+        '[data-menu-trigger="workspace"]',
+        (node) => getComputedStyle(node as HTMLElement).color,
+      )
+      expect(darkTriggerColor).toBe("rgb(223, 225, 229)")
 
       await page.keyboard.down("Alt")
       await page.keyboard.up("Alt")
