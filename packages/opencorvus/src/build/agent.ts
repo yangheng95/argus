@@ -103,6 +103,10 @@ export namespace BuildAgent {
      *  retry entries. Empty / undefined on the first attempt. The caller
      *  composes the markdown so this agent doesn't need DB access. */
     retryFeedback?: string
+    /** Canonical delivery rejection packet read directly from persisted
+     *  verdict / manifest artifacts. Unlike retryFeedback, this is not an
+     *  orchestrator-written summary and also exists for task-scope rework. */
+    deliveryFeedback?: string
     /** Pre-formatted multimodal file parts produced by upstream evidence —
      *  typically the previous attempt's rendered.png from delivery's visual
      *  hard gate so the build LLM can see what it actually produced versus
@@ -1667,7 +1671,7 @@ function buildSessionTitle(target: BuildTarget): string {
   return `Build: ${snippet}${target.text.length > 60 ? "…" : ""}`
 }
 
-function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext): string {
+export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext): string {
   if (target.kind === "goal") {
     const lines: string[] = []
 
@@ -1738,6 +1742,12 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
       lines.push(context.retryFeedback)
       lines.push("")
     }
+    if (context?.deliveryFeedback && context.deliveryFeedback.trim().length > 0) {
+      lines.push("## Canonical Delivery Rejection Feedback")
+      lines.push("")
+      lines.push(context.deliveryFeedback.trim())
+      lines.push("")
+    }
 
     // ── Goal contract ────────────────────────────────────────────────────
     lines.push(`# Goal: ${target.title}`)
@@ -1770,11 +1780,25 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
     lines.push("Orchestrator is asking build to implement this goal, verify it, and report the result.")
     return lines.join("\n")
   }
+  const contextLines: string[] = []
+  if (context?.retryFeedback && context.retryFeedback.trim().length > 0) {
+    contextLines.push("## Prior Attempt Failed — Read This Before Implementing")
+    contextLines.push("")
+    contextLines.push(context.retryFeedback.trim())
+    contextLines.push("")
+  }
+  if (context?.deliveryFeedback && context.deliveryFeedback.trim().length > 0) {
+    contextLines.push("## Canonical Delivery Rejection Feedback")
+    contextLines.push("")
+    contextLines.push(context.deliveryFeedback.trim())
+    contextLines.push("")
+  }
   return [
     "# Delegation",
     "",
     "Orchestrator is asking build to implement this request, verify it, and report the result.",
     "",
+    ...contextLines,
     "# Request",
     "",
     target.text,
