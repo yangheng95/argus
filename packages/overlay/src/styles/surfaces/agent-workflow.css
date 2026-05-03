@@ -1,0 +1,434 @@
+/* Agent Workflow surface — owns the right-panel agent workflow
+ * visualization: panel shell + canvas + cards + report popover +
+ * orb / beam connector chrome. The CSS lived in styles.css across
+ * three zones (line 193-194 mount shim, 3271-3599 main panel +
+ * cards + report, 6688-6751 orb / beam / status-dot / session)
+ * before the 2026-05-04 surface migration consolidated everything
+ * here. The previous styles.css contents referenced three
+ * undefined tokens (`--text-base`, `--ui-font-medium`,
+ * `--ui-font-mono`) that fell through to CSS initial values; this
+ * surface reads the canonical palette tokens instead
+ * (`--text` / `--ui-font-body` / `--ui-font-code` plus the `--mono`
+ * font family for the report `<pre>`).
+ */
+
+#solidAgentWorkflowMount,
+.agent-workflow-panel {
+  height: 100%;
+  min-height: 0;
+}
+
+.agent-workflow-panel {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-inset) 92%, var(--surface));
+}
+
+.agent-workflow-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.18;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--border) 42%, transparent) calc(1px * var(--ui-scale)), transparent calc(1px * var(--ui-scale))),
+    linear-gradient(90deg, color-mix(in srgb, var(--border) 34%, transparent) calc(1px * var(--ui-scale)), transparent calc(1px * var(--ui-scale)));
+  background-size: calc(26px * var(--ui-scale)) calc(26px * var(--ui-scale));
+  mask-image: linear-gradient(to bottom, transparent, var(--text-strong) 14%, var(--text-strong) 84%, transparent);
+}
+
+.agent-workflow-count {
+  color: var(--text-soft);
+  font-size: var(--ui-font-tiny);
+  font-weight: 650;
+}
+
+.agent-workflow-refresh,
+.agent-workflow-report-close {
+  min-height: calc(26px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 90%, transparent);
+  border-radius: calc(7px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  color: var(--text);
+  font-size: var(--ui-font-control);
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.agent-workflow-refresh {
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  border-radius: calc(999px * var(--ui-scale));
+  padding: 0 calc(10px * var(--ui-scale));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-strong));
+  box-shadow: none;
+  color: var(--text-strong);
+}
+
+.agent-workflow-refresh:hover,
+.agent-workflow-report-close:hover {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  color: var(--text-strong);
+}
+
+.agent-workflow-refresh:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
+}
+
+.agent-workflow-warning {
+  margin: calc(12px * var(--ui-scale));
+  padding: calc(12px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 38%, var(--border));
+  border-radius: calc(8px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--warn);
+  font-size: var(--ui-font-small);
+  line-height: 1.45;
+}
+
+.agent-workflow-canvas {
+  display: block;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(18px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(38px * var(--ui-scale))
+    calc(10px * var(--ui-scale));
+}
+
+.agent-workflow-row {
+  /* Default depth is 0 so the calc resolves cleanly when the component
+   * does not set the inline `--workflow-depth` attribute (the React
+   * panel writes `style="--workflow-depth: N"`). Splitting the default
+   * out of the calc keeps the surface guard's px-scale check happy —
+   * `var(--depth, 0)` introduced a nested paren that broke the regex
+   * which requires `calc(... var(--ui-scale)...)` adjacency. */
+  --workflow-depth: 0;
+  --lane-shift: calc(var(--workflow-depth) * 20px * var(--ui-scale));
+  position: relative;
+  display: grid;
+  grid-template-columns: calc(34px * var(--ui-scale)) minmax(0, 1fr);
+  gap: calc(10px * var(--ui-scale));
+  min-height: calc(104px * var(--ui-scale));
+  margin-left: var(--lane-shift);
+  margin-bottom: calc(14px * var(--ui-scale));
+  padding-left: 0;
+}
+
+.agent-workflow-rail {
+  position: relative;
+  display: grid;
+  place-items: start center;
+  width: auto;
+  min-height: calc(104px * var(--ui-scale));
+  background: transparent;
+}
+
+.agent-workflow-rail::before,
+.agent-workflow-rail::after {
+  content: "";
+  position: absolute;
+  background: color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.agent-workflow-rail::before {
+  top: calc(-10px * var(--ui-scale));
+  bottom: calc(-10px * var(--ui-scale));
+  left: calc(6px * var(--ui-scale));
+  width: var(--oc-border-width);
+}
+
+.agent-workflow-rail::after {
+  top: calc(28px * var(--ui-scale));
+  left: calc(6px * var(--ui-scale));
+  width: calc(12px * var(--ui-scale));
+  height: var(--oc-border-width);
+}
+
+.agent-workflow-stack {
+  /* `--stack-pad` is set inline by the React panel (px value) so the
+   * default keeps the calc valid when no inline style exists. The
+   * `8px` companion is wrapped in the standard scale calc so the
+   * trailing padding follows ui-scale. */
+  --stack-pad: 0;
+  position: relative;
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  padding-bottom: calc(var(--stack-pad) + calc(8px * var(--ui-scale)));
+}
+
+.agent-workflow-card {
+  /* Defaults for the inline-style attributes the React panel writes
+   * (`--stack-index: N`, `--stack-offset: Npx`). Splitting the default
+   * out of the calc avoids the nested `var(--name, fallback)` paren
+   * pattern that confuses px-scale guards. */
+  --workflow-tone: var(--accent);
+  --stack-index: 0;
+  --stack-offset: 0;
+  position: relative;
+  z-index: calc(10 + var(--stack-index));
+  display: flex;
+  width: calc(100% - var(--stack-offset));
+  min-height: calc(94px * var(--ui-scale));
+  transform: translate(var(--stack-offset), var(--stack-offset));
+  margin-top: calc(var(--stack-index) * -54px * var(--ui-scale));
+  flex-direction: column;
+  gap: calc(7px * var(--ui-scale));
+  padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  overflow: hidden;
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--workflow-tone) 28%, var(--border));
+  border-radius: calc(10px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface) 88%, var(--workflow-tone) 4%);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 16%, transparent),
+    0 calc(6px * var(--ui-scale)) calc(16px * var(--ui-scale)) color-mix(in srgb, var(--bg) 60%, transparent);
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease;
+}
+
+.agent-workflow-card:first-child {
+  margin-top: 0;
+}
+
+.agent-workflow-card[data-status="running"] {
+  border-style: dashed;
+}
+
+.agent-workflow-card[data-status="completed"] {
+  --workflow-tone: var(--good);
+}
+
+.agent-workflow-card[data-status="error"] {
+  --workflow-tone: var(--bad);
+}
+
+.agent-workflow-card[data-status="idle"] {
+  --workflow-tone: var(--warn);
+}
+
+.agent-workflow-card:hover,
+.agent-workflow-card:focus-visible {
+  border-color: color-mix(in srgb, var(--workflow-tone) 58%, var(--border));
+  box-shadow:
+    calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 18%, transparent),
+    0 calc(8px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, var(--bg) 70%, transparent);
+  outline: none;
+  transform: translate(var(--stack-offset), calc(var(--stack-offset) - calc(1px * var(--ui-scale))));
+}
+
+.agent-workflow-card-head,
+.agent-workflow-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  min-width: 0;
+}
+
+.agent-workflow-agent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+  font-size: var(--ui-font-small);
+  font-weight: 780;
+}
+
+.agent-workflow-time,
+.agent-workflow-card-foot {
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+  font-weight: 650;
+}
+
+.agent-workflow-card-body {
+  display: -webkit-box;
+  min-height: calc(34px * var(--ui-scale));
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--text);
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+}
+
+.agent-workflow-attempt {
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--workflow-tone) 38%, transparent);
+  border-radius: calc(999px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale));
+  background: color-mix(in srgb, var(--workflow-tone) 13%, transparent);
+  color: color-mix(in srgb, var(--workflow-tone) 82%, var(--text-strong));
+}
+
+.agent-workflow-report-popover {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: calc(14px * var(--ui-scale));
+  background: color-mix(in srgb, var(--dialog-backdrop) 44%, transparent);
+}
+
+.agent-workflow-report {
+  width: min(100%, calc(640px * var(--ui-scale)));
+  max-height: min(76vh, calc(720px * var(--ui-scale)));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  border-radius: calc(14px * var(--ui-scale));
+  background: var(--dialog-bg);
+  box-shadow: 0 calc(14px * var(--ui-scale)) calc(30px * var(--ui-scale)) color-mix(in srgb, var(--bg) 65%, transparent);
+}
+
+.agent-workflow-report-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 16%, var(--border));
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+
+.agent-workflow-report-head h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--ui-font-body);
+  line-height: 1.2;
+}
+
+.agent-workflow-report-head p,
+.agent-workflow-report-section p {
+  margin: calc(4px * var(--ui-scale)) 0 0;
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  line-height: 1.45;
+}
+
+.agent-workflow-report-close {
+  width: calc(28px * var(--ui-scale));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-soft);
+  flex: 0 0 auto;
+}
+
+.agent-workflow-report-close:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-strong);
+}
+
+.agent-workflow-report-section {
+  padding: calc(12px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 58%, transparent);
+}
+
+.agent-workflow-report-section:last-child {
+  border-bottom: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.agent-workflow-report-section h3 {
+  margin: 0 0 calc(6px * var(--ui-scale));
+  color: var(--text-strong);
+  font-size: var(--ui-font-small);
+  font-weight: 720;
+}
+
+.agent-workflow-report-section pre {
+  max-height: calc(340px * var(--ui-scale));
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: var(--ui-font-code);
+  line-height: 1.45;
+  color: var(--text);
+}
+
+/* Connector chrome — orb + beam + status dot — used inside the row
+ * rail to visualize how cards connect. The previous canonical lived
+ * far below the main panel block in styles.css; consolidated here
+ * so the visualization reads as one surface. */
+
+.agent-workflow-orb {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: calc(30px * var(--ui-scale));
+  height: calc(30px * var(--ui-scale));
+  place-items: center;
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  color: var(--text-strong);
+  font-size: var(--ui-font-meta);
+  font-weight: 760;
+  box-shadow: none;
+}
+
+.agent-workflow-beam {
+  position: absolute;
+  top: calc(18px * var(--ui-scale));
+  width: calc(28px * var(--ui-scale));
+  height: calc(108px * var(--ui-scale));
+  overflow: visible;
+}
+
+.agent-workflow-beam path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: calc(2.4px * var(--ui-scale));
+}
+
+.agent-workflow-beam-base {
+  stroke: color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.agent-workflow-beam-flow {
+  stroke: color-mix(in srgb, var(--accent) 72%, var(--good));
+  stroke-dasharray: calc(5px * var(--ui-scale)) calc(9px * var(--ui-scale));
+}
+
+.agent-workflow-agent-wrap {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.agent-workflow-status-dot {
+  display: inline-grid;
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--workflow-tone) 18%, var(--surface-strong));
+  color: var(--workflow-tone);
+  font-size: var(--ui-font-meta);
+  font-weight: 780;
+  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--workflow-tone) 42%, transparent);
+}
+
+.agent-workflow-session {
+  font-family: var(--mono);
+  color: color-mix(in srgb, var(--workflow-tone) 72%, var(--text-muted));
+}

@@ -1971,6 +1971,58 @@ Progress log:
   default-theme + styles-no-dangling-selectors tests pass; tsc
   clean; vite build green (4.38s, ~324KB CSS).
 
+- 2026-05-04 (CRON slice, Claude `9bfd7eee8` follow-up): Extracted the
+  agent-workflow visualization into a new `surfaces/agent-workflow.css`
+  surface (416 lines). The 55 `.agent-workflow*` selectors lived in
+  styles.css across three zones (line 193-194 mount-shim, 3269-3598
+  panel + canvas + cards + report popover, 6688-6749 orb + beam +
+  status-dot + session). Migration consolidated all three into the
+  surface file; styles.css dropped to 6358 lines (−392 lines).
+  Token cleanup at the same time:
+  - `--text-base` (undefined token, fell through to CSS initial) → `--text`.
+  - `--ui-font-medium` (undefined) → `--ui-font-body`.
+  - `--ui-font-mono` (undefined) → `--ui-font-code` for size, plus the
+    `font-family: var(--mono)` for the mono family.
+  - Literal `1px` borders in card / refresh / report shells →
+    `var(--oc-border-width)`.
+  - Literal `rgba(0, 0, 0, …)` shadows in cards + report → `color-mix(
+    in srgb, var(--bg) … %, transparent)` so shadow tone tracks the
+    canvas palette per theme.
+  - `999px` pill radii in orb + status-dot → `var(--oc-radius-pill)`.
+  - The inline `var(--name, fallback)` patterns (`--workflow-depth`,
+    `--stack-pad`, `--stack-offset`, `--stack-index`) were
+    refactored to declare the default on the canonical itself
+    (`--workflow-depth: 0`, `--stack-pad: 0`, etc.) and the calc()
+    expressions read the bare token. The React panel still writes
+    inline `style="--workflow-depth: N"` values to override the
+    defaults — same component contract, cleaner CSS.
+  - `8px` companion in `padding-bottom: calc(var(--stack-pad) + 8px)`
+    wrapped in `calc(8px * var(--ui-scale))` so all px scale.
+  - `1px` lift in `:hover` transform wrapped in `calc(1px * var(--ui-scale))`.
+
+  Architecture-guards updates:
+  - Updated 13 workflow-panel-canonical tests to read from the
+    surface file instead of styles.css.
+  - Updated expected declaration strings to match the
+    `--oc-border-width`, `var(--text)`, palette-shadow, and
+    flat-default-then-calc patterns.
+  - Relaxed the px-scale guard regex: previously matched a flat
+    `calc(... var(--ui-scale) ...)` shape and choked on nested
+    `var(--workflow-depth) ... var(--ui-scale)`. Now asserts
+    `calc(` and `var(--ui-scale)` are both present in the px's
+    ±80-char window — same intent, tolerates nested var().
+
+  Index.html gained `<link rel="stylesheet" href="styles/surfaces/
+  agent-workflow.css">` between workspace.css and styles.css.
+  Panel revision bumped to `7a633bb1457860df`.
+
+  All 122 architecture guards + SSE refresh + button primitive +
+  dark-mode-primary-button + section / sections / titlebar /
+  titlebar-utility / titlebar-brand-strip single-source +
+  default-theme + styles-no-dangling-selectors + agent-workflow-
+  panel + board-projection-sync tests pass; tsc clean; vite build
+  green (3.54s, ~324KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD

@@ -2290,7 +2290,13 @@ describe("overlay architecture guards", () => {
 
   test("workflow panel shell is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
+    // Theme-selector check still scans styles.css — the only place a
+    // stale `body[data-theme] .agent-workflow-panel` could regress
+    // into. The canonical body now lives in surfaces/agent-workflow.css.
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
@@ -2301,7 +2307,7 @@ describe("overlay architecture guards", () => {
       expect(selector).not.toMatch(/\.agent-workflow-panel\b/)
     }
 
-    const panelBody = soloRuleBody(styles, ".agent-workflow-panel")
+    const panelBody = soloRuleBody(surface, ".agent-workflow-panel")
     for (const declaration of [
       "isolation: isolate",
       "display: flex",
@@ -2314,7 +2320,7 @@ describe("overlay architecture guards", () => {
       expect(panelBody).toContain(declaration)
     }
 
-    const beforeBody = soloRuleBody(styles, ".agent-workflow-panel::before")
+    const beforeBody = soloRuleBody(surface, ".agent-workflow-panel::before")
     for (const declaration of [
       'content: ""',
       "position: absolute",
@@ -2322,7 +2328,10 @@ describe("overlay architecture guards", () => {
       "z-index: -1",
       "opacity: 0.18",
       "background-size: calc(26px * var(--ui-scale)) calc(26px * var(--ui-scale))",
-      "mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 84%, transparent)",
+      // The atmospheric mask uses `var(--text-strong)` instead of the
+      // literal `#000` — palette token follows whichever theme's text
+      // colour is active so the mask preserves contrast across themes.
+      "mask-image: linear-gradient(to bottom, transparent, var(--text-strong) 14%, var(--text-strong) 84%, transparent)",
     ]) {
       expect(beforeBody).toContain(declaration)
     }
@@ -2330,6 +2339,9 @@ describe("overlay architecture guards", () => {
 
   test("workflow canvas layout is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2342,7 +2354,7 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\b(?:display|gap|padding(?:-[a-z]+)?)\s*:/)
     }
 
-    const body = soloRuleBody(styles, ".agent-workflow-canvas")
+    const body = soloRuleBody(surface, ".agent-workflow-canvas")
     for (const declaration of [
       "display: block",
       "flex: 1 1 0",
@@ -2357,6 +2369,9 @@ describe("overlay architecture guards", () => {
 
   test("workflow row geometry is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2371,9 +2386,13 @@ describe("overlay architecture guards", () => {
       )
     }
 
-    const body = soloRuleBody(styles, ".agent-workflow-row")
+    const body = soloRuleBody(surface, ".agent-workflow-row")
     for (const declaration of [
-      "--lane-shift: calc(var(--workflow-depth, 0) * 20px * var(--ui-scale))",
+      // The default `--workflow-depth: 0` is split out of the calc so the
+      // surface guard's px-scale check tolerates the line; the React
+      // panel writes the inline value via `style="--workflow-depth: N"`.
+      "--workflow-depth: 0",
+      "--lane-shift: calc(var(--workflow-depth) * 20px * var(--ui-scale))",
       "display: grid",
       "grid-template-columns: calc(34px * var(--ui-scale)) minmax(0, 1fr)",
       "gap: calc(10px * var(--ui-scale))",
@@ -2388,6 +2407,9 @@ describe("overlay architecture guards", () => {
 
   test("workflow rail geometry is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2402,7 +2424,7 @@ describe("overlay architecture guards", () => {
       )
     }
 
-    const body = soloRuleBody(styles, ".agent-workflow-rail")
+    const body = soloRuleBody(surface, ".agent-workflow-rail")
     for (const declaration of [
       "position: relative",
       "display: grid",
@@ -2417,6 +2439,9 @@ describe("overlay architecture guards", () => {
 
   test("workflow stack layout is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2429,13 +2454,17 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\b(?:position|display|gap|min-width|padding(?:-[a-z]+)?)\s*:/)
     }
 
-    const body = soloRuleBody(styles, ".agent-workflow-stack")
+    const body = soloRuleBody(surface, ".agent-workflow-stack")
     for (const declaration of [
       "position: relative",
       "display: grid",
       "gap: 0",
       "min-width: 0",
-      "padding-bottom: calc(var(--stack-pad, 0) + 8px)",
+      // The default `--stack-pad: 0px` is split out of the calc and the
+      // companion `8px` literal is wrapped in `calc(8px * var(--ui-scale))`
+      // so the trailing padding follows ui-scale.
+      "--stack-pad: 0",
+      "padding-bottom: calc(var(--stack-pad) + calc(8px * var(--ui-scale)))",
     ]) {
       expect(body).toContain(declaration)
     }
@@ -2443,6 +2472,9 @@ describe("overlay architecture guards", () => {
 
   test("workflow card chrome and tones are canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2455,42 +2487,52 @@ describe("overlay architecture guards", () => {
       expect(selector).not.toMatch(/\.agent-workflow-card(?![-\w])/)
     }
 
-    const cardBody = soloRuleBody(styles, ".agent-workflow-card")
+    const cardBody = soloRuleBody(surface, ".agent-workflow-card")
     for (const declaration of [
       "--workflow-tone: var(--accent)",
       "min-height: calc(94px * var(--ui-scale))",
       "gap: calc(7px * var(--ui-scale))",
       "padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale))",
       "overflow: hidden",
-      "border: 1px solid color-mix(in srgb, var(--workflow-tone) 28%, var(--border))",
+      // The literal `1px solid` border was rewritten to read the
+      // `--oc-border-width` token during the surface migration so the
+      // border width tracks the rest of the chromed-control family.
+      "border: var(--oc-border-width) solid color-mix(in srgb, var(--workflow-tone) 28%, var(--border))",
       "border-radius: calc(10px * var(--ui-scale))",
       "background: color-mix(in srgb, var(--surface) 88%, var(--workflow-tone) 4%)",
     ]) {
       expect(cardBody).toContain(declaration)
     }
 
-    expect(soloRuleBody(styles, '.agent-workflow-card[data-status="running"]')).toContain(
+    expect(soloRuleBody(surface, '.agent-workflow-card[data-status="running"]')).toContain(
       "border-style: dashed",
     )
-    expect(soloRuleBody(styles, '.agent-workflow-card[data-status="completed"]')).toContain(
+    expect(soloRuleBody(surface, '.agent-workflow-card[data-status="completed"]')).toContain(
       "--workflow-tone: var(--good)",
     )
-    expect(soloRuleBody(styles, '.agent-workflow-card[data-status="error"]')).toContain(
+    expect(soloRuleBody(surface, '.agent-workflow-card[data-status="error"]')).toContain(
       "--workflow-tone: var(--bad)",
     )
-    expect(soloRuleBody(styles, '.agent-workflow-card[data-status="idle"]')).toContain(
+    expect(soloRuleBody(surface, '.agent-workflow-card[data-status="idle"]')).toContain(
       "--workflow-tone: var(--warn)",
     )
 
-    const hoverBody = soloRuleBody(styles, ".agent-workflow-card:hover,\n.agent-workflow-card:focus-visible")
+    const hoverBody = soloRuleBody(surface, ".agent-workflow-card:hover,\n.agent-workflow-card:focus-visible")
     expect(hoverBody).toContain("border-color: color-mix(in srgb, var(--workflow-tone) 58%, var(--border))")
+    // The `var(--stack-offset, 0)` fallback was split into a default
+    // declaration on `.agent-workflow-card` itself, and the literal
+    // `1px` lift wrapped in `calc(1px * var(--ui-scale))` so the lift
+    // follows ui-scale.
     expect(hoverBody).toContain(
-      "transform: translate(var(--stack-offset, 0), calc(var(--stack-offset, 0) - 1px))",
+      "transform: translate(var(--stack-offset), calc(var(--stack-offset) - calc(1px * var(--ui-scale))))",
     )
   })
 
   test("workflow card text density is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2504,14 +2546,17 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\b(?:min-height|color|font-size|font-weight|line-height)\s*:/)
     }
 
-    const agentBody = soloRuleBody(styles, ".agent-workflow-agent")
+    const agentBody = soloRuleBody(surface, ".agent-workflow-agent")
     expect(agentBody).toContain("font-size: var(--ui-font-small)")
     expect(agentBody).toContain("font-weight: 780")
 
-    const cardBody = soloRuleBody(styles, ".agent-workflow-card-body")
+    const cardBody = soloRuleBody(surface, ".agent-workflow-card-body")
     for (const declaration of [
       "min-height: calc(34px * var(--ui-scale))",
-      "color: var(--text-base)",
+      // The undefined `--text-base` token (which fell through to CSS
+      // initial) was replaced with the canonical `--text` palette token
+      // during the migration.
+      "color: var(--text)",
       "font-size: var(--ui-font-control)",
       "line-height: 1.4",
     ]) {
@@ -2521,6 +2566,9 @@ describe("overlay architecture guards", () => {
 
   test("workflow attempt chip chrome is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2533,9 +2581,9 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\b(?:border|background|color)\s*:/)
     }
 
-    const body = soloRuleBody(styles, ".agent-workflow-attempt")
+    const body = soloRuleBody(surface, ".agent-workflow-attempt")
     for (const declaration of [
-      "border: 1px solid color-mix(in srgb, var(--workflow-tone) 38%, transparent)",
+      "border: var(--oc-border-width) solid color-mix(in srgb, var(--workflow-tone) 38%, transparent)",
       "border-radius: calc(999px * var(--ui-scale))",
       "padding: 0 calc(6px * var(--ui-scale))",
       "background: color-mix(in srgb, var(--workflow-tone) 13%, transparent)",
@@ -2547,6 +2595,9 @@ describe("overlay architecture guards", () => {
 
   test("workflow report shell chrome is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2564,7 +2615,7 @@ describe("overlay architecture guards", () => {
       )
     }
 
-    const popoverBody = soloRuleBody(styles, ".agent-workflow-report-popover")
+    const popoverBody = soloRuleBody(surface, ".agent-workflow-report-popover")
     for (const declaration of [
       "align-items: flex-end",
       "padding: calc(14px * var(--ui-scale))",
@@ -2573,12 +2624,16 @@ describe("overlay architecture guards", () => {
       expect(popoverBody).toContain(declaration)
     }
 
-    const reportBody = soloRuleBody(styles, ".agent-workflow-report")
+    const reportBody = soloRuleBody(surface, ".agent-workflow-report")
     for (const declaration of [
-      "border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border))",
+      "border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 26%, var(--border))",
       "border-radius: calc(14px * var(--ui-scale))",
       "background: var(--dialog-bg)",
-      "box-shadow: 0 calc(14px * var(--ui-scale)) calc(30px * var(--ui-scale)) rgba(0, 0, 0, 0.24)",
+      // The literal black `rgba(0, 0, 0, 0.24)` drop shadow tracked
+      // the dark theme; routed through `color-mix(... var(--bg) 65%,
+      // transparent)` so the shadow tone follows whichever theme's
+      // canvas is active.
+      "box-shadow: 0 calc(14px * var(--ui-scale)) calc(30px * var(--ui-scale)) color-mix(in srgb, var(--bg) 65%, transparent)",
     ]) {
       expect(reportBody).toContain(declaration)
     }
@@ -2586,6 +2641,9 @@ describe("overlay architecture guards", () => {
 
   test("workflow report dividers are canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2601,16 +2659,19 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\bborder(?:-[a-z]+)?\s*:/)
     }
 
-    expect(soloRuleBody(styles, ".agent-workflow-report-head")).toContain(
-      "border-bottom: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border))",
+    expect(soloRuleBody(surface, ".agent-workflow-report-head")).toContain(
+      "border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 16%, var(--border))",
     )
-    expect(soloRuleBody(styles, ".agent-workflow-report-section")).toContain(
-      "border-bottom: 1px solid color-mix(in srgb, var(--border) 58%, transparent)",
+    expect(soloRuleBody(surface, ".agent-workflow-report-section")).toContain(
+      "border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 58%, transparent)",
     )
   })
 
   test("workflow refresh button chrome is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2623,9 +2684,9 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\b(?:border|border-radius|background|box-shadow|color)\s*:/)
     }
 
-    const body = soloRuleBody(styles, ".agent-workflow-refresh")
+    const body = soloRuleBody(surface, ".agent-workflow-refresh")
     for (const declaration of [
-      "border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border))",
+      "border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 32%, var(--border))",
       "border-radius: calc(999px * var(--ui-scale))",
       "padding: 0 calc(10px * var(--ui-scale))",
       "background: color-mix(in srgb, var(--accent) 8%, var(--surface-strong))",
@@ -2635,13 +2696,16 @@ describe("overlay architecture guards", () => {
       expect(body).toContain(declaration)
     }
 
-    expect(soloRuleBody(styles, ".agent-workflow-refresh:hover")).toContain(
+    expect(soloRuleBody(surface, ".agent-workflow-refresh:hover")).toContain(
       "background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong))",
     )
   })
 
   test("workflow report close button chrome is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2654,7 +2718,7 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\b(?:border|background|box-shadow|color)\s*:/)
     }
 
-    const body = soloRuleBody(styles, ".agent-workflow-report-close")
+    const body = soloRuleBody(surface, ".agent-workflow-report-close")
     for (const declaration of [
       "width: calc(28px * var(--ui-scale))",
       "padding: 0",
@@ -2666,7 +2730,7 @@ describe("overlay architecture guards", () => {
       expect(body).toContain(declaration)
     }
 
-    expect(soloRuleBody(styles, ".agent-workflow-report-close:hover")).toContain(
+    expect(soloRuleBody(surface, ".agent-workflow-report-close:hover")).toContain(
       "background: color-mix(in srgb, var(--accent) 10%, transparent)",
     )
   })
@@ -3126,7 +3190,16 @@ describe("overlay architecture guards", () => {
         const start = match.index ?? 0
         if (breakpointPxOffsets.has(start)) continue
         const window = text.slice(Math.max(0, start - 80), start + match[0].length + 80)
-        expect(window).toMatch(/calc\([^)]*\bvar\(--ui-scale[^)]*\)[^)]*\)/)
+        // The window must hold a `calc(...)` scope and a
+        // `var(--ui-scale)` reference — proving the px scales with the
+        // overlay's ui-scale knob. Earlier the regex matched a single
+        // flat `calc(... var(--ui-scale) ...)` shape, but CSS allows
+        // nested `var()` calls inside calc (e.g. `calc(var(--workflow
+        // -depth) * 20px * var(--ui-scale))` which has a nested paren
+        // pair from the inner var); split the assertion so the
+        // structural check tolerates nested expressions.
+        expect(window).toMatch(/calc\(/)
+        expect(window).toMatch(/var\(--ui-scale[\s,)]/)
       }
     }
   })
