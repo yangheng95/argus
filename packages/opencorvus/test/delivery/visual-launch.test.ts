@@ -1,12 +1,9 @@
 import { afterEach, expect, test } from "bun:test"
-import { spawn, type ChildProcess } from "node:child_process"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import {
   announcedLocalUrlFromOutput,
-  cleanupIsolatedRenderWorkspace,
-  createIsolatedRenderWorkspace,
   renderWorkspaceCommandFailureMessage,
   resolveProjectLaunchScript,
 } from "../../src/delivery/checks/visual"
@@ -45,7 +42,10 @@ test("preview launch schedules build when compiled output is absent", async () =
   })
 })
 
-test("preview launch rebuilds in the isolated render workspace even when dist index already exists", async () => {
+test("preview launch always declares its build dependency, even when dist already exists", async () => {
+  // The render call site decides whether to re-run build; the resolver only
+  // reports what the project ships. Subsequent delivery rounds can reuse the
+  // previous dist/ in projectRoot when the source is unchanged.
   const dir = await fixture(
     {
       build: "vite build",
@@ -61,33 +61,6 @@ test("preview launch rebuilds in the isolated render workspace even when dist in
     command: "vite preview --host 127.0.0.1",
     buildScript: "build",
   })
-})
-
-test("isolated render workspace copies project files without mutating source scratch dirs", async () => {
-  const dir = await fixture(
-    {
-      build: "vite build",
-      preview: "vite preview --host 127.0.0.1",
-    },
-    {
-      "src/main.ts": "console.log('render')\n",
-      ".opencorvus/cache.txt": "internal scratch\n",
-      "node_modules/pkg/index.js": "module.exports = 1\n",
-      "dist/index.html": "<div>built</div>",
-    },
-  )
-
-  const isolated = await createIsolatedRenderWorkspace(dir)
-  tempDirs.push(path.dirname(isolated.directory))
-
-  await expect(fs.readFile(path.join(isolated.directory, "src", "main.ts"), "utf8")).resolves.toContain("render")
-  await expect(fs.readFile(path.join(isolated.directory, "dist", "index.html"), "utf8")).resolves.toContain("built")
-  await expect(fs.access(path.join(isolated.directory, ".opencorvus", "cache.txt"))).rejects.toThrow()
-  await expect(fs.access(path.join(isolated.directory, "node_modules", "pkg", "index.js"))).rejects.toThrow()
-
-  await isolated.cleanup()
-  await expect(fs.access(isolated.directory)).rejects.toThrow()
-  await expect(fs.readFile(path.join(dir, ".opencorvus", "cache.txt"), "utf8")).resolves.toContain("internal scratch")
 })
 
 test("announcedLocalUrlFromOutput parses ANSI-colored vite preview port", () => {
@@ -124,41 +97,3 @@ test("render install timeout message preserves stderr tail", () => {
   expect(message).toContain("package registry timeout while resolving puppeteer-core")
   expect(message.length).toBeLessThan(2_300)
 })
-
-test("isolated render cleanup kills Windows processes referencing the workspace", async () => {
-  if (process.platform !== "win32") return
-
-  const scratchRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-render-cleanup-"))
-  const workspace = path.join(scratchRoot, "workspace")
-  tempDirs.push(scratchRoot)
-  await fs.mkdir(workspace, { recursive: true })
-  const scriptPath = path.join(workspace, "hold.ts")
-  await fs.writeFile(scriptPath, "setInterval(() => {}, 1000)\n")
-
-  const child = spawn("bun", [scriptPath], {
-    cwd: workspace,
-    stdio: "ignore",
-    shell: true,
-  })
-  try {
-    await waitForProcessStart(child)
-    await cleanupIsolatedRenderWorkspace(scratchRoot)
-    await expect(fs.access(scratchRoot)).rejects.toThrow()
-  } finally {
-    child.kill("SIGKILL")
-  }
-})
-
-function waitForProcessStart(child: ChildProcess): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, 500)
-    child.once("error", (err) => {
-      clearTimeout(timer)
-      reject(err)
-    })
-    child.once("exit", (code) => {
-      clearTimeout(timer)
-      reject(new Error(`process exited before cleanup test could run: ${code}`))
-    })
-  })
-}
