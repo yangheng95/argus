@@ -229,6 +229,30 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(/\.chat-icon-col \.oc-button\[data-ui="chat-toolbar-button"\]/)
   })
 
+  test("composer icon column chrome is not controlled by legacy theme selectors", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector) continue
+
+      expect(selector).not.toMatch(/\.chat-icon-col(?=$|[\s:{.#\[,>+~])/)
+    }
+  })
+
+  test("composer chat-input shell is owned by surfaces/composer.css", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+
+    expect(styles).not.toMatch(/(^|\n)\.chat-input\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)\.chat-input:focus-within\s*\{/)
+    expect(composerSurface).toMatch(/(^|\n)\.chat-input\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-input:focus-within\s*\{/)
+  })
+
   test("dead static composer toolbar button classes stay retired", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const composerSurface = withoutComments(
@@ -562,7 +586,10 @@ describe("overlay architecture guards", () => {
       expect(usesChromeImportant).toBe(false)
     }
 
-    const body = soloRuleBody(styles, ".chat-input")
+    const composerSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")),
+    )
+    const body = soloRuleBody(composerSurface, ".chat-input")
     expect(body).toContain("margin: 0")
     expect(body).toContain("padding: calc(4px * var(--ui-scale))")
     expect(body).toContain("gap: calc(2px * var(--ui-scale))")

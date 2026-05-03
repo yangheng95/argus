@@ -631,6 +631,15 @@ Progress log:
   the calc at any sane scale. New extraction guard pins the three
   classes, the `[data-disabled]` / `[data-active]` / disabled-hover
   variants to the surface file.
+- 2026-05-03: Extracted the composer `.chat-input` shell + the
+  `.chat-input:focus-within` ring from `styles.css` into
+  `styles/surfaces/composer.css`. Both are token-clean (color-mix over
+  `var(--accent)` / `var(--surface-strong)`); the focus-ring `2px`
+  literal scales through `calc(2px * var(--ui-scale))`, and the `1px`
+  resting border routes through `var(--oc-border-width)`. The existing
+  "composer shell does not rely on theme chrome resets" guard now
+  reads `.chat-input` from the surface file. New extraction guard
+  pins `.chat-input` and `:focus-within` to the surface.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
