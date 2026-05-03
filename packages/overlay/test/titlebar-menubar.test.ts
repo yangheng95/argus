@@ -291,6 +291,135 @@ test(
 )
 
 test(
+  "titlebar menubar uses strong light text and supports Alt access keys",
+  async () => {
+    const server = Bun.serve({
+      idleTimeout: 255,
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url)
+        const path = route(url)
+        if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+        if (path === "/" || path === "/ui" || path === "/ui/")
+          return Response.redirect(`${url.origin}/ui/index.html`, 302)
+        const staticResponse = await overlayStaticResponse(path)
+        if (staticResponse) return staticResponse
+        if (path === "/global/health") return send({ version: "1.2.3" })
+        if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+        if (path === "/session") return send([])
+        if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+        if (path === "/vcs")
+          return send({
+            branch: "dev",
+            clean: true,
+            dirty: false,
+            staged: 0,
+            modified: 0,
+            untracked: 0,
+            conflicts: 0,
+            ahead: 0,
+            behind: 0,
+          })
+        if (path === "/provider") return send({ all: [], connected: [], default: {} })
+        if (path === "/provider/auth") return send({})
+        if (path === "/config/providers") return send({ providers: [], default: {} })
+        if (path === "/config/prompt") return send([])
+        if (path === "/config") return send({})
+        if (path === "/agent") return send([])
+        if (path === "/channel") return send([])
+        if (path === "/executor") return send([])
+        if (path === "/skill/installed" || path === "/skill") return send([])
+        if (path === "/mcp") return send({})
+        if (path === "/panel/knowledge/memory") return send([])
+        if (path === "/panel/knowledge/preference") return send([])
+        if (path === "/log" && req.method === "POST") return send({ ok: true })
+        return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+      },
+    })
+
+    const browser = await launchBrowser(["--disable-dev-shm-usage"])
+    try {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 960, height: 720 })
+      await page.evaluateOnNewDocument(() => {
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_locale", "en-US")
+        window.__TAURI__ = {
+          core: {
+            invoke: async (command: string) => {
+              if (command === "overlay_settings_load") {
+                return {
+                  serverUrl: location.origin,
+                  autoServer: false,
+                  theme: "light",
+                  locale: "en-US",
+                  directory: "D:/overlay/workspace/app",
+                }
+              }
+              if (command === "overlay_settings_save") return true
+              if (command === "overlay_create_temp_dir") return "D:/overlay/temp"
+              return null
+            },
+          },
+          window: {
+            getCurrentWindow() {
+              return {
+                close: async () => undefined,
+                hide: async () => undefined,
+                minimize: async () => undefined,
+                startDragging: async () => undefined,
+                isMaximized: async () => false,
+                onResized: async () => ({ unlisten: async () => undefined }),
+              }
+            },
+          },
+        }
+      })
+      await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
+      await page.waitForSelector('[data-menu-trigger="workspace"]', { visible: true })
+      await page.waitForFunction(() => document.documentElement.dataset.theme === "light")
+
+      const triggerState = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
+        const el = node as HTMLElement
+        return {
+          color: getComputedStyle(el).color,
+          accessKey: el.dataset.accessKey,
+          ariaKeyshortcuts: el.getAttribute("aria-keyshortcuts"),
+        }
+      })
+      expect(triggerState).toEqual({
+        color: "rgb(26, 26, 26)",
+        accessKey: "w",
+        ariaKeyshortcuts: "Alt+W",
+      })
+
+      await page.keyboard.down("Alt")
+      await page.keyboard.up("Alt")
+      await page.waitForFunction(
+        () => (document.activeElement as HTMLElement | null)?.dataset.menuTrigger === "workspace",
+      )
+
+      await page.keyboard.down("Alt")
+      await page.keyboard.press("v")
+      await page.keyboard.up("Alt")
+      await page.waitForSelector('[data-testid="titlebar-menu-view"]', { visible: true })
+      const altOpenState = await page.evaluate(() => ({
+        expanded: document.querySelector('[data-menu-trigger="view"]')?.getAttribute("aria-expanded"),
+        focusedMenuText: (document.activeElement as HTMLElement | null)?.textContent?.trim() || "",
+      }))
+      expect(altOpenState.expanded).toBe("true")
+      expect(altOpenState.focusedMenuText).toContain("Language")
+
+      await page.close()
+    } finally {
+      await browser.close().catch(() => undefined)
+      server.stop(true)
+    }
+  },
+  { timeout: 120_000 },
+)
+
+test(
   "workspace intro owns first-run directory setup when no directory is set",
   async () => {
     const server = Bun.serve({

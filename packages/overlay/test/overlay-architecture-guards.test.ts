@@ -391,7 +391,7 @@ describe("overlay architecture guards", () => {
       const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
         selector,
       )
-      if (!isThemeSelector || !/\.(?:task-dir-shell|sidebar-toolset)\b/.test(selector)) continue
+      if (!isThemeSelector || !/\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset)\b/.test(selector)) continue
 
       expect(body).not.toMatch(/\b(?:gap|padding(?:-[a-z]+)?)\s*:/)
     }
