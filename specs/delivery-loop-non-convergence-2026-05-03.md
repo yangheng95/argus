@@ -107,6 +107,10 @@ The corrected behavior is:
 5. Fix-run budget exhaustion follows the same rule: it blocks another identical
    `delivery_rework`, but remains active strategy feedback. It must not stop the
    orchestrator step and must not present `fail_task` as the ordinary next move.
+6. Delivery verification throws follow the same rule when no structured verdict
+   exists: they are infrastructure feedback in the same active task context, not
+   a stop signal. The orchestrator must repair the delivery tool path or change
+   strategy from persisted facts.
 
 ## Out Of Scope
 

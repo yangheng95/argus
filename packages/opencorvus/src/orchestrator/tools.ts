@@ -3571,9 +3571,8 @@ export function createOrchestratorTools(input: {
           // Delivery verification threw — infrastructure fault (network /
           // parse-retry exhaustion / tool crash). Write a snapshot for
           // trajectory visibility; do NOT run any deterministic arbiter
-          // here. Give-up decisions belong to the orchestrator LLM — the
-          // old `decisionErr.verdict === "abort" | "stalled"` branch was an
-          // FSM over metric counts (CLAUDE.md rule 23) and is retired.
+          // here. The old `decisionErr.verdict === "abort" | "stalled"`
+          // branch was a metric-count state machine and is retired.
           const {
             computeIterationSnapshot: computeSnapshotErr,
           } = await import("@/metrics/score")
@@ -3599,10 +3598,10 @@ export function createOrchestratorTools(input: {
           })
           writeSnapshotErr({ ...snapshotErr, arbiter_verdict: "continue" })
 
-          // A throw carries no per-goal attribution — do NOT open new
-          // attempts. Record the failure in the decision log and hand back
-          // to the orchestrator LLM: it reads the trajectory on the next
-          // turn and chooses build({ goalID }) / modify_goal / fail_task.
+          // A throw carries no per-goal attribution. Record the failure in
+          // the decision log and keep the task active so the orchestrator can
+          // either fix the delivery tool path or change strategy in the same
+          // task context.
           try {
             const { createDecisionLog } = await import("@/decision-log")
             const decisionLog = createDecisionLog(taskID)
@@ -3616,14 +3615,14 @@ export function createOrchestratorTools(input: {
             /* best effort */
           }
 
-          requestStopAfterCurrentStep("delivery_threw")
           return (
             `Delivery verification threw (not a structured rejection): ${msg}. ` +
             `Iteration ${iterationErr}. No goals were reset — the throw is an ` +
             `infrastructure fault and carries no per-goal attribution. Read the ` +
             `decision log entry delivery_verification_threw_${iterationErr} and ` +
-            `decide: build({ goalID }) on a suspect goal, modify_goal if the contract ` +
-            `looks wrong, or fail_task if the failure is fundamental.`
+            `continue in this task context: repair the delivery tool path if it is ` +
+            `broken, build({ goalID }) on a suspect goal, or modify_goal if the ` +
+            `contract looks wrong.`
           )
         }
       },
