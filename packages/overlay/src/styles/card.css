@@ -88,7 +88,9 @@
   border: 1px solid var(--card-border);
   background: var(--card-bg-0);
   margin: var(--card-gap) 0;
+  box-shadow: none;
   overflow: hidden;
+  transform: none;
   transition: background-color 140ms ease, border-color 140ms ease;
   box-sizing: border-box;
   /* Chat / coding containers are flex-column; keep cards at their natural
@@ -118,12 +120,19 @@
   margin-top: calc(var(--card-pad-y) + 2px);
 }
 
+.card[data-depth="0"] {
+  box-shadow: none;
+}
+
 /* iter51: flat hover — only border-color tightens, no
    transform/shadow lift. Skeumorphic "card lifts on hover"
    was the loudest old visual; cards now stay flush with the
    thread. */
 .card[data-depth="0"]:hover {
-  border-color: color-mix(in srgb, var(--card-border-strong) 78%, transparent);
+  background: var(--card-bg-hover);
+  border-color: var(--card-border-strong);
+  box-shadow: none;
+  transform: none;
 }
 
 /* iter51: per-stage cards (agent / goal / step / tool) used a
@@ -136,9 +145,10 @@
    warn / danger) where appropriate. */
 .card[data-depth="0"][data-kind="agent"],
 .card[data-depth="0"][data-kind="goal"],
+.card[data-depth="0"][data-kind="phase"],
 .card[data-depth="0"][data-kind="step"],
 .card[data-depth="0"][data-kind="tool"] {
-  border-left: 2px solid var(--card-stage-info);
+  border-left: 3px solid var(--card-stage, var(--card-line));
   background: var(--card-bg-0);
 }
 
@@ -169,10 +179,14 @@
 /* Nested cards: remove outer border, use a left accent rail instead.
    Depth fades the rail colour so deep nesting stays readable. */
 .card:not([data-depth="0"]) {
-  border: none;
-  border-left: 2px solid var(--card-line);
+  border: 0;
+  border-left: 2px solid var(--card-line-dim);
   border-radius: 0;
-  margin: 6px 0;
+  margin: calc(6px * var(--ui-scale, 1)) 0;
+  background: transparent;
+  opacity: 1;
+}
+.card:not([data-depth="0"]):hover {
   background: transparent;
 }
 .card[data-depth="2"] { border-left-color: var(--card-line); }
@@ -1504,49 +1518,6 @@ body[data-theme="light"] .card__round {
    Final card layer: compact timeline rows, explicit status rails, no lifted
    decorative card stack. Conversation items should scan like an event log.
    ========================================================================== */
-
-.card {
-  border-radius: var(--card-radius);
-  border: 1px solid var(--card-border);
-  background: var(--card-bg-0);
-  margin: var(--card-gap) 0;
-  box-shadow: none;
-  overflow: hidden;
-  transform: none;
-}
-
-.card[data-depth="0"] {
-  box-shadow: none;
-}
-
-.card[data-depth="0"]:hover {
-  background: var(--card-bg-hover);
-  border-color: var(--card-border-strong);
-  box-shadow: none;
-  transform: none;
-}
-
-.card[data-depth="0"][data-kind="agent"],
-.card[data-depth="0"][data-kind="goal"],
-.card[data-depth="0"][data-kind="phase"],
-.card[data-depth="0"][data-kind="step"],
-.card[data-depth="0"][data-kind="tool"] {
-  border-left: 3px solid var(--card-stage, var(--card-line));
-  background: var(--card-bg-0);
-}
-
-.card:not([data-depth="0"]) {
-  border: 0;
-  border-left: 2px solid var(--card-line-dim);
-  border-radius: 0;
-  margin: calc(6px * var(--ui-scale, 1)) 0;
-  background: transparent;
-  opacity: 1;
-}
-
-.card:not([data-depth="0"]):hover {
-  background: transparent;
-}
 
 .card__head {
   min-height: calc(34px * var(--ui-scale, 1));

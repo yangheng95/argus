@@ -27,6 +27,21 @@ function count(pattern: RegExp, text: string): number {
   return Array.from(text.matchAll(pattern)).length
 }
 
+function countDuplicateSelectors(css: string): number {
+  const selectorCounts = new Map<string, number>()
+  for (const match of withoutComments(css).matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+    const head = (match[1] ?? "").trim()
+    if (head.includes("@")) continue
+    for (const selector of head
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)) {
+      selectorCounts.set(selector, (selectorCounts.get(selector) ?? 0) + 1)
+    }
+  }
+  return Array.from(selectorCounts.values()).filter((value) => value > 1).length
+}
+
 function withoutComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")
 }
@@ -158,7 +173,13 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(183)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(147)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(140)
+  })
+
+  test("card stylesheet duplicate selector debt cannot increase", () => {
+    const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
+
+    expect(countDuplicateSelectors(card)).toBeLessThanOrEqual(52)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {

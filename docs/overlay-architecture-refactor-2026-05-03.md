@@ -389,6 +389,13 @@ Progress log:
   that file. Card/message/interaction chrome now resolves by load order and
   selector specificity instead of an emergency override layer. Guard ceiling
   drops again to `!important <= 183`.
+- 2026-05-03: Began collapsing the `styles/card.css` final override layer
+  into the canonical card primitive block. The container, depth-0 hover,
+  stage rail, and nested-card geometry now live at their first-owner rules;
+  the duplicate-selector guard starts at `card.css duplicate selectors <= 52`.
+- 2026-05-03: Removed theme-scoped chrome overrides for `.executor-chip`,
+  `.titlebar-btn`, and `.chat-toolbar-btn`; all three already resolve through
+  canonical surface tokens. `body[data-theme]` guard ceiling drops to `<= 143`.
 
 Trigger: user feedback (2026-05-03):
 
@@ -422,9 +429,9 @@ one theme contract, and no runtime God CSS path left behind.
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
-| `packages/overlay/src/styles/card.css` | **1,722 lines**                                                                         |
+| `packages/overlay/src/styles/card.css` | **1,698 lines**                                                                         |
 | Total `!important` in stylesheets      | **183** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **147**                                                                                 |
+| `body[data-theme="…"]` theme overrides | **143**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
