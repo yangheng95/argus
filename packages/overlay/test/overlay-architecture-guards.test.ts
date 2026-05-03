@@ -142,14 +142,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(373)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(255)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(359)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(245)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(273)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(256)
   })
 
   test("new theme files only write root-scoped tokens", () => {
@@ -251,6 +251,12 @@ describe("overlay architecture guards", () => {
     const providersPanel = readText(join(OVERLAY_ROOT, "src/components/settings/ProvidersPanel.tsx"))
     expect(count(/<SurfaceHeader/g, providersPanel)).toBe(1)
     expect(providersPanel).not.toContain("config-panel-group-title")
+
+    const agentWorkflowPanel = readText(join(OVERLAY_ROOT, "src/components/AgentWorkflowPanel.tsx"))
+    expect(count(/<SurfaceHeader/g, agentWorkflowPanel)).toBe(1)
+    expect(agentWorkflowPanel).not.toContain("agent-workflow-toolbar")
+    expect(agentWorkflowPanel).not.toContain("agent-workflow-heading")
+    expect(agentWorkflowPanel).not.toContain("agent-workflow-title")
   })
 
   test("config writers do not re-fetch config after updateConfig writes through the store", () => {

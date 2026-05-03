@@ -7402,30 +7402,6 @@ select.field-input option {
   background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
 }
 
-.agent-workflow-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-md);
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
-  flex-shrink: 0;
-}
-
-.agent-workflow-heading {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-}
-
-.agent-workflow-title {
-  color: var(--text-strong);
-  font-size: var(--ui-font-small);
-  font-weight: 720;
-}
-
 .agent-workflow-count {
   color: var(--text-soft);
   font-size: var(--ui-font-tiny);
@@ -15210,13 +15186,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-panel {
   background: transparent;
 }
 
-body[data-theme="light"] .agent-workflow-toolbar,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-toolbar {
-  gap: calc(4px * var(--ui-scale)) !important;
-  min-height: calc(26px * var(--ui-scale)) !important;
-  padding: 0 calc(4px * var(--ui-scale)) !important;
-}
-
 body[data-theme="light"] .agent-workflow-canvas,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-canvas {
   gap: calc(4px * var(--ui-scale)) !important;
@@ -15266,7 +15235,6 @@ body[data-theme="light"]
     .board-intro__agent,
     .board-intro__cta,
     .chat-empty--task,
-    .agent-workflow-toolbar,
     .agent-workflow-warning,
     .agent-workflow-refresh,
     .agent-workflow-report-close
@@ -15293,7 +15261,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .board-intro__agent,
     .board-intro__cta,
     .chat-empty--task,
-    .agent-workflow-toolbar,
     .agent-workflow-warning,
     .agent-workflow-refresh,
     .agent-workflow-report-close
@@ -15514,32 +15481,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-panel::
     linear-gradient(90deg, color-mix(in srgb, var(--border) 34%, transparent) 1px, transparent 1px);
   background-size: calc(26px * var(--ui-scale)) calc(26px * var(--ui-scale));
   mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 84%, transparent);
-}
-
-body[data-theme="light"] .agent-workflow-toolbar,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-toolbar {
-  min-height: calc(46px * var(--ui-scale)) !important;
-  padding: calc(9px * var(--ui-scale)) calc(12px * var(--ui-scale)) !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent) !important;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  box-shadow: none !important;
-}
-
-body[data-theme="light"] .agent-workflow-heading,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-heading {
-  gap: calc(3px * var(--ui-scale));
-}
-
-body[data-theme="light"] .agent-workflow-title,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-title {
-  font-size: var(--ui-font-body);
-  font-weight: 780;
-  letter-spacing: 0;
-}
-
-body[data-theme="light"] .agent-workflow-count,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-count {
-  color: var(--text-soft);
 }
 
 body[data-theme="light"] .agent-workflow-refresh,

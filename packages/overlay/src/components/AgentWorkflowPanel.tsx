@@ -6,6 +6,7 @@ import { buildAgentWorkflow, type AgentWorkflowRecord } from "../utils/agent-wor
 import { orderedReachableCardIDs } from "../utils/card-tree";
 import { agentStageLabel } from "../utils/message";
 import { t } from "../utils/i18n";
+import { SurfaceHeader } from "./ui/SurfaceHeader";
 
 function formatClock(ms: number | undefined): string {
   if (!Number.isFinite(ms || 0) || !ms) return "-";
@@ -90,22 +91,25 @@ export function AgentWorkflowPanel() {
 
   return (
     <section class="agent-workflow-panel" aria-label={t("agent_workflow.title")}>
-      <header class="agent-workflow-toolbar">
-        <div class="agent-workflow-heading">
-          <span class="agent-workflow-title">{t("agent_workflow.title")}</span>
-          <span class="agent-workflow-count">
-            {t("agent_workflow.count", { count: String(records().length) })}
-          </span>
-        </div>
-        <button
-          type="button"
-          class="agent-workflow-refresh"
-          title={t("agent_workflow.refresh")}
-          onClick={refresh}
-        >
-          {trace.loading ? t("common.loading") : t("common.refresh")}
-        </button>
-      </header>
+      <SurfaceHeader
+        variant="panel"
+        title={t("agent_workflow.title")}
+        actions={
+          <>
+            <span class="agent-workflow-count">
+              {t("agent_workflow.count", { count: String(records().length) })}
+            </span>
+            <button
+              type="button"
+              class="agent-workflow-refresh"
+              title={t("agent_workflow.refresh")}
+              onClick={refresh}
+            >
+              {trace.loading ? t("common.loading") : t("common.refresh")}
+            </button>
+          </>
+        }
+      />
 
       <Show when={trace.loading && records().length === 0}>
         <div class="empty-hint empty-hint--card">{t("agent_workflow.loading")}</div>
