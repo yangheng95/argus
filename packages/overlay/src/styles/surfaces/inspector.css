@@ -467,3 +467,53 @@
   margin-top: calc(4px * var(--ui-scale));
   line-height: 1.4;
 }
+
+/* Delivery panel — verdict card with a left-rail accent stripe.
+   Tone is driven by the data-verdict attribute (`accepted` →
+   --good, `rejected` → --bad, `inflight` → --accent, `empty` →
+   transparent). The accent rail is rendered via `::before` against
+   the local `--delivery-panel-accent` cascade var. */
+.delivery-panel {
+  --delivery-panel-accent: var(--text-muted);
+  position: relative;
+  padding: calc(6px * var(--ui-scale));
+  border: 0;
+  border-radius: calc(5px * var(--ui-scale));
+  background: var(--surface-inset);
+  box-shadow: none;
+  margin-top: calc(2px * var(--ui-scale));
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+  overflow: hidden;
+}
+
+.delivery-panel::before {
+  content: "";
+  position: absolute;
+  inset-block: calc(6px * var(--ui-scale));
+  inset-inline-start: 0;
+  width: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--delivery-panel-accent);
+  pointer-events: none;
+}
+
+.delivery-panel[data-verdict="accepted"] {
+  --delivery-panel-accent: var(--good);
+}
+
+.delivery-panel[data-verdict="rejected"] {
+  --delivery-panel-accent: var(--bad);
+}
+
+.delivery-panel[data-verdict="inflight"] {
+  --delivery-panel-accent: var(--accent);
+}
+
+.delivery-panel[data-verdict="empty"] {
+  background: transparent;
+}
+
+.delivery-panel[data-verdict="empty"]::before {
+  display: none;
+}

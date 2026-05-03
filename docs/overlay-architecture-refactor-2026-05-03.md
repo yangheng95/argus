@@ -965,6 +965,18 @@ Progress log:
   detail` stays in styles.css — it is layout, not chrome. Ceilings
   unchanged.
 
+- 2026-05-03: Moved the `.delivery-panel` family (base shell,
+  `::before` left-rail accent, four `[data-verdict]` tone variants)
+  into surfaces/inspector.css. The dead `var(--accent, #63a2ff)`
+  fallback hex on the inflight verdict was dropped — `--accent` is
+  always defined at :root, so the fallback never fired but kept the
+  surface guard from accepting the rule. The `999px` pill border-
+  radius converted to `var(--oc-radius-pill)`. The verdict-accent
+  guard now reads the rail rule from inspector.css; new ownership
+  guard adds the four `[data-verdict]` selectors plus presence of
+  the `--good` / `--bad` cascade vars and absence of any
+  `#63a2ff` literal. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and

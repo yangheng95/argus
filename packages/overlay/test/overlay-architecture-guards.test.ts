@@ -404,6 +404,26 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
   })
 
+  test("delivery panel chrome is owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    expect(styles).not.toMatch(/(^|\n)\.delivery-panel\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)\.delivery-panel::before\s*\{/)
+    expect(inspectorSurface).toMatch(/\.delivery-panel\s*\{/)
+    expect(inspectorSurface).toMatch(/\.delivery-panel::before\s*\{/)
+
+    for (const verdict of ["accepted", "rejected", "inflight", "empty"]) {
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.delivery-panel\\[data-verdict="${verdict}"\\]`),
+      )
+    }
+
+    expect(inspectorSurface).toMatch(/--delivery-panel-accent: var\(--good\)/)
+    expect(inspectorSurface).toMatch(/--delivery-panel-accent: var\(--bad\)/)
+    expect(inspectorSurface).not.toMatch(/#63a2ff/)
+  })
+
   test("eval error + summary chrome is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
@@ -861,6 +881,7 @@ describe("overlay architecture guards", () => {
 
   test("delivery panel keeps verdict accent outside theme chrome resets", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -870,8 +891,10 @@ describe("overlay architecture guards", () => {
       expect(selector).not.toMatch(/delivery-panel/)
     }
 
-    expect(styles).toMatch(/\.delivery-panel::before\s*\{[^}]*background:\s*var\(--delivery-panel-accent\)/)
-    expect(styles).not.toMatch(/\.delivery-panel\s*\{[^}]*border-left\s*:/)
+    expect(inspectorSurface).toMatch(
+      /\.delivery-panel::before\s*\{[^}]*background:\s*var\(--delivery-panel-accent\)/,
+    )
+    expect(inspectorSurface).not.toMatch(/\.delivery-panel\s*\{[^}]*border-left\s*:/)
   })
 
   test("evaluation errors keep semantic error chrome outside theme resets", () => {
