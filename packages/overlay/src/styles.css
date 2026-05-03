@@ -1289,14 +1289,14 @@ a {
 .status-label {
   font-size: var(--ui-font-small);
   font-weight: 600;
-  color: #dbe3ee;
+  color: var(--text-strong);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .elapsed {
   font-size: var(--ui-font-small);
-  color: #94a3b8;
+  color: var(--text-soft);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2160,22 +2160,10 @@ body[data-theme="light"] .task-flag {
   color: #334155;
 }
 
-body[data-theme="light"] .status-label {
-  color: #0f172a;
-}
-
-body[data-theme="light"] .elapsed {
-  color: #64748b;
-}
-
 /* Light theme: reasoning blocks */
 body[data-theme="light"] .msg-reasoning {
   background: rgba(37, 99, 235, 0.06);
   border-color: rgba(37, 99, 235, 0.14);
-  color: var(--text-strong);
-}
-body[data-theme="light"] .reasoning-text {
-  color: var(--text-strong);
 }
 
 /* Light theme: section badges */
