@@ -3348,8 +3348,8 @@ export function createOrchestratorTools(input: {
           // the unchanged primary, and `startNewAttempt` happily opened a
           // fresh attempt every time). When the budget is exhausted, refuse
           // to dispatch yet another `delivery_rework` and yield a sharp
-          // signal so the orchestrator LLM must escalate (modify_goal /
-          // restart_from_stage) or call `fail_task`. Compare with `>=` so a
+          // signal so the orchestrator LLM must change strategy while keeping
+          // the task active. Compare with `>=` so a
           // budget of N permits N fix runs (iterations 0..N-1 open new
           // attempts; iteration N is the cutoff).
           const {
@@ -3382,17 +3382,17 @@ export function createOrchestratorTools(input: {
               /* best effort */
             }
             await trackStepComplete("deliver", undefined, true)
-            requestStopAfterCurrentStep("delivery_budget_exhausted")
             return SubAgentProtocol.yieldResult({
-              headline: `Delivery rejected and fix-runs budget exhausted (iteration=${iteration}, max_fix_runs=${fixBudget}). No more delivery_rework attempts; orchestrator MUST either: (a) call restart_from_stage(plan|executor) to change strategy, OR (b) call fail_task with a final summary explaining what went wrong.`,
+              headline: `Delivery rejected and fix-runs budget exhausted (iteration=${iteration}, max_fix_runs=${fixBudget}). Task remains active; no more identical delivery_rework attempts. The orchestrator MUST change strategy now with restart_from_stage(plan|executor), modify_goal, or integrated build({ request }) before the next deliver.`,
               fields: [
                 ["issues_found", rejectionIssues],
                 ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
                 ["max_fix_runs", String(fixBudget)],
                 ["agent_summary", verdict.summary],
+                ["next", "change strategy from persisted delivery facts before another deliver"],
               ],
-              pointer: `verdict artifact ${verdictArtifactId}; budget exhausted, escalate or fail`,
+              pointer: `verdict artifact ${verdictArtifactId}; budget exhaustion is strategy feedback and does not stop the task`,
             })
           }
           const priorManifests = currentManifest?.taskId
