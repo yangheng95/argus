@@ -169,11 +169,15 @@ describe("overlay architecture guards", () => {
   })
 
   test("legacy style debt cannot increase while migration is in progress", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
-    const card = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
+    // Strip comments before counting — historical mentions in comments
+    // (e.g., `/* this `!important` reset retired */`) shouldn't count as
+    // live cascade debt. The live count tracks rule bodies and selectors
+    // that the browser actually evaluates.
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(81)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(20)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(50)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(5)
   })
 
   test("styles.css has no hard-coded accent/bad/warn rgb expansions outside comments", () => {
