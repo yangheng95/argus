@@ -8,7 +8,7 @@
 // but you should look at it" or "this never produced a result".
 //
 // This helper maps `(status, terminalReason, integrity.verdict)` onto
-// one of six tones. The CSS for each tone lives in `styles/card.css`
+// one of six tones. The CSS for each tone lives in `styles/surfaces/card.css`
 // alongside the existing `card__badge--*` classes.
 
 import type { CardNode } from "../store/card-tree";

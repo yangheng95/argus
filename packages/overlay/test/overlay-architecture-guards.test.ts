@@ -170,14 +170,14 @@ describe("overlay architecture guards", () => {
 
   test("legacy style debt cannot increase while migration is in progress", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
-    const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
+    const card = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(125)
     expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(62)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
-    const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
+    const card = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
 
     expect(countDuplicateSelectors(card)).toBeLessThanOrEqual(6)
   })
@@ -1725,7 +1725,6 @@ describe("overlay architecture guards", () => {
   test("bold font-weight declarations cannot increase across overlay stylesheets", () => {
     const sources = [
       readText(join(OVERLAY_ROOT, "src/styles.css")),
-      readText(join(OVERLAY_ROOT, "src/styles/card.css")),
       ...walkFiles(join(OVERLAY_ROOT, "src/styles/primitives"), (path) =>
         path.endsWith(".css"),
       ).map(readText),
@@ -2620,7 +2619,7 @@ describe("overlay architecture guards", () => {
 
   test("board intro density and typography are canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
-    const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/card.css")))
+    const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
 
     expect(card).not.toMatch(/\.board-intro(?:__|\b)/)
 
