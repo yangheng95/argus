@@ -9,6 +9,11 @@
   --diff-add-fg: color-mix(in srgb, var(--accent) 58%, var(--text-strong) 42%);
   --diff-add-bg: color-mix(in srgb, var(--accent) 12%, transparent);
   --diff-add-border: color-mix(in srgb, var(--accent) 22%, transparent);
+  --diff-del-fg: color-mix(in srgb, var(--bad) 58%, var(--text-strong) 42%);
+  --diff-del-bg: color-mix(in srgb, var(--bad) 10%, transparent);
+  --diff-del-border: color-mix(in srgb, var(--bad) 22%, transparent);
+  --diff-add-row-bg: color-mix(in srgb, var(--good) 9%, transparent);
+  --diff-del-row-bg: color-mix(in srgb, var(--bad) 10%, transparent);
   --guide-card-border: color-mix(in srgb, var(--accent) 22%, transparent);
   --guide-card-bg: linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 44%), #1e1f22;
   --guide-card-shadow: var(--shadow-lg);
@@ -724,8 +729,7 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
-.change-status,
-.diff-dialog-stat {
+.change-status {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -756,14 +760,6 @@ a {
   color: var(--accent);
   background: var(--accent-dim);
   border-color: rgba(91, 141, 239, 0.14);
-}
-
-.diff-dialog-stat[data-tone="add"] {
-  color: var(--diff-add-fg);
-}
-
-.diff-dialog-stat[data-tone="del"] {
-  color: var(--bad);
 }
 
 .goals-list {
@@ -1680,14 +1676,6 @@ select.field-input option {
   min-width: 160px;
 }
 
-.diff-dialog-head {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-sm);
-}
-
 .section-dialog-head {
   min-width: 0;
   flex: 1;
@@ -1696,32 +1684,11 @@ select.field-input option {
   gap: var(--ui-gap-sm);
 }
 
-.diff-dialog-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ui-gap-md);
-  align-items: center;
-  font-size: var(--ui-font-small);
-  color: var(--text-soft);
-}
-
 .section-dialog-meta {
   display: flex;
   flex-wrap: wrap;
   gap: var(--ui-gap-sm);
   align-items: center;
-}
-
-.diff-preview {
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: calc(18px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.034), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
-    color-mix(in srgb, var(--surface-inset) 95%, transparent);
-  overflow: auto;
-  max-height: calc(100vh - (180px * var(--ui-scale)));
-  padding: calc(10px * var(--ui-scale));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .section-dialog-body {
@@ -1779,88 +1746,6 @@ select.field-input option {
   .detail-grid-row {
     grid-template-columns: 1fr;
   }
-}
-
-.diff-lines {
-  display: flex;
-  flex-direction: column;
-  font-family: var(--mono);
-  font-size: var(--ui-font-small);
-  line-height: 1.5;
-}
-
-.diff-row {
-  display: grid;
-  grid-template-columns: 26px 52px 52px 1fr;
-  align-items: stretch;
-}
-
-.diff-row + .diff-row {
-  border-top: 1px solid var(--divider-soft);
-}
-
-.diff-gutter,
-.diff-num {
-  background: var(--subtle-1);
-  color: var(--text-muted);
-}
-
-.diff-gutter {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: calc(3px * var(--ui-scale)) 0;
-  user-select: none;
-}
-
-.diff-num {
-  padding: calc(3px * var(--ui-scale)) var(--ui-input-padding-x);
-  text-align: right;
-  user-select: none;
-}
-
-.diff-code {
-  padding: calc(3px * var(--ui-scale)) var(--ui-section-padding-x);
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text);
-}
-
-.diff-row[data-kind="add"] .diff-gutter,
-.diff-row[data-kind="add"] .diff-num,
-.diff-row[data-kind="add"] .diff-code {
-  background: rgba(52, 211, 153, 0.09);
-}
-
-.diff-row[data-kind="del"] .diff-gutter,
-.diff-row[data-kind="del"] .diff-num,
-.diff-row[data-kind="del"] .diff-code {
-  background: rgba(248, 113, 113, 0.1);
-}
-
-.diff-row[data-kind="add"] .diff-gutter,
-.diff-row[data-kind="add"] .diff-code {
-  color: var(--good);
-}
-
-.diff-row[data-kind="del"] .diff-gutter,
-.diff-row[data-kind="del"] .diff-code {
-  color: #fca5a5;
-}
-
-.diff-row[data-kind="skip"] .diff-gutter,
-.diff-row[data-kind="skip"] .diff-num,
-.diff-row[data-kind="skip"] .diff-code {
-  background: var(--subtle-1);
-  color: var(--text-soft);
-}
-
-.diff-row[data-kind="skip"] .diff-code {
-  font-style: italic;
-}
-
-.diff-empty {
-  padding: var(--ui-panel-padding-x);
 }
 
 .app-dialog-body {
@@ -3891,14 +3776,16 @@ body {
 .extension-status,
 .llm-status,
 .gwg-priority-badge,
-.change-status,
-.diff-dialog-stat {
+.change-status {
   /* This rule lives later in the cascade than every individual
    * canonical (`.section-badge, .extension-status, ...` at 4927
    * declares 999px pill; the iter15+ dot-prefix multi-class at 5789
    * declares 0; per-class rules at 1241 / 3243 / 4814 / 5662 declare
    * their own variants). Same class specificity → cascade order
-   * resolves to this 5px-rounded value without `!important`. */
+   * resolves to this 5px-rounded value without `!important`.
+   * .diff-dialog-stat moved to surfaces/diff.css with the 5px
+   * baked into its canonical, so the cascade has a single source
+   * for that selector instead of base-then-override. */
   border-radius: calc(5px * var(--ui-scale));
   letter-spacing: 0;
   font-weight: 600;
