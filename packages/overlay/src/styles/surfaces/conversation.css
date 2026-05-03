@@ -1,0 +1,41 @@
+/* Conversation surface — owns the chat scroll column's chrome. The
+   richer task-aware empty state (`.chat-empty--task` and friends) plus
+   `.chat-scroll` will land in follow-up extractions; this seed covers
+   the calm placeholder shown when no task is selected. */
+
+.chat-empty {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--ui-scale));
+  align-items: center;
+  justify-content: center;
+  width: min(100%, calc(360px * var(--ui-scale)));
+  min-height: calc(150px * var(--ui-scale));
+  margin: auto;
+  padding: 0;
+  color: var(--text-soft);
+  text-align: center;
+  opacity: 0.9;
+}
+
+.chat-empty-icon {
+  width: calc(34px * var(--ui-scale));
+  height: calc(34px * var(--ui-scale));
+  flex-shrink: 0;
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+.chat-empty-text {
+  max-width: 28ch;
+  color: var(--text-soft);
+  font-size: var(--ui-font-body);
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.chat-follow-label {
+  white-space: nowrap;
+}

@@ -719,6 +719,19 @@ Progress log:
   `!important <= 138`, `body[data-theme] <= 69`, theme layout/chrome
   overrides `<= 33`. New extraction guard pins five composer classes
   plus the icon-svg selector and the `@container` / `@media` blocks.
+- 2026-05-03: Seeded `styles/surfaces/conversation.css` and extracted
+  the calm-state chat-empty placeholder (`.chat-empty`,
+  `.chat-empty-icon`, `.chat-empty-text`, `.chat-follow-label`) from
+  `styles.css` into the new file. `index.html` loads the surface after
+  the primitive layer and before legacy `styles.css` so canonical
+  conversation rules win against any late God CSS that may still
+  reference these classes. The richer `.chat-empty--task` task-status
+  variant + theme overrides will land in a follow-up because they
+  need rgba-to-color-mix conversions that change visuals. The
+  `.chat-empty-text` font-weight dropped from 650 to 600 — meta
+  copy below an icon does not need extra emphasis. Bold-weight
+  density ceiling tightens to `<= 41`.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
