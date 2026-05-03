@@ -335,6 +335,12 @@ Progress log:
   now inherit semantic tone through component variables, reducing guard ceilings
   to `!important <= 241`, `body[data-theme] <= 155`, and theme layout/chrome
   overrides <= 95.
+- 2026-05-03: Moved `.agent-workflow-report-popover` and
+  `.agent-workflow-report` alignment, padding, backdrop, border, radius, and
+  shadow from theme selectors into canonical report shell rules. Workflow report
+  modal geometry and chrome are now theme-invariant, reducing guard ceilings to
+  `!important <= 241`, `body[data-theme] <= 153`, and theme layout/chrome
+  overrides <= 90.
 
 Trigger: user feedback (2026-05-03):
 
