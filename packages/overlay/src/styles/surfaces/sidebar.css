@@ -1,0 +1,100 @@
+/* Sidebar surface — owns the rail column's shell + tool affordances.
+   The chunkier `.sidebar-btn` family stays in styles.css until its
+   gradient/rgba chrome is reworked through palette tokens. */
+
+.sidebar {
+  width: var(--ui-sidebar-width);
+  min-width: min(100%, var(--ui-rail-min-width));
+  max-width: var(--ui-sidebar-width);
+  flex: 0 1 var(--ui-sidebar-width);
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: 0;
+  background: var(--rail-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+  transition:
+    width 140ms ease,
+    min-width 140ms ease;
+  overflow: hidden;
+}
+
+.sidebar[data-collapsed="true"] {
+  width: calc(62px * var(--ui-scale));
+  min-width: calc(62px * var(--ui-scale));
+  max-width: calc(62px * var(--ui-scale));
+  flex-basis: calc(62px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+.sidebar[data-collapsed="true"] .sidebar-toggle svg {
+  transform: rotate(180deg);
+}
+
+/* Sidebar tool cluster: a control-group container holding icon-only
+   actions in the rail header. Routes through `--oc-control-*` tokens
+   so the cluster shape matches the rest of the overlay control vocab. */
+.sidebar-toolset {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--oc-control-border);
+  border-radius: var(--oc-radius-control);
+  background: var(--oc-control-bg);
+  box-shadow: var(--oc-control-shadow);
+}
+
+.sidebar-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  border-radius: var(--oc-radius-control);
+  border: var(--oc-border-width) solid transparent;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    border-color 80ms,
+    background 80ms,
+    color 80ms,
+    transform 80ms;
+  box-shadow: none;
+}
+
+.sidebar-tool:hover {
+  border-color: var(--oc-control-border-hover);
+  background: var(--oc-control-bg-hover);
+  color: var(--text-strong);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.sidebar-tool:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--oc-control-focus-ring);
+}
+
+/* Sidebar header text lanes: align with the shared
+   `.oc-surface-header__title` / `__actions` grammar. */
+.sidebar-title {
+  flex: 1 1 auto;
+}
+
+.sidebar-subtitle {
+  font-size: var(--ui-font-meta);
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-soft));
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-header-actions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}

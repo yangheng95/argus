@@ -243,6 +243,32 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("sidebar shell + tool family are owned by surfaces/sidebar.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const sidebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css"))
+    const html = readText(join(OVERLAY_ROOT, "src/index.html"))
+
+    for (const className of [
+      "sidebar",
+      "sidebar-toolset",
+      "sidebar-tool",
+      "sidebar-title",
+      "sidebar-subtitle",
+      "sidebar-header-actions",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(sidebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\]\s*\{/)
+    expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\] \.sidebar-toggle svg/)
+
+    const sidebarAt = html.indexOf('href="styles/surfaces/sidebar.css"')
+    const stylesAt = html.indexOf('href="styles.css"')
+    expect(sidebarAt).toBeGreaterThan(-1)
+    expect(sidebarAt).toBeLessThan(stylesAt)
+  })
+
   test("conversation goals strip is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const conversationSurface = readText(
@@ -871,13 +897,16 @@ describe("overlay architecture guards", () => {
     expect(soloRuleBody(styles, ".task-dir-shell.task-cwd-dropdown")).toContain(
       "padding-block: calc(2px * var(--ui-scale))",
     )
-    expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("gap: calc(2px * var(--ui-scale))")
-    expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("padding: calc(2px * var(--ui-scale))")
-    expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
-    expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("border-radius: var(--oc-radius-control)")
-    expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("background: var(--oc-control-bg)")
-    expect(soloRuleBody(styles, ".sidebar-tool")).toContain("border-radius: var(--oc-radius-control)")
-    expect(soloRuleBody(styles, ".sidebar-tool")).toContain("border: var(--oc-border-width) solid transparent")
+    const sidebarSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")),
+    )
+    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("gap: calc(2px * var(--ui-scale))")
+    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("padding: calc(2px * var(--ui-scale))")
+    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
+    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("background: var(--oc-control-bg)")
+    expect(soloRuleBody(sidebarSurface, ".sidebar-tool")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(sidebarSurface, ".sidebar-tool")).toContain("border: var(--oc-border-width) solid transparent")
     expect(soloRuleBody(styles, ".workspace-toggle")).toContain("border-radius: var(--oc-radius-control)")
     expect(soloRuleBody(styles, ".workspace-toggle")).toContain("border: var(--oc-border-width) solid transparent")
   })
@@ -1373,8 +1402,15 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\b(?:border(?:-[a-z]+)?|border-radius|box-shadow|backdrop-filter)\s*:/)
     }
 
-    for (const selector of [".sidebar", ".chat", ".sections"]) {
-      const body = soloRuleBody(styles, selector)
+    const sidebarSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")),
+    )
+    for (const [selector, source] of [
+      [".sidebar", sidebarSurface],
+      [".chat", styles],
+      [".sections", styles],
+    ] as const) {
+      const body = soloRuleBody(source, selector)
       for (const declaration of [
         "border: 0",
         "border-radius: 0",
