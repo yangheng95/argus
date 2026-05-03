@@ -7432,10 +7432,26 @@ select.field-input option {
 /* ── Agent Workflow Root Tab ── */
 .agent-workflow-panel {
   position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
+  gap: 0;
+  padding: 0;
   overflow: hidden;
-  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 92%, var(--surface));
+}
+
+.agent-workflow-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.18;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--border) 42%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--border) 34%, transparent) 1px, transparent 1px);
+  background-size: calc(26px * var(--ui-scale)) calc(26px * var(--ui-scale));
+  mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 84%, transparent);
 }
 
 .agent-workflow-count {
@@ -14864,16 +14880,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   box-shadow: none !important;
 }
 
-body[data-theme="light"] .agent-workflow-panel,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-panel {
-  display: flex;
-  flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale));
-  overflow: hidden;
-  background: transparent;
-}
-
 body[data-theme="light"] .agent-workflow-canvas,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-canvas {
   gap: calc(4px * var(--ui-scale)) !important;
@@ -15094,27 +15100,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 }
 
 /* Calm workflow map */
-body[data-theme="light"] .agent-workflow-panel,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-panel {
-  isolation: isolate;
-  gap: 0;
-  padding: 0;
-  background: color-mix(in srgb, var(--surface-inset) 92%, var(--surface));
-}
-
-body[data-theme="light"] .agent-workflow-panel::before,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  opacity: 0.18;
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--border) 42%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--border) 34%, transparent) 1px, transparent 1px);
-  background-size: calc(26px * var(--ui-scale)) calc(26px * var(--ui-scale));
-  mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 84%, transparent);
-}
 
 body[data-theme="light"] .agent-workflow-refresh,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh {
