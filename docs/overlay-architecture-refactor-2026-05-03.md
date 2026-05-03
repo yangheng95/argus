@@ -764,6 +764,22 @@ Progress log:
   theme scoped" guard now reads body declarations from the
   conversation surface instead of styles.css; new extraction guard
   pins `.chat-scroll` + descendant card selectors to the surface.
+- 2026-05-03: Extracted the chat header + task-switch progress chrome
+  (`.task-switch-progress` + `[data-active]` + `::before` + animated
+  `[data-active]::before` + `@keyframes task-switch-progress-slide`,
+  `.chat-header-main`, `.chat-title`, `.chat-header-status`,
+  `.chat-task-status` + nested `.status-icon` / `.status-copy` /
+  `.status-label` / `.elapsed`, `.chat-count`, `.chat-header-meta`)
+  from `styles.css` into `styles/surfaces/conversation.css`. The
+  `var(--accent, #5b8def)` fallback hex on the progress bar gradient
+  routes through bare `var(--accent)` (the fallback never fired since
+  every theme defines `--accent`). The `2px` height literal scales
+  through `calc(2px * var(--ui-scale))`. The "task-switch progress
+  overlays the header" guard now reads `.task-switch-progress` from
+  the conversation surface. New extraction guard pins five primary
+  classes plus `@keyframes`, `::before`, and the late
+  `.chat-header-meta` / `.chat-count` overrides (which still live in
+  styles.css for follow-up).
 
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
