@@ -216,6 +216,24 @@ describe("overlay architecture guards", () => {
     expect(titlebarSurface).toMatch(/\.titlebar-status-value\s*\{/)
   })
 
+  test("titlebar layout containers and connection badge are owned by surfaces/titlebar.css", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
+
+    for (const className of [
+      "titlebar-nav",
+      "titlebar-nav-group",
+      "titlebar-utility",
+      "titlebar-actions",
+      "titlebar-status-cluster",
+      "titlebar-window-controls",
+      "conn-badge",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(titlebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+  })
+
   test("titlebar shell and brand layout are owned by surfaces/titlebar.css", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
