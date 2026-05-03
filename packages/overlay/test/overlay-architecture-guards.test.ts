@@ -461,6 +461,31 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("prompt catalog is owned by surfaces/settings.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    for (const className of [
+      "prompt-grid",
+      "prompt-card",
+      "prompt-card-copy",
+      "prompt-textarea",
+      "prompt-diff-details",
+      "prompt-diff-summary",
+      "prompt-preview-card",
+      "prompt-preview-body",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(settingsSurface).toMatch(/\.prompt-card-head,\s*\.prompt-toolbar\s*\{/)
+    expect(settingsSurface).toMatch(/\.prompt-card-copy span,\s*\.prompt-card-copy small,\s*\.prompt-preview-head\s*\{/)
+    expect(settingsSurface).toMatch(/\.prompt-diff-details\[open\] \> \.prompt-diff-summary::before\s*\{/)
+    expect(settingsSurface).toMatch(/\.prompt-preview-card--default\s*\{/)
+    expect(settingsSurface).toMatch(/\.prompt-preview-card--attached\s*\{/)
+  })
+
   test("config-status-box and about panel are owned by surfaces/settings.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
@@ -525,7 +550,14 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).toMatch(/\.config-subsection\[open\] \> \.config-subsection-head::before\s*\{/)
     expect(settingsSurface).toMatch(/\.ext-group \+ \.ext-group\s*\{/)
     expect(settingsSurface).not.toMatch(/rgba\(91,\s*141,\s*239/)
-    expect(settingsSurface).not.toMatch(/content:\s*"▸"/)
+    // The `.config-section-head::before` chevron must use the
+    // CSS-drawn border-right/border-bottom approach, not the
+    // legacy "▸" Unicode glyph. Probe the rule body specifically.
+    const sectionChevron = settingsSurface.match(
+      /\.config-section-head::before\s*\{([^}]*)\}/,
+    )?.[1] ?? ""
+    expect(sectionChevron).not.toMatch(/content:\s*"▸"/)
+    expect(sectionChevron).toContain('content: ""')
 
     // The solo `.config-section { border: 0 / radius / surface-inset }`
     // and its hover/[open] state rules must NOT also appear in

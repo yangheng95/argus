@@ -1433,6 +1433,25 @@ Progress log:
   in surface + absence of solo `.config-status-box` rule
   body in styles.css. Ceilings unchanged.
 
+- 2026-05-03: Extended surfaces/settings.css with the
+  PromptCatalog.tsx family (`.prompt-*`): `.prompt-grid`,
+  `.prompt-card`, `.prompt-card-head` / `.prompt-toolbar`
+  multi-class layout, `.prompt-card-copy` (+ `strong` +
+  `span`/`small`/`prompt-preview-head` typography multi-class),
+  `.prompt-textarea`, `.prompt-diff-details` (+ `.prompt-diff-
+  summary` with ::-webkit-details-marker / ::marker / ::before
+  Unicode-glyph chevron + `[open] > ::before` rotation +
+  `:hover`), `.prompt-preview-card` (+ `--default` / `--attached`
+  modifiers), `.prompt-preview-body`. Token conversions: 4×
+  `1px` borders + 1× inset 1px shadow → `var(--oc-border-
+  width)`. Tightened the .config-section-head chevron guard to
+  scan only the section-head rule body (the legacy "▸" glyph
+  ban there should not also forbid the prompt-diff-summary's
+  legitimate solo chevron, which has no late CSS-drawn dupe).
+  New ownership guard asserts 8 base classes + 2 multi-class
+  child rules + chevron rotation + 2 modifier variants.
+  Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
