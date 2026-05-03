@@ -1,7 +1,54 @@
-/* Conversation surface — owns the chat scroll column's chrome. The
-   richer task-aware empty state (`.chat-empty--task` and friends) plus
-   `.chat-scroll` will land in follow-up extractions; this seed covers
-   the calm placeholder shown when no task is selected. */
+/* Conversation surface — owns the chat scroll column's chrome.
+   The shell `.chat-empty--task` selector + its theme overrides still
+   live in styles.css until those rgba literals are reworked through
+   palette tokens. */
+
+/* Chat scroll: the message column flow. The canonical here folds in
+   the late `--card-min-inline-size`, gap, padding, and background
+   overrides that previously lived in styles.css as rule-8 duplicates;
+   the wider 1040px cap on cards (vs the historical 960px) was the
+   actually-rendered value. */
+.chat-scroll {
+  --card-min-inline-size: 46%;
+  flex: 1;
+  overflow-y: auto;
+  overflow-anchor: none;
+  padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  background: var(--chat-canvas);
+}
+
+.chat-scroll > .card,
+.chat-scroll > .interaction-card {
+  width: auto;
+  max-width: min(100%, calc(1040px * var(--ui-scale)));
+  align-self: flex-start;
+}
+
+.chat-scroll > .card[data-kind="message"][data-role="user"] {
+  width: min(72%, calc(720px * var(--ui-scale)));
+  align-self: flex-end;
+}
+
+.chat-scroll > .card[data-kind="message"][data-role="system"] {
+  width: min(86%, calc(760px * var(--ui-scale)));
+  align-self: center;
+}
+
+@media (max-width: 900px) {
+  .chat-scroll > .card,
+  .chat-scroll > .interaction-card,
+  .chat-scroll > .card[data-kind="message"][data-role="user"],
+  .chat-scroll > .card[data-kind="message"][data-role="system"] {
+    width: 100%;
+    align-self: stretch;
+  }
+}
 
 .chat-empty {
   flex: 0 0 auto;

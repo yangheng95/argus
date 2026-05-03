@@ -3980,47 +3980,9 @@ code .file-link:hover {
   text-decoration: underline;
 }
 
-.chat-scroll {
-  --card-min-inline-size: 50%;
-  flex: 1;
-  overflow-y: auto;
-  overflow-anchor: none;
-  padding: calc(18px * var(--ui-scale)) calc(var(--ui-panel-padding-x) + 6px) calc(28px * var(--ui-scale));
-  display: flex;
-  flex-direction: column;
-  gap: calc(18px * var(--ui-scale));
-  user-select: text;
-  -webkit-user-select: text;
-  cursor: text;
-  background: transparent;
-}
-
-.chat-scroll > .card,
-.chat-scroll > .interaction-card {
-  width: auto;
-  max-width: min(100%, calc(960px * var(--ui-scale)));
-  align-self: flex-start;
-}
-
-.chat-scroll > .card[data-kind="message"][data-role="user"] {
-  width: min(72%, calc(720px * var(--ui-scale)));
-  align-self: flex-end;
-}
-
-.chat-scroll > .card[data-kind="message"][data-role="system"] {
-  width: min(86%, calc(760px * var(--ui-scale)));
-  align-self: center;
-}
-
-@media (max-width: 900px) {
-  .chat-scroll > .card,
-  .chat-scroll > .interaction-card,
-  .chat-scroll > .card[data-kind="message"][data-role="user"],
-  .chat-scroll > .card[data-kind="message"][data-role="system"] {
-    width: 100%;
-    align-self: stretch;
-  }
-}
+/* `.chat-scroll` shell + descendant card layout + matching @media
+   (max-width: 900px) reflow live in `styles/surfaces/conversation.css`
+   now. */
 
 /* `.chat-empty` is the flat placeholder shown when a task has no
    messages yet ("Conversation updates will appear here"). This used
@@ -12198,17 +12160,8 @@ body::after,
   border-radius: calc(5px * var(--ui-scale));
 }
 
-.chat-scroll {
-  --card-min-inline-size: 46%;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));
-  background: var(--surface);
-}
-
-.chat-scroll > .card,
-.chat-scroll > .interaction-card {
-  max-width: min(100%, calc(1040px * var(--ui-scale)));
-}
+/* `.chat-scroll` and its `> .card / > .interaction-card` chrome are
+   owned by `styles/surfaces/conversation.css` now. */
 
 .chat-goals-strip {
   gap: calc(5px * var(--ui-scale));
@@ -12491,10 +12444,9 @@ body::after,
   background: color-mix(in srgb, var(--warn) 10%, transparent);
 }
 
-.chat-scroll {
-  background: var(--chat-canvas) !important;
-  padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
-}
+/* `.chat-scroll` background + padding live in
+   `styles/surfaces/conversation.css` now (no `!important` needed
+   because nothing in the runtime fights the surface rule). */
 
 /* iter5: the prior `.chat-empty` mini-block here (min-height 150px,
    opacity 0.9) was folded into the canonical rule near line ~4418
