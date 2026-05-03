@@ -1,8 +1,8 @@
 /**
  * `webpage_text_diff` tool — re-extracts the agent's current `index.html`
  * via puppeteer, compares its text catalog to the reference, and returns a
- * specific list of missing phrases. This is the feedback signal that
- * usually closes the final 1-2 points of the visual-similarity gap.
+ * specific list of missing phrases. This is a diagnostic feedback signal for
+ * text coverage, not an acceptance source.
  *
  * Why not fold this into `webpage_evaluate`? Evaluate only reads PNGs and
  * has no DOM access. Text comparison requires re-extracting the rendered
@@ -30,7 +30,7 @@ export const WebpageTextDiffTool = Tool.define("webpage_text_diff", {
 
 Re-extracts the rendered HTML via puppeteer on a \`file://\` URL and tokenises both catalogues. Returns a concrete list of reference tokens that the current clone is missing — feed this list back to the agent so it can add the specific phrases rather than guess from the diff heatmap.
 
-Use this tool AFTER \`webpage_evaluate\` returns a score below target. It pinpoints *which strings* are missing, where SSIM+pixel diff only says *where*.
+Use this tool when \`webpage_vision_judge\` flags missing or incorrect text. It pinpoints *which strings* are missing, where SSIM+pixel diff only says *where*.
 
 Reads extracted-page.json (from webpage_extract) and the clone's index.html.`,
   parameters: z.object({
@@ -120,7 +120,7 @@ Reads extracted-page.json (from webpage_extract) and the clone's index.html.`,
               "",
               ...missing.map((t) => `- \`${t}\``),
               "",
-              "Locate the right parent section for each using `page-ir.xml`'s `Section Text` catalog, then `edit` index.html to insert them. Re-run `webpage_render` + `webpage_evaluate` after.",
+              "Locate the right parent section for each using `page-ir.xml`'s `Section Text` catalog, then edit the deliverable to insert them. Re-run `webpage_render url=<explicit URL>` + `webpage_vision_judge` after.",
             ].join("\n")
           : "✅ All reference tokens are present in your render. Remaining score gap is pure visual (colour, spacing, layout).",
       ].join("\n"),

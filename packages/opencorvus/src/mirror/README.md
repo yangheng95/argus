@@ -48,7 +48,7 @@ name: figma-to-code
 1. `figma_extract` → 拿 CompressedDesign
 2. `figma_compile` → 拿 XML IR
 3. 把 XML IR 交给 build agent 生成代码
-4. `visual_render` + `visual_evaluate` 验收
+  4. `visual_render url=<explicit URL>` + `webpage_vision_judge` 验收；`visual_evaluate` 只作诊断
 ```
 
 ---
@@ -69,7 +69,7 @@ src/mirror/
 ├── shared/                        # opencorvus 缺失的零依赖工具
 │   ├── extract-xml.ts             # htmlparser2 SAX 标签提取 + 截断容错
 │   ├── similarity.ts              # Bigram Dice + 自适应阈值
-│   ├── tier-graph.ts              # Kahn 拓扑 + 启发式回退
+│   ├── tier-graph.ts              # Kahn 拓扑；contracts.imports 是唯一依赖来源
 │   ├── xml-escape.ts
 │   ├── token-estimator.ts         # CJK/ASCII 启发式 Token 估算（pattern/* 会用）
 │   ├── image-constrain.ts         # Bedrock 8000px 约束
@@ -91,7 +91,7 @@ src/mirror/
 │       ├── contract.ts            # 内部辅助
 │       └── scaffold.ts            # 内部辅助
 ├── visual/                        # 原子工具，彼此零调用
-│   ├── render.ts                  # renderFiles(outputDir, opts) → Screenshot
+│   ├── render.ts                  # renderFiles({ url, ... }) → Screenshot
 │   └── evaluate.ts                # evaluateVisual(design, render) → VisualScore
 └── (no __tests__ here; tests live at packages/opencorvus/test/mirror/)
 ```
@@ -147,7 +147,7 @@ mirror/* 允许依赖:
 | `service/url-compile.ts` | `url/compile.ts` | 单一函数 `compilePageToXML(page) → xmlIR` |
 | `service/url-to-code.ts` | **不移植**（是 e2e 管线） | — |
 | `infra/pattern/*` | `url/pattern/*` | 保留目录组织；顶层单一函数 `analyzePage(page) → scaffold` |
-| `service/render.ts` | `visual/render.ts` | 单一函数 `renderFiles(outputDir, opts) → screenshot` |
+| `service/render.ts` | `visual/render.ts` | 单一函数 `renderFiles({ url, ... }) → screenshot` |
 | `service/evaluate.ts` | `visual/evaluate.ts` | 单一函数 `evaluateVisual(design, render) → score` |
 | `service/visual-refine-loop.ts` | **不移植**（是 e2e loop） | — |
 | `prompt/*` | 不移植 | skill markdown 承载 |

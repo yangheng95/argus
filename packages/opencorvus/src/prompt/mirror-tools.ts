@@ -7,7 +7,7 @@
  *
  * 1. **Pipeline steering** — `webpage_extract` + siblings are the authoritative
  *    path for any URL the agent wants to clone / render / analyze visually.
- *    `webfetch` is a pure-text fallback only. Without this steering, every
+ *    `webfetch` is for pure-text content only. Without this steering, every
  *    sub-agent tends to reach for `webfetch` first (its description is softer
  *    about "prefer other tools when available") and misses the whole mirror
  *    pipeline.
@@ -55,7 +55,7 @@ export function buildMirrorToolsPromptSection(opts: { cwd: string }): string {
     "",
     "For any URL you want to clone, render, analyze visually, extract design",
     "tokens from, or reproduce as HTML, use the `webpage_*` mirror pipeline —",
-    "NOT `webfetch`. `webfetch` is a fallback for pure-text content (API docs,",
+    "NOT `webfetch`. `webfetch` handles pure-text content (API docs,",
     "README, plain JSON/XML) only.",
     "",
     "Pipeline (strict order, each step reads the previous step's artifact):",
@@ -65,9 +65,10 @@ export function buildMirrorToolsPromptSection(opts: { cwd: string }): string {
     "  3. `webpage_analyze`  extracted-page.json → `scaffold.json` +",
     "                        `design-tokens.ts` + `App.tsx` + `shared-context.md`",
     "  4. (agent writes `index.html` / source)",
-    "  5. `webpage_render`   `index.html` → `rendered.png`",
-    "  6. `webpage_evaluate` (reference.png, rendered.png) → score + `diff.png`",
-    "  7. `webpage_text_diff` (if score < target) → list of missing text tokens",
+    "  5. `webpage_render`   url=<file://... or http(s)://...> → `rendered.png`",
+    "  6. `webpage_vision_judge` (reference.png, rendered.png) → acceptance verdict",
+    "  7. `webpage_evaluate` (reference.png, rendered.png) → diagnostic score + `diff.png`",
+    "  8. `webpage_text_diff` (diagnostic only) → list of missing text tokens",
     "",
     "Steps 2/3 MUST NOT share a turn with step 1 — `extracted-page.json` has",
     "to be written to disk first. Steps 5/6 MUST NOT share a turn with the",

@@ -1,6 +1,6 @@
 ---
 name: webpage-generate
-description: Generate a high-fidelity clone of a reference webpage with visual similarity ≥ 95. The mirror toolchain (`webpage_extract` → `webpage_compile` → `webpage_analyze`) extracts structure, design tokens, copy, and assets deterministically; you implement the page in whatever tech stack the brief or surrounding goals call for (static HTML+CSS, React+Tailwind, Vue, plain Hono SSR — the skill is tech-stack-neutral); then iterate against `webpage_render` + `webpage_evaluate` + `webpage_vision_judge` until the score meets target. Pass `url=http://127.0.0.1:<port>/<route>` to `webpage_render` when your project needs a live server. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (specific URL, screenshot). Always pull palette / text / structure from the mirror artifacts — never invent hex codes, copy, or section structure.
+description: 'Generate a high-fidelity clone of a reference webpage. The mirror toolchain (`webpage_extract` → `webpage_compile` → `webpage_analyze`) extracts structure, design tokens, copy, and assets deterministically; you implement the page in whatever tech stack the brief or surrounding goals call for; then iterate against `webpage_render` + `webpage_vision_judge` until the vision verdict accepts. Call `webpage_render` with the exact URL to capture: `file://` for self-contained local HTML or `http://` / `https://` for an already running app. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (specific URL, screenshot). Always pull palette / text / structure from the mirror artifacts — never invent hex codes, copy, or section structure.'
 stage: build
 auto_detect:
   task_signals:
@@ -19,7 +19,7 @@ required_tools:
 
 # Webpage Generate Skill
 
-You produce a **high-fidelity visual clone** of a reference webpage. The mirror toolchain extracts structure, tokens, and text deterministically; you implement the page; you iterate against the visual judge until the score meets target.
+You produce a **high-fidelity visual clone** of a reference webpage. The mirror toolchain extracts structure, tokens, and text deterministically; you implement the page; you iterate until the visual judge accepts the rendered pixels.
 
 ## Tech-stack policy — adaptive
 
@@ -32,19 +32,14 @@ This skill is tech-stack-neutral. Pick the shape that best fits the brief, the s
 
 What is NOT optional regardless of stack:
 
-- The deliverable MUST be loadable by `webpage_render` — either as a static file (`index.html` at the worktree root or `inputDir`) or via a live server you start yourself.
+- The deliverable MUST expose an explicit URL for `webpage_render`: `file:///absolute/path/index.html` for a self-contained static page, or the exact `http://` / `https://` route for an already running app.
 - Design tokens (colours, fonts, spacing, radii) come from `mirror/design-tokens.ts` — do not invent hex codes, font sizes, or spacing values. Apply them through whatever convention your stack uses (CSS custom properties under `:root`, Tailwind theme extension, design-tokens-as-TS-export, etc.).
 - Visible text comes verbatim from `mirror/page-ir.xml` `<Text>` nodes / `Section Text` catalog — do not paraphrase.
-- Images from `mirror/images/` (or fallback to the original URLs from `mirror/extracted-page.json` when the extractor could not download).
+- Images come from `mirror/images/`. If extraction did not produce a required image, stop and fix the extraction/materialization issue instead of substituting a different source.
 
 ## Rendering the result for evaluation
 
-Two `webpage_render` modes — pick whichever fits your project shape:
-
-1. **Static mode** (default): your project produces a self-contained `index.html` at the worktree root. `webpage_render` serves the directory over a built-in loopback server and screenshots `index.html`.
-2. **Live-server mode**: your project needs a backend or a dev server (Vite, Webpack, Next, etc.). Start it yourself on a known port (e.g. `PORT=4123 bun run dev &`) and call `webpage_render` with `url=http://127.0.0.1:4123/<route>`. Puppeteer navigates directly to the live URL. Kill the server after the goal closes.
-
-`webpage_render` hard-fails in static mode when the rendered page logs 404 / fetch / network errors — that signals your page expected a live backend. Switch to live-server mode or inline the data; do not iterate on a degraded screenshot.
+`webpage_render` is URL-only. For a self-contained static page, pass the absolute `file://` URL for the HTML file. For an app that needs a server, start it according to the project-owned instructions and pass the exact route URL. Do not ask `webpage_render` to infer directories, start servers, or choose a runtime.
 
 The skill exposes no "magic compile" tool that emits the page — you implement it (rule 22, single source of truth for generation strategy is your code, not a hidden compiler).
 
@@ -130,7 +125,7 @@ Adapt to the chosen tech stack. Whatever shape you pick, the deliverable must:
 - Match section structure verbatim from `page-ir.xml` — section ordering, nesting, and approximate bounds.
 - Use exact text from the `Section Text` catalog — no paraphrasing.
 - Wire colours / fonts / spacing through `mirror/design-tokens.ts` via your stack's idiomatic mechanism (CSS custom properties under `:root`, Tailwind theme extension, design-token export, etc.). Don't invent values.
-- Reference image assets via `mirror/images/<name>` (or original URLs from `mirror/extracted-page.json` as fallback).
+- Reference image assets via `mirror/images/<name>`.
 
 If you're picking the static path, a minimal skeleton looks like this — every other approach (React component tree, Vue SFC, etc.) has its own equivalent:
 
@@ -162,7 +157,7 @@ Bounds: match approximately via flex/grid + sizing tokens — pixel-exact placem
 
 ## Step 6 — Render
 
-Call `webpage_render` (no args needed — defaults render `<worktree>/index.html` and write `mirror/rendered.png`). Returns render time + any console errors.
+Call `webpage_render url=<explicit URL>` and write `mirror/rendered.png`. Use a `file://` URL for self-contained local HTML; use the already-running app URL for server-backed pages. Returns render time + any console errors.
 
 ## Step 7 — Evaluate
 
@@ -175,7 +170,7 @@ Call `webpage_vision_judge` (no args needed — defaults read `mirror/reference.
 
 Why this is the gate: SSIM numbers and pixel-diff heatmaps are proxies that let the agent skip looking at pixels (score plateau at ~94 with logo, search-box layout, and floating buttons visibly wrong). Vision-judge forces an actual visual comparison every round.
 
-### 7b. SSIM score (progress + regression signal)
+### 7b. SSIM score (diagnostic signal)
 
 Call `webpage_evaluate reference=reference.png rendered=rendered.png` (both inside `mirror/`). Writes `mirror/eval-result.json`. Returns a 0–100 score (`round(ssim × 50 + (100 − pixelDiff%) × 0.5)`).
 
@@ -183,9 +178,9 @@ Track the score across iterations: rising = your edits are helping, falling = a 
 
 ## Step 8 — Iterate on specific gaps
 
-**Target:** `webpage_evaluate` overall score **≥ 95** AND `webpage_vision_judge.accepted = true`. Either condition alone is not enough — a 96 score with structurally wrong layout is not done; a vision-judge accept with score 80 means a regression slipped in.
+**Target:** `webpage_vision_judge.accepted = true`. `webpage_evaluate` is a diagnostic trend signal only.
 
-**Stagnation guard (HARD STOP):** if **3 consecutive iterations** fail to raise the score above the previous best (`new_score ≤ best_score_so_far`), STOP iterating and proceed to acceptance with the best snapshot. The remaining gap is either dynamic content that can't be statically cloned, or a structural decision the next pass (delivery / orchestrator) needs to handle. Do not burn rounds 4–8 grinding on the same plateau — record the final verdict and hand off.
+**Stagnation guard (HARD STOP):** if **3 consecutive iterations** repeat the same blocking vision-judge differences, STOP iterating and report those differences. The remaining gap is either dynamic content that can't be statically cloned, a missing asset, or a structural decision the next pass (delivery / orchestrator) needs to handle. Do not burn rounds 4–8 grinding on the same plateau — record the final verdict and hand off.
 
 For each round (up to **8**, count explicitly):
 
@@ -197,13 +192,13 @@ For each round (up to **8**, count explicitly):
    - Apply the `fix_hint` for each diff vision-judge listed (severity-ordered).
    - Insert any strings reported by `webpage_text_diff`, in the right section per `page-ir.xml`'s `Section Text` catalogue. Keep wording verbatim.
    - Add or refine CSS rules for color drift / spacing / typography. Reference tokens via `var(--…)` only — do not invent hex values.
-   - Replace placeholder image src values when `mirror/images/` is missing the asset (use the original remote URL from `extracted-page.json` as a fallback).
+   - If a required `mirror/images/` asset is missing, stop and fix extraction/materialization before continuing.
    - Preserve every element + CSS rule that is already rendering correctly. Deleting correct markup costs points you won't recover.
-3. Re-run `webpage_render`.
+3. Re-run `webpage_render url=<explicit URL>`.
 4. Re-run `webpage_vision_judge` AND `webpage_evaluate`.
 5. **Decide:**
-   - If `score ≥ 95` AND `webpage_vision_judge.accepted = true` → goal done, proceed to acceptance.
-   - If 3 consecutive rounds with no new high score → STOP (stagnation guard above). Report the final score, the biggest remaining critical/major diffs from vision-judge, and any obvious blockers (dynamic content, missing asset). Hand off to delivery.
+   - If `webpage_vision_judge.accepted = true` → goal done, proceed to acceptance.
+   - If 3 consecutive rounds repeat the same blocking vision-judge differences → STOP (stagnation guard above). Report the final diagnostic score, the biggest remaining critical/major diffs from vision-judge, and any obvious blockers (dynamic content, missing asset). Hand off to delivery.
    - If you've completed 8 rounds without acceptance → STOP. Same handoff as the stagnation case.
    - Otherwise go back to step 1.
 
@@ -215,7 +210,7 @@ The mirror toolchain output MUST stay in the worktree. Subsequent goals + delive
 
 You MUST NOT mark the goal `passed` or call `goal_report` / `StructuredOutput` until you have:
 
-1. Run `webpage_render` and produced `mirror/rendered.png` for the CURRENT `index.html` (re-run after every edit pass — a stale rendered.png from before your last edit does NOT count).
+1. Run `webpage_render url=<explicit URL>` and produced `mirror/rendered.png` for the CURRENT deliverable (re-run after every edit pass — a stale rendered.png from before your last edit does NOT count).
 2. Run `webpage_vision_judge` against the freshly-rendered `mirror/rendered.png` and confirmed the verdict file `mirror/vision-judge.json` reports `accepted: true`. This is the SINGLE primary acceptance signal — SSIM scores alone are NOT enough.
 3. Read `mirror/rendered.png` (the actual image, not just its bytes count) and visually compared it against `mirror/reference.png`. Confirm in your structured output that you inspected both images.
 4. Run `webpage_evaluate` against the freshly-rendered `mirror/rendered.png` and recorded the score in `mirror/eval-result.json` (secondary trend signal).
@@ -229,9 +224,9 @@ If `webpage_render` fails (port collision, puppeteer crash, missing assets) — 
 A working clone — whatever shape your stack produced — that passes `webpage_render`, plus the `mirror/` toolchain output preserved for downstream goals, with:
 
 - All canonical text from the reference present verbatim (read from `page-ir.xml`)
-- All images referenced by their local `mirror/images/` paths (or original URLs as fallback)
+- All images referenced by their local `mirror/images/` paths
 - Design tokens applied through whichever idiomatic mechanism the chosen stack uses (`:root` custom properties, Tailwind theme extension, design-token export, etc.) — never invented hex codes or font sizes
 - `mirror/rendered.png` exists, was visually inspected against `mirror/reference.png`, and matches
-- `webpage_vision_judge.accepted = true` AND `webpage_evaluate` score ≥ 95 (against the freshly-rendered screenshot)
+- `webpage_vision_judge.accepted = true` against the freshly-rendered screenshot; `webpage_evaluate` is recorded only as a diagnostic trend
 
 Report the final score and `vision_judge` verdict, cite the render screenshot path in your goal_report, and list the sections that are still below pixel parity (usually dynamic content — rotating placeholders, ads, personalisation).

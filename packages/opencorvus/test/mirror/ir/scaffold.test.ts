@@ -41,7 +41,7 @@ describe("PlanFileSchema", () => {
         file_info: "constants",
         file_path: "constants.ts",
         notes: "",
-        contracts: { exports: ["COLORS"] },
+        contracts: { exports: ["COLORS"], imports: {} },
       }),
       PlanFileSchema.parse({
         file_info: "App",

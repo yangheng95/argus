@@ -107,19 +107,13 @@ describe("parity: tier-graph", () => {
       file_path: "constants.ts",
       file_info: "",
       notes: "",
-      contracts: { exports: ["C"] },
+      contracts: { exports: ["C"], imports: {} },
     },
   ]
 
-  const planHeuristic = [
+  const planWithoutContracts = [
     { file_path: "App.tsx", file_info: "", notes: "" },
     { file_path: "Header.tsx", file_info: "", notes: "" },
-    { file_path: "Card.tsx", file_info: "", notes: "" },
-    { file_path: "constants.ts", file_info: "", notes: "" },
-    { file_path: "utils.ts", file_info: "", notes: "" },
-    { file_path: "types.ts", file_info: "", notes: "" },
-    { file_path: "styles.css", file_info: "", notes: "" },
-    { file_path: "Button.tsx", file_info: "", notes: "" },
   ]
 
   function tierPaths(tiers: Array<Array<{ file_path: string }>>) {
@@ -132,10 +126,9 @@ describe("parity: tier-graph", () => {
     )
   })
 
-  test("buildTiers — heuristic plan matches mirror", () => {
-    expect(tierPaths(ourTier.buildTiers(planHeuristic))).toEqual(
-      tierPaths(mirrorTier.buildTiers(planHeuristic)),
-    )
+  test("buildTiers rejects plans without contracts instead of matching mirror's heuristic path", () => {
+    expect(() => ourTier.buildTiers(planWithoutContracts)).toThrow(/without explicit contracts\.imports/)
+    expect(() => mirrorTier.buildTiers(planWithoutContracts)).not.toThrow()
   })
 
   test("buildDependencyGraph — contract-based matches mirror", () => {
@@ -147,12 +140,8 @@ describe("parity: tier-graph", () => {
     }
   })
 
-  test("buildHeuristicDependencyGraph matches mirror", () => {
-    const ours = ourTier.buildHeuristicDependencyGraph(planHeuristic)
-    const theirs = mirrorTier.buildHeuristicDependencyGraph(planHeuristic)
-    for (const [k, v] of ours) {
-      expect([...v].sort()).toEqual([...(theirs.get(k) ?? new Set())].sort())
-    }
+  test("heuristic dependency graph is not exported", () => {
+    expect("buildHeuristicDependencyGraph" in ourTier).toBe(false)
   })
 })
 

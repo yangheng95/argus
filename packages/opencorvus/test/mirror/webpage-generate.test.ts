@@ -5,6 +5,8 @@ import { Instance } from "../../src/project/instance"
 import { WebpageCompileTool } from "../../src/mirror/tools/webpage-compile"
 import { WebpageAnalyzeTool } from "../../src/mirror/tools/webpage-analyze"
 import webpageGenerateMd from "../../src/skill/builtin/webpage-generate.md" with { type: "text" }
+import imageGenerateMd from "../../src/skill/builtin/image-generate.md" with { type: "text" }
+import figmaGenerateMd from "../../src/skill/builtin/figma-generate.md" with { type: "text" }
 
 describe("webpage-generate dependency guards", () => {
   test("skill declares vanilla-CSS handwrite pipeline and build-required tools", () => {
@@ -31,6 +33,23 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.content).toMatch(/you implement (the )?page/i)
     expect(parsed.content).not.toMatch(/Tailwind CDN|cdn\.tailwindcss\.com/)
     expect(parsed.content).not.toContain("`webpage_compile_html`")
+    expect(parsed.content).toContain("webpage_render url=<explicit URL>")
+    expect(parsed.content).toContain("webpage_vision_judge.accepted = true")
+    expect(parsed.content).toContain("SINGLE primary acceptance signal")
+    expect(parsed.content).not.toMatch(/\bbun run dev\b|\bnpm start\b/i)
+    expect(parsed.content).not.toMatch(/static mode|Live-server mode/i)
+  })
+
+  test("visual generation skills keep one URL render path and one acceptance signal", () => {
+    for (const md of [webpageGenerateMd, imageGenerateMd, figmaGenerateMd]) {
+      const parsed = matter(md)
+      expect(parsed.content).toContain("webpage_render url=<explicit URL>")
+      expect(parsed.content).toContain("webpage_vision_judge.accepted = true")
+      expect(parsed.content).toContain("diagnostic")
+      expect(parsed.content).not.toMatch(/\bbun run dev\b|\bnpm start\b/i)
+      expect(parsed.content).not.toMatch(/static mode|Live-server mode|defaults render `<worktree>/i)
+      expect(parsed.content).not.toMatch(/overall score\s+\*\*≥\s*95\*\*\s+AND/i)
+    }
   })
 
   test("compile and analyze surface an actionable missing-artifact error", async () => {

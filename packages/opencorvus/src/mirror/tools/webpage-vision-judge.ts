@@ -13,8 +13,9 @@
  * visual differences before the next edit pass.
  *
  * Output: `mirror/vision-judge.json` — structured verdict (pass/fail
- * + ranked differences). The build-stage required-tools enforcement
- * gates `goal_report` on this file's `accepted` field.
+ * + ranked differences). The build-stage required-tools enforcement gates
+ * `goal_report` on this file's `accepted` field. Tool failure produces no
+ * verdict file; callers must retry or fix the root cause.
  *
  * Pure tool: no network beyond the LLM call, deterministic per (model,
  * reference, rendered) triple.
@@ -107,9 +108,9 @@ const VerdictSchema = z.object({
 export const WebpageVisionJudgeTool = Tool.define("webpage_vision_judge", {
   description: `Vision-only side-by-side comparison of a reference screenshot and a rendered screenshot. Calls a vision-capable LLM with NO system prompt, NO tool list, NO scores — just the two images and a request to enumerate visible differences.
 
-Use this AFTER \`webpage_render\` produces a fresh \`mirror/rendered.png\`. The verdict goes to \`mirror/vision-judge.json\` and is the SINGLE acceptance signal the build-stage gate looks at — SSIM numbers and text-diffs were retired because they let the agent skip looking at pixels.
+Use this AFTER \`webpage_render\` produces a fresh \`mirror/rendered.png\`. The verdict goes to \`mirror/vision-judge.json\` and is the SINGLE acceptance signal the build-stage gate looks at — SSIM numbers and text-diffs are diagnostic only.
 
-Loop semantics: when \`accepted=false\`, work through the \`differences\` list (severity-ordered) by editing \`index.html\`, re-rendering, and re-running this tool. When \`accepted=true\` AND every visible canonical text from the reference is present in your render, the goal is done.
+Loop semantics: when \`accepted=false\`, work through the \`differences\` list (severity-ordered), re-render, and re-run this tool. When \`accepted=true\`, the visual acceptance gate is satisfied.
 
 Pure transformation, no network besides the LLM call. Deterministic per (model, reference, rendered) triple.`,
   parameters: z.object({
@@ -188,10 +189,6 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
     // the assignment happens inside the attemptFn lambda which TS cannot
     // see through.
     const verdictHolder: { value?: z.infer<typeof VerdictSchema> } = {}
-    // Step 2 transitional policy: maxRetries=0 keeps the existing
-    // failure-payload-on-throw path the source of truth; activity adds
-    // proper terminal events + idle gate. Step 5 may grant retries here
-    // once the failurePayload write is moved into a sink-aware finalizer.
     const visionPolicy: LLMActivityPolicy = {
       ...DefaultLLMActivityPolicy,
       idleMs: VISION_JUDGE_IDLE_MS,
@@ -238,7 +235,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
           }
           verdictHolder.value = (await result.output) as z.infer<typeof VerdictSchema>
         },
-        () => { /* sink: vision-judge surfaces via log only for now; step 3 wires bus */ },
+        () => {},
       )
     } catch (err) {
       const original = err instanceof LLMActivityError ? (err.cause ?? err) : err
@@ -256,24 +253,13 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
         causeMessage,
         errStack,
       })
-      const failurePayload = {
-        generatedAt: new Date().toISOString(),
-        model: `${parsed.providerID}/${parsed.modelID}`,
-        referencePath,
-        renderedPath,
-        accepted: false,
-        overall_impression: `Vision judge failed: ${errName} — ${errMessage}`,
-        differences: [],
-        error: { name: errName, message: errMessage, cause: causeMessage },
-      }
-      await fs.writeFile(judgePath, JSON.stringify(failurePayload, null, 2), "utf8")
       throw new Error(
         `webpage_vision_judge: ${errName} — ${errMessage}` +
           (causeMessage ? ` (cause: ${causeMessage})` : "") +
           `. Common causes: (1) the model returned narrative text instead of JSON matching the schema; ` +
           `(2) the model timed out streaming (idle > ${VISION_JUDGE_IDLE_MS}ms — provider stalled); ` +
           `(3) the model rejected the image payload. ` +
-          `A failure verdict was written to ${judgePath} so downstream gates can proceed.`,
+          `No verdict was written; downstream gates must treat ${judgePath} as missing until a real verdict is produced.`,
         { cause: original instanceof Error ? original : undefined },
       )
     }
@@ -326,7 +312,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
     }
     lines.push(
       verdict.accepted
-        ? "Acceptance gate passed. You may proceed to `goal_report` once you have also confirmed all canonical text appears in your render."
+        ? "Acceptance gate passed. You may proceed to `goal_report`."
         : "Acceptance gate NOT passed. Address the **critical** differences first, re-render, then call this tool again.",
     )
 

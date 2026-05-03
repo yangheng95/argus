@@ -33,6 +33,8 @@ describe("webpage_vision_judge — stream-activity idle gate", () => {
     expect(src).toMatch(/abortSignal:\s*run\.signal/)
     expect(src).toMatch(/run\.bump\(/)
     expect(src).toMatch(/Output\.object\(\{\s*schema:\s*VerdictSchema\s*\}\)/)
+    expect(src).not.toContain("failurePayload")
+    expect(src).not.toMatch(/accepted:\s*false/)
     // Idle window must be a hard constant, not a magic number sprinkled
     // inline — keeps in sync with session.processor's 180s gate.
     expect(src).toMatch(/const\s+VISION_JUDGE_IDLE_MS\s*=\s*180_000/)
