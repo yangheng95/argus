@@ -572,19 +572,22 @@ describe("delivery repeated failure tracking", () => {
     ])).toBe(2)
   })
 
-  test("repeated delivery signatures remain non-terminal strategy feedback", async () => {
+  test("delivery refusal guards remain non-terminal strategy feedback", async () => {
     const orchestratorTools = await fs.readFile(
       path.join(import.meta.dir, "../../src/orchestrator/tools.ts"),
       "utf8",
     )
 
     expect(orchestratorTools).toContain("delivery_repeated_failure_signature_")
+    expect(orchestratorTools).toContain("delivery_budget_exhausted_")
     expect(orchestratorTools).not.toContain("delivery_loop_hard_fail")
     expect(orchestratorTools).not.toContain("delivery_repeated_loop_hard_escalation")
     expect(orchestratorTools).not.toContain("Task hard-failed")
     expect(orchestratorTools).not.toContain("shouldHardFailRepeatedDelivery")
     expect(orchestratorTools).not.toContain("countPriorRepeatedDeliveryFailureEscalates")
     expect(orchestratorTools).not.toContain("requestStopAfterCurrentStep(\"delivery_repeated_failure_signature\")")
+    expect(orchestratorTools).not.toContain("requestStopAfterCurrentStep(\"delivery_budget_exhausted\")")
+    expect(orchestratorTools).not.toContain("call fail_task with a final summary")
     expect(orchestratorTools).not.toContain("status: \"failed\", error: hardFailReason")
   })
 })

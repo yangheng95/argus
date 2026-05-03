@@ -94,9 +94,9 @@ The corrected behavior is:
 
 1. Repeated failure signatures are recorded in the delivery decision log for
    context and audit only.
-2. The guard refuses another identical `delivery_rework` prompt, but does not
-   write `status=failed`, does not clean terminal goal workspaces, and does not
-   stop the current orchestrator step.
+2. The repeated-signature guard refuses another identical `delivery_rework`
+   prompt, but does not write `status=failed`, does not clean terminal goal
+   workspaces, and does not stop the current orchestrator step.
 3. The orchestrator must stay in the same task context and choose a different
    strategy before the next `deliver`: `restart_from_stage(plan|executor)`,
    `modify_goal`, or integrated `build({ request })` based on the canonical
@@ -104,6 +104,9 @@ The corrected behavior is:
 4. A repeated signature cannot become an automatic hard-fail threshold. Operator
    intervention remains possible through normal user messages, but the system
    must not require a manual retry to keep a recoverable task alive.
+5. Fix-run budget exhaustion follows the same rule: it blocks another identical
+   `delivery_rework`, but remains active strategy feedback. It must not stop the
+   orchestrator step and must not present `fail_task` as the ordinary next move.
 
 ## Out Of Scope
 
