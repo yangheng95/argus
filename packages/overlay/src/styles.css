@@ -4,22 +4,6 @@
   color-scheme: dark;
   --ui-scale: 1;
   --ui-window-opacity: 1;
-  --bg: #1e1f22;
-  --surface: #2b2d30;
-  --surface-hover: #37393e;
-  --surface-inset: #18191c;
-  --surface-strong: #313438;
-  --chrome: #1c1d20;
-  --border: rgba(255, 255, 255, 0.1);
-  --border-hover: color-mix(in srgb, var(--accent) 35%, transparent);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --text: #a8adb3;
-  --text-strong: #dfe1e5;
-  --text-soft: #9095a0;
-  --text-muted: #6e7278;
-  --accent: #548af7;
-  --accent-dim: color-mix(in srgb, var(--accent) 18%, transparent);
-  --accent-hover: #6b9ef9;
   /* Foreground colour painted on top of any --accent-* surface. White is
      the contrast-correct choice across all three palettes (light accent
      #2470b3, dark accent #548af7, vscode-dark accent #007acc). Routed
@@ -28,48 +12,16 @@
   --diff-add-fg: color-mix(in srgb, var(--accent) 58%, var(--text-strong) 42%);
   --diff-add-bg: color-mix(in srgb, var(--accent) 12%, transparent);
   --diff-add-border: color-mix(in srgb, var(--accent) 22%, transparent);
-  --hover-accent-border: color-mix(in srgb, var(--accent) 28%, transparent);
-  --hover-accent-wash: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 18%, transparent),
-    color-mix(in srgb, var(--accent) 6%, transparent) 58%,
-    rgba(255, 255, 255, 0.02)
-  );
-  --hover-accent-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
   --guide-card-border: color-mix(in srgb, var(--accent) 22%, transparent);
   --guide-card-bg: linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 44%), #1e1f22;
   --guide-card-shadow: var(--shadow-lg);
-  --good: #5fad56;
-  --good-dim: rgba(95, 173, 86, 0.14);
-  --warn: #d4a72c;
-  --warn-dim: color-mix(in srgb, var(--warn) 15%, transparent);
-  --bad: #f75464;
-  --bad-dim: color-mix(in srgb, var(--bad) 14%, transparent);
   --ok: var(--good);
   --warning: var(--warn);
   --danger: var(--bad);
-  --info: var(--accent);
   --text-dim: var(--text-muted);
-  --radius: calc(10px * var(--ui-scale));
-  --radius-lg: calc(18px * var(--ui-scale));
-  --shadow: 0 20px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --shadow-md: 0 14px 30px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --panel-radius: calc(10px * var(--ui-scale));
   --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
   --session-scrollbar-size: calc(12px * var(--ui-scale));
-  --session-scrollbar-track: rgba(255, 255, 255, 0.03);
-  --subtle-1: rgba(255, 255, 255, 0.04);
-  --subtle-2: rgba(255, 255, 255, 0.06);
-  --subtle-3: rgba(255, 255, 255, 0.08);
-  --subtle-4: rgba(255, 255, 255, 0.11);
-  --subtle-5: rgba(255, 255, 255, 0.16);
   --dialog-backdrop: rgba(0, 0, 0, 0.6);
-  --dialog-bg: #2b2d30;
-  --menu-panel-bg: #1c1d20;
-  --divider-soft: rgba(255, 255, 255, 0.08);
   /* iter48: user feedback (2026-05-03) "以标题栏菜单的字体大小
      为准，任何其余字体都不允许比他字体更大". The titlebar
      menubar trigger uses var(--ui-font-body) (≈12px). Cap
@@ -77,21 +29,11 @@
      renders text larger than the menubar. Single-source — every
      selector that consumed --ui-font-display / --ui-font-heading
      / --ui-font-title now resolves to the body value. */
-  --ui-font-display: clamp(11px, calc(11.5px * var(--ui-scale)), 12px);
-  --ui-font-heading: clamp(11px, calc(11.5px * var(--ui-scale)), 12px);
-  --ui-font-title: clamp(11px, calc(11.5px * var(--ui-scale)), 12px);
-  --ui-font-body: clamp(11px, calc(11.5px * var(--ui-scale)), 12px);
-  --ui-font-control: clamp(10px, calc(10.5px * var(--ui-scale)), 11px);
-  --ui-font-meta: clamp(10px, calc(10px * var(--ui-scale)), 11px);
-  --ui-font-small: clamp(10px, calc(10.25px * var(--ui-scale)), 11px);
-  --ui-font-tiny: clamp(10px, calc(10px * var(--ui-scale)), 10.5px);
-  --ui-font-code: clamp(10px, calc(10.5px * var(--ui-scale)), 11px);
   --ui-font-label: var(--ui-font-meta);
   --ui-gap-xs: calc(4px * var(--ui-scale));
   --ui-gap-sm: calc(6px * var(--ui-scale));
   --ui-gap-md: calc(8px * var(--ui-scale));
   --ui-gap-lg: calc(12px * var(--ui-scale));
-  --ui-titlebar-height: calc(32px * var(--ui-scale));
   --ui-titlebar-padding-x: calc(8px * var(--ui-scale));
   --ui-titlebar-btn-width: calc(28px * var(--ui-scale));
   --ui-titlebar-btn-height: calc(24px * var(--ui-scale));
@@ -114,8 +56,6 @@
   --ui-taskbar-padding-x: calc(10px * var(--ui-scale));
   --ui-section-padding-y: calc(5px * var(--ui-scale));
   --ui-section-padding-x: calc(10px * var(--ui-scale));
-  --ui-panel-padding-x: calc(12px * var(--ui-scale));
-  --ui-panel-padding-y: calc(10px * var(--ui-scale));
   --ui-dialog-padding: calc(16px * var(--ui-scale));
   --ui-dialog-gap: calc(12px * var(--ui-scale));
   --ui-dialog-width: calc(380px * var(--ui-scale));
@@ -126,30 +66,8 @@
   --ui-chat-min-height: calc(58px * var(--ui-scale));
   --ui-chat-max-height: calc(140px * var(--ui-scale));
   --ui-select-padding-right: calc(28px * var(--ui-scale));
-  --ui-rail-width: clamp(calc(300px * var(--ui-scale)), 28vw, calc(460px * var(--ui-scale)));
-  --ui-rail-min-width: calc(180px * var(--ui-scale));
-  --ui-chat-priority-width: calc(520px * var(--ui-scale));
-  --ui-chat-min-width: calc(420px * var(--ui-scale));
-  --ui-sidebar-width: var(--ui-rail-width);
-  --ui-sections-width: var(--ui-rail-width);
-  --ui-resizer-width: 1px;
   --title-size: var(--ui-font-title);
-  --title-weight: 700;
-  --title-track: 0.08em;
   --subhead-size: var(--ui-font-control);
-  --subhead-weight: 600;
-  --subhead-track: 0.08em;
-  --font: "Aptos", "Segoe UI Variable Text", "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", sans-serif;
-  --mono: "Cascadia Code", "JetBrains Mono", "SF Mono", "Cascadia Mono", ui-monospace, monospace;
-  --panel-fill:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015) 58%, rgba(255, 255, 255, 0.03)),
-    var(--surface);
-  --panel-fill-hover:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, transparent), rgba(255, 255, 255, 0.025) 58%, rgba(255, 255, 255, 0.03)),
-    var(--surface-hover);
-  --card-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015) 72%), var(--subtle-1);
-  --card-fill-hover:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, transparent), rgba(255, 255, 255, 0.02) 68%), var(--surface-hover);
 }
 
 /* Early vscode-dark :root override retired. It duplicated 34 of the

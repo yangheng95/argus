@@ -1736,6 +1736,29 @@ Progress log:
   primitive + dark-mode-primary-button + section / sections single-
   source tests pass; tsc clean; vite build green (3.63s).
 
+- 2026-05-04 (CRON slice, Claude `59d2a6593` follow-up): Pruned 72
+  dead duplicate token definitions from the early `:root` block.
+  styles.css declared `:root` at line 2 (the IntelliJ-Darcula
+  fallback) and `:root, body[data-theme="dark"]` at line 6976 (the
+  iter22 cohesive-workbench palette). 67 tokens differed between
+  the two blocks (early lost cascade), 5 were identical (no-op).
+  Both kept the same token defined twice with the late winning. The
+  early values rendered nowhere yet contributed cognitive noise and
+  a subtle bug surface — any palette tweak in the early block had
+  zero effect on dark theme. Kept the 55 :root-only tokens (truly
+  theme-neutral structural sizing + color-mix on var(--accent)
+  aliases that adapt per theme + the dialog-backdrop / session-
+  scrollbar-size / aliases like --ok / --warning / --danger /
+  --text-dim / --accent-glow that all resolve via theme-aware
+  references). Guard ceilings: `!important` unchanged at 81;
+  `body[data-theme]` unchanged at 20; theme layout overrides
+  unchanged at 7. Added 1 ownership test that fails if any token is
+  redefined in both `:root` and `:root, body[data-theme="dark"]`.
+  styles.css size 248718 → 244681 bytes (-4KB). All 122 architecture
+  guards + SSE refresh + button-primitive + dark-mode-primary-button
+  + section / sections single-source + default-theme tests pass; tsc
+  clean; vite build green (4.56s, 324KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD

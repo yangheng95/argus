@@ -203,6 +203,31 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test(":root and :root,body[data-theme='dark'] do not redefine the same token", () => {
+    // Pre-2026-05-04 :root carried 67 palette tokens that were also
+    // declared in `:root, body[data-theme="dark"]` with different
+    // values + 5 declared with identical values. The cascade winner
+    // was always the late block, so the early :root values rendered
+    // nowhere. This guard ensures the dual-source pattern stays
+    // retired so any palette tweak lands in one place.
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    function tokens(headPattern: string): Set<string> {
+      const m = new RegExp(headPattern).exec(styles)
+      if (!m) return new Set()
+      const open = m.index + m[0].length - 1
+      const close = styles.indexOf("\n}", open)
+      if (close < 0) return new Set()
+      const body = styles.slice(open + 1, close)
+      const set = new Set<string>()
+      for (const x of body.matchAll(/^[ \t]*(--[\w-]+)\s*:/gm)) set.add(x[1]!)
+      return set
+    }
+    const root = tokens(`(^|\\n):root\\s*\\{`)
+    const rootDark = tokens(`(^|\\n):root,[\\s\\S]*?body\\[data-theme="dark"\\]\\s*\\{`)
+    const overlap = [...root].filter((tok) => rootDark.has(tok))
+    expect(overlap).toEqual([])
+  })
+
   test("each theme has at most one solo body[data-theme=…] palette block", () => {
     // Pre-2026-05-04 styles.css carried two `body[data-theme="light"]`
     // blocks (line 208 + 7261) and two `body[data-theme="vscode-dark"]`
