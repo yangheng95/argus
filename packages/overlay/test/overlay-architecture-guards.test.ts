@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(311)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(201)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(306)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(199)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(198)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(193)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -442,6 +442,36 @@ describe("overlay architecture guards", () => {
         expect(body).toContain(declaration)
       }
     }
+  })
+
+  test("workspace and inspector stack spacing are canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.(?:workspace-main|sections-stack)\b/.test(selector)) continue
+
+      expect(body).not.toMatch(/\b(?:gap|margin(?:-[a-z]+)?|padding(?:-[a-z]+)?)\s*:/)
+    }
+
+    const workspaceBodies = Array.from(styles.matchAll(/(^|\n)\.workspace-main\s*\{([^{}]*)\}/g)).map(
+      (match) => match[2] ?? "",
+    )
+    const workspaceBody = workspaceBodies.at(-1) ?? ""
+    for (const declaration of ["gap: 0", "margin: 0", "padding: 0"]) {
+      expect(workspaceBody).toContain(declaration)
+    }
+
+    const sectionsBodies = Array.from(styles.matchAll(/(^|\n)\.sections-stack\s*\{([^{}]*)\}/g)).map(
+      (match) => match[2] ?? "",
+    )
+    const sectionsBody = sectionsBodies.at(-1) ?? ""
+    expect(sectionsBody).toContain("gap: calc(4px * var(--ui-scale))")
+    expect(sectionsBody).toContain("padding: calc(4px * var(--ui-scale))")
   })
 
   test("chat scroll layout is canonical, not theme scoped", () => {
