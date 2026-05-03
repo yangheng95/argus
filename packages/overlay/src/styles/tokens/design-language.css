@@ -24,4 +24,5 @@
   --oc-header-border: 0 solid transparent;
   --oc-header-shadow: none;
   --oc-titlebar-menu-text: #000000;
+  --oc-titlebar-gap: calc(2px * var(--ui-scale, 1));
 }

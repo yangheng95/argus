@@ -370,6 +370,14 @@ Progress log:
   This document is now also the cross-agent coordination source: both agents
   must update this log, respect file ownership, run the same guard/test gates,
   and avoid touching unrelated dirty files.
+- 2026-05-03: Promoted titlebar layout container `gap` out of the late
+  `body[data-theme] :is(...)` `!important` reset and into the canonical
+  `.titlebar-left/-brand/-nav/-nav-group/-utility/-actions/-status-cluster/`
+  `-window-controls` rules via the new `--oc-titlebar-gap` design-language
+  token. Titlebar inner spacing is now theme-invariant and resolved through
+  the token contract instead of an `!important` chain. Guard ceilings drop to
+  `!important <= 233`, `body[data-theme] <= 148`, and theme layout/chrome
+  overrides <= 84.
 
 Trigger: user feedback (2026-05-03):
 
@@ -404,9 +412,9 @@ one theme contract, and no runtime God CSS path left behind.
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `packages/overlay/src/styles.css`      | **15,172 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **2,023 lines**                                                                         |
-| Total `!important` in stylesheets      | **234** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **149**                                                                                 |
-| Theme layout/chrome overrides          | **85** current guard baseline                                                           |
+| Total `!important` in stylesheets      | **233** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **148**                                                                                 |
+| Theme layout/chrome overrides          | **84** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
 | Total `.tsx` LOC under `packages/overlay/src` | **15,108**                                                                      |
