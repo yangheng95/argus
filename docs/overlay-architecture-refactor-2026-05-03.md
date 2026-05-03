@@ -1495,6 +1495,34 @@ Progress log:
   connecting"]` variant + `__dot` element + `@keyframes conn-
   banner-pulse` rule are all preserved. Ceilings unchanged.
 
+- 2026-05-03: Moved the TaskDirBar.tsx family
+  (working-directory + branch row in the chat header) into
+  surfaces/conversation.css: `.task-meta` / `.task-cwd` /
+  `.task-dir` / `.task-workspace` / `.task-workspace-row`
+  layout containers + `.vcs-badge` (+ 3 `[data-tone]` variants
+  + `-icon` / `-branch` / `-counts` / `-arrows` children) +
+  `.task-dir-shell` + `.task-cwd-dropdown` (+ multi-class
+  `:hover` / `:focus-visible`, `[data-open="true"]`) +
+  `.task-cwd-caret` (+ child overrides on dropdown
+  hover/open) + `.task-dir-actions` / `-path` (+ `::-webkit-
+  scrollbar`) + the `.task-dir-tool, -node, -step, -empty`
+  multi-class reset + per-element rules + state variants.
+  Token conversions: 1× `1px` border on `.vcs-badge` →
+  `var(--oc-border-width)`; raw slate hex `#94a3b8` (default
+  caret) and `#e5e7eb` (hover/open caret) routed through
+  `var(--text-muted)` and `var(--text-strong)` for theme
+  adaptation; raw `rgba(248, 113, 113, 0.12)` danger-hover
+  background (= literal expansion of `--bad` at 12%) →
+  `color-mix(in srgb, var(--bad) 12%, transparent)`. Updated
+  existing directory/sidebar/workspace-controls-canonical
+  guard to scan styles.css + conversation.css + sidebar.css
+  for theme overrides on this control set, and now reads
+  `.task-dir-shell` solo body from conversation.css. New
+  ownership guard asserts 19 base classes + 3 vcs-badge tone
+  variants + multi-class hover/focus + `[data-open]` variant
+  + `.task-dir-tool.danger:hover` selector + absence of the 3
+  retired raw color literals. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
