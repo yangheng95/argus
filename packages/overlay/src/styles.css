@@ -7513,13 +7513,15 @@ select.field-input option {
 }
 
 .agent-workflow-row {
-  --workflow-indent: calc(var(--workflow-depth, 0) * 18px * var(--ui-scale));
+  --lane-shift: calc(var(--workflow-depth, 0) * 20px * var(--ui-scale));
   position: relative;
   display: grid;
-  grid-template-columns: calc(14px * var(--ui-scale)) minmax(0, 1fr);
-  gap: calc(6px * var(--ui-scale));
-  margin-left: var(--workflow-indent);
-  margin-bottom: calc(10px * var(--ui-scale));
+  grid-template-columns: calc(34px * var(--ui-scale)) minmax(0, 1fr);
+  gap: calc(10px * var(--ui-scale));
+  min-height: calc(104px * var(--ui-scale));
+  margin-left: var(--lane-shift);
+  margin-bottom: calc(14px * var(--ui-scale));
+  padding-left: 0;
 }
 
 .agent-workflow-rail {
@@ -15109,17 +15111,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh
 body[data-theme="light"] .agent-workflow-refresh:hover,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh:hover {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong)) !important;
-}
-
-body[data-theme="light"] .agent-workflow-row,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-row {
-  --lane-shift: calc(var(--workflow-depth, 0) * 20px * var(--ui-scale));
-  grid-template-columns: calc(34px * var(--ui-scale)) minmax(0, 1fr);
-  gap: calc(10px * var(--ui-scale));
-  min-height: calc(104px * var(--ui-scale));
-  margin-left: var(--lane-shift);
-  margin-bottom: calc(14px * var(--ui-scale));
-  padding-left: 0;
 }
 
 body[data-theme="light"] .agent-workflow-rail,

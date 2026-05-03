@@ -158,13 +158,13 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(256)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(169)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(168)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(133)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(127)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -498,6 +498,37 @@ describe("overlay architecture guards", () => {
       "overflow-y: auto",
       "padding: calc(18px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(38px * var(--ui-scale))",
       "calc(10px * var(--ui-scale))",
+    ]) {
+      expect(body).toContain(declaration)
+    }
+  })
+
+  test("workflow row geometry is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.agent-workflow-row\b/.test(selector)) continue
+
+      expect(body).not.toMatch(
+        /\b(?:--lane-shift|grid-template-columns|gap|min-height|margin(?:-[a-z]+)?|padding(?:-[a-z]+)?)\s*:/,
+      )
+    }
+
+    const body = soloRuleBody(styles, ".agent-workflow-row")
+    for (const declaration of [
+      "--lane-shift: calc(var(--workflow-depth, 0) * 20px * var(--ui-scale))",
+      "display: grid",
+      "grid-template-columns: calc(34px * var(--ui-scale)) minmax(0, 1fr)",
+      "gap: calc(10px * var(--ui-scale))",
+      "min-height: calc(104px * var(--ui-scale))",
+      "margin-left: var(--lane-shift)",
+      "margin-bottom: calc(14px * var(--ui-scale))",
+      "padding-left: 0",
     ]) {
       expect(body).toContain(declaration)
     }
