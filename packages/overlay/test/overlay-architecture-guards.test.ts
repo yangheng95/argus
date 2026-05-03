@@ -365,6 +365,29 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("var(--oc-border-width)")
   })
 
+  test("section content rails (icon, title, badge, body, caret) are owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "section-icon",
+      "section-title",
+      "section-badge",
+      "section-head-action",
+      "section-body",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(styles).not.toMatch(/(^|\n)\.section-head::before\s*\{/)
+    expect(inspectorSurface).toMatch(/\.section-head::before\s*\{/)
+    expect(inspectorSurface).toMatch(/\.section\[open\] > \.section-head::before\s*\{/)
+    expect(inspectorSurface).toMatch(/\.section-badge\[data-tone="(?:good|bad|warn|accent)"\](?:::before)?\s*\{/)
+    expect(inspectorSurface).toMatch(/\.section-badge\[data-variant="metric"\]/)
+    expect(inspectorSurface).toContain("var(--oc-radius-pill)")
+  })
+
   test("conversation goals strip is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const conversationSurface = readText(
@@ -1558,21 +1581,26 @@ describe("overlay architecture guards", () => {
 
   test("right panel card radius and body padding are canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")),
+    )
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1] ?? ""
-      const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
-      if (
-        !isThemeSelector ||
-        !/(?:^|[\s>+~,])\.(?:section|gwg|section-body|gwg-body)(?:$|[\s:{.#\[,>+~])/.test(selector)
-      ) {
-        continue
+    for (const source of [styles, inspectorSurface]) {
+      for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = match[1] ?? ""
+        const body = match[2] ?? ""
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+          selector,
+        )
+        if (
+          !isThemeSelector ||
+          !/(?:^|[\s>+~,])\.(?:section|gwg|section-body|gwg-body)(?:$|[\s:{.#\[,>+~])/.test(selector)
+        ) {
+          continue
+        }
+
+        expect(body).not.toMatch(/\b(?:border-radius|padding(?:-[a-z]+)?)\s*:/)
       }
-
-      expect(body).not.toMatch(/\b(?:border-radius|padding(?:-[a-z]+)?)\s*:/)
     }
 
     for (const selector of [".section", ".gwg"]) {
@@ -1580,10 +1608,12 @@ describe("overlay architecture guards", () => {
       expect(body).toContain("border-radius: calc(5px * var(--ui-scale))")
     }
 
-    for (const selector of [".section-body", ".gwg-body"]) {
-      const body = soloRuleBody(styles, selector)
-      expect(body).toContain("padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))")
-    }
+    expect(soloRuleBody(inspectorSurface, ".section-body")).toContain(
+      "padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))",
+    )
+    expect(soloRuleBody(styles, ".gwg-body")).toContain(
+      "padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))",
+    )
   })
 
   test("board intro density and typography are canonical, not theme scoped", () => {
