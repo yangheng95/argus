@@ -265,6 +265,11 @@ Progress log:
   light/dark theme resets. Their gap/margin/padding now live in canonical
   layout rules, reducing guard ceilings to `!important <= 306`,
   `body[data-theme] <= 199`, and theme layout/chrome overrides <= 193.
+- 2026-05-03: Folded `.section`/`.gwg` radius and
+  `.section-body`/`.gwg-body` padding out of light/dark theme resets. Right
+  panel card shape and density now live in canonical component rules, reducing
+  guard ceilings to `!important <= 304`, `body[data-theme] <= 197`, and theme
+  layout/chrome overrides <= 191.
 
 Trigger: user feedback (2026-05-03):
 
