@@ -142,14 +142,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(349)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(236)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(342)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(232)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(253)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(248)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -173,6 +173,18 @@ describe("overlay architecture guards", () => {
       if (!isThemeSelector) continue
 
       expect(selector).not.toMatch(/(?:section-head|gwg-header|config-section-head|config-subsection-head)/)
+    }
+  })
+
+  test("criteria groups do not rely on theme layout or chrome resets", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      if (!isThemeSelector) continue
+
+      expect(selector).not.toMatch(/criteria-group(?:-list)?/)
     }
   })
 

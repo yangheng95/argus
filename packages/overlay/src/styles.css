@@ -3999,21 +3999,20 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   gap: calc(8px * var(--ui-scale));
 }
 
-/* iter52: canonical bg switched from `transparent` to
-   `var(--surface-inset)` to match what the !important reset
-   chain actually rendered. Border-radius switched from
-   hardcoded 8px to var(--radius) (≈10px) for the same
-   reason — the reset's var(--radius) won via !important.
-   `.criteria-group` now drops out of the reset chain at
-   ~12648; only `.gwg` + `.delivery-panel` remain. */
+/* Single source after iter57. Earlier canonicals said
+   `.criteria-group` had a bordered card shell, while the theme
+   reset tail forced compact spacing, a small radius, and no
+   visible border. Fold the rendered chrome here so criteria
+   groups no longer depend on theme layout/chrome overrides. */
 .criteria-group {
   display: flex;
   flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale));
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--surface-inset);
+  gap: calc(3px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale));
+  border: 0;
+  border-radius: calc(5px * var(--ui-scale));
+  background: var(--surface);
+  box-shadow: none;
   transition:
     border-color 120ms,
     background 120ms;
@@ -4060,7 +4059,8 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .criteria-group-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: calc(4px * var(--ui-scale));
+  padding: 0;
 }
 
 .criteria-item {
@@ -14345,7 +14345,6 @@ body[data-theme="light"] .chat-toolbar-btn[data-active] {
 body[data-theme="light"] .section,
 body[data-theme="light"] .gwg,
 body[data-theme="light"] .delivery-panel,
-body[data-theme="light"] .criteria-group,
 body[data-theme="light"] .eval-error,
 body[data-theme="light"] .extension-row,
 body[data-theme="light"] .channel-doc-card,
@@ -14595,7 +14594,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-toolbar-btn[data-
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .gwg,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .delivery-panel,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .criteria-group,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .eval-error,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .extension-row,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .channel-doc-card,
@@ -14658,7 +14656,6 @@ body[data-theme="vscode-dark"] .chat-scroll > .interaction-card,
 body[data-theme="vscode-dark"] .section,
 body[data-theme="vscode-dark"] .gwg,
 body[data-theme="vscode-dark"] .delivery-panel,
-body[data-theme="vscode-dark"] .criteria-group,
 body[data-theme="vscode-dark"] .eval-error,
 body[data-theme="vscode-dark"] .extension-row,
 body[data-theme="vscode-dark"] .channel-doc-card,
@@ -15013,8 +15010,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-stack {
   padding: calc(4px * var(--ui-scale)) !important;
 }
 
-body[data-theme="light"] :is(.section, .gwg, .delivery-panel, .criteria-group),
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section, .gwg, .delivery-panel, .criteria-group) {
+body[data-theme="light"] :is(.section, .gwg, .delivery-panel),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section, .gwg, .delivery-panel) {
   border-radius: calc(5px * var(--ui-scale)) !important;
 }
 
@@ -15130,19 +15127,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   border-radius: calc(4px * var(--ui-scale)) !important;
 }
 
-body[data-theme="light"] .criteria-group,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .criteria-group {
-  gap: calc(3px * var(--ui-scale)) !important;
-  padding: calc(4px * var(--ui-scale)) !important;
-  border-radius: calc(4px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] .criteria-group-list,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .criteria-group-list {
-  gap: calc(4px * var(--ui-scale)) !important;
-  padding: 0 !important;
-}
-
 body[data-theme="light"] .agent-workflow-panel,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-panel {
   display: flex;
@@ -15185,7 +15169,6 @@ body[data-theme="light"]
     .section,
     .gwg,
     .delivery-panel,
-    .criteria-group,
     .eval-error,
     .extension-row,
     .channel-doc-card,
@@ -15207,7 +15190,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .section,
     .gwg,
     .delivery-panel,
-    .criteria-group,
     .eval-error,
     .extension-row,
     .channel-doc-card,
