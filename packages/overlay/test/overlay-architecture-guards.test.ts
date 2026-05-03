@@ -461,6 +461,40 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("settings section + subsection collapsibles are owned by surfaces/settings.css", () => {
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    for (const className of [
+      "config-section",
+      "config-section-head",
+      "config-section-body",
+      "config-subsection",
+      "config-subsection-head",
+      "config-subsection-body",
+      "ext-group",
+      "ext-group-body",
+    ]) {
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(settingsSurface).toMatch(/\.config-section\[open\]\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-section:hover,\s*\.config-section:focus-within\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-section-head::before\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-section\[open\] \> \.config-section-head::before\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-subsection\[open\] \> \.config-subsection-head::before\s*\{/)
+    expect(settingsSurface).toMatch(/\.ext-group \+ \.ext-group\s*\{/)
+    expect(settingsSurface).not.toMatch(/rgba\(91,\s*141,\s*239/)
+    expect(settingsSurface).not.toMatch(/content:\s*"▸"/)
+
+    // The solo `.config-section { border: 0 / radius / surface-inset }`
+    // and its hover/[open] state rules must NOT also appear in
+    // styles.css. We probe via soloRuleBody — the helper requires
+    // the selector to start at column 0, which excludes multi-class
+    // typography rules like `.dialog-title, .config-section-head`.
+    expect(() => soloRuleBody(readText(join(OVERLAY_ROOT, "src/styles.css")), ".config-section")).toThrow()
+    expect(() => soloRuleBody(readText(join(OVERLAY_ROOT, "src/styles.css")), ".config-subsection")).toThrow()
+  })
+
   test("settings content panel + resizer are owned by surfaces/settings.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
@@ -1544,8 +1578,28 @@ describe("overlay architecture guards", () => {
       expect(usesChromeImportant).toBe(false)
     }
 
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+    for (const source of [styles, settingsSurface]) {
+      for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = match[1] ?? ""
+        const body = match[2] ?? ""
+        const hasConfigContainer = /(?:^|\s|:is\([^)]*)\.config-(?:section|subsection)(?:\b|[:.[#])/.test(
+          selector,
+        )
+        if (!hasConfigContainer) continue
+
+        const isThemeSelector =
+          /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+        const usesChromeImportant =
+          /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(body)
+
+        expect(isThemeSelector).toBe(false)
+        expect(usesChromeImportant).toBe(false)
+      }
+    }
+
     for (const selector of [".config-section", ".config-subsection"]) {
-      const body = soloRuleBody(styles, selector)
+      const body = soloRuleBody(settingsSurface, selector)
       expect(body).toContain("background: var(--surface-inset)")
       expect(body).toContain("border: 0")
     }

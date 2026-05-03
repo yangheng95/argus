@@ -6705,300 +6705,32 @@ body[data-theme="light"] .config-close-btn:hover {
   padding-right: 2px;
 }
 
-/* Single source after iter33. The canonical here used to
-   declare `background: var(--subtle-1)` while the late-tail
-   `!important` reset shared with .section / .gwg /
-   .delivery-panel / .criteria-group / .eval-error /
-   .channel-doc-card / .detail-card forced
-   `var(--surface-inset)` over it — the source said one
-   thing, the browser rendered another. Same rule-8 active
-   conflict iter28 cleaned for .config-subsection and iter30
-   for .extension-row. Updated canonical to declare
-   --surface-inset directly so source matches rendered. iter56
-   folded the later theme reset's borderless chrome into this
-   canonical, so theme selectors no longer decide settings
-   container shape. Hover transition kept; the [open] / :hover /
-   :focus-within pseudo-state rules below still drive the hover
-   wash. */
-.config-section {
-  border: 0;
-  border-radius: var(--section-corner);
-  background: var(--surface-inset);
-  overflow: hidden;
-  box-shadow: none;
-  transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
-}
-.config-section[open] {
-  background: var(--subtle-2);
-}
+/* `.config-section` + `[open]` + hover/focus-within +
+   `[open]:hover/focus-within` + `.config-section-head` (+ ::-
+   webkit-details-marker / ::marker / ::before CSS-chevron /
+   `[open] > ::before` rotation / :hover) + `.config-section-body`
+   (+ hover/focus-within child) + mirror `.config-subsection`
+   family + `.config-subsection-body` (+ hover/focus-within
+   child) + `.ext-group` family live in `styles/surfaces/
+   settings.css` now. Per rule 8 + the iter29 audit comment, the
+   early `::before { content: "▸" }` Unicode-glyph chevron + its
+   `[open]` rotate(90deg) sibling were dropped (they were
+   already documented dead — fully shadowed by the late CSS-
+   drawn chevron pair). Raw `rgba(91, 141, 239, X)` accent washes
+   (= literal expansion of `--accent`) routed through `color-mix
+   (var(--accent) X%, transparent)`; raw `rgba(255, 255, 255, X)`
+   inset highlights → `color-mix(white X%, transparent)`. */
 
-.config-section:hover,
-.config-section:focus-within {
-  border-color: var(--hover-accent-border);
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 62%, transparent), var(--subtle-1);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    var(--hover-accent-shadow);
-}
-
-.config-section[open]:hover,
-.config-section[open]:focus-within {
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 62%, transparent), var(--subtle-2);
-}
-
-.config-section-head {
-  font-size: var(--title-size);
-  font-weight: var(--title-weight);
-  color: var(--text-strong);
-  letter-spacing: var(--title-track);
-  line-height: 1.2;
-  box-sizing: border-box;
-  min-height: calc(32px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: var(--section-field-gap);
-  border: 1px solid transparent;
-  border-bottom-color: var(--divider-soft);
-  border-radius: var(--radius) var(--radius) 0 0;
-  background: var(--oc-header-bg);
-  box-shadow: none;
-  position: relative;
-  line-height: 1.2;
-  transition:
-    background 120ms,
-    border-color 120ms,
-    box-shadow 120ms,
-    color 120ms,
-    transform 120ms;
-}
-.config-section-head::-webkit-details-marker {
-  display: none;
-}
-.config-section-head::marker {
-  content: "";
-}
-.config-section-head::before {
-  content: "▸";
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  transition: transform 120ms;
-}
-
-.config-section[open] > .config-section-head::before {
-  transform: rotate(90deg);
-}
-.config-section-head:hover {
-  color: var(--text-strong);
-  background: var(--hover-accent-wash);
-  border-top-color: var(--hover-accent-border);
-  border-right-color: var(--hover-accent-border);
-  border-bottom-color: var(--hover-accent-border);
-  border-left-color: var(--hover-accent-border);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 0 0 1px var(--hover-accent-border);
-}
-
+/* `.extension-head .field-label` typography late-dupe: same
+   `--title-size/-weight/-track` declaration as line ~7859's
+   multi-class. Stays here pending font-token cleanup pass on
+   `--title-*` / `--subhead-*`. */
 .extension-head .field-label {
   font-size: var(--title-size);
   font-weight: var(--title-weight);
   color: var(--text-strong);
   text-transform: none;
   letter-spacing: var(--title-track);
-}
-
-.config-section-body {
-  padding: var(--section-body-padding-y) var(--section-body-padding-x) calc(8px * var(--ui-scale));
-  display: flex;
-  flex-direction: column;
-  gap: var(--section-field-gap);
-  border: 1px solid transparent;
-  border-top: none;
-  border-radius: 0 0 var(--section-corner) var(--section-corner);
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
-}
-
-.config-section:hover > .config-section-body,
-.config-section:focus-within > .config-section-body {
-  background: linear-gradient(180deg, rgba(91, 141, 239, 0.06), rgba(91, 141, 239, 0.02) 68%, transparent);
-  border-color: rgba(91, 141, 239, 0.12);
-  border-top-color: transparent;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.config-subsection {
-  border: 0;
-  border-radius: var(--section-corner);
-  background: var(--surface-inset);
-  box-shadow: none;
-  transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
-}
-
-.config-subsection[open] {
-  background: var(--subtle-2);
-}
-
-.config-subsection:hover,
-.config-subsection:focus-within {
-  border-color: var(--hover-accent-border);
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 62%, transparent), var(--surface-inset);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    var(--hover-accent-shadow);
-}
-
-.config-subsection[open]:hover,
-.config-subsection[open]:focus-within {
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 62%, transparent), var(--subtle-2);
-}
-
-.config-subsection-head {
-  font-size: var(--ui-font-body);
-  font-weight: 600;
-  color: var(--text-strong);
-  padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: var(--section-field-gap);
-  min-height: calc(32px * var(--ui-scale));
-  line-height: 1.2;
-  border: 1px solid transparent;
-  border-radius: var(--radius) var(--radius) 0 0;
-  background: var(--oc-header-bg);
-  box-shadow: none;
-  transition:
-    background 120ms,
-    border-color 120ms,
-    box-shadow 120ms,
-    color 120ms,
-    transform 120ms;
-}
-
-.config-subsection-head::-webkit-details-marker {
-  display: none;
-}
-.config-subsection-head::marker {
-  content: "";
-}
-
-/* iter29: the early `::before { content: "▸"; … }` Unicode-
-   glyph chevron and its `[open]` rotate(90deg) sibling that
-   lived here were fully shadowed by the late-tail
-   CSS-drawn chevron at lines ~8508 / ~8519 (which sets
-   `content: ""` + border-right/border-bottom + rotate(-45)
-   on closed and rotate(45) on open). Editing here was a
-   no-op — `content: ""` from the late block emptied the
-   glyph, and the late `[open]` transform overrode the
-   90deg rotation. Removed; the late-tail pair is now the
-   single source. */
-
-.config-subsection-head:hover {
-  background: var(--hover-accent-wash);
-  border-top-color: var(--hover-accent-border);
-  border-right-color: var(--hover-accent-border);
-  border-bottom-color: var(--hover-accent-border);
-  border-left-color: var(--hover-accent-border);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 0 0 1px var(--hover-accent-border);
-}
-
-/* Flat (non-collapsible) groups used inside the Extensions panel. Replaces
- * nested <details class="config-subsection"> which produced redundant
- * collapsible bars inside an already-collapsible outer section. */
-.ext-group {
-  display: flex;
-  flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-}
-.ext-group + .ext-group {
-  margin-top: calc(10px * var(--ui-scale));
-  padding-top: calc(10px * var(--ui-scale));
-  border-top: 1px solid var(--border);
-}
-.ext-group-body {
-  display: flex;
-  flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-}
-
-/* Draw chevrons in CSS so the config toggles do not depend on glyph encoding. */
-.config-section-head::before {
-  content: "";
-  width: calc(7px * var(--ui-scale));
-  height: calc(7px * var(--ui-scale));
-  flex-shrink: 0;
-  border-right: 1.5px solid var(--text-muted);
-  border-bottom: 1.5px solid var(--text-muted);
-  transform: rotate(-45deg) translateY(-1px);
-  transition:
-    transform 120ms ease,
-    border-color 120ms ease;
-}
-
-.config-section[open] > .config-section-head::before {
-  transform: rotate(45deg) translateY(-1px);
-}
-
-.config-subsection-head::before {
-  content: "";
-  width: calc(6px * var(--ui-scale));
-  height: calc(6px * var(--ui-scale));
-  flex-shrink: 0;
-  border-right: 1.5px solid var(--text-muted);
-  border-bottom: 1.5px solid var(--text-muted);
-  transform: rotate(-45deg) translateY(-1px);
-  transition:
-    transform 120ms ease,
-    border-color 120ms ease;
-}
-
-.config-subsection[open] > .config-subsection-head::before {
-  transform: rotate(45deg) translateY(-1px);
-}
-
-.config-subsection-body {
-  padding: 0 calc(9px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  display: flex;
-  flex-direction: column;
-  gap: var(--section-row-gap);
-  border: 1px solid transparent;
-  border-top: none;
-  border-radius: 0 0 var(--section-corner) var(--section-corner);
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
-}
-
-.config-subsection:hover > .config-subsection-body,
-.config-subsection:focus-within > .config-subsection-body {
-  background: linear-gradient(180deg, rgba(91, 141, 239, 0.06), rgba(91, 141, 239, 0.02) 68%, transparent);
-  border-color: rgba(91, 141, 239, 0.12);
-  border-top-color: transparent;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .config-inline-form {

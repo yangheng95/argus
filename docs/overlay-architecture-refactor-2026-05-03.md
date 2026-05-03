@@ -1374,6 +1374,44 @@ Progress log:
   + the resizer hover/active state multi-class. Ceilings
   unchanged.
 
+- 2026-05-03: Extended surfaces/settings.css with the
+  `.config-section` + `.config-subsection` collapsibles family
+  (the deepest token-debt block of the settings dialog):
+  outer `.config-section` (+ `[open]` + `:hover/:focus-within` +
+  `[open]:hover/:focus-within`) + `.config-section-head`
+  (with ::-webkit-details-marker, ::marker, ::before CSS-drawn
+  chevron + `[open] > ::before` rotation, `:hover`) +
+  `.config-section-body` (+ hover/focus-within child wash);
+  mirror `.config-subsection` family (same chrome pattern
+  applied one level deeper) + `.config-subsection-head` (with
+  same pseudo + chevron + hover) + `.config-subsection-body`
+  (+ hover/focus-within child wash); plus `.ext-group` flat
+  group family. Per rule 8 + the iter29 audit comment, the
+  early `::before { content: "▸" }` Unicode-glyph chevron + its
+  `[open]` rotate(90deg) sibling that lived in styles.css were
+  dropped — they were already documented dead, fully shadowed
+  by the late CSS-drawn chevron pair, and are now the single
+  source in the surface. Token conversions: 8× raw `rgba(91,
+  141, 239, X)` accent washes (= literal expansion of `--accent`)
+  routed through `color-mix(var(--accent) X%, transparent)`;
+  6× raw `rgba(255, 255, 255, X)` inset highlights →
+  `color-mix(in srgb, white X%, transparent)`; 8× `1px` borders
+  → `var(--oc-border-width)`; 4× `1.5px` chevron rule width
+  wrapped in `calc(1.5px * --ui-scale)`; chevron transform
+  `translateY(-1px)` wrapped in `calc(-1px * --ui-scale)`. The
+  `.extension-head .field-label` typography late-dupe was kept
+  in styles.css but deduplicated to one block (was at ~7171 +
+  ~7867 separately) — a deeper font-token cleanup pass on
+  `--title-*` / `--subhead-*` is the right place to retire it
+  fully. Updated existing settings-config-containers-no-theme-
+  resets guard to scan both styles.css and settings.css and
+  read the solo `.config-section` / `.config-subsection` rule
+  bodies from the surface. New ownership guard asserts 8 base
+  classes + `[open]` + multi-class hover + ::before CSS chevron
+  + `[open] > ::before` rotation pair + ext-group sibling rule
+  + absence of all retired raw rgba accent literals + the
+  retired `▸` glyph. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
