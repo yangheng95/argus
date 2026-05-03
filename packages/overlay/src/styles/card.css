@@ -1506,24 +1506,24 @@ body[data-theme="light"] .card__round {
    ========================================================================== */
 
 .card {
-  border-radius: var(--card-radius) !important;
-  border: 1px solid var(--card-border) !important;
-  background: var(--card-bg-0) !important;
-  margin: var(--card-gap) 0 !important;
-  box-shadow: none !important;
+  border-radius: var(--card-radius);
+  border: 1px solid var(--card-border);
+  background: var(--card-bg-0);
+  margin: var(--card-gap) 0;
+  box-shadow: none;
   overflow: hidden;
-  transform: none !important;
+  transform: none;
 }
 
 .card[data-depth="0"] {
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .card[data-depth="0"]:hover {
-  background: var(--card-bg-hover) !important;
-  border-color: var(--card-border-strong) !important;
-  box-shadow: none !important;
-  transform: none !important;
+  background: var(--card-bg-hover);
+  border-color: var(--card-border-strong);
+  box-shadow: none;
+  transform: none;
 }
 
 .card[data-depth="0"][data-kind="agent"],
@@ -1531,43 +1531,43 @@ body[data-theme="light"] .card__round {
 .card[data-depth="0"][data-kind="phase"],
 .card[data-depth="0"][data-kind="step"],
 .card[data-depth="0"][data-kind="tool"] {
-  border-left: 3px solid var(--card-stage, var(--card-line)) !important;
-  background: var(--card-bg-0) !important;
+  border-left: 3px solid var(--card-stage, var(--card-line));
+  background: var(--card-bg-0);
 }
 
 .card:not([data-depth="0"]) {
-  border: 0 !important;
-  border-left: 2px solid var(--card-line-dim) !important;
-  border-radius: 0 !important;
-  margin: calc(6px * var(--ui-scale, 1)) 0 !important;
-  background: transparent !important;
-  opacity: 1 !important;
+  border: 0;
+  border-left: 2px solid var(--card-line-dim);
+  border-radius: 0;
+  margin: calc(6px * var(--ui-scale, 1)) 0;
+  background: transparent;
+  opacity: 1;
 }
 
 .card:not([data-depth="0"]):hover {
-  background: transparent !important;
+  background: transparent;
 }
 
 .card__head {
-  min-height: calc(34px * var(--ui-scale, 1)) !important;
+  min-height: calc(34px * var(--ui-scale, 1));
   gap: calc(8px * var(--ui-scale, 1));
-  padding: var(--card-pad-y) var(--card-pad-x) !important;
-  background: transparent !important;
-  border-bottom: 1px solid transparent !important;
+  padding: var(--card-pad-y) var(--card-pad-x);
+  background: transparent;
+  border-bottom: 1px solid transparent;
   line-height: 1.35;
 }
 
 .card--expanded > .card__head {
-  border-bottom-color: var(--card-line-dim) !important;
+  border-bottom-color: var(--card-line-dim);
 }
 
 .card__head[role="button"]:hover {
-  background: color-mix(in srgb, var(--card-bg-hover) 68%, transparent) !important;
+  background: color-mix(in srgb, var(--card-bg-hover) 68%, transparent);
 }
 
 .card:not([data-depth="0"]) .card__head {
-  min-height: calc(28px * var(--ui-scale, 1)) !important;
-  padding: calc(6px * var(--ui-scale, 1)) calc(9px * var(--ui-scale, 1)) !important;
+  min-height: calc(28px * var(--ui-scale, 1));
+  padding: calc(6px * var(--ui-scale, 1)) calc(9px * var(--ui-scale, 1));
 }
 
 .card__title-row {
@@ -1589,7 +1589,7 @@ body[data-theme="light"] .card__round {
 .card__stat,
 .card__todo-count,
 .card__token-hint {
-  border-radius: calc(5px * var(--ui-scale, 1)) !important;
+  border-radius: calc(5px * var(--ui-scale, 1));
   letter-spacing: 0;
 }
 
@@ -1601,7 +1601,7 @@ body[data-theme="light"] .card__round {
   border: 1px solid var(--card-border);
   background: var(--surface, transparent);
   color: var(--text-muted);
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .card__badge--done {
@@ -1623,13 +1623,13 @@ body[data-theme="light"] .card__round {
 }
 
 .card__body {
-  padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x) !important;
+  padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x);
   background: transparent;
   line-height: 1.55;
 }
 
 .card:not([data-depth="0"]) > .card__body {
-  padding: calc(6px * var(--ui-scale, 1)) calc(8px * var(--ui-scale, 1)) calc(8px * var(--ui-scale, 1)) calc(12px * var(--ui-scale, 1)) !important;
+  padding: calc(6px * var(--ui-scale, 1)) calc(8px * var(--ui-scale, 1)) calc(8px * var(--ui-scale, 1)) calc(12px * var(--ui-scale, 1));
 }
 
 .card__children {
@@ -1687,15 +1687,15 @@ body[data-theme="light"] .card__round {
 }
 
 .card[data-kind="message"] {
-  background: var(--surface-inset) !important;
-  border-color: var(--card-border) !important;
+  background: var(--surface-inset);
+  border-color: var(--card-border);
 }
 
 .card[data-kind="message"][data-role="user"] {
-  background: var(--accent-dim) !important;
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent) !important;
-  border-left: 3px solid var(--accent) !important;
-  box-shadow: none !important;
+  background: var(--accent-dim);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  border-left: 3px solid var(--accent);
+  box-shadow: none;
 }
 
 .card[data-kind="message"][data-role="user"] > .card__head .card__title {
@@ -1703,22 +1703,22 @@ body[data-theme="light"] .card__round {
 }
 
 .card[data-kind="message"][data-role="system"] {
-  background: var(--card-system-bg) !important;
-  border-color: var(--card-system-border) !important;
-  border-left: 2px solid var(--card-system-rail) !important;
+  background: var(--card-system-bg);
+  border-color: var(--card-system-border);
+  border-left: 2px solid var(--card-system-rail);
 }
 
 .card[data-depth="0"][data-kind="message"] > .card__head,
 .card[data-depth="0"][data-kind="message"] > .card__body {
-  border-bottom: 0 !important;
+  border-bottom: 0;
 }
 
 .interaction-card {
-  border-radius: var(--card-radius) !important;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--card-border)) !important;
-  border-left: 3px solid var(--card-stage, var(--accent)) !important;
-  background: var(--surface-inset) !important;
-  box-shadow: none !important;
+  border-radius: var(--card-radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--card-border));
+  border-left: 3px solid var(--card-stage, var(--accent));
+  background: var(--surface-inset);
+  box-shadow: none;
   padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x);
 }
 
@@ -1728,8 +1728,8 @@ body[data-theme="light"] .card__round {
 
 .interaction-card__custom-input,
 .trace-panel {
-  border-radius: calc(6px * var(--ui-scale, 1)) !important;
-  box-shadow: none !important;
+  border-radius: calc(6px * var(--ui-scale, 1));
+  box-shadow: none;
 }
 
 /* ── Task progress bar ───────────────────────────────────────

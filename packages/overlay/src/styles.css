@@ -960,6 +960,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: calc(5px * var(--ui-scale));
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: calc(4px * var(--ui-scale));
   background: var(--subtle-3);
@@ -997,6 +998,7 @@ a {
 .titlebar-status-icon {
   width: var(--ui-titlebar-btn-width);
   justify-content: center;
+  padding: 0;
 }
 
 .titlebar-status-chip:hover,
@@ -1081,6 +1083,7 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
   background: var(--subtle-3);
   border: 1px solid var(--border);
   color: var(--text-soft);
@@ -14764,11 +14767,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   ) {
   gap: calc(2px * var(--ui-scale)) !important;
   padding-inline: calc(6px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] :is(.titlebar-btn, .titlebar-status-icon, .chat-toolbar-btn),
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.titlebar-btn, .titlebar-status-icon, .chat-toolbar-btn) {
-  padding: 0 !important;
 }
 
 /* iter57: `.chat-input` compact gap/padding folded into canonical. */

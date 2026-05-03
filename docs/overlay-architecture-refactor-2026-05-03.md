@@ -378,6 +378,17 @@ Progress log:
   the token contract instead of an `!important` chain. Guard ceilings drop to
   `!important <= 233`, `body[data-theme] <= 148`, and theme layout/chrome
   overrides <= 84.
+- 2026-05-03: Retired the `body[data-theme] :is(.titlebar-btn,`
+  `.titlebar-status-icon, .chat-toolbar-btn) { padding: 0 !important }`
+  reset. The canonical `.titlebar-btn`, `.titlebar-status-icon`, and
+  `.chat-toolbar-btn` rules now declare `padding: 0`, so icon-button geometry
+  no longer depends on theme-scoped chrome. Guard ceilings drop to
+  `!important <= 232` and `body[data-theme] <= 147`.
+- 2026-05-03: Removed the remaining `!important` declarations from
+  `styles/card.css` after retiring the right-panel board-intro duplicate from
+  that file. Card/message/interaction chrome now resolves by load order and
+  selector specificity instead of an emergency override layer. Guard ceiling
+  drops again to `!important <= 183`.
 
 Trigger: user feedback (2026-05-03):
 
@@ -410,10 +421,10 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **15,172 lines** and still on the runtime path                                          |
-| `packages/overlay/src/styles/card.css` | **2,023 lines**                                                                         |
-| Total `!important` in stylesheets      | **233** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **148**                                                                                 |
+| `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles/card.css` | **1,722 lines**                                                                         |
+| Total `!important` in stylesheets      | **183** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **147**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
