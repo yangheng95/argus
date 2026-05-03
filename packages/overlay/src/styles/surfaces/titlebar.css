@@ -189,13 +189,82 @@
   }
 }
 
+.titlebar-theme-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(4px * var(--ui-scale));
+  margin-left: calc(32px * var(--ui-scale));
+}
+
+.titlebar-theme-option {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  background: transparent;
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: calc(5px * var(--ui-scale));
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.titlebar-theme-option:hover {
+  background: var(--subtle-3);
+  border-color: var(--subtle-5);
+  color: var(--text-strong);
+}
+
+.titlebar-theme-option[data-active="true"] {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--text-strong);
+  box-shadow: 0 0 0 var(--oc-border-width) var(--accent-dim);
+}
+
+.titlebar-theme-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar-theme-option-swatch {
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
+  border-radius: calc(3px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.titlebar-theme-option-swatch[data-theme="dark"] {
+  background: var(--oc-theme-swatch-dark);
+}
+
+.titlebar-theme-option-swatch[data-theme="light"] {
+  background: var(--oc-theme-swatch-light);
+}
+
+.titlebar-theme-option-swatch[data-theme="vscode-dark"] {
+  background: var(--oc-theme-swatch-vscode-dark);
+}
+
+.titlebar-theme-option-swatch[data-theme="system"] {
+  background: var(--oc-theme-swatch-system);
+}
+
 .brand-guide {
   position: relative;
   display: inline-flex;
   align-items: center;
+  gap: var(--oc-titlebar-gap);
   min-width: 0;
   padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border: var(--oc-border-width) solid transparent;
+  border: 0 solid transparent;
   border-radius: calc(10px * var(--ui-scale));
   cursor: help;
   outline: none;

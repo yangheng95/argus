@@ -27,4 +27,13 @@
   --oc-titlebar-gap: calc(2px * var(--ui-scale, 1));
   --oc-titlebar-status-radius: calc(10px * var(--ui-scale, 1));
   --oc-titlebar-status-icon: calc(14px * var(--ui-scale, 1));
+
+  /* Theme swatch previews: the titlebar theme-picker shows a 12x12 chip
+     for each available theme. These previews are metadata about *other*
+     themes, not the active one, so the gradients are deliberately fixed
+     hex literals routed through tokens instead of palette tokens. */
+  --oc-theme-swatch-dark: linear-gradient(135deg, #1e1f22 50%, #2b2d30 50%);
+  --oc-theme-swatch-light: linear-gradient(135deg, #f2f2f2 50%, #ffffff 50%);
+  --oc-theme-swatch-vscode-dark: linear-gradient(135deg, #1e1e1e 50%, #252526 50%);
+  --oc-theme-swatch-system: linear-gradient(135deg, #1e1f22 50%, #f2f2f2 50%);
 }
