@@ -341,6 +341,11 @@ Progress log:
   modal geometry and chrome are now theme-invariant, reducing guard ceilings to
   `!important <= 241`, `body[data-theme] <= 153`, and theme layout/chrome
   overrides <= 90.
+- 2026-05-03: Moved `.agent-workflow-report-head` and
+  `.agent-workflow-report-section` divider borders from theme selectors into
+  canonical report content rules. Workflow report internal separators now follow
+  one source, reducing guard ceilings to `!important <= 239`,
+  `body[data-theme] <= 151`, and theme layout/chrome overrides <= 88.
 
 Trigger: user feedback (2026-05-03):
 
