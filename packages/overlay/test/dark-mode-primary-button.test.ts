@@ -1,22 +1,22 @@
-// Regression for iter19 of the design-language audit.
+// Regression for iter19 of the design-language audit, refreshed for the
+// 2026-05-03 primary-button palette-only refactor.
 //
-// User feedback (2026-05-02 22:57): "深色模式下渐变色按钮有点
-// 奇怪" — the gradient primary buttons look weird in dark mode.
+// Original user feedback (2026-05-02 22:57): "深色模式下渐变色按钮有点
+// 奇怪" — the gradient primary buttons look weird in dark mode. The
+// original fix used a `body:is([data-theme="dark"], …) :is(.btn-primary,
+// .sidebar-btn-primary, .board-intro__cta-action)` selector to force a
+// solid accent on dark surfaces. That made the theme override button
+// chrome, which violates the "themes only swap palette" contract this
+// codebase now enforces.
 //
-// Primary buttons (.btn-primary, .sidebar-btn-primary,
-// .chat-send, .board-intro__cta-action) used a multi-hue
-// accent gradient — `linear-gradient(135deg, #4b8dff, #7b83ff
-// 52%, #9b62ff)` (blue → violet). On a dark surface this reads
-// as a saturated retro candy bar; the calm/flat trajectory
-// shipped in iter4 / iter15 / iter16 / iter17 / iter18 calls
-// for a single solid accent instead.
-//
-// Pin the contract: the dark-theme + vscode-dark-theme primary-
-// button overrides use solid `var(--accent)` for the resting
-// state and solid `var(--accent-hover)` on hover. The light
-// theme keeps its gradient (the user's complaint was scoped
-// to dark mode and the lighter background carries a gradient
-// gracefully).
+// New contract: the dark + vscode-dark `:root` blocks override
+// `--accent-gradient` itself to `var(--accent)` (and
+// `--accent-gradient-hover` to `var(--accent-hover)`). The shared
+// canonical at the multi-class selector reads `--accent-gradient`
+// directly, so dark surfaces resolve to a solid accent without any
+// theme selector touching `.btn-primary` / `.sidebar-btn-primary` /
+// `.board-intro__cta-action`. Light keeps the linear-gradient palette
+// because the original complaint was scoped to dark.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
@@ -27,33 +27,50 @@ const STYLES = readFileSync(
   "utf8",
 )
 
-function ruleBodies(headRegex: RegExp): string[] {
-  const out: string[] = []
-  for (const match of STYLES.matchAll(headRegex)) {
-    const open = match.index! + match[0].length - 1
-    const close = STYLES.indexOf("}", open)
-    if (close < 0) continue
-    out.push(STYLES.slice(open + 1, close))
-  }
-  return out
+function rootBodyOfTheme(theme: "dark" | "vscode-dark"): string {
+  // styles.css carries multiple `body[data-theme="<theme>"]` palette
+  // blocks (the original early-cascade palette and the iter22 "cohesive
+  // workbench" palette later in the file). The iter22 block wins under
+  // CSS cascade, so this helper returns the last matching block — that is
+  // the one that actually decides the rendered palette.
+  const headRe = new RegExp(
+    `body\\[data-theme="${theme}"\\]\\s*\\{`,
+    "g",
+  )
+  const matches = [...STYLES.matchAll(headRe)]
+  if (matches.length === 0) throw new Error(`theme block for ${theme} not found`)
+  const last = matches[matches.length - 1]!
+  const open = last.index! + last[0].length - 1
+  const close = STYLES.indexOf("\n}", open)
+  if (close < 0) throw new Error(`theme block ${theme} missing close brace`)
+  return STYLES.slice(open + 1, close)
 }
 
 describe("dark-mode primary buttons render with a solid accent (no multi-hue gradient)", () => {
-  test("the dark-theme primary-button reset uses a solid accent, not the multi-hue gradient", () => {
-    // Find the block with both `[data-theme="dark"]` and the
-    // primary-button selector list. Assert its body uses
-    // `var(--accent)` (solid) and NOT `var(--accent-gradient)`.
-    const headRe = new RegExp(
-      `(^|\\n)(body[^{]*\\[data-theme=["']dark["'][^{]*?(?:\\.sidebar-btn-primary|\\.btn-primary|\\.chat-send)[^{]*?)\\{`,
+  for (const theme of ["dark", "vscode-dark"] as const) {
+    test(`${theme} :root flattens --accent-gradient to the solid accent palette`, () => {
+      const body = rootBodyOfTheme(theme)
+      expect(body).toMatch(/--accent-gradient:\s*var\(--accent\)\s*;/)
+      expect(body).toMatch(/--accent-gradient-hover:\s*var\(--accent-hover\)\s*;/)
+      // Guard against a regression that re-introduces a multi-hue
+      // gradient inside the dark palette: the token must resolve to a
+      // solid accent var, not a `linear-gradient(...)` value.
+      expect(body).not.toMatch(/--accent-gradient:\s*linear-gradient/)
+      expect(body).not.toMatch(/--accent-gradient-hover:\s*linear-gradient/)
+    })
+  }
+
+  test("primary-button selectors do not appear in any theme override block", () => {
+    // The chrome layer is single-sourced in the shared canonical at line
+    // 7585; no `body:is([data-theme="dark"], …) :is(.btn-primary, …)`
+    // override is allowed. Iter19's selector-driven fix has been
+    // retired in favour of a palette-only approach.
+    const themeWithPrimaryRe = new RegExp(
+      "body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))" +
+        "[^{]*(?:\\.btn-primary|\\.sidebar-btn-primary|\\.board-intro__cta-action)\\b",
       "g",
     )
-    const bodies = ruleBodies(headRe)
-    expect(bodies.length).toBeGreaterThan(0)
-    for (const body of bodies) {
-      // The hover-only block is allowed (it's also under
-      // dark-theme but governs hover state — same rule
-      // applies). Both should use solid accent.
-      expect(body).not.toMatch(/background:\s*var\(--accent-gradient(?:-hover)?\)/)
-    }
+    const stripped = STYLES.replace(/\/\*[\s\S]*?\*\//g, "")
+    expect(stripped).not.toMatch(themeWithPrimaryRe)
   })
 })

@@ -1566,6 +1566,37 @@ Progress log:
   the existing "task bar shell layout" test to assert the canonical
   lives in conversation.css. All 111 guard tests pass.
 
+- 2026-05-03 (CRON slice, Claude `db9d001dc` follow-up): Retired the
+  primary-action button siblings (`.btn-primary`, `.sidebar-btn-primary`,
+  `.board-intro__cta-action`) from every theme selector in styles.css.
+  Deleted: pre-iter22 dead `.btn-primary` duplicate (raw rgba gradient +
+  `#fff`), the `body[data-theme="light"]` chrome override block, the
+  `body:is([data-theme="dark"], [data-theme="vscode-dark"])` chrome
+  override block, and the iter19 per-theme `:is(...)` gradient/flat
+  split. Pruned the four multi-class scale-override `:is()` lists
+  (margin / gap+padding-inline / border+box-shadow / hover border+shadow)
+  to drop the primary-sibling members. Folded the chrome (gradient on
+  light, flat accent on dark/vscode-dark) into a single shared canonical
+  driven by palette tokens: dark + vscode-dark `:root` blocks now
+  override `--accent-gradient` to `var(--accent)` and
+  `--accent-gradient-hover` to `var(--accent-hover)`, so the canonical
+  reads the right value per theme without any selector. Added the
+  `--text-on-accent: #ffffff` palette token to retire the hardcoded
+  `#fff` / `#ffffff` button foreground. Updated `.board-intro__cta-action`
+  size/shape canonical to drop the now-redundant `background: var(--accent)`
+  / `color: #ffffff` / `border: 1px solid color-mix(...)` declarations
+  (chrome single-sourced in the shared rule). Guard ceilings tightened:
+  `!important` 125→106, `body[data-theme]` 62→56, theme layout overrides
+  28→22. Added 3 ownership tests: primary siblings absent from any
+  theme selector, dark + vscode-dark palettes flatten `--accent-gradient`
+  to `var(--accent)`, and the shared canonical consumes
+  `--accent-gradient` / `--text-on-accent` with no raw color literals.
+  Rewrote `dark-mode-primary-button.test.ts` to pin the new palette-only
+  contract instead of the retired selector-driven one — original user
+  feedback ("深色模式下渐变色按钮有点奇怪") still upheld through palette,
+  not chrome. All 115 architecture guards + 14 SSE refresh tests + button
+  primitive tests pass; vite build green.
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD

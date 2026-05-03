@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(125)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(62)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(106)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(56)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,60 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(28)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(22)
+  })
+
+  test("primary action button siblings have no theme chrome override", () => {
+    // Strip comments first: the canonical's documentation block mentions
+    // `body[data-theme]` as a literal phrase explaining what was retired;
+    // a non-comment-aware regex would walk from that prose into the
+    // canonical's selector list and report a false positive.
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    // Each of the three sibling classes must not appear inside any
+    // selector that starts with `body[data-theme=…]` or `body:is(…data-theme…)`.
+    // Theme palette (`--accent-gradient`) drives the gradient↔flat split
+    // — themes never touch button chrome directly.
+    for (const cls of ["sidebar-btn-primary", "btn-primary", "board-intro__cta-action"]) {
+      const themeSelector = new RegExp(
+        `body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))[^{]*\\.${cls}\\b`,
+      )
+      expect(styles).not.toMatch(themeSelector)
+    }
+  })
+
+  test("dark themes flatten --accent-gradient to --accent so palette drives the gradient/flat split", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    // Both dark and vscode-dark `:root` blocks must override
+    // `--accent-gradient` to `var(--accent)` and the matching hover token —
+    // that is the single source for "dark surfaces don't render the candy
+    // bar gradient" without resorting to `body:is(…)` selectors.
+    expect(styles).toMatch(
+      /body\[data-theme="dark"\][\s\S]*?--accent-gradient:\s*var\(--accent\)/,
+    )
+    expect(styles).toMatch(
+      /body\[data-theme="dark"\][\s\S]*?--accent-gradient-hover:\s*var\(--accent-hover\)/,
+    )
+    expect(styles).toMatch(
+      /body\[data-theme="vscode-dark"\][\s\S]*?--accent-gradient:\s*var\(--accent\)/,
+    )
+    expect(styles).toMatch(
+      /body\[data-theme="vscode-dark"\][\s\S]*?--accent-gradient-hover:\s*var\(--accent-hover\)/,
+    )
+  })
+
+  test("primary action canonical reads palette tokens, not literals", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    // The shared canonical at the multi-class selector for the three
+    // primary siblings must consume `--accent-gradient` and
+    // `--text-on-accent`. No raw `#fff`, no raw rgba(), no
+    // `var(--accent-gradient, …fallback…)` remains.
+    const sharedRule = styles.match(
+      /\.btn-primary,\s*\.sidebar-btn-primary,\s*\.board-intro__cta-action\s*\{([^}]*)\}/,
+    )
+    expect(sharedRule).not.toBeNull()
+    expect(sharedRule![1]).toContain("background: var(--accent-gradient)")
+    expect(sharedRule![1]).toContain("color: var(--text-on-accent)")
+    expect(sharedRule![1]).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba\(|hsla\(/)
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
