@@ -1207,6 +1207,24 @@ Progress log:
   asserts 17 base classes are absent from styles.css and
   present in inspector.css. Ceilings unchanged.
 
+- 2026-05-03: Seeded `styles/surfaces/settings.css` with the
+  PermissionsPanel.tsx family (`.perm-*`): `.perm-panel`,
+  `.perm-panel-intro`, `.perm-list`, `.perm-row` (+ `:hover`),
+  `.perm-row-info` / `-label` / `-desc` / `-actions`, and
+  `.perm-action-btn` (+ `:hover`, `:focus-visible`, three
+  `[data-active="true"][data-action="allow|ask|deny"]` color
+  variants). Token conversions: `1px` action-btn border →
+  `var(--oc-border-width)`; `2px` focus-ring outset wrapped in
+  `calc(2px * --ui-scale)`. The new settings.css surface is the
+  seed for the broader settings-dialog migration — `.config-*` /
+  `.extension-*` / `.knowledge-*` / `.pref-*` / `.market-*` /
+  `.channel-doc-*` will follow as each block gets a token sweep.
+  Bumped panel_revision to `16d9e2e6559adadd` (en + zh) for the
+  index.html surface link addition. New ownership guard asserts
+  9 base classes + three action variants + focus-visible state +
+  `var(--oc-border-width)` presence + index.html load order.
+  Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
