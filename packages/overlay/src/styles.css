@@ -1419,86 +1419,14 @@ body[data-theme="light"] .msg-reasoning {
   min-height: 0;
 }
 
-#solidFrontendPreviewMount,
-.frontend-preview {
+/* `.section-icon-btn` and `.frontend-preview*` family live in
+   `styles/surfaces/inspector.css` now. Late theme-scoped chrome
+   overrides on `.section-icon-btn` still live here until the theme
+   override sweep retires them. */
+
+#solidFrontendPreviewMount {
   height: 100%;
   min-height: 0;
-}
-
-.frontend-preview {
-  display: flex;
-  flex-direction: column;
-  background: color-mix(in srgb, var(--surface-inset) 82%, transparent);
-}
-
-.frontend-preview-toolbar {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  min-height: calc(38px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.frontend-preview-url {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-soft);
-  font-family: var(--mono);
-  font-size: var(--ui-font-meta);
-  user-select: text;
-  -webkit-user-select: text;
-}
-
-.section-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(26px * var(--ui-scale));
-  height: calc(24px * var(--ui-scale));
-  border: 1px solid var(--border);
-  border-radius: calc(6px * var(--ui-scale));
-  background: var(--surface);
-  color: var(--text-soft);
-  cursor: pointer;
-}
-
-.section-icon-btn:hover,
-.section-icon-btn:focus-visible {
-  border-color: var(--hover-accent-border);
-  color: var(--accent);
-  outline: none;
-}
-
-.section-icon-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.frontend-preview-frame {
-  flex: 1 1 0;
-  width: 100%;
-  min-height: 0;
-  border: 0;
-  background: #ffffff;
-}
-
-.frontend-preview-empty {
-  flex: 1 1 0;
-  display: grid;
-  place-items: center;
-  padding: calc(18px * var(--ui-scale));
-  color: var(--text-muted);
-  text-align: center;
-  line-height: 1.5;
-}
-
-.frontend-preview-empty[data-kind="error"] {
-  color: var(--bad);
 }
 
 /* ── Section (details/summary) ──

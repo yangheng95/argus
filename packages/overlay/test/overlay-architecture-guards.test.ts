@@ -343,6 +343,28 @@ describe("overlay architecture guards", () => {
     expect(inspectorAt).toBeLessThan(stylesAt)
   })
 
+  test("inspector preview tab + section icon button are owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "section-icon-btn",
+      "frontend-preview",
+      "frontend-preview-toolbar",
+      "frontend-preview-url",
+      "frontend-preview-frame",
+      "frontend-preview-empty",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(inspectorSurface).toMatch(/\.section-icon-btn:hover,\s*\.section-icon-btn:focus-visible\s*\{/)
+    expect(inspectorSurface).toMatch(/\.frontend-preview-empty\[data-kind="error"\]\s*\{/)
+    expect(inspectorSurface).toContain("background: white")
+    expect(inspectorSurface).toContain("var(--oc-border-width)")
+  })
+
   test("conversation goals strip is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const conversationSurface = readText(

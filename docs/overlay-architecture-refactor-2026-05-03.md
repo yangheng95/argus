@@ -890,6 +890,24 @@ Progress log:
   slice (~75 selector lines moved out, ~13 explanatory comments left
   behind for traceability).
 
+- 2026-05-03: Extended surfaces/inspector.css to own
+  `.section-icon-btn` (+ `:hover` / `:focus-visible` / `:disabled`)
+  and the `.frontend-preview*` family (`-toolbar`, `-url`, `-frame`,
+  `-empty`, `-empty[data-kind="error"]`). The two old
+  `.frontend-preview { height/min-height }` and `.frontend-preview
+  { display/flex/bg }` rules were folded into one block per rule 8.
+  `1px` borders converted to `var(--oc-border-width)`. The iframe
+  `.frontend-preview-frame` background uses the literal `white`
+  keyword (was `#ffffff`) because rendered web content expects a
+  white canvas regardless of overlay theme — no token tie-in. Late
+  theme-scoped chrome overrides on `.section-icon-btn` (lines
+  ~12240-12435 in styles.css) stay until the theme override sweep
+  retires them. New ownership guard asserts six classes live in the
+  surface, the multi-selector hover rule is preserved, and the
+  surface contains both `background: white` + `var(--oc-border-width)`.
+  Bumped panel_revision is unchanged because index.html was not
+  touched in this slice.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
