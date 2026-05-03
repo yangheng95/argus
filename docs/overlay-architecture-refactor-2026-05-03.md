@@ -1651,6 +1651,33 @@ Progress log:
   button-primitive + dark-mode-primary-button + section / sections
   single-source tests pass; vite build green (5.21s, 324.74KB CSS).
 
+- 2026-05-04 (CRON slice, Claude `fbd271e33` follow-up): Folded the
+  body root + `.panel-body` + `.config-sidebar`/`-nav-item`/`-nav-badge`/
+  `-close-btn` + `.msg-reasoning` overrides into the palette layer.
+  Introduced 3 new palette tokens (`--body-bg`, `--panel-body-bg`,
+  `--panel-body-blur`) declared per theme — light gets the soft AI-
+  workbench gradient + translucent white wash + 20px blur;
+  dark/vscode-dark get the canvas color with no blur; vscode-dark
+  uses solid #1e1e1e for `.panel-body`. The body canonical now reads
+  `background: var(--body-bg)` (no `!important` since no override is
+  fighting back); `.panel-body` reads
+  `background: var(--panel-body-bg); backdrop-filter: var(--panel-body-blur)`.
+  Retired five override blocks: light body root gradient, light
+  `.panel-body` translucent + blur, dark/vscode-dark body root +
+  `.panel-body`, vscode-dark-only `.panel-body` solid #1e1e1e, the
+  six light-only `.config-*` rgba paint-overs at line 5212-5232, and
+  the light-only `.msg-reasoning` override. Updated the
+  `.msg-reasoning` canonical itself to drop its hardcoded
+  rgba(122, 167, 245) and read `color-mix(in srgb, var(--accent) X%,
+  transparent)` so the reasoning callout matches the active theme's
+  accent without any selector. Guard ceilings tightened:
+  `!important` 85→81, `body[data-theme]` 30→22, theme layout
+  overrides 8→7. Added 1 ownership test asserting the body /
+  panel-body canonicals consume the new palette tokens. All 119
+  architecture guards + SSE + button-primitive + dark-mode-primary-
+  button + section / sections single-source tests pass; tsc clean;
+  vite build green (4.36s, 324.15KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD
