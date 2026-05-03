@@ -427,6 +427,14 @@ Progress log:
   redundant once the canonical resolved through tokens; only the
   `.msg-reasoning` light background/border tint remained. `body[data-theme]`
   guard ceiling drops to `<= 120`.
+- 2026-05-03: Routed `.task-dir-tool`, `.task-dir-node`, `.task-dir-empty`,
+  `.task-dir-step`, and `.task-dir-node[data-current=true]` chrome through
+  theme-aware tokens (`--text-soft`, `--text-strong`, `--text-muted`,
+  `--accent`, `--accent-dim`) instead of hex literals. Removed nine
+  `body[data-theme="light"] .task-dir*` overrides that only existed to
+  re-color the sidebar directory tree for light mode — the new canonical
+  resolves correctly via palette tokens in every theme. `body[data-theme]`
+  guard ceiling drops to `<= 110`.
 
 Trigger: user feedback (2026-05-03):
 
@@ -462,7 +470,7 @@ one theme contract, and no runtime God CSS path left behind.
 | `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,612 lines**                                                                         |
 | Total `!important` in stylesheets      | **183** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **120**                                                                                 |
+| `body[data-theme="…"]` theme overrides | **110**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |

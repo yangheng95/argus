@@ -1504,7 +1504,7 @@ a {
   align-items: center;
   justify-content: center;
   border-radius: calc(4px * var(--ui-scale));
-  color: #94a3b8;
+  color: var(--text-soft);
   transition:
     background 100ms,
     color 100ms;
@@ -1512,7 +1512,7 @@ a {
 
 .task-dir-tool:hover {
   background: var(--subtle-3);
-  color: #e5e7eb;
+  color: var(--text-strong);
 }
 
 .task-dir-editor {
@@ -1539,7 +1539,7 @@ a {
   min-height: calc(24px * var(--ui-scale));
   padding: 0 calc(6px * var(--ui-scale));
   border-radius: calc(4px * var(--ui-scale));
-  color: #dbe3ee;
+  color: var(--text-strong);
   font-size: var(--ui-font-control);
   font-weight: 500;
   white-space: nowrap;
@@ -1557,15 +1557,15 @@ a {
 }
 
 .task-dir-node[data-current="true"] {
-  background: rgba(59, 130, 246, 0.16);
-  color: #eff6ff;
+  background: var(--accent-dim);
+  color: var(--accent);
 }
 
 .task-dir-step {
   min-width: calc(18px * var(--ui-scale));
   height: calc(24px * var(--ui-scale));
   border-radius: calc(4px * var(--ui-scale));
-  color: #64748b;
+  color: var(--text-muted);
   font-size: var(--ui-font-meta);
   transition:
     background 100ms,
@@ -1573,15 +1573,15 @@ a {
 }
 
 .task-dir-step:hover {
-  background: rgba(59, 130, 246, 0.14);
-  color: #bfdbfe;
+  background: var(--accent-dim);
+  color: var(--accent);
 }
 
 .task-dir-empty {
   min-width: 0;
   flex: 1;
   text-align: left;
-  color: #94a3b8;
+  color: var(--text-soft);
   cursor: default;
 }
 
@@ -2108,45 +2108,6 @@ body[data-theme="light"] .executor-menu-model:hover {
 
 body[data-theme="light"] .task-bar {
   background: var(--subtle-1);
-}
-
-body[data-theme="light"] .task-dir {
-  color: #0f172a;
-  border-color: transparent;
-  background: transparent;
-}
-
-body[data-theme="light"] .task-dir-tool {
-  color: #64748b;
-}
-
-body[data-theme="light"] .task-dir-node,
-body[data-theme="light"] .task-dir-empty {
-  color: #0f172a;
-}
-
-body[data-theme="light"] .task-dir-empty {
-  color: #64748b;
-}
-
-body[data-theme="light"] .task-dir-tool:hover,
-body[data-theme="light"] .task-dir-node:hover {
-  background: var(--subtle-4);
-  color: #0f172a;
-}
-
-body[data-theme="light"] .task-dir-step {
-  color: #94a3b8;
-}
-
-body[data-theme="light"] .task-dir-step:hover {
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
-}
-
-body[data-theme="light"] .task-dir-node[data-current="true"] {
-  background: rgba(37, 99, 235, 0.14);
-  color: #1d4ed8;
 }
 
 body[data-theme="light"] .titlebar-task-status {
