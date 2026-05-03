@@ -57,4 +57,21 @@
   --oc-syntax-addition-bg: color-mix(in srgb, #3fb950 15%, transparent);
   --oc-syntax-deletion-text: #ffdcd7;
   --oc-syntax-deletion-bg: color-mix(in srgb, #f85149 15%, transparent);
+
+  /* Agent stage palette. Each pipeline stage carries a stable identity
+     hue so users can spot which agent emitted a card in a long log:
+     goal=violet, architect=teal, planner=cobalt, executor=amber,
+     evaluator=ochre, delivery=jade. The default fallback is the same
+     cobalt as planner. The hues are intentional metadata, not theme-
+     adaptive: stage identity must read the same in every overlay
+     theme so muscle memory stays portable. Surfaces consume these
+     through color-mix() with the alpha they need; raw alpha values
+     do not belong in design-language. */
+  --oc-stage-default: #6eb7ff;
+  --oc-stage-goal: #8c6edc;
+  --oc-stage-architect: #50aaa0;
+  --oc-stage-planner: #64a0dc;
+  --oc-stage-executor: #e68c32;
+  --oc-stage-evaluator: #c8b43c;
+  --oc-stage-delivery: #50be64;
 }
