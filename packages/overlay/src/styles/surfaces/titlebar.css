@@ -2,7 +2,7 @@
   --oc-button-height: var(--ui-titlebar-btn-height);
   --oc-button-padding-x: calc(var(--oc-header-gap) * 0.75);
   --oc-button-border: 0 solid transparent;
-  --oc-button-color: var(--oc-color-text-strong);
+  --oc-button-color: var(--oc-titlebar-menu-text);
 
   height: var(--ui-titlebar-btn-height);
   white-space: nowrap;
@@ -12,7 +12,7 @@
 .titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"] {
   --oc-button-bg: var(--subtle-3);
   --oc-button-border: 0 solid transparent;
-  --oc-button-color: var(--oc-color-text-strong);
+  --oc-button-color: var(--oc-titlebar-menu-text);
 }
 
 .titlebar-status-cluster .oc-button[data-ui="titlebar-status-icon"] {

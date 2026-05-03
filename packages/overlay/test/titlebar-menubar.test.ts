@@ -291,7 +291,7 @@ test(
 )
 
 test(
-  "titlebar menubar uses strong light text and supports Alt access keys",
+  "titlebar menubar uses black menu text and supports Alt access keys",
   async () => {
     const server = Bun.serve({
       idleTimeout: 255,
@@ -388,7 +388,7 @@ test(
         }
       })
       expect(triggerState).toEqual({
-        color: "rgb(26, 26, 26)",
+        color: "rgb(0, 0, 0)",
         accessKey: "w",
         ariaKeyshortcuts: "Alt+W",
       })
