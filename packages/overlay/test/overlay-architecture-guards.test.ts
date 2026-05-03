@@ -158,13 +158,13 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(241)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(155)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(153)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(95)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(90)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -690,6 +690,45 @@ describe("overlay architecture guards", () => {
       "color: color-mix(in srgb, var(--workflow-tone) 82%, var(--text-strong))",
     ]) {
       expect(body).toContain(declaration)
+    }
+  })
+
+  test("workflow report shell chrome is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      const hasReportShell =
+        /\.agent-workflow-report-popover\b/.test(selector) ||
+        /\.agent-workflow-report(?![-\w])/.test(selector)
+      if (!isThemeSelector || !hasReportShell) continue
+
+      expect(body).not.toMatch(
+        /\b(?:align-items|padding(?:-[a-z]+)?|background|border|border-radius|box-shadow)\s*:/,
+      )
+    }
+
+    const popoverBody = soloRuleBody(styles, ".agent-workflow-report-popover")
+    for (const declaration of [
+      "align-items: flex-end",
+      "padding: calc(14px * var(--ui-scale))",
+      "background: color-mix(in srgb, var(--dialog-backdrop) 44%, transparent)",
+    ]) {
+      expect(popoverBody).toContain(declaration)
+    }
+
+    const reportBody = soloRuleBody(styles, ".agent-workflow-report")
+    for (const declaration of [
+      "border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border))",
+      "border-radius: calc(14px * var(--ui-scale))",
+      "background: var(--dialog-bg)",
+      "box-shadow: 0 calc(14px * var(--ui-scale)) calc(30px * var(--ui-scale)) rgba(0, 0, 0, 0.24)",
+    ]) {
+      expect(reportBody).toContain(declaration)
     }
   })
 
