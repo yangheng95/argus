@@ -297,6 +297,131 @@
   text-decoration: underline;
 }
 
+/* Build/version block: the small text strip beneath the textarea showing
+   the active engine + model and the build version link. Wraps onto a
+   second line on narrow composers via `.chat-compose-tip` reflow. */
+.chat-build {
+  display: flex;
+  flex: 1 1 calc(220px * var(--ui-scale));
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--ui-scale));
+  padding: 0;
+  color: var(--text-soft);
+}
+
+.chat-version {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  min-width: 0;
+  color: color-mix(in srgb, var(--text-muted) 72%, transparent);
+  font-size: var(--ui-font-tiny);
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-version-copy,
+.chat-version-name {
+  color: inherit;
+  white-space: nowrap;
+}
+
+.chat-version-sep {
+  opacity: 0.45;
+}
+
+.chat-version-link {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+  transition:
+    color 120ms ease,
+    opacity 120ms ease;
+  opacity: 0.82;
+  white-space: nowrap;
+}
+
+.chat-version-link:hover {
+  color: var(--text-soft);
+  opacity: 1;
+}
+
+.chat-compose-tip {
+  display: inline-flex;
+  align-items: center;
+  min-height: auto;
+  padding: 0;
+  text-align: right;
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  background: transparent;
+  border: 0 solid transparent;
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+/* Send button SVG icon sizing. Kept separate from the `.chat-send`
+   shell because it is purely an icon affordance and the icon column
+   reuses the same SVG component. */
+.chat-send-icon svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+}
+
+/* Container query: when the composer container itself drops below
+   520px, hide the send label (icon-only mode) and stack the meta row.
+   Container query so it activates per-composer regardless of viewport. */
+@container (max-width: 520px) {
+  .chat-send {
+    padding: 0 calc(10px * var(--ui-scale));
+  }
+
+  .chat-send-label {
+    display: none;
+  }
+
+  .chat-compose-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .chat-compose-meta-right {
+    justify-content: flex-start;
+  }
+
+  .chat-version,
+  .chat-compose-tip {
+    margin-left: 0;
+    text-align: left;
+    white-space: normal;
+  }
+}
+
+/* Viewport reflow: at narrow viewports the send button drops onto its
+   own row and the icon column moves to the right, so the textarea takes
+   the entire first row. */
+@media (max-width: 700px) {
+  .chat-compose-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .chat-icon-col {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+
+  .chat-send {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
 .chat-placeholder-caret {
   display: inline-block;
   width: 0.42em;

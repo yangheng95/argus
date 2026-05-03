@@ -704,6 +704,21 @@ Progress log:
   `calc(±2px * var(--ui-scale))`. New extraction guard pins ten
   composer classes plus the `:hover` variants and the
   `.chat-input[data-dragover]` compound selector to the surface file.
+- 2026-05-03: Extracted the composer build/version row + reflow rules
+  (`.chat-build`, `.chat-version` + `-copy/-name/-sep`,
+  `.chat-version-link` + `:hover`, `.chat-compose-tip`,
+  `.chat-send-icon svg` icon sizing, the composer-internal
+  `@container (max-width: 520px)` adjustments, and the viewport
+  `@media (max-width: 700px)` reflow that drops `.chat-send` to its own
+  row) from `styles.css` into `styles/surfaces/composer.css`. The
+  redundant per-side `border-left/right/top/bottom: 0 !important`
+  declarations on the `body[data-theme] :is(.section:last-child,
+  .criteria-item)` reset block were folded into the existing `border:
+  0 !important` shorthand (the explicit-side declarations were
+  duplicates of the shorthand). Guard ceilings drop to
+  `!important <= 138`, `body[data-theme] <= 69`, theme layout/chrome
+  overrides `<= 33`. New extraction guard pins five composer classes
+  plus the icon-svg selector and the `@container` / `@media` blocks.
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
@@ -713,7 +728,19 @@ Progress log:
   theme selector that targets this control family and pins the canonical
   radius/border/background declarations. Guard ceilings drop to
   `!important <= 142`, `body[data-theme] <= 71`, and theme
-  layout/chrome overrides `<= 44`.
+  layout/chrome overrides `<= 37` after the guard now strips comments
+  before counting real declarations.
+- 2026-05-03: Removed `.chat-send` and `.chat-send:hover` from the
+  remaining theme reset `:is(...)` chains. This does not move the
+  coarse `body[data-theme]` count because the reset blocks still serve
+  other unmigrated buttons, but it closes the runtime double-source gap
+  for the composer send button: the only rendered background, border,
+  spacing, hover, disabled, and focus behavior now comes from
+  `styles/surfaces/composer.css`. The composer guard now scans every
+  theme selector, including grouped `:is(...)` selectors, and fails if
+  `.chat-send` reappears there. The theme-layout counter now strips
+  comments before scanning so historical explanation text no longer
+  counts as live CSS debt.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
@@ -748,7 +775,7 @@ one theme contract, and no runtime God CSS path left behind.
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
 | Total `!important` in stylesheets      | **142** current guard baseline                                                          |
 | `body[data-theme="…"]` theme overrides | **71**                                                                                  |
-| Theme layout/chrome overrides          | **44** current guard baseline                                                           |
+| Theme layout/chrome overrides          | **37** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 857 / ProvidersPanel 819 / SkillMarketPanel 649 / TaskList 648 / ChatComposer 553 |
 | Total `.tsx` LOC under `packages/overlay/src` | **14,074**                                                                      |
