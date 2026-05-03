@@ -1,3 +1,80 @@
+.titlebar {
+  position: relative;
+  z-index: 10000;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(calc(16px * var(--ui-scale)), 1fr) auto;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  margin: 0;
+  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  min-height: var(--ui-titlebar-height);
+  background: var(--chrome);
+  border: var(--oc-border-width) solid var(--border);
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  flex-shrink: 0;
+  box-shadow: none;
+}
+
+.titlebar::after {
+  content: "";
+  position: absolute;
+  left: calc(14px * var(--ui-scale));
+  right: calc(14px * var(--ui-scale));
+  bottom: 0;
+  height: var(--oc-border-width);
+  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+}
+
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--oc-titlebar-gap);
+  min-width: 0;
+  grid-column: 1;
+  justify-self: start;
+  -webkit-app-region: drag;
+}
+
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--oc-titlebar-gap);
+  flex: none;
+  min-width: calc(36px * var(--ui-scale));
+  justify-self: auto;
+  -webkit-app-region: drag;
+}
+
+.titlebar-spacer {
+  min-width: calc(20px * var(--ui-scale));
+  height: 100%;
+  grid-column: 2;
+  -webkit-app-region: drag;
+}
+
+.brand-logo {
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  color: var(--accent);
+  filter: drop-shadow(0 0 calc(8px * var(--ui-scale)) var(--accent-glow));
+  flex-shrink: 0;
+}
+
+@media (max-width: 760px) {
+  .titlebar-left,
+  .titlebar-brand,
+  .titlebar-utility {
+    grid-column: auto;
+    justify-self: auto;
+  }
+
+  .titlebar-spacer {
+    display: none;
+  }
+}
+
 .titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"] {
   --oc-button-height: var(--ui-titlebar-btn-height);
   --oc-button-padding-x: calc(var(--oc-header-gap) * 0.75);

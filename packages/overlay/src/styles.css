@@ -427,65 +427,8 @@ a {
    final visual; tweaks at any one site silently lost to the
    late !important. Folded into one block below — grid layout
    + chrome live together. The two duplicate blocks are gone. */
-.titlebar {
-  position: relative;
-  z-index: 10000;
-  display: grid;
-  grid-template-columns: minmax(0, auto) minmax(calc(16px * var(--ui-scale)), 1fr) auto;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  margin: 0;
-  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  min-height: var(--ui-titlebar-height);
-  background: var(--chrome);
-  border: 1px solid var(--border);
-  border-left: 0;
-  border-right: 0;
-  border-radius: 0;
-  flex-shrink: 0;
-  box-shadow: none;
-}
-
-.titlebar::after {
-  content: "";
-  position: absolute;
-  left: calc(14px * var(--ui-scale));
-  right: calc(14px * var(--ui-scale));
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
-}
-
-.titlebar-left {
-  display: flex;
-  align-items: center;
-  gap: var(--oc-titlebar-gap);
-  min-width: 0;
-  -webkit-app-region: drag;
-}
-
-.titlebar-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--oc-titlebar-gap);
-  flex: none;
-  min-width: 32px;
-  -webkit-app-region: drag;
-}
-
-.titlebar-spacer {
-  min-width: calc(20px * var(--ui-scale));
-  height: 100%;
-  -webkit-app-region: drag;
-}
-
-.brand-logo {
-  width: calc(16px * var(--ui-scale));
-  height: calc(16px * var(--ui-scale));
-  color: var(--accent);
-  filter: drop-shadow(0 0 8px var(--accent-glow));
-  flex-shrink: 0;
-}
+/* `.titlebar` shell + `.titlebar-left/-brand/-spacer` layout containers
+   and `.brand-logo` live in `styles/surfaces/titlebar.css` now. */
 
 /* iter6: the OpenCorvus wordmark used to live in the titlebar next
    to the logo (`<span class="brand-name">`), and the connection
@@ -4084,6 +4027,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   min-height: 0;
   width: 100%;
   height: clamp(calc(200px * var(--ui-scale)), 40vh, calc(560px * var(--ui-scale)));
+  background: var(--surface-inset);
 }
 .workspace-mount[hidden] {
   display: none;
@@ -12244,39 +12188,8 @@ body[data-resizing="true"] * {
    `.titlebar-spacer` / `.titlebar-utility` stay because they
    only apply once the parent's grid is in effect. */
 
-.titlebar-left {
-  grid-column: 1;
-  justify-self: start;
-}
-
-.titlebar-brand {
-  justify-self: auto;
-}
-
-.titlebar-spacer {
-  grid-column: 2;
-}
-
-/* iter23: `.titlebar-utility` grid placement folded into the
-   canonical block near line ~629 (which now carries
-   grid-column / justify-self / margin-left: 0). */
-
-@media (max-width: 760px) {
-  /* `.titlebar` narrow-width tweaks live in the consolidated
-     block near line ~641 (iter14). Sibling selectors stay here
-     so the grid-column/justify-self resets sit alongside the
-     other titlebar children. */
-  .titlebar-left,
-  .titlebar-brand,
-  .titlebar-utility {
-    grid-column: auto;
-    justify-self: auto;
-  }
-
-  .titlebar-spacer {
-    display: none;
-  }
-}
+/* `.titlebar-left/-brand/-spacer` grid placements + their narrow-width
+   reset live in `styles/surfaces/titlebar.css` now. */
 
 /*
   Zero-reconcile tab switching: every group's rows are mounted once inside
@@ -13898,11 +13811,8 @@ body[data-theme="light"] .diff-dialog-stat {
 /* iter59: `.chat-scroll` and its card descendants resolve through
    canonical conversation/card rules. Themes only provide palette tokens. */
 
-body[data-theme="light"] .chat-goals-strip,
-body[data-theme="light"] .workspace-mount {
-  background: rgba(248, 250, 255, 0.82) !important;
-  border-color: rgba(116, 133, 184, 0.14) !important;
-}
+/* iter60: chat goals strip and workspace mount chrome is canonical;
+   themes only provide `--surface-inset` and `--border` palette tokens. */
 
 /* iter57: light-theme `.chat-input` chrome folded into the
    canonical so themes no longer decide composer spacing,
@@ -14055,11 +13965,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .diff-dialog-stat {
 /* iter59: dark/vscode-dark conversation stream chrome now uses the
    same canonical `.chat-scroll` and `card.css` sources as light mode. */
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-goals-strip,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-mount {
-  background: color-mix(in srgb, var(--surface-inset) 78%, transparent) !important;
-  border-color: color-mix(in srgb, var(--border) 84%, transparent) !important;
-}
+/* iter60: dark/vscode-dark use the same canonical chat goals/workspace
+   chrome grammar as light mode. */
 
 /* iter57: dark/vscode-dark `.chat-input` chrome folded into the
    canonical for the same reason as light mode. */
