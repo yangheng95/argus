@@ -9,7 +9,7 @@
 // through `renderMarkdown`, eliminating the previous render-divergence
 // where the sidebar parsed markdown but the inline card showed raw text.
 //
-// Visual treatment lives in `styles/card.css` under `.interaction-card`,
+// Visual treatment lives in `styles/surfaces/card.css` under `.interaction-card`,
 // reusing the same `--card-*` design vars as the agent / goal cards so all
 // system-prompt cards share one look.
 

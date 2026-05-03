@@ -25,10 +25,10 @@
      var() substitution resolves at the consuming element where
      theme overrides have already taken effect — see comment on
      the * block below. */
-  --card-line: color-mix(in srgb, var(--accent, #64b9a6) 44%, transparent);
-  --card-title-size: var(--ui-font-body, 12px);
-  --card-sub-size: var(--ui-font-control, 11px);
-  --card-meta-size: var(--ui-font-meta, 11px);
+  --card-line: color-mix(in srgb, var(--accent) 44%, transparent);
+  --card-title-size: var(--ui-font-body);
+  --card-sub-size: var(--ui-font-control);
+  --card-meta-size: var(--ui-font-meta);
 
   /* Semantic stage tones — 4 categories instead of the prior 14.
      Stages map: info (default — agent / orchestrator / spec /
@@ -44,9 +44,9 @@
   /* System-message tint kept distinct (warn-toned) since system
      messages are operational notices, not part of the agent
      stream — the warn palette signals "operator should read". */
-  --card-system-rail: var(--warn, #c28b55);
-  --card-system-bg: var(--warn-dim, rgba(194, 139, 85, 0.14));
-  --card-system-border: color-mix(in srgb, var(--warn, #c28b55) 28%, transparent);
+  --card-system-rail: var(--warn);
+  --card-system-bg: var(--warn-dim);
+  --card-system-border: color-mix(in srgb, var(--warn) 28%, transparent);
 }
 
 /* Card surface aliases — declared on every element so the var()
@@ -58,12 +58,12 @@
  * is exactly the bug that made every conversation card render with a
  * dark surface on the white theme. */
 * {
-  --card-bg-0: var(--surface-inset, rgba(255, 255, 255, 0.04));
-  --card-bg-1: var(--surface, rgba(255, 255, 255, 0.06));
-  --card-bg-hover: var(--surface-hover, rgba(255, 255, 255, 0.08));
-  --card-border: var(--border, rgba(255, 255, 255, 0.1));
-  --card-border-strong: var(--border-strong, rgba(255, 255, 255, 0.16));
-  --card-line-dim: var(--border, rgba(255, 255, 255, 0.08));
+  --card-bg-0: var(--surface-inset);
+  --card-bg-1: var(--surface);
+  --card-bg-hover: var(--surface-hover);
+  --card-border: var(--border);
+  --card-border-strong: var(--border-strong);
+  --card-line-dim: var(--border);
 }
 
 /* ── Container ────────────────────────────────────────────── */
@@ -83,10 +83,10 @@
 .card {
   position: relative;
   display: block;
-  min-width: max(var(--card-min-inline-size, 0px), min(100%, var(--card-sticky-inline-size, 0px)));
+  min-width: max(var(--card-min-inline-size), min(100%, var(--card-sticky-inline-size)));
   max-width: 100%;
   border-radius: var(--card-radius);
-  border: 1px solid var(--card-border);
+  border: var(--oc-border-width) solid var(--card-border);
   background: var(--card-bg-0);
   margin: var(--card-gap) 0;
   box-shadow: none;
@@ -107,18 +107,18 @@
   gap: calc(10px * var(--ui-scale, 1));
   padding: calc(var(--card-pad-y) + 1px) calc(var(--card-pad-x) + 1px);
   min-height: calc(42px * var(--ui-scale, 1));
-  border-bottom: 1px solid color-mix(in srgb, var(--card-line-dim) 84%, transparent);
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--card-line-dim) 84%, transparent);
   background: transparent;
 }
 
 .card[data-depth="0"] > .card__body {
-  padding: calc(var(--card-pad-y) + 4px) calc(var(--card-pad-x) + 1px) calc(var(--card-pad-y) + 6px);
+  padding: calc(var(--card-pad-y) + calc(4px * var(--ui-scale))) calc(var(--card-pad-x) + calc(1px * var(--ui-scale))) calc(var(--card-pad-y) + calc(6px * var(--ui-scale)));
   line-height: 1.62;
 }
 
 .card[data-depth="0"] > .card__body > .card__children {
-  gap: 8px;
-  margin-top: calc(var(--card-pad-y) + 2px);
+  gap: calc(8px * var(--ui-scale));
+  margin-top: calc(var(--card-pad-y) + calc(2px * var(--ui-scale)));
 }
 
 .card[data-depth="0"] {
@@ -149,7 +149,7 @@
 .card[data-depth="0"][data-kind="phase"],
 .card[data-depth="0"][data-kind="step"],
 .card[data-depth="0"][data-kind="tool"] {
-  border-left: 3px solid var(--card-stage, var(--card-line));
+  border-left: calc(3px * var(--ui-scale)) solid var(--card-stage);
   background: var(--card-bg-0);
 }
 
@@ -181,7 +181,7 @@
    Depth fades the rail colour so deep nesting stays readable. */
 .card:not([data-depth="0"]) {
   border: 0;
-  border-left: 2px solid var(--card-line-dim);
+  border-left: calc(2px * var(--ui-scale)) solid var(--card-line-dim);
   border-radius: 0;
   margin: calc(6px * var(--ui-scale, 1)) 0;
   background: transparent;
@@ -203,7 +203,7 @@
   gap: calc(8px * var(--ui-scale, 1));
   padding: var(--card-pad-y) var(--card-pad-x);
   background: transparent;
-  border-bottom: 1px solid transparent;
+  border-bottom: var(--oc-border-width) solid transparent;
   font-size: var(--card-title-size);
   color: var(--text-strong);
   user-select: none;
@@ -230,7 +230,7 @@
   outline: none;
 }
 .card__head[tabindex]:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--accent-dim);
+  box-shadow: inset 0 0 0 calc(2px * var(--ui-scale)) var(--accent-dim);
 }
 
 .card__main {
@@ -239,7 +239,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: calc(2px * var(--ui-scale));
 }
 
 .card__title-row {
@@ -252,13 +252,13 @@
 
 .card__title-spacer {
   flex: 1 1 auto;
-  min-width: 12px;
+  min-width: calc(12px * var(--ui-scale));
 }
 
 .card__preview-row {
   min-width: 0;
   display: flex;
-  margin-top: 3px;
+  margin-top: calc(3px * var(--ui-scale));
 }
 
 .card__actions {
@@ -267,11 +267,11 @@
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--ui-scale));
 }
 
 .card__head--with-meta .card__actions {
-  padding-top: 1px;
+  padding-top: calc(1px * var(--ui-scale));
 }
 
 .card__title {
@@ -286,7 +286,7 @@
 }
 
 .card__icon {
-  font-size: calc(var(--card-title-size) + 1px);
+  font-size: calc(var(--card-title-size) + calc(1px * var(--ui-scale)));
   opacity: 0.9;
   flex: none;
   line-height: 1;
@@ -297,28 +297,25 @@
   font-size: var(--card-meta-size);
   color: var(--text-soft);
   flex: none;
-  padding: 2px 6px;
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
   letter-spacing: 0;
-  /* token-based fill so all three themes pick up the right tint without
-     a per-theme override block. --subtle-3 sits at ~6-8% across themes. */
-  background: var(--subtle-3);
+  /* --border carries enough contrast across all themes (≥10% in dark, ≥12%
+     in light, satisfies WCAG AA over the canonical surface). The previous
+     body[data-theme="light"] override is gone — palette token differs by
+     theme on its own. */
+  background: var(--border);
   border-radius: calc(5px * var(--ui-scale, 1));
-}
-body[data-theme="light"] .card__round {
-  /* light needs more contrast — Round-2 audit caught the prior 6% as
-     2.5:1 against #ffffff which fails WCAG AA for small text. */
-  background: rgba(0, 0, 0, 0.12);
 }
 /* Goal index badge — pushed to the LEFT of the title so #G1V1 reads
  * before the goal name. Slightly stronger contrast than the normal
  * round chip because it acts as the goal's primary identifier. */
 .card__round--lead {
-  margin-right: 4px;
+  margin-right: calc(4px * var(--ui-scale));
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: color-mix(in srgb, var(--card-stage, var(--text)) 90%, var(--text));
-  background: color-mix(in srgb, var(--card-stage, var(--text-muted)) 18%, transparent);
-  border: 1px solid color-mix(in srgb, var(--card-stage, var(--text-muted)) 28%, transparent);
+  color: color-mix(in srgb, var(--card-stage) 90%, var(--text));
+  background: color-mix(in srgb, var(--card-stage) 18%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--card-stage) 28%, transparent);
 }
 
 .card__subtitle {
@@ -335,13 +332,13 @@ body[data-theme="light"] .card__round {
   text-overflow: ellipsis;
   font-weight: 400;
   position: relative;
-  padding-left: 10px;
-  margin-left: 2px;
+  padding-left: calc(10px * var(--ui-scale));
+  margin-left: calc(2px * var(--ui-scale));
 }
 .card__subtitle::before {
   content: "·";
   position: absolute;
-  left: 2px;
+  left: calc(2px * var(--ui-scale));
   color: color-mix(in srgb, var(--text-muted) 60%, transparent);
 }
 
@@ -364,13 +361,13 @@ body[data-theme="light"] .card__round {
   white-space: pre-wrap;
   line-height: 1.45;
   word-break: break-word;
-  border-left: 2px solid color-mix(in srgb, var(--card-stage, var(--text-muted)) 35%, transparent);
-  padding-left: 8px;
+  border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage) 35%, transparent);
+  padding-left: calc(8px * var(--ui-scale));
 }
 
 .card__chevron {
   flex: none;
-  font-size: 10px;
+  font-size: calc(10px * var(--ui-scale));
   color: var(--text-muted);
   transition: transform 140ms ease;
   padding-left: 2px;
@@ -384,8 +381,8 @@ body[data-theme="light"] .card__round {
 .card__todo-summary {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 4px;
+  gap: calc(10px * var(--ui-scale));
+  margin-top: calc(4px * var(--ui-scale));
   min-width: 0;
   font-size: var(--card-sub-size);
   color: color-mix(in srgb, var(--text-muted) 90%, transparent);
@@ -395,11 +392,11 @@ body[data-theme="light"] .card__round {
 
 .card__todo-progress {
   flex: 1 1 auto;
-  min-width: 60px;
-  max-width: 240px;
+  min-width: calc(60px * var(--ui-scale));
+  max-width: calc(240px * var(--ui-scale));
   position: relative;
-  height: 5px;
-  border-radius: 999px;
+  height: calc(5px * var(--ui-scale));
+  border-radius: calc(999px * var(--ui-scale));
   background: color-mix(in srgb, var(--text-muted) 20%, transparent);
   overflow: hidden;
 }
@@ -450,36 +447,36 @@ body[data-theme="light"] .card__round {
 .card__stat {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: calc(3px * var(--ui-scale));
   min-height: calc(18px * var(--ui-scale, 1));
   padding: 0 calc(5px * var(--ui-scale, 1));
   border-radius: calc(5px * var(--ui-scale, 1));
   background: var(--subtle-2);
-  border: 1px solid color-mix(in srgb, var(--text-muted) 18%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 18%, transparent);
   color: var(--text-muted);
   box-shadow: none;
   letter-spacing: 0;
   line-height: 1.1;
 }
 .card__stat[data-kind="messages"] {
-  background: color-mix(in srgb, #6aa9ff 14%, transparent);
-  border-color: color-mix(in srgb, #6aa9ff 22%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .card__stat[data-kind="tools"] {
-  background: color-mix(in srgb, #ffb966 14%, transparent);
-  border-color: color-mix(in srgb, #ffb966 22%, transparent);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 22%, transparent);
 }
 .card__stat[data-kind="agents"] {
-  background: color-mix(in srgb, #c2a8ff 14%, transparent);
-  border-color: color-mix(in srgb, #c2a8ff 24%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 .card__stat[data-kind="skills"] {
-  background: color-mix(in srgb, #6ee7b7 14%, transparent);
-  border-color: color-mix(in srgb, #6ee7b7 24%, transparent);
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+  border-color: color-mix(in srgb, var(--good) 24%, transparent);
 }
 
 .card__stat-icon {
-  font-size: calc(var(--card-sub-size) - 1px);
+  font-size: calc(var(--card-sub-size) - calc(1px * var(--ui-scale)));
   line-height: 1;
   opacity: 0.9;
 }
@@ -512,10 +509,10 @@ body[data-theme="light"] .card__round {
 }
 .card__copy:hover {
   color: var(--text-strong);
-  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+  background: var(--surface-hover);
 }
 .card__copy--done {
-  color: var(--accent-success, #5ac8a8);
+  color: var(--good);
   opacity: 1;
 }
 .card__copy + .card__chevron {
@@ -536,7 +533,7 @@ body[data-theme="light"] .card__round {
   cursor: pointer;
   border-radius: calc(5px * var(--ui-scale, 1));
   opacity: 0.52;
-  font-size: 14px;
+  font-size: calc(14px * var(--ui-scale));
   line-height: 1;
   transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
 }
@@ -545,8 +542,8 @@ body[data-theme="light"] .card__round {
   opacity: 1;
 }
 .card__rewind:hover {
-  color: var(--accent-warning, #f0b429);
-  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+  color: var(--warn);
+  background: var(--surface-hover);
 }
 .card__rewind--pending {
   opacity: 0.5;
@@ -573,12 +570,12 @@ body[data-theme="light"] .card__round {
   height: calc(18px * var(--ui-scale, 1));
   min-width: calc(18px * var(--ui-scale, 1));
   padding: 0;
-  border: 1px solid var(--card-border);
+  border: var(--oc-border-width) solid var(--card-border);
   border-radius: calc(5px * var(--ui-scale, 1));
   font-size: calc(10px * var(--ui-scale, 1));
   font-weight: 700;
   line-height: 1;
-  background: var(--surface, transparent);
+  background: var(--surface);
   color: var(--text-muted);
   box-shadow: none;
   letter-spacing: 0;
@@ -588,23 +585,23 @@ body[data-theme="light"] .card__round {
 /* "concerns" — completed but the integrity / fidelity verdict surfaced
  * non-blocking issues. Distinct from `done` (clean pass) so the operator
  * sees at a glance which finished cards still need attention. Amber. */
-.card__badge--concerns { background: rgba(242, 178, 79, 0.28); color: #f5c46c; box-shadow: 0 0 0 1px rgba(242, 178, 79, 0.4) inset; }
+.card__badge--concerns { background: var(--warn-dim); color: var(--warn); box-shadow: 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--warn) 40%, transparent) inset; }
 /* "cancelled" — finished without producing a result (operator stop, replan
  * superseded, etc.). Distinct from `error` (real failure) so a red ✗ no
  * longer collapses three different terminal reasons into one icon.
  * Outline ⊘ on muted tone. */
-.card__badge--cancelled { background: rgba(255, 255, 255, 0.04); color: var(--text-muted); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18) inset; }
+.card__badge--cancelled { background: var(--subtle-1); color: var(--text-muted); box-shadow: 0 0 0 calc(1px * var(--ui-scale)) var(--subtle-5) inset; }
 .card__badge--running { background: var(--accent-dim); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 34%, transparent); }
-.card__badge--pending { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset; }
-.card__badge--skipped { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
-.card__badge--neutral { background: transparent; color: transparent; width: 6px; height: 6px; }
+.card__badge--pending { background: var(--subtle-3); color: var(--text-muted); box-shadow: 0 0 0 calc(1px * var(--ui-scale)) var(--subtle-4) inset; }
+.card__badge--skipped { background: var(--subtle-2); color: var(--text-muted); }
+.card__badge--neutral { background: transparent; color: transparent; width: calc(6px * var(--ui-scale)); height: calc(6px * var(--ui-scale)); }
 
 .card__spinner {
-  width: 10px;
-  height: 10px;
+  width: calc(10px * var(--ui-scale));
+  height: calc(10px * var(--ui-scale));
   border-radius: 50%;
-  border: 1.6px solid rgba(242, 153, 74, 0.22);
-  border-top-color: #f2994a;
+  border: calc(1.6px * var(--ui-scale)) solid var(--warn-dim);
+  border-top-color: var(--warn);
   animation: card-spin 0.8s linear infinite;
 }
 @keyframes card-spin {
@@ -627,9 +624,9 @@ body[data-theme="light"] .card__round {
    (accent). The depth-0 left-rail thickness drops from 3px
    to 2px to match the calm/flat trajectory. */
 
-.card[data-depth="0"][data-kind="agent"][data-stage] { border-left: 2px solid var(--card-stage, var(--card-stage-info)); }
-.card[data-depth="0"][data-kind="goal"]              { border-left: 2px solid var(--card-stage, var(--card-stage-info)); }
-.card[data-depth="0"][data-kind="step"][data-stage]  { border-left: 2px solid var(--card-stage, var(--card-stage-info)); }
+.card[data-depth="0"][data-kind="agent"][data-stage] { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage); }
+.card[data-depth="0"][data-kind="goal"]              { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage); }
+.card[data-depth="0"][data-kind="step"][data-stage]  { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage); }
 
 /* iter51: stage colour title tinting dropped — the per-stage
    hue tints made the conversation a rainbow of agent identities.
@@ -637,7 +634,7 @@ body[data-theme="light"] .card__round {
    header label + icon, not by hue. */
 
 /* Nested step cards: use stage accent on the left rail */
-.card:not([data-depth="0"])[data-kind="step"][data-stage] { border-left-color: var(--card-stage, var(--card-line)); }
+.card:not([data-depth="0"])[data-kind="step"][data-stage] { border-left-color: var(--card-stage); }
 
 /* Tool card: tools use the muted info accent (same as default
    stage) — pre-iter51 they got their own grey #8f9b96 from
@@ -680,7 +677,7 @@ body[data-theme="light"] .card__round {
   overflow-wrap: anywhere;
   word-break: break-word;
   font-family: var(--mono);
-  font-size: calc(var(--card-sub-size) - 0.2px);
+  font-size: calc(var(--card-sub-size) - calc(0.2px * var(--ui-scale)));
   line-height: 1.46;
   padding-left: 0;
   margin-left: 0;
@@ -707,7 +704,7 @@ body[data-theme="light"] .card__round {
   overflow-wrap: anywhere;
   word-break: break-word;
   font-family: var(--mono);
-  font-size: calc(var(--card-sub-size) - 0.2px);
+  font-size: calc(var(--card-sub-size) - calc(0.2px * var(--ui-scale)));
   line-height: 1.46;
   scrollbar-width: auto;
 }
@@ -720,7 +717,7 @@ body[data-theme="light"] .card__round {
 
 .card__body {
   padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x);
-  border-top: 1px solid color-mix(in srgb, var(--card-line-dim) 88%, transparent);
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--card-line-dim) 88%, transparent);
   background: transparent;
   font-size: var(--card-sub-size);
   color: var(--text-strong);
@@ -743,16 +740,16 @@ body[data-theme="light"] .card__round {
 .card__body-actions {
   display: flex;
   justify-content: center;
-  margin-top: calc(var(--card-pad-y) + 4px);
-  padding-top: 2px;
+  margin-top: calc(var(--card-pad-y) + calc(4px * var(--ui-scale)));
+  padding-top: calc(2px * var(--ui-scale));
 }
 
 .card__collapse-toggle {
-  width: min(240px, 74%);
+  width: min(calc(240px * var(--ui-scale)), 74%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: calc(6px * var(--ui-scale));
   padding: 0;
   border: 0;
   background: transparent;
@@ -768,7 +765,7 @@ body[data-theme="light"] .card__round {
 .card__collapse-toggle::after {
   content: "";
   flex: 1 1 0;
-  height: 1px;
+  height: calc(1px * var(--ui-scale));
 }
 
 .card__collapse-toggle::before {
@@ -793,21 +790,21 @@ body[data-theme="light"] .card__round {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  color: color-mix(in srgb, var(--card-stage, var(--text-soft)) 72%, var(--text-muted));
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  border-radius: calc(999px * var(--ui-scale));
+  color: color-mix(in srgb, var(--card-stage) 72%, var(--text-muted));
   background: color-mix(in srgb, var(--card-bg-1) 82%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-stage, var(--card-line)) 12%, var(--card-line-dim));
+  box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-stage) 12%, var(--card-line-dim));
   transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 
 .card__collapse-toggle:hover .card__collapse-toggle-icon,
 .card__collapse-toggle:focus-visible .card__collapse-toggle-icon {
-  color: var(--card-stage, var(--text-strong));
-  background: color-mix(in srgb, var(--card-stage, var(--card-bg-1)) 12%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-stage, var(--card-border-strong)) 28%, var(--card-line));
-  transform: translateY(-1px);
+  color: var(--card-stage);
+  background: color-mix(in srgb, var(--card-stage) 12%, transparent);
+  box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-stage) 28%, var(--card-line));
+  transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
 .card__collapse-toggle svg {
@@ -829,24 +826,24 @@ body[data-theme="light"] .card__round {
 /* ── Goal preamble ───────────────────────────────────────── */
 
 .card__goal-desc {
-  margin: 6px 0 12px 0;
-  padding: 11px 12px 12px;
+  margin: calc(6px * var(--ui-scale)) 0 calc(12px * var(--ui-scale)) 0;
+  padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(12px * var(--ui-scale));
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card-stage, var(--accent)) 10%, transparent), transparent 72%),
+    linear-gradient(180deg, color-mix(in srgb, var(--card-stage) 10%, transparent), transparent 72%),
     color-mix(in srgb, var(--card-bg-1) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--card-stage, var(--card-border-strong)) 16%, var(--card-border));
-  border-radius: 12px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--card-stage) 16%, var(--card-border));
+  border-radius: calc(12px * var(--ui-scale));
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--subtle-1);
 }
 
 .card__goal-desc-label {
   display: inline-flex;
   align-items: center;
-  margin-bottom: 7px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--card-stage, var(--card-bg-1)) 16%, transparent);
-  color: color-mix(in srgb, var(--card-stage, var(--text-soft)) 78%, var(--text-muted));
+  margin-bottom: calc(7px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: calc(999px * var(--ui-scale));
+  background: color-mix(in srgb, var(--card-stage) 16%, transparent);
+  color: color-mix(in srgb, var(--card-stage) 78%, var(--text-muted));
   font-size: var(--ui-font-tiny);
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -876,24 +873,24 @@ body[data-theme="light"] .card__round {
 
 .card[data-kind="step"] > .card__body > .msg-text {
   position: relative;
-  margin: 10px 0 0;
-  padding: 14px 16px 14px 18px;
-  border-radius: 14px;
+  margin: calc(10px * var(--ui-scale)) 0 0;
+  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
+  border-radius: calc(14px * var(--ui-scale));
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card-stage, var(--accent)) 8%, transparent), transparent 74%),
+    linear-gradient(180deg, color-mix(in srgb, var(--card-stage) 8%, transparent), transparent 74%),
     color-mix(in srgb, var(--card-bg-1) 94%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--subtle-1);
 }
 
 .card[data-kind="step"] > .card__body > .msg-text::before {
   content: "";
   position: absolute;
-  left: 10px;
-  top: 14px;
-  bottom: 14px;
-  width: 2px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--card-stage, var(--accent)) 58%, transparent);
+  left: calc(10px * var(--ui-scale));
+  top: calc(14px * var(--ui-scale));
+  bottom: calc(14px * var(--ui-scale));
+  width: calc(2px * var(--ui-scale));
+  border-radius: calc(999px * var(--ui-scale));
+  background: color-mix(in srgb, var(--card-stage) 58%, transparent);
 }
 
 .card[data-kind="step"] > .card__body > .msg-text > :first-child {
@@ -910,16 +907,16 @@ body[data-theme="light"] .card__round {
   display: flex;
   align-items: baseline;
   gap: var(--ui-gap-sm);
-  padding: 3px 0 2px 0;
+  padding: calc(3px * var(--ui-scale)) 0 calc(2px * var(--ui-scale)) 0;
   font-size: var(--ui-font-tiny);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 .card-boundary:not(:first-child) {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px dashed var(--card-line-dim);
+  margin-top: calc(6px * var(--ui-scale));
+  padding-top: calc(6px * var(--ui-scale));
+  border-top: var(--oc-border-width) dashed var(--card-line-dim);
 }
 .card-boundary-role {
   font-weight: 600;
@@ -932,7 +929,7 @@ body[data-theme="light"] .card__round {
 /* ── Message bubble variant (kind=message, role=user/system) ── */
 
 .card[data-kind="message"] {
-  border: 1px solid var(--card-border);
+  border: var(--oc-border-width) solid var(--card-border);
   border-color: var(--card-border);
   background: var(--surface-inset);
 }
@@ -953,12 +950,12 @@ body[data-theme="light"] .card__round {
 .card[data-kind="message"][data-role="user"] {
   background: var(--accent-dim);
   border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  border-left: 3px solid var(--accent);
+  border-left: calc(3px * var(--ui-scale)) solid var(--accent);
   box-shadow: none;
 }
 .card[data-kind="message"][data-role="user"] > .card__head {
   cursor: default;
-  padding-bottom: 2px;
+  padding-bottom: calc(2px * var(--ui-scale));
 }
 .card[data-kind="message"][data-role="user"] > .card__head .card__badge,
 .card[data-kind="message"][data-role="user"] > .card__head .card__chevron {
@@ -978,11 +975,11 @@ body[data-theme="light"] .card__round {
 .card[data-kind="message"][data-role="system"] {
   background: var(--card-system-bg);
   border-color: var(--card-system-border);
-  border-left: 2px solid var(--card-system-rail);
+  border-left: calc(2px * var(--ui-scale)) solid var(--card-system-rail);
   box-shadow: none;
 }
 .card[data-kind="message"][data-role="system"] > .card__head {
-  padding-bottom: 2px;
+  padding-bottom: calc(2px * var(--ui-scale));
 }
 .card[data-kind="message"][data-role="system"] > .card__head .card__title {
   font-size: var(--ui-font-tiny);
@@ -1006,10 +1003,10 @@ body[data-theme="light"] .card__round {
       Most rules are already in styles.css; only tweak spacing here. ── */
 
 .card__body .msg-tool {
-  margin: 2px 0;
+  margin: calc(2px * var(--ui-scale)) 0;
 }
 .card__body .msg-text {
-  margin: 2px 0;
+  margin: calc(2px * var(--ui-scale)) 0;
 }
 
 /* ── Context-token hint ──
@@ -1019,12 +1016,12 @@ body[data-theme="light"] .card__round {
    floating debris against the card border; keeping it in the header flow
    aligns it with the status/title row. */
 .card__token-hint {
-  padding: 0 6px;
-  font-size: 10px;
+  padding: 0 calc(6px * var(--ui-scale));
+  font-size: calc(10px * var(--ui-scale));
   font-variant-numeric: tabular-nums;
   border-radius: calc(5px * var(--ui-scale, 1));
   letter-spacing: 0;
-  color: var(--text-soft, #888);
+  color: var(--text-soft);
   opacity: 0.42;
   white-space: nowrap;
   user-select: none;
@@ -1043,9 +1040,9 @@ body[data-theme="light"] .card__round {
 .card__usage-hint {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 6px;
-  font-size: 10px;
+  gap: calc(4px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale));
+  font-size: calc(10px * var(--ui-scale));
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   color: var(--text-soft);
@@ -1067,8 +1064,8 @@ body[data-theme="light"] .card__round {
    Matches the token hint cadence so the operator scans the same column
    for "how long did this take?" alongside "how much did it cost?". */
 .card__duration {
-  padding: 0 6px;
-  font-size: 10px;
+  padding: 0 calc(6px * var(--ui-scale));
+  font-size: calc(10px * var(--ui-scale));
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   color: var(--text-soft);
@@ -1089,10 +1086,10 @@ body[data-theme="light"] .card__round {
    for the 1.2s feedback window. */
 .card__error-reason {
   display: inline-block;
-  max-width: clamp(160px, 50%, 420px);
-  padding: 0 6px;
-  border: 1px solid color-mix(in srgb, var(--bad) 32%, transparent);
-  border-radius: 4px;
+  max-width: clamp(calc(160px * var(--ui-scale)), 50%, calc(420px * var(--ui-scale)));
+  padding: 0 calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 32%, transparent);
+  border-radius: calc(4px * var(--ui-scale));
   background: var(--bad-dim);
   color: var(--bad);
   font: inherit;
@@ -1109,8 +1106,8 @@ body[data-theme="light"] .card__round {
   background: color-mix(in srgb, var(--bad) 28%, transparent);
 }
 .card__error-reason:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--bad) 60%, transparent);
-  outline-offset: 1px;
+  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--bad) 60%, transparent);
+  outline-offset: calc(1px * var(--ui-scale));
 }
 .card__error-reason--copied {
   background: var(--good-dim);
@@ -1130,12 +1127,12 @@ body[data-theme="light"] .card__round {
 
 .interaction-card {
   display: block;
-  min-width: var(--card-min-inline-size, 0px);
+  min-width: var(--card-min-inline-size);
   max-width: 100%;
   border-radius: var(--card-radius);
   background: var(--surface-inset);
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--card-border));
-  border-left: 3px solid var(--card-stage, var(--accent));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 28%, var(--card-border));
+  border-left: 3px solid var(--card-stage);
   padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x);
   margin: var(--card-gap) 0;
   font-size: var(--card-title-size);
@@ -1153,11 +1150,11 @@ body[data-theme="light"] .card__round {
 .interaction-card__title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--ui-scale));
   font-size: var(--card-title-size);
   font-weight: 600;
-  color: var(--card-stage, var(--text-strong));
-  margin-bottom: 6px;
+  color: var(--card-stage);
+  margin-bottom: calc(6px * var(--ui-scale));
   letter-spacing: 0;
   line-height: 1.35;
 }
@@ -1169,7 +1166,7 @@ body[data-theme="light"] .card__round {
 .interaction-card__body {
   font-size: var(--card-sub-size);
   color: var(--text);
-  margin-bottom: 8px;
+  margin-bottom: calc(8px * var(--ui-scale));
   word-break: break-word;
   user-select: text;
   -webkit-user-select: text;
@@ -1177,20 +1174,20 @@ body[data-theme="light"] .card__round {
 
 .interaction-card__error {
   font-size: var(--card-sub-size);
-  color: var(--bad, #f87171);
-  margin-bottom: 6px;
+  color: var(--bad);
+  margin-bottom: calc(6px * var(--ui-scale));
 }
 
 .interaction-card__questions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: calc(10px * var(--ui-scale));
+  margin-bottom: calc(8px * var(--ui-scale));
 }
 .interaction-card__question {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--ui-scale));
 }
 .interaction-card__question-text {
   font-size: var(--card-sub-size);
@@ -1200,13 +1197,13 @@ body[data-theme="light"] .card__round {
 .interaction-card__options {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 4px 0;
+  gap: calc(3px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) 0;
 }
 .interaction-card__option {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: calc(6px * var(--ui-scale));
   font-size: var(--card-sub-size);
   color: var(--text);
   cursor: pointer;
@@ -1223,8 +1220,8 @@ body[data-theme="light"] .card__round {
   font-size: var(--card-sub-size);
   padding: 4px 6px;
   border-radius: calc(6px * var(--ui-scale, 1));
-  border: 1px solid var(--card-border);
-  background: var(--input-bg, rgba(0, 0, 0, 0.2));
+  border: var(--oc-border-width) solid var(--card-border);
+  background: var(--surface-inset);
   color: var(--text);
   resize: vertical;
   box-sizing: border-box;
@@ -1233,21 +1230,21 @@ body[data-theme="light"] .card__round {
 .interaction-card__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
+  gap: calc(6px * var(--ui-scale));
+  margin-top: calc(4px * var(--ui-scale));
 }
 .interaction-card__actions .btn {
-  padding: 3px 10px;
+  padding: calc(3px * var(--ui-scale)) calc(10px * var(--ui-scale));
   font-size: var(--card-sub-size);
 }
 .interaction-card__option:focus-within {
-  outline: 2px solid color-mix(in srgb, var(--accent) 56%, transparent);
-  outline-offset: 2px;
+  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 56%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
   border-radius: calc(var(--radius) * 0.6);
 }
 .interaction-card__actions .btn:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
-  outline-offset: 2px;
+  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
 }
 
 /* Sidebar list wrapper used by Board's "interactions" section. */
@@ -1288,8 +1285,8 @@ body[data-theme="light"] .card__round {
   opacity: 1;
 }
 .card__trace:hover {
-  color: var(--accent-info, #6cb6ff);
-  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+  color: var(--accent);
+  background: var(--surface-hover);
 }
 .card__agent-cancel:hover {
   color: var(--bad);
@@ -1300,8 +1297,8 @@ body[data-theme="light"] .card__round {
   opacity: 0.5;
 }
 .card__trace--open {
-  color: var(--accent-info, #6cb6ff);
-  background: var(--surface-hover, rgba(255, 255, 255, 0.08));
+  color: var(--accent);
+  background: var(--surface-hover);
   opacity: 1;
 }
 .card__trace + .card__chevron,
@@ -1314,12 +1311,12 @@ body[data-theme="light"] .card__round {
 .card__agent-reply {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  margin-top: 8px;
-  padding: 8px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-inset, #18191c) 72%, transparent);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  gap: calc(7px * var(--ui-scale));
+  margin-top: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale));
+  border-radius: calc(10px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  border: var(--oc-border-width) solid var(--border);
   cursor: default;
 }
 
@@ -1327,12 +1324,12 @@ body[data-theme="light"] .card__round {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
-  min-height: 64px;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-  border-radius: 8px;
-  padding: 8px 10px;
+  min-height: calc(64px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   color: var(--text);
-  background: var(--surface, rgba(0, 0, 0, 0.18));
+  background: var(--surface);
   font: inherit;
   line-height: 1.45;
   user-select: text;
@@ -1342,13 +1339,13 @@ body[data-theme="light"] .card__round {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: calc(6px * var(--ui-scale));
 }
 
 .card__agent-reply-send {
-  border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
-  border-radius: 999px;
-  padding: 4px 11px;
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: calc(999px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(11px * var(--ui-scale));
   font-size: var(--card-sub-size);
   font-weight: 600;
   cursor: pointer;
@@ -1367,12 +1364,12 @@ body[data-theme="light"] .card__round {
 .card__agent-reply-error {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin-top: 6px;
-  padding: 4px 10px;
-  border-radius: 6px;
+  gap: calc(6px * var(--ui-scale));
+  margin-top: calc(6px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: calc(6px * var(--ui-scale));
   background: var(--bad-dim);
-  border: 1px solid color-mix(in srgb, var(--bad) 36%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 36%, transparent);
   color: var(--bad);
   font-size: var(--card-sub-size);
   line-height: 1.4;
@@ -1388,25 +1385,25 @@ body[data-theme="light"] .card__round {
   background: transparent;
   color: var(--bad);
   cursor: pointer;
-  font-size: 14px;
+  font-size: calc(14px * var(--ui-scale));
   line-height: 1;
-  padding: 0 4px;
-  border-radius: 4px;
+  padding: 0 calc(4px * var(--ui-scale));
+  border-radius: calc(4px * var(--ui-scale));
 }
 .card__agent-reply-error-dismiss:hover {
   background: color-mix(in srgb, var(--bad) 18%, transparent);
 }
 
 .trace-panel {
-  margin: 8px 0 12px;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  margin: calc(8px * var(--ui-scale)) 0 calc(12px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
   border-radius: calc(6px * var(--ui-scale, 1));
-  background: var(--surface-inset, #18191c);
-  font-size: 12px;
+  background: var(--surface-inset);
+  font-size: calc(12px * var(--ui-scale));
   color: var(--text);
   display: flex;
   flex-direction: column;
-  max-height: 480px;
+  max-height: calc(480px * var(--ui-scale));
   overflow: hidden;
   box-shadow: none;
 }
@@ -1414,20 +1411,20 @@ body[data-theme="light"] .card__round {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
-  background: var(--surface, #2b2d30);
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  background: var(--surface);
 }
 .trace-panel-title {
   font-weight: 600;
-  font-size: 12px;
-  color: var(--text-strong, #ddd);
-  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+  font-size: calc(12px * var(--ui-scale));
+  color: var(--text-strong);
+  font-family: var(--font-mono);
 }
 .trace-panel-actions {
   display: inline-flex;
-  gap: 4px;
+  gap: calc(4px * var(--ui-scale));
 }
 .trace-panel-refresh,
 .trace-panel-close,
@@ -1436,64 +1433,64 @@ body[data-theme="light"] .card__round {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 12px;
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: calc(3px * var(--ui-scale));
+  font-size: calc(12px * var(--ui-scale));
   line-height: 1;
 }
 .trace-panel-refresh:hover,
 .trace-panel-close:hover,
 .trace-panel-copy:hover:not([disabled]) {
   color: var(--text-strong);
-  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+  background: var(--surface-hover);
 }
 .trace-panel-copy[disabled] {
   opacity: 0.4;
   cursor: not-allowed;
 }
 .trace-panel-copy[data-state="ok"] {
-  color: var(--accent-positive, #6ec46e);
+  color: var(--good);
 }
 .trace-panel-copy[data-state="err"] {
-  color: var(--accent-negative, #d05c5c);
+  color: var(--bad);
 }
 .trace-panel-empty {
-  padding: 12px 14px;
-  font-size: 12px;
+  padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  font-size: calc(12px * var(--ui-scale));
   color: var(--text-muted);
 }
 .trace-panel-empty code {
-  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
-  font-size: 11px;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 1px 4px;
-  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: calc(11px * var(--ui-scale));
+  background: var(--subtle-2);
+  padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  border-radius: calc(3px * var(--ui-scale));
 }
 .trace-panel-body {
   overflow-y: auto;
-  padding: 4px 0;
+  padding: calc(4px * var(--ui-scale)) 0;
 }
 
 .trace-event {
-  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.04));
+  border-bottom: var(--oc-border-width) solid var(--border);
 }
 .trace-event:last-child { border-bottom: 0; }
 .trace-event-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--ui-scale));
   width: 100%;
-  padding: 4px 10px;
+  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
   background: transparent;
   border: 0;
   color: var(--text);
-  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
-  font-size: 11.5px;
+  font-family: var(--font-mono);
+  font-size: calc(11.5px * var(--ui-scale));
   cursor: pointer;
   text-align: left;
 }
 .trace-event-head:hover {
-  background: var(--surface-hover, rgba(255, 255, 255, 0.04));
+  background: var(--surface-hover);
 }
 .trace-event-ts {
   color: var(--text-muted);
@@ -1501,7 +1498,7 @@ body[data-theme="light"] .card__round {
   flex: none;
 }
 .trace-event-kind {
-  color: var(--text-strong, #ddd);
+  color: var(--text-strong);
   flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1510,31 +1507,31 @@ body[data-theme="light"] .card__round {
 .trace-event-sid {
   color: var(--text-muted);
   flex: none;
-  font-size: 11px;
+  font-size: calc(11px * var(--ui-scale));
 }
-.trace-event[data-kind="llm_request"] .trace-event-kind { color: #92c5f7; }
+.trace-event[data-kind="llm_request"] .trace-event-kind { color: var(--accent); }
 .trace-event[data-kind="agent_report"] .trace-event-kind,
 .trace-event[data-kind="agent_report_retry_final"] .trace-event-kind,
-.trace-event[data-kind="orchestrator_wake"] .trace-event-kind { color: #b5e890; }
+.trace-event[data-kind="orchestrator_wake"] .trace-event-kind { color: var(--good); }
 .trace-event[data-kind="agent_report_failure"] .trace-event-kind,
-.trace-event[data-kind="orchestrator_wake_failure"] .trace-event-kind { color: #f08c8c; }
-.trace-event[data-kind="helper_llm_call"] .trace-event-kind { color: #d8b4f5; }
+.trace-event[data-kind="orchestrator_wake_failure"] .trace-event-kind { color: var(--bad); }
+.trace-event[data-kind="helper_llm_call"] .trace-event-kind { color: var(--accent); }
 .trace-event-chevron {
   color: var(--text-muted);
   flex: none;
-  font-size: 10px;
+  font-size: calc(10px * var(--ui-scale));
 }
 .trace-event-body {
   margin: 0;
-  padding: 6px 12px 10px 28px;
-  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
-  font-size: 11px;
+  padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale)) calc(28px * var(--ui-scale));
+  font-family: var(--font-mono);
+  font-size: calc(11px * var(--ui-scale));
   line-height: 1.5;
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
-  background: rgba(255, 255, 255, 0.02);
-  max-height: 360px;
+  background: var(--subtle-1);
+  max-height: calc(360px * var(--ui-scale));
   overflow-y: auto;
 }
 
@@ -1556,28 +1553,28 @@ body[data-theme="light"] .card__round {
   z-index: 5;
   margin: 0 0 var(--card-gap) 0;
   padding: calc(8px * var(--ui-scale, 1)) calc(10px * var(--ui-scale, 1));
-  background: color-mix(in srgb, var(--card-bg-1) 92%, var(--bg, #0a0a0c));
-  border: 1px solid var(--card-border);
+  background: color-mix(in srgb, var(--card-bg-1) 92%, var(--bg));
+  border: var(--oc-border-width) solid var(--card-border);
   border-radius: var(--card-radius);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--ui-scale));
   font-size: var(--card-meta-size);
   color: var(--text-soft);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(calc(6px * var(--ui-scale)));
 }
 
 .task-progress__header {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: calc(8px * var(--ui-scale));
 }
 .task-progress__heading {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
-  font-size: calc(var(--card-meta-size) - 1px);
+  font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
 }
 .task-progress__summary {
   margin-left: auto;
@@ -1588,8 +1585,8 @@ body[data-theme="light"] .card__round {
 
 .task-progress__bar {
   position: relative;
-  height: 4px;
-  border-radius: 999px;
+  height: calc(4px * var(--ui-scale));
+  border-radius: calc(999px * var(--ui-scale));
   background: color-mix(in srgb, var(--text-muted) 18%, transparent);
   overflow: hidden;
 }
@@ -1598,33 +1595,33 @@ body[data-theme="light"] .card__round {
   inset: 0 auto 0 0;
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--good, #69b578) 80%, transparent),
-    color-mix(in srgb, var(--good, #69b578) 100%, transparent)
+    color-mix(in srgb, var(--good) 80%, transparent),
+    color-mix(in srgb, var(--good) 100%, transparent)
   );
   transition: width 200ms ease;
 }
 .task-progress__bar-fail {
   position: absolute;
   inset: 0 0 0 auto;
-  background: color-mix(in srgb, var(--bad, #d56262) 80%, transparent);
+  background: color-mix(in srgb, var(--bad) 80%, transparent);
 }
 
 .task-progress__pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: calc(4px * var(--ui-scale));
 }
 
 .task-progress__pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--card-border);
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: calc(999px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--card-border);
   background: var(--card-bg-0);
   color: var(--text-soft);
-  font-size: calc(var(--card-meta-size) - 0.5px);
+  font-size: calc(var(--card-meta-size) - calc(0.5px * var(--ui-scale)));
   cursor: pointer;
   max-width: 18rem;
   min-width: 0;
@@ -1643,7 +1640,7 @@ body[data-theme="light"] .card__round {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: 0.02em;
-  font-size: calc(var(--card-meta-size) - 1px);
+  font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
   color: color-mix(in srgb, var(--text-muted) 92%, var(--text-soft));
 }
 .task-progress__pill-title {
@@ -1655,31 +1652,31 @@ body[data-theme="light"] .card__round {
 /* state colours echo the badge palette so the progress strip and
  * the per-card badges stay visually consistent. */
 .task-progress__pill[data-state="passed"] {
-  background: color-mix(in srgb, var(--good, #69b578) 18%, var(--card-bg-0));
-  border-color: color-mix(in srgb, var(--good, #69b578) 35%, var(--card-border));
-  color: color-mix(in srgb, var(--good, #69b578) 80%, var(--text-strong));
+  background: color-mix(in srgb, var(--good) 18%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--good) 35%, var(--card-border));
+  color: color-mix(in srgb, var(--good) 80%, var(--text-strong));
 }
 .task-progress__pill[data-state="failed"] {
-  background: color-mix(in srgb, var(--bad, #d56262) 16%, var(--card-bg-0));
-  border-color: color-mix(in srgb, var(--bad, #d56262) 32%, var(--card-border));
-  color: color-mix(in srgb, var(--bad, #d56262) 75%, var(--text-strong));
+  background: color-mix(in srgb, var(--bad) 16%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--bad) 32%, var(--card-border));
+  color: color-mix(in srgb, var(--bad) 75%, var(--text-strong));
 }
 .task-progress__pill[data-state="running"] {
-  background: color-mix(in srgb, #f2994a 18%, var(--card-bg-0));
-  border-color: color-mix(in srgb, #f2994a 36%, var(--card-border));
-  color: color-mix(in srgb, #f2994a 70%, var(--text-strong));
+  background: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--warn) 36%, var(--card-border));
+  color: color-mix(in srgb, var(--warn) 70%, var(--text-strong));
   animation: task-progress-pulse 1.6s ease-in-out infinite;
 }
 .task-progress__pill[data-state="blocked"] {
-  background: color-mix(in srgb, var(--warn, #c28b55) 18%, var(--card-bg-0));
-  border-color: color-mix(in srgb, var(--warn, #c28b55) 32%, var(--card-border));
-  color: color-mix(in srgb, var(--warn, #c28b55) 75%, var(--text-strong));
+  background: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--warn) 32%, var(--card-border));
+  color: color-mix(in srgb, var(--warn) 75%, var(--text-strong));
 }
 .task-progress__pill[data-state="pending"] {
   opacity: 0.7;
 }
 
 @keyframes task-progress-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, #f2994a 30%, transparent); }
-  50% { box-shadow: 0 0 0 4px color-mix(in srgb, #f2994a 5%, transparent); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 30%, transparent); }
+  50% { box-shadow: 0 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--warn) 5%, transparent); }
 }
