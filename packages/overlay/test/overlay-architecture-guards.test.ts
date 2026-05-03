@@ -243,6 +243,26 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("conversation chat-empty placeholder is owned by surfaces/conversation.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const conversationSurface = readText(
+      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
+    )
+    const html = readText(join(OVERLAY_ROOT, "src/index.html"))
+
+    for (const className of ["chat-empty", "chat-empty-icon", "chat-empty-text", "chat-follow-label"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(html).toContain('href="styles/surfaces/conversation.css"')
+    const conversationAt = html.indexOf('href="styles/surfaces/conversation.css"')
+    const stylesAt = html.indexOf('href="styles.css"')
+    expect(conversationAt).toBeGreaterThan(-1)
+    expect(stylesAt).toBeGreaterThan(-1)
+    expect(conversationAt).toBeLessThan(stylesAt)
+  })
+
   test("composer build/version row and reflow are owned by surfaces/composer.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
@@ -522,7 +542,7 @@ describe("overlay architecture guards", () => {
     ]
     const text = sources.join("\n")
     const boldDecls = count(/font-weight\s*:\s*(?:700|720|750|760|780|800|900|bold)\b/g, text)
-    expect(boldDecls).toBeLessThanOrEqual(42)
+    expect(boldDecls).toBeLessThanOrEqual(41)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {

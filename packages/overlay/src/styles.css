@@ -4031,42 +4031,9 @@ code .file-link:hover {
    `.empty-hint`. The richer task-aware variant is `.chat-empty--task`
    below; that one keeps its own bordered card because it surfaces
    live task status, not just "no data". */
-.chat-empty {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: calc(12px * var(--ui-scale));
-  align-items: center;
-  justify-content: center;
-  width: min(100%, calc(360px * var(--ui-scale)));
-  min-height: calc(150px * var(--ui-scale));
-  margin: auto;
-  padding: 0;
-  color: var(--text-soft);
-  text-align: center;
-  opacity: 0.9;
-}
-
-.chat-empty-icon {
-  width: calc(34px * var(--ui-scale));
-  height: calc(34px * var(--ui-scale));
-  flex-shrink: 0;
-  color: var(--accent);
-  opacity: 0.8;
-}
-
-.chat-empty-text {
-  max-width: 28ch;
-  color: var(--text-soft);
-  font-size: var(--ui-font-body);
-  font-weight: 650;
-  text-align: center;
-  line-height: 1.5;
-}
-
-.chat-follow-label {
-  white-space: nowrap;
-}
+/* `.chat-empty` placeholder + icon + text, and `.chat-follow-label` live
+   in `styles/surfaces/conversation.css` now. The richer
+   `.chat-empty--task` variant + theme overrides will follow. */
 
 /* Text parts — prominent */
 .msg-text {
