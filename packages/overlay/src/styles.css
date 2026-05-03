@@ -9112,79 +9112,16 @@ body[data-resizing="true"] * {
    `--good` / `--bad` / `--warn` routed through color-mix on the
    matching semantic token. */
 
-/* ── Eval checks list ────────────────────────────────────── */
-.gwg-checks {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.gwg-check {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  padding: 4px var(--ui-gap-sm);
-  font-size: var(--ui-font-control);
-  border-radius: 3px;
-  transition: background 120ms ease;
-}
-.gwg-check + .gwg-check {
-  border-top: 1px solid var(--subtle-2);
-}
-.gwg-check:hover {
-  background: var(--subtle-2);
-}
-.gwg-check-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  font-size: clamp(10px, calc(10px * var(--ui-scale)), 10px);
-  font-weight: 700;
-  line-height: 1;
-  background: var(--subtle-2);
-  color: var(--text-muted);
-}
-.gwg-check-name {
-  flex: 1;
-  min-width: 0;
-  font-weight: 500;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.gwg-check-evidence {
-  font-family: var(--mono);
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  max-width: 50%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 1px 5px;
-  background: var(--subtle-1);
-  border-radius: 3px;
-}
-.gwg-check--passed .gwg-check-icon {
-  background: var(--good-dim);
-  color: var(--good);
-  box-shadow: 0 0 0 1px rgba(95, 173, 86, 0.35) inset;
-}
-.gwg-check--failed .gwg-check-icon {
-  background: var(--bad-dim);
-  color: var(--bad);
-  box-shadow: 0 0 0 1px rgba(247, 84, 100, 0.35) inset;
-}
-.gwg-check--failed .gwg-check-name {
-  color: var(--bad);
-}
-.gwg-check--pending .gwg-check-icon {
-  background: var(--subtle-2);
-  color: var(--text-muted);
-}
+/* `.gwg-checks` + `.gwg-check` family + `.gwg-check-icon` /
+   `-name` / `-evidence` + `.gwg-check--passed/--failed/--pending`
+   modifier-children live in `styles/surfaces/inspector.css` now.
+   Raw px wrapped in `calc(N * --ui-scale)`; `1px` border on the
+   row separator → `var(--oc-border-width)`; `1px` inset rings
+   on passed/failed icons routed through `color-mix(--good 35%,
+   transparent)` / `color-mix(--bad 35%, transparent)`; the
+   collapsed `clamp(10px, …, 10px)` on the icon font-size (where
+   min === max already made the clamp a no-op) replaced with
+   plain `calc(10px * --ui-scale)`. */
 
 /* `.gwg--passed/--failed/--running` border-color rules folded into
    the surface canonical at styles/surfaces/inspector.css. The

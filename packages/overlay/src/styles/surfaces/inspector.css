@@ -1329,3 +1329,97 @@
 .gwg-step-messages::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Eval checks list — itemized pass/fail rows shown after the
+   verdict pill. Each `.gwg-check` row hosts an icon, a name, and
+   an optional `.gwg-check-evidence` mono-font snippet. The
+   passed/failed/pending status modifiers retint icon background
+   + box-shadow; the failed modifier also retints the name. */
+.gwg-checks {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1px * var(--ui-scale));
+}
+
+.gwg-check {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: calc(4px * var(--ui-scale)) var(--ui-gap-sm);
+  font-size: var(--ui-font-control);
+  border-radius: calc(3px * var(--ui-scale));
+  transition: background 120ms ease;
+}
+
+.gwg-check + .gwg-check {
+  border-top: var(--oc-border-width) solid var(--subtle-2);
+}
+
+.gwg-check:hover {
+  background: var(--subtle-2);
+}
+
+/* Check icon: same 14x14 round chip pattern as the step icon.
+   The earlier 10/10/10 clamp around the font-size collapsed to
+   its preferred value (min === max), so the clamp was a no-op
+   even visually — kept just `calc(10px * --ui-scale)` here. */
+.gwg-check-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: calc(10px * var(--ui-scale));
+  font-weight: 700;
+  line-height: 1;
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+.gwg-check-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwg-check-evidence {
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: calc(1px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  background: var(--subtle-1);
+  border-radius: calc(3px * var(--ui-scale));
+}
+
+/* Status modifiers — passed / failed / pending. Inset rings'
+   raw rgba on --good / --bad routed through color-mix. */
+.gwg-check--passed .gwg-check-icon {
+  background: var(--good-dim);
+  color: var(--good);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--good) 35%, transparent) inset;
+}
+
+.gwg-check--failed .gwg-check-icon {
+  background: var(--bad-dim);
+  color: var(--bad);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 35%, transparent) inset;
+}
+
+.gwg-check--failed .gwg-check-name {
+  color: var(--bad);
+}
+
+.gwg-check--pending .gwg-check-icon {
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
