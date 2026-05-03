@@ -936,34 +936,6 @@ body[data-resizing="row"] * {
   flex: 1;
 }
 
-.extension-status {
-  flex-shrink: 0;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  font-size: var(--ui-font-title);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-soft);
-}
-
-.extension-status[data-state="connected"] {
-  background: var(--good-dim);
-  border-color: rgba(74, 222, 128, 0.14);
-  color: var(--good);
-}
-
-.extension-status[data-state="failed"] {
-  background: var(--bad-dim);
-  border-color: rgba(248, 113, 113, 0.14);
-  color: var(--bad);
-}
-
-.extension-status[data-state="disabled"] {
-  background: var(--subtle-2);
-  color: var(--text-muted);
-}
-
 /* Agent-workflow rules migrated to styles/surfaces/agent-workflow.css. */
 
 .delivery-panel-header {
@@ -1541,7 +1513,6 @@ body[data-resizing="row"] * {
 }
 
 .section-badge,
-.extension-status,
 .knowledge-scope,
 .mini-badge {
   display: inline-flex;
@@ -2028,11 +1999,13 @@ body[data-resizing="true"] * {
 }
 
 .extension-status {
+  flex-shrink: 0;
   padding-left: calc(10px * var(--ui-scale));
   font-size: calc(var(--ui-font-meta) * 0.96);
   font-weight: 620;
   text-transform: none;
   letter-spacing: 0.02em;
+  color: var(--text-soft);
 }
 
 .extension-status[data-state="connected"] {
@@ -2057,6 +2030,7 @@ body[data-resizing="true"] * {
 
 .extension-status[data-state="disabled"] {
   background: transparent;
+  color: var(--text-muted);
 }
 
 .extension-status[data-state="disabled"]::before {
