@@ -1,3 +1,71 @@
+/* Composer attachments strip: chips that show pending uploads above the
+   input row. The chip background and border use color-mix over the
+   surface palette so it adapts per theme. */
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0;
+}
+
+.chat-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-inset) 78%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--subtle-4) 92%, transparent);
+  border-radius: calc(12px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+  max-width: calc(220px * var(--ui-scale));
+  overflow: hidden;
+}
+
+.chat-attachment-thumb {
+  width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  object-fit: cover;
+  border-radius: calc(4px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+.chat-attachment-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  background: var(--subtle-10);
+  border-radius: calc(4px * var(--ui-scale));
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.chat-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.chat-attachment-remove {
+  flex-shrink: 0;
+  border: 0 solid transparent;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 calc(2px * var(--ui-scale));
+  font-size: var(--ui-font-heading);
+  line-height: 1;
+}
+
+.chat-attachment-remove:hover {
+  color: var(--text-strong);
+}
+
 /* Composer shell: the chat-input is the operator's primary input surface.
    Flat — border-radius 0, no gradient, no shadow — matched to the chat
    column. The :focus-within ring is the only chrome it keeps active. */
@@ -162,6 +230,71 @@
 
 .chat-send-label {
   white-space: nowrap;
+}
+
+/* Compose row: grid that lays the textarea wrap, the icon column, and
+   the send button across the chat-input shell. The 8px gap is the
+   canonical value (the late `gap: 8px` override that lived in styles.css
+   wins over the historical 6px; folded here as the single source). */
+.chat-compose-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: calc(8px * var(--ui-scale));
+  min-width: 0;
+}
+
+/* Drag-over outline: dashed accent ring around the compose row when the
+   operator is dragging a file over the input. The 2px outline width is
+   the same in every theme so it stays as a fixed value rather than
+   `calc(2px * var(--ui-scale))` — outline thickness reads as a single
+   semantic affordance, not a layout dimension. */
+.chat-input[data-dragover] .chat-compose-row {
+  outline: calc(2px * var(--ui-scale)) dashed color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: calc(-2px * var(--ui-scale));
+  border-radius: calc(20px * var(--ui-scale) * var(--chat-compose-scale));
+}
+
+/* Compose meta: the bottom row beneath the textarea showing build /
+   permissions / shortcut hints. Two-up flex layout that wraps on narrow
+   compose containers. */
+.chat-compose-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
+  flex-wrap: wrap;
+  min-width: 0;
+  padding-top: calc(2px * var(--ui-scale) * var(--chat-compose-scale));
+  border-top: 0 solid transparent;
+}
+
+.chat-compose-meta-left {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+}
+
+.chat-compose-meta-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.chat-compose-meta-left a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.chat-compose-meta-left a:hover {
+  color: var(--text-soft);
+  text-decoration: underline;
 }
 
 .chat-placeholder-caret {
