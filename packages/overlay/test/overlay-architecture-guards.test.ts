@@ -871,9 +871,13 @@ describe("overlay architecture guards", () => {
   })
 
   test("shared .verdict-pill primitive routes verdict tones through palette tokens", () => {
+    // Canonical moved from styles.css into surfaces/inspector.css. The
+    // verdict-pill is rendered by Board.tsx + IntegrityCard inside the
+    // inspector workspace, so the inspector surface owns it.
+    const inspector = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    const verdictBlock = styles.match(
+    const verdictBlock = inspector.match(
       /\.verdict-pill\s*\{[\s\S]*?\.verdict-pill\[data-verdict="empty"\]\s*\{[^}]*\}/,
     )?.[0]
     expect(verdictBlock).toBeTruthy()
@@ -900,6 +904,11 @@ describe("overlay architecture guards", () => {
     ]) {
       expect(block).toContain(`data-verdict="${variant}"`)
     }
+
+    // Single-source assertion: the canonical no longer lives in
+    // styles.css. This catches accidental copy-paste during future
+    // strips that would re-introduce double sourcing per rule 8.
+    expect(styles).not.toMatch(/^\.verdict-pill\s*\{/m)
   })
 
   test("executor menu dropdown is owned by surfaces/composer.css", () => {
