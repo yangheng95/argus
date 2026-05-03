@@ -8684,14 +8684,8 @@ select.field-input option {
 
 /* ── Subsections inside content (Extensions) ── */
 .config-content .config-subsection {
-  border: 1px solid var(--border);
-  border-radius: calc(10px * var(--ui-scale));
-  background: var(--subtle-1);
   overflow: hidden;
   margin-bottom: calc(8px * var(--ui-scale));
-}
-.config-content .config-subsection[open] {
-  background: var(--subtle-2);
 }
 .config-content .config-subsection-head {
   min-height: calc(40px * var(--ui-scale));
@@ -8899,11 +8893,14 @@ body[data-theme="light"] .config-close-btn:hover {
    thing, the browser rendered another. Same rule-8 active
    conflict iter28 cleaned for .config-subsection and iter30
    for .extension-row. Updated canonical to declare
-   --surface-inset directly so source matches rendered.
-   Hover transition kept; the [open] / :hover / :focus-within
-   pseudo-state rules below still drive the hover wash. */
+   --surface-inset directly so source matches rendered. iter56
+   folded the later theme reset's borderless chrome into this
+   canonical, so theme selectors no longer decide settings
+   container shape. Hover transition kept; the [open] / :hover /
+   :focus-within pseudo-state rules below still drive the hover
+   wash. */
 .config-section {
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--section-corner);
   background: var(--surface-inset);
   overflow: hidden;
@@ -9022,7 +9019,7 @@ body[data-theme="light"] .config-close-btn:hover {
 }
 
 .config-subsection {
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--section-corner);
   background: var(--surface-inset);
   box-shadow: none;
@@ -9930,10 +9927,6 @@ body[data-theme="light"] .config-close-btn:hover {
     transform 120ms;
 }
 
-.config-content .config-subsection:hover,
-.config-content .config-subsection:focus-within,
-.config-content .config-subsection[open]:hover,
-.config-content .config-subsection[open]:focus-within,
 .config-content .extension-head:hover,
 .config-content .extension-head:focus-within,
 .config-content .knowledge-toolbar:hover,
@@ -14343,9 +14336,7 @@ body[data-theme="light"] .chat-toolbar-btn[data-active] {
 }
 
 body[data-theme="light"] .section,
-body[data-theme="light"] .gwg,
-body[data-theme="light"] .config-section,
-body[data-theme="light"] .config-subsection {
+body[data-theme="light"] .gwg {
   background: rgba(255, 255, 255, 0.72) !important;
   border-color: rgba(116, 133, 184, 0.14) !important;
 }
@@ -14587,9 +14578,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-toolbar-btn[data-
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .gwg,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .config-section,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .config-subsection {
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .gwg {
   background: color-mix(in srgb, var(--surface) 82%, transparent) !important;
   border-color: color-mix(in srgb, var(--border) 84%, transparent) !important;
 }
@@ -14645,8 +14634,6 @@ body[data-theme="vscode-dark"] .chat-scroll > .card,
 body[data-theme="vscode-dark"] .chat-scroll > .interaction-card,
 body[data-theme="vscode-dark"] .section,
 body[data-theme="vscode-dark"] .gwg,
-body[data-theme="vscode-dark"] .config-section,
-body[data-theme="vscode-dark"] .config-subsection,
 body[data-theme="vscode-dark"] .board-intro,
 body[data-theme="vscode-dark"] .chat-empty--task {
   background: #252526 !important;
@@ -15139,8 +15126,6 @@ body[data-theme="light"]
   :is(
     .section,
     .gwg,
-    .config-section,
-    .config-subsection,
     .board-intro,
     .board-intro__section,
     .board-intro__mode,
@@ -15155,8 +15140,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .section,
     .gwg,
-    .config-section,
-    .config-subsection,
     .board-intro,
     .board-intro__section,
     .board-intro__mode,

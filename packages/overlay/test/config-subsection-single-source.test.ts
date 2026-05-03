@@ -25,12 +25,12 @@
 // trying to override the canonical — but with the canonical now
 // the single source of truth, nothing remains to override.
 //
-// Pin: ONE solo top-level rule for `.config-subsection`. The two
-// multi-selector partner blocks keep their other siblings
-// (.extension-row, .channel-doc-card, .detail-card, .config-section)
-// — those iters are scoped separately. Theme-scoped overrides
-// (`body[data-theme="..."] .config-subsection`) stay legitimate
-// per-context palette tweaks.
+// Pin: ONE solo top-level rule for `.config-subsection`.
+// Canonical owns `border: 0` directly after the theme reset
+// extraction. Theme-scoped overrides
+// (`body[data-theme="..."] .config-subsection`) are not legitimate
+// palette tweaks anymore because they were changing container
+// chrome instead of root palette tokens.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
@@ -67,9 +67,28 @@ function countSoloTopLevelRules(selector: string): number {
   return count
 }
 
+function soloRuleBody(selector: string): string {
+  for (const chunk of STYLES.split("}")) {
+    const openIdx = chunk.indexOf("{")
+    if (openIdx < 0) continue
+    const raw = chunk.slice(0, openIdx)
+    const head = raw.trim()
+    if (head !== selector) continue
+    const lastNewline = raw.lastIndexOf("\n")
+    const lastLine = raw.slice(lastNewline + 1)
+    if (lastLine !== lastLine.trimStart()) continue
+    return chunk.slice(openIdx + 1)
+  }
+  throw new Error(`solo ${selector} not found`)
+}
+
 describe(".config-subsection base rule is a single source", () => {
   test("only one solo top-level `.config-subsection { … }` rule", () => {
     expect(countSoloTopLevelRules(".config-subsection")).toBe(1)
+  })
+
+  test("the canonical body declares the actually-rendered borderless chrome", () => {
+    expect(soloRuleBody(".config-subsection")).toMatch(/\bborder:\s*0\s*;/)
   })
 
   test("no rule body that re-asserts canonical chrome via !important still lists `.config-subsection`", () => {
@@ -85,5 +104,18 @@ describe(".config-subsection base rule is a single source", () => {
     expect(STYLES).not.toMatch(
       /\.detail-card,[\s\n]*\.config-subsection\s*\{[^}]*!important/,
     )
+  })
+
+  test("theme selectors cannot own `.config-subsection` chrome", () => {
+    for (const chunk of STYLES.split("}")) {
+      const openIdx = chunk.indexOf("{")
+      if (openIdx < 0) continue
+      const selector = chunk.slice(0, openIdx).trim()
+      const isThemeSelector =
+        /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      if (!isThemeSelector) continue
+
+      expect(selector).not.toMatch(/(?:^|\s|:is\([^)]*)\.config-subsection(?:\b|[:.[#])/)
+    }
   })
 })

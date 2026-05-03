@@ -215,6 +215,11 @@ Progress log:
   chrome and removed it from light/dark/vscode theme reset lists plus the local
   `config-content` important hover chain. Settings extension rows now keep one
   background, radius, padding, and border contract across themes.
+- 2026-05-03: Folded `.config-section` and `.config-subsection` into canonical
+  borderless settings-container chrome, removed both from light/dark/vscode
+  theme reset lists, and retired the local `.config-content .config-subsection`
+  background/border/radius override. Settings containers now share the same
+  shape contract across themes.
 
 Trigger: user feedback (2026-05-03):
 
@@ -241,7 +246,7 @@ one theme contract, and no runtime God CSS path left behind.
 | `packages/overlay/src/styles.css`      | **15,212 lines / 2,070 top-level rules / 490 nested rules**                             |
 | `packages/overlay/src/styles/card.css` | 2,022 lines / 336 top-level rules                                                       |
 | Total `!important` in stylesheets      | **332** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **220**                                                                                 |
+| `body[data-theme="…"]` theme overrides | **216**                                                                                 |
 | Theme layout/chrome overrides          | **243** current guard baseline                                                          |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | TaskList 696 / LogViewer 579 / CardHeader 544 / MemoryPanel 444 / GoalWorkflowGroup 206 |

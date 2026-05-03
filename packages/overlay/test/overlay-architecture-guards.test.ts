@@ -31,6 +31,21 @@ function withoutComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")
 }
 
+function soloRuleBody(css: string, selector: string): string {
+  for (const chunk of css.replace(/\/\*[\s\S]*?\*\//g, "").split("}")) {
+    const openIdx = chunk.indexOf("{")
+    if (openIdx < 0) continue
+    const raw = chunk.slice(0, openIdx)
+    const head = raw.trim()
+    if (head !== selector) continue
+    const lastNewline = raw.lastIndexOf("\n")
+    const lastLine = raw.slice(lastNewline + 1)
+    if (lastLine !== lastLine.trimStart()) continue
+    return chunk.slice(openIdx + 1)
+  }
+  throw new Error(`solo ${selector} not found`)
+}
+
 const THEME_LAYOUT_PROPERTIES =
   /^(?:display|position|inset|top|right|bottom|left|z-index|overflow|box-sizing|grid(?:-.+)?|flex(?:-.+)?|align-.+|justify-.+|place-.+|gap|row-gap|column-gap|margin(?:-.+)?|padding(?:-.+)?|width|height|min-width|min-height|max-width|max-height|border(?:-.+)?|border-radius|box-shadow|transform|translate|scale)$/
 const THEME_CHROME_TOKEN =
@@ -143,7 +158,7 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(332)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(220)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(216)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
@@ -260,6 +275,34 @@ describe("overlay architecture guards", () => {
     const body = styles.match(/\.extension-row\s*\{([^}]*)\}/)?.[1] ?? ""
     expect(body).toContain("background: var(--surface-inset)")
     expect(body).toContain("border: 0")
+  })
+
+  test("settings config containers do not rely on theme or local important chrome resets", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const hasConfigContainer = /(?:^|\s|:is\([^)]*)\.config-(?:section|subsection)(?:\b|[:.[#])/.test(
+        selector,
+      )
+      if (!hasConfigContainer) continue
+
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      const usesChromeImportant =
+        /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(body)
+
+      expect(isThemeSelector).toBe(false)
+      expect(usesChromeImportant).toBe(false)
+    }
+
+    for (const selector of [".config-section", ".config-subsection"]) {
+      const body = soloRuleBody(styles, selector)
+      expect(body).toContain("background: var(--surface-inset)")
+      expect(body).toContain("border: 0")
+    }
   })
 
   test("new theme files only write root-scoped tokens", () => {
