@@ -2210,7 +2210,11 @@ body[data-theme="light"] .section-badge {
   flex-direction: column;
   gap: 0;
   padding: 0;
+  border: 0;
+  border-radius: 0;
   background: var(--inspector-surface);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .sections,
@@ -4252,7 +4256,11 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   flex-direction: column;
   min-height: 0;
   min-width: min(100%, var(--ui-chat-min-width));
+  border: 0;
+  border-radius: 0;
   background: var(--chat-canvas);
+  box-shadow: none;
+  backdrop-filter: none;
   overflow: hidden;
 }
 
@@ -10153,7 +10161,11 @@ body[data-theme="light"] .config-close-btn:hover {
   flex: 0 1 var(--ui-sidebar-width);
   display: flex;
   flex-direction: column;
+  border: 0;
+  border-radius: 0;
   background: var(--rail-surface);
+  box-shadow: none;
+  backdrop-filter: none;
   transition:
     width 140ms ease,
     min-width 140ms ease;
@@ -14173,16 +14185,6 @@ body[data-theme="light"] .panel-body {
   backdrop-filter: blur(20px);
 }
 
-body[data-theme="light"] .sidebar,
-body[data-theme="light"] .chat,
-body[data-theme="light"] .sections {
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: var(--surface) !important;
-  box-shadow: none !important;
-  backdrop-filter: blur(12px);
-}
-
 body[data-theme="light"] .sidebar {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 251, 255, 0.82)) !important;
 }
@@ -14392,16 +14394,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body {
   background: var(--bg);
-  backdrop-filter: none;
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: var(--surface) !important;
-  box-shadow: none !important;
   backdrop-filter: none;
 }
 
@@ -15035,17 +15027,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card {
   padding: calc(5px * var(--ui-scale)) calc(6px * var(--ui-scale)) !important;
   border: 0 !important;
   border-radius: calc(4px * var(--ui-scale)) !important;
-  box-shadow: none !important;
-}
-
-body[data-theme="light"] .sidebar,
-body[data-theme="light"] .chat,
-body[data-theme="light"] .sections,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
-  border: 0 !important;
-  border-radius: 0 !important;
   box-shadow: none !important;
 }
 

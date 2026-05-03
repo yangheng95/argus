@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(322)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(212)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(311)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(201)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(207)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(198)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -410,6 +410,37 @@ describe("overlay architecture guards", () => {
       "border-radius: 0",
     ]) {
       expect(body).toContain(declaration)
+    }
+  })
+
+  test("primary column shell chrome is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const columnClass = String.raw`(?:sidebar|chat|sections)`
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector) continue
+      if (!new RegExp(`(?:^|[\\s>+~,])\\.${columnClass}(?:$|[\\s:{.#\\[,>+~])`).test(selector)) {
+        continue
+      }
+
+      expect(body).not.toMatch(/\b(?:border(?:-[a-z]+)?|border-radius|box-shadow|backdrop-filter)\s*:/)
+    }
+
+    for (const selector of [".sidebar", ".chat", ".sections"]) {
+      const body = soloRuleBody(styles, selector)
+      for (const declaration of [
+        "border: 0",
+        "border-radius: 0",
+        "box-shadow: none",
+        "backdrop-filter: none",
+      ]) {
+        expect(body).toContain(declaration)
+      }
     }
   })
 
