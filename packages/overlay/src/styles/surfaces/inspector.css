@@ -1423,3 +1423,193 @@
   background: var(--subtle-2);
   color: var(--text-muted);
 }
+
+/* Requirements panel (RequirementsPanel.tsx): renders the spec
+   agent's parsed requirement list inside the inspector tab. The
+   tab body uses a divided list with a leading mono-font index,
+   description body, and trailing type / status / priority pill
+   meta row. The streaming sub-block surfaces live spec-agent
+   output while the agent runs. */
+.req-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+
+.req-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.req-item {
+  display: grid;
+  gap: calc(7px * var(--ui-scale));
+  padding: calc(9px * var(--ui-scale)) 0;
+  font-size: var(--ui-font-control);
+  border-bottom: var(--oc-border-width) solid var(--subtle-1);
+}
+
+.req-item:last-child {
+  border-bottom: none;
+}
+
+.req-item-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: calc(10px * var(--ui-scale));
+  min-width: 0;
+}
+
+.req-index {
+  font-family: var(--mono);
+  font-size: var(--ui-font-small);
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.req-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  padding-left: calc(56px * var(--ui-scale));
+}
+
+/* Type / status pill family: flat dim-tinted chip carrying
+   uppercase short label. Three type variants and three status
+   variants each pull their tone from the corresponding
+   `--{semantic}-dim` / `--{semantic}` token pair. */
+.req-type,
+.req-status {
+  font-size: var(--ui-font-tiny);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
+  border-radius: var(--oc-radius-pill);
+  flex-shrink: 0;
+}
+
+.req-type--explicit {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.req-type--inferred {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+.req-type--system {
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+.req-status--passed {
+  background: var(--good-dim);
+  color: var(--good);
+}
+
+.req-status--failed {
+  background: var(--bad-dim);
+  color: var(--bad);
+}
+
+.req-status--pending {
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+.req-desc {
+  min-width: 0;
+  color: var(--text);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* Priority pill: separate from type/status because it always
+   renders with the warn-tone palette regardless of value. */
+.req-priority {
+  font-size: var(--ui-font-tiny);
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
+  border-radius: var(--oc-radius-pill);
+  background: var(--warn-dim);
+  color: var(--warn);
+  flex-shrink: 0;
+}
+
+/* Streaming block: surfaced while the spec agent is producing
+   requirements live. The accent left-rail visually marks the
+   sub-block as in-progress. */
+.req-streaming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+
+.req-streaming-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-xs) 0;
+  color: var(--accent);
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+}
+
+.req-streaming-label {
+  color: var(--accent);
+}
+
+.req-streaming-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  max-height: calc(160px * var(--ui-scale));
+  overflow-y: auto;
+  padding-left: var(--ui-gap-sm);
+  border-left: calc(2px * var(--ui-scale)) solid var(--accent-dim);
+}
+
+.req-streaming-messages::-webkit-scrollbar {
+  width: calc(4px * var(--ui-scale));
+}
+
+.req-streaming-messages::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: calc(2px * var(--ui-scale));
+}
+
+/* Spec-detail collapsible: shows the raw spec text under a
+   <details><summary> shell when the user opens it. Mono-font
+   pre-wrap preserves formatting from the spec agent. */
+.req-spec-detail {
+  margin-top: var(--ui-gap-sm);
+}
+
+.req-spec-detail > summary {
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  color: var(--text-soft);
+  cursor: pointer;
+  padding: var(--ui-gap-xs) 0;
+}
+
+.req-spec-content {
+  font-family: var(--mono);
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: var(--ui-gap-sm);
+  background: var(--subtle-1);
+  border-radius: calc(var(--radius) / 2);
+  max-height: calc(200px * var(--ui-scale));
+  overflow-y: auto;
+}
