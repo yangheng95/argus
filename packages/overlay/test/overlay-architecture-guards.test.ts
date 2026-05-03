@@ -388,6 +388,22 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("var(--oc-radius-pill)")
   })
 
+  test("section shell + head baseline are owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const selector of ["section", "section-head"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${selector}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${selector}\\s*\\{`))
+    }
+
+    expect(styles).not.toMatch(/(^|\n)\.section:last-child\s*\{/)
+    expect(inspectorSurface).toMatch(/\.section:last-child\s*\{/)
+    expect(inspectorSurface).toMatch(/\.section-head::-webkit-details-marker\s*\{/)
+    expect(inspectorSurface).toMatch(/\.section-head:hover\s*\{/)
+    expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
+  })
+
   test("conversation goals strip is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const conversationSurface = readText(
@@ -1603,10 +1619,10 @@ describe("overlay architecture guards", () => {
       }
     }
 
-    for (const selector of [".section", ".gwg"]) {
-      const body = soloRuleBody(styles, selector)
-      expect(body).toContain("border-radius: calc(5px * var(--ui-scale))")
-    }
+    expect(soloRuleBody(inspectorSurface, ".section")).toContain(
+      "border-radius: calc(5px * var(--ui-scale))",
+    )
+    expect(soloRuleBody(styles, ".gwg")).toContain("border-radius: calc(5px * var(--ui-scale))")
 
     expect(soloRuleBody(inspectorSurface, ".section-body")).toContain(
       "padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))",
