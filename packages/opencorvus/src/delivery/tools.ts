@@ -725,11 +725,7 @@ function renderManifestContext(delivery: DeliveryInfo | undefined): string {
 function renderHostGateFailures(delivery: DeliveryInfo | undefined): string {
   const failures = delivery?.hostGateFailures ?? []
   if (failures.length === 0) return "No host gate findings."
-  // These are advisory by default — only `kind: "manifest"` when finalGate
-  // failed represents a true blocker (functional completion / required-check
-  // primary failure). Runtime and visual entries are warnings the agent may
-  // surface in deferred_checks but does not need to reject on by themselves.
-  const lines = ["# Host Gate Findings (manifest entries are blockers; runtime/visual are advisory)"]
+  const lines = ["# Host Gate Findings"]
   for (const failure of failures) {
     lines.push("", `## ${failure.kind}:${failure.id}`, `Summary: ${failure.summary}`)
     if (failure.evidence.length > 0) {

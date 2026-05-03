@@ -5,6 +5,7 @@ import { spawn } from "node:child_process"
 import { Instance } from "@/project/instance"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
+import { collectMainWorktreeDiff, readBaselineCommitFromMetadata } from "@/engine/workspace-export"
 import { clip } from "./types"
 import { computeRuntimeEvidence } from "./runtime-evidence"
 import {
@@ -118,8 +119,12 @@ export async function buildDeliveryEvidenceManifest(input: {
       specSnapshotID: input.specSnapshotID,
       goals: input.goals ?? [],
     }),
+    await buildWorkspaceExportEvidence({
+      metadata: input.metadata,
+      changedFiles: input.changedFiles,
+    }),
     ...specialistReviews.map(specialistReviewEvidence),
-  ]
+  ].filter((item): item is DeliveryReviewEvidence => Boolean(item))
   const failedReviewIds = reviewEvidence
     .filter((item) => item.status === "failed")
     .map((item) => item.id)
@@ -192,14 +197,6 @@ async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
   return checkResults
 }
 
-/**
- * Per the project rule "只看功能完成度和e2e测试结果，其余全部作为警告":
- * primary blockers are required-check failures (build/typecheck/test/e2e)
- * and goal-coverage failures (acceptance specs missing). Runtime probes
- * (puppeteer renders, server-launch checks) and specialist reviews are
- * advisory — they get reported as auxiliary so the agent can see and
- * address them, but they do not block delivery acceptance on their own.
- */
 function assessFunctionalCompletion(input: {
   failedCheckIds: string[]
   failedCoverageIds: string[]
@@ -210,17 +207,14 @@ function assessFunctionalCompletion(input: {
   const primaryFailureIds = [
     ...input.failedCheckIds,
     ...input.failedCoverageIds,
-  ]
-  const auxiliaryFailureIds = [
     ...input.failedRuntimeFlowIds,
     ...input.failedReviewIds,
   ]
+  const auxiliaryFailureIds: string[] = []
   const status = primaryFailureIds.length === 0 ? "complete" : "incomplete"
   const summary = status === "complete"
-    ? auxiliaryFailureIds.length === 0
-      ? "Functional completion passed and auxiliary quality gates passed."
-      : `Functional completion passed, but ${auxiliaryFailureIds.length} auxiliary advisory gate(s) reported issues.`
-    : `Functional completion failed with ${primaryFailureIds.length} primary blocker(s) and ${auxiliaryFailureIds.length} auxiliary advisory issue(s).`
+    ? "Functional completion passed and project integrity gates passed."
+    : `Functional completion failed with ${primaryFailureIds.length} primary blocker(s).`
   return {
     status,
     primaryFailureIds: [...new Set(primaryFailureIds)].sort(),
@@ -279,6 +273,7 @@ function buildReviewEvidence(input: {
   taskID?: string
   specSnapshotID?: string
   goals: Array<{
+    priority?: "blocking" | "advisory"
     depends_on?: string[]
     imports?: string[]
     exports?: string[]
@@ -330,7 +325,8 @@ function buildReviewEvidence(input: {
     missing_count?: number
     reason?: string | null
   }
-  const unresolved = payload.verdict === "needs_correction"
+  const unresolved = payload.verdict !== "pass"
+    || (payload.issues_count ?? 0) > 0
     || (payload.corrections_count ?? 0) > 0
     || (payload.missing_count ?? 0) > 0
   return [{
@@ -351,16 +347,50 @@ function buildReviewEvidence(input: {
 }
 
 function requiresIntegrityReview(goals: Array<{
+  priority?: "blocking" | "advisory"
   depends_on?: string[]
   imports?: string[]
   exports?: string[]
 }>) {
-  return goals.length >= 3
+  return goals.some((goal) => goal.priority !== "advisory")
+    || goals.length >= 3
     || goals.some((goal) =>
       (goal.depends_on?.length ?? 0) > 0
       || (goal.imports?.length ?? 0) > 0
       || (goal.exports?.length ?? 0) > 0
     )
+}
+
+async function buildWorkspaceExportEvidence(input: {
+  metadata?: Record<string, unknown>
+  changedFiles: string[]
+}): Promise<DeliveryReviewEvidence | undefined> {
+  const declaredChangedFiles = input.changedFiles.filter((item) => item.length > 0)
+  if (declaredChangedFiles.length === 0) return undefined
+  const baseRef = readBaselineCommitFromMetadata(input.metadata)
+  if (!baseRef) return undefined
+  const id = "review:workspace_export"
+  const { changedFiles: exportedChangedFiles, patch } = await collectMainWorktreeDiff(Instance.directory, baseRef)
+  const exportedSet = new Set(exportedChangedFiles)
+  const missingDeclaredFiles = declaredChangedFiles.filter((item) => !exportedSet.has(item))
+  const failed = exportedChangedFiles.length === 0 || patch.trim().length === 0 || missingDeclaredFiles.length > 0
+  return {
+    id,
+    name: "Workspace Export Coverage",
+    status: failed ? "failed" : "passed",
+    evidence: failed
+      ? [
+        `declared_changed_files=${declaredChangedFiles.length}`,
+        `exported_changed_files=${exportedChangedFiles.length}`,
+        `missing_declared_files=${missingDeclaredFiles.join(", ") || "(none)"}`,
+        `baseline=${baseRef}`,
+      ]
+      : [
+        `declared_changed_files=${declaredChangedFiles.length}`,
+        `exported_changed_files=${exportedChangedFiles.length}`,
+        `baseline=${baseRef}`,
+      ],
+  }
 }
 
 async function runRuntimeFlows(input: {

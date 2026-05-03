@@ -6,7 +6,7 @@
 
 ## 1. 目标
 
-Deliver 必须从“LLM 自述式验收”重构为“确定性证据门禁 + LLM 修复/解释 + 发布硬门禁”的结构。
+Deliver 必须从“LLM 自述式验收”重构为“确定性证据门禁 + LLM 修复/解释 + 发布投影”的结构。
 
 最终状态：
 
@@ -161,9 +161,9 @@ type DeliveryEvidenceManifest = {
 - 修复后必须触发 runner 重跑。
 - 不能直接把 finalGate 改成 passed。
 
-#### PublisherGate
+#### DeliveryCompletenessGate
 
-职责：唯一发布硬门禁。
+职责：唯一交付完整性硬门。它在 delivery manifest 内判定交付物是否完整满足用户请求、active requirements、设计约束、运行工作流和导出一致性。Publisher 只能消费 gate-passed manifest 执行导出，不能再追加第二套验收。
 
 通过条件：
 
@@ -301,9 +301,10 @@ type FailureSignature = {
 
 ### P5：发布完整性
 
-- PublisherGate 只接受 gate-passed manifest。
+- DeliveryCompletenessGate 只接受 gate-passed manifest。
 - patch/changed_files 从 `baselineRef..headRef` 计算。
 - delivery artifact 必须含 manifest id、patch summary、changed files。
+- Publisher 不再运行 declared-files acceptance gate；workspace export 覆盖作为 `review:workspace_export` 写入 manifest。
 
 验收：
 
@@ -381,7 +382,7 @@ type FailureSignature = {
 - P1 回归覆盖：当 build/test 通过但 lint 失败时，manifest gate 失败，delivery 被合成为 rejected。
 - P1 回归覆盖：package script 使用 `|| exit 0` / `|| true` 这类吞错表达时，manifest gate 失败。
 - P5 部分完成：auto publish 和 manual `publish_delivery` 都要求 accepted verdict + passed manifest。
-- P5 部分完成：Publisher 校验 delivery 声明的 changed files 必须被 `workspace_export` patch 覆盖，否则返回 failed，不允许 completed。
+- P5 历史实现曾让 Publisher 校验 delivery 声明 changed files；2026-05-04 后该检查必须前移到 manifest 的 `review:workspace_export`，Publisher 只执行导出。
 - benchmark 覆盖：现有 `test/benchmark` 套件和新增 deliver/publish gate 回归测试通过。
 
 未完成，后续继续：
@@ -519,3 +520,21 @@ type FailureSignature = {
 剩余外部限制：
 
 - live pipeline benchmark 仍依赖实际 LLM 模型环境变量；当前本机未配置 `OPENCORVUS_BENCHMARK_MODEL` / `OPENCORVUS_E2E_MODEL` / provider key。代码侧已补上不依赖 LLM 的 deliver manifest benchmark，覆盖本次 deliver gate 的真实浏览器路径。
+
+### 2026-05-04 第十轮
+
+已完成：
+
+- 完整性定义收束：delivery finalGate 同时硬性检查 required checks、coverage、runtime flows、project/spec integrity review 和 workspace export 覆盖；失败时 UI 不得显示 Accepted。
+- `DeliveryArbiter` 不再把 runtime/review/visual evidence 当作 advisory accept；LLM accepted 但 host gate failed 时，最终 verdict 改为 rejected，并保留 manifest evidence。
+- `review:integrity` 现在要求当前 spec snapshot 的 integrity attempt verdict 为 pass，且 issues/corrections/missing 全部为 0；`concerns` 不再被当作通过。
+- `review:workspace_export` 前移到 `DeliveryEvidenceManifest`，用 baseline commit 对比主 worktree diff，校验 declared changed files 均被导出覆盖。
+- Publisher 删除 declared-files post-acceptance gate；workspace export adapter 缺 baseline 或执行失败属于 publish execution failure，不再形成 Accepted 后的第二套验收状态。
+- runtime flow benchmark 增加 auth-gated 场景，证明交互探针会点击登录后再评估 post-interaction DOM。
+
+验证：
+
+- `bun test packages/opencorvus/test/delivery/arbiter.test.ts`
+- `bun test packages/opencorvus/test/delivery/project-gate.test.ts`
+- `bun test packages/opencorvus/test/engine/publisher-delivery-gate.test.ts`
+- `bun test packages/opencorvus/test/benchmark/delivery-runtime-flow-benchmark.test.ts`

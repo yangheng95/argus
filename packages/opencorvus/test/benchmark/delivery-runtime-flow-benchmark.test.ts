@@ -6,7 +6,11 @@ import { mkdtemp } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project-gate"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { Instance } from "../../src/project/instance"
+import { ProjectTable } from "../../src/project/project.sql"
+import { Database } from "../../src/storage/db"
 
 const tempDirs: string[] = []
 const childProcesses: ChildProcess[] = []
@@ -15,7 +19,13 @@ afterEach(async () => {
   for (const child of childProcesses.splice(0)) {
     if (child.exitCode !== null) continue
     child.kill()
-    await new Promise<void>((resolve) => child.once("exit", () => resolve()))
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 2_000)
+      child.once("exit", () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
   }
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
@@ -26,21 +36,25 @@ describe("delivery runtime flow benchmark", () => {
 
     const manifest = await Instance.provide({
       directory: fixture.dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_runtime_benchmark",
-        runID: "run_runtime_benchmark",
-        deliveryID: "dlv_runtime_benchmark",
-        changedFiles: ["dist/index.html"],
-        metadata: { previewUrl: fixture.previewUrl },
-        goals: [{
-          id: "gol_chat_runtime",
-          title: "Chat runtime flow",
-          priority: "blocking",
-          requirement_ids: ["REQ-chat"],
-          acceptance_spec_count: 1,
-          runtime_scenario_count: 1,
-        }],
-      }),
+      fn: () => {
+        recordPassingIntegrity("tsk_runtime_benchmark", "spec_runtime_benchmark")
+        return buildDeliveryEvidenceManifest({
+          taskID: "tsk_runtime_benchmark",
+          runID: "run_runtime_benchmark",
+          deliveryID: "dlv_runtime_benchmark",
+          specSnapshotID: "spec_runtime_benchmark",
+          changedFiles: ["dist/index.html"],
+          metadata: { previewUrl: fixture.previewUrl },
+          goals: [{
+            id: "gol_chat_runtime",
+            title: "Chat runtime flow",
+            priority: "blocking",
+            requirement_ids: ["REQ-chat"],
+            acceptance_spec_count: 1,
+            runtime_scenario_count: 1,
+          }],
+        })
+      },
     })
 
     expect(manifest.finalGate.status).toBe("passed")
@@ -58,24 +72,28 @@ describe("delivery runtime flow benchmark", () => {
 
     const manifest = await Instance.provide({
       directory: fixture.dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_runtime_benchmark_fail",
-        runID: "run_runtime_benchmark_fail",
-        deliveryID: "dlv_runtime_benchmark_fail",
-        changedFiles: ["dist/index.html"],
-        metadata: { previewUrl: fixture.previewUrl },
-        goals: [{
-          id: "gol_chat_runtime",
-          title: "Chat runtime flow",
-          priority: "blocking",
-          requirement_ids: ["REQ-chat"],
-          acceptance_spec_count: 1,
-          runtime_scenario_count: 1,
-        }],
-      }),
+      fn: () => {
+        recordPassingIntegrity("tsk_runtime_benchmark_fail", "spec_runtime_benchmark_fail")
+        return buildDeliveryEvidenceManifest({
+          taskID: "tsk_runtime_benchmark_fail",
+          runID: "run_runtime_benchmark_fail",
+          deliveryID: "dlv_runtime_benchmark_fail",
+          specSnapshotID: "spec_runtime_benchmark_fail",
+          changedFiles: ["dist/index.html"],
+          metadata: { previewUrl: fixture.previewUrl },
+          goals: [{
+            id: "gol_chat_runtime",
+            title: "Chat runtime flow",
+            priority: "blocking",
+            requirement_ids: ["REQ-chat"],
+            acceptance_spec_count: 1,
+            runtime_scenario_count: 1,
+          }],
+        })
+      },
     })
 
-    expect(manifest.finalGate.status).toBe("passed")
+    expect(manifest.finalGate.status).toBe("failed")
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual(["runtime:web:."])
     expect(manifest.runtimeFlows[0]?.status).toBe("failed")
     expect(manifest.runtimeFlows[0]?.evidence.join("\n")).toContain("interaction_required_but_missing")
@@ -86,21 +104,25 @@ describe("delivery runtime flow benchmark", () => {
 
     const manifest = await Instance.provide({
       directory: fixture.dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_runtime_auth_gate",
-        runID: "run_runtime_auth_gate",
-        deliveryID: "dlv_runtime_auth_gate",
-        changedFiles: ["dist/index.html"],
-        metadata: { previewUrl: fixture.previewUrl },
-        goals: [{
-          id: "gol_auth_runtime",
-          title: "Mock login runtime flow",
-          priority: "blocking",
-          requirement_ids: ["REQ-auth"],
-          acceptance_spec_count: 1,
-          runtime_scenario_count: 1,
-        }],
-      }),
+      fn: () => {
+        recordPassingIntegrity("tsk_runtime_auth_gate", "spec_runtime_auth_gate")
+        return buildDeliveryEvidenceManifest({
+          taskID: "tsk_runtime_auth_gate",
+          runID: "run_runtime_auth_gate",
+          deliveryID: "dlv_runtime_auth_gate",
+          specSnapshotID: "spec_runtime_auth_gate",
+          changedFiles: ["dist/index.html"],
+          metadata: { previewUrl: fixture.previewUrl },
+          goals: [{
+            id: "gol_auth_runtime",
+            title: "Mock login runtime flow",
+            priority: "blocking",
+            requirement_ids: ["REQ-auth"],
+            acceptance_spec_count: 1,
+            runtime_scenario_count: 1,
+          }],
+        })
+      },
     })
 
     expect(manifest.finalGate.status).toBe("passed")
@@ -128,6 +150,52 @@ async function frontendFixture(input: { interactive: boolean | "auth-gated" }) {
   await fs.writeFile(path.join(dir, "dist", "index.html"), htmlFixture(input.interactive))
   const previewUrl = await startFixturePreviewServer(dir)
   return { dir, previewUrl }
+}
+
+function recordPassingIntegrity(taskID: string, specSnapshotID: string) {
+  const now = Date.now()
+  Database.use((db) => {
+    db.insert(ProjectTable).values({
+      id: `project_${taskID}`,
+      worktree: Instance.directory,
+      name: `Project ${taskID}`,
+      sandboxes: "[]",
+      time_created: now,
+      time_updated: now,
+    }).onConflictDoNothing().run()
+    db.insert(EngineTaskTable).values({
+      id: taskID,
+      project_id: `project_${taskID}`,
+      source: "test",
+      title: `Task ${taskID}`,
+      request: "Test delivery runtime flow",
+      kind: "workflow",
+      priority: "normal",
+      status: "active",
+      attachments: [],
+      system_artifacts: [],
+      design_specs: [],
+      metadata: {},
+      time_created: now,
+      time_updated: now,
+      time_started: now,
+    }).onConflictDoNothing().run()
+  })
+  recordIntegrityAttempt({
+    taskID,
+    sessionID: `ses_${specSnapshotID}`,
+    specSnapshotID,
+    verdict: "pass",
+    perDimension: [
+      { id: "goal_fidelity", verdict: "pass" },
+      { id: "technical_feasibility", verdict: "pass" },
+      { id: "hallucination", verdict: "pass" },
+      { id: "solution_quality", verdict: "pass" },
+    ],
+    issuesCount: 0,
+    correctionsCount: 0,
+    missingCount: 0,
+  })
 }
 
 async function startFixturePreviewServer(dir: string): Promise<string> {
