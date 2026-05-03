@@ -561,20 +561,20 @@ Progress log:
   `.titlebar-actions`, `.titlebar-status-cluster`,
   `.titlebar-window-controls`, the `.conn-badge*` family (dot-indicator
   + status tones + label), and the matching `@media (max-width: 760px)`
-  `.titlebar` flow reset. The `.brand-guide-card` width tweak inside
-  the same media block stays in `styles.css` until the brand-guide
-  family is extracted (its focus ring still uses an rgba literal).
-  New guard pins seven classes to the surface file.
+  `.titlebar` flow reset. New guard pins seven classes to the surface
+  file. The follow-up brand-guide slice below removes the remaining
+  popover-specific titlebar family from `styles.css`.
 - 2026-05-03: Retired the remaining legacy theme selectors for migrated
   titlebar chrome. `.titlebar`, `.titlebar-menubar-trigger`,
   `.titlebar-status-chip`, `.titlebar-setup-cta`,
-  `.titlebar-status-icon`, and `.titlebar-task-status` now resolve
-  through `styles/surfaces/titlebar.css` plus palette tokens only; no
-  `body[data-theme]` block may target them. The `brand-guide` family is
-  deliberately left behind until its own surface extraction because it
-  still has local popover/focus chrome in God CSS. Guard ceilings drop to
-  `!important <= 160`, `body[data-theme] <= 85`, and theme layout/chrome
-  overrides `<= 57`.
+  `.titlebar-status-icon`, `.titlebar-task-status`, and the full
+  `.brand-guide*` popover family now resolve through
+  `styles/surfaces/titlebar.css` plus palette tokens only; no
+  `body[data-theme]` block may target them. The `brand-guide` move also
+  replaced its rgba focus/step chrome with `color-mix()` over tokens and
+  tightened its bold weights to the shared titlebar density. Guard
+  ceilings drop to `!important <= 152`, `body[data-theme] <= 82`, and
+  theme layout/chrome overrides `<= 53`.
 - 2026-05-03: Extracted the `.brand-guide*` family (anchor, popover
   card with `::before` / `::after` arrow geometry, kicker, title,
   copy, steps, step-index, step-copy) plus its `@media (max-width:
@@ -590,6 +590,19 @@ Progress log:
   bold-weight density guard tightens to `<= 42`. New extraction guard
   pins ten brand-guide classes plus the two pseudo-elements to the
   surface file.
+- 2026-05-03: Extracted the `.titlebar-theme-options*` picker family
+  (grid wrapper, option button, hover/active states, label,
+  preview-swatch base, four `[data-theme]` swatch variants) from
+  `styles.css` into `styles/surfaces/titlebar.css`. The hover state's
+  `rgba(255, 255, 255, …)` whitewash routed through palette tokens
+  (`--subtle-3` / `--subtle-5`) so it adapts per theme. The four swatch
+  hex previews live in design-language tokens (`--oc-theme-swatch-dark`,
+  `-light`, `-vscode-dark`, `-system`) — they are deliberately fixed
+  metadata about other themes, not theme-aware values, so they cannot
+  resolve through the palette but they now route through the design
+  language instead of being inlined hex literals on selectors. New
+  guard pins four classes plus the four data-theme variants and asserts
+  the four swatch tokens exist.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
@@ -620,11 +633,11 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **13,176 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles.css`      | **12,991 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
-| Total `!important` in stylesheets      | **160** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **85**                                                                                  |
-| Theme layout/chrome overrides          | **57** current guard baseline                                                           |
+| Total `!important` in stylesheets      | **152** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **82**                                                                                  |
+| Theme layout/chrome overrides          | **53** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
 | Total `.tsx` LOC under `packages/overlay/src` | **15,108**                                                                      |

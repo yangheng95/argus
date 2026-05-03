@@ -453,67 +453,8 @@ a {
    `.titlebar-status-value`, and the dead `.titlebar-status-icon` rules
    live in `styles/surfaces/titlebar.css` now. */
 
-.titlebar-theme-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: calc(4px * var(--ui-scale));
-  margin-left: calc(32px * var(--ui-scale));
-}
-
-.titlebar-theme-option {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: calc(5px * var(--ui-scale));
-  color: var(--text-soft);
-  font-size: var(--ui-font-small);
-  cursor: pointer;
-  text-align: left;
-  min-width: 0;
-}
-.titlebar-theme-option:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
-  color: var(--text-strong);
-}
-.titlebar-theme-option[data-active="true"] {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-  color: var(--text-strong);
-  box-shadow: 0 0 0 1px var(--accent-dim);
-}
-
-.titlebar-theme-option-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.titlebar-theme-option-swatch {
-  width: calc(12px * var(--ui-scale));
-  height: calc(12px * var(--ui-scale));
-  border-radius: 3px;
-  border: 1px solid var(--border);
-  flex-shrink: 0;
-  display: inline-block;
-}
-.titlebar-theme-option-swatch[data-theme="dark"] {
-  background: linear-gradient(135deg, #1e1f22 50%, #2b2d30 50%);
-}
-.titlebar-theme-option-swatch[data-theme="light"] {
-  background: linear-gradient(135deg, #f2f2f2 50%, #ffffff 50%);
-}
-.titlebar-theme-option-swatch[data-theme="vscode-dark"] {
-  background: linear-gradient(135deg, #1e1e1e 50%, #252526 50%);
-}
-.titlebar-theme-option-swatch[data-theme="system"] {
-  background: linear-gradient(135deg, #1e1f22 50%, #f2f2f2 50%);
-}
+/* `.titlebar-theme-options*` family lives in
+   `styles/surfaces/titlebar.css` now. */
 
 /* `.titlebar-window-controls` lives in `styles/surfaces/titlebar.css` now. */
 

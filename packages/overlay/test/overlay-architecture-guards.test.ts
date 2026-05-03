@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(160)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(85)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(152)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(82)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(57)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(53)
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
@@ -214,6 +214,29 @@ describe("overlay architecture guards", () => {
     expect(titlebarSurface).toMatch(/\.titlebar-setup-cta\s*\{/)
     expect(titlebarSurface).toMatch(/\.titlebar-status-label\s*\{/)
     expect(titlebarSurface).toMatch(/\.titlebar-status-value\s*\{/)
+  })
+
+  test("titlebar theme picker is owned by surfaces/titlebar.css", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
+    const tokenText = readText(join(OVERLAY_ROOT, "src/styles/tokens/design-language.css"))
+
+    for (const className of [
+      "titlebar-theme-options",
+      "titlebar-theme-option",
+      "titlebar-theme-option-label",
+      "titlebar-theme-option-swatch",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(titlebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const swatch of ["dark", "light", "vscode-dark", "system"]) {
+      expect(titlebarSurface).toMatch(
+        new RegExp(`\\.titlebar-theme-option-swatch\\[data-theme="${swatch}"\\]`),
+      )
+      expect(tokenText).toMatch(new RegExp(`--oc-theme-swatch-${swatch}\\s*:`))
+    }
   })
 
   test("brand-guide family is owned by surfaces/titlebar.css", () => {
@@ -286,6 +309,7 @@ describe("overlay architecture guards", () => {
       "titlebar-setup-cta",
       "titlebar-status-icon",
       "titlebar-task-status",
+      "brand-guide",
     ]
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
