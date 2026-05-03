@@ -26,7 +26,7 @@ export function arbitrateDeliveryGate(input: {
   failedCoverageIds: string[]
   failedRuntimeFlowIds?: string[]
   failedReviewIds?: string[]
-  functionalAssessment?: DeliveryManifestFunctionalAssessment
+  functionalAssessment: DeliveryManifestFunctionalAssessment
 }): DeliveryGateVerdict {
   const failedRuntimeFlowIds = input.failedRuntimeFlowIds ?? []
   const failedReviewIds = input.failedReviewIds ?? []
@@ -48,7 +48,6 @@ export function arbitrateDeliveryGate(input: {
       runtime: failedRuntimeFlowIds.length,
       reviews: failedReviewIds.length,
       functionalAssessment: input.functionalAssessment,
-      fallbackPassedSummary: input.checks.summary,
     }),
   }
 }
@@ -59,21 +58,16 @@ function deliveryGateSummary(input: {
   coverage: number
   runtime: number
   reviews: number
-  functionalAssessment?: DeliveryManifestFunctionalAssessment
-  fallbackPassedSummary: string
+  functionalAssessment: DeliveryManifestFunctionalAssessment
 }) {
   const advisoryNote = input.runtime + input.reviews > 0
     ? ` Advisory warnings: ${input.runtime} runtime flow(s), ${input.reviews} review item(s).`
     : ""
   if (input.status === "passed") {
-    const base = input.functionalAssessment?.summary ?? input.fallbackPassedSummary
-    return `${base}${advisoryNote}`
+    return `${input.functionalAssessment.summary}${advisoryNote}`
   }
   const counts =
     `${input.checks} required check(s) and ${input.coverage} coverage item(s)`
-  if (!input.functionalAssessment) {
-    return `Delivery evidence gate failed ${counts}.${advisoryNote}`
-  }
   const primary = input.functionalAssessment.primaryFailureIds.join(", ") || "none"
   const auxiliary = input.functionalAssessment.auxiliaryFailureIds.join(", ") || "none"
   return `${input.functionalAssessment.summary} Evidence gate failed ${counts}. Primary: ${primary}. Auxiliary: ${auxiliary}.${advisoryNote}`
