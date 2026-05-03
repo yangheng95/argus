@@ -265,10 +265,19 @@
   min-width: 0;
   padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border: 0 solid transparent;
-  border-radius: calc(10px * var(--ui-scale));
+  /* Reads the shared `--radius` token (12px scaled) so brand-guide's
+   * resting radius matches the rest of the chromed-control family
+   * (.field-input, .field-input-group). The previous calc(10px * scale)
+   * literal disagreed with the multi-class
+   * `:is(.brand-guide, .field-input, …) { border-radius: var(--radius)
+   * !important }` reset that lived at the styles.css tail; the reset
+   * always won. Updating the canonical to read `var(--radius)`
+   * directly retires the dual source. */
+  border-radius: var(--radius);
   cursor: help;
   outline: none;
   background: transparent;
+  box-shadow: none;
   transition:
     border-color 120ms,
     background 120ms,

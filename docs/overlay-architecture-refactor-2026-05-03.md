@@ -1895,6 +1895,42 @@ Progress log:
   default-theme + styles-no-dangling-selectors tests pass; tsc
   clean; vite build green (3.95s, ~324KB CSS).
 
+- 2026-05-04 (CRON slice, Claude `ff6c0b0e5` follow-up): Removed
+  6 more stale `!important` declarations across two unrelated
+  clusters by single-sourcing the chrome.
+  - `.config-content .extension-head:hover, … .pref-item:hover`
+    block at line 4971 carried 4 `!important` (border-color, bg,
+    box-shadow, transform). The selector chain already includes
+    `.config-content`, so the specificity is `(0, 2, 1)` —
+    strictly higher than the shared hover canonical at line 4955
+    `.goal-item:hover, .extension-row:hover, …` which is `(0, 1, 1)`.
+    The `!important` was redundant — specificity already wins. Dropped
+    all 4.
+  - Multi-class `.brand-guide, .engine-bar, .sidebar-btn, .field-input,
+    .field-input-group, .custom-select { border-radius: var(--radius)
+    !important; box-shadow: none !important }` reset block at line
+    6161 retired. Updated each canonical to declare the values
+    directly: `.brand-guide` (in surfaces/titlebar.css) reads
+    `var(--radius)` instead of `calc(10px * --ui-scale)` so the
+    radius matches the chromed-control family; `.sidebar-btn` and
+    `.custom-select` canonicals here gained
+    `border-radius: var(--radius); box-shadow: none`. `.field-input`
+    and `.field-input-group` canonicals already declared both. The
+    dead `.engine-bar` is gone from the list (canonical retired in
+    the prior dead-code sweep). Block deleted, 2 `!important`
+    removed.
+  Also fixed `.field-input-group:focus-within` raw rgba(91, 141, 239,
+  0.24) focus ring → `color-mix(in srgb, var(--accent) 24%,
+  transparent)`. Same theme-bleed fix applied to `.field-input:focus`
+  in the previous slice.
+  Guard ceiling: `!important` 15 → 9 (-6). body[data-theme] +
+  theme layout overrides unchanged. All 171 architecture guards +
+  SSE refresh + button primitive + dark-mode-primary-button +
+  section / sections / titlebar / titlebar-utility / titlebar-brand-
+  strip single-source + task-row-mini pseudo-states + default-theme +
+  styles-no-dangling-selectors tests pass; tsc clean; vite build
+  green (4.12s, ~324KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD
