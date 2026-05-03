@@ -1783,6 +1783,47 @@ Progress log:
   + default-theme tests pass; tsc clean; vite build green (4.16s,
   324KB CSS).
 
+- 2026-05-04 (CRON slice, Claude `a83f9d7d2` follow-up): Retired all
+  six multi-class scale-override `:is(...)` blocks (margin /
+  gap+padding-inline / border + box-shadow / hover border-color +
+  box-shadow / background / hover+active background) by a combination
+  of dead-code deletion, canonical rewrite, and trust-the-canonical:
+  - Deleted dead `.btn-terminate`, `.engine-chip`, `.engine-chip-caret`,
+    and `.engine-bar` canonicals. None of those classes appear in any
+    tsx / html source — they had been replaced by the Button primitive
+    (terminate via `tone="danger"` variant) and the executor-chip
+    primitive (engine selector). Removing the canonicals strips ~7
+    rules + corresponding `:is()` membership.
+  - Rewrote `.sidebar-btn` canonical (line 5855) to declare flat chrome
+    directly: `background: transparent; border: 0; box-shadow: none;
+    margin: 0; gap: calc(2px * --ui-scale); padding: calc(3px *
+    --ui-scale) calc(6px * --ui-scale)`. Previously it carried a raw
+    rgba(91, 141, 239, …) gradient + drop-shadow that rendered nowhere
+    (only consumer is `class="sidebar-btn sidebar-btn-primary"` and the
+    `:is(.sidebar-btn, …)` reset force-stripped the chrome). The
+    new flat canonical composes cleanly with the shared primary
+    canonical at line 7585 — no override needed for the accent-gradient
+    to paint. **This unblocks the user-reported bleed where
+    `.sidebar-btn-primary` lost its accent-gradient bg because the
+    `:is(.sidebar-btn) { background: transparent !important }` reset
+    matched it via the `.sidebar-btn` parent class.**
+  - Added `background: transparent; border: 0; box-shadow: none;
+    margin: 0` to `.btn.mini` canonical so the mini variant declares
+    flat directly instead of relying on the override.
+  - Trusted the chromed canonicals for `.workspace-tab` (subtle right
+    separator + active accent border-bottom), `.section-icon-btn`
+    (bordered icon button), and `.conn-banner__action` (chromed call-
+    to-action). The override blocks were masking these designs; the
+    canonical chrome is the single intended visual.
+  Guard ceilings tightened: !important 50 → 27 (-23 — 6 override
+  blocks × 2-3 `!important` each disappeared), body[data-theme]
+  unchanged at 5 (already at floor — only root palette + 1 light
+  pseudo-element block remain), theme layout overrides unchanged at
+  0. All 122 architecture guards + SSE refresh + button primitive +
+  dark-mode-primary-button + section / sections single-source +
+  default-theme tests pass; tsc clean; vite build green (3.98s,
+  ~324KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD
