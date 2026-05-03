@@ -463,12 +463,17 @@ Progress log:
   the dark render (`rgb(223, 225, 229)`).
 - 2026-05-03: Added a bold-weight density guard. Overlay stylesheets
   (`styles.css`, `card.css`, primitives, surfaces) currently declare
-  many weights at `>= 700` / `bold`; the guard caps that count at 50
-  and must drop monotonically as decorative bold is pruned. Initial
-  sweep dropped `.task-dir-editor` and `.executor-chip-label` from 700
-  to 600 to seat under the new ceiling. **Why:** user feedback flagged
-  "黑体太多，视觉噪音太多" — bold should be reserved for genuine
-  semantic emphasis, not a default decoration.
+  many weights at `>= 700` / `bold`; the guard caps that count and
+  must drop monotonically as decorative bold is pruned. **Why:** user
+  feedback flagged "黑体太多，视觉噪音太多" — bold should be reserved
+  for genuine semantic emphasis, not a default decoration.
+- 2026-05-03: Bold-weight sweep round 1: downshifted
+  `.task-dir-editor`, `.executor-chip-label` (700 → 600),
+  `.brand-guide-kicker` (700 → 500; uppercase + tracking already
+  carries the kicker emphasis), and four chip/label/subtitle classes
+  (`.provider-test-result-icon`, `.provider-section-label`,
+  `.goal-priority`, `.dialog-subtitle`) from 700 to 600. Bold-weight
+  guard ceiling drops to `<= 45`.
 
 Trigger: user feedback (2026-05-03):
 
