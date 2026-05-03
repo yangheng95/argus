@@ -1931,6 +1931,46 @@ Progress log:
   styles-no-dangling-selectors tests pass; tsc clean; vite build
   green (4.12s, ~324KB CSS).
 
+- 2026-05-04 (CRON slice, Claude `f6176877a` follow-up): Bottomed out
+  the live `!important` count to architecture-allowlisted floor of 6.
+  Three retire candidates resolved:
+  - `.diff-dialog-form max-width !important` — the bare class
+    selector lost specificity to `.dialog-wide .dialog-form` (which
+    targets the same DOM node from the parent dialog scope). Replaced
+    with `.dialog-wide .diff-dialog-form` so specificity (0, 2, 0)
+    matches the wider-dialog default and cascade source order
+    resolves to the diff width.
+  - `.section-dialog-form max-width !important` — class had zero tsx
+    / html consumers (superseded by the right-panel section surface
+    migration). Deleted.
+  - `.section-badge, .extension-status, .llm-status, .gwg-priority-
+    badge, .change-status, .diff-dialog-stat { border-radius:
+    calc(5px * --ui-scale) !important }` pill family reset block.
+    The rule lives later in the cascade than every individual
+    canonical (multi-class pill at 4927 declares 999px; iter15+
+    dot-prefix multi-class at 5789 declares 0; per-class rules
+    declare their own); same class specificity, source order
+    resolves to this rule. `!important` was redundant — removed.
+  Guard ceiling: `!important` 9 → 6 (-3). All remaining 6 are
+  architecture-allowlist legitimate: `[hidden]` + `.hidden` (native
+  utility), `body[data-resizing="row"|"true"] *` cursor (drag must
+  override children), and two `@media (prefers-reduced-motion:
+  reduce)` accessibility overrides (`.conn-banner__dot, .board-
+  intro__cta, .task-list-skeleton-row { animation: none }` and
+  `.cmdk-backdrop { animation: none }`).
+
+  **Cumulative !important reduction: 380 → 6 (98.4%)** — the
+  remaining 6 are the architecture-plan allowlist; no further
+  `!important` cleanup is possible without violating the spirit of
+  the rules. The `!important` ratchet phase of the refactor is
+  complete.
+
+  All 167 architecture guards + SSE refresh + button primitive +
+  dark-mode-primary-button + section / sections / titlebar /
+  titlebar-utility single-source + task-row-mini pseudo-states +
+  default-theme + styles-no-dangling-selectors tests pass; tsc
+  clean; vite build green (4.38s, ~324KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD
