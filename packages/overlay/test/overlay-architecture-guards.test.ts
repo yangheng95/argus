@@ -429,6 +429,38 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
   })
 
+  test("shared .verdict-pill primitive routes verdict tones through palette tokens", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+
+    const verdictBlock = styles.match(
+      /\.verdict-pill\s*\{[\s\S]*?\.verdict-pill\[data-verdict="empty"\]\s*\{[^}]*\}/,
+    )?.[0]
+    expect(verdictBlock).toBeTruthy()
+
+    const block = verdictBlock ?? ""
+    expect(block).toContain("var(--oc-radius-pill)")
+    expect(block).toContain("var(--oc-border-width)")
+
+    expect(block).not.toMatch(/rgba\(95,\s*173,\s*86/)
+    expect(block).not.toMatch(/rgba\(217,\s*158,\s*79/)
+    expect(block).not.toMatch(/rgba\(247,\s*84,\s*100/)
+    expect(block).not.toMatch(/rgba\(99,\s*162,\s*255/)
+    expect(block).not.toMatch(/#63a2ff/)
+    expect(block).not.toMatch(/border-radius:\s*999px/)
+
+    for (const variant of [
+      "pass",
+      "accepted",
+      "concerns",
+      "needs_correction",
+      "rejected",
+      "inflight",
+      "empty",
+    ]) {
+      expect(block).toContain(`data-verdict="${variant}"`)
+    }
+  })
+
   test("integrity panel is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
