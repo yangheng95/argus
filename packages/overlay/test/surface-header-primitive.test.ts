@@ -78,3 +78,10 @@ test("surface header titles own title typography outside theme resets", () => {
     expect(block.body).not.toMatch(typography);
   }
 });
+
+test("workflow tab header uses the shared surface header instead of local toolbar chrome", () => {
+  const css = readFileSync(LEGACY_CSS, "utf8");
+
+  expect(css).not.toMatch(/agent-workflow-(?:toolbar|heading|title)/);
+  expect(css).not.toMatch(/body[^{]*agent-workflow-(?:toolbar|heading|title|count)[^{}]*\{/);
+});
