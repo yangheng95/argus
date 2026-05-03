@@ -1545,6 +1545,26 @@ Progress log:
   `.chat-send` reappears there. The theme-layout counter now strips
   comments before scanning so historical explanation text no longer
   counts as live CSS debt.
+- 2026-05-03 (CRON slice): Completed full extraction of
+  `.task-bar` / `.task-status` / `.task-flag` / `.recent-dir-panel*`
+  family and `.executor-chip*` / `.executor-selector` family.
+  Removed all remaining legacy entries from `styles.css`: shared pill
+  multi-class, pseudo-element reset, compact `border-radius/box-shadow`
+  and `background/border` multi-class overrides, late compact
+  `.task-bar { margin: 0; background: var(--chrome) !important }` block,
+  all three `body[data-theme] .task-bar` theme overrides, and removed
+  `.task-status`/`.executor-chip` entries from all five
+  `body[data-theme] :is(…)` scale-override blocks (margin, gap/padding,
+  border/shadow, background, hover-background). Updated `.task-flag`
+  canonical in `conversation.css` to include `justify-content: center;
+  min-height: var(--ui-pill-min-height); font-weight: 600;
+  letter-spacing: 0.03em` absorbed from the now-removed shared pill
+  entry. Guard ceilings tightened: `!important` 137→125,
+  `body[data-theme]` 69→62, theme-layout overrides 33→28, bold
+  declarations 39→37. Added 2 new ownership tests (task-bar family →
+  conversation.css; executor-chip family → composer.css) and updated
+  the existing "task bar shell layout" test to assert the canonical
+  lives in conversation.css. All 111 guard tests pass.
 
 ## Pause Checkpoint — 2026-05-03
 

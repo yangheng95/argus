@@ -483,483 +483,19 @@ a {
 }
 
 /* ── Task Bar ── */
-.task-bar {
-  display: flex;
-  flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  margin: calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: var(--panel-radius);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(84, 138, 247, 0.012) 62%, transparent),
-    color-mix(in srgb, var(--chrome) 82%, var(--surface));
-  flex-shrink: 0;
-  box-shadow:
-    0 10px 18px rgba(5, 10, 16, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms;
-}
+/* `.task-bar` / `.task-bar-main` / `.task-status` / `.status-label` /
+   `.elapsed` family lives in `styles/surfaces/conversation.css` now.
+   `.titlebar-task-status` and `.status-icon` live in
+   `styles/surfaces/titlebar.css`. */
 
-.task-bar:hover,
-.task-bar:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(84, 138, 247, 0.016) 68%, transparent),
-    color-mix(in srgb, var(--chrome) 86%, var(--surface));
-  box-shadow:
-    0 12px 22px rgba(5, 10, 16, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.045);
-}
+/* TaskDirBar.tsx family + `.task-bar` / `.task-status` / `.status-label`
+   / `.elapsed` / `.task-cwd-actions` / `.task-flag` / `.recent-dir-panel*`
+   family all live in `styles/surfaces/conversation.css` now. */
 
-.task-bar-main {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--ui-gap-md);
-  width: 100%;
-}
-
-.task-status {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  flex-shrink: 0;
-  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  background: color-mix(in srgb, var(--surface-strong) 74%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-/* `.titlebar-task-status` and `.status-icon` extracted into
-   `styles/surfaces/titlebar.css` (the surface owns these rules now;
-   nothing else in the runtime references either class). */
-
-.status-label {
-  font-size: var(--ui-font-small);
-  font-weight: 600;
-  color: var(--text-strong);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.elapsed {
-  font-size: var(--ui-font-small);
-  color: var(--text-soft);
-  font-variant-numeric: tabular-nums;
-}
-
-/* TaskDirBar.tsx family (.task-meta + .task-cwd + .task-dir +
-   .task-workspace + .task-workspace-row + .vcs-badge family +
-   .task-dir-shell + .task-cwd-dropdown family + .task-cwd-caret +
-   .task-dir-actions / -path / -tool / -node / -step / -empty +
-   state variants) lives in `styles/surfaces/conversation.css`
-   now. Conversions: `1px` border on .vcs-badge → var(--oc-
-   border-width); raw slate `#94a3b8` / `#e5e7eb` caret colors
-   → var(--text-muted) / var(--text-strong) for theme adaptation;
-   raw rgba(248, 113, 113, 0.12) danger hover → color-mix(var(
-   --bad) 12%, transparent). */
-
-/* ── Recent Directory Panel ── */
-.recent-dir-panel {
-  position: fixed;
-  min-width: calc(260px * var(--ui-scale));
-  max-width: calc(460px * var(--ui-scale));
-  max-height: calc(320px * var(--ui-scale));
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(84, 138, 247, 0.018) 66%, transparent),
-    color-mix(in srgb, var(--surface) 96%, var(--surface-inset) 4%);
-  border: 1px solid color-mix(in srgb, var(--border-strong) 88%, transparent);
-  border-radius: calc(16px * var(--ui-scale));
-  padding: 0;
-  box-shadow:
-    0 20px 40px rgba(7, 12, 19, 0.24),
-    0 10px 18px rgba(7, 12, 19, 0.12);
-  z-index: 9999;
-  scrollbar-width: thin;
-  scrollbar-color: var(--subtle-5) transparent;
-}
-.recent-dir-panel::-webkit-scrollbar {
-  width: 4px;
-}
-.recent-dir-panel::-webkit-scrollbar-thumb {
-  background: var(--subtle-5);
-  border-radius: 4px;
-}
-
-.recent-dir-panel-shell {
-  display: flex;
-  flex-direction: column;
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale));
-}
-
-.recent-dir-panel-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: calc(12px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-}
-
-.recent-dir-panel-title {
-  min-width: 0;
-  font-size: var(--ui-font-control);
-  font-weight: 700;
-  color: var(--text-strong);
-  letter-spacing: 0.02em;
-}
-
-.recent-dir-panel-meta {
-  min-width: 0;
-  max-width: 48%;
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.recent-dir-list {
-  display: flex;
-  flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-  max-height: calc(248px * var(--ui-scale));
-  overflow-y: auto;
-  padding-right: calc(2px * var(--ui-scale));
-}
-
-.recent-dir-row {
-  display: flex;
-  align-items: stretch;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: calc(12px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 72%),
-    color-mix(in srgb, var(--surface-inset) 74%, transparent);
-  transition:
-    background 120ms,
-    border-color 120ms,
-    box-shadow 120ms,
-    transform 120ms;
-}
-.recent-dir-row:hover {
-  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 72%, transparent),
-    color-mix(in srgb, var(--surface) 94%, transparent);
-  box-shadow: 0 10px 16px rgba(7, 12, 19, 0.1);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
-.recent-dir-row[data-active="true"] {
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.12), rgba(91, 141, 239, 0.03) 74%, transparent),
-    color-mix(in srgb, var(--surface) 95%, transparent);
-  box-shadow: inset 0 0 0 1px rgba(91, 141, 239, 0.08);
-}
-
-.recent-dir-item {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: calc(10px * var(--ui-scale));
-  border: none;
-  border-radius: calc(10px * var(--ui-scale));
-  background: transparent;
-  color: var(--text-soft);
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  font-size: var(--ui-font-control);
-  cursor: pointer;
-}
-
-.recent-dir-copy {
-  min-width: 0;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-}
-
-.recent-dir-label {
-  min-width: 0;
-  color: var(--text-strong);
-  font-size: var(--ui-font-body);
-  font-weight: 600;
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.recent-dir-path {
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.recent-dir-state {
-  flex-shrink: 0;
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: rgba(91, 141, 239, 0.14);
-  color: var(--accent);
-  font-size: calc(var(--ui-font-meta) * 1.05);
-  line-height: 1;
-}
-.recent-dir-row:hover .recent-dir-item {
-  color: var(--text-strong);
-}
-.recent-dir-row[data-active="true"] .recent-dir-item {
-  color: var(--text-strong);
-}
-
-.recent-dir-remove {
-  flex-shrink: 0;
-  width: calc(22px * var(--ui-scale));
-  height: calc(22px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: calc(8px * var(--ui-scale));
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--ui-font-heading);
-  line-height: 1;
-  cursor: pointer;
-  margin: calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale)) 0 0;
-  opacity: 0;
-  transition:
-    background 80ms,
-    color 80ms,
-    opacity 120ms;
-}
-.recent-dir-row:hover .recent-dir-remove,
-.recent-dir-row:focus-within .recent-dir-remove,
-.recent-dir-row[data-active="true"] .recent-dir-remove {
-  opacity: 1;
-}
-.recent-dir-remove:hover {
-  background: rgba(248, 113, 113, 0.16);
-  color: var(--bad);
-}
-
-.recent-dir-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: calc(84px * var(--ui-scale));
-  padding: calc(16px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: calc(12px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(91, 141, 239, 0.014) 72%, transparent),
-    color-mix(in srgb, var(--surface-inset) 72%, transparent);
-  font-size: var(--ui-font-small);
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.task-cwd-actions {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  flex-wrap: wrap;
-  flex-shrink: 0;
-}
-
-.task-cwd-actions .btn {
-  white-space: nowrap;
-}
-
-.task-flag {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: calc(7px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: 999px;
-  border: 1px solid rgba(107, 114, 128, 0.24);
-  background: rgba(17, 24, 39, 0.6);
-  color: #cbd5e1;
-  font-size: var(--ui-font-meta);
-  cursor: pointer;
-  user-select: none;
-}
-
-.task-flag:hover {
-  border-color: rgba(91, 141, 239, 0.24);
-  background: rgba(17, 24, 39, 0.85);
-  color: #e5e7eb;
-}
-
-.task-flag input {
-  accent-color: var(--accent);
-}
-
-/* ── ExecutorSelector ───────────────────────────────────────────
-   Bottom-left of the chat composer. Replaces the previous titlebar
-   `.engine-bar` block + #codexModelPanel/#claudeCodeModelPanel
-   imperative wiring. Dropdown opens UPWARD via `bottom: 100%` since
-   the chip sits near the viewport bottom inside .chat-compose-meta. */
-
-.executor-selector {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.executor-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--border) 92%, transparent);
-  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
-  color: var(--text-soft);
-  border-radius: 999px;
-  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  font-size: var(--ui-font-meta);
-  line-height: 1.2;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    border-color 100ms,
-    background 100ms,
-    color 100ms;
-}
-
-.executor-chip:hover {
-  background: var(--subtle-4);
-  color: var(--text-strong);
-}
-
-.executor-selector[data-open="true"] .executor-chip {
-  border-color: color-mix(in srgb, var(--accent) 56%, transparent);
-  color: var(--text-strong);
-}
-
-.executor-chip-label {
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-/* iter50: chip carries two label-prefixed model slots
-   ("G" = Global / orchestrator, "E" = Executor) so both
-   models always read at a glance. Prefix typography is
-   smaller + dimmer than the model identifier so the chip
-   visually anchors on the actual model names. */
-.executor-chip-sep {
-  color: var(--text-muted);
-  opacity: 0.55;
-  font-size: calc(var(--ui-font-meta) * 0.85);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  padding: 0 calc(2px * var(--ui-scale)) 0 calc(4px * var(--ui-scale));
-}
-
-/* iter35: arrow between MirrorCode/orchestrator model and external
-   executor model — communicates the planning → execution handoff. Only
-   rendered when the active executor is external. */
-.executor-chip-arrow {
-  color: var(--text-muted);
-  opacity: 0.55;
-  font-size: calc(var(--ui-font-meta) * 0.9);
-  padding: 0 calc(1px * var(--ui-scale));
-}
-
-.executor-chip-model {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  max-width: calc(180px * var(--ui-scale));
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* iter35: when the chip carries both an orchestrator model and an
-   external executor model, the per-model max-width tightens so the
-   pair fits in the bottom-left composer slot without wrapping. */
-.executor-chip[data-has-external="true"] .executor-chip-model {
-  max-width: calc(120px * var(--ui-scale));
-}
-
-/* iter41: when the project default model is unset, the orchestrator
-   model span shows a `— not set —` placeholder. Distinguish it
-   visually from a real model name (italic + dimmer) so the user
-   sees it as a call-to-action, not a real model identifier. */
-.executor-chip-model[data-empty="true"] {
-  font-style: italic;
-  opacity: 0.62;
-  font-variant-numeric: normal;
-}
-
-/* iter50: executor-source model carries an accent dot prefix
-   so the "execution" segment reads distinct from the
-   "orchestrator" segment even when the two model values are
-   the same (mirrorcode case). Renamed from
-   data-source="external" → data-source="executor" since the
-   slot now always renders, not just for external executors. */
-.executor-chip-model[data-source="executor"]::before {
-  content: "";
-  display: inline-block;
-  width: calc(4px * var(--ui-scale));
-  height: calc(4px * var(--ui-scale));
-  margin-right: calc(4px * var(--ui-scale));
-  border-radius: 999px;
-  background: var(--accent);
-  vertical-align: middle;
-  opacity: 0.6;
-}
-
-.executor-chip-caret {
-  display: inline-flex;
-  color: var(--text-muted);
-  margin-left: calc(2px * var(--ui-scale));
-}
-
-/* `.executor-menu` family lives in `styles/surfaces/composer.css`
-   now (dropdown opens above the chat composer's executor chip).
-   Light-theme overrides at the theme-scoped selectors below stay
-   here pending palette-tokenization. */
-
-body[data-theme="light"] .executor-menu {
-  background: #fff;
-  border-color: var(--border);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}
-
-body[data-theme="light"] .executor-menu-row:hover:not(:disabled),
-body[data-theme="light"] .executor-menu-model:hover {
-  background: var(--subtle-5);
-  color: #0f172a;
-}
-
-body[data-theme="light"] .task-status,
-body[data-theme="light"] .task-flag {
-  border-color: var(--border);
-  background: var(--subtle-3);
-  color: #334155;
-}
+/* `.executor-chip*` family + executor-menu light-theme overrides live
+   in `styles/surfaces/composer.css` now. `.task-bar` / `.task-status`
+   / `.task-flag` / `.recent-dir-panel*` live in
+   `styles/surfaces/conversation.css` now. */
 
 /* Light theme: reasoning blocks */
 body[data-theme="light"] .msg-reasoning {
@@ -6597,7 +6133,6 @@ body[data-theme="light"] .config-close-btn:hover {
 }
 
 .section-badge,
-.task-flag,
 .extension-status,
 .knowledge-scope,
 .mini-badge {
@@ -8113,7 +7648,6 @@ body::after,
 .tech-atlas,
 .titlebar::before,
 .titlebar::after,
-.task-bar::before,
 .sidebar::before,
 .sidebar::after,
 .chat::before,
@@ -8135,7 +7669,6 @@ body::after,
 
 .brand-guide,
 .engine-bar,
-.task-status,
 .sidebar-btn,
 .field-input,
 .field-input-group,
@@ -8144,8 +7677,7 @@ body::after,
   box-shadow: none !important;
 }
 
-.engine-bar,
-.task-status {
+.engine-bar {
   background: var(--surface-inset) !important;
   border: 1px solid var(--border) !important;
 }
@@ -8179,23 +7711,6 @@ body::after,
  * — it only re-applied flex-basis / min-width and re-skinned the rail,
  * both of which the canonical rule already does via --ui-resizer-width
  * + var(--border) / var(--accent) tokens that adapt per theme. */
-
-.task-bar {
-  margin: 0;
-  padding: 0 calc(6px * var(--ui-scale));
-  background: var(--chrome) !important;
-  border: 1px solid var(--border);
-  border-width: 0 0 1px;
-  border-radius: 0;
-  box-shadow: none !important;
-}
-
-.task-bar:hover,
-.task-bar:focus-within {
-  background: var(--chrome) !important;
-  border-color: var(--border-hover);
-  box-shadow: none !important;
-}
 
 /* iter16: `.sidebar`, `.chat`, `.sections` all carry their
    own flat canonicals now (rail-surface / chat-canvas /
@@ -8896,12 +8411,6 @@ body[data-theme="light"] {
   background: linear-gradient(135deg, #fbfdff 0%, #f4f7ff 42%, #eef1ff 100%) !important;
 }
 
-body[data-theme="light"] .task-bar {
-  border-color: rgba(116, 133, 184, 0.14);
-  background: rgba(255, 255, 255, 0.62) !important;
-  backdrop-filter: blur(18px);
-}
-
 body[data-theme="light"] .panel-body {
   background: rgba(255, 255, 255, 0.44);
   backdrop-filter: blur(20px);
@@ -9011,12 +8520,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) {
   background: var(--bg) !important;
 }
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
-  border-color: color-mix(in srgb, var(--border) 88%, transparent);
-  background: var(--chrome) !important;
-  backdrop-filter: none;
-}
-
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body {
   background: var(--bg);
   backdrop-filter: none;
@@ -9113,7 +8616,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__cta {
   border-color: color-mix(in srgb, var(--border) 84%, transparent);
 }
 
-body[data-theme="vscode-dark"] .task-bar,
 body[data-theme="vscode-dark"] .sidebar,
 body[data-theme="vscode-dark"] .sections {
   background: #252526 !important;
@@ -9135,10 +8637,8 @@ body[data-theme="light"]
   :is(
     .sidebar-btn,
     .sidebar-btn-primary,
-    .task-status,
     .btn.mini,
     .btn-terminate,
-    .executor-chip,
     .engine-chip,
     .engine-chip-caret,
     .workspace-tab,
@@ -9150,10 +8650,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .sidebar-btn,
     .sidebar-btn-primary,
-    .task-status,
     .btn.mini,
     .btn-terminate,
-    .executor-chip,
     .engine-chip,
     .engine-chip-caret,
     .workspace-tab,
@@ -9168,9 +8666,7 @@ body[data-theme="light"]
   :is(
     .sidebar-btn,
     .sidebar-btn-primary,
-    .task-status,
     .btn-terminate,
-    .executor-chip,
     .engine-chip,
     .board-intro__cta-action
   ),
@@ -9178,9 +8674,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .sidebar-btn,
     .sidebar-btn-primary,
-    .task-status,
     .btn-terminate,
-    .executor-chip,
     .engine-chip,
     .board-intro__cta-action
   ) {
@@ -9194,10 +8688,8 @@ body[data-theme="light"]
   :is(
     .sidebar-btn,
     .sidebar-btn-primary,
-    .task-status,
     .btn.mini,
     .btn-terminate,
-    .executor-chip,
     .engine-chip,
     .engine-chip-caret,
     .workspace-tab,
@@ -9209,10 +8701,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .sidebar-btn,
     .sidebar-btn-primary,
-    .task-status,
     .btn.mini,
     .btn-terminate,
-    .executor-chip,
     .engine-chip,
     .engine-chip-caret,
     .workspace-tab,
@@ -9226,7 +8716,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 
 body[data-theme="light"]
   :is(
-    .executor-chip:hover,
     .engine-chip:hover,
     .workspace-tab:hover,
     .workspace-tab[data-active="true"],
@@ -9237,7 +8726,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .executor-chip:hover,
     .engine-chip:hover,
     .workspace-tab:hover,
     .workspace-tab[data-active="true"],
@@ -9285,9 +8773,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 body[data-theme="light"]
   :is(
     .sidebar-btn,
-    .task-status,
     .btn-terminate,
-    .executor-chip,
     .engine-chip,
     .engine-chip-caret,
     .workspace-tab,
@@ -9297,9 +8783,7 @@ body[data-theme="light"]
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .sidebar-btn,
-    .task-status,
     .btn-terminate,
-    .executor-chip,
     .engine-chip,
     .engine-chip-caret,
     .workspace-tab,
@@ -9316,8 +8800,6 @@ body[data-theme="light"]
     .sidebar-btn:hover,
     .sidebar-btn[data-active="true"],
     .btn-terminate:hover,
-    .executor-chip:hover,
-    .executor-selector[data-open="true"] .executor-chip,
     .engine-chip:hover,
     .engine-chip[data-active="true"],
     .workspace-tab:hover,
@@ -9331,8 +8813,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .sidebar-btn:hover,
     .sidebar-btn[data-active="true"],
     .btn-terminate:hover,
-    .executor-chip:hover,
-    .executor-selector[data-open="true"] .executor-chip,
     .engine-chip:hover,
     .engine-chip[data-active="true"],
     .workspace-tab:hover,

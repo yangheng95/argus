@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(137)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(69)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(125)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(62)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(33)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(28)
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
@@ -469,6 +469,85 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).not.toMatch(/#94a3b8/)
     expect(conversationSurface).not.toMatch(/#e5e7eb/)
     expect(conversationSurface).not.toMatch(/rgba\(248,\s*113,\s*113/)
+  })
+
+  test("task bar, task status, task flag, and recent dir panel are owned by surfaces/conversation.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const conversationSurface = readText(
+      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
+    )
+
+    for (const className of [
+      "task-bar",
+      "task-bar-main",
+      "task-status",
+      "status-label",
+      "task-flag",
+      "recent-dir-panel",
+      "recent-dir-row",
+      "recent-dir-label",
+      "recent-dir-path",
+      "recent-dir-state",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    // task-bar must not appear in any theme selector in styles.css
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      if (!isThemeSelector) continue
+      expect(selector).not.toMatch(/\.task-bar\b/)
+    }
+
+    // Canonical properties must use tokens, not raw values
+    expect(conversationSurface).toContain("var(--oc-border-width)")
+    expect(conversationSurface).toContain("var(--oc-radius-pill)")
+    expect(conversationSurface).not.toMatch(/border-radius:\s*999px/)
+    expect(conversationSurface).not.toMatch(/rgba\(116,\s*133,\s*184/)
+    expect(conversationSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.62\)/)
+
+    expect(conversationSurface).toMatch(/\.task-bar:hover,\s*\.task-bar:focus-within\s*\{/)
+    expect(conversationSurface).toMatch(/body\[data-theme="light"\] \.task-bar\s*\{/)
+    expect(conversationSurface).toMatch(/body:is\(\[data-theme="dark"\][^)]*\) \.task-bar\s*\{/)
+    expect(conversationSurface).toMatch(/\.recent-dir-panel::-webkit-scrollbar\s*\{/)
+    expect(conversationSurface).toMatch(/\.recent-dir-row:hover\s*\{/)
+    expect(conversationSurface).toMatch(/\.recent-dir-row\[data-active="true"\]\s*\{/)
+  })
+
+  test("executor chip and selector family are owned by surfaces/composer.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+
+    for (const className of [
+      "executor-selector",
+      "executor-chip",
+      "executor-chip-label",
+      "executor-chip-sep",
+      "executor-chip-model",
+      "executor-chip-caret",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    // executor-chip must not appear in any theme selector in styles.css
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      if (!isThemeSelector) continue
+      expect(selector).not.toMatch(/\.executor-chip\b/)
+    }
+
+    // Canonical properties must use tokens
+    expect(composerSurface).toContain("var(--oc-border-width)")
+    expect(composerSurface).toContain("var(--oc-radius-pill)")
+    expect(composerSurface).not.toMatch(/border-radius:\s*999px/)
+
+    expect(composerSurface).toMatch(/\.executor-chip:hover\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-selector\[data-open="true"\] \.executor-chip\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-chip-model\[data-source="executor"\]::before\s*\{/)
   })
 
   test("conn-banner cross-surface notification primitive routes through palette tokens", () => {
@@ -1591,7 +1670,7 @@ describe("overlay architecture guards", () => {
     ]
     const text = sources.join("\n")
     const boldDecls = count(/font-weight\s*:\s*(?:700|720|750|760|780|800|900|bold)\b/g, text)
-    expect(boldDecls).toBeLessThanOrEqual(39)
+    expect(boldDecls).toBeLessThanOrEqual(37)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -2326,7 +2405,11 @@ describe("overlay architecture guards", () => {
 
   test("task bar shell layout is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const conversationSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
+    )
 
+    // No theme selector in styles.css may set layout/chrome on .task-bar
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
@@ -2340,14 +2423,13 @@ describe("overlay architecture guards", () => {
       )
     }
 
-    const bodies = Array.from(styles.matchAll(/(^|\n)\.task-bar\s*\{([^{}]*)\}/g)).map(
-      (match) => match[2] ?? "",
-    )
-    const body = bodies.at(-1) ?? ""
+    // Canonical .task-bar rule must live in conversation.css
+    expect(styles).not.toMatch(/(^|\n)\.task-bar\s*\{/)
+    const body = soloRuleBody(conversationSurface, ".task-bar")
     for (const declaration of [
       "margin: 0",
       "padding: 0 calc(6px * var(--ui-scale))",
-      "border-width: 0 0 1px",
+      "border-bottom:",
       "border-radius: 0",
     ]) {
       expect(body).toContain(declaration)

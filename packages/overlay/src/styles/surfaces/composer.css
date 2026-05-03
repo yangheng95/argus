@@ -639,3 +639,116 @@
   color: var(--text-strong);
   font-weight: 600;
 }
+
+/* Light-theme executor-menu overrides (folded from styles.css; tokenized
+   raw hex and rgba). Kept in this surface because the executor-menu
+   already lives here; palette-only diff from dark defaults. */
+body[data-theme="light"] .executor-menu {
+  background: white;
+  border-color: var(--border);
+  box-shadow:
+    0 calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale))
+    color-mix(in srgb, black 12%, transparent);
+}
+
+body[data-theme="light"] .executor-menu-row:hover:not(:disabled),
+body[data-theme="light"] .executor-menu-model:hover {
+  background: var(--subtle-5);
+  color: var(--text-strong);
+}
+
+/* ── Executor Chip (model selector pill in the chat composer bottom row) ── */
+.executor-selector {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.executor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 92%, transparent);
+  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
+  color: var(--text-soft);
+  border-radius: var(--oc-radius-pill);
+  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  font-size: var(--ui-font-meta);
+  line-height: 1.2;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    border-color 100ms,
+    background 100ms,
+    color 100ms;
+}
+
+.executor-chip:hover {
+  background: var(--subtle-4);
+  color: var(--text-strong);
+}
+
+.executor-selector[data-open="true"] .executor-chip {
+  border-color: color-mix(in srgb, var(--accent) 56%, transparent);
+  color: var(--text-strong);
+}
+
+.executor-chip-label {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* G = Global/orchestrator slot; E = Executor slot prefix */
+.executor-chip-sep {
+  color: var(--text-muted);
+  opacity: 0.55;
+  font-size: calc(var(--ui-font-meta) * 0.85);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 0 calc(2px * var(--ui-scale)) 0 calc(4px * var(--ui-scale));
+}
+
+.executor-chip-arrow {
+  color: var(--text-muted);
+  opacity: 0.55;
+  font-size: calc(var(--ui-font-meta) * 0.9);
+  padding: 0 calc(1px * var(--ui-scale));
+}
+
+.executor-chip-model {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  max-width: calc(180px * var(--ui-scale));
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.executor-chip[data-has-external="true"] .executor-chip-model {
+  max-width: calc(120px * var(--ui-scale));
+}
+
+.executor-chip-model[data-empty="true"] {
+  font-style: italic;
+  opacity: 0.62;
+  font-variant-numeric: normal;
+}
+
+.executor-chip-model[data-source="executor"]::before {
+  content: "";
+  display: inline-block;
+  width: calc(4px * var(--ui-scale));
+  height: calc(4px * var(--ui-scale));
+  margin-right: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--accent);
+  vertical-align: middle;
+  opacity: 0.6;
+}
+
+.executor-chip-caret {
+  display: inline-flex;
+  color: var(--text-muted);
+  margin-left: calc(2px * var(--ui-scale));
+}
