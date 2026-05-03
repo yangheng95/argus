@@ -780,6 +780,18 @@ Progress log:
   classes plus `@keyframes`, `::before`, and the late
   `.chat-header-meta` / `.chat-count` overrides (which still live in
   styles.css for follow-up).
+- 2026-05-03: Extracted the late conversation header chrome
+  (`.chat-count` + `:empty` + `::before` dot, `.chat-header-meta
+  #btnChatCopyAll` copy-all link + `::before` dot + hover +
+  focus-visible, `.chat-header-meta .workspace-toggle` icon button +
+  hover + pressed + focus-visible) from `styles.css` into
+  `styles/surfaces/conversation.css`. Three `border-radius: 999px`
+  literals routed through `var(--oc-radius-pill)`; two `outline: 1px`
+  literals through `var(--oc-border-width)`; `outline-offset: 2px`
+  through `calc(2px * var(--ui-scale))`. The btnChatCopyAll
+  font-weight dropped from 620 to 600 — a copy-all text link does
+  not need a special weight notch above the chat-header text-soft
+  baseline.
 
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
