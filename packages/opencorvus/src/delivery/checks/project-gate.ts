@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
+import { spawn } from "node:child_process"
 import { Instance } from "@/project/instance"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
@@ -634,33 +635,40 @@ async function runShellCommand(input: {
   timeoutMs: number
 }): Promise<{ exitCode: number | undefined; stdout: string; stderr: string }> {
   const isWindows = process.platform === "win32"
-  const proc = Bun.spawn(
-    isWindows
-      ? ["cmd.exe", "/d", "/s", "/c", input.command]
-      : ["sh", "-lc", input.command],
-    {
-      cwd: input.cwd,
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  )
-  const timeout = new Promise<"timeout">((resolve) =>
-    setTimeout(() => resolve("timeout"), input.timeoutMs),
-  )
-  const exited = proc.exited.then(() => "exited" as const)
-  const state = await Promise.race([exited, timeout])
-  if (state === "timeout") {
-    proc.kill()
-  }
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ])
-  const exitCode = state === "timeout" ? undefined : await proc.exited
+  const [command, ...args] = isWindows
+    ? ["cmd.exe", "/d", "/s", "/c", input.command]
+    : ["sh", "-lc", input.command]
+  const proc = spawn(command, args, {
+    cwd: input.cwd,
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  })
+  const stdoutChunks: Buffer[] = []
+  const stderrChunks: Buffer[] = []
+  proc.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)))
+  proc.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)))
+  let timedOut = false
+  const exitCode = await new Promise<number | undefined>((resolve) => {
+    const timer = setTimeout(() => {
+      timedOut = true
+      proc.kill()
+      resolve(undefined)
+    }, input.timeoutMs)
+    proc.once("error", () => {
+      clearTimeout(timer)
+      resolve(undefined)
+    })
+    proc.once("exit", (code) => {
+      clearTimeout(timer)
+      resolve(code ?? undefined)
+    })
+  })
+  const stdout = Buffer.concat(stdoutChunks).toString("utf8")
+  const stderr = Buffer.concat(stderrChunks).toString("utf8")
   return {
     exitCode,
     stdout,
-    stderr: state === "timeout"
+    stderr: timedOut
       ? `${stderr}\nCommand timed out after ${input.timeoutMs}ms.`
       : stderr,
   }
@@ -695,16 +703,18 @@ function forbiddenShellSuccess(command: string, script?: string) {
 }
 
 async function currentHeadRef(cwd: string) {
-  const proc = Bun.spawn(["git", "rev-parse", "HEAD"], {
+  const proc = spawn("git", ["rev-parse", "HEAD"], {
     cwd,
-    stdout: "pipe",
-    stderr: "pipe",
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
   })
-  const [stdout] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
+  const stdoutChunks: Buffer[] = []
+  proc.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)))
+  await new Promise<void>((resolve) => {
+    proc.once("error", () => resolve())
+    proc.once("exit", () => resolve())
+  })
+  const stdout = Buffer.concat(stdoutChunks).toString("utf8")
   const value = stdout.trim()
   return value.length > 0 ? value : undefined
 }
