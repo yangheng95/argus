@@ -189,6 +189,9 @@ Progress log:
   `.agent-workflow-toolbar` / heading / title markup to `SurfaceHeader`,
   retiring the workflow tab's theme-scoped toolbar layout and typography
   overrides from God CSS.
+- 2026-05-03: Folded `.delivery-panel-header` and `.criteria-group-head`
+  compact spacing into their canonicals and removed both from theme-scoped
+  right-panel header reset lists.
 
 Trigger: user feedback (2026-05-03):
 
