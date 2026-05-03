@@ -22,6 +22,86 @@
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+/* Composer textarea wrap and inner field: the wrap is the flex slot that
+   anchors the textarea to its 62px floor; the textarea is the actual
+   editable surface. After iter17 / iter20 both render flat (no radius,
+   no shadow) so they read as a single slice of the chat-input shell. */
+.chat-textarea-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-self: stretch;
+  min-height: calc(62px * var(--ui-scale));
+}
+
+.chat-textarea-wrap > .chat-textarea {
+  flex: 1;
+}
+
+.chat-textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: calc(62px * var(--ui-scale));
+  resize: none;
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: 0;
+  background: var(--surface-inset);
+  color: var(--text-strong);
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  font-size: var(--ui-font-body);
+  line-height: 1.45;
+  overflow-y: auto;
+}
+
+.chat-textarea[data-expanded="true"] {
+  min-height: calc(210px * var(--ui-scale));
+}
+
+.chat-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--accent-ring);
+}
+
+.chat-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+/* Floating placeholder overlay: the textarea's native placeholder is
+   plain text; this overlay layers a stylised hint with an animated caret
+   that shows when the textarea is empty. The caret pulse animation was
+   removed (kept the WebView2 compositor awake on idle composers). */
+.chat-placeholder-float {
+  position: absolute;
+  inset: 0;
+  padding: calc(10px * var(--ui-scale) * var(--chat-compose-scale))
+    calc(12px * var(--ui-scale) * var(--chat-compose-scale));
+  font-size: var(--ui-font-body);
+  line-height: 1.45;
+  color: var(--text-muted);
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.85;
+}
+
+.chat-placeholder-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-placeholder-caret {
+  display: inline-block;
+  width: 0.42em;
+  height: 0.42em;
+  margin-left: calc(4px * var(--ui-scale));
+  vertical-align: middle;
+  background: var(--accent);
+  border-radius: 50%;
+  transform: translateY(-0.05em);
+  opacity: 0.6;
+}
+
 /* Composer icon column: the small attach / web-search / expand stack on
    the left edge of the chat input. Flat slice that visually merges with
    the chat-input shell. */
