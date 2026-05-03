@@ -952,6 +952,19 @@ Progress log:
   inspector.css and that no raw rgba(91,141,239) / rgba(10,16,24)
   literals leak in. Ceilings unchanged.
 
+- 2026-05-03: Moved the `.eval-error` family + `.eval-summary` into
+  surfaces/inspector.css. The card background gradient converted
+  from raw `rgba(224, 106, 99, X%)` red (which was Tailwind red-400
+  spelled `#e06a63`, not the design-language `--bad`) to
+  `color-mix(in srgb, var(--bad) X%, transparent)`. Unscaled `1px /
+  2px / 3px / 4px / 60px` margins/heights wrapped in `calc(N *
+  var(--ui-scale))`. Existing eval-error theme-reset guard now
+  reads body from inspector.css and asserts the color-mix bg +
+  `border: 0`. The cross-surface multi-class `min-width: 0 / max-
+  width: 100%` rule that includes `.eval-error` and `.eval-error-
+  detail` stays in styles.css — it is layout, not chrome. Ceilings
+  unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and

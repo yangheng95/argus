@@ -404,6 +404,26 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
   })
 
+  test("eval error + summary chrome is owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "eval-error",
+      "eval-error-name",
+      "eval-error-meta",
+      "eval-error-detail",
+      "eval-summary",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(inspectorSurface).toMatch(/\.eval-error \+ \.eval-error\s*\{/)
+    expect(inspectorSurface).not.toMatch(/rgba\(224,\s*106,\s*99/)
+    expect(inspectorSurface).toContain("color-mix(in srgb, var(--bad)")
+  })
+
   test("section phase-state variants are owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
@@ -856,6 +876,7 @@ describe("overlay architecture guards", () => {
 
   test("evaluation errors keep semantic error chrome outside theme resets", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -865,9 +886,10 @@ describe("overlay architecture guards", () => {
       expect(selector).not.toMatch(/eval-error/)
     }
 
-    const evalErrorBody = styles.match(/\.eval-error\s*\{([^}]*)\}/)?.[1] ?? ""
-    expect(evalErrorBody).toContain("background: linear-gradient")
-    expect(evalErrorBody).toContain("rgba(224, 106, 99")
+    const evalErrorBody = inspectorSurface.match(/\.eval-error\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(evalErrorBody).toContain("background:")
+    expect(evalErrorBody).toContain("linear-gradient")
+    expect(evalErrorBody).toContain("color-mix(in srgb, var(--bad)")
     expect(evalErrorBody).toContain("border: 0")
   })
 

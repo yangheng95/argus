@@ -412,3 +412,58 @@
 .section[data-phase-state="active"] .section-badge:not(:empty)::before {
   background: color-mix(in srgb, var(--accent) 86%, transparent);
 }
+
+/* Eval error card — semantic error chrome that surfaces evaluator
+   failures inside the right panel. Background routes through
+   color-mix on var(--bad) (was raw rgba on a slightly different red;
+   the design language wants --bad consistently). */
+.eval-error {
+  margin-top: calc(4px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: 0;
+  border-radius: calc(5px * var(--ui-scale));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bad) 16%, transparent),
+      color-mix(in srgb, var(--bad) 8%, transparent)
+    );
+  box-shadow: none;
+}
+
+.eval-error-name {
+  font-size: var(--ui-font-title);
+  font-weight: 600;
+  color: var(--bad);
+}
+
+.eval-error-meta {
+  margin-top: calc(1px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.eval-error-detail {
+  margin-top: calc(2px * var(--ui-scale));
+  font-size: var(--ui-font-body);
+  color: var(--text);
+  font-family: var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: calc(60px * var(--ui-scale));
+  overflow: auto;
+  line-height: 1.4;
+}
+
+.eval-error + .eval-error {
+  margin-top: calc(3px * var(--ui-scale));
+}
+
+.eval-summary {
+  font-size: var(--ui-font-title);
+  color: var(--text);
+  margin-top: calc(4px * var(--ui-scale));
+  line-height: 1.4;
+}
