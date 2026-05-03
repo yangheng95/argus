@@ -7658,10 +7658,11 @@ select.field-input option {
 }
 
 .agent-workflow-attempt {
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--workflow-tone) 38%, transparent);
   border-radius: calc(999px * var(--ui-scale));
   padding: 0 calc(6px * var(--ui-scale));
-  color: var(--accent);
+  background: color-mix(in srgb, var(--workflow-tone) 13%, transparent);
+  color: color-mix(in srgb, var(--workflow-tone) 82%, var(--text-strong));
 }
 
 .agent-workflow-report-popover {
@@ -15183,13 +15184,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh
 .agent-workflow-session {
   font-family: var(--mono);
   color: color-mix(in srgb, var(--workflow-tone) 72%, var(--text-muted));
-}
-
-body[data-theme="light"] .agent-workflow-attempt,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-attempt {
-  border: 1px solid color-mix(in srgb, var(--workflow-tone) 38%, transparent);
-  background: color-mix(in srgb, var(--workflow-tone) 13%, transparent);
-  color: color-mix(in srgb, var(--workflow-tone) 82%, var(--text-strong));
 }
 
 body[data-theme="light"] .agent-workflow-report-popover,
