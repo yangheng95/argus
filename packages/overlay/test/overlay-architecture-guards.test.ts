@@ -143,7 +143,7 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(333)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(222)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(220)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
@@ -236,6 +236,30 @@ describe("overlay architecture guards", () => {
       expect(body).toContain("background: var(--surface-inset)")
       expect(body).toContain("border: 0")
     }
+  })
+
+  test("settings extension rows do not rely on theme or local important chrome resets", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const hasExtensionRow = /(?:^|\s|:is\([^)]*)\.extension-row(?:\b|[:.[#])/.test(selector)
+      if (!hasExtensionRow) continue
+
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      const usesChromeImportant =
+        /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(body)
+
+      expect(isThemeSelector).toBe(false)
+      expect(usesChromeImportant).toBe(false)
+    }
+
+    const body = styles.match(/\.extension-row\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(body).toContain("background: var(--surface-inset)")
+    expect(body).toContain("border: 0")
   })
 
   test("new theme files only write root-scoped tokens", () => {

@@ -19,8 +19,9 @@
 //                 !important` bg, conflicting with canonical's
 //                 `--subtle-1`. The !important wins; the
 //                 canonical's bg was a lie.
-//   - line ~13028: !important `border-color: var(--border)`
-//                 reset (redundant with canonical's border).
+//   - later theme reset chains: !important background / border /
+//                 border-color changes under light, dark, and
+//                 vscode-dark.
 //
 // Late-winning rendered bg was `--surface-inset` (from the
 // !important reset at ~12327). The canonical and the
@@ -28,12 +29,12 @@
 // pure rule-8 violation: the source said one thing, the
 // browser rendered another.
 //
-// Pin: canonical declares `--surface-inset` directly (the
-// actually-rendered value). All three reset chains drop
-// `.extension-row` from their selector lists — the canonical
-// is now the single source for the row's chrome. The other
-// siblings in those reset chains keep the resets until they
-// get the same single-source treatment.
+// Pin: canonical declares `--surface-inset` and `border: 0`
+// directly (the actually-rendered values). Theme reset chains
+// and local !important hover chains drop `.extension-row` from
+// their selector lists — the canonical is now the single source
+// for the row's chrome. Siblings in those chains keep their
+// resets until they get the same single-source treatment.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
@@ -89,6 +90,10 @@ describe(".extension-row base rule is a single source", () => {
     )
   })
 
+  test("the canonical body declares the actually-rendered borderless chrome", () => {
+    expect(soloRuleBody(".extension-row")).toMatch(/\bborder:\s*0\s*;/)
+  })
+
   test("no rule body using !important to set background/border still lists `.extension-row`", () => {
     // Walk every top-level rule head + body; for any rule
     // whose body uses !important on background, border, or
@@ -116,7 +121,22 @@ describe(".extension-row base rule is a single source", () => {
         )
       if (!usesChromeImportant) continue
       const segments = head.split(",").map((s) => s.trim())
-      expect(segments).not.toContain(".extension-row")
+      for (const segment of segments) {
+        expect(segment).not.toMatch(/(?:^|\s|:is\([^)]*)\.extension-row(?:\b|[:.[#])/)
+      }
+    }
+  })
+
+  test("theme selectors cannot own `.extension-row` chrome", () => {
+    for (const chunk of STYLES.split("}")) {
+      const openIdx = chunk.indexOf("{")
+      if (openIdx < 0) continue
+      const selector = chunk.slice(0, openIdx).trim()
+      const isThemeSelector =
+        /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      if (!isThemeSelector) continue
+
+      expect(selector).not.toMatch(/(?:^|\s|:is\([^)]*)\.extension-row(?:\b|[:.[#])/)
     }
   })
 })
