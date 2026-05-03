@@ -8,10 +8,10 @@
  *   - webpage_analyze         ExtractedPage → ProjectScaffold + pre-generated files
  *   - webpage_image_extract   Image(s) → ImageAnalysis (vision-LLM)
  *   - webpage_image_compile   ImageAnalysis → XML IR (same dialect as URL flow)
- *   - webpage_render          index.html → PNG screenshot
- *   - webpage_evaluate        (reference, rendered) → score + diff PNG
+ *   - webpage_render          explicit browser URL → PNG screenshot
+ *   - webpage_evaluate        (reference, rendered) → diagnostic score + diff PNG
  *   - webpage_text_diff       reference DOM vs rendered DOM → missing tokens
- *   - webpage_vision_judge    (reference, rendered) → vision-LLM verdict + ranked diffs
+ *   - webpage_vision_judge    (reference, rendered) → acceptance verdict + ranked diffs
  *
  * Two skills compose them for the build agent:
  *   - \`src/skill/builtin/webpage-generate.md\`  URL → clone (DOM extract path)

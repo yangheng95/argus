@@ -1,6 +1,6 @@
 ---
 name: figma-generate
-description: Generate a high-fidelity clone of a webpage from a Figma design URL. The figma2code mirror toolchain (`figma_extract` → `figma_compile` → `figma_analyze`) hits the Figma REST API, compresses the design tree, compiles a compact XML IR, and folds it into the same ProjectScaffold contract URL/image flows produce; you implement the page in whatever tech stack the brief or surrounding goals call for; then iterate against `webpage_render` + `webpage_evaluate` + `webpage_vision_judge` until the score meets target. Activate when the user provides a Figma URL (`https://figma.com/file/...` or `/design/...`) and asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" the design. Requires `FIGMA_API_TOKEN` in env or passed as the `token` parameter to `figma_extract`.
+description: Generate a high-fidelity clone of a webpage from a Figma design URL. The figma2code mirror toolchain (`figma_extract` → `figma_compile` → `figma_analyze`) hits the Figma REST API, compresses the design tree, compiles a compact XML IR, and folds it into the same ProjectScaffold contract URL/image flows produce; you implement the page in whatever tech stack the brief or surrounding goals call for; then render an explicit URL (`file://` for local HTML or the already-started app URL) and iterate against `webpage_vision_judge` until it accepts. Activate when the user provides a Figma URL (`https://figma.com/file/...` or `/design/...`) and asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" the design. Requires `FIGMA_API_TOKEN` in env or passed as the `token` parameter to `figma_extract`.
 stage: build
 auto_detect:
   task_signals:
@@ -31,7 +31,7 @@ This skill is tech-stack-neutral. Pick what best fits the brief and the surround
 
 Non-negotiable regardless of stack:
 
-- The deliverable MUST be loadable by `webpage_render` (static `index.html` at the worktree root, or a live server you start yourself).
+- The deliverable MUST expose an explicit browser URL for `webpage_render`: either a `file://` URL to a local HTML file or an `http(s)://` URL for an app server you already started.
 - Design tokens (palette / fonts / sizes) come from `mirror/design-tokens.ts` — do not invent hex codes or font sizes the analysis did not report.
 - Visible text comes from the analysis tree's `<Text content="…">` leaves (`mirror/page-ir.xml`) — copy verbatim.
 - The Figma rendered frame at `mirror/reference.png` is the visual ground truth.
@@ -107,11 +107,11 @@ Whatever shape you pick, the deliverable must:
 - Match section structure from `page-ir.xml` — frame ordering, nesting, approximate bounds.
 - Use exact text from `<Text>` leaves — no paraphrasing.
 - Wire colours / fonts / sizes through whatever convention the chosen stack uses (CSS custom properties under `:root`, Tailwind theme extension, design-token export).
-- Reference Figma image assets via the original URL from `figma-design.json::images[<nodeId>]`. If your render environment can't reach Figma's CDN, mirror the relevant images from `mirror/` (when `figma_extract` downloaded them) or substitute inline SVG.
+- Reference Figma image assets via downloaded files in `mirror/` when `figma_extract` produced them. If a required Figma asset is absent, fix the extraction/materialization step or stop with that concrete asset error instead of substituting unrelated artwork.
 
 ## Step 6 — Render
 
-Call `webpage_render` (defaults render `<worktree>/index.html` and write `mirror/rendered.png`). Returns render time + any console errors.
+Call `webpage_render url=<explicit URL>` and write `mirror/rendered.png`. Use a `file://` URL for local HTML or the already-started app URL for framework/server deliverables. Returns render time + any console errors.
 
 ## Step 7 — Evaluate
 
@@ -122,15 +122,15 @@ Call `webpage_vision_judge`. Single-shot vision-LLM comparison of `mirror/refere
 - `accepted: true|false` — the acceptance signal
 - `differences[]` — ranked list with `severity` + `region` + `observed` + `expected` + concrete `fix_hint`
 
-### 7b. SSIM score (progress + regression signal)
+### 7b. SSIM score (diagnostic signal)
 
 Call `webpage_evaluate reference=reference.png rendered=rendered.png` (both inside `mirror/`). Returns 0–100 score.
 
 ## Step 8 — Iterate
 
-**Target:** `webpage_evaluate` overall score **≥ 95** AND `webpage_vision_judge.accepted = true`.
+**Target:** `webpage_vision_judge.accepted = true`. `webpage_evaluate` is diagnostic only; do not turn its score into a separate acceptance source.
 
-**Stagnation guard (HARD STOP):** if **3 consecutive iterations** fail to raise the score above the previous best, STOP and proceed to acceptance with the best snapshot.
+**Stagnation guard (HARD STOP):** if **3 consecutive iterations** repeat the same blocking vision-judge differences, STOP and report those differences.
 
 For each round (up to **8**, count explicitly):
 
@@ -141,9 +141,9 @@ For each round (up to **8**, count explicitly):
    - Apply each `fix_hint` from vision-judge.
    - Reference tokens via the stack's idiomatic mechanism — never invent hex values.
    - Preserve every element + rule that already renders correctly.
-3. Re-run `webpage_render`.
+3. Re-run `webpage_render url=<explicit URL>`.
 4. Re-run `webpage_vision_judge` AND `webpage_evaluate`.
-5. **Decide:** accepted → done; 3-stagnation → handoff; 8 rounds → handoff; else loop.
+5. **Decide:** vision accepted → done; repeated blocking differences → handoff; 8 rounds → handoff; else loop.
 
 ## Cross-goal artifact sharing — DO NOT delete `mirror/`
 
@@ -153,7 +153,7 @@ Subsequent goals + delivery agents read `mirror/figma-design.json`, `mirror/page
 
 You MUST NOT mark the goal `passed` until you have:
 
-1. Run `webpage_render` and produced `mirror/rendered.png` for the CURRENT deliverable.
+1. Run `webpage_render url=<explicit URL>` and produced `mirror/rendered.png` for the CURRENT deliverable.
 2. Run `webpage_vision_judge` and confirmed `mirror/vision-judge.json` reports `accepted: true`.
 3. Read `mirror/rendered.png` and visually compared it against `mirror/reference.png`.
 4. Run `webpage_evaluate` and recorded the score.
@@ -167,4 +167,4 @@ The render screenshot is THE source of truth for "does this look like the refere
 - `figma_analyze` produced `mirror/scaffold.json` + `design-tokens.ts` + `shared-context.md`
 - All canonical text from the figma frames present verbatim in the deliverable
 - `mirror/rendered.png` exists, was visually inspected, and matches the reference
-- `webpage_vision_judge.accepted = true` AND `webpage_evaluate` score ≥ 95
+- `webpage_vision_judge.accepted = true`

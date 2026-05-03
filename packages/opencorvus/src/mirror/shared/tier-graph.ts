@@ -2,15 +2,9 @@
  * Dependency-based tiered grouping for parallel codegen.
  * Ported from mirror/src/infra/utils/tier-graph.ts.
  *
- * Two strategies:
- *   1. Contract-based (when `contracts.imports` is available):
- *      Kahn-style topological sort on the import dependency graph.
- *   2. Heuristic fallback (no contracts):
- *      - Tier 0: foundation files (constants, types, config, CSS, utils)
- *      - Tier 1..N: remaining files chunked by plan order (~4 per tier)
- *
- * Both ensure earlier tiers' code is visible to later tiers while files
- * within a tier can be generated in parallel.
+ * Uses `contracts.imports` as the single source of dependency truth. Plans
+ * without explicit import contracts are rejected instead of being inferred from
+ * filenames.
  *
  * This module is generic over any object with `file_path` and an optional
  * `contracts.imports` map, so it stays decoupled from the Zod `PlanFile`
@@ -29,7 +23,7 @@ export interface TierPlanFile {
   }
 }
 
-const EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"] as const
+const RESOLVABLE_IMPORT_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"] as const
 
 /** Resolve an import path to a concrete `PlanFile.file_path` entry. */
 function normalizeImportPath(importPath: string, allPaths: readonly string[]): string | undefined {
@@ -37,19 +31,19 @@ function normalizeImportPath(importPath: string, allPaths: readonly string[]): s
 
   if (allPaths.includes(cleaned)) return cleaned
 
-  for (const ext of EXTENSIONS) {
+  for (const ext of RESOLVABLE_IMPORT_EXTENSIONS) {
     const withExt = cleaned + ext
     if (allPaths.includes(withExt)) return withExt
   }
 
-  for (const ext of EXTENSIONS) {
+  for (const ext of RESOLVABLE_IMPORT_EXTENSIONS) {
     const indexPath = cleaned + "/index" + ext
     if (allPaths.includes(indexPath)) return indexPath
   }
 
   for (const p of allPaths) {
     if (p.endsWith("/" + cleaned) || p.endsWith("\\" + cleaned)) return p
-    for (const ext of EXTENSIONS) {
+    for (const ext of RESOLVABLE_IMPORT_EXTENSIONS) {
       if (p.endsWith("/" + cleaned + ext) || p.endsWith("\\" + cleaned + ext)) return p
     }
   }
@@ -99,10 +93,8 @@ function buildContractTiers<T extends TierPlanFile>(plan: readonly T[]): T[][] {
     }
 
     if (tier.length === 0) {
-      // Circular dependencies — dump the remainder into a single tier.
-      const remaining = plan.filter((f) => !assigned.has(f.file_path))
-      tiers.push(remaining)
-      break
+      const remaining = plan.filter((f) => !assigned.has(f.file_path)).map((f) => f.file_path)
+      throw new Error(`Cannot build mirror tiers: circular or unsatisfied imports among ${remaining.join(", ")}`)
     }
 
     for (const f of tier) assigned.add(f.file_path)
@@ -110,93 +102,6 @@ function buildContractTiers<T extends TierPlanFile>(plan: readonly T[]): T[][] {
   }
 
   return tiers
-}
-
-/** Foundation filename patterns (constants, types, config, CSS, utils). */
-const FOUNDATION_PATTERNS: readonly RegExp[] = [
-  /constant/i,
-  /config/i,
-  /types?\./i,
-  /theme/i,
-  /data\./i,
-  /mock/i,
-  /utils?\./i,
-  /helpers?\./i,
-  /\.css$/i,
-  /\.scss$/i,
-  /styles?\./i,
-  /tokens?\./i,
-  /enum/i,
-  /context\./i,
-  /store\./i,
-  /api\./i,
-  /service\./i,
-]
-
-function isFoundationFile(filePath: string): boolean {
-  const name = filePath.split("/").pop() ?? filePath
-  return FOUNDATION_PATTERNS.some((p) => p.test(name))
-}
-
-function buildHeuristicTiers<T extends TierPlanFile>(plan: readonly T[]): T[][] {
-  if (plan.length <= 2) return [plan.slice()]
-
-  const foundation: T[] = []
-  const rest: T[] = []
-
-  for (const file of plan) {
-    if (isFoundationFile(file.file_path)) foundation.push(file)
-    else rest.push(file)
-  }
-
-  const tiers: T[][] = []
-
-  if (foundation.length > 0) tiers.push(foundation)
-
-  if (rest.length > 0) {
-    const TARGET_TIER_SIZE = 4
-    const numTiers = Math.max(1, Math.ceil(rest.length / TARGET_TIER_SIZE))
-    const tierSize = Math.ceil(rest.length / numTiers)
-    for (let i = 0; i < rest.length; i += tierSize) {
-      tiers.push(rest.slice(i, i + tierSize))
-    }
-  }
-
-  return tiers.length > 0 ? tiers : [plan.slice()]
-}
-
-/**
- * Heuristic dependency graph (contracts absent): foundation files have no
- * deps; non-foundation files depend on every foundation file plus a chained
- * edge back `TARGET_GROUP` positions to preserve plan order while allowing
- * parallelism within each group.
- */
-export function buildHeuristicDependencyGraph<T extends TierPlanFile>(plan: readonly T[]): Map<string, Set<string>> {
-  const deps = new Map<string, Set<string>>()
-  for (const file of plan) deps.set(file.file_path, new Set())
-
-  if (plan.length <= 2) return deps
-
-  const foundationPaths: string[] = []
-  const restPaths: string[] = []
-
-  for (const file of plan) {
-    if (isFoundationFile(file.file_path)) foundationPaths.push(file.file_path)
-    else restPaths.push(file.file_path)
-  }
-
-  for (const r of restPaths) {
-    for (const f of foundationPaths) {
-      deps.get(r)!.add(f)
-    }
-  }
-
-  const GROUP = 4
-  for (let i = GROUP; i < restPaths.length; i++) {
-    deps.get(restPaths[i])!.add(restPaths[i - GROUP])
-  }
-
-  return deps
 }
 
 /**
@@ -210,8 +115,12 @@ export function buildHeuristicDependencyGraph<T extends TierPlanFile>(plan: read
 export function buildTiers<T extends TierPlanFile>(plan: readonly T[]): T[][] {
   if (plan.length === 0) return []
 
-  const hasContracts = plan.some((f) => f.contracts?.imports)
-  if (hasContracts) return buildContractTiers(plan)
+  const missingContracts = plan.filter((f) => !f.contracts?.imports).map((f) => f.file_path)
+  if (missingContracts.length > 0) {
+    throw new Error(
+      `Cannot build mirror tiers without explicit contracts.imports for: ${missingContracts.join(", ")}`,
+    )
+  }
 
-  return buildHeuristicTiers(plan)
+  return buildContractTiers(plan)
 }

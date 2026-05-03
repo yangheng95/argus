@@ -38,16 +38,16 @@ export function buildClonePrompt(input: BuildClonePromptInput): string {
   const iterationHeader =
     input.iter === 1
       ? `You are cloning ${input.referenceUrl} as a single-file static HTML page with vanilla CSS.`
-      : `Iteration ${input.iter}. The previous attempt did not meet the target visual similarity. **Add missing elements and rules with \`edit\`** — do NOT rewrite the whole file. Preserve every section that already matches.`
+      : `Iteration ${input.iter}. The previous attempt had visual differences. **Add missing elements and rules with \`edit\`** — do NOT rewrite the whole file. Preserve every section that already matches.`
 
   return `
 ${iterationHeader}
 
 # Goal
 Produce an \`index.html\` at the root of the working directory that visually reproduces
-${input.referenceUrl} with overall score ≥ ${input.targetScore}/100.
-Score = (SSIM × 50) + ((100 − pixelDiff%) × 0.5). Structural fidelity and colour
-placement matter most.
+${input.referenceUrl}. The acceptance source is \`webpage_vision_judge.accepted = true\`
+after rendering the deliverable with an explicit browser URL. SSIM/pixel scores are
+diagnostic progress signals only.
 
 # Viewport
 ${input.viewport.width} × ${input.viewport.height} (logical).
@@ -81,8 +81,8 @@ ${input.outputDir}
 6. Use **exact text** from the XML IR (\`<Text …>content</Text>\`) and \`Section
    Text\` catalogs. Do not paraphrase headings, nav labels, or button text.
 7. Use **exact image paths**: \`Section Images\` catalogs list \`img-N: path\`.
-   Reference the local paths where present, fall back to the original URLs
-   otherwise.
+   Reference the local paths where present. If a selected image path is missing,
+   stop and report the missing asset instead of linking remote originals.
 8. Structure must match the section list exactly (in order, with matching bounds).
 9. Do not fetch \`${input.referenceUrl}\` at runtime; the clone must be fully static.
 10. Before writing \`index.html\`, \`read\` \`page-ir.xml\` and at least
@@ -115,8 +115,6 @@ export interface BuildCloneFeedbackInput {
 export function buildCloneFeedback(input: BuildCloneFeedbackInput): string {
   const r = input.evalReport
   const renderedPath = input.referencePath.replace("reference.png", `rendered-${input.iter}.png`)
-  const gapToTarget = Math.max(0, input.targetScore - r.overallScore)
-
   const missing = input.missingTokens.slice(0, 30)
   const missingLines =
     missing.length > 0
@@ -132,14 +130,14 @@ export function buildCloneFeedback(input: BuildCloneFeedbackInput): string {
 
   const stagnationWarning =
     input.consecutiveNoImprovement >= 3
-      ? `\n**Stagnation HARD STOP**: ${input.consecutiveNoImprovement} consecutive iterations failed to raise the best score (${input.bestScore}/100). Stop iterating — the remaining gap is not closeable from text edits. Hand off the best snapshot to delivery.\n`
+      ? `\n**Stagnation HARD STOP**: ${input.consecutiveNoImprovement} consecutive diagnostic-score iterations failed to raise the best score (${input.bestScore}/100). Stop score-chasing and hand off the current blocking visual differences for \`webpage_vision_judge\` review.\n`
       : input.consecutiveNoImprovement >= 1
-        ? `\n**Stagnation watch**: ${input.consecutiveNoImprovement}/3 iterations with no new high score. If the next round also fails to improve, stop iterating and hand off.\n`
+        ? `\n**Stagnation watch**: ${input.consecutiveNoImprovement}/3 diagnostic-score iterations with no new high score. Use the visual judge differences as the work queue.\n`
         : ""
 
   return `
-Previous iteration scored ${r.overallScore}/100 (target ≥ ${input.targetScore}, gap = ${gapToTarget}).
-Best iteration so far: ${input.bestScore}/100. Iterations without improvement: ${input.consecutiveNoImprovement}/3.
+Previous iteration diagnostic score: ${r.overallScore}/100.
+Best diagnostic score so far: ${input.bestScore}/100. Diagnostic-score iterations without improvement: ${input.consecutiveNoImprovement}/3.
 
 Metrics (track them across iterations as a progress / regression signal):
   - SSIM structural similarity: ${r.ssimScore.toFixed(3)}

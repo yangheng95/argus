@@ -9,7 +9,7 @@
  *     `design-analyst/url-screenshot.ts`, `delivery/checks/visual.ts`).
  *   - Silent `catch` → `Log.create({ service: "mirror.url.extract" })`
  *     with structured fields.
- *   - Throws `UrlExtractError` (typed) on 401/403/429 + all infra failures.
+ *   - Throws `UrlExtractError` (typed) on 401/403/429 + infra/asset failures.
  *   - Image-download constants inlined (mirror imports them from `infra/config.ts`).
  *
  * **Atomic tool guarantee**: this module does not call `url/compile`,
@@ -383,62 +383,7 @@ function browserExtract(args: {
   }
 }
 
-// ─── Image download (Node-side + browser-context fallback) ───────────────
-
-interface BrowserDownloadResult {
-  originalUrl: string
-  dataUrl: string
-  mimeType: string
-  size: number
-}
-
-function browserDownloadImages(args: {
-  urls: string[]
-  maxSizeBytes: number
-  concurrency: number
-  timeoutMs: number
-}): Promise<BrowserDownloadResult[]> {
-  const { urls, maxSizeBytes, concurrency, timeoutMs } = args
-  const results: BrowserDownloadResult[] = []
-
-  async function downloadOne(url: string): Promise<BrowserDownloadResult | null> {
-    try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), timeoutMs)
-      const resp = await fetch(url, { signal: controller.signal, credentials: "include" })
-      clearTimeout(timer)
-      if (!resp.ok) return null
-
-      const blob = await resp.blob()
-      if (blob.size > maxSizeBytes || blob.size === 0) return null
-
-      const mimeType = blob.type || "image/jpeg"
-      if (!mimeType.startsWith("image/")) return null
-
-      const buffer = await blob.arrayBuffer()
-      const bytes = new Uint8Array(buffer)
-      let binary = ""
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
-      const base64 = btoa(binary)
-      const dataUrl = `data:${mimeType};base64,${base64}`
-
-      return { originalUrl: url, dataUrl, mimeType, size: blob.size }
-    } catch {
-      return null
-    }
-  }
-
-  return (async () => {
-    for (let i = 0; i < urls.length; i += concurrency) {
-      const batch = urls.slice(i, i + concurrency)
-      const batchResults = await Promise.all(batch.map(downloadOne))
-      for (const r of batchResults) {
-        if (r) results.push(r)
-      }
-    }
-    return results
-  })()
-}
+// ─── Image download ───────────────────────────────────────────────────────
 
 function mimeToExt(mime: string): string {
   if (mime.includes("png")) return "png"
@@ -449,35 +394,6 @@ function mimeToExt(mime: string): string {
   if (mime.includes("ico")) return "ico"
   if (mime.includes("avif")) return "avif"
   return "jpg"
-}
-
-function saveDownloadedImages(
-  downloadResults: BrowserDownloadResult[],
-  outputDir: string,
-): Record<string, string> {
-  const imageMap: Record<string, string> = {}
-  const imagesDir = resolve(outputDir, "images")
-  mkdirSync(imagesDir, { recursive: true })
-
-  let totalBytes = 0
-  for (let i = 0; i < downloadResults.length; i++) {
-    const item = downloadResults[i]
-    if (totalBytes + item.size > IMAGE_DOWNLOAD_MAX_TOTAL_BYTES) break
-
-    const ext = mimeToExt(item.mimeType)
-    const fileName = `img-${i}.${ext}`
-    const filePath = resolve(imagesDir, fileName)
-
-    const base64Data = item.dataUrl.split(",")[1]
-    if (!base64Data) continue
-    const buffer = Buffer.from(base64Data, "base64")
-
-    writeFileSync(filePath, buffer)
-    imageMap[item.originalUrl] = `images/${fileName}`
-    totalBytes += item.size
-  }
-
-  return imageMap
 }
 
 async function nodeDownloadImages(
@@ -507,21 +423,36 @@ async function nodeDownloadImages(
               ? AbortSignal.any([signal, AbortSignal.timeout(IMAGE_DOWNLOAD_TIMEOUT_MS)])
               : AbortSignal.timeout(IMAGE_DOWNLOAD_TIMEOUT_MS),
           })
-          if (!resp.ok) return null
+          if (!resp.ok) return { url, error: `HTTP ${resp.status}` }
           const contentType = resp.headers.get("content-type") || ""
-          if (!contentType.startsWith("image/")) return null
+          if (!contentType.startsWith("image/")) return { url, error: `non-image content-type ${contentType || "(missing)"}` }
           const buf = Buffer.from(await resp.arrayBuffer())
-          if (buf.length === 0 || buf.length > IMAGE_DOWNLOAD_MAX_SIZE_BYTES) return null
+          if (buf.length === 0) return { url, error: "empty image response" }
+          if (buf.length > IMAGE_DOWNLOAD_MAX_SIZE_BYTES) {
+            return { url, error: `image size ${buf.length} exceeds ${IMAGE_DOWNLOAD_MAX_SIZE_BYTES}` }
+          }
           return { url, buf, mime: contentType.split(";")[0] }
-        } catch {
-          return null
+        } catch (err) {
+          return { url, error: err instanceof Error ? err.message : String(err) }
         }
       }),
     )
 
     for (const r of results) {
-      if (!r) continue
-      if (totalBytes + r.buf.length > IMAGE_DOWNLOAD_MAX_TOTAL_BYTES) break
+      if ("error" in r) {
+        throw new UrlExtractError({
+          url: r.url,
+          reason: `image download failed: ${r.error}`,
+          phase: "asset",
+        })
+      }
+      if (totalBytes + r.buf.length > IMAGE_DOWNLOAD_MAX_TOTAL_BYTES) {
+        throw new UrlExtractError({
+          url: r.url,
+          reason: `image download total bytes would exceed ${IMAGE_DOWNLOAD_MAX_TOTAL_BYTES}`,
+          phase: "asset",
+        })
+      }
       const ext = mimeToExt(r.mime)
       const fileName = `img-${downloaded}.${ext}`
       writeFileSync(resolve(imagesDir, fileName), r.buf)
@@ -634,7 +565,11 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
       } as never)
     }
     if (status >= 400 && status < 500) {
-      log.warn("non-fatal HTTP status, extraction continues", { url, status })
+      throw new UrlExtractError({
+        url,
+        reason: `HTTP ${status}: URL extraction requires a successful page response`,
+        phase: "navigate",
+      })
     }
 
     await new Promise((r) => setTimeout(r, waitMs))
@@ -736,29 +671,17 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
         onProgress?.(`Downloading ${downloadUrls.length} images (Node-side)...`)
         try {
           imageMap = await nodeDownloadImages(downloadUrls, outputDir, signal, onProgress)
-          if (!imageMap || Object.keys(imageMap).length === 0) {
-            onProgress?.("Node download got 0 images, trying browser context fallback...")
-            const downloadResults = (await page.evaluate(browserDownloadImages as unknown as string, {
-              urls: downloadUrls,
-              maxSizeBytes: IMAGE_DOWNLOAD_MAX_SIZE_BYTES,
-              concurrency: IMAGE_DOWNLOAD_CONCURRENCY,
-              timeoutMs: IMAGE_DOWNLOAD_TIMEOUT_MS,
-            })) as BrowserDownloadResult[]
-            if (downloadResults.length > 0) {
-              imageMap = saveDownloadedImages(downloadResults, outputDir)
-              onProgress?.(`Browser fallback: ${Object.keys(imageMap).length}/${downloadUrls.length} images`)
-            } else {
-              onProgress?.("No images downloaded from either method")
-            }
-          } else {
-            onProgress?.(`Downloaded ${Object.keys(imageMap).length}/${downloadUrls.length} images`)
-          }
+          onProgress?.(`Downloaded ${Object.keys(imageMap).length}/${downloadUrls.length} images`)
         } catch (err) {
-          // Image download is best-effort. Logged, not fatal.
-          log.warn("image download failed (non-fatal)", {
-            url,
-            error: err instanceof Error ? err.message : String(err),
-          })
+          if (UrlExtractError.isInstance(err)) throw err
+          throw new UrlExtractError(
+            {
+              url,
+              reason: err instanceof Error ? err.message : String(err),
+              phase: "asset",
+            },
+            { cause: err },
+          )
         }
       }
     }

@@ -26,7 +26,7 @@ export const UrlExtractError = NamedError.create(
   z.object({
     url: z.string(),
     reason: z.string(),
-    phase: z.enum(["launch", "navigate", "evaluate", "screenshot", "close"]).optional(),
+    phase: z.enum(["launch", "navigate", "evaluate", "screenshot", "asset", "close"]).optional(),
   }),
 )
 
@@ -58,13 +58,13 @@ export const ImageExtractError = NamedError.create(
   }),
 )
 
-/** Visual render (static server + headless browser) failed. */
+/** Visual render against an explicit browser URL failed. */
 export const RenderError = NamedError.create(
   "MirrorRenderError",
   z.object({
-    outputDir: z.string(),
+    url: z.string(),
     reason: z.string(),
-    phase: z.enum(["server", "launch", "navigate", "screenshot", "close"]).optional(),
+    phase: z.enum(["launch", "navigate", "screenshot", "close"]).optional(),
   }),
 )
 
