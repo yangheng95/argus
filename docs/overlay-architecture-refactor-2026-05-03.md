@@ -1307,6 +1307,33 @@ Progress log:
   `#channelFields` id + 3 multi-class child rules + assertion
   that `.market-card` declares no chrome. Ceilings unchanged.
 
+- 2026-05-03: Extended surfaces/settings.css with the LogViewer.tsx
+  family (Diagnostics tab): `.log-level-select` (+ `:focus`),
+  `.log-viewer`, `.log-path`, `.log-line` (+ `:last-child`) with
+  the `content-visibility: auto` lazy-render hint and the 48px
+  `contain-intrinsic-size` reserve, `.log-line-head`, the
+  `.log-level` family with debug/info/warn/error tone variants,
+  `.log-ts` / `.log-delta` / `.log-service` / `.log-msg`,
+  `.log-fields` + `.log-chip`, and the detail collapsible
+  (`.log-detail` + `> summary`, `.log-detail-block + .log-detail-
+  block`, `.log-detail-title`, `.log-detail-pre`). Token
+  conversions: 4× dead `var(--good|--accent|--warn|--bad, #hex)`
+  fallbacks dropped (canonical tokens always defined at :root);
+  the `var(--border-subtle, rgba(...))` log-line border-bottom
+  rewritten as `color-mix(in srgb, white 4%, transparent)`
+  direct (no synthetic token); 4× `1px` borders →
+  `var(--oc-border-width)`; 2× `999px` pills →
+  `var(--oc-radius-pill)`; ~14 unscaled px wrapped in
+  `calc(N * --ui-scale)`. The `.log-source` family stays in
+  styles.css because the `[data-source="pipeline"]` `#7b54c9`
+  purple has no canonical token in the design language —
+  extracting alone would split a per-source color set, and
+  minting a new violet token needs design judgment. New
+  ownership guard asserts 19 base classes + the multi-class
+  sibling rule + `> summary` child rule + absence of the 4
+  retired `var(--token, #hex)` fallbacks and the `--border-
+  subtle` rgba fallback. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
