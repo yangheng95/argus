@@ -1759,6 +1759,30 @@ Progress log:
   + section / sections single-source + default-theme tests pass; tsc
   clean; vite build green (4.56s, 324KB CSS).
 
+- 2026-05-04 (CRON slice, Claude `024f9faf5` follow-up): Collapsed the
+  six remaining multi-class scale-override blocks at line 8146-8312
+  from `body[data-theme="light"] :is(...), body:is([data-theme="dark"],
+  [data-theme="vscode-dark"]) :is(...) { … !important }` to plain
+  `:is(...) { … !important }`. Both arms targeted the same classes
+  with identical bodies; the theme prefix added zero behavior, just
+  noise + extra specificity over the canonical. The blocks reset
+  margin / gap+padding-inline / border + box-shadow / hover border-
+  color + box-shadow / background / hover+active background for
+  `.sidebar-btn`, `.btn.mini`, `.btn-terminate`, `.engine-chip`(-caret),
+  `.workspace-tab`, `.section-icon-btn`, `.conn-banner__action`. The
+  `!important` resets stay until each canonical is rewritten to
+  declare the actually-rendered flat chrome (next slice). Also fixed
+  the legacy-debt guard: it was counting `!important` and
+  `body[data-theme]` mentions inside comments toward the budget
+  (33 + 10 false positives respectively); switched to
+  `withoutComments` so only live cascade debt counts. Real ceilings
+  now: !important 50 (live), body[data-theme] 5 (live), theme layout
+  overrides 0 (the multi-class blocks no longer carry data-theme
+  selectors). All 122 architecture guards + SSE + button-primitive
+  + dark-mode-primary-button + section / sections single-source
+  + default-theme tests pass; tsc clean; vite build green (4.16s,
+  324KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD

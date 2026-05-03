@@ -8141,101 +8141,73 @@ body::after,
  * `rgba(30, 30, 30, 0.96)`, which renders as a near-solid panel against
  * the canvas; no theme selector needs to repaint the inner cards. */
 
-/* `.sidebar-btn-primary` / `.board-intro__cta-action` removed: their margin
- * is single-sourced in the shared primary-action canonical at line 7585. */
-body[data-theme="light"]
-  :is(
-    .sidebar-btn,
-    .btn.mini,
-    .btn-terminate,
-    .engine-chip,
-    .engine-chip-caret,
-    .workspace-tab,
-    .section-icon-btn,
-    .conn-banner__action
-  ),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(
-    .sidebar-btn,
-    .btn.mini,
-    .btn-terminate,
-    .engine-chip,
-    .engine-chip-caret,
-    .workspace-tab,
-    .section-icon-btn,
-    .conn-banner__action
-  ) {
+/* Pre-2026-05-04 this block was a `body[data-theme="light"] :is(…),
+ * body:is(…data-theme…) :is(…)` chain — both arms targeted the same
+ * classes with the same body. Themes never differed here, so the
+ * theme-prefix gained nothing but specificity over the canonical. The
+ * primary-action siblings (`.sidebar-btn-primary` / `.board-intro__
+ * cta-action`) are out — their margin lives in the shared primary
+ * canonical at line 7585. The remaining classes still need the
+ * `!important` reset until each canonical is updated to declare flat
+ * margin directly; collapsing to a non-themed `:is(...)` removes the
+ * theme noise without changing behavior. */
+:is(
+  .sidebar-btn,
+  .btn.mini,
+  .btn-terminate,
+  .engine-chip,
+  .engine-chip-caret,
+  .workspace-tab,
+  .section-icon-btn,
+  .conn-banner__action
+) {
   margin: 0 !important;
 }
 
-/* `.sidebar-btn-primary` / `.board-intro__cta-action` removed: their gap +
- * padding-inline live in the shared primary-action canonical at line 7585. */
-body[data-theme="light"]
-  :is(
-    .sidebar-btn,
-    .btn-terminate,
-    .engine-chip
-  ),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(
-    .sidebar-btn,
-    .btn-terminate,
-    .engine-chip
-  ) {
+/* Same theme-noise collapse as the margin block above. `.sidebar-btn-
+ * primary` / `.board-intro__cta-action` already pull gap + padding-
+ * inline from the shared primary-action canonical at line 7585; the
+ * three classes here keep the `!important` reset until their canonicals
+ * declare flat gap + padding directly. */
+:is(
+  .sidebar-btn,
+  .btn-terminate,
+  .engine-chip
+) {
   gap: calc(2px * var(--ui-scale)) !important;
   padding-inline: calc(6px * var(--ui-scale)) !important;
 }
 
 /* iter57: `.chat-input` compact gap/padding folded into canonical. */
 
-/* `.sidebar-btn-primary` / `.board-intro__cta-action` removed: border:0 +
- * box-shadow:none live in the shared primary-action canonical at line 7585. */
-body[data-theme="light"]
-  :is(
-    .sidebar-btn,
-    .btn.mini,
-    .btn-terminate,
-    .engine-chip,
-    .engine-chip-caret,
-    .workspace-tab,
-    .section-icon-btn,
-    .conn-banner__action
-  ),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(
-    .sidebar-btn,
-    .btn.mini,
-    .btn-terminate,
-    .engine-chip,
-    .engine-chip-caret,
-    .workspace-tab,
-    .section-icon-btn,
-    .conn-banner__action
-  ) {
+/* Same theme-noise collapse. `.sidebar-btn-primary` /
+ * `.board-intro__cta-action` border:0 + box-shadow:none live in the
+ * shared primary-action canonical at line 7585. */
+:is(
+  .sidebar-btn,
+  .btn.mini,
+  .btn-terminate,
+  .engine-chip,
+  .engine-chip-caret,
+  .workspace-tab,
+  .section-icon-btn,
+  .conn-banner__action
+) {
   border: 0 !important;
   box-shadow: none !important;
 }
 
-/* `.board-intro__cta-action:hover` removed: hover border-color +
- * box-shadow live in the shared primary-action :hover canonical at line 7604. */
-body[data-theme="light"]
-  :is(
-    .engine-chip:hover,
-    .workspace-tab:hover,
-    .workspace-tab[data-active="true"],
-    .section-icon-btn:hover,
-    .section-icon-btn:focus-visible,
-    .conn-banner__action:hover
-  ),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(
-    .engine-chip:hover,
-    .workspace-tab:hover,
-    .workspace-tab[data-active="true"],
-    .section-icon-btn:hover,
-    .section-icon-btn:focus-visible,
-    .conn-banner__action:hover
-  ) {
+/* Same theme-noise collapse for the hover/active reset. `.board-intro_
+ * _cta-action:hover` lives in the shared primary-action :hover canonical
+ * at line 7604. */
+:is(
+  .engine-chip:hover,
+  .workspace-tab:hover,
+  .workspace-tab[data-active="true"],
+  .section-icon-btn:hover,
+  .section-icon-btn:focus-visible,
+  .conn-banner__action:hover
+) {
   border-color: transparent !important;
   box-shadow: none !important;
 }
@@ -8255,57 +8227,34 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
  * design intent, not the `border: 0` reset that lived here. .criteria-item
  * keeps its own border canonical near line 1957. */
 
-body[data-theme="light"]
-  :is(
-    .sidebar-btn,
-    .btn-terminate,
-    .engine-chip,
-    .engine-chip-caret,
-    .workspace-tab,
-    .section-icon-btn,
-    .conn-banner__action
-  ),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(
-    .sidebar-btn,
-    .btn-terminate,
-    .engine-chip,
-    .engine-chip-caret,
-    .workspace-tab,
-    .section-icon-btn,
-    .conn-banner__action
-  ) {
+/* Same theme-noise collapse for the background reset. */
+:is(
+  .sidebar-btn,
+  .btn-terminate,
+  .engine-chip,
+  .engine-chip-caret,
+  .workspace-tab,
+  .section-icon-btn,
+  .conn-banner__action
+) {
   background: transparent !important;
   background-color: transparent !important;
   background-image: none !important;
 }
 
-body[data-theme="light"]
-  :is(
-    .sidebar-btn:hover,
-    .sidebar-btn[data-active="true"],
-    .btn-terminate:hover,
-    .engine-chip:hover,
-    .engine-chip[data-active="true"],
-    .workspace-tab:hover,
-    .workspace-tab[data-active="true"],
-    .section-icon-btn:hover,
-    .section-icon-btn:focus-visible,
-    .conn-banner__action:hover
-  ),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(
-    .sidebar-btn:hover,
-    .sidebar-btn[data-active="true"],
-    .btn-terminate:hover,
-    .engine-chip:hover,
-    .engine-chip[data-active="true"],
-    .workspace-tab:hover,
-    .workspace-tab[data-active="true"],
-    .section-icon-btn:hover,
-    .section-icon-btn:focus-visible,
-    .conn-banner__action:hover
-  ) {
+/* Same theme-noise collapse for the hover/active background reset. */
+:is(
+  .sidebar-btn:hover,
+  .sidebar-btn[data-active="true"],
+  .btn-terminate:hover,
+  .engine-chip:hover,
+  .engine-chip[data-active="true"],
+  .workspace-tab:hover,
+  .workspace-tab[data-active="true"],
+  .section-icon-btn:hover,
+  .section-icon-btn:focus-visible,
+  .conn-banner__action:hover
+) {
   background: transparent !important;
   background-color: transparent !important;
   background-image: none !important;
