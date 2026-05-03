@@ -74,6 +74,10 @@ describe(".chat-icon-col is a single flat source", () => {
     expect(soloRuleBody(".chat-icon-col")).toMatch(/border-radius:\s*0(?:px)?\s*;/)
   })
 
+  test("the canonical caps its own spacing instead of relying on late reset chains", () => {
+    expect(soloRuleBody(".chat-icon-col")).toMatch(/padding:\s*min\(calc\(3px \* var\(--ui-scale\)\), 4px\)\s*;/)
+  })
+
   test("no theme override re-introduces a non-zero border-radius on .chat-icon-col", () => {
     const headRe = /(^|\n)body[^{]*?\.chat-icon-col(?![-\w])(?::[a-z-]+)?\s*\{/g
     for (const match of STYLES.matchAll(headRe)) {
