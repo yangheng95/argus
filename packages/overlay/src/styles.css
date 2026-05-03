@@ -7504,10 +7504,12 @@ select.field-input option {
 }
 
 .agent-workflow-canvas {
+  display: block;
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
-  padding: calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale)) calc(24px * var(--ui-scale));
+  padding: calc(18px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(38px * var(--ui-scale))
+    calc(10px * var(--ui-scale));
 }
 
 .agent-workflow-row {
@@ -14880,12 +14882,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   box-shadow: none !important;
 }
 
-body[data-theme="light"] .agent-workflow-canvas,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-canvas {
-  gap: calc(4px * var(--ui-scale)) !important;
-  padding: 0 calc(2px * var(--ui-scale)) 0 0 !important;
-}
-
 body[data-theme="light"] .agent-workflow-card,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card {
   min-height: 0 !important;
@@ -15113,13 +15109,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh
 body[data-theme="light"] .agent-workflow-refresh:hover,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh:hover {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong)) !important;
-}
-
-body[data-theme="light"] .agent-workflow-canvas,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-canvas {
-  display: block;
-  padding: calc(18px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(38px * var(--ui-scale))
-    calc(10px * var(--ui-scale)) !important;
 }
 
 body[data-theme="light"] .agent-workflow-row,
