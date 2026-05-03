@@ -937,6 +937,21 @@ Progress log:
   guard asserts the four selectors plus the white-color-mix hover.
   Ceilings unchanged.
 
+- 2026-05-03: Folded the `.section[data-phase-state="related"]` and
+  `[data-phase-state="active"]` chrome into surfaces/inspector.css.
+  Raw `rgba(91, 141, 239, X%)` accent washes converted to
+  `color-mix(in srgb, var(--accent) X%, transparent)`. The
+  `0 10px 22px rgba(10, 16, 24, 0.1)` glow on the active card is now
+  `0 calc(10px * --ui-scale) calc(22px * --ui-scale)
+  color-mix(black 10%, transparent)`. `inset 0 0 0 1px rgba(...)`
+  becomes `inset 0 0 0 var(--oc-border-width) color-mix(...)`.
+  White-wash gradient stops on the active head route through
+  `color-mix(white, 3%, transparent)` (same pattern as the
+  baseline `:hover`). New ownership guard asserts both phase-state
+  base selectors plus the active-badge `::before` live in
+  inspector.css and that no raw rgba(91,141,239) / rgba(10,16,24)
+  literals leak in. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
