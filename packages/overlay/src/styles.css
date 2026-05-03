@@ -4916,64 +4916,7 @@ code .file-link:hover {
    `styles/surfaces/composer.css` now. */
 
 /* ── Chat Attachments ── */
-.chat-attachments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0;
-}
-.chat-attachment-item {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-inset) 78%, transparent);
-  border: 1px solid color-mix(in srgb, var(--subtle-4) 92%, transparent);
-  border-radius: calc(12px * var(--ui-scale));
-  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  font-size: var(--ui-font-small);
-  color: var(--text-soft);
-  max-width: calc(220px * var(--ui-scale));
-  overflow: hidden;
-}
-.chat-attachment-thumb {
-  width: calc(28px * var(--ui-scale));
-  height: calc(28px * var(--ui-scale));
-  object-fit: cover;
-  border-radius: calc(4px * var(--ui-scale));
-  flex-shrink: 0;
-}
-.chat-attachment-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(28px * var(--ui-scale));
-  height: calc(28px * var(--ui-scale));
-  background: var(--subtle-10);
-  border-radius: calc(4px * var(--ui-scale));
-  font-size: var(--ui-font-small);
-  font-weight: 600;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-.chat-attachment-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.chat-attachment-remove {
-  flex-shrink: 0;
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0 calc(2px * var(--ui-scale));
-  font-size: var(--ui-font-heading);
-  line-height: 1;
-}
-.chat-attachment-remove:hover {
-  color: var(--text-strong);
-}
+/* `.chat-attachment*` family lives in `styles/surfaces/composer.css` now. */
 
 /* ── Chat icon column + toolbar buttons ── */
 
@@ -4996,21 +4939,8 @@ code .file-link:hover {
    The dead `.chat-toolbar-btn` / `.chat-cancel-btn` static class rules
    were retired after composer toolbar actions moved to Button. */
 
-.chat-input[data-dragover] .chat-compose-row {
-  outline: 2px dashed rgba(59, 130, 246, 0.5);
-  outline-offset: -2px;
-  border-radius: calc(20px * var(--ui-scale) * var(--chat-compose-scale));
-}
-
-.chat-compose-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: stretch;
-  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
-  min-width: 0;
-}
-
-/* .chat-compose-actions removed — send button now lives directly in .chat-compose-row */
+/* `.chat-input[data-dragover] .chat-compose-row` and `.chat-compose-row`
+   live in `styles/surfaces/composer.css` now. */
 
 /* iter20 follow-up (CRON self-audit): the wrap and the
    inner textarea historically shared `min-height` via three
@@ -5038,40 +4968,8 @@ code .file-link:hover {
    focus-visible) and `.chat-send-icon` / `.chat-send-label`
    live in `styles/surfaces/composer.css` now. */
 
-.chat-compose-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
-  flex-wrap: wrap;
-  min-width: 0;
-  padding-top: calc(2px * var(--ui-scale) * var(--chat-compose-scale));
-  border-top: none;
-}
-.chat-compose-meta-left {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-}
-.chat-compose-meta-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
-  flex: 1 1 auto;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-.chat-compose-meta-left a {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-.chat-compose-meta-left a:hover {
-  color: var(--text-soft);
-  text-decoration: underline;
-}
+/* `.chat-compose-meta*` family lives in
+   `styles/surfaces/composer.css` now. */
 
 .chat-build {
   display: flex;
@@ -12445,9 +12343,8 @@ body::after,
    canonical now matches the rendered visual directly (flat,
    no decorative gradient overlay). */
 
-.chat-compose-row {
-  gap: calc(8px * var(--ui-scale));
-}
+/* `.chat-compose-row` gap consolidated into the canonical (8px) in
+   `styles/surfaces/composer.css`. */
 
 /* `.chat-textarea:focus` lives in `styles/surfaces/composer.css` now
    (the simpler ring superseded the earlier multi-rgba stack). */
@@ -12622,10 +12519,8 @@ body::after,
    override stack: regression test
    `test/chat-empty-single-source.test.ts` will fail. */
 
-.chat-compose-row {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: end;
-}
+/* `.chat-compose-row` align-items consolidated into the canonical
+   (end) in `styles/surfaces/composer.css`. */
 
 /* `.chat-textarea[data-expanded="true"]` lives in
    `styles/surfaces/composer.css` now (the late 210px wins; the canonical
@@ -13314,13 +13209,6 @@ body[data-theme="vscode-dark"] .chat {
   background: #1e1e1e !important;
 }
 
-body[data-theme="vscode-dark"] .sidebar-tool,
-body[data-theme="vscode-dark"] .sidebar-toolset,
-body[data-theme="vscode-dark"] .task-dir-shell,
-body[data-theme="vscode-dark"] .task-cwd-dropdown {
-  background: #2d2d30 !important;
-}
-
 body[data-theme="vscode-dark"] .section,
 body[data-theme="vscode-dark"] .gwg,
 body[data-theme="vscode-dark"] .board-intro,
@@ -13332,12 +13220,7 @@ body[data-theme="light"]
   :is(
     .sidebar-btn,
     .sidebar-btn-primary,
-    .sidebar-tool,
-    .sidebar-toolset,
     .task-status,
-    .task-dir-shell,
-    .task-cwd-dropdown,
-    .workspace-toggle,
     .btn.mini,
     .btn-terminate,
     .executor-chip,
@@ -13353,12 +13236,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .sidebar-btn,
     .sidebar-btn-primary,
-    .sidebar-tool,
-    .sidebar-toolset,
     .task-status,
-    .task-dir-shell,
-    .task-cwd-dropdown,
-    .workspace-toggle,
     .btn.mini,
     .btn-terminate,
     .executor-chip,
@@ -13504,12 +13382,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 body[data-theme="light"]
   :is(
     .sidebar-btn,
-    .sidebar-tool,
-    .sidebar-toolset,
     .task-status,
-    .task-dir-shell,
-    .task-cwd-dropdown,
-    .workspace-toggle,
     .btn-terminate,
     .executor-chip,
     .engine-chip,
@@ -13521,12 +13394,7 @@ body[data-theme="light"]
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .sidebar-btn,
-    .sidebar-tool,
-    .sidebar-toolset,
     .task-status,
-    .task-dir-shell,
-    .task-cwd-dropdown,
-    .workspace-toggle,
     .btn-terminate,
     .executor-chip,
     .engine-chip,
@@ -13544,12 +13412,6 @@ body[data-theme="light"]
   :is(
     .sidebar-btn:hover,
     .sidebar-btn[data-active="true"],
-    .sidebar-tool:hover,
-    .task-cwd-dropdown:hover,
-    .task-cwd-dropdown:focus-visible,
-    .task-cwd-dropdown[data-open="true"],
-    .workspace-toggle:hover,
-    .workspace-toggle[aria-pressed="true"],
     .btn-terminate:hover,
     .executor-chip:hover,
     .executor-selector[data-open="true"] .executor-chip,
@@ -13565,12 +13427,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .sidebar-btn:hover,
     .sidebar-btn[data-active="true"],
-    .sidebar-tool:hover,
-    .task-cwd-dropdown:hover,
-    .task-cwd-dropdown:focus-visible,
-    .task-cwd-dropdown[data-open="true"],
-    .workspace-toggle:hover,
-    .workspace-toggle[aria-pressed="true"],
     .btn-terminate:hover,
     .executor-chip:hover,
     .executor-selector[data-open="true"] .executor-chip,

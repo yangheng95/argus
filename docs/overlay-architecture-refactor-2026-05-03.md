@@ -688,6 +688,32 @@ Progress log:
   Guard ceilings drop to `body[data-theme] <= 78`; the gradient
   override remains for the still-unmoved `.sidebar-btn-primary`,
   `.btn-primary`, and `.board-intro__cta-action` siblings.
+- 2026-05-03: Extracted the composer attachments strip
+  (`.chat-attachments`, `-item`, `-thumb`, `-icon`, `-name`, `-remove`,
+  `-remove:hover`) plus the compose row + meta layout
+  (`.chat-input[data-dragover] .chat-compose-row`, `.chat-compose-row`,
+  `.chat-compose-meta` + `-left` + `-right` and the meta-left anchor
+  states) from `styles.css` into `styles/surfaces/composer.css`. Two
+  rule-8 duplicates collapsed: `.chat-compose-row { gap }` was 6px in
+  the canonical and 8px in a late override (8px wins, canonical
+  updated); `.chat-compose-row { align-items }` was stretch in the
+  canonical and end in a late override (end wins, canonical updated).
+  The drag-over outline's `rgba(59, 130, 246, 0.5)` literal routes
+  through `color-mix(in srgb, var(--accent) 50%, transparent)`;
+  outline width and offset scale through
+  `calc(±2px * var(--ui-scale))`. New extraction guard pins ten
+  composer classes plus the `:hover` variants and the
+  `.chat-input[data-dragover]` compound selector to the surface file.
+- 2026-05-03: Canonicalized the directory/sidebar/workspace control
+  chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
+  `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
+  `.workspace-toggle` no longer appear in any `body[data-theme]`
+  selector, so themes cannot change their margin, border, radius,
+  background, hover chrome, or shadow. The guard now rejects any future
+  theme selector that targets this control family and pins the canonical
+  radius/border/background declarations. Guard ceilings drop to
+  `!important <= 142`, `body[data-theme] <= 71`, and theme
+  layout/chrome overrides `<= 44`.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
@@ -718,14 +744,14 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **12,761 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles.css`      | **12,436 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
-| Total `!important` in stylesheets      | **152** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **81**                                                                                  |
-| Theme layout/chrome overrides          | **45** current guard baseline                                                           |
+| Total `!important` in stylesheets      | **142** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **71**                                                                                  |
+| Theme layout/chrome overrides          | **44** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
-| Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
-| Total `.tsx` LOC under `packages/overlay/src` | **15,108**                                                                      |
+| Largest 5 components                   | Board 857 / ProvidersPanel 819 / SkillMarketPanel 649 / TaskList 648 / ChatComposer 553 |
+| Total `.tsx` LOC under `packages/overlay/src` | **14,074**                                                                      |
 
 Early single-source iters proved the per-selector teardown discipline.
 The current baseline is materially lower, but the same rule still holds:

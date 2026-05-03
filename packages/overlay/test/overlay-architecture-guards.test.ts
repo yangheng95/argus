@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(147)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(78)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(142)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(71)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(45)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(44)
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
@@ -241,6 +241,31 @@ describe("overlay architecture guards", () => {
 
       expect(selector).not.toMatch(/\.chat-icon-col(?=$|[\s:{.#\[,>+~])/)
     }
+  })
+
+  test("composer attachments and compose row/meta are owned by surfaces/composer.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+
+    for (const className of [
+      "chat-attachments",
+      "chat-attachment-item",
+      "chat-attachment-thumb",
+      "chat-attachment-icon",
+      "chat-attachment-name",
+      "chat-attachment-remove",
+      "chat-compose-row",
+      "chat-compose-meta",
+      "chat-compose-meta-left",
+      "chat-compose-meta-right",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(composerSurface).toMatch(/\.chat-attachment-remove:hover\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-input\[data-dragover\]\s+\.chat-compose-row\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-compose-meta-left a:hover\s*\{/)
   })
 
   test("composer chat-send and chat-interrupt are owned by surfaces/composer.css", () => {
@@ -690,22 +715,28 @@ describe("overlay architecture guards", () => {
     }
   })
 
-  test("directory and sidebar toolset spacing are canonical, not theme scoped", () => {
+  test("directory, sidebar, and workspace controls are canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
-      const body = match[2] ?? ""
       const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
         selector,
       )
-      if (!isThemeSelector || !/\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset)\b/.test(selector)) continue
+      const hasHeaderControl =
+        /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|sidebar-tool|workspace-toggle)\b/.test(selector)
+      if (!isThemeSelector || !hasHeaderControl) continue
 
-      expect(body).not.toMatch(/\b(?:gap|padding(?:-[a-z]+)?)\s*:/)
+      expect(selector).not.toMatch(
+        /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|sidebar-tool|workspace-toggle)\b/,
+      )
     }
 
     expect(soloRuleBody(styles, ".task-dir-shell")).toContain("gap: calc(2px * var(--ui-scale))")
     expect(soloRuleBody(styles, ".task-dir-shell")).toContain("padding: calc(2px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".task-dir-shell")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
+    expect(soloRuleBody(styles, ".task-dir-shell")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(styles, ".task-dir-shell")).toContain("background: var(--oc-control-bg)")
     expect(soloRuleBody(styles, ".task-dir-shell.task-cwd-dropdown")).toContain(
       "padding-inline: calc(2px * var(--ui-scale))",
     )
@@ -714,6 +745,13 @@ describe("overlay architecture guards", () => {
     )
     expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("gap: calc(2px * var(--ui-scale))")
     expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("padding: calc(2px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
+    expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("background: var(--oc-control-bg)")
+    expect(soloRuleBody(styles, ".sidebar-tool")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(styles, ".sidebar-tool")).toContain("border: var(--oc-border-width) solid transparent")
+    expect(soloRuleBody(styles, ".workspace-toggle")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(styles, ".workspace-toggle")).toContain("border: var(--oc-border-width) solid transparent")
   })
 
   test("right-panel empty hint density is canonical, not theme scoped", () => {
