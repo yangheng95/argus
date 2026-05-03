@@ -346,6 +346,12 @@ Progress log:
   canonical report content rules. Workflow report internal separators now follow
   one source, reducing guard ceilings to `!important <= 239`,
   `body[data-theme] <= 151`, and theme layout/chrome overrides <= 88.
+- 2026-05-03: Moved `.agent-workflow-refresh` pill chrome and hover background
+  from broad theme reset lists plus Calm workflow map selectors into canonical
+  refresh button rules. Workflow refresh now shares the palette through tokens
+  without theme-owned button geometry, reducing guard ceilings to
+  `!important <= 234`, `body[data-theme] <= 149`, and theme layout/chrome
+  overrides <= 85.
 
 Trigger: user feedback (2026-05-03):
 

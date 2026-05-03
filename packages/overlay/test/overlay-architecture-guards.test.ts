@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(239)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(151)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(234)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(149)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(88)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(85)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -754,6 +754,37 @@ describe("overlay architecture guards", () => {
     )
     expect(soloRuleBody(styles, ".agent-workflow-report-section")).toContain(
       "border-bottom: 1px solid color-mix(in srgb, var(--border) 58%, transparent)",
+    )
+  })
+
+  test("workflow refresh button chrome is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.agent-workflow-refresh\b/.test(selector)) continue
+
+      expect(body).not.toMatch(/\b(?:border|border-radius|background|box-shadow|color)\s*:/)
+    }
+
+    const body = soloRuleBody(styles, ".agent-workflow-refresh")
+    for (const declaration of [
+      "border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border))",
+      "border-radius: calc(999px * var(--ui-scale))",
+      "padding: 0 calc(10px * var(--ui-scale))",
+      "background: color-mix(in srgb, var(--accent) 8%, var(--surface-strong))",
+      "box-shadow: none",
+      "color: var(--text-strong)",
+    ]) {
+      expect(body).toContain(declaration)
+    }
+
+    expect(soloRuleBody(styles, ".agent-workflow-refresh:hover")).toContain(
+      "background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong))",
     )
   })
 
