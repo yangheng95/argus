@@ -514,6 +514,14 @@ Progress log:
   The chat-scroll guard now blocks theme-scoped background, border,
   box-shadow, and padding. Guard ceilings drop to `!important <= 167`,
   `body[data-theme] <= 96`, and theme layout/chrome `<= 64`.
+- 2026-05-03: Retired light and dark/vscode-dark
+  `.chat-goals-strip` / `.workspace-mount` chrome overrides.
+  `workspace-mount` now owns `background: var(--surface-inset)` in its
+  canonical rule; `chat-goals-strip` already owned background and border
+  canonical values. New guard blocks theme-scoped background, border, and
+  shadow for these auxiliary conversation surfaces. Guard ceilings drop
+  to `!important <= 163`, `body[data-theme] <= 94`, and theme
+  layout/chrome `<= 62`.
 - 2026-05-03: Surface guard relaxed to recognize the project's
   canonical `calc(Npx * var(--ui-scale))` scaling pattern. The earlier
   blanket `Npx` ban forced a token wrapper around every scaled length,
@@ -537,6 +545,16 @@ Progress log:
   + ui-font-tiny already carry the kicker emphasis — so the bold-weight
   density guard tightens to `<= 44`. New extraction guard pins
   fourteen menubar classes to the surface file.
+- 2026-05-03: Extracted the titlebar shell + brand layout containers
+  from `styles.css` into `styles/surfaces/titlebar.css`. Moved
+  `.titlebar` (grid shell + decorative `::after` underline),
+  `.titlebar-left`, `.titlebar-brand`, `.titlebar-spacer`, and
+  `.brand-logo`, plus the late grid-column placements and the
+  matching `@media (max-width: 760px)` reset that flips the grid back
+  to flow. The `1px` border + divider thickness uses the
+  `--oc-border-width` design-language token; the brand logo glow
+  scales through `calc(8px * var(--ui-scale))`. New guard pins five
+  classes plus `.titlebar::after` to the surface file.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
@@ -567,11 +585,11 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **13,441 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles.css`      | **13,436 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
-| Total `!important` in stylesheets      | **167** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **96**                                                                                  |
-| Theme layout/chrome overrides          | **64** current guard baseline                                                           |
+| Total `!important` in stylesheets      | **163** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **94**                                                                                  |
+| Theme layout/chrome overrides          | **62** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
 | Total `.tsx` LOC under `packages/overlay/src` | **15,108**                                                                      |

@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(167)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(96)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(163)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(94)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(64)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(62)
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
@@ -214,6 +214,24 @@ describe("overlay architecture guards", () => {
     expect(titlebarSurface).toMatch(/\.titlebar-setup-cta\s*\{/)
     expect(titlebarSurface).toMatch(/\.titlebar-status-label\s*\{/)
     expect(titlebarSurface).toMatch(/\.titlebar-status-value\s*\{/)
+  })
+
+  test("titlebar shell and brand layout are owned by surfaces/titlebar.css", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
+
+    for (const className of [
+      "titlebar",
+      "titlebar-left",
+      "titlebar-brand",
+      "titlebar-spacer",
+      "brand-logo",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(titlebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(titlebarSurface).toMatch(/\.titlebar::after\s*\{/)
   })
 
   test("titlebar menubar family is owned by surfaces/titlebar.css", () => {
@@ -443,6 +461,7 @@ describe("overlay architecture guards", () => {
 
   test("titlebar shell layout is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const titlebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -457,12 +476,13 @@ describe("overlay architecture guards", () => {
       )
     }
 
-    const body = soloRuleBody(styles, ".titlebar")
+    expect(styles).not.toMatch(/(^|\n)\.titlebar\s*\{/)
+    const body = soloRuleBody(titlebarSurface, ".titlebar")
     for (const declaration of [
       "gap: calc(2px * var(--ui-scale))",
       "margin: 0",
       "padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale))",
-      "border: 1px solid var(--border)",
+      "border: var(--oc-border-width) solid var(--border)",
       "border-left: 0",
       "border-right: 0",
       "border-radius: 0",
@@ -1119,6 +1139,23 @@ describe("overlay architecture guards", () => {
     )
   })
 
+  test("conversation auxiliary surfaces keep chrome out of theme selectors", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.(?:chat-goals-strip|workspace-mount)\b/.test(selector)) continue
+
+      expect(body).not.toMatch(/\b(?:background|border(?:-[a-z]+)?|box-shadow)\s*:/)
+    }
+
+    expect(soloRuleBody(styles, ".workspace-mount")).toContain("background: var(--surface-inset)")
+  })
+
   test("chat task-switch progress overlays the header instead of creating a hidden gap", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const chatBody = soloRuleBody(styles, ".chat")
@@ -1237,6 +1274,9 @@ describe("overlay architecture guards", () => {
 
   test("titlebar layout container gaps are canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const titlebarSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")),
+    )
     const containerSelectors = [
       ".titlebar-left",
       ".titlebar-brand",
@@ -1263,7 +1303,12 @@ describe("overlay architecture guards", () => {
     }
 
     for (const selector of containerSelectors) {
-      const body = soloRuleBody(styles, selector)
+      let body: string | null = null
+      try {
+        body = soloRuleBody(styles, selector)
+      } catch {
+        body = soloRuleBody(titlebarSurface, selector)
+      }
       expect(body).toContain("gap: var(--oc-titlebar-gap)")
     }
   })
