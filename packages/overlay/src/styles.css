@@ -2391,14 +2391,14 @@ body[data-theme="light"] .section-badge {
 .section-head {
   display: flex;
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border: none;
   border-radius: inherit;
   cursor: pointer;
   user-select: none;
   list-style: none;
-  min-height: var(--section-control-height);
+  min-height: calc(26px * var(--ui-scale));
   transition:
     background 140ms ease,
     color 140ms ease,
@@ -11246,15 +11246,14 @@ body[data-resizing="true"] * {
 .gwg-header {
   display: flex;
   align-items: center;
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(9px * var(--ui-scale))
-    calc(16px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
   cursor: pointer;
   user-select: none;
   font-size: var(--ui-font-body);
   font-weight: 600;
   color: var(--text-strong);
-  min-height: auto;
+  min-height: calc(26px * var(--ui-scale));
   line-height: 1.22;
 }
 .gwg-header:focus-visible {
@@ -13260,10 +13259,8 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
    block is gone. Theme-scoped overrides in styles.css tail
    continue to handle per-theme palette without !important. */
 
-.section-head,
 .config-section-head,
-.config-subsection-head,
-.gwg-header {
+.config-subsection-head {
   min-height: calc(32px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
   background: transparent !important;
@@ -15044,13 +15041,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-stack {
 body[data-theme="light"] :is(.section, .gwg, .delivery-panel, .criteria-group),
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section, .gwg, .delivery-panel, .criteria-group) {
   border-radius: calc(5px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] :is(.section-head, .gwg-header),
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section-head, .gwg-header) {
-  min-height: calc(26px * var(--ui-scale)) !important;
-  gap: calc(4px * var(--ui-scale)) !important;
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale)) !important;
 }
 
 body[data-theme="light"] :is(.section-body, .gwg-body),
