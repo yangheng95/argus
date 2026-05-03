@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(304)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(197)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(279)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(184)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(191)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(175)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -502,6 +502,37 @@ describe("overlay architecture guards", () => {
       const body = soloRuleBody(styles, selector)
       expect(body).toContain("padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))")
     }
+  })
+
+  test("board intro density and typography are canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.board-intro(?:__|\b)/.test(selector)) continue
+      if (/\.board-intro__cta-action\b/.test(selector)) continue
+
+      expect(body).not.toMatch(
+        /\b(?:display|gap|grid-template-columns|overflow|-webkit-line-clamp|-webkit-box-orient|font-size|line-height|letter-spacing|text-transform|padding(?:-[a-z]+)?|border|border-radius)\s*:/,
+      )
+    }
+
+    expect(soloRuleBody(styles, ".board-intro")).toContain("gap: calc(5px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".board-intro")).toContain("padding: calc(6px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".board-intro__title")).toContain("font-size: var(--ui-font-body)")
+    expect(soloRuleBody(styles, ".board-intro__section")).toContain("border-radius: calc(4px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".board-intro__section")).toContain("border: 0")
+    expect(soloRuleBody(styles, ".board-intro__modes")).toContain(
+      "grid-template-columns: repeat(auto-fit, minmax(calc(128px * var(--ui-scale)), 1fr))",
+    )
+    expect(soloRuleBody(styles, ".board-intro__cta")).toContain("border-radius: calc(3px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".board-intro__mode-desc,\n.board-intro__agent-desc")).toContain(
+      "-webkit-line-clamp: 2",
+    )
   })
 
   test("chat scroll layout is canonical, not theme scoped", () => {
