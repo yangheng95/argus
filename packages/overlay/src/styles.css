@@ -7556,8 +7556,10 @@ select.field-input option {
 
 .agent-workflow-stack {
   position: relative;
+  display: grid;
+  gap: 0;
   min-width: 0;
-  padding-bottom: var(--stack-pad, 0);
+  padding-bottom: calc(var(--stack-pad, 0) + 8px);
 }
 
 .agent-workflow-card {
@@ -15154,15 +15156,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh
 .agent-workflow-beam-flow {
   stroke: color-mix(in srgb, var(--accent) 72%, var(--good));
   stroke-dasharray: 5 9;
-}
-
-body[data-theme="light"] .agent-workflow-stack,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-stack {
-  position: relative;
-  display: grid;
-  gap: 0;
-  min-width: 0;
-  padding-bottom: calc(var(--stack-pad, 0) + 8px);
 }
 
 body[data-theme="light"] .agent-workflow-card,
