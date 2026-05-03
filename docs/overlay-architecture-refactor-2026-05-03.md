@@ -775,11 +775,14 @@ Progress log:
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD
-`1a6af4d4d` (`refactor(overlay): seed surfaces/conversation.css with
-chat-empty placeholder`), pushed to origin. The refactor is not
-complete and the God CSS archive rule remains active: God CSS may be
-retired from runtime imports and archived as reference-only backup, but
-must not be physically deleted.
+`5a707e301` (`refactor(overlay): extract chat-empty task-state children
+to conversation surface`). That latest local commit continues the
+Conversation surface extraction by moving task-state children out of
+runtime God CSS into `styles/surfaces/conversation.css` with an
+architecture guard update. The refactor is not complete and the God CSS
+archive rule remains active: God CSS may be retired from runtime imports
+and archived as reference-only backup, but must not be physically
+deleted.
 
 Latest verified state before pause:
 
@@ -797,8 +800,6 @@ Known dirty files at pause that are not owned by this checkpoint
 commit:
 
 - `CLAUDE.md`
-- `packages/overlay/src/styles.css`
-- `packages/overlay/src/styles/surfaces/conversation.css`
 - `packages/overlay/src/utils/time.ts`
 - `packages/opencorvus/script/benchmark/assets/web-calculator-request.txt`
 - `packages/opencorvus/script/overlay-snap.ts`
