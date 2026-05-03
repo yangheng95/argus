@@ -143,7 +143,7 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(333)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(228)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(226)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
@@ -201,6 +201,23 @@ describe("overlay architecture guards", () => {
 
     expect(styles).toMatch(/\.delivery-panel::before\s*\{[^}]*background:\s*var\(--delivery-panel-accent\)/)
     expect(styles).not.toMatch(/\.delivery-panel\s*\{[^}]*border-left\s*:/)
+  })
+
+  test("evaluation errors keep semantic error chrome outside theme resets", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      if (!isThemeSelector) continue
+
+      expect(selector).not.toMatch(/eval-error/)
+    }
+
+    const evalErrorBody = styles.match(/\.eval-error\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(evalErrorBody).toContain("background: linear-gradient")
+    expect(evalErrorBody).toContain("rgba(224, 106, 99")
+    expect(evalErrorBody).toContain("border: 0")
   })
 
   test("new theme files only write root-scoped tokens", () => {

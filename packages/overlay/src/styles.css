@@ -4192,11 +4192,12 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 /* ── Evaluation Errors ── */
 .eval-error {
-  margin-top: 4px;
-  padding: 5px 8px;
-  border-radius: var(--radius);
+  margin-top: calc(4px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: 0;
+  border-radius: calc(5px * var(--ui-scale));
   background: linear-gradient(180deg, rgba(224, 106, 99, 0.16), rgba(224, 106, 99, 0.08));
-  border: 1px solid rgba(224, 106, 99, 0.24);
+  box-shadow: none;
 }
 .eval-error-name {
   font-size: var(--ui-font-title);
@@ -14347,7 +14348,6 @@ body[data-theme="light"] .chat-toolbar-btn[data-active] {
 
 body[data-theme="light"] .section,
 body[data-theme="light"] .gwg,
-body[data-theme="light"] .eval-error,
 body[data-theme="light"] .extension-row,
 body[data-theme="light"] .channel-doc-card,
 body[data-theme="light"] .detail-card,
@@ -14595,7 +14595,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-toolbar-btn[data-
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .gwg,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .eval-error,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .extension-row,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .channel-doc-card,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .detail-card,
@@ -14656,7 +14655,6 @@ body[data-theme="vscode-dark"] .chat-scroll > .card,
 body[data-theme="vscode-dark"] .chat-scroll > .interaction-card,
 body[data-theme="vscode-dark"] .section,
 body[data-theme="vscode-dark"] .gwg,
-body[data-theme="vscode-dark"] .eval-error,
 body[data-theme="vscode-dark"] .extension-row,
 body[data-theme="vscode-dark"] .channel-doc-card,
 body[data-theme="vscode-dark"] .detail-card,
@@ -15154,7 +15152,6 @@ body[data-theme="light"]
   :is(
     .section,
     .gwg,
-    .eval-error,
     .extension-row,
     .channel-doc-card,
     .detail-card,
@@ -15174,7 +15171,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .section,
     .gwg,
-    .eval-error,
     .extension-row,
     .channel-doc-card,
     .detail-card,
