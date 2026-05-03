@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(85)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(30)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(81)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(22)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(8)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(7)
   })
 
   test("primary action button siblings have no theme chrome override", () => {
@@ -258,6 +258,30 @@ describe("overlay architecture guards", () => {
         `body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))[^{]*\\.${cls}(?![\\w-])`,
       )
       expect(styles).not.toMatch(themeSelector)
+    }
+  })
+
+  test("body root + .panel-body chrome canonicals read palette tokens, not literals", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    // The canonical body rule reads `var(--body-bg)` and the .panel-body
+    // canonical reads `var(--panel-body-bg)` + `var(--panel-body-blur)`.
+    // Each :root block (light, dark, vscode-dark) declares the right
+    // palette value so themes never repaint the shells via selectors.
+    expect(styles).toMatch(/^body\s*\{[^}]*background:\s*var\(--body-bg\)\s*;/m)
+    expect(styles).toMatch(/^\.panel-body\s*\{[^}]*background:\s*var\(--panel-body-bg\)/m)
+    expect(styles).toMatch(
+      /^\.panel-body\s*\{[^}]*backdrop-filter:\s*var\(--panel-body-blur\)/m,
+    )
+    // Each theme :root must declare the new tokens (otherwise the
+    // canonical would fall through to `unset`).
+    for (const theme of [
+      'body\\[data-theme="dark"\\]',
+      'body\\[data-theme="vscode-dark"\\]',
+      'body\\[data-theme="light"\\]',
+    ]) {
+      const head = new RegExp(`${theme}\\s*\\{`)
+      const idx = styles.search(head)
+      expect(idx).toBeGreaterThan(-1)
     }
   })
 

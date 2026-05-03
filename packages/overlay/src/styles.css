@@ -502,11 +502,9 @@ a {
    / `.task-flag` / `.recent-dir-panel*` live in
    `styles/surfaces/conversation.css` now. */
 
-/* Light theme: reasoning blocks */
-body[data-theme="light"] .msg-reasoning {
-  background: rgba(37, 99, 235, 0.06);
-  border-color: rgba(37, 99, 235, 0.14);
-}
+/* Light-theme `.msg-reasoning` override retired. The canonical now
+ * reads `color-mix(in srgb, var(--accent) X%, transparent)` and `--accent`
+ * differs per theme, so the callout adapts without a selector. */
 
 /* ── Sections Container (right column) ──
    Single source after iter15. Used to be four blocks: a chromed
@@ -3001,8 +2999,18 @@ body[data-resizing="row"] * {
   gap: calc(6px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: calc(14px * var(--ui-scale));
-  background: linear-gradient(180deg, rgba(122, 167, 245, 0.16), rgba(122, 167, 245, 0.08));
-  border: 1px solid rgba(122, 167, 245, 0.22);
+  /* Accent-tinted callout. The previous canonical hardcoded
+     rgba(122, 167, 245, …) (a light-blue near `--accent`) and a light-
+     theme override painted a separate rgba(37, 99, 235, …); both are
+     theme-blind. Routing through `color-mix` on `--accent` reuses the
+     single palette token so the callout matches the active theme's
+     accent without any `body[data-theme]` selector. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 16%, transparent),
+    color-mix(in srgb, var(--accent) 8%, transparent)
+  );
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 22%, transparent);
   font-size: var(--ui-font-control);
   line-height: 1.55;
   color: var(--text-strong);
@@ -5208,28 +5216,14 @@ select.field-input option {
 /* `.about-*` family lives in `styles/surfaces/settings.css` now.
    `1px` borders → `var(--oc-border-width)`. */
 
-/* ── Light theme overrides ── */
-body[data-theme="light"] .config-sidebar {
-  background: rgba(0, 0, 0, 0.03);
-}
-body[data-theme="light"] .config-nav-item.active {
-  background: linear-gradient(135deg, rgba(36, 112, 179, 0.12), rgba(36, 112, 179, 0.04));
-  color: var(--accent);
-}
-body[data-theme="light"] .config-nav-item.active::before {
-  background: var(--accent);
-}
-body[data-theme="light"] .config-nav-badge {
-  background: rgba(0, 0, 0, 0.08);
-  color: var(--text-soft);
-}
-body[data-theme="light"] .config-nav-item.active .config-nav-badge {
-  background: rgba(36, 112, 179, 0.14);
-  color: var(--accent);
-}
-body[data-theme="light"] .config-close-btn:hover {
-  background: rgba(0, 0, 0, 0.08);
-}
+/* Light-theme `.config-sidebar` / `.config-nav-item` / `.config-nav-badge`
+ * / `.config-close-btn` overrides retired. The canonicals in
+ * `surfaces/settings.css` already read palette tokens (`--subtle-1` for
+ * the rail bg, `color-mix(in srgb, var(--accent) X%, transparent)` for
+ * the active gradient + nav badge highlight, `--subtle-3` for the
+ * close-btn hover); each token differs per theme so the rendered chrome
+ * adapts automatically. The bespoke rgba literals here were patch debt
+ * — they slightly drifted from the palette values without justification. */
 
 #channelConfigBody {
   min-height: 0;
@@ -7092,6 +7086,13 @@ body[data-theme="dark"] {
   --rail-surface: rgba(25, 30, 52, 0.88);
   --chat-canvas: rgba(18, 22, 40, 0.82);
   --inspector-surface: rgba(25, 30, 52, 0.9);
+  /* Body / panel-body palette tokens. Both dark variants resolve to
+     `var(--bg)` (the canvas) with no backdrop blur — themes only swap
+     palette behind the canonical's `background: var(--body-bg);
+     backdrop-filter: var(--panel-body-blur);` declaration. */
+  --body-bg: var(--bg);
+  --panel-body-bg: var(--bg);
+  --panel-body-blur: none;
   --chrome: rgba(23, 28, 50, 0.82);
   --border: rgba(170, 183, 236, 0.15);
   --border-hover: rgba(124, 134, 255, 0.38);
@@ -7214,6 +7215,11 @@ body[data-theme="vscode-dark"] {
   --rail-surface: #252526;
   --chat-canvas: #1e1e1e;
   --inspector-surface: #252526;
+  /* vscode-dark uses solid #1e1e1e for both body root and the inner
+     panel-body canvas. No backdrop blur. */
+  --body-bg: var(--bg);
+  --panel-body-bg: #1e1e1e;
+  --panel-body-blur: none;
   --accent-ring: rgba(0, 122, 204, 0.3);
   --hover-accent-border: rgba(0, 122, 204, 0.36);
   --hover-accent-wash: rgba(0, 122, 204, 0.1);
@@ -7262,6 +7268,12 @@ body[data-theme="light"] {
   --rail-surface: rgba(250, 252, 255, 0.86);
   --chat-canvas: rgba(255, 255, 255, 0.78);
   --inspector-surface: rgba(250, 252, 255, 0.9);
+  /* Light body root paints the soft AI-workbench gradient; .panel-body
+     adds a translucent white wash + backdrop blur. Both ride palette
+     tokens so themes never own component chrome. */
+  --body-bg: linear-gradient(135deg, #fbfdff 0%, #f4f7ff 42%, #eef1ff 100%);
+  --panel-body-bg: rgba(255, 255, 255, 0.44);
+  --panel-body-blur: blur(20px);
   --chrome: rgba(255, 255, 255, 0.78);
   --border: rgba(92, 112, 163, 0.16);
   --border-hover: rgba(85, 101, 238, 0.34);
@@ -7311,7 +7323,7 @@ body[data-theme="light"] {
 }
 
 body {
-  background: var(--bg) !important;
+  background: var(--body-bg);
   color: var(--text);
   font-size: var(--ui-font-body);
   line-height: 1.45;
@@ -7373,7 +7385,8 @@ body::after,
 .panel-body {
   gap: 0;
   padding: 0;
-  background: var(--bg);
+  background: var(--panel-body-bg);
+  backdrop-filter: var(--panel-body-blur);
 }
 
 .workspace-main {
@@ -8110,14 +8123,11 @@ body::after,
    Final light-theme skin for the default Overlay experience. It keeps the
    existing task/workspace/inspector structure and only retunes the visual
    system so cold starts match the provided soft AI-workbench reference. */
-body[data-theme="light"] {
-  background: linear-gradient(135deg, #fbfdff 0%, #f4f7ff 42%, #eef1ff 100%) !important;
-}
-
-body[data-theme="light"] .panel-body {
-  background: rgba(255, 255, 255, 0.44);
-  backdrop-filter: blur(20px);
-}
+/* Light-theme body root + .panel-body chrome overrides retired. The body
+ * canonical reads `var(--body-bg)` and the .panel-body canonical reads
+ * `var(--panel-body-bg)` + `var(--panel-body-blur)`; both palette tokens
+ * are declared per theme so the gradient + translucent white + blur
+ * combination renders without a `body[data-theme]` selector. */
 
 /* Light-theme `.sidebar` / `.chat` / `.sections` shell overrides retired.
  * The canonicals in `surfaces/sidebar.css` (`.sidebar`),
@@ -8191,14 +8201,8 @@ body[data-theme="light"] .panel-body {
    The dark themes keep their contrast, but share the same workbench shell:
    rounded panels, softened borders, theme-native primary actions, and a
    single quiet canvas instead of stacked divider chrome. */
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) {
-  background: var(--bg) !important;
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body {
-  background: var(--bg);
-  backdrop-filter: none;
-}
+/* Dark / vscode-dark body root + .panel-body chrome overrides retired
+ * alongside the light counterparts — palette tokens drive everything. */
 
 /* Dark / vscode-dark `.sidebar` / `.chat` / `.sections` shell overrides
  * retired alongside the light counterparts. They were force-painting
@@ -8250,11 +8254,9 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body {
 /* vscode-dark `.sidebar` / `.sections` / `.chat` shell overrides retired.
  * The desired #252526 / #1e1e1e values now live in the vscode-dark `:root`
  * palette (`--rail-surface` / `--inspector-surface` / `--chat-canvas`),
- * so the canonicals render the right shell automatically. `.panel-body`
- * still has its own per-theme treatment until the panel-body slice. */
-body[data-theme="vscode-dark"] .panel-body {
-  background: #1e1e1e !important;
-}
+ * so the canonicals render the right shell automatically. The vscode-dark
+ * `.panel-body` solid #1e1e1e override has now been folded into
+ * `--panel-body-bg` in the vscode-dark `:root` palette block. */
 
 /* vscode-dark `.section` / `.gwg` / `.board-intro` / `.chat-empty--task`
  * solid #252526 override retired. The vscode-dark `:root` palette already
