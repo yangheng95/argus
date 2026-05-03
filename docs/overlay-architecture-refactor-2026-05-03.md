@@ -250,6 +250,11 @@ Progress log:
   theme selectors. Gap, padding, margin, border, radius, and shadow now live in
   the canonical panel-body rule; theme-specific blocks only keep background and
   backdrop palette behavior. The guard ceiling drops to 220.
+- 2026-05-03: Folded `.task-bar` shell layout out of light/dark theme selectors
+  and their mobile/compact resets. Margin, padding, bottom-border geometry, and
+  radius now live in the canonical task-bar rule; theme blocks keep only
+  unresolved color/backdrop differences. The guard ceiling drops to 207, while
+  `!important` drops to 322 and `body[data-theme]` to 212.
 
 Trigger: user feedback (2026-05-03):
 

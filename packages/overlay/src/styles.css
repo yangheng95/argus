@@ -13171,11 +13171,12 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
  * + var(--border) / var(--accent) tokens that adapt per theme. */
 
 .task-bar {
-  margin: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) 0;
-  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  margin: 0;
+  padding: 0 calc(6px * var(--ui-scale));
   background: var(--chrome) !important;
   border: 1px solid var(--border);
-  border-radius: var(--panel-radius);
+  border-width: 0 0 1px;
+  border-radius: 0;
   box-shadow: none !important;
 }
 
@@ -14162,10 +14163,7 @@ body[data-theme="light"] .titlebar-btn:hover {
 }
 
 body[data-theme="light"] .task-bar {
-  margin: 0;
-  border-width: 0 0 1px;
   border-color: rgba(116, 133, 184, 0.14);
-  border-radius: 0;
   background: rgba(255, 255, 255, 0.62) !important;
   backdrop-filter: blur(18px);
 }
@@ -14387,10 +14385,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-btn:hover {
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
-  margin: 0;
-  border-width: 0 0 1px;
   border-color: color-mix(in srgb, var(--border) 88%, transparent);
-  border-radius: 0;
   background: var(--chrome) !important;
   backdrop-filter: none;
 }
@@ -14737,12 +14732,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.titlebar-btn, .tit
   padding: 0 !important;
 }
 
-body[data-theme="light"] .task-bar,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
-  gap: calc(4px * var(--ui-scale)) !important;
-  padding: 0 calc(6px * var(--ui-scale)) !important;
-}
-
 body[data-theme="light"] :is(.sidebar-toolset, .task-dir-shell),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(.sidebar-toolset, .task-dir-shell) {
@@ -14904,14 +14893,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
     border-radius: 0;
   }
 
-  body[data-theme="light"] .task-bar,
-  body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
-    margin-left: 0;
-    margin-right: 0;
-    border-left: 0;
-    border-right: 0;
-    border-radius: 0;
-  }
 }
 
 .task-dir-shell,
