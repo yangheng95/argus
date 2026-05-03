@@ -319,6 +319,12 @@ Progress log:
   canonical stack rule. Workflow card stacking density is now theme-invariant,
   reducing guard ceilings to `!important <= 256`, `body[data-theme] <= 166`,
   and theme layout/chrome overrides <= 117.
+- 2026-05-03: Promoted `.agent-workflow-card` chrome, status tone variables,
+  running dashed state, and hover/focus elevation from theme-scoped Calm
+  workflow overrides into canonical card rules. Workflow card radius, density,
+  border, shadow, and semantic tone now follow one component source, reducing
+  guard ceilings to `!important <= 241`, `body[data-theme] <= 158`, and theme
+  layout/chrome overrides <= 97.
 
 Trigger: user feedback (2026-05-03):
 

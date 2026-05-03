@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(256)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(166)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(241)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(158)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(117)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(97)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -587,6 +587,54 @@ describe("overlay architecture guards", () => {
     ]) {
       expect(body).toContain(declaration)
     }
+  })
+
+  test("workflow card chrome and tones are canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      const hasWorkflowCard = /(?:^|[\s>+~,])\.agent-workflow-card(?![-\w])/.test(selector)
+      if (!isThemeSelector || !hasWorkflowCard) continue
+
+      expect(selector).not.toMatch(/\.agent-workflow-card(?![-\w])/)
+    }
+
+    const cardBody = soloRuleBody(styles, ".agent-workflow-card")
+    for (const declaration of [
+      "--workflow-tone: var(--accent)",
+      "min-height: calc(94px * var(--ui-scale))",
+      "gap: calc(7px * var(--ui-scale))",
+      "padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale))",
+      "overflow: hidden",
+      "border: 1px solid color-mix(in srgb, var(--workflow-tone) 28%, var(--border))",
+      "border-radius: calc(10px * var(--ui-scale))",
+      "background: color-mix(in srgb, var(--surface) 88%, var(--workflow-tone) 4%)",
+    ]) {
+      expect(cardBody).toContain(declaration)
+    }
+
+    expect(soloRuleBody(styles, '.agent-workflow-card[data-status="running"]')).toContain(
+      "border-style: dashed",
+    )
+    expect(soloRuleBody(styles, '.agent-workflow-card[data-status="completed"]')).toContain(
+      "--workflow-tone: var(--good)",
+    )
+    expect(soloRuleBody(styles, '.agent-workflow-card[data-status="error"]')).toContain(
+      "--workflow-tone: var(--bad)",
+    )
+    expect(soloRuleBody(styles, '.agent-workflow-card[data-status="idle"]')).toContain(
+      "--workflow-tone: var(--warn)",
+    )
+
+    const hoverBody = soloRuleBody(styles, ".agent-workflow-card:hover,\n.agent-workflow-card:focus-visible")
+    expect(hoverBody).toContain("border-color: color-mix(in srgb, var(--workflow-tone) 58%, var(--border))")
+    expect(hoverBody).toContain(
+      "transform: translate(var(--stack-offset, 0), calc(var(--stack-offset, 0) - 1px))",
+    )
   })
 
   test("panel body shell chrome is canonical, not theme scoped", () => {
