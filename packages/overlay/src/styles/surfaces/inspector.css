@@ -1851,3 +1851,133 @@
   font-style: italic;
   font-size: var(--ui-font-small);
 }
+
+/* ArchitectPanel (ArchitectPanel.tsx): renders the architect
+   agent's decisions and the inferred category overview inside
+   the inspector tab. The panel layers an overview row (count +
+   category pills + detail blurb) above a decisions list (per-
+   decision card with key/value/reason) and a streaming row
+   surfaced while the architect agent runs. */
+.arch-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+
+.arch-overview {
+  display: grid;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.arch-summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-gap-sm);
+}
+
+.arch-count {
+  font-size: var(--ui-font-heading);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.arch-count-label {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+}
+
+.arch-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-gap-xs);
+}
+
+.arch-cat-badge {
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+  padding: var(--ui-badge-padding-y) var(--ui-pill-padding-x);
+  border-radius: var(--oc-radius-pill);
+  background: var(--subtle-2);
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.arch-detail {
+  font-size: var(--ui-font-control);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* Decision list: each card carries the decision key, target
+   goal id, decision value, and rationale on separate rows. */
+.arch-decisions {
+  display: grid;
+  gap: calc(7px * var(--ui-scale));
+}
+
+.arch-decision {
+  display: grid;
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--subtle-2);
+  border-radius: calc(7px * var(--ui-scale));
+  background: var(--surface-inset);
+}
+
+.arch-decision-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-sm);
+  min-width: 0;
+}
+
+.arch-decision-key {
+  min-width: 0;
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arch-decision-goal {
+  max-width: 45%;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arch-decision-value {
+  color: var(--text);
+  font-size: var(--ui-font-control);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.arch-decision-reason {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* Streaming sub-block: surfaced while the architect agent is
+   producing decisions live. */
+.arch-generating {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-sm) 0;
+  color: var(--accent);
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+}
+
+.arch-generating-label {
+  color: var(--accent);
+}

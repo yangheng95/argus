@@ -1194,6 +1194,19 @@ Progress log:
   enumerates all seven `[data-verdict]` variants are still
   declared. Ceilings unchanged.
 
+- 2026-05-03: Moved the ArchitectPanel (ArchitectPanel.tsx)
+  family into surfaces/inspector.css: `.arch-panel`,
+  `.arch-overview`, `.arch-summary`, `.arch-count` /
+  `-count-label`, `.arch-categories` / `.arch-cat-badge`
+  category-pill row, `.arch-detail` blurb, `.arch-decisions` /
+  `.arch-decision` decision-card list (+ `-head`, `-key`,
+  `-goal`, `-value`, `-reason` rows), and the `.arch-generating`
+  / `-label` streaming indicator. Token conversions: `999px`
+  cat-badge pill → `var(--oc-radius-pill)`; `1px` decision-card
+  border → `var(--oc-border-width)`. New ownership guard
+  asserts 17 base classes are absent from styles.css and
+  present in inspector.css. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
