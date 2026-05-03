@@ -179,7 +179,7 @@ describe("overlay architecture guards", () => {
   test("card stylesheet duplicate selector debt cannot increase", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(countDuplicateSelectors(card)).toBeLessThanOrEqual(52)
+    expect(countDuplicateSelectors(card)).toBeLessThanOrEqual(27)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
