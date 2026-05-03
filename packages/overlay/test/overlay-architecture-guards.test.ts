@@ -404,6 +404,27 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
   })
 
+  test("gwg shell + status modifiers are owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    expect(styles).not.toMatch(/(^|\n)\.gwg\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)\.gwg::before\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)\.gwg:hover\s*\{/)
+    expect(inspectorSurface).toMatch(/\.gwg\s*\{/)
+    expect(inspectorSurface).toMatch(/\.gwg::before\s*\{/)
+    expect(inspectorSurface).toMatch(/\.gwg:hover\s*\{/)
+
+    for (const modifier of ["expanded", "passed", "failed", "running"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.gwg--${modifier}(?:::before)?\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`\\.gwg--${modifier}(?:::before)?\\s*\\{`))
+    }
+
+    expect(inspectorSurface).not.toMatch(/#c3d2ee/)
+    expect(inspectorSurface).toMatch(/\.gwg--passed::before[\s\S]*?var\(--text-soft\)/)
+    expect(inspectorSurface).toContain("color-mix(in srgb, black 12%, transparent)")
+  })
+
   test("criteria group baseline is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
@@ -1705,7 +1726,9 @@ describe("overlay architecture guards", () => {
     expect(soloRuleBody(inspectorSurface, ".section")).toContain(
       "border-radius: calc(5px * var(--ui-scale))",
     )
-    expect(soloRuleBody(styles, ".gwg")).toContain("border-radius: calc(5px * var(--ui-scale))")
+    expect(soloRuleBody(inspectorSurface, ".gwg")).toContain(
+      "border-radius: calc(5px * var(--ui-scale))",
+    )
 
     expect(soloRuleBody(inspectorSurface, ".section-body")).toContain(
       "padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))",

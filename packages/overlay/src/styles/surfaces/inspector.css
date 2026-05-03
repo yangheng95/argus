@@ -585,3 +585,83 @@
   gap: calc(4px * var(--ui-scale));
   padding: 0;
 }
+
+/* GWG (Goal-Workflow-Graph) card — flat shell with a left-rail
+   ::before accent stripe whose tone rotates with the goal status
+   modifier. The richer `.gwg-header` / `-title` / `-revision` /
+   `-objective` / `-step` / `-verdict` / `-checks` family still
+   lives in styles.css until each block gets a token sweep —
+   relocating them piecemeal would explode the surface size before
+   the cleanup pays off. */
+.gwg {
+  position: relative;
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: calc(5px * var(--ui-scale));
+  background: var(--surface-inset);
+  overflow: hidden;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.gwg::before {
+  content: "";
+  position: absolute;
+  left: calc(11px * var(--ui-scale));
+  top: calc(12px * var(--ui-scale));
+  bottom: calc(12px * var(--ui-scale));
+  width: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--subtle-5) 86%, transparent);
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease;
+  pointer-events: none;
+}
+
+.gwg:hover {
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  box-shadow: 0 calc(9px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, black 12%, transparent);
+}
+
+.gwg--expanded {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white 2.8%, transparent),
+      color-mix(in srgb, var(--accent) 1.2%, transparent)
+    ),
+    color-mix(in srgb, var(--surface) 96%, transparent);
+}
+
+/* `.gwg--*` status modifiers — rail tone via `::before` plus a
+   subtle border tint on the host. The `::before` and border rules
+   were originally split (rail bg here, border-color in a late
+   block at the styles.css tail); folded together per rule 8.
+   The previous light-blue hex sibling on `--passed` was retired
+   in favor of `var(--text-soft)` so the muted-accent hue stays
+   theme-adaptive without a literal color. */
+.gwg--passed {
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+}
+
+.gwg--passed::before {
+  background: color-mix(in srgb, var(--accent) 52%, var(--text-soft));
+}
+
+.gwg--failed {
+  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
+}
+
+.gwg--failed::before {
+  background: color-mix(in srgb, var(--bad) 82%, white 4%);
+}
+
+.gwg--running {
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.gwg--running::before {
+  background: var(--accent);
+  box-shadow: none;
+}
