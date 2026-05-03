@@ -6732,8 +6732,9 @@ select.field-input option {
   gap: var(--ui-gap-sm);
   padding: var(--ui-panel-padding-y) var(--ui-panel-padding-x);
   border-radius: var(--radius);
-  border: 1px solid var(--border);
+  border: 0;
   background: var(--surface-inset);
+  box-shadow: none;
 }
 
 .detail-pre {
@@ -7247,12 +7248,13 @@ select.field-input option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--ui-gap-md);
   flex-wrap: wrap;
-  padding: 8px 10px;
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
   border-radius: var(--radius);
-  border: 1px solid var(--border);
+  border: 0;
   background: var(--surface-inset);
+  box-shadow: none;
 }
 
 .channel-doc-copy {
@@ -9876,7 +9878,6 @@ body[data-theme="light"] .config-close-btn:hover {
    keep the --subtle-1 treatment until they get the same
    single-source pass. */
 .goal-item,
-.channel-doc-card,
 .market-card,
 .knowledge-item,
 .pref-item,
@@ -9894,7 +9895,6 @@ body[data-theme="light"] .config-close-btn:hover {
    the browser default provides, which matches the calm/flat
    trajectory.) */
 .goal-item,
-.channel-doc-card,
 .market-card,
 .knowledge-item,
 .pref-item,
@@ -14349,8 +14349,6 @@ body[data-theme="light"] .chat-toolbar-btn[data-active] {
 body[data-theme="light"] .section,
 body[data-theme="light"] .gwg,
 body[data-theme="light"] .extension-row,
-body[data-theme="light"] .channel-doc-card,
-body[data-theme="light"] .detail-card,
 body[data-theme="light"] .config-section,
 body[data-theme="light"] .config-subsection {
   background: rgba(255, 255, 255, 0.72) !important;
@@ -14596,8 +14594,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-toolbar-btn[data-
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .gwg,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .extension-row,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .channel-doc-card,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .detail-card,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .config-section,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .config-subsection {
   background: color-mix(in srgb, var(--surface) 82%, transparent) !important;
@@ -14656,8 +14652,6 @@ body[data-theme="vscode-dark"] .chat-scroll > .interaction-card,
 body[data-theme="vscode-dark"] .section,
 body[data-theme="vscode-dark"] .gwg,
 body[data-theme="vscode-dark"] .extension-row,
-body[data-theme="vscode-dark"] .channel-doc-card,
-body[data-theme="vscode-dark"] .detail-card,
 body[data-theme="vscode-dark"] .config-section,
 body[data-theme="vscode-dark"] .config-subsection,
 body[data-theme="vscode-dark"] .board-intro,
@@ -15153,8 +15147,6 @@ body[data-theme="light"]
     .section,
     .gwg,
     .extension-row,
-    .channel-doc-card,
-    .detail-card,
     .config-section,
     .config-subsection,
     .board-intro,
@@ -15172,8 +15164,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .section,
     .gwg,
     .extension-row,
-    .channel-doc-card,
-    .detail-card,
     .config-section,
     .config-subsection,
     .board-intro,

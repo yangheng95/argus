@@ -57,6 +57,12 @@ describe(".channel-doc-card + .detail-card canonicals match the rendered bg", ()
       /background:\s*var\(--surface-inset\)/,
     )
   })
+
+  test("both canonicals own borderless chrome directly", () => {
+    for (const sel of [".channel-doc-card", ".detail-card"]) {
+      expect(soloRuleBody(sel)).toMatch(/border:\s*0/)
+    }
+  })
 })
 
 describe("neither selector still rides an !important bg/border-color reset chain", () => {
