@@ -822,6 +822,23 @@ Progress log:
   the surface file. New extraction guard pins six classes plus the
   collapsed-state selectors and asserts `index.html` loads the
   surface before legacy styles.css.
+- 2026-05-03: Extended `styles/surfaces/sidebar.css` with the rail
+  body / list family: `.sidebar-body`, `.sidebar-footer` (+ anchor
+  resting + `:hover`), `.sidebar-list`,
+  `.sidebar-list.session-list-panel`, `.task-list-panel`,
+  `.sidebar-list-group`, `.sidebar-list-heading`, and
+  `.sidebar-list-cluster`. Two rule-8 duplicate sources collapsed in
+  the move: the canonical declared `.sidebar-body { padding: 10px }`
+  vs a late `padding: 8px` (8px wins, surface keeps that); canonical
+  declared `.task-list-panel { gap: 12px }` / `.sidebar-list-group {
+  gap: 8px }` / `.sidebar-list-cluster { gap: 2px }` vs a late
+  three-class cluster forcing `gap: 6px` (6px wins, surface
+  consolidates). `.sidebar-list-heading` weight dropped from 700 to
+  600 — the heading is muted-color + 88% font-size, the kicker reads
+  without the heavy weight. `1px` border on `.sidebar-footer` and the
+  cancelled `border: none` on the session panel routed through
+  `var(--oc-border-width)` / `0 solid transparent`. Bold-weight
+  density ceiling tightens to `<= 39`.
 
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,

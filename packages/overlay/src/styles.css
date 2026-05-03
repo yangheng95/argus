@@ -8900,91 +8900,10 @@ body[data-resizing="true"] * {
   flex-shrink: 0;
 }
 
-.sidebar-body {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  padding: calc(10px * var(--ui-scale));
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.sidebar-footer {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  color: var(--text-muted);
-  font-size: var(--ui-font-tiny);
-  min-width: 0;
-  overflow: hidden;
-}
-
-.sidebar-footer a {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-.sidebar-footer a:hover {
-  color: var(--text-soft);
-  text-decoration: underline;
-}
-
-.sidebar-list {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale));
-}
-
-.task-list-panel {
-  display: flex;
-  flex-direction: column;
-  gap: calc(12px * var(--ui-scale));
-  min-height: 100%;
-}
-
-.sidebar-list.session-list-panel {
-  flex: 1;
-  min-height: 0;
-  max-height: none;
-  overflow-y: auto;
-  padding: 0;
-  border: none;
-  background: transparent;
-}
-
-.sidebar-list-group {
-  display: flex;
-  flex-direction: column;
-  gap: calc(8px * var(--ui-scale));
-}
-
-/* Group label above each chat cluster in the sidebar — "Today",
-   "Yesterday", "Last 7 days", "Older". Was uppercase + 0.1em
-   tracking until iter8; a late `.project-group-heading,
-   .sidebar-list-heading` rule then flipped it back to Title Case
-   with !specificity. The dual definition was misleading — anyone
-   tweaking the canonical rule would silently lose to the late
-   override. Folded together: Title Case, slightly muted, sits
-   one notch below the chat row labels. */
-.sidebar-list-heading {
-  display: block;
-  padding: calc(2px * var(--ui-scale)) 0 calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  font-size: calc(var(--ui-font-meta) * 0.88);
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.sidebar-list-cluster {
-  display: flex;
-  flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-}
+/* `.sidebar-body`, `.sidebar-footer` (+ anchor), `.sidebar-list`,
+   `.task-list-panel`, `.sidebar-list.session-list-panel`,
+   `.sidebar-list-group`, `.sidebar-list-heading`, and
+   `.sidebar-list-cluster` live in `styles/surfaces/sidebar.css` now. */
 
 .project-group {
   padding: calc(4px * var(--ui-scale)) 0 0;
@@ -11714,15 +11633,9 @@ body::after,
   font-weight: 600;
 }
 
-.sidebar-body {
-  padding: calc(8px * var(--ui-scale));
-}
-
-.task-list-panel,
-.sidebar-list-group,
-.sidebar-list-cluster {
-  gap: calc(6px * var(--ui-scale));
-}
+/* `.sidebar-body` padding + `.task-list-panel` /
+   `.sidebar-list-group` / `.sidebar-list-cluster` gap consolidated
+   into `styles/surfaces/sidebar.css`. */
 
 .project-group + .project-group {
   margin-top: calc(8px * var(--ui-scale));
