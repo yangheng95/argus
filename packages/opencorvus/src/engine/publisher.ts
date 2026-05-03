@@ -4,6 +4,7 @@ import { Instance } from "@/project/instance"
 import { Vcs } from "@/project/vcs"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
+import { collectMainWorktreeDiff, readBaselineCommitFromMetadata } from "./workspace-export"
 import type { TaskRow, RunRow, DeliveryRow } from "./store"
 
 const log = Log.create({ service: "engine-delivery" })
@@ -122,39 +123,7 @@ const workspaceExportAdapter: DeliveryAdapter = {
 }
 
 function readBaselineCommit(task: TaskRow): string | undefined {
-  const meta = task.metadata
-  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return
-  const git = (meta as Record<string, unknown>).git
-  if (!git || typeof git !== "object" || Array.isArray(git)) return
-  const baseline = (git as Record<string, unknown>).baseline
-  if (!baseline || typeof baseline !== "object" || Array.isArray(baseline)) return
-  const commit = (baseline as Record<string, unknown>).commit
-  return typeof commit === "string" && commit ? commit : undefined
-}
-
-async function collectMainWorktreeDiff(
-  cwd: string,
-  baseRef: string | undefined,
-): Promise<{ changedFiles: string[]; patch: string }> {
-  const { $ } = await import("bun")
-  if (!baseRef) {
-    throw new Error("workspace_export requires task.metadata.git.baseline.commit")
-  }
-  const range = `${baseRef}..HEAD`
-  const namesResult = await $`git -c core.quotepath=false diff --no-ext-diff --name-only ${range}`
-    .cwd(cwd)
-    .quiet()
-    .nothrow()
-  const changedFiles = namesResult.stdout
-    .toString()
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-  const patchResult = await $`git -c core.quotepath=false diff --no-ext-diff ${range}`
-    .cwd(cwd)
-    .quiet()
-    .nothrow()
-  return { changedFiles, patch: patchResult.stdout.toString() }
+  return readBaselineCommitFromMetadata(task.metadata)
 }
 
 const gitPreviewAdapter: DeliveryAdapter = {
@@ -231,16 +200,12 @@ export namespace Publisher {
           summary: `${adapter.id} failed.`,
           detail: String(error),
         })
-      }
-    }
-
-    const patchGate = validatePatchExport(input.delivery, artifacts)
-    if (patchGate) {
-      return {
-        status: "failed" as const,
-        summary: patchGate,
-        artifacts,
-        publish,
+        return {
+          status: "failed" as const,
+          summary: `${adapter.id} failed: ${String(error)}`,
+          artifacts,
+          publish,
+        }
       }
     }
 
@@ -254,26 +219,4 @@ export namespace Publisher {
       publish,
     }
   }
-}
-
-function validatePatchExport(delivery: DeliveryRow, artifacts: DeliveryArtifact[]) {
-  const declaredChangedFiles = Array.isArray(delivery.result?.changed_files)
-    ? delivery.result.changed_files.filter((item): item is string => typeof item === "string" && item.length > 0)
-    : []
-  if (declaredChangedFiles.length === 0) return undefined
-  const patchArtifact = artifacts.find((item) => item.kind === "patch" && item.label === "delivery.patch")
-  const payload = patchArtifact?.payload
-  const exportedChangedFiles = Array.isArray(payload?.changed_files)
-    ? payload.changed_files.filter((item): item is string => typeof item === "string" && item.length > 0)
-    : []
-  const patch = typeof payload?.patch === "string" ? payload.patch : ""
-  const exportedSet = new Set(exportedChangedFiles)
-  const missingDeclaredFiles = declaredChangedFiles.filter((item) => !exportedSet.has(item))
-  if (exportedChangedFiles.length === 0 || patch.trim().length === 0 || missingDeclaredFiles.length > 0) {
-    return (
-      `Publish blocked: delivery declared ${declaredChangedFiles.length} changed file(s), ` +
-      `but workspace_export did not include ${missingDeclaredFiles.length} declared file(s) from the publish baseline.`
-    )
-  }
-  return undefined
 }

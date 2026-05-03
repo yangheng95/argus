@@ -29,12 +29,18 @@ Delivery 的最终判断仍必须有证据硬门，但评分和反馈顺序必�
    - runtime flow 是否能启动、渲染、交互。
    - specialist review 中与功能、runtime、client contract、visual runtime 相关的 blocking finding。
 
-2. **Auxiliary：辅助质量指标**
+2. **Project integrity gates：项目完整性硬门**
    - build/test/lint/typecheck 等项目检查。
-   - test quality、security、style、lint 等支撑性质量信号。
-   - 这些仍可阻止发布，但不能作为唯一沟通主体遮蔽功能失败。
+   - active spec snapshot 对应的 integrity review 结论。
+   - runtime flow、client contract、visual runtime 等能证明真实交付物可运行的 review。
+   - workspace export 覆盖声明的 changed files，避免 delivery accepted 后 publish 再出现第二套文件门。
+   - 这些信号和功能完成度共同决定 finalGate；它们不是可选 warning。
 
-3. **Iteration：拒绝后重试**
+3. **Auxiliary：辅助诊断材料**
+   - test quality、style、lint 细节、日志、截图等支撑性材料。
+   - 辅助材料只能解释 root cause 和 rework scope，不能替代“交付物是否完整满足要求”的判断。
+
+4. **Iteration：拒绝后重试**
    - task-scope 功能失败必须形成 task-level rework request，而不是空转 `deliver`。
    - goal-scope 功能失败只重开真实归属 goal。
    - 辅助指标失败作为修复约束附带给 rework，不再抢占主原因。
@@ -60,21 +66,21 @@ type DeliveryManifestFunctionalAssessment = {
 
 - coverage failure 总是 primary。
 - runtime flow failure 总是 primary。
+- project/spec integrity review failure 总是 primary。
+- workspace export 覆盖失败总是 primary，因为它证明发布产物和 delivery 声明不一致。
 - specialist review 若 blocking finding 属于 `runtime`、`functional`、`client_contract`、
   `api_contract`、`visual`、`evidence_quality`，归 primary。
-- required check failure 默认 auxiliary；但如果 failure 直接导致 runtime 无法评估，
-  仍保留为 auxiliary prerequisite，不改写成“功能完成”。
+- required check failure 是 project integrity blocker；如果 failure 直接导致 runtime 无法评估，
+  summary 必须说明它阻断了完成度验证，不得把交付写成 complete。
 
 ### Final Gate Summary
 
 `finalGate.summary` 改为功能优先：
 
-- primary 失败存在：
-  `Functional completion failed: ... Auxiliary blockers: ...`
-- primary 失败不存在但辅助失败存在：
-  `Functional completion passed, but auxiliary quality gates failed: ...`
+- primary 或项目完整性硬门失败存在：
+  `Functional completion failed with N primary blocker(s).`
 - 全部通过：
-  `Functional completion passed and auxiliary quality gates passed.`
+  `Functional completion passed and project integrity gates passed.`
 
 ### Verdict Details
 
@@ -94,9 +100,9 @@ type DeliveryManifestFunctionalAssessment = {
 
 - 同时存在 check/runtime/review failure 时，verdict details 包含全部失败家族。
 - finalGate summary 以 functional completion 开头。
+- runtime flow、integrity review、workspace export 失败时，finalGate 必须 failed，UI 不得显示 Accepted。
 - task-scope rejection 不再触发空 `delivery_rework` 自旋。
 - latest deepseek report 中的 `no_build_artifact` / runtime / client contract 失败
   在 deliver result 中作为主要问题出现。
 - `bun test packages/opencorvus/test/delivery/arbiter.test.ts packages/opencorvus/test/delivery/project-gate.test.ts`
   通过。
-

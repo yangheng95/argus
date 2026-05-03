@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { $ } from "bun"
 import fs from "node:fs/promises"
 import { mkdtemp } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { Instance } from "../../src/project/instance"
+import { ProjectTable } from "../../src/project/project.sql"
 import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project-gate"
 import { runtimeInteractionViolations } from "../../src/delivery/checks/runtime-evidence"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { recordIntegrityAttempt } from "../../src/engine/persist"
+import { Database } from "../../src/storage/db"
 import {
   countPriorRepeatedDeliveryFailureSignals,
   repeatedDeliveryFailureSignatures,
@@ -189,19 +194,23 @@ console.log("lint scope ok", cwd())
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_coverage",
-        runID: "run_coverage",
-        deliveryID: "dlv_coverage",
-        changedFiles: ["src/app.ts"],
-        goals: [{
-          id: "gol_missing_acceptance",
-          title: "Missing acceptance specs",
-          priority: "blocking",
-          requirement_ids: ["REQ-1"],
-          acceptance_spec_count: 0,
-        }],
-      }),
+      fn: () => {
+        recordPassingIntegrity("tsk_coverage", "spec_coverage")
+        return buildDeliveryEvidenceManifest({
+          taskID: "tsk_coverage",
+          runID: "run_coverage",
+          deliveryID: "dlv_coverage",
+          specSnapshotID: "spec_coverage",
+          changedFiles: ["src/app.ts"],
+          goals: [{
+            id: "gol_missing_acceptance",
+            title: "Missing acceptance specs",
+            priority: "blocking",
+            requirement_ids: ["REQ-1"],
+            acceptance_spec_count: 0,
+          }],
+        })
+      },
     })
 
     expect(manifest.goalCoverage).toEqual([{
@@ -235,20 +244,24 @@ console.log("lint scope ok", cwd())
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_completion_first",
-        runID: "run_completion_first",
-        deliveryID: "dlv_completion_first",
-        changedFiles: ["src/app.ts"],
-        metadata: { checks: { lint: ["bun run lint"] } },
-        goals: [{
-          id: "gol_missing_acceptance",
-          title: "Missing acceptance specs",
-          priority: "blocking",
-          requirement_ids: [],
-          acceptance_spec_count: 0,
-        }],
-      }),
+      fn: () => {
+        recordPassingIntegrity("tsk_completion_first", "spec_completion_first")
+        return buildDeliveryEvidenceManifest({
+          taskID: "tsk_completion_first",
+          runID: "run_completion_first",
+          deliveryID: "dlv_completion_first",
+          specSnapshotID: "spec_completion_first",
+          changedFiles: ["src/app.ts"],
+          metadata: { checks: { lint: ["bun run lint"] } },
+          goals: [{
+            id: "gol_missing_acceptance",
+            title: "Missing acceptance specs",
+            priority: "blocking",
+            requirement_ids: [],
+            acceptance_spec_count: 0,
+          }],
+        })
+      },
     })
 
     expect(manifest.requiredChecks.map((item) => item.id)).toEqual(["lint#1"])
@@ -408,13 +421,10 @@ console.log("lint scope ok", cwd())
       category: "security",
       claim: expect.stringContaining("hardcoded secret-like value"),
     })
-    // Specialist reviews are advisory under the "其余全部作为警告" rule —
-    // they surface as auxiliary findings on the agent prompt but do NOT
-    // flip the final gate. The agent decides whether to act on them.
     expect(manifest.finalGate.failedReviewIds).toContain("specialist:security_data")
-    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("specialist:security_data")
-    expect(manifest.functionalAssessment?.primaryFailureIds).not.toContain("specialist:security_data")
-    expect(manifest.finalGate.status).toBe("passed")
+    expect(manifest.functionalAssessment?.primaryFailureIds).toContain("specialist:security_data")
+    expect(manifest.functionalAssessment?.auxiliaryFailureIds).not.toContain("specialist:security_data")
+    expect(manifest.finalGate.status).toBe("failed")
   })
 
   test("fails non-trivial goal graph when integrity review evidence is missing", async () => {
@@ -444,11 +454,34 @@ console.log("lint scope ok", cwd())
       evidence: ["non-trivial goal graph requires integrity review, but task or spec snapshot identity is missing"],
       specSnapshotId: "spec_review",
     }])
-    // Integrity review is advisory: failure shows on failedReviewIds but
-    // does not block the gate.
     expect(manifest.finalGate.failedReviewIds).toEqual(["review:integrity"])
-    expect(manifest.finalGate.status).toBe("passed")
-    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("review:integrity")
+    expect(manifest.finalGate.status).toBe("failed")
+    expect(manifest.functionalAssessment?.primaryFailureIds).toContain("review:integrity")
+    expect(manifest.functionalAssessment?.auxiliaryFailureIds).not.toContain("review:integrity")
+  })
+
+  test("fails delivery when declared changed files are absent from workspace export diff", async () => {
+    const dir = await packageFixture({})
+    await $`git init`.cwd(dir).quiet()
+    await $`git add src/app.ts package.json`.cwd(dir).quiet()
+    await $`git -c user.name=test -c user.email=test@example.com commit -m init`.cwd(dir).quiet()
+    const baseline = (await $`git rev-parse HEAD`.cwd(dir).quiet().text()).trim()
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_workspace_export",
+        runID: "run_workspace_export",
+        deliveryID: "dlv_workspace_export",
+        changedFiles: ["src/app.ts"],
+        metadata: { git: { baseline: { commit: baseline } } },
+      }),
+    })
+
+    expect(manifest.finalGate.status).toBe("failed")
+    expect(manifest.finalGate.failedReviewIds).toContain("review:workspace_export")
+    expect(manifest.reviewEvidence.find((item) => item.id === "review:workspace_export")?.evidence.join("\n"))
+      .toContain("missing_declared_files=src/app.ts")
   })
 
   test("requires observable browser interaction for structured runtime scenarios", () => {
@@ -602,4 +635,50 @@ function goalInput(id: string) {
     requirement_ids: [id.replace("gol", "REQ")],
     acceptance_spec_count: 1,
   }
+}
+
+function recordPassingIntegrity(taskID: string, specSnapshotID: string) {
+  const now = Date.now()
+  Database.use((db) => {
+    db.insert(ProjectTable).values({
+      id: `project_${taskID}`,
+      worktree: Instance.directory,
+      name: `Project ${taskID}`,
+      sandboxes: "[]",
+      time_created: now,
+      time_updated: now,
+    }).onConflictDoNothing().run()
+    db.insert(EngineTaskTable).values({
+      id: taskID,
+      project_id: `project_${taskID}`,
+      source: "test",
+      title: `Task ${taskID}`,
+      request: "Test delivery manifest",
+      kind: "workflow",
+      priority: "normal",
+      status: "active",
+      attachments: [],
+      system_artifacts: [],
+      design_specs: [],
+      metadata: {},
+      time_created: now,
+      time_updated: now,
+      time_started: now,
+    }).onConflictDoNothing().run()
+  })
+  recordIntegrityAttempt({
+    taskID,
+    sessionID: `ses_${specSnapshotID}`,
+    specSnapshotID,
+    verdict: "pass",
+    perDimension: [
+      { id: "goal_fidelity", verdict: "pass" },
+      { id: "technical_feasibility", verdict: "pass" },
+      { id: "hallucination", verdict: "pass" },
+      { id: "solution_quality", verdict: "pass" },
+    ],
+    issuesCount: 0,
+    correctionsCount: 0,
+    missingCount: 0,
+  })
 }

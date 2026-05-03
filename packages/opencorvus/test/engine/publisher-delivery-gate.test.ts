@@ -10,7 +10,7 @@ import { EngineGit } from "../../src/engine/git"
 import type { DeliveryRow, RunRow, TaskRow } from "../../src/engine/store"
 
 describe("Publisher delivery gate", () => {
-  test("fails publish when delivery declares changed files but exported patch is empty", async () => {
+  test("publisher does not run a second declared-files acceptance gate", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "oc-publisher-gate-"))
     try {
       await fs.writeFile(path.join(dir, "file.txt"), "initial\n")
@@ -28,8 +28,8 @@ describe("Publisher delivery gate", () => {
         }),
       })
 
-      expect(result.status).toBe("failed")
-      expect(result.summary).toContain("did not include 1 declared file")
+      expect(result.status).toBe("delivered")
+      expect(result.summary).toContain("Delivery finalized")
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
