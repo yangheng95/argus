@@ -11,14 +11,14 @@
   --surface-strong: #313438;
   --chrome: #1c1d20;
   --border: rgba(255, 255, 255, 0.1);
-  --border-hover: rgba(84, 138, 247, 0.35);
+  --border-hover: color-mix(in srgb, var(--accent) 35%, transparent);
   --border-strong: rgba(255, 255, 255, 0.16);
   --text: #a8adb3;
   --text-strong: #dfe1e5;
   --text-soft: #9095a0;
   --text-muted: #6e7278;
   --accent: #548af7;
-  --accent-dim: rgba(84, 138, 247, 0.18);
+  --accent-dim: color-mix(in srgb, var(--accent) 18%, transparent);
   --accent-hover: #6b9ef9;
   /* Foreground colour painted on top of any --accent-* surface. White is
      the contrast-correct choice across all three palettes (light accent
@@ -28,23 +28,23 @@
   --diff-add-fg: color-mix(in srgb, var(--accent) 58%, var(--text-strong) 42%);
   --diff-add-bg: color-mix(in srgb, var(--accent) 12%, transparent);
   --diff-add-border: color-mix(in srgb, var(--accent) 22%, transparent);
-  --hover-accent-border: rgba(84, 138, 247, 0.28);
+  --hover-accent-border: color-mix(in srgb, var(--accent) 28%, transparent);
   --hover-accent-wash: linear-gradient(
     180deg,
-    rgba(84, 138, 247, 0.18),
-    rgba(84, 138, 247, 0.06) 58%,
+    color-mix(in srgb, var(--accent) 18%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent) 58%,
     rgba(255, 255, 255, 0.02)
   );
   --hover-accent-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
-  --guide-card-border: rgba(84, 138, 247, 0.22);
-  --guide-card-bg: linear-gradient(180deg, rgba(84, 138, 247, 0.14), rgba(84, 138, 247, 0) 44%), #1e1f22;
+  --guide-card-border: color-mix(in srgb, var(--accent) 22%, transparent);
+  --guide-card-bg: linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 44%), #1e1f22;
   --guide-card-shadow: var(--shadow-lg);
   --good: #5fad56;
   --good-dim: rgba(95, 173, 86, 0.14);
   --warn: #d4a72c;
-  --warn-dim: rgba(212, 167, 44, 0.15);
+  --warn-dim: color-mix(in srgb, var(--warn) 15%, transparent);
   --bad: #f75464;
-  --bad-dim: rgba(247, 84, 100, 0.14);
+  --bad-dim: color-mix(in srgb, var(--bad) 14%, transparent);
   --ok: var(--good);
   --warning: var(--warn);
   --danger: var(--bad);
@@ -56,7 +56,7 @@
   --shadow-md: 0 14px 30px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --panel-radius: calc(10px * var(--ui-scale));
-  --accent-glow: rgba(84, 138, 247, 0.24);
+  --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
   --scrollbar-thumb: rgba(255, 255, 255, 0.16);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
   --session-scrollbar-size: calc(12px * var(--ui-scale));
@@ -145,11 +145,11 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015) 58%, rgba(255, 255, 255, 0.03)),
     var(--surface);
   --panel-fill-hover:
-    linear-gradient(180deg, rgba(84, 138, 247, 0.12), rgba(255, 255, 255, 0.025) 58%, rgba(255, 255, 255, 0.03)),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, transparent), rgba(255, 255, 255, 0.025) 58%, rgba(255, 255, 255, 0.03)),
     var(--surface-hover);
   --card-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015) 72%), var(--subtle-1);
   --card-fill-hover:
-    linear-gradient(180deg, rgba(84, 138, 247, 0.12), rgba(255, 255, 255, 0.02) 68%), var(--surface-hover);
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, transparent), rgba(255, 255, 255, 0.02) 68%), var(--surface-hover);
 }
 
 /* Early vscode-dark :root override retired. It duplicated 34 of the
@@ -216,8 +216,8 @@ body::after {
 body::before {
   z-index: -2;
   background:
-    radial-gradient(circle at 12% 0%, rgba(84, 138, 247, 0.06), transparent 24%),
-    radial-gradient(circle at 88% 4%, rgba(84, 138, 247, 0.05), transparent 22%),
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 24%),
+    radial-gradient(circle at 88% 4%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 22%),
     linear-gradient(180deg, #17191d, #181b1f 38%, #14171a 100%);
 }
 
@@ -231,8 +231,8 @@ body::after {
 
 body[data-theme="light"]::before {
   background:
-    radial-gradient(circle at top left, rgba(36, 112, 179, 0.06), transparent 30%),
-    radial-gradient(circle at top right, rgba(36, 112, 179, 0.08), transparent 32%),
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 6%, transparent), transparent 30%),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 8%, transparent), transparent 32%),
     linear-gradient(180deg, #f2f2f2, #eeeeee 46%, #ebebeb 96%);
 }
 
@@ -3103,7 +3103,7 @@ body[data-resizing="row"] * {
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: calc(18px * var(--ui-scale));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(84, 138, 247, 0.012) 76%, transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.038), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 94%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
@@ -3121,7 +3121,7 @@ body[data-resizing="row"] * {
 .session-msg[data-role="assistant"] {
   border-color: color-mix(in srgb, var(--accent) 16%, var(--border));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(84, 138, 247, 0.012) 74%, transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), color-mix(in srgb, var(--accent) 1.2%, transparent) 74%, transparent),
     color-mix(in srgb, var(--surface) 88%, transparent);
 }
 
@@ -3541,7 +3541,7 @@ select.field-input option {
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: calc(18px * var(--ui-scale));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(84, 138, 247, 0.012) 76%, transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.034), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 95%, transparent);
   overflow: auto;
   max-height: calc(100vh - (180px * var(--ui-scale)));
@@ -3553,7 +3553,7 @@ select.field-input option {
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: calc(18px * var(--ui-scale));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(84, 138, 247, 0.012) 76%, transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.034), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 95%, transparent);
   overflow: auto;
   max-height: calc(100vh - (180px * var(--ui-scale)));
@@ -3697,7 +3697,7 @@ select.field-input option {
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: calc(16px * var(--ui-scale));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(84, 138, 247, 0.01) 76%, transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.032), color-mix(in srgb, var(--accent) 1%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 94%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
   white-space: pre-wrap;
@@ -5577,15 +5577,15 @@ select.field-input option {
   color: var(--accent);
 }
 .llm-status[data-status="error"] {
-  background: rgba(247, 84, 100, 0.15);
+  background: color-mix(in srgb, var(--bad) 15%, transparent);
   color: var(--bad);
 }
 .llm-status[data-status="warn"] {
-  background: rgba(212, 167, 44, 0.15);
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
   color: var(--warn);
 }
 .llm-status[data-status="ready"] {
-  background: rgba(84, 138, 247, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
 }
 
@@ -5608,13 +5608,13 @@ select.field-input option {
   color: var(--accent);
 }
 .llm-notice[data-status="error"] {
-  border-color: rgba(247, 84, 100, 0.3);
-  background: rgba(247, 84, 100, 0.08);
+  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
   color: var(--bad);
 }
 .llm-notice[data-status="warn"] {
-  border-color: rgba(212, 167, 44, 0.3);
-  background: rgba(212, 167, 44, 0.08);
+  border-color: color-mix(in srgb, var(--warn) 30%, transparent);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
   color: var(--warn);
 }
 
@@ -6670,7 +6670,7 @@ body[data-resizing="true"] * {
 
 /* `.gwg--passed/--failed/--running` border-color rules folded into
    the surface canonical at styles/surfaces/inspector.css. The
-   previous raw rgba(247,84,100,0.3) and rgba(84,138,247,0.32) were
+   previous raw color-mix(in srgb, var(--bad) 30%, transparent) and color-mix(in srgb, var(--accent) 32%, transparent) were
    color-mix-ed onto var(--bad) and var(--accent) respectively. */
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -7001,7 +7001,7 @@ body[data-theme="dark"] {
   --text-soft: #9ea9d1;
   --text-muted: #727fa9;
   --accent: #7b83ff;
-  --accent-dim: rgba(123, 131, 255, 0.14);
+  --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
   --accent-hover: #9b82ff;
   --accent-start: #4b8dff;
   --accent-mid: #7b83ff;
@@ -7012,10 +7012,10 @@ body[data-theme="dark"] {
      theme selector touches button chrome. */
   --accent-gradient: var(--accent);
   --accent-gradient-hover: var(--accent-hover);
-  --accent-shadow: 0 10px 26px rgba(93, 104, 255, 0.24);
-  --accent-ring: rgba(123, 131, 255, 0.26);
-  --hover-accent-border: rgba(123, 131, 255, 0.32);
-  --hover-accent-wash: rgba(123, 131, 255, 0.1);
+  --accent-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 24%, transparent);
+  --accent-ring: color-mix(in srgb, var(--accent) 26%, transparent);
+  --hover-accent-border: color-mix(in srgb, var(--accent) 32%, transparent);
+  --hover-accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
   --hover-accent-shadow: 0 12px 30px rgba(42, 52, 112, 0.2);
   --info: #78a8ff;
   --info-dim: rgba(120, 168, 255, 0.12);
@@ -7032,13 +7032,13 @@ body[data-theme="dark"] {
   --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.045);
   --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --scrollbar-thumb: rgba(170, 183, 236, 0.22);
-  --scrollbar-thumb-hover: rgba(123, 131, 255, 0.36);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 36%, transparent);
   --session-scrollbar-track: rgba(255, 255, 255, 0.04);
-  --subtle-1: rgba(123, 131, 255, 0.04);
-  --subtle-2: rgba(123, 131, 255, 0.06);
-  --subtle-3: rgba(123, 131, 255, 0.08);
-  --subtle-4: rgba(123, 131, 255, 0.12);
-  --subtle-5: rgba(123, 131, 255, 0.16);
+  --subtle-1: color-mix(in srgb, var(--accent) 4%, transparent);
+  --subtle-2: color-mix(in srgb, var(--accent) 6%, transparent);
+  --subtle-3: color-mix(in srgb, var(--accent) 8%, transparent);
+  --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
+  --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
   --dialog-bg: #1c213a;
   --menu-panel-bg: rgba(28, 33, 58, 0.96);
   --divider-soft: rgba(170, 183, 236, 0.11);
@@ -7197,14 +7197,14 @@ body[data-theme="light"] {
   --text-soft: #66708e;
   --text-muted: #8a94b2;
   --accent: #5b5ff0;
-  --accent-dim: rgba(91, 95, 240, 0.11);
+  --accent-dim: color-mix(in srgb, var(--accent) 11%, transparent);
   --accent-hover: #474add;
   --accent-start: #4b8dff;
   --accent-mid: #6757f2;
   --accent-end: #8a4df3;
   --accent-gradient: linear-gradient(135deg, var(--accent-start), var(--accent-mid) 52%, var(--accent-end));
   --accent-gradient-hover: linear-gradient(135deg, #367cff, #5748ec 56%, #7c40ea);
-  --accent-ring: rgba(91, 95, 240, 0.2);
+  --accent-ring: color-mix(in srgb, var(--accent) 20%, transparent);
   --info: #2f80ed;
   --info-dim: rgba(47, 128, 237, 0.1);
   --good: #28a66a;
@@ -7217,13 +7217,13 @@ body[data-theme="light"] {
   --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.76);
   --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --scrollbar-thumb: rgba(95, 111, 162, 0.24);
-  --scrollbar-thumb-hover: rgba(91, 95, 240, 0.34);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 34%, transparent);
   --session-scrollbar-track: rgba(255, 255, 255, 0.48);
-  --subtle-1: rgba(91, 95, 240, 0.04);
-  --subtle-2: rgba(91, 95, 240, 0.065);
-  --subtle-3: rgba(91, 95, 240, 0.085);
-  --subtle-4: rgba(91, 95, 240, 0.12);
-  --subtle-5: rgba(91, 95, 240, 0.16);
+  --subtle-1: color-mix(in srgb, var(--accent) 4%, transparent);
+  --subtle-2: color-mix(in srgb, var(--accent) 6.5%, transparent);
+  --subtle-3: color-mix(in srgb, var(--accent) 8.5%, transparent);
+  --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
+  --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
   --dialog-bg: #ffffff;
   --menu-panel-bg: rgba(255, 255, 255, 0.96);
   --divider-soft: rgba(92, 112, 163, 0.12);
