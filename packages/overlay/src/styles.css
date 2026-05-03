@@ -7526,7 +7526,11 @@ select.field-input option {
 
 .agent-workflow-rail {
   position: relative;
-  min-height: calc(72px * var(--ui-scale));
+  display: grid;
+  place-items: start center;
+  width: auto;
+  min-height: calc(104px * var(--ui-scale));
+  background: transparent;
 }
 
 .agent-workflow-rail::before,
@@ -15111,16 +15115,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh
 body[data-theme="light"] .agent-workflow-refresh:hover,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh:hover {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong)) !important;
-}
-
-body[data-theme="light"] .agent-workflow-rail,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-rail {
-  position: relative;
-  display: grid;
-  place-items: start center;
-  width: auto;
-  min-height: calc(104px * var(--ui-scale));
-  background: transparent;
 }
 
 .agent-workflow-orb {
