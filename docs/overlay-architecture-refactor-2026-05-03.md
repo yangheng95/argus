@@ -270,6 +270,11 @@ Progress log:
   panel card shape and density now live in canonical component rules, reducing
   guard ceilings to `!important <= 304`, `body[data-theme] <= 197`, and theme
   layout/chrome overrides <= 191.
+- 2026-05-03: Folded the `.board-intro*` density, typography, card radius,
+  grid sizing, and text clamp rules out of light/dark theme resets. The right
+  panel empty-state design language now lives in canonical component rules,
+  reducing guard ceilings to `!important <= 279`, `body[data-theme] <= 184`,
+  and theme layout/chrome overrides <= 175.
 
 Trigger: user feedback (2026-05-03):
 
