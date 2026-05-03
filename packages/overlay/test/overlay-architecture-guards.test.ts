@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(279)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(184)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(275)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(182)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(175)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(159)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -349,6 +349,37 @@ describe("overlay architecture guards", () => {
 
     const body = soloRuleBody(styles, ".panel")
     expect(body).toContain("padding: 0")
+  })
+
+  test("titlebar shell layout is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/(?:^|[\s>+~,])\.titlebar(?:$|[\s:{.#\[,>+~])/.test(selector)) continue
+
+      expect(body).not.toMatch(
+        /\b(?:gap|margin(?:-[a-z]+)?|padding(?:-[a-z]+)?|border|border-left|border-right|border-radius|box-shadow)\s*:/,
+      )
+    }
+
+    const body = soloRuleBody(styles, ".titlebar")
+    for (const declaration of [
+      "gap: calc(2px * var(--ui-scale))",
+      "margin: 0",
+      "padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale))",
+      "border: 1px solid var(--border)",
+      "border-left: 0",
+      "border-right: 0",
+      "border-radius: 0",
+      "box-shadow: none",
+    ]) {
+      expect(body).toContain(declaration)
+    }
   })
 
   test("panel body shell chrome is canonical, not theme scoped", () => {
