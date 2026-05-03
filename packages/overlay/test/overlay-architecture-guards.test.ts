@@ -176,6 +176,33 @@ describe("overlay architecture guards", () => {
     expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(20)
   })
 
+  test("styles.css has no hard-coded accent/bad/warn rgb expansions outside comments", () => {
+    const raw = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const stripped = raw.replace(/\/\*[\s\S]*?\*\//g, "")
+    // Pre-2026-05-04, styles.css carried 32 literal expansions of palette
+    // accent / bad / warn rgb values in rule bodies. Each one painted the
+    // active theme with a hue from a *different* theme's palette (e.g. a
+    // light-theme button rendering rgba(84, 138, 247, …) which is the
+    // OLD default-dark accent #548af7 instead of the active light accent
+    // #5b5ff0). That is the root cause of the "different theme cascade
+    // conflict — colors bleeding between themes" the user flagged. The
+    // fix routes every accent-tinted decoration through `color-mix(in
+    // srgb, var(--accent|--bad|--warn) X%, transparent)` so it follows
+    // whichever palette token the theme resolves.
+    const palettes = [
+      ["accent", "84, 138, 247"], // OLD default-dark accent #548af7
+      ["accent", "36, 112, 179"], // OLD light accent #2470b3
+      ["accent", "91, 95, 240"], // current light accent #5b5ff0
+      ["accent", "123, 131, 255"], // current dark accent #7b83ff
+      ["bad", "247, 84, 100"], // current default-dark bad #f75464
+      ["warn", "212, 167, 44"], // current default-dark warn #d4a72c
+    ] as const
+    for (const [token, rgb] of palettes) {
+      const re = new RegExp(`rgba\\(\\s*${rgb.replace(/, /g, ",\\s*")}\\s*,`, "g")
+      expect(stripped).not.toMatch(re)
+    }
+  })
+
   test("each theme has at most one solo body[data-theme=…] palette block", () => {
     // Pre-2026-05-04 styles.css carried two `body[data-theme="light"]`
     // blocks (line 208 + 7261) and two `body[data-theme="vscode-dark"]`

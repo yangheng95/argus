@@ -1705,6 +1705,37 @@ Progress log:
   dark-mode-primary-button + section / sections single-source +
   default-theme tests pass; tsc clean; vite build green (3.83s).
 
+- 2026-05-04 (CRON slice — user-flagged theme cascade bleed): The
+  user reported "颜色互相传染" — different themes' palette colors
+  visibly leaking into each other. Audit revealed 32 literal
+  rgba(R, G, B, A) expansions of palette tokens scattered through
+  styles.css rule bodies (not just :root): rgba(84, 138, 247, X) for
+  the OLD default-dark accent #548af7, rgba(36, 112, 179, X) for the
+  OLD light accent #2470b3, rgba(91, 95, 240, X) for the CURRENT
+  light accent #5b5ff0, rgba(123, 131, 255, X) for the CURRENT dark
+  accent #7b83ff, rgba(247, 84, 100, X) for `--bad`, and
+  rgba(212, 167, 44, X) for `--warn`. Each literal painted the same
+  hue regardless of active theme — e.g.,
+  `.llm-status[data-status="ready"] { background: rgba(84, 138, 247, 0.15) }`
+  rendered the old-default-dark blue under any theme's active
+  accent. Routed every match through `color-mix(in srgb,
+  var(--accent|--bad|--warn) X%, transparent)` so the tint follows
+  whichever palette token the theme resolves. Affected rule bodies
+  include `body::before` atmospheric layers, `.session-msg` role
+  variants, `.llm-status` / `.llm-notice` status variants, the
+  conversation/timeline gradients at line ~3700, and the :root
+  fallback definitions. Also fixed `--accent-glow` which was only
+  defined in :root (with the old-default-dark hue) and had no
+  override in :root,body[data-theme="dark"] — dark theme rendered the
+  glow in #548af7 instead of #7b83ff. Now reads color-mix on
+  var(--accent), so every theme's glow matches its accent. Guard
+  ceilings: !important unchanged at 81; body[data-theme] unchanged
+  at 20; theme layout overrides unchanged at 7. Added 1 ownership
+  test that fails if any palette-token rgb expansion is reintroduced
+  outside comments. All 121 architecture guards + 14 SSE + button-
+  primitive + dark-mode-primary-button + section / sections single-
+  source tests pass; tsc clean; vite build green (3.63s).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD
