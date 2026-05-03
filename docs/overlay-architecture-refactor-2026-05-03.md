@@ -748,6 +748,22 @@ Progress log:
   border / border-color stay in styles.css until those rgba literals
   are reworked through palette tokens. Bold-weight density ceiling
   tightens to `<= 40`.
+- 2026-05-03: Extracted the `.chat-scroll` shell + descendant card
+  layout (`> .card`, `> .interaction-card`, `[data-role="user"]` /
+  `[data-role="system"]` width + alignment, plus the matching
+  `@media (max-width: 900px)` reflow) from `styles.css` into
+  `styles/surfaces/conversation.css`. Three rule-8 duplicate sources
+  collapsed: the canonical declared `--card-min-inline-size: 50%` /
+  `gap: 18px` / `padding: 18 (N+6) 28` / `background: transparent`,
+  while two later overrides at lines ~12201 and ~12494 force-set
+  `--card-min-inline-size: 46%` / `gap: 10px` / `padding: 18 22 20` /
+  `background: var(--chat-canvas) !important`. The surface file now
+  declares the actually-rendered values directly (no `!important`).
+  Card `max-width` raised from 960px to the actually-rendered 1040px
+  (late override at 12208). The "chat scroll layout is canonical, not
+  theme scoped" guard now reads body declarations from the
+  conversation surface instead of styles.css; new extraction guard
+  pins `.chat-scroll` + descendant card selectors to the surface.
 
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,

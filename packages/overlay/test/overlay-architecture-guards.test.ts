@@ -243,6 +243,18 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("conversation chat-scroll is owned by surfaces/conversation.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const conversationSurface = readText(
+      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
+    )
+
+    expect(styles).not.toMatch(/(^|\n)\.chat-scroll\s*\{/)
+    expect(conversationSurface).toMatch(/(^|\n)\.chat-scroll\s*\{/)
+    expect(conversationSurface).toMatch(/\.chat-scroll > \.card,\n\.chat-scroll > \.interaction-card/)
+    expect(conversationSurface).toMatch(/@media \(max-width: 900px\)/)
+  })
+
   test("conversation chat-empty task-children are owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const conversationSurface = readText(
@@ -1430,6 +1442,9 @@ describe("overlay architecture guards", () => {
 
   test("chat scroll layout is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const conversationSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -1442,9 +1457,9 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\b(?:padding(?:-[a-z]+)?|background|border(?:-[a-z]+)?|box-shadow)\s*:/)
     }
 
-    const bodies = Array.from(styles.matchAll(/(^|\n)\.chat-scroll\s*\{([^{}]*)\}/g)).map(
-      (match) => match[2] ?? "",
-    )
+    const bodies = Array.from(
+      conversationSurface.matchAll(/(^|\n)\.chat-scroll\s*\{([^{}]*)\}/g),
+    ).map((match) => match[2] ?? "")
     const body = bodies.at(-1) ?? ""
     expect(body).toContain(
       "padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale))",
