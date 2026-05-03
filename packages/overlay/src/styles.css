@@ -459,7 +459,7 @@ a {
 .titlebar-left {
   display: flex;
   align-items: center;
-  gap: calc(8px * var(--ui-scale));
+  gap: var(--oc-titlebar-gap);
   min-width: 0;
   -webkit-app-region: drag;
 }
@@ -467,7 +467,7 @@ a {
 .titlebar-brand {
   display: flex;
   align-items: center;
-  gap: calc(10px * var(--ui-scale));
+  gap: var(--oc-titlebar-gap);
   flex: none;
   min-width: 32px;
   -webkit-app-region: drag;
@@ -658,7 +658,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: calc(8px * var(--ui-scale));
+  gap: var(--oc-titlebar-gap);
   flex: 1 1 auto;
   min-width: 0;
   -webkit-app-region: no-drag;
@@ -668,7 +668,7 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: calc(8px * var(--ui-scale));
+  gap: var(--oc-titlebar-gap);
   min-width: 0;
 }
 
@@ -689,7 +689,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: calc(10px * var(--ui-scale));
+  gap: var(--oc-titlebar-gap);
   flex: none;
   min-width: 0;
   grid-column: 3;
@@ -761,7 +761,7 @@ a {
 .titlebar-actions {
   display: flex;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
+  gap: var(--oc-titlebar-gap);
   flex-shrink: 0;
 }
 
@@ -948,7 +948,7 @@ a {
 .titlebar-status-cluster {
   display: flex;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
+  gap: var(--oc-titlebar-gap);
   min-width: 0;
   -webkit-app-region: no-drag;
 }
@@ -1072,7 +1072,7 @@ a {
 .titlebar-window-controls {
   display: flex;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
+  gap: var(--oc-titlebar-gap);
 }
 
 .titlebar-btn {
@@ -14035,8 +14035,8 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .board-intro {
   display: flex;
   flex-direction: column;
-  gap: calc(5px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale));
+  gap: calc(1px * var(--ui-scale));
+  padding: calc(1px * var(--ui-scale));
   border: 0;
   font-size: var(--ui-font-control);
   color: var(--text-soft);
@@ -14048,7 +14048,7 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .board-intro__head {
   display: flex;
   flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
+  gap: calc(0.5px * var(--ui-scale));
 }
 .board-intro__title {
   margin: 0;
@@ -14066,8 +14066,8 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .board-intro__section {
   display: flex;
   flex-direction: column;
-  gap: calc(3px * var(--ui-scale));
-  padding: calc(5px * var(--ui-scale));
+  gap: calc(1px * var(--ui-scale));
+  padding: calc(1px * var(--ui-scale));
   border-radius: calc(4px * var(--ui-scale));
   background: var(--subtle-1);
   border: 0;
@@ -14088,7 +14088,7 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .board-intro__modes,
 .board-intro__agents {
   display: grid;
-  gap: calc(3px * var(--ui-scale));
+  gap: calc(1px * var(--ui-scale));
   margin: 0;
   padding: 0;
   list-style: none;
@@ -14103,8 +14103,8 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .board-intro__agent {
   display: flex;
   flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  gap: calc(0.5px * var(--ui-scale));
+  padding: calc(1px * var(--ui-scale));
   border-radius: calc(3px * var(--ui-scale));
   background: var(--subtle-2);
   border: 0;
@@ -14726,31 +14726,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .board-intro__cta-action
   ) {
   margin: 0 !important;
-}
-
-body[data-theme="light"]
-  :is(
-    .titlebar-left,
-    .titlebar-brand,
-    .titlebar-nav,
-    .titlebar-nav-group,
-    .titlebar-utility,
-    .titlebar-actions,
-    .titlebar-status-cluster,
-    .titlebar-window-controls
-  ),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(
-    .titlebar-left,
-    .titlebar-brand,
-    .titlebar-nav,
-    .titlebar-nav-group,
-    .titlebar-utility,
-    .titlebar-actions,
-    .titlebar-status-cluster,
-    .titlebar-window-controls
-  ) {
-  gap: calc(2px * var(--ui-scale)) !important;
 }
 
 body[data-theme="light"]

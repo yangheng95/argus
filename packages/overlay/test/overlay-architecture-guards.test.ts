@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(234)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(149)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(233)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(148)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(85)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(84)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -989,8 +989,8 @@ describe("overlay architecture guards", () => {
       )
     }
 
-    expect(soloRuleBody(styles, ".board-intro")).toContain("gap: calc(5px * var(--ui-scale))")
-    expect(soloRuleBody(styles, ".board-intro")).toContain("padding: calc(6px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".board-intro")).toContain("gap: calc(1px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".board-intro")).toContain("padding: calc(1px * var(--ui-scale))")
     expect(soloRuleBody(styles, ".board-intro__title")).toContain("font-size: var(--ui-font-body)")
     expect(soloRuleBody(styles, ".board-intro__section")).toContain("border-radius: calc(4px * var(--ui-scale))")
     expect(soloRuleBody(styles, ".board-intro__section")).toContain("border: 0")
@@ -1099,8 +1099,42 @@ describe("overlay architecture guards", () => {
       "--oc-radius-pill",
       "--oc-density-control-height",
       "--oc-density-icon-button",
+      "--oc-titlebar-gap",
     ]) {
       expect(tokenText).toContain(token)
+    }
+  })
+
+  test("titlebar layout container gaps are canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const containerSelectors = [
+      ".titlebar-left",
+      ".titlebar-brand",
+      ".titlebar-nav",
+      ".titlebar-nav-group",
+      ".titlebar-utility",
+      ".titlebar-actions",
+      ".titlebar-status-cluster",
+      ".titlebar-window-controls",
+    ]
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      const targetsTitlebarLayout = containerSelectors.some((cls) =>
+        new RegExp(`\\${cls}\\b`).test(selector),
+      )
+      if (!isThemeSelector || !targetsTitlebarLayout) continue
+
+      expect(body).not.toMatch(/\bgap\s*:/)
+    }
+
+    for (const selector of containerSelectors) {
+      const body = soloRuleBody(styles, selector)
+      expect(body).toContain("gap: var(--oc-titlebar-gap)")
     }
   })
 
