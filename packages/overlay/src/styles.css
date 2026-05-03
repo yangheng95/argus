@@ -590,7 +590,7 @@ a {
 
 .brand-guide-kicker {
   font-size: var(--ui-font-tiny);
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
@@ -2821,7 +2821,7 @@ body[data-theme="light"] .msg-reasoning {
 }
 .provider-test-result-icon {
   flex: none;
-  font-weight: 700;
+  font-weight: 600;
 }
 .provider-test-result-msg {
   min-width: 0;
@@ -3027,7 +3027,7 @@ body[data-theme="light"] .msg-reasoning {
 .provider-section-label {
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
-  font-weight: 700;
+  font-weight: 600;
 }
 .provider-flat-list {
   display: flex;
@@ -3843,7 +3843,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .goal-priority {
   font-size: var(--ui-font-small);
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 1px 4px;
@@ -6267,7 +6267,7 @@ code .file-link:hover {
    color now reads as a clean section subtitle. */
 .dialog-subtitle {
   font-size: var(--ui-font-meta);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-strong);
   margin-top: var(--ui-gap-xs);
 }

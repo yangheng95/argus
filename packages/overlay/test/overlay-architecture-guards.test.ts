@@ -201,7 +201,7 @@ describe("overlay architecture guards", () => {
     ]
     const text = sources.join("\n")
     const boldDecls = count(/font-weight\s*:\s*(?:700|720|750|760|780|800|900|bold)\b/g, text)
-    expect(boldDecls).toBeLessThanOrEqual(50)
+    expect(boldDecls).toBeLessThanOrEqual(45)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
