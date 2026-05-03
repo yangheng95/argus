@@ -555,6 +555,16 @@ Progress log:
   `--oc-border-width` design-language token; the brand logo glow
   scales through `calc(8px * var(--ui-scale))`. New guard pins five
   classes plus `.titlebar::after` to the surface file.
+- 2026-05-03: Extracted the remaining titlebar layout containers and
+  connection badge from `styles.css` into `styles/surfaces/titlebar.css`.
+  Moved `.titlebar-nav`, `.titlebar-nav-group`, `.titlebar-utility`,
+  `.titlebar-actions`, `.titlebar-status-cluster`,
+  `.titlebar-window-controls`, the `.conn-badge*` family (dot-indicator
+  + status tones + label), and the matching `@media (max-width: 760px)`
+  `.titlebar` flow reset. The `.brand-guide-card` width tweak inside
+  the same media block stays in `styles.css` until the brand-guide
+  family is extracted (its focus ring still uses an rgba literal).
+  New guard pins seven classes to the surface file.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散

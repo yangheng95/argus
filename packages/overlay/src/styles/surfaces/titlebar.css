@@ -62,7 +62,116 @@
   flex-shrink: 0;
 }
 
+.titlebar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--oc-titlebar-gap);
+  flex: 1 1 auto;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-nav-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--oc-titlebar-gap);
+  min-width: 0;
+}
+
+/* Single source after iter23: grid placement + flex container live together.
+   The flex container layout is harmless when the parent is grid (icons flow
+   flex-end inside the grid cell), and inside the narrow-width @media the
+   parent flips back to flex where the flex container layout is the actual
+   behavior. */
+.titlebar-utility {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--oc-titlebar-gap);
+  flex: none;
+  min-width: 0;
+  grid-column: 3;
+  justify-self: end;
+  margin-left: 0;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--oc-titlebar-gap);
+  flex-shrink: 0;
+}
+
+.titlebar-status-cluster {
+  display: flex;
+  align-items: center;
+  gap: var(--oc-titlebar-gap);
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-window-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--oc-titlebar-gap);
+}
+
+/* Connection badge: a small dot-indicator that lives in the titlebar
+   utility area. Kept within this surface because no other column owns it. */
+.conn-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  font-size: var(--ui-font-tiny);
+  font-weight: 500;
+  padding: var(--ui-badge-padding-y) 0;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+}
+
+.conn-badge::before {
+  content: "";
+  display: inline-block;
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.conn-badge[data-status="online"] {
+  color: var(--good);
+}
+
+.conn-badge[data-status="offline"] {
+  color: var(--bad);
+}
+
+.conn-badge[data-status="connecting"] {
+  color: var(--warn);
+}
+
+.conn-badge__label {
+  color: var(--text-muted);
+  text-transform: none;
+}
+
 @media (max-width: 760px) {
+  .titlebar {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    height: auto;
+    gap: calc(8px * var(--ui-scale));
+  }
+
   .titlebar-left,
   .titlebar-brand,
   .titlebar-utility {
