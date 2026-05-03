@@ -65,7 +65,7 @@ import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
 
 const log = Log.create({ service: "task-tools" })
 
-async function composeLatestDeliveryFeedbackForBuild(input: {
+export async function composeLatestDeliveryFeedbackForBuild(input: {
   taskID: string
   goalID?: string
 }): Promise<string | undefined> {
