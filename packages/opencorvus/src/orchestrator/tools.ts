@@ -144,23 +144,31 @@ async function loadLatestRenderedRetryAttachment(input: {
   enabled: boolean
 }): Promise<import("@/build/agent").BuildAgent.BuildContext["retryAttachments"]> {
   if (!input.enabled) return undefined
-  const fsMod = await import("node:fs/promises")
-  const pathMod = await import("node:path")
-  const renderedPath = pathMod.join(
-    Instance.directory,
-    ".opencorvus",
-    "delivery-hard-gate",
-    input.taskID,
-    "rendered.png",
-  )
-  const stat = await fsMod.stat(renderedPath).catch(() => undefined)
-  if (!stat?.isFile()) return undefined
-  const bytes = await fsMod.readFile(renderedPath)
-  return [{
-    url: `data:image/png;base64,${bytes.toString("base64")}`,
-    mime: "image/png",
-    filename: "previous-attempt-rendered.png",
-  }]
+  try {
+    const fsMod = await import("node:fs/promises")
+    const pathMod = await import("node:path")
+    const renderedPath = pathMod.join(
+      Instance.directory,
+      ".opencorvus",
+      "delivery-hard-gate",
+      input.taskID,
+      "rendered.png",
+    )
+    const stat = await fsMod.stat(renderedPath).catch(() => undefined)
+    if (!stat?.isFile()) return undefined
+    const bytes = await fsMod.readFile(renderedPath)
+    return [{
+      url: `data:image/png;base64,${bytes.toString("base64")}`,
+      mime: "image/png",
+      filename: "previous-attempt-rendered.png",
+    }]
+  } catch (err) {
+    log.warn("build retry: failed to load previous rendered screenshot attachment", {
+      taskID: input.taskID,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return undefined
+  }
 }
 
 /**
