@@ -275,6 +275,12 @@ Progress log:
   panel empty-state design language now lives in canonical component rules,
   reducing guard ceilings to `!important <= 279`, `body[data-theme] <= 184`,
   and theme layout/chrome overrides <= 175.
+- 2026-05-03: Folded titlebar shell layout/chrome out of light/dark theme
+  selectors and mobile/compact resets. Gap, margin, padding, border geometry,
+  radius, and shadow now live in the canonical titlebar rule; theme selectors
+  only keep titlebar palette/backdrop differences. Guard ceilings drop to
+  `!important <= 275`, `body[data-theme] <= 182`, and theme layout/chrome
+  overrides <= 159.
 
 Trigger: user feedback (2026-05-03):
 
