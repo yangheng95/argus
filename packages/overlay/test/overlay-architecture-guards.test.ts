@@ -461,6 +461,47 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("config-status-box and about panel are owned by surfaces/settings.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    // .config-status-box appears in a cross-surface multi-class
+    // typography rule that shares font-size with .field-label /
+    // .change-subline / .knowledge-item-meta — only assert it
+    // lives in the surface, not that it's absent from styles.
+    for (const className of [
+      "about-body",
+      "about-section",
+      "about-section-title",
+      "about-author-card",
+      "about-author-avatar",
+      "about-author-info",
+      "about-author-name",
+      "about-author-link",
+      "about-info-grid",
+      "about-info-label",
+      "about-info-value",
+      "about-links",
+      "about-link",
+      "about-shortcut-grid",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+    expect(settingsSurface).toMatch(/(^|\n)\.config-status-box\s*\{/)
+    expect(() => soloRuleBody(styles, ".config-status-box")).toThrow()
+
+    for (const status of ["active", "warn", "error"]) {
+      expect(settingsSurface).toMatch(
+        new RegExp(`\\.config-status-box\\[data-status="${status}"\\]\\s*\\{`),
+      )
+    }
+    expect(settingsSurface).toMatch(/\.about-author-link:hover\s*\{/)
+    expect(settingsSurface).toMatch(/\.about-link:hover\s*\{/)
+    expect(settingsSurface).toMatch(/\.about-shortcut-grid kbd\s*\{/)
+    expect(settingsSurface).toMatch(/\.about-shortcut-grid span\s*\{/)
+  })
+
   test("settings section + subsection collapsibles are owned by surfaces/settings.css", () => {
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
@@ -1558,27 +1599,9 @@ describe("overlay architecture guards", () => {
   })
 
   test("settings config containers do not rely on theme or local important chrome resets", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const settingsSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css")))
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1] ?? ""
-      const body = match[2] ?? ""
-      const hasConfigContainer = /(?:^|\s|:is\([^)]*)\.config-(?:section|subsection)(?:\b|[:.[#])/.test(
-        selector,
-      )
-      if (!hasConfigContainer) continue
-
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
-      const usesChromeImportant =
-        /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(body)
-
-      expect(isThemeSelector).toBe(false)
-      expect(usesChromeImportant).toBe(false)
-    }
-
-    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
     for (const source of [styles, settingsSurface]) {
       for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         const selector = match[1] ?? ""
