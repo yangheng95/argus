@@ -565,6 +565,31 @@ Progress log:
   the same media block stays in `styles.css` until the brand-guide
   family is extracted (its focus ring still uses an rgba literal).
   New guard pins seven classes to the surface file.
+- 2026-05-03: Retired the remaining legacy theme selectors for migrated
+  titlebar chrome. `.titlebar`, `.titlebar-menubar-trigger`,
+  `.titlebar-status-chip`, `.titlebar-setup-cta`,
+  `.titlebar-status-icon`, and `.titlebar-task-status` now resolve
+  through `styles/surfaces/titlebar.css` plus palette tokens only; no
+  `body[data-theme]` block may target them. The `brand-guide` family is
+  deliberately left behind until its own surface extraction because it
+  still has local popover/focus chrome in God CSS. Guard ceilings drop to
+  `!important <= 160`, `body[data-theme] <= 85`, and theme layout/chrome
+  overrides `<= 57`.
+- 2026-05-03: Extracted the `.brand-guide*` family (anchor, popover
+  card with `::before` / `::after` arrow geometry, kicker, title,
+  copy, steps, step-index, step-copy) plus its `@media (max-width:
+  760px)` width tweak from `styles.css` into
+  `styles/surfaces/titlebar.css`. The two raw `rgba(91, 141, 239, …)`
+  literals that previously kept this family in `styles.css` (focus ring
+  + step-index border) now resolve through `color-mix(in srgb,
+  var(--accent) NN%, transparent)`, so the popover follows the per-theme
+  accent palette instead of a hardcoded blue. The pill radius routes
+  through the existing `--oc-radius-pill` token. `.brand-guide-title`
+  and `.brand-guide-step-index` font-weight dropped from 700 to 600 in
+  the move (the popover already has the kicker for emphasis), so the
+  bold-weight density guard tightens to `<= 42`. New extraction guard
+  pins ten brand-guide classes plus the two pseudo-elements to the
+  surface file.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
@@ -595,11 +620,11 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **13,436 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles.css`      | **13,176 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
-| Total `!important` in stylesheets      | **163** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **94**                                                                                  |
-| Theme layout/chrome overrides          | **62** current guard baseline                                                           |
+| Total `!important` in stylesheets      | **160** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **85**                                                                                  |
+| Theme layout/chrome overrides          | **57** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
 | Total `.tsx` LOC under `packages/overlay/src` | **15,108**                                                                      |

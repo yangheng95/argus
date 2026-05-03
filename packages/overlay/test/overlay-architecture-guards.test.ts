@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(163)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(94)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(160)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(85)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(62)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(57)
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
@@ -214,6 +214,31 @@ describe("overlay architecture guards", () => {
     expect(titlebarSurface).toMatch(/\.titlebar-setup-cta\s*\{/)
     expect(titlebarSurface).toMatch(/\.titlebar-status-label\s*\{/)
     expect(titlebarSurface).toMatch(/\.titlebar-status-value\s*\{/)
+  })
+
+  test("brand-guide family is owned by surfaces/titlebar.css", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
+
+    for (const className of [
+      "brand-guide",
+      "brand-guide-card",
+      "brand-guide-kicker",
+      "brand-guide-section",
+      "brand-guide-title",
+      "brand-guide-copy",
+      "brand-guide-steps",
+      "brand-guide-step",
+      "brand-guide-step-index",
+      "brand-guide-step-copy",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(titlebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(titlebarSurface).toMatch(/\.brand-guide-card::before\s*\{/)
+    expect(titlebarSurface).toMatch(/\.brand-guide-card::after\s*\{/)
+    expect(titlebarSurface).toMatch(/var\(--oc-radius-pill\)/)
   })
 
   test("titlebar layout containers and connection badge are owned by surfaces/titlebar.css", () => {
@@ -250,6 +275,32 @@ describe("overlay architecture guards", () => {
     }
 
     expect(titlebarSurface).toMatch(/\.titlebar::after\s*\{/)
+  })
+
+  test("migrated titlebar chrome is not controlled by legacy theme selectors", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const migratedTitlebarClasses = [
+      "titlebar",
+      "titlebar-menubar-trigger",
+      "titlebar-status-chip",
+      "titlebar-setup-cta",
+      "titlebar-status-icon",
+      "titlebar-task-status",
+    ]
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector) continue
+
+      for (const className of migratedTitlebarClasses) {
+        expect(selector).not.toMatch(
+          new RegExp(`\\.${className}(?=$|[\\s:{.#\\[,>+~])`),
+        )
+      }
+    }
   })
 
   test("titlebar menubar family is owned by surfaces/titlebar.css", () => {
@@ -290,7 +341,7 @@ describe("overlay architecture guards", () => {
     ]
     const text = sources.join("\n")
     const boldDecls = count(/font-weight\s*:\s*(?:700|720|750|760|780|800|900|bold)\b/g, text)
-    expect(boldDecls).toBeLessThanOrEqual(44)
+    expect(boldDecls).toBeLessThanOrEqual(42)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
