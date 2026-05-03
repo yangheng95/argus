@@ -1143,6 +1143,32 @@ Progress log:
   classes + 6 type/status variants + the `> summary` child rule
   + the scrollbar pseudo. Ceilings unchanged.
 
+- 2026-05-03: Moved the IntegrityCard panel (`.integrity__*`)
+  family into surfaces/inspector.css: `.integrity` shell +
+  `__header` + `__attempts` + `__summary` + `__section` +
+  `__section-title` + `__list` + `__dimension` (with three
+  `[data-verdict="pass|concerns|needs_correction"]` left-rail
+  tone variants) + `__dimension-name` + `__dimension-counts` +
+  shared `.integrity__issue, __correction, __missing` chrome
+  declaration + `__issue` flex layout + `__issue-desc` + `__tag`
+  (with three `[data-action="modify|split|remove"]` color
+  variants) + the long issue-type taxonomy multi-class rules
+  (5 hard violations → `--bad` rail, 10 soft concerns → `--warn`
+  rail) + `__correction-head` + `__correction-reason` +
+  `__goal-id` + `__diff` (+ `dt` / `dd` child rules) +
+  `__missing-title` / `-objective` / `-reason`. Token
+  conversions: 2× `2px` left-rail wrapped in `calc(2px * --ui-
+  scale)`; 4× `4px` border-radius and `1px 6px` goal-id padding
+  and `2px var(--ui-gap-sm)` diff gap and 2× `margin-top: 2px`
+  all wrapped in `calc(N * --ui-scale)`; `999px` `__tag` pill →
+  `var(--oc-radius-pill)`. The shared `.verdict-pill` primitive
+  (used by IntegrityCard + Board) stays in styles.css until its
+  raw-rgba/hex chrome gets a palette-token sweep — extracting it
+  alone would split a cross-surface primitive between two files.
+  New ownership guard asserts 19 base classes + 3 dimension
+  verdict variants + 3 tag action variants + `dt` / `dd` child
+  rules. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
