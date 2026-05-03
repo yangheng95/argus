@@ -34,7 +34,13 @@ describe("delivery arbiter", () => {
     expect(verdict.summary).toContain("1 review item(s)")
   })
 
-  test("manifest failure requires a rejected LLM verdict instead of synthesized attribution", () => {
+  test("manifest gate failure does not synthesize a rejection when LLM accepted", () => {
+    // Per the "只看功能完成度和e2e测试结果，其余全部作为警告" rule, the
+    // arbiter never overrides an LLM-accepted verdict with a host-driven
+    // rejection. The manifest evidence is appended as advisory warnings on
+    // the verdict so the orchestrator and downstream UI can surface it,
+    // but the agent's accept stands. Without an LLM verdict the arbiter
+    // returns undefined (caller is expected to wait for the agent).
     const accepted: DeliveryVerdictType = {
       verdict: "accepted",
       summary: "accepted by reviewer",
@@ -48,11 +54,17 @@ describe("delivery arbiter", () => {
       manifest: manifestWithFailedBuildCheck(),
       goalIds: ["gol_auth", "gol_ui"],
     })).toBeUndefined()
-    expect(arbitrateDeliveryVerdict({
+
+    const decision = arbitrateDeliveryVerdict({
       manifest: manifestWithFailedBuildCheck(),
       goalIds: ["gol_auth", "gol_ui"],
       llmVerdict: accepted,
-    })).toBeUndefined()
+    })
+
+    expect(decision?.source).toBe("llm")
+    expect(decision?.verdict.verdict).toBe("accepted")
+    expect(decision?.verdict.summary).toContain("Advisory host gates:")
+    expect(decision?.verdict.deferred_checks.some((item) => item.name === "check:build")).toBe(true)
   })
 
   test("preserves delivery agent goal attribution when manifest gate fails", () => {
@@ -77,13 +89,13 @@ describe("delivery arbiter", () => {
       llmVerdict: rejected,
     })
 
-    expect(decision?.source).toBe("manifest")
+    expect(decision?.source).toBe("llm")
     expect(decision?.verdict.verdict).toBe("rejected")
     if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
     expect(affectedGoalIDs(decision.verdict)).toEqual(["gol_ui"])
     expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
     expect(decision.verdict.deferred_checks.some((item) => item.name === "check:build")).toBe(true)
-    expect(decision.verdict.summary).toContain("Host gate:")
+    expect(decision.verdict.summary).toContain("Advisory host gates:")
   })
 
   test("keeps task-scope agent rejection task-scoped when manifest gate fails", () => {
@@ -107,19 +119,28 @@ describe("delivery arbiter", () => {
       llmVerdict: rejected,
     })
 
-    expect(decision?.source).toBe("manifest")
+    expect(decision?.source).toBe("llm")
     expect(decision?.verdict.verdict).toBe("rejected")
     if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
     expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
     expect(affectedGoalIDs(decision.verdict)).toEqual([])
   })
 
-  test("manifest failure formatting reports every failure family with functional blockers first", () => {
+  test("manifest failure formatting reports primary blockers before advisory items", () => {
+    // Primary = check + coverage (功能完成度 + e2e). Auxiliary = runtime + review.
     const formatted = formatDeliveryManifestFailureDetails(manifestWithMixedFunctionalAndAuxiliaryFailures())
-    expect(formatted[0]).toContain("[coverage] goal:gol_ui")
-    expect(formatted.some((item) => item.includes("[runtime] runtime:web:."))).toBe(true)
-    expect(formatted.some((item) => item.includes("[review] specialist:frontend"))).toBe(true)
-    expect(formatted.at(-1)).toContain("[check] check:build")
+    const checkIdx = formatted.findIndex((item) => item.includes("[check] check:build"))
+    const coverageIdx = formatted.findIndex((item) => item.includes("[coverage] goal:gol_ui"))
+    const runtimeIdx = formatted.findIndex((item) => item.includes("[runtime] runtime:web:."))
+    const reviewIdx = formatted.findIndex((item) => item.includes("[review] specialist:frontend"))
+    expect(checkIdx).toBeGreaterThanOrEqual(0)
+    expect(coverageIdx).toBeGreaterThanOrEqual(0)
+    expect(runtimeIdx).toBeGreaterThanOrEqual(0)
+    expect(reviewIdx).toBeGreaterThanOrEqual(0)
+    expect(checkIdx).toBeLessThan(runtimeIdx)
+    expect(checkIdx).toBeLessThan(reviewIdx)
+    expect(coverageIdx).toBeLessThan(runtimeIdx)
+    expect(coverageIdx).toBeLessThan(reviewIdx)
   })
 
   test("keeps delivery agent rejection text when manifest gate also fails", () => {
@@ -143,11 +164,11 @@ describe("delivery arbiter", () => {
       llmVerdict: rejected,
     })
 
-    expect(decision?.source).toBe("manifest")
+    expect(decision?.source).toBe("llm")
     expect(decision?.verdict.verdict).toBe("rejected")
     if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
     expect(decision.verdict.summary).toContain("Agent inspected the failure")
-    expect(decision.verdict.summary).toContain("Host gate:")
+    expect(decision.verdict.summary).toContain("Advisory host gates:")
     expect(decision.verdict.rejection_details.some((item) => item.error.includes("./missing"))).toBe(true)
     expect(decision.verdict.rejection_details.some((item) => item.error.includes("tsc exited"))).toBe(false)
     expect(decision.verdict.deferred_checks.some((item) => item.evidence.includes("tsc exited"))).toBe(true)
@@ -202,7 +223,7 @@ describe("delivery arbiter", () => {
     ])
   })
 
-  test("runtime evidence failure requires rejected LLM verdict and preserves runtime audit evidence", () => {
+  test("runtime evidence failure is advisory and never overrides an LLM accept", () => {
     const rejected: DeliveryVerdictType = {
       verdict: "rejected",
       summary: "Agent traced the empty DOM to the UI goal hydration code.",
@@ -241,12 +262,20 @@ describe("delivery arbiter", () => {
       },
     }
 
-    expect(arbitrateDeliveryVerdict({
+    // Runtime probe failures are advisory: the LLM accept stands, but the
+    // failure shows up in deferred_checks + tool_call_evidence so callers
+    // can surface it as a warning.
+    const acceptedDecision = arbitrateDeliveryVerdict({
       manifest: baseManifest(),
       goalIds: ["gol_ui"],
       llmVerdict: accepted,
       runtimeReport,
-    })).toBeUndefined()
+    })
+    expect(acceptedDecision?.source).toBe("llm")
+    expect(acceptedDecision?.verdict.verdict).toBe("accepted")
+    expect(acceptedDecision?.verdict.summary).toContain("Advisory host gates:")
+    expect(acceptedDecision?.verdict.deferred_checks.some((item) => item.name === "runtime_evidence")).toBe(true)
+    expect(acceptedDecision?.verdict.tool_call_evidence.some((item) => item.tool === "runtime_evidence")).toBe(true)
 
     const decision = arbitrateDeliveryVerdict({
       manifest: baseManifest(),
@@ -255,7 +284,7 @@ describe("delivery arbiter", () => {
       runtimeReport,
     })
 
-    expect(decision?.source).toBe("runtime_evidence")
+    expect(decision?.source).toBe("llm")
     expect(decision?.verdict.verdict).toBe("rejected")
     if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
     expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
@@ -263,7 +292,7 @@ describe("delivery arbiter", () => {
     expect(decision.verdict.tool_call_evidence.some((item) => item.tool === "runtime_evidence")).toBe(true)
   })
 
-  test("visual hard-gate failures require rejected LLM verdict and preserve visual audit evidence", () => {
+  test("visual metric failure is advisory and never overrides an LLM accept", () => {
     const rejected: DeliveryVerdictType = {
       verdict: "rejected",
       summary: "Agent attributed the visual mismatch to the UI shell layout.",
@@ -301,12 +330,18 @@ describe("delivery arbiter", () => {
       capturedAt: 1,
     }
 
-    expect(arbitrateDeliveryVerdict({
+    // SSIM-based visual diff is advisory: the LLM accept stands, but the
+    // metric is appended as deferred_checks evidence so callers can warn.
+    const acceptedDecision = arbitrateDeliveryVerdict({
       manifest: baseManifest(),
       goalIds: ["gol_ui"],
       llmVerdict: accepted,
       visualMetric,
-    })).toBeUndefined()
+    })
+    expect(acceptedDecision?.source).toBe("llm")
+    expect(acceptedDecision?.verdict.verdict).toBe("accepted")
+    expect(acceptedDecision?.verdict.summary).toContain("Advisory host gates:")
+    expect(acceptedDecision?.verdict.deferred_checks.some((item) => item.name === "visual_metric")).toBe(true)
 
     const decision = arbitrateDeliveryVerdict({
       manifest: baseManifest(),
@@ -315,7 +350,7 @@ describe("delivery arbiter", () => {
       visualMetric,
     })
 
-    expect(decision?.source).toBe("visual_hard_gate")
+    expect(decision?.source).toBe("llm")
     expect(decision?.verdict.verdict).toBe("rejected")
     if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
     expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
@@ -350,22 +385,22 @@ function manifestWithMixedFunctionalAndAuxiliaryFailures(): DeliveryEvidenceMani
     }],
     functionalAssessment: {
       status: "incomplete",
-      primaryFailureIds: ["goal:gol_ui", "runtime:web:.", "specialist:frontend"],
-      auxiliaryFailureIds: ["check:build"],
-      summary: "Functional completion failed with 3 primary blocker(s) and 1 auxiliary blocker(s).",
+      primaryFailureIds: ["check:build", "goal:gol_ui"],
+      auxiliaryFailureIds: ["runtime:web:.", "specialist:frontend"],
+      summary: "Functional completion failed with 2 primary blocker(s) and 2 auxiliary advisory issue(s).",
     },
     finalGate: {
       status: "failed",
-      summary: "Functional completion failed with 3 primary blocker(s) and 1 auxiliary blocker(s).",
+      summary: "Functional completion failed with 2 primary blocker(s) and 2 auxiliary advisory issue(s).",
       failedCheckIds: ["check:build"],
       failedCoverageIds: ["goal:gol_ui"],
       failedRuntimeFlowIds: ["runtime:web:."],
       failedReviewIds: ["specialist:frontend"],
       functionalAssessment: {
         status: "incomplete",
-        primaryFailureIds: ["goal:gol_ui", "runtime:web:.", "specialist:frontend"],
-        auxiliaryFailureIds: ["check:build"],
-        summary: "Functional completion failed with 3 primary blocker(s) and 1 auxiliary blocker(s).",
+        primaryFailureIds: ["check:build", "goal:gol_ui"],
+        auxiliaryFailureIds: ["runtime:web:.", "specialist:frontend"],
+        summary: "Functional completion failed with 2 primary blocker(s) and 2 auxiliary advisory issue(s).",
       },
     },
   }
