@@ -173,7 +173,7 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(147)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(80)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(78)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -241,6 +241,25 @@ describe("overlay architecture guards", () => {
 
       expect(selector).not.toMatch(/\.chat-icon-col(?=$|[\s:{.#\[,>+~])/)
     }
+  })
+
+  test("composer chat-send and chat-interrupt are owned by surfaces/composer.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+
+    for (const className of ["chat-send", "chat-interrupt", "chat-send-icon", "chat-send-label"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(styles).not.toMatch(/(^|\n)\.chat-send:hover\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)\.chat-send:disabled\s*\{/)
+    expect(styles).not.toMatch(/body\[data-theme="light"\] \.chat-send\b/)
+    expect(styles).not.toMatch(/body:is\([^)]*\) \.chat-send\b/)
+    expect(composerSurface).toMatch(/\.chat-send:hover\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-send:disabled\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-send:focus-visible\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-interrupt:hover\s*\{/)
   })
 
   test("composer chat-textarea family is owned by surfaces/composer.css", () => {
