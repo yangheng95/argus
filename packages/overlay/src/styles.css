@@ -7563,24 +7563,31 @@ select.field-input option {
 }
 
 .agent-workflow-card {
+  --workflow-tone: var(--accent);
   position: relative;
   z-index: calc(10 + var(--stack-index, 0));
   display: flex;
   width: calc(100% - var(--stack-offset, 0));
-  min-height: calc(72px * var(--ui-scale));
+  min-height: calc(94px * var(--ui-scale));
   transform: translate(var(--stack-offset, 0), var(--stack-offset, 0));
   margin-top: calc(var(--stack-index, 0) * -54px * var(--ui-scale));
   flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  border-left: calc(3px * var(--ui-scale)) solid var(--accent);
-  border-radius: calc(8px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  gap: calc(7px * var(--ui-scale));
+  padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--workflow-tone) 28%, var(--border));
+  border-radius: calc(10px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface) 88%, var(--workflow-tone) 4%);
   color: var(--text-base);
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 calc(6px * var(--ui-scale)) calc(18px * var(--ui-scale)) rgba(0, 0, 0, 0.12);
+  box-shadow:
+    calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 16%, transparent),
+    0 calc(6px * var(--ui-scale)) calc(16px * var(--ui-scale)) rgba(0, 0, 0, 0.1);
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease;
 }
 
 .agent-workflow-card:first-child {
@@ -7588,25 +7595,29 @@ select.field-input option {
 }
 
 .agent-workflow-card[data-status="running"] {
-  border-left-color: var(--accent);
+  border-style: dashed;
 }
 
 .agent-workflow-card[data-status="completed"] {
-  border-left-color: var(--good);
+  --workflow-tone: var(--good);
 }
 
 .agent-workflow-card[data-status="error"] {
-  border-left-color: var(--bad);
+  --workflow-tone: var(--bad);
 }
 
 .agent-workflow-card[data-status="idle"] {
-  border-left-color: var(--warn);
+  --workflow-tone: var(--warn);
 }
 
 .agent-workflow-card:hover,
 .agent-workflow-card:focus-visible {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-color: color-mix(in srgb, var(--workflow-tone) 58%, var(--border));
+  box-shadow:
+    calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 18%, transparent),
+    0 calc(8px * var(--ui-scale)) calc(18px * var(--ui-scale)) rgba(0, 0, 0, 0.12);
   outline: none;
+  transform: translate(var(--stack-offset, 0), calc(var(--stack-offset, 0) - 1px));
 }
 
 .agent-workflow-card-head,
@@ -14890,16 +14901,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   box-shadow: none !important;
 }
 
-body[data-theme="light"] .agent-workflow-card,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card {
-  min-height: 0 !important;
-  gap: calc(3px * var(--ui-scale)) !important;
-  padding: calc(5px * var(--ui-scale)) calc(6px * var(--ui-scale)) !important;
-  border: 0 !important;
-  border-radius: calc(4px * var(--ui-scale)) !important;
-  box-shadow: none !important;
-}
-
 body[data-theme="light"]
   :is(
     .section,
@@ -15156,59 +15157,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh
 .agent-workflow-beam-flow {
   stroke: color-mix(in srgb, var(--accent) 72%, var(--good));
   stroke-dasharray: 5 9;
-}
-
-body[data-theme="light"] .agent-workflow-card,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card {
-  --workflow-tone: var(--accent);
-  position: relative;
-  min-height: calc(94px * var(--ui-scale)) !important;
-  width: calc(100% - var(--stack-offset, 0));
-  gap: calc(7px * var(--ui-scale)) !important;
-  padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale)) !important;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--workflow-tone) 28%, var(--border)) !important;
-  border-radius: calc(10px * var(--ui-scale)) !important;
-  background: color-mix(in srgb, var(--surface) 88%, var(--workflow-tone) 4%);
-  box-shadow:
-    calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 16%, transparent),
-    0 calc(6px * var(--ui-scale)) calc(16px * var(--ui-scale)) rgba(0, 0, 0, 0.1) !important;
-  transform: translate(var(--stack-offset, 0), var(--stack-offset, 0));
-  transition:
-    transform 140ms ease,
-    border-color 140ms ease,
-    background-color 140ms ease;
-}
-
-body[data-theme="light"] .agent-workflow-card[data-status="completed"],
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card[data-status="completed"] {
-  --workflow-tone: var(--good);
-}
-
-body[data-theme="light"] .agent-workflow-card[data-status="error"],
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card[data-status="error"] {
-  --workflow-tone: var(--bad);
-}
-
-body[data-theme="light"] .agent-workflow-card[data-status="idle"],
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card[data-status="idle"] {
-  --workflow-tone: var(--warn);
-}
-
-body[data-theme="light"] .agent-workflow-card[data-status="running"],
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card[data-status="running"] {
-  border-style: dashed !important;
-}
-
-body[data-theme="light"] .agent-workflow-card:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card:hover,
-body[data-theme="light"] .agent-workflow-card:focus-visible,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card:focus-visible {
-  border-color: color-mix(in srgb, var(--workflow-tone) 58%, var(--border)) !important;
-  box-shadow:
-    calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 18%, transparent),
-    0 calc(8px * var(--ui-scale)) calc(18px * var(--ui-scale)) rgba(0, 0, 0, 0.12) !important;
-  transform: translate(var(--stack-offset, 0), calc(var(--stack-offset, 0) - 1px));
 }
 
 .agent-workflow-agent-wrap {
