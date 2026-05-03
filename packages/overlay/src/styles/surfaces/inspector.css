@@ -2062,3 +2062,208 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.criteria-panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+}
+.criteria-summary {
+  display: flex;
+  gap: calc(12px * var(--ui-scale));
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+  margin-bottom: calc(4px * var(--ui-scale));
+}
+.criteria-summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+}
+.criteria-summary-item--passed {
+  color: var(--good);
+}
+.criteria-summary-item--failed {
+  color: var(--bad);
+}
+.criteria-summary-item--skipped {
+  color: var(--text-muted);
+}
+.criteria-family {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.criteria-family-head {
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+.criteria-item .criteria-name {
+  font-family: var(--mono);
+  font-size: var(--ui-font-small);
+  color: var(--text);
+}
+.criteria-item--failed .criteria-name {
+  color: var(--bad);
+}
+.criteria-item--skipped .criteria-name {
+  color: var(--text-muted);
+}
+.criteria-evidence {
+  grid-column: 2;
+  font-family: var(--mono);
+  font-size: calc(var(--ui-font-small) * 0.92);
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: calc(2px * var(--ui-scale));
+}
+
+.criteria-list {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--ui-scale));
+}
+
+/* The legacy .criteria-item rule (4-col grid card chip used inside
+ * .criteria-list) and the older 2-col-grid .criteria-panel list-row
+ * rule both lived in styles.css; the older rule's only surviving
+ * contribution after the newer rule's `border:` shorthand stomp was
+ * `list-style: none`, so the merged canonical adds that here. The
+ * .criteria-item:last-child border-bottom override is preserved as a
+ * state rule because border-bottom: none defeats the chip's all-side
+ * `border:1px solid transparent` baseline only on the trailing item. */
+.criteria-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid transparent;
+  border-radius: calc(6px * var(--ui-scale));
+  list-style: none;
+  cursor: pointer;
+  transition:
+    border-color 120ms,
+    background 120ms,
+    box-shadow 120ms;
+}
+.criteria-item:last-child {
+  border-bottom: none;
+}
+.criteria-item:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.criteria-item input[type="checkbox"] {
+  display: none;
+}
+
+.check-mark {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  border-radius: calc(3px * var(--ui-scale));
+  border: calc(1.2px * var(--ui-scale)) solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 120ms;
+  background: transparent;
+}
+.criteria-item input:checked + .check-mark {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.criteria-item input:checked + .check-mark::after {
+  content: "";
+  width: calc(6px * var(--ui-scale));
+  height: calc(4px * var(--ui-scale));
+  border-left: calc(1.2px * var(--ui-scale)) solid var(--text-on-accent);
+  border-bottom: calc(1.2px * var(--ui-scale)) solid var(--text-on-accent);
+  transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
+}
+
+.criteria-copy {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.criteria-name {
+  font-size: var(--ui-font-control);
+  font-weight: 500;
+  color: var(--text-strong);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.criteria-desc {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.criteria-status {
+  width: calc(7px * var(--ui-scale));
+  height: calc(7px * var(--ui-scale));
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.criteria-result {
+  min-width: calc(40px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  text-align: right;
+}
+.criteria-status[data-result="pending"] {
+  background: var(--subtle-5);
+}
+.criteria-status[data-result="passed"] {
+  background: var(--good);
+  box-shadow: 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--good) 40%, transparent);
+}
+.criteria-status[data-result="failed"] {
+  background: var(--bad);
+  box-shadow: 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--bad) 40%, transparent);
+}
+.criteria-status[data-result="skipped"] {
+  background: var(--text-muted);
+}
+.criteria-status[data-result="off"] {
+  background: transparent;
+  border: var(--oc-border-width) solid var(--subtle-5);
+  box-shadow: none;
+}
+.criteria-status[data-result="passed"] + .criteria-result {
+  color: var(--good);
+}
+.criteria-status[data-result="failed"] + .criteria-result {
+  color: var(--bad);
+}
+.criteria-status[data-result="skipped"] + .criteria-result {
+  color: var(--text-soft);
+}
+.criteria-status[data-result="off"] + .criteria-result {
+  color: var(--text-muted);
+}
+.criteria-status:not([data-result]) {
+  display: none;
+}
