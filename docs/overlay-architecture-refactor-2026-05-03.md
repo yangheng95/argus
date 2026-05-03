@@ -198,6 +198,9 @@ Progress log:
   `.config-section-head`, and `.config-subsection-head` header backgrounds
   into canonical `--oc-header-bg` chrome, retired their theme-scoped
   background/border reset selectors, and lowered the legacy debt guard.
+- 2026-05-03: Folded `.criteria-group` / `.criteria-group-list` compact
+  layout and no-border chrome into canonical CSS, then removed all remaining
+  criteria group selectors from legacy theme reset blocks.
 
 Trigger: user feedback (2026-05-03):
 
@@ -223,9 +226,9 @@ one theme contract, and no runtime God CSS path left behind.
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `packages/overlay/src/styles.css`      | **15,212 lines / 2,070 top-level rules / 490 nested rules**                             |
 | `packages/overlay/src/styles/card.css` | 2,022 lines / 336 top-level rules                                                       |
-| Total `!important` in stylesheets      | **349** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **236**                                                                                 |
-| Theme layout/chrome overrides          | **253** current guard baseline                                                          |
+| Total `!important` in stylesheets      | **342** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **232**                                                                                 |
+| Theme layout/chrome overrides          | **248** current guard baseline                                                          |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | TaskList 696 / LogViewer 579 / CardHeader 544 / MemoryPanel 444 / GoalWorkflowGroup 206 |
 | Total `.tsx` LOC across overlay        | 28,700                                                                                  |
