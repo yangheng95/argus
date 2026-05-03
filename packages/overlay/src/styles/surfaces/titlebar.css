@@ -29,6 +29,212 @@
   display: none;
 }
 
+.titlebar-menubar {
+  display: flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-menubar-slot {
+  position: relative;
+  display: flex;
+}
+
+/* iter43: the menubar reads as a primary navigation surface with weight
+   600 and ui-font-body sizing; resting color stays --text-soft, hover /
+   active lifts to --text-strong. */
+.titlebar-menubar-trigger {
+  height: var(--ui-titlebar-btn-height);
+  padding: 0 calc(9px * var(--ui-scale));
+  border: var(--oc-border-width) solid transparent;
+  border-radius: calc(4px * var(--ui-scale));
+  background: transparent;
+  color: var(--text-soft);
+  font-size: var(--ui-font-body);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.titlebar-menubar-trigger:hover,
+.titlebar-menubar-trigger:focus-visible,
+.titlebar-menubar-trigger[data-active="true"] {
+  color: var(--text-strong);
+  background: var(--subtle-3);
+  border-color: var(--border);
+  outline: none;
+}
+
+.titlebar-menubar-panel {
+  position: absolute;
+  top: calc(100% + calc(7px * var(--ui-scale)));
+  left: 0;
+  z-index: 10050;
+  width: min(calc(340px * var(--ui-scale)), calc(100vw - calc(24px * var(--ui-scale))));
+  box-sizing: border-box;
+  max-height: min(calc(620px * var(--ui-scale)), calc(100vh - calc(88px * var(--ui-scale))));
+  overflow: auto;
+  display: grid;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(7px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: calc(7px * var(--ui-scale));
+  background: var(--menu-panel-bg);
+  box-shadow: var(--shadow-lg);
+  -webkit-app-region: no-drag;
+}
+
+@media (max-width: calc(520px * var(--ui-scale))) {
+  .titlebar-menubar-panel {
+    position: fixed;
+    top: calc(var(--ui-titlebar-height) + calc(8px * var(--ui-scale)));
+    left: calc(12px * var(--ui-scale));
+    right: calc(12px * var(--ui-scale));
+    width: auto;
+    max-height: calc(100vh - var(--ui-titlebar-height) - calc(24px * var(--ui-scale)));
+  }
+}
+
+.titlebar-menubar-group {
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.titlebar-menubar-group + .titlebar-menubar-group {
+  padding-top: calc(6px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid var(--divider-soft);
+}
+
+/* group title (e.g. "Theme", "Locale") — plain subheader, no pill chrome. */
+.titlebar-menubar-group-title {
+  padding: calc(3px * var(--ui-scale)) calc(7px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+  font-weight: 600;
+}
+
+.titlebar-menubar-item,
+.titlebar-menubar-toggle,
+.titlebar-menubar-range {
+  width: 100%;
+  min-height: calc(32px * var(--ui-scale));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid transparent;
+  border-radius: calc(6px * var(--ui-scale));
+  background: transparent;
+  color: var(--text-soft);
+  text-align: left;
+}
+
+.titlebar-menubar-item:not(:disabled) {
+  cursor: pointer;
+}
+
+.titlebar-menubar-item:hover:not(:disabled),
+.titlebar-menubar-item:focus-visible,
+.titlebar-menubar-toggle:hover,
+.titlebar-menubar-range:hover {
+  background: var(--subtle-3);
+  border-color: var(--border);
+  color: var(--text-strong);
+  outline: none;
+}
+
+.titlebar-menubar-item:disabled {
+  opacity: 0.58;
+}
+
+.titlebar-menubar-item-title {
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  line-height: 1.2;
+}
+
+.titlebar-menubar-item-meta {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  line-height: 1.25;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.titlebar-menubar-note {
+  min-width: 0;
+  padding: calc(7px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: calc(6px * var(--ui-scale));
+  background: var(--subtle-2);
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar-menubar-toggle > span,
+.titlebar-menubar-range-copy {
+  min-width: 0;
+  display: grid;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.titlebar-menubar-toggle input[type="checkbox"] {
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.titlebar-menubar-range input[type="range"] {
+  width: calc(116px * var(--ui-scale));
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.titlebar-theme-options-menubar {
+  margin-left: 0;
+  padding: calc(4px * var(--ui-scale));
+}
+
+@media (max-width: 760px) {
+  .titlebar-menubar {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: calc(1px * var(--ui-scale));
+  }
+
+  .titlebar-menubar-trigger {
+    width: calc(24px * var(--ui-scale));
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .titlebar-menubar-trigger::after {
+    content: attr(data-compact);
+    font-size: var(--ui-font-control);
+  }
+
+  .titlebar-menubar-panel {
+    position: fixed;
+    top: calc(var(--ui-titlebar-height) + calc(13px * var(--ui-scale)));
+    left: calc(12px * var(--ui-scale));
+    right: calc(12px * var(--ui-scale));
+    width: auto;
+    max-height: calc(100vh - calc(var(--ui-titlebar-height) + calc(28px * var(--ui-scale))));
+  }
+}
+
 .titlebar-status-chip,
 .titlebar-setup-cta,
 .titlebar-status-icon {

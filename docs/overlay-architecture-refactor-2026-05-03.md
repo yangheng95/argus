@@ -497,6 +497,23 @@ Progress log:
   surface declares the migrated rules. **Why:** styles.css must end
   empty so it can leave the runtime import graph; this is the first
   full extraction rather than another internal fold.
+- 2026-05-03: Extracted the titlebar menubar family
+  (`.titlebar-menubar*`, trigger, panel, group, item, toggle/range,
+  note, compact media behavior, and theme shortcut) into
+  `styles/surfaces/titlebar.css`. The move replaces surface-local raw
+  borders with `--oc-border-width`, keeps scaled one-off geometry in
+  `calc(Npx * var(--ui-scale))`, and adds an ownership guard so
+  `styles.css` cannot regain these selectors. Bold-weight guard drops
+  to `<= 44` after the group heading is demoted from decorative 700 to
+  600.
+- 2026-05-03: Retired light and dark/vscode-dark `.chat-scroll`
+  conversation-stream chrome overrides. The stream background now
+  comes from canonical `.chat-scroll { background: var(--chat-canvas) }`
+  and card/message chrome stays in `card.css`; themes only change
+  `--chat-canvas`, `--surface`, `--accent`, and border palette tokens.
+  The chat-scroll guard now blocks theme-scoped background, border,
+  box-shadow, and padding. Guard ceilings drop to `!important <= 167`,
+  `body[data-theme] <= 96`, and theme layout/chrome `<= 64`.
 - 2026-05-03: Surface guard relaxed to recognize the project's
   canonical `calc(Npx * var(--ui-scale))` scaling pattern. The earlier
   blanket `Npx` ban forced a token wrapper around every scaled length,
@@ -511,6 +528,15 @@ Progress log:
   `styles.css` into `styles/surfaces/titlebar.css`. New guard asserts
   none of the four classes are owned by `styles.css` and all are
   declared in the surface file.
+- 2026-05-03: Extracted the entire `.titlebar-menubar*` family (bar
+  shell, slot, trigger, panel, group, group-title, item, toggle,
+  range, note, item-title, item-meta, range-copy, theme-options
+  shortcut) plus the matching `@media (max-width: 760px)` compact-mode
+  tweaks from `styles.css` into `styles/surfaces/titlebar.css`. The
+  group-title weight dropped from 700 to 600 in the move — uppercase
+  + ui-font-tiny already carry the kicker emphasis — so the bold-weight
+  density guard tightens to `<= 44`. New extraction guard pins
+  fourteen menubar classes to the surface file.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
@@ -541,11 +567,11 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **13,777 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles.css`      | **13,441 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
-| Total `!important` in stylesheets      | **179** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **103**                                                                                 |
-| Theme layout/chrome overrides          | **70** current guard baseline                                                           |
+| Total `!important` in stylesheets      | **167** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **96**                                                                                  |
+| Theme layout/chrome overrides          | **64** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
 | Total `.tsx` LOC under `packages/overlay/src` | **15,108**                                                                      |
