@@ -1125,6 +1125,24 @@ Progress log:
   modifier-child rules + `.gwg-check + .gwg-check` separator
   + absence of any `clamp(10px,` literal. Ceilings unchanged.
 
+- 2026-05-03: Moved the Requirements panel (RequirementsPanel.tsx)
+  family into surfaces/inspector.css: `.req-panel`, `.req-list`,
+  `.req-item` (+ `:last-child`), `.req-item-main`, `.req-index`,
+  `.req-item-meta`, the `.req-type` / `.req-status` shared pill
+  declaration plus 3 type variants (`--explicit/--inferred/
+  --system`) and 3 status variants (`--passed/--failed/--pending`),
+  `.req-desc`, `.req-priority`, the streaming sub-block (`.req-
+  streaming`, `-indicator`, `-label`, `-messages` + 2 webkit
+  scrollbar pseudos), and `.req-spec-detail` (+ `> summary`,
+  `.req-spec-content`). Token conversions: 1x `1px` border-bottom
+  → `var(--oc-border-width)`; 2x `999px` pills →
+  `var(--oc-radius-pill)`; 1x `2px` left-rail border-left wrapped
+  in `calc(2px * --ui-scale)`; raw `4px` scrollbar width / `2px`
+  thumb radius / `160px` / `200px` max-heights all wrapped in
+  `calc(N * --ui-scale)`. New ownership guard asserts 14 base
+  classes + 6 type/status variants + the `> summary` child rule
+  + the scrollbar pseudo. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and

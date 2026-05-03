@@ -429,6 +429,40 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
   })
 
+  test("requirements panel is owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "req-panel",
+      "req-list",
+      "req-item",
+      "req-item-main",
+      "req-index",
+      "req-item-meta",
+      "req-desc",
+      "req-priority",
+      "req-streaming",
+      "req-streaming-indicator",
+      "req-streaming-label",
+      "req-streaming-messages",
+      "req-spec-detail",
+      "req-spec-content",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const variant of ["explicit", "inferred", "system"]) {
+      expect(inspectorSurface).toMatch(new RegExp(`\\.req-type--${variant}\\s*\\{`))
+    }
+    for (const variant of ["passed", "failed", "pending"]) {
+      expect(inspectorSurface).toMatch(new RegExp(`\\.req-status--${variant}\\s*\\{`))
+    }
+    expect(inspectorSurface).toMatch(/\.req-spec-detail \> summary\s*\{/)
+    expect(inspectorSurface).toMatch(/\.req-streaming-messages::-webkit-scrollbar\s*\{/)
+  })
+
   test("gwg checks list is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
