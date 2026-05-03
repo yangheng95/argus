@@ -23,6 +23,6 @@
   --oc-header-bg: var(--oc-color-surface-strong);
   --oc-header-border: 0 solid transparent;
   --oc-header-shadow: none;
-  --oc-titlebar-menu-text: #000000;
+  --oc-titlebar-menu-text: var(--oc-color-text-strong);
   --oc-titlebar-gap: calc(2px * var(--ui-scale, 1));
 }
