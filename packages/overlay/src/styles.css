@@ -4026,8 +4026,9 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .criteria-group-head {
   display: flex;
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  padding: 0 calc(2px * var(--ui-scale));
+  min-height: calc(26px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
 }
 
 .criteria-group-icon {
@@ -7676,7 +7677,9 @@ select.field-input option {
 
 .delivery-panel-header {
   display: flex;
-  gap: 8px;
+  min-height: calc(26px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
   align-items: baseline;
 }
 
@@ -15043,9 +15046,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section, .gwg, .de
   border-radius: calc(5px * var(--ui-scale)) !important;
 }
 
-body[data-theme="light"] :is(.section-head, .gwg-header, .delivery-panel-header, .criteria-group-head),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(.section-head, .gwg-header, .delivery-panel-header, .criteria-group-head) {
+body[data-theme="light"] :is(.section-head, .gwg-header),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section-head, .gwg-header) {
   min-height: calc(26px * var(--ui-scale)) !important;
   gap: calc(4px * var(--ui-scale)) !important;
   padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale)) !important;
@@ -15170,8 +15172,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .criteria-group {
   border-radius: calc(4px * var(--ui-scale)) !important;
 }
 
-body[data-theme="light"] :is(.criteria-group-head, .criteria-group-list),
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.criteria-group-head, .criteria-group-list) {
+body[data-theme="light"] .criteria-group-list,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .criteria-group-list {
   gap: calc(4px * var(--ui-scale)) !important;
   padding: 0 !important;
 }
@@ -15220,9 +15222,7 @@ body[data-theme="light"]
     .gwg,
     .gwg-header,
     .delivery-panel,
-    .delivery-panel-header,
     .criteria-group,
-    .criteria-group-head,
     .eval-error,
     .extension-row,
     .channel-doc-card,
@@ -15246,9 +15246,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .gwg,
     .gwg-header,
     .delivery-panel,
-    .delivery-panel-header,
     .criteria-group,
-    .criteria-group-head,
     .eval-error,
     .extension-row,
     .channel-doc-card,

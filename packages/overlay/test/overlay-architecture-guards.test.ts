@@ -152,6 +152,12 @@ describe("overlay architecture guards", () => {
     expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(256)
   })
 
+  test("right-panel inner headers do not rely on theme reset chrome", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+
+    expect(styles).not.toMatch(/body[^{]*(?:delivery-panel-header|criteria-group-head)[^{]*\{/)
+  })
+
   test("new theme files only write root-scoped tokens", () => {
     const files = walkFiles(join(OVERLAY_ROOT, "src/styles/themes"), (path) => path.endsWith(".css"))
     for (const file of files) {
