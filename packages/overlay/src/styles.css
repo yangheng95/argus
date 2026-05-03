@@ -2384,7 +2384,7 @@ body[data-theme="light"] .section-badge {
    .eval-error) for future single-source passes. */
 .section {
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: calc(5px * var(--ui-scale));
   background: var(--surface-inset);
   overflow: hidden;
   flex-shrink: 0;
@@ -2588,7 +2588,7 @@ body[data-theme="light"] .section-badge {
 }
 
 .section-body {
-  padding: 0 calc(10px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
 }
 
 /* Arrow indicator for details */
@@ -11219,7 +11219,7 @@ body[data-resizing="true"] * {
 .gwg {
   position: relative;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: calc(5px * var(--ui-scale));
   background: var(--surface-inset);
   overflow: hidden;
   transition:
@@ -11439,8 +11439,7 @@ body[data-resizing="true"] * {
   display: flex;
   flex-direction: column;
   gap: var(--ui-gap-sm);
-  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(14px * var(--ui-scale))
-    calc(18px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-top: 1px solid color-mix(in srgb, var(--subtle-3) 72%, transparent);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 26%);
 }
@@ -14890,16 +14889,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   padding: calc(2px * var(--ui-scale)) !important;
   padding-inline: calc(2px * var(--ui-scale)) !important;
   padding-block: calc(2px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] :is(.section, .gwg),
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section, .gwg) {
-  border-radius: calc(5px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] :is(.section-body, .gwg-body),
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section-body, .gwg-body) {
-  padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale)) !important;
 }
 
 body[data-theme="light"] .board-intro,

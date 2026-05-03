@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(306)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(199)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(304)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(197)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(193)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(191)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -472,6 +472,36 @@ describe("overlay architecture guards", () => {
     const sectionsBody = sectionsBodies.at(-1) ?? ""
     expect(sectionsBody).toContain("gap: calc(4px * var(--ui-scale))")
     expect(sectionsBody).toContain("padding: calc(4px * var(--ui-scale))")
+  })
+
+  test("right panel card radius and body padding are canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (
+        !isThemeSelector ||
+        !/(?:^|[\s>+~,])\.(?:section|gwg|section-body|gwg-body)(?:$|[\s:{.#\[,>+~])/.test(selector)
+      ) {
+        continue
+      }
+
+      expect(body).not.toMatch(/\b(?:border-radius|padding(?:-[a-z]+)?)\s*:/)
+    }
+
+    for (const selector of [".section", ".gwg"]) {
+      const body = soloRuleBody(styles, selector)
+      expect(body).toContain("border-radius: calc(5px * var(--ui-scale))")
+    }
+
+    for (const selector of [".section-body", ".gwg-body"]) {
+      const body = soloRuleBody(styles, selector)
+      expect(body).toContain("padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))")
+    }
   })
 
   test("chat scroll layout is canonical, not theme scoped", () => {
