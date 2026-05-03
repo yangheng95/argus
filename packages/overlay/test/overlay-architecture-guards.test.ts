@@ -550,6 +550,71 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(/\.executor-chip-model\[data-source="executor"\]::before\s*\{/)
   })
 
+  test("workspace panel, diff preview, and file view are owned by surfaces/workspace.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const workspaceSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css"))
+    const html = readText(join(OVERLAY_ROOT, "src/index.html"))
+
+    for (const className of [
+      "workspace-toggle",
+      "workspace-mount",
+      "workspace",
+      "workspace-header",
+      "workspace-tabs",
+      "workspace-tab",
+      "workspace-tab-label",
+      "workspace-tab-file",
+      "workspace-close",
+      "workspace-body",
+      "workspace-view",
+      "diff-preview-panel",
+      "diff-preview-head",
+      "diff-preview-copy",
+      "diff-preview-scope",
+      "diff-preview-path",
+      "diff-preview-meta",
+      "diff-preview-body",
+      "diff-preview-empty",
+      "file-view-panel",
+      "file-view-head",
+      "file-view-path",
+      "file-view-body",
+      "file-view-empty",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(workspaceSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(styles).not.toMatch(/(^|\n)\.pane-resizer\.pane-resizer-workspace\s*\{/)
+    expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)code \.file-link\s*\{/)
+    expect(workspaceSurface).toMatch(/code \.file-link\s*\{/)
+
+    expect(workspaceSurface).toContain("var(--oc-border-width)")
+    expect(workspaceSurface).toContain("var(--oc-radius-pill)")
+    expect(workspaceSurface).not.toMatch(/border-radius:\s*999px/)
+    expect(workspaceSurface).not.toMatch(/rgba\(/)
+    expect(workspaceSurface).not.toMatch(/var\(--accent,\s*#/)
+
+    const workspaceAt = html.indexOf('href="styles/surfaces/workspace.css"')
+    const stylesAt = html.indexOf('href="styles.css"')
+    expect(workspaceAt).toBeGreaterThan(-1)
+    expect(workspaceAt).toBeLessThan(stylesAt)
+
+    expect(workspaceSurface).toMatch(/\.workspace-toggle:hover\s*\{/)
+    expect(workspaceSurface).toMatch(/\.workspace-toggle\[aria-pressed="true"\]\s*\{/)
+    expect(workspaceSurface).toMatch(/\.workspace-mount\[hidden\]\s*\{/)
+    expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace::before\s*\{/)
+    expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace:hover::before/)
+    expect(workspaceSurface).toMatch(/\.workspace-tabs::-webkit-scrollbar\s*\{/)
+    expect(workspaceSurface).toMatch(/\.workspace-tab:hover\s*\{/)
+    expect(workspaceSurface).toMatch(/\.workspace-tab\[data-active="true"\]\s*\{/)
+    expect(workspaceSurface).toMatch(/\.workspace-close:hover\s*\{/)
+    expect(workspaceSurface).toMatch(/\.workspace-view\[data-active="false"\]\s*\{/)
+    expect(workspaceSurface).toMatch(/\.file-view-body pre\s*\{/)
+    expect(workspaceSurface).toMatch(/code \.file-link:hover\s*\{/)
+  })
+
   test("conn-banner cross-surface notification primitive routes through palette tokens", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
@@ -1914,6 +1979,7 @@ describe("overlay architecture guards", () => {
     const surfaceTexts = [
       "src/styles/surfaces/conversation.css",
       "src/styles/surfaces/sidebar.css",
+      "src/styles/surfaces/workspace.css",
     ].map((path) => withoutComments(readText(join(OVERLAY_ROOT, path))))
 
     for (const source of [styles, ...surfaceTexts]) {
@@ -1956,8 +2022,9 @@ describe("overlay architecture guards", () => {
     expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("background: var(--oc-control-bg)")
     expect(soloRuleBody(sidebarSurface, ".sidebar-tool")).toContain("border-radius: var(--oc-radius-control)")
     expect(soloRuleBody(sidebarSurface, ".sidebar-tool")).toContain("border: var(--oc-border-width) solid transparent")
-    expect(soloRuleBody(styles, ".workspace-toggle")).toContain("border-radius: var(--oc-radius-control)")
-    expect(soloRuleBody(styles, ".workspace-toggle")).toContain("border: var(--oc-border-width) solid transparent")
+    const workspaceSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
+    expect(soloRuleBody(workspaceSurface, ".workspace-toggle")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(workspaceSurface, ".workspace-toggle")).toContain("border: var(--oc-border-width) solid transparent")
   })
 
   test("right-panel empty hint density is canonical, not theme scoped", () => {
@@ -2613,19 +2680,24 @@ describe("overlay architecture guards", () => {
 
   test("conversation auxiliary surfaces keep chrome out of theme selectors", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const workspaceSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
+    )
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1] ?? ""
-      const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
-      if (!isThemeSelector || !/\.(?:chat-goals-strip|workspace-mount)\b/.test(selector)) continue
+    for (const source of [styles, workspaceSurface]) {
+      for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = match[1] ?? ""
+        const body = match[2] ?? ""
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+          selector,
+        )
+        if (!isThemeSelector || !/\.(?:chat-goals-strip|workspace-mount)\b/.test(selector)) continue
 
-      expect(body).not.toMatch(/\b(?:background|border(?:-[a-z]+)?|box-shadow)\s*:/)
+        expect(body).not.toMatch(/\b(?:background|border(?:-[a-z]+)?|box-shadow)\s*:/)
+      }
     }
 
-    expect(soloRuleBody(styles, ".workspace-mount")).toContain("background: var(--surface-inset)")
+    expect(soloRuleBody(workspaceSurface, ".workspace-mount")).toContain("background: var(--surface-inset)")
   })
 
   test("chat task-switch progress overlays the header instead of creating a hidden gap", () => {
