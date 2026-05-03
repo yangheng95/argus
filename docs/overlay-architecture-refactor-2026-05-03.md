@@ -281,6 +281,12 @@ Progress log:
   only keep titlebar palette/backdrop differences. Guard ceilings drop to
   `!important <= 275`, `body[data-theme] <= 182`, and theme layout/chrome
   overrides <= 159.
+- 2026-05-03: Folded `.task-dir-shell`, `.task-dir-shell.task-cwd-dropdown`,
+  and `.sidebar-toolset` spacing out of light/dark/vscode theme resets and the
+  late global `!important` compact reset. Directory chrome and sidebar toolset
+  density now live in canonical rules, reducing guard ceilings to
+  `!important <= 263`, `body[data-theme] <= 175`, and theme layout/chrome
+  overrides <= 151.
 
 Trigger: user feedback (2026-05-03):
 
