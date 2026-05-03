@@ -605,6 +605,12 @@ Progress log:
   composer controls must use the Button primitive instead of reintroducing
   static class geometry. New guard pins the icon column to composer.css
   and rejects both dead static classes across God CSS and composer surface.
+- 2026-05-03: Retired the light and dark/vscode theme chrome overrides
+  for `.chat-icon-col`. The icon column now reads `background` and
+  `border` from its canonical composer surface rule, which already points
+  at palette tokens. New guard rejects any `body[data-theme]` selector
+  targeting `.chat-icon-col`; ceilings drop to `body[data-theme] <= 81`
+  and theme layout/chrome overrides `<= 45`.
 - 2026-05-03: Extracted the `.titlebar-theme-options*` picker family
   (grid wrapper, option button, hover/active states, label,
   preview-swatch base, four `[data-theme]` swatch variants) from
@@ -670,11 +676,11 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **12,792 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles.css`      | **12,761 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
 | Total `!important` in stylesheets      | **152** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **82**                                                                                  |
-| Theme layout/chrome overrides          | **53** current guard baseline                                                           |
+| `body[data-theme="…"]` theme overrides | **81**                                                                                  |
+| Theme layout/chrome overrides          | **45** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
 | Total `.tsx` LOC under `packages/overlay/src` | **15,108**                                                                      |

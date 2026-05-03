@@ -13331,11 +13331,6 @@ body[data-theme="light"] .chat-placeholder-float {
   color: var(--text-muted);
 }
 
-body[data-theme="light"] .chat-icon-col {
-  background: rgba(248, 250, 255, 0.86);
-  border-color: rgba(116, 133, 184, 0.14);
-}
-
 body[data-theme="light"] .section,
 body[data-theme="light"] .gwg {
   background: rgba(255, 255, 255, 0.72) !important;
@@ -13455,11 +13450,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-textarea {
   background: color-mix(in srgb, var(--surface-inset) 90%, transparent) !important;
   border-color: color-mix(in srgb, var(--border) 82%, transparent);
   color: var(--text-strong);
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-icon-col {
-  background: color-mix(in srgb, var(--surface-inset) 82%, transparent);
-  border-color: color-mix(in srgb, var(--border) 82%, transparent);
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section,
