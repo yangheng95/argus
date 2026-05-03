@@ -176,8 +176,8 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(27)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(5)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(24)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(3)
   })
 
   test("styles.css has no hard-coded accent/bad/warn rgb expansions outside comments", () => {
