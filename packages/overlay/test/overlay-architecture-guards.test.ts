@@ -429,6 +429,42 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
   })
 
+  test("gwg step body, plan nodes, diff stats, verdict are owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "gwg-step-body",
+      "gwg-plan-nodes",
+      "gwg-plan-node",
+      "gwg-plan-node-title",
+      "gwg-plan-node-brief",
+      "gwg-changed-files",
+      "gwg-diff-stats",
+      "gwg-diff-additions",
+      "gwg-diff-deletions",
+      "gwg-changed-file",
+      "gwg-open-session",
+      "gwg-open-session-btn",
+      "gwg-verdict",
+      "gwg-eval-summary",
+      "gwg-step-messages",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const variant of ["accepted", "rejected", "inconclusive"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.gwg-verdict--${variant}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`\\.gwg-verdict--${variant}\\s*\\{`))
+    }
+
+    expect(inspectorSurface).toMatch(/\.gwg-plan-node::before\s*\{/)
+    expect(inspectorSurface).toMatch(/\.gwg-step-messages::-webkit-scrollbar\s*\{/)
+    expect(inspectorSurface).not.toMatch(/rgba\(95,\s*173,\s*86/)
+    expect(inspectorSurface).not.toMatch(/rgba\(212,\s*167,\s*44/)
+  })
+
   test("gwg step row family is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))

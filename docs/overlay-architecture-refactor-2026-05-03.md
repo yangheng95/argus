@@ -1082,6 +1082,31 @@ Progress log:
   retired `clamp(10px,` and the two raw rgba rings. Ceilings
   unchanged.
 
+- 2026-05-03: Moved the goal-card body sub-surfaces into surfaces/
+  inspector.css: `.gwg-step-body`, `.gwg-plan-nodes` /
+  `.gwg-plan-node` (+ `::before` numbered counter chip) /
+  `.gwg-plan-node-title` / `-brief`, the `.gwg-changed-files`
+  diff-stats family (`.gwg-diff-stats`, `.gwg-diff-files`,
+  `.gwg-diff-additions`, `.gwg-diff-deletions`,
+  `.gwg-changed-file` + `:hover`), `.gwg-open-session` +
+  `-btn` + `:hover`, `.gwg-verdict` (+ accepted / rejected /
+  inconclusive variants), `.gwg-eval-summary`, and
+  `.gwg-step-messages` (+ webkit scrollbar pseudos). Token
+  conversions: every raw px wrapped in `calc(N * --ui-scale)`
+  (with the scaled term placed first when the calc nests another
+  `var(...)` token, per the surface guard's regex constraint
+  documented in the prior step-row slice); two `999px` pills →
+  `var(--oc-radius-pill)` (`.gwg-open-session-btn`,
+  `.gwg-verdict`); two `1px` borders → `var(--oc-border-width)`;
+  three verdict-ring `rgba(95,173,86) / rgba(247,84,100) /
+  rgba(212,167,44)` raw rgba routed through `color-mix` on
+  `--good` / `--bad` / `--warn` (each rgb is the literal
+  expansion of the matching token). New ownership guard asserts
+  fifteen base classes + three verdict variants +
+  `.gwg-plan-node::before` + scrollbar pseudo + absence of
+  `rgba(95,173,86)` and `rgba(212,167,44)` literals. Ceilings
+  unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
