@@ -440,6 +440,12 @@ Progress log:
   `.card__copy`, `.card__rewind`, `.card__trace`, `.card__agent-cancel`, and
   `.card__agent-reply-toggle` rules. `card.css` duplicate-selector guard
   drops from `<= 27` to `<= 14`.
+- 2026-05-03: Retired the dead `body[data-theme="light"] .task-bar`
+  background override (the winning rule already lives in the late light
+  block with `!important`) and the `body[data-theme="light"] .section-badge`
+  rule that only restated the canonical `var(--text-soft)` palette. Both
+  were rule 8 violations sitting alongside their authoritative source.
+  `body[data-theme]` guard ceiling drops to `<= 108`.
 
 Trigger: user feedback (2026-05-03):
 
@@ -475,7 +481,7 @@ one theme contract, and no runtime God CSS path left behind.
 | `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,589 lines**                                                                         |
 | Total `!important` in stylesheets      | **183** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **110**                                                                                 |
+| `body[data-theme="…"]` theme overrides | **108**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
