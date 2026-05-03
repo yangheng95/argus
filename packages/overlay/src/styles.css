@@ -2711,7 +2711,10 @@ textarea.field-input {
 
 .field-input-group:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(91, 141, 239, 0.24);
+  /* color-mix on the palette accent so the focus ring follows
+   * whichever theme's --accent resolves. Same theme-bleed fix
+   * applied to .field-input:focus earlier. */
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .field-input-group .field-input {
@@ -2796,6 +2799,8 @@ select.field-input {
 .custom-select {
   padding-left: calc(14px * var(--ui-scale));
   padding-right: calc(40px * var(--ui-scale));
+  border-radius: var(--radius);
+  box-shadow: none;
 }
 select.field-input option {
   color: var(--text-strong);
@@ -4977,10 +4982,10 @@ select.field-input option {
 .config-content .market-card:hover,
 .config-content .knowledge-item:hover,
 .config-content .pref-item:hover {
-  border-color: var(--guide-card-border) !important;
-  background: var(--guide-card-bg) !important;
-  box-shadow: var(--guide-card-shadow) !important;
-  transform: none !important;
+  border-color: var(--guide-card-border);
+  background: var(--guide-card-bg);
+  box-shadow: var(--guide-card-shadow);
+  transform: none;
 }
 
 .config-content .config-subsection-head:hover,
@@ -5110,6 +5115,7 @@ body[data-resizing="true"] * {
   min-height: calc(34px * var(--ui-scale));
   padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border: 0;
+  border-radius: var(--radius);
   background: transparent;
   font-size: var(--ui-font-meta);
   font-weight: 700;
@@ -6158,15 +6164,17 @@ body {
   isolation: isolate;
 }
 
-.brand-guide,
-.engine-bar,
-.sidebar-btn,
-.field-input,
-.field-input-group,
-.custom-select {
-  border-radius: var(--radius) !important;
-  box-shadow: none !important;
-}
+/* The multi-class `border-radius: var(--radius) !important; box-shadow:
+ * none !important` reset that lived here was retired in 2026-05-04.
+ * Every member of the list either declared the same values directly
+ * already (.field-input / .field-input-group at line 2701, the
+ * canonical declares both) or got updated to declare them in this
+ * slice (.brand-guide canonical in surfaces/titlebar.css now reads
+ * `var(--radius)` instead of `calc(10px * --ui-scale)`; .sidebar-btn
+ * and .custom-select canonicals here gained the same declarations).
+ * `.engine-bar` is dead (canonical removed earlier). With every
+ * canonical self-declaring flat chrome, the override was pure
+ * `!important` noise. */
 
 .panel-body {
   gap: 0;
