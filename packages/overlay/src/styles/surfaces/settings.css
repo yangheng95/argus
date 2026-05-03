@@ -2044,3 +2044,81 @@
   box-shadow: var(--hover-accent-shadow);
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
+
+.agent-model-table {
+  display: flex;
+  flex-direction: column;
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: calc(8px * var(--ui-scale));
+  background: var(--subtle-1);
+  overflow: hidden;
+}
+
+.agent-model-tier-label {
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  background: var(--subtle-2);
+}
+
+.agent-model-tier-label:not(:first-child) {
+  border-top: var(--oc-border-width) solid var(--divider-soft);
+  margin-top: calc(2px * var(--ui-scale));
+}
+
+.agent-model-row {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid var(--divider-soft);
+}
+
+.agent-model-row:hover {
+  background: var(--subtle-2);
+}
+
+.agent-model-tier-label + .agent-model-row {
+  border-top: none;
+}
+
+.agent-model-name {
+  flex: 0 0 calc(140px * var(--ui-scale));
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-model-select {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--ui-font-control);
+}
+
+.agent-model-status {
+  flex: 0 0 auto;
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+  min-width: calc(48px * var(--ui-scale));
+  text-align: right;
+}
+
+/* The .pref-item canonical previously appeared twice in styles.css —
+ * one rule cleared border-bottom (overriding the shared card baseline
+ * `border:1px solid var(--border)` in styles.css that also applied to
+ * .goal-item / .market-card / .knowledge-item / .criteria-check), and
+ * a second rule eight lines later set cursor:pointer. Rule 9 cleanup:
+ * merged into one canonical here. The .pref-item entry in those
+ * shared card multi-selectors stays in styles.css until the broader
+ * card-pattern abstraction lands. */
+.pref-item {
+  border-bottom: none;
+  cursor: pointer;
+}
+
+.pref-item-value {
+  font-size: var(--ui-font-control);
+}
