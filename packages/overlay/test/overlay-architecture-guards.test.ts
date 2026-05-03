@@ -142,20 +142,26 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(359)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(245)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(356)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(244)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(256)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(253)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
     expect(styles).not.toMatch(/body[^{]*(?:delivery-panel-header|criteria-group-head)[^{]*\{/)
+  })
+
+  test("right-panel primary headers do not rely on theme spacing resets", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+
+    expect(styles).not.toMatch(/body[^{]*(?:section-head|gwg-header)[^{]*\{[^}]*\b(?:min-height|gap|padding)\s*:/)
   })
 
   test("new theme files only write root-scoped tokens", () => {
