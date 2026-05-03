@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(106)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(49)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(85)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(30)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(20)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(8)
   })
 
   test("primary action button siblings have no theme chrome override", () => {
@@ -224,6 +224,63 @@ describe("overlay architecture guards", () => {
     expect(styles).toMatch(
       /body\[data-theme="vscode-dark"\][\s\S]*?--accent-gradient-hover:\s*var\(--accent-hover\)/,
     )
+  })
+
+  test("container shell + content shell families have no theme chrome override", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    // The shell families (`.sidebar` / `.chat` / `.sections` for the
+    // three workbench columns; `.section` / `.gwg` for inspector cards;
+    // `.board-intro` / `.chat-empty--task` for empty states; the four
+    // `.board-intro__*` children) all canonicalize on palette tokens
+    // (`--rail-surface` / `--chat-canvas` / `--inspector-surface` /
+    // `--surface-inset` / `--subtle-1` / `--subtle-2` / color-mix on
+    // `--accent`+`--surface`). Themes only swap palette behind those
+    // tokens; no `body[data-theme]` selector touches the shell chrome.
+    for (const cls of [
+      "sidebar",
+      "chat",
+      "sections",
+      "section",
+      "gwg",
+      "board-intro",
+      "chat-empty--task",
+      "board-intro__section",
+      "board-intro__mode",
+      "board-intro__agent",
+      "board-intro__cta",
+      "agent-workflow-warning",
+    ]) {
+      // Negative lookahead `(?![\w-])` instead of `\b`: a dash is a
+      // non-word char, so `\bsidebar\b` would falsely match `.sidebar-btn`.
+      // The class boundary must reject both word chars and dashes to keep
+      // shell-vs-child selectors distinct.
+      const themeSelector = new RegExp(
+        `body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))[^{]*\\.${cls}(?![\\w-])`,
+      )
+      expect(styles).not.toMatch(themeSelector)
+    }
+  })
+
+  test("vscode-dark :root surfaces solid palette tokens for shell columns", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    // Pre-2026-05-04, vscode-dark used translucent rgba defaults for
+    // --rail-surface / --chat-canvas / --inspector-surface and an
+    // override block forced #252526 / #1e1e1e on .sidebar / .chat /
+    // .sections to win the rendered look. Both the override and the
+    // dual values are gone; the palette token is the single source.
+    const headRe = /body\[data-theme="vscode-dark"\]\s*\{/g
+    let match: RegExpExecArray | null = null
+    let lastBlock: string | null = null
+    while ((match = headRe.exec(styles)) !== null) {
+      const open = match.index + match[0].length - 1
+      const close = styles.indexOf("\n}", open)
+      if (close < 0) continue
+      lastBlock = styles.slice(open + 1, close)
+    }
+    expect(lastBlock).not.toBeNull()
+    expect(lastBlock!).toMatch(/--rail-surface:\s*#252526\b/)
+    expect(lastBlock!).toMatch(/--chat-canvas:\s*#1e1e1e\b/)
+    expect(lastBlock!).toMatch(/--inspector-surface:\s*#252526\b/)
   })
 
   test("inline-pill family has no theme chrome override", () => {

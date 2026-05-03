@@ -7206,6 +7206,14 @@ body[data-theme="vscode-dark"] {
      reason as dark — see comment in the dark block. */
   --accent-gradient: var(--accent);
   --accent-gradient-hover: var(--accent-hover);
+  /* vscode-dark prefers solid panel surfaces (#252526 / #1e1e1e) over the
+     translucent rgba defaults. Folding the values into the palette token
+     means the canonical (`background: var(--rail-surface)` etc.) renders
+     correctly without any `body[data-theme="vscode-dark"]` override
+     touching shell chrome. */
+  --rail-surface: #252526;
+  --chat-canvas: #1e1e1e;
+  --inspector-surface: #252526;
   --accent-ring: rgba(0, 122, 204, 0.3);
   --hover-accent-border: rgba(0, 122, 204, 0.36);
   --hover-accent-wash: rgba(0, 122, 204, 0.1);
@@ -8111,17 +8119,14 @@ body[data-theme="light"] .panel-body {
   backdrop-filter: blur(20px);
 }
 
-body[data-theme="light"] .sidebar {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 251, 255, 0.82)) !important;
-}
-
-body[data-theme="light"] .chat {
-  background: rgba(255, 255, 255, 0.86) !important;
-}
-
-body[data-theme="light"] .sections {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(249, 251, 255, 0.86)) !important;
-}
+/* Light-theme `.sidebar` / `.chat` / `.sections` shell overrides retired.
+ * The canonicals in `surfaces/sidebar.css` (`.sidebar`),
+ * `surfaces/inspector.css` (`.sections`), and styles.css line 2148
+ * (`.chat`) read `var(--rail-surface)` / `var(--chat-canvas)` /
+ * `var(--inspector-surface)` palette tokens directly, and the light
+ * theme `:root` block already declares those tokens with the
+ * appropriate translucent white-blue values. No theme selector is
+ * needed to repaint the shells. */
 
 /* iter16 follow-up: light-theme hover-chrome flatteners removed.
    The canonical .sidebar / .chat / .sections blocks have no
@@ -8175,26 +8180,12 @@ body[data-theme="light"] .sections {
    were redundant — the canonical now resolves `--surface-inset` /
    `--text-muted` palette per theme via `styles/surfaces/composer.css`. */
 
-body[data-theme="light"] .section,
-body[data-theme="light"] .gwg {
-  background: rgba(255, 255, 255, 0.72) !important;
-  border-color: rgba(116, 133, 184, 0.14) !important;
-}
-
-body[data-theme="light"] .board-intro,
-body[data-theme="light"] .chat-empty--task {
-  background: rgba(255, 255, 255, 0.72) !important;
-  border-color: rgba(116, 133, 184, 0.16) !important;
-  box-shadow: none !important;
-}
-
-body[data-theme="light"] .board-intro__section,
-body[data-theme="light"] .board-intro__mode,
-body[data-theme="light"] .board-intro__agent,
-body[data-theme="light"] .board-intro__cta {
-  background: rgba(248, 250, 255, 0.78);
-  border-color: rgba(116, 133, 184, 0.14);
-}
+/* Light-theme `.section` / `.gwg` / `.board-intro` / `.chat-empty--task`
+ * + board-intro children chrome overrides retired. Each canonical uses
+ * palette tokens (`--surface-inset` / `--border` / `--subtle-1` /
+ * `--subtle-2` / color-mix on `--accent` / `--surface`) that already
+ * adapt per theme; the bespoke rgba(255, 255, 255, …) +
+ * rgba(116, 133, 184, …) literals here were patch debt. */
 
 /* ── Reference Dark Variants ──
    The dark themes keep their contrast, but share the same workbench shell:
@@ -8209,17 +8200,11 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body {
   backdrop-filter: none;
 }
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar {
-  background: var(--rail-surface) !important;
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat {
-  background: var(--chat-canvas) !important;
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
-  background: var(--inspector-surface) !important;
-}
+/* Dark / vscode-dark `.sidebar` / `.chat` / `.sections` shell overrides
+ * retired alongside the light counterparts. They were force-painting
+ * the same `--rail-surface` / `--chat-canvas` / `--inspector-surface`
+ * palette tokens that the canonicals already read; pure `!important`
+ * noise. */
 
 /* iter16 follow-up: dark-theme hover-chrome flatteners removed
    for the same reason the light-theme block above was removed —
@@ -8257,43 +8242,25 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
    was redundant — the canonical resolves `--surface-inset` / `--border`
    palette per theme via `styles/surfaces/composer.css`. */
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .gwg {
-  background: color-mix(in srgb, var(--surface) 82%, transparent) !important;
-  border-color: color-mix(in srgb, var(--border) 84%, transparent) !important;
-}
+/* Dark / vscode-dark `.section` / `.gwg` / `.board-intro` /
+ * `.chat-empty--task` + board-intro children chrome overrides retired
+ * for the same reason as the light counterparts. The canonicals already
+ * paint via palette tokens that differ per theme. */
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-empty--task {
-  background: color-mix(in srgb, var(--surface) 82%, transparent) !important;
-  border-color: color-mix(in srgb, var(--border-strong) 78%, transparent) !important;
-  box-shadow: none !important;
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__section,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__mode,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__agent,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__cta {
-  background: color-mix(in srgb, var(--surface-inset) 80%, transparent);
-  border-color: color-mix(in srgb, var(--border) 84%, transparent);
-}
-
-body[data-theme="vscode-dark"] .sidebar,
-body[data-theme="vscode-dark"] .sections {
-  background: #252526 !important;
-}
-
-body[data-theme="vscode-dark"] .panel-body,
-body[data-theme="vscode-dark"] .chat {
+/* vscode-dark `.sidebar` / `.sections` / `.chat` shell overrides retired.
+ * The desired #252526 / #1e1e1e values now live in the vscode-dark `:root`
+ * palette (`--rail-surface` / `--inspector-surface` / `--chat-canvas`),
+ * so the canonicals render the right shell automatically. `.panel-body`
+ * still has its own per-theme treatment until the panel-body slice. */
+body[data-theme="vscode-dark"] .panel-body {
   background: #1e1e1e !important;
 }
 
-body[data-theme="vscode-dark"] .section,
-body[data-theme="vscode-dark"] .gwg,
-body[data-theme="vscode-dark"] .board-intro,
-body[data-theme="vscode-dark"] .chat-empty--task {
-  background: #252526 !important;
-}
+/* vscode-dark `.section` / `.gwg` / `.board-intro` / `.chat-empty--task`
+ * solid #252526 override retired. The vscode-dark `:root` palette already
+ * resolves `--surface-inset` (the canonical's chosen background) to
+ * `rgba(30, 30, 30, 0.96)`, which renders as a near-solid panel against
+ * the canvas; no theme selector needs to repaint the inner cards. */
 
 /* `.sidebar-btn-primary` / `.board-intro__cta-action` removed: their margin
  * is single-sourced in the shared primary-action canonical at line 7585. */
@@ -8394,37 +8361,20 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   box-shadow: none !important;
 }
 
-body[data-theme="light"]
-  :is(
-    .section,
-    .gwg,
-    .chat-empty--task,
-    .agent-workflow-warning
-  ),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(
-    .section,
-    .gwg,
-    .chat-empty--task,
-    .agent-workflow-warning
-  ) {
-  border: 0 !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
+/* `.section` / `.gwg` / `.chat-empty--task` / `.agent-workflow-warning`
+ * theme-driven border + shadow stripping retired. The canonical for
+ * each (.section / .gwg in surfaces/inspector.css, .chat-empty--task at
+ * line 7849, .agent-workflow-warning in surfaces/inspector.css) already
+ * declares the desired border/shadow chrome via palette tokens; the
+ * theme-driven `border: 0; box-shadow: none` reset was masking the
+ * canonical and reintroducing themes that own component chrome. */
 
-body[data-theme="light"]
-  :is(
-    .section:last-child,
-    .criteria-item
-  ),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(
-    .section:last-child,
-    .criteria-item
-  ) {
-  border: 0 !important;
-}
+/* `.section:last-child` / `.criteria-item` border-stripping override
+ * retired. The .section:last-child canonical lives in surfaces/inspector.css
+ * line 316 (`.section:last-child { border-bottom: var(--oc-border-width)
+ * solid var(--border) }`); the deliberate bottom border there is the
+ * design intent, not the `border: 0` reset that lived here. .criteria-item
+ * keeps its own border canonical near line 1957. */
 
 body[data-theme="light"]
   :is(
