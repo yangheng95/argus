@@ -114,3 +114,198 @@
   border-color: color-mix(in srgb, var(--bad) 60%, transparent);
   color: var(--bad);
 }
+
+/* ── MemoryPanel.tsx (Knowledge tab) ─────────────────────── */
+
+/* Toolbar above the knowledge list — wraps the search input +
+   action buttons. The shared-card multi-class rule
+   `.goal-item, .market-card, .knowledge-item, .pref-item,
+   .criteria-check { border / bg / radius / padding }` and the
+   shared hover treatment that includes `.knowledge-item:hover`
+   stay in styles.css as cross-surface primitives — extracting
+   either would split the rule-9 abstraction across files. */
+.knowledge-toolbar {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  flex-wrap: wrap;
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--subtle-1);
+  transition:
+    border-color 120ms,
+    background 120ms,
+    box-shadow 120ms,
+    transform 120ms;
+}
+
+.knowledge-toolbar:hover,
+.knowledge-toolbar:focus-within {
+  background: var(--hover-accent-wash);
+  border-color: var(--hover-accent-border);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    var(--hover-accent-shadow);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.knowledge-search {
+  flex: 1;
+  min-width: 0;
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  color: var(--text);
+  font-size: var(--ui-font-control);
+  font-family: var(--font);
+  outline: none;
+  box-shadow: none;
+}
+
+.knowledge-search:focus {
+  border-color: var(--accent);
+}
+
+.knowledge-search::placeholder {
+  color: var(--text-muted);
+}
+
+/* Knowledge list: scrollable column inside the panel body. The
+   layout properties (display/flex-direction/gap) and the
+   scroll-clamp (max-height/overflow-y) used to live in two
+   separate solo rules in styles.css; folded into one block here
+   per rule 8. */
+.knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+  max-height: calc(300px * var(--ui-scale));
+  overflow-y: auto;
+}
+
+/* Memory item row in the list. The original solo declared a
+   `border-bottom: 1px solid var(--divider-soft)` that a late
+   cross-surface rule (`.knowledge-item, .pref-item { border-
+   bottom: none }`) zeroed out — declaring the rendered value
+   directly here so the surface canonical does not lie. */
+.knowledge-item {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: none;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.knowledge-item:hover {
+  background: var(--subtle-3);
+}
+
+.knowledge-item:last-child {
+  border-bottom: none;
+}
+
+.knowledge-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.knowledge-item-title {
+  font-size: var(--ui-font-control);
+  font-weight: 500;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-item-meta {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+}
+
+.knowledge-item-actions {
+  display: flex;
+  gap: calc(4px * var(--ui-scale));
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.knowledge-delete {
+  white-space: nowrap;
+}
+
+/* Memory scope chip: "global" / "session" / "builtin_default"
+   tones. The pill-shape declaration (border-radius / padding /
+   font) lives in the cross-surface multi-class
+   `.section-badge, .task-flag, .extension-status, .knowledge-
+   scope, .mini-badge` block in styles.css — only the
+   surface-specific tone overrides live here. */
+.knowledge-scope {
+  padding: calc(1px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  border-radius: calc(3px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  background: var(--subtle-4);
+  color: var(--text-soft);
+}
+
+.knowledge-scope[data-scope="global"] {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.knowledge-scope[data-scope="session"] {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+.knowledge-scope[data-source="builtin_default"] {
+  background: var(--subtle-3);
+  color: var(--text-muted);
+}
+
+/* Memory detail dialog — opened when the operator clicks an item. */
+.memory-detail-meta {
+  display: flex;
+  gap: calc(8px * var(--ui-scale));
+  flex-wrap: wrap;
+  padding: calc(8px * var(--ui-scale)) 0;
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+}
+
+.memory-detail-content {
+  max-height: calc(400px * var(--ui-scale));
+  overflow-y: auto;
+  padding: calc(12px * var(--ui-scale));
+  background: var(--surface-inset);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--radius);
+  font-size: var(--ui-font-control);
+  font-family: var(--mono);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+
+/* Search-result highlight: when the panel is in search mode, the
+   meta line greens to indicate a match and the title gets a
+   trailing "(search)" marker. */
+.knowledge-item[data-mode="search"] .knowledge-item-meta {
+  color: var(--good);
+}
+
+.knowledge-item[data-mode="search"] .knowledge-item-title::after {
+  content: " (search)";
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+}

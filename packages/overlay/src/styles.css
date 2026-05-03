@@ -7838,155 +7838,14 @@ body[data-theme="light"] .config-close-btn:hover {
 
 /* ── Knowledge: Memory ── */
 
-.knowledge-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--subtle-1);
-  transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
-}
-
-.knowledge-toolbar:hover,
-.knowledge-toolbar:focus-within {
-  background: var(--hover-accent-wash);
-  border-color: var(--hover-accent-border);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
-.knowledge-search {
-  flex: 1;
-  min-width: 0;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-inset);
-  color: var(--text);
-  font-size: var(--ui-font-control);
-  font-family: var(--font);
-  outline: none;
-  box-shadow: none;
-}
-.knowledge-search:focus {
-  border-color: var(--accent);
-}
-.knowledge-search::placeholder {
-  color: var(--text-muted);
-}
-.knowledge-list {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-/* Memory items */
-.knowledge-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--divider-soft);
-  cursor: pointer;
-  transition: background 0.1s;
-}
-.knowledge-item:hover {
-  background: var(--subtle-3);
-}
-.knowledge-item:last-child {
-  border-bottom: none;
-}
-.knowledge-item-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.knowledge-item-title {
-  font-size: var(--ui-font-control);
-  font-weight: 500;
-  color: var(--text-strong);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.knowledge-item-meta {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-}
-.knowledge-item-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.knowledge-delete {
-  white-space: nowrap;
-}
-.knowledge-scope {
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-size: var(--ui-font-control);
-  font-weight: 600;
-  background: var(--subtle-4);
-  color: var(--text-soft);
-}
-.knowledge-scope[data-scope="global"] {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-.knowledge-scope[data-scope="session"] {
-  background: var(--warn-dim);
-  color: var(--warn);
-}
-.knowledge-scope[data-source="builtin_default"] {
-  background: var(--subtle-3);
-  color: var(--text-muted);
-}
-
-/* Memory detail dialog */
-.memory-detail-meta {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 8px 0;
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-}
-.memory-detail-content {
-  max-height: 400px;
-  overflow-y: auto;
-  padding: 12px;
-  background: var(--surface-inset);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: var(--ui-font-control);
-  font-family: var(--mono);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text);
-}
-
-/* Search result highlight */
-.knowledge-item[data-mode="search"] .knowledge-item-meta {
-  color: var(--good);
-}
-.knowledge-item[data-mode="search"] .knowledge-item-title::after {
-  content: " (search)";
-  font-weight: 400;
-  color: var(--text-muted);
-  font-size: var(--ui-font-control);
-}
+/* `.knowledge-*` (MemoryPanel) family + sibling `.memory-detail-*`
+   live in `styles/surfaces/settings.css` now. The cross-surface
+   multi-class shared chrome rules that include `.knowledge-item`
+   (card-shell border/bg/radius/padding at line ~8060, transition
+   at ~8077, hover-accent-wash at ~8091) and the pill-shape
+   declaration that includes `.knowledge-scope` at ~8034 stay in
+   styles.css as cross-surface primitives. Surface-specific raw
+   px / rgba converted to tokens or color-mix. */
 
 /* UI normalization */
 .criteria-result,
@@ -8142,18 +8001,16 @@ body[data-theme="light"] .config-close-btn:hover {
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
-.knowledge-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-sm);
-}
-
-.knowledge-item,
+/* `.knowledge-list` solo + the `.knowledge-item` half of the
+   shared `border-bottom: none` reset + the `.knowledge-item-
+   title` half of the shared font-size declaration folded into
+   the surface canonical at styles/surfaces/settings.css. The
+   `.pref-item` halves stay here until .pref-* moves to the
+   surface. */
 .pref-item {
   border-bottom: none;
 }
 
-.knowledge-item-title,
 .pref-item-value {
   font-size: var(--ui-font-control);
 }

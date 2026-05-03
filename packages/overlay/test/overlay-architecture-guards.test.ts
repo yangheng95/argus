@@ -461,6 +461,40 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("knowledge / memory panel is owned by surfaces/settings.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    for (const className of [
+      "knowledge-toolbar",
+      "knowledge-search",
+      "knowledge-list",
+      "knowledge-item",
+      "knowledge-item-main",
+      "knowledge-item-title",
+      "knowledge-item-meta",
+      "knowledge-item-actions",
+      "knowledge-delete",
+      "knowledge-scope",
+      "memory-detail-meta",
+      "memory-detail-content",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(settingsSurface).toMatch(/\.knowledge-toolbar:hover,\s*\.knowledge-toolbar:focus-within\s*\{/)
+    expect(settingsSurface).toMatch(/\.knowledge-search:focus\s*\{/)
+    expect(settingsSurface).toMatch(/\.knowledge-search::placeholder\s*\{/)
+    expect(settingsSurface).toMatch(/\.knowledge-item\[data-mode="search"\]/)
+    for (const variant of ["global", "session"]) {
+      expect(settingsSurface).toMatch(
+        new RegExp(`\\.knowledge-scope\\[data-scope="${variant}"\\]`),
+      )
+    }
+    expect(settingsSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.04\)/)
+  })
+
   test("permissions panel is owned by surfaces/settings.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))

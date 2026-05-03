@@ -1225,6 +1225,38 @@ Progress log:
   `var(--oc-border-width)` presence + index.html load order.
   Ceilings unchanged.
 
+- 2026-05-03: Extended surfaces/settings.css with the
+  MemoryPanel.tsx (Knowledge tab) family: `.knowledge-toolbar`
+  (+ `:hover` / `:focus-within`), `.knowledge-search` (+
+  `:focus` + `::placeholder`), `.knowledge-list`,
+  `.knowledge-item` (+ `:hover` + `:last-child`), `.knowledge-
+  item-main` / `-title` / `-meta` / `-actions`, `.knowledge-
+  delete`, `.knowledge-scope` (+ 3 [data-scope|source]
+  variants), the `.knowledge-item[data-mode="search"]` search-
+  highlight selectors, and the sibling `.memory-detail-meta` /
+  `-content` dialog. Per rule 8, the late `.knowledge-list`
+  layout solo (display/flex-direction/gap) was folded into the
+  scroll-clamp canonical (max-height/overflow-y) so the surface
+  declares all five rendered properties in one block; the
+  `.knowledge-item, .pref-item { border-bottom: none }` shared
+  reset and the `.knowledge-item-title, .pref-item-value`
+  shared font-size declaration each had `.knowledge-*`
+  dropped from the multi-class (the surface canonical now
+  declares `border-bottom: none` and the typography directly).
+  Cross-surface shared chrome that includes other selectors
+  (the `.goal-item, .market-card, .knowledge-item, .pref-
+  item, .criteria-check` card-shell + transition + hover-
+  accent-wash trio) stays in styles.css as rule-9 abstraction
+  primitives. Token conversions: 4× `1px` borders → `var(--
+  oc-border-width)`; raw `rgba(255, 255, 255, 0.04)` toolbar
+  inset highlight → `color-mix(in srgb, white 4%, transparent)`;
+  ~12 unscaled px wrapped in `calc(N * --ui-scale)`. New
+  ownership guard asserts 12 base classes + the toolbar
+  multi-class hover/focus-within selector + search :focus +
+  ::placeholder + `[data-mode="search"]` selector + 2 scope
+  variants + absence of the retired rgba(255,255,255,0.04)
+  literal. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
