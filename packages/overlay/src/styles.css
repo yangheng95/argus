@@ -7473,13 +7473,22 @@ select.field-input option {
 }
 
 .agent-workflow-refresh {
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  border-radius: calc(999px * var(--ui-scale));
   padding: 0 calc(10px * var(--ui-scale));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-strong));
+  box-shadow: none;
+  color: var(--text-strong);
 }
 
 .agent-workflow-refresh:hover,
 .agent-workflow-report-close:hover {
   border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
   color: var(--text-strong);
+}
+
+.agent-workflow-refresh:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
 }
 
 /* `.agent-workflow-warning` keeps its own bordered card because it
@@ -14908,7 +14917,6 @@ body[data-theme="light"]
     .gwg,
     .chat-empty--task,
     .agent-workflow-warning,
-    .agent-workflow-refresh,
     .agent-workflow-report-close
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
@@ -14917,7 +14925,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .gwg,
     .chat-empty--task,
     .agent-workflow-warning,
-    .agent-workflow-refresh,
     .agent-workflow-report-close
   ) {
   border: 0 !important;
@@ -14966,7 +14973,6 @@ body[data-theme="light"]
     .chat-toolbar-btn,
     .chat-cancel-btn,
     .conn-banner__action,
-    .agent-workflow-refresh,
     .agent-workflow-report-close
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
@@ -14993,7 +14999,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .chat-toolbar-btn,
     .chat-cancel-btn,
     .conn-banner__action,
-    .agent-workflow-refresh,
     .agent-workflow-report-close
   ) {
   background: transparent !important;
@@ -15032,7 +15037,6 @@ body[data-theme="light"]
     .chat-toolbar-btn[data-active],
     .chat-cancel-btn:hover:not(:disabled),
     .conn-banner__action:hover,
-    .agent-workflow-refresh:hover,
     .agent-workflow-report-close:hover
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
@@ -15066,7 +15070,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .chat-toolbar-btn[data-active],
     .chat-cancel-btn:hover:not(:disabled),
     .conn-banner__action:hover,
-    .agent-workflow-refresh:hover,
     .agent-workflow-report-close:hover
   ) {
   background: transparent !important;
@@ -15099,22 +15102,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(.sidebar-btn-primary:hover, .chat-send:hover, .btn-primary:hover, .board-intro__cta-action:hover) {
   background: var(--accent-hover) !important;
   color: #ffffff !important;
-}
-
-/* Calm workflow map */
-
-body[data-theme="light"] .agent-workflow-refresh,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh {
-  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border)) !important;
-  border-radius: calc(999px * var(--ui-scale)) !important;
-  background: color-mix(in srgb, var(--accent) 8%, var(--surface-strong)) !important;
-  box-shadow: none !important;
-  color: var(--text-strong);
-}
-
-body[data-theme="light"] .agent-workflow-refresh:hover,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh:hover {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong)) !important;
 }
 
 .agent-workflow-orb {
