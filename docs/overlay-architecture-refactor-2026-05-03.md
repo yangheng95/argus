@@ -325,6 +325,11 @@ Progress log:
   border, shadow, and semantic tone now follow one component source, reducing
   guard ceilings to `!important <= 241`, `body[data-theme] <= 158`, and theme
   layout/chrome overrides <= 97.
+- 2026-05-03: Moved `.agent-workflow-agent` and `.agent-workflow-card-body`
+  typography/density from theme selectors into canonical text rules. Workflow
+  card text weight, body min-height, color, font size, and line-height no longer
+  vary by theme, reducing guard ceilings to `!important <= 241`,
+  `body[data-theme] <= 156`, and theme layout/chrome overrides <= 96.
 
 Trigger: user feedback (2026-05-03):
 

@@ -158,13 +158,13 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(241)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(158)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(156)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(97)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(96)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -635,6 +635,36 @@ describe("overlay architecture guards", () => {
     expect(hoverBody).toContain(
       "transform: translate(var(--stack-offset, 0), calc(var(--stack-offset, 0) - 1px))",
     )
+  })
+
+  test("workflow card text density is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      const hasWorkflowCardText = /\.(?:agent-workflow-agent|agent-workflow-card-body)\b/.test(selector)
+      if (!isThemeSelector || !hasWorkflowCardText) continue
+
+      expect(body).not.toMatch(/\b(?:min-height|color|font-size|font-weight|line-height)\s*:/)
+    }
+
+    const agentBody = soloRuleBody(styles, ".agent-workflow-agent")
+    expect(agentBody).toContain("font-size: var(--ui-font-small)")
+    expect(agentBody).toContain("font-weight: 780")
+
+    const cardBody = soloRuleBody(styles, ".agent-workflow-card-body")
+    for (const declaration of [
+      "min-height: calc(34px * var(--ui-scale))",
+      "color: var(--text-base)",
+      "font-size: var(--ui-font-control)",
+      "line-height: 1.4",
+    ]) {
+      expect(cardBody).toContain(declaration)
+    }
   })
 
   test("panel body shell chrome is canonical, not theme scoped", () => {
