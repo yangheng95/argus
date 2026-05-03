@@ -493,6 +493,7 @@ async function packageFixture(
   await fs.writeFile(path.join(dir, "src", "app.ts"), "export const ok = true\n")
   await fs.writeFile(path.join(dir, "package.json"), JSON.stringify({
     type: "module",
+    packageManager: "bun@1.3.12",
     scripts,
     dependencies: options?.dependencies ?? {},
     devDependencies: options?.devDependencies ?? {},

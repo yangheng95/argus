@@ -85,12 +85,9 @@ export function resolvedChecks(
 export async function discoverChecks(changedFiles?: unknown) {
   const cwd = await discoverPackageRoot(changedFiles)
   const pkgPath = path.join(cwd, "package.json")
-  const file = Bun.file(pkgPath)
-  const json = (await file.exists())
-    ? (await file.json()) as { scripts?: Record<string, string> }
-    : undefined
+  const json = await readPackageJson(pkgPath)
   const scripts = json?.scripts ?? {}
-  const run = (name: string): EvaluatorCommand[] => [{ command: `bun run ${name}`, cwd }]
+  const run = packageScriptRunner(json, cwd)
   const files = Array.isArray(changedFiles)
     ? changedFiles
         .filter((item): item is string => typeof item === "string" && /\.(spec|test)\.[cm]?[jt]sx?$/.test(item))
@@ -98,9 +95,8 @@ export async function discoverChecks(changedFiles?: unknown) {
         .filter((item) => Filesystem.contains(cwd, item))
         .map((item) => path.relative(cwd, item).replaceAll("\\", "/"))
     : []
-  const tests = await classifyTests(files, cwd)
   const named = {
-    ...(scripts.typecheck ? {
+    ...(run && scripts.typecheck ? {
       typecheck: {
         name: "typecheck",
         label: "Type Check",
@@ -108,7 +104,7 @@ export async function discoverChecks(changedFiles?: unknown) {
         commands: run("typecheck"),
       },
     } : {}),
-    ...(scripts.pycompile ? {
+    ...(run && scripts.pycompile ? {
       py_compile: {
         name: "py_compile",
         label: "Python Compile",
@@ -116,7 +112,7 @@ export async function discoverChecks(changedFiles?: unknown) {
         commands: run("pycompile"),
       },
     } : {}),
-    ...(scripts.pytest ? {
+    ...(run && scripts.pytest ? {
       pytest: {
         name: "pytest",
         label: "Pytest",
@@ -127,13 +123,37 @@ export async function discoverChecks(changedFiles?: unknown) {
     ...(await discoverPythonChecks(cwd, files)),
   }
   return {
-    build: scripts.build ? run("build") : [],
-    test: tests.bun.length > 0
-      ? [{ command: `bun test ${tests.bun.map(quote).join(" ")}`, cwd }]
-      : scripts.test ? run("test") : [],
-    lint: scripts.lint ? run("lint") : [],
+    build: run && scripts.build ? run("build") : [],
+    test: run && scripts.test ? run("test") : [],
+    lint: run && scripts.lint ? run("lint") : [],
     named,
   }
+}
+
+async function readPackageJson(pkgPath: string): Promise<{ scripts?: Record<string, string>; packageManager?: string } | undefined> {
+  try {
+    return JSON.parse(await fs.readFile(pkgPath, "utf8")) as { scripts?: Record<string, string>; packageManager?: string }
+  } catch (err) {
+    const code = typeof err === "object" && err && "code" in err ? (err as { code?: unknown }).code : undefined
+    if (code === "ENOENT") return undefined
+    throw err
+  }
+}
+
+function packageScriptRunner(
+  pkg: { packageManager?: string } | undefined,
+  cwd: string,
+): ((name: string) => EvaluatorCommand[]) | undefined {
+  const manager = packageManagerName(pkg)
+  if (!manager) return undefined
+  if (!/^[a-z0-9._-]+$/i.test(manager)) return undefined
+  return (name) => [{ command: `${manager} run ${name}`, cwd }]
+}
+
+function packageManagerName(pkg: { packageManager?: string } | undefined) {
+  const raw = pkg?.packageManager?.trim()
+  if (!raw) return undefined
+  return raw.split("@", 1)[0]
 }
 
 export function commandGroups(
@@ -231,8 +251,7 @@ async function discoverPythonChecks(cwd: string, files: string[]) {
     exists(path.join(cwd, "ruff.toml")),
     exists(path.join(cwd, ".ruff.toml")),
   ])
-  const pyprojectFile = Bun.file(path.join(cwd, "pyproject.toml"))
-  const pyproject = (await pyprojectFile.exists()) ? await pyprojectFile.text() : ""
+  const pyproject = await fs.readFile(path.join(cwd, "pyproject.toml"), "utf8").catch(() => "")
   const hasPythonFiles = files.some((item) => item.endsWith(".py")) || (await hasPythonTopLevel(cwd))
   const isPythonProject = hasPythonFiles || markers.some(Boolean)
   if (!isPythonProject) return {}
@@ -279,7 +298,12 @@ async function discoverPythonChecks(cwd: string, files: string[]) {
 }
 
 async function exists(filepath: string) {
-  return Bun.file(filepath).exists()
+  try {
+    await fs.access(filepath)
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function hasPythonTopLevel(cwd: string) {
@@ -317,21 +341,6 @@ function checkLabel(key: string) {
 }
 
 
-async function classifyTests(files: string[], cwd: string) {
-  const items = await Promise.all(
-    files.map(async (file) => {
-      const bunFile = Bun.file(path.join(cwd, file))
-      const text = (await bunFile.exists()) ? await bunFile.text() : ""
-      return { file, text }
-    }),
-  )
-  return {
-    bun: items
-      .filter((item) => /["']bun:test["']/.test(item.text))
-      .map((item) => item.file),
-  }
-}
-
 export async function discoverPackageRoot(changedFiles?: unknown) {
   const root = Instance.directory
   const candidates = new Map<string, number>()
@@ -355,8 +364,4 @@ export async function discoverPackageRoot(changedFiles?: unknown) {
   if (candidates.size === 0) return root
   return [...candidates.entries()]
     .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]![0]
-}
-
-function quote(input: string) {
-  return `"${input.replaceAll('"', '\\"')}"`
 }

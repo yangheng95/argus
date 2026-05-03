@@ -118,7 +118,7 @@ describe("delivery test integration specialist review", () => {
       }),
     })
 
-    expect(manifest.specialistReviews?.map((item) => item.reviewer)).not.toContain("test_integration")
+    expect(manifest.specialistReviews?.map((item) => item.reviewer) ?? []).not.toContain("test_integration")
     expect(manifest.reviewEvidence.map((item) => item.id)).not.toContain("specialist:test_integration")
   })
 })
@@ -131,6 +131,7 @@ async function packageFixture(input: {
   tempDirs.push(dir)
   await fs.writeFile(path.join(dir, "package.json"), JSON.stringify({
     type: "module",
+    packageManager: "bun@1.3.12",
     scripts: input.scripts,
   }, null, 2))
   for (const [file, text] of Object.entries(input.files)) {
