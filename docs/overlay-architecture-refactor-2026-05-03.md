@@ -1862,6 +1862,39 @@ Progress log:
   titlebar-utility single-source tests pass; tsc clean; vite build
   green (4.76s, ~324KB CSS).
 
+- 2026-05-04 (CRON slice, Claude `188c68a75` follow-up): Removed
+  9 stale `!important` declarations defending against now-retired
+  override blocks. After the prior slices retired the body[data-
+  theme] shell + content overrides (`body[data-theme="light"]
+  .chat-empty--task`, `body:is(...) :is(.section, .gwg, .chat-empty
+  --task, .agent-workflow-warning) { border:0 ... }`,
+  vscode-dark `.chat-empty--task { background: #252526 }`, the
+  `.task-row-mini` !important reset chain at the file tail), the
+  remaining `!important` on the canonical declarations were
+  defensive against ghosts. Cleared:
+  - `.chat-empty--task` base block (4 !important: border, border-
+    left, border-radius, background) → drop !important; replace the
+    raw `1px` border-width with `var(--oc-border-width)` while at it.
+  - `.chat-empty--task[data-status="queued"]` (border-left-color)
+    and `.chat-empty--task[data-status="failed"], [data-status=
+    "cancelled"]` (border-left-color) → drop both !important.
+  - `.task-row-mini:hover, :focus-within { background !important }`
+    → drop. Cascade order (styles.css after sidebar.css canonical) +
+    pseudo-class specificity already wins.
+  - `.task-row-mini[data-drag-over="true"] { background !important }`
+    → drop. Also wrapped the raw `2px` inset shadow offset in
+    `calc(2px * --ui-scale)` for consistency with the rest of the
+    overlay's px scaling.
+  - `.task-row-mini[data-active="true"] { background !important }`
+    → drop.
+  Guard ceiling: `!important` 24 → 15 (-9). body[data-theme] +
+  theme layout overrides unchanged. All 170 architecture guards +
+  SSE refresh + button primitive + dark-mode-primary-button +
+  section / sections / titlebar / titlebar-utility single-source +
+  task-row-mini pseudo-states + task-row-mini drag-states +
+  default-theme + styles-no-dangling-selectors tests pass; tsc
+  clean; vite build green (3.95s, ~324KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD
