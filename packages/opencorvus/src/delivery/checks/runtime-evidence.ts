@@ -13,7 +13,8 @@
  * rejected verdict 和 goal attribution；host 只负责阻止 accepted，不合成
  * rejection_details。
  */
-import { findRenderedIndex, renderPage } from "./visual"
+import { captureRuntimePage } from "@/delivery/runtime-capture"
+import { findRenderedIndex } from "./visual"
 
 export type RuntimeEvidenceViolationKind =
   | "no_build_artifact"
@@ -92,25 +93,25 @@ export async function computeRuntimeEvidence(input: {
   }
   report.evidence.buildArtifactPath = indexHtml
 
-  // 2. 真实 render + DOM 快照（renderPage 已处理 vite/preview 启动脚本与静态兜底）
-  let render: Awaited<ReturnType<typeof renderPage>>
-  try {
-    render = await renderPage({
-      rendered: indexHtml,
-      outDir: input.outDir,
-      viewport: input.viewport ?? (input.referenceForViewport ? undefined : { width: 1440, height: 900 }),
-      referenceForViewport: input.referenceForViewport,
-      probeInteractions: input.requireInteraction ?? false,
-    })
-  } catch (e) {
+  // 2. 真实 render + DOM 快照。delivery 只从 RuntimeCapture 读取截图和页面层证据。
+  const render = await captureRuntimePage({
+    url: indexHtml,
+    outDir: input.outDir,
+    viewport_width: input.viewport?.width,
+    viewport_height: input.viewport?.height,
+    referenceForViewport: input.referenceForViewport,
+    probeInteractions: input.requireInteraction ?? false,
+    min_dom_descendants: RUNTIME_EVIDENCE_THRESHOLDS.min_dom_node_count,
+  })
+  if (!render.captured) {
     violations.push({
       kind: "render_failed",
-      detail: `puppeteer 渲染 build artifact 失败: ${e instanceof Error ? e.message : String(e)}`,
+      detail: `runtime capture 渲染 build artifact 失败: ${render.capture_error.message}`,
     })
     return report
   }
-  report.evidence.renderedPngPath = render.renderedPath
-  report.evidence.viewport = render.viewport
+  report.evidence.renderedPngPath = render.path
+  report.evidence.viewport = { width: render.viewport.width, height: render.viewport.height }
   report.evidence.dom = render.dom
   report.evidence.interaction = render.interaction
 
