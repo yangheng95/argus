@@ -908,6 +908,21 @@ Progress log:
   Bumped panel_revision is unchanged because index.html was not
   touched in this slice.
 
+- 2026-05-03: Continued the inspector surface migration with the
+  .section content rails — `.section-icon` (+ svg + open variant),
+  `.section-title`, `.section-badge` (with `:empty`, `::before`,
+  `[data-variant="metric"]` and four `[data-tone="good|bad|warn|
+  accent"]` color variants each with their own `::before`),
+  `.section-head-action`, `.section-body`, and the `.section-head::
+  before` disclosure caret (+ open rotation). The `999px` pip
+  border-radius converted to `var(--oc-radius-pill)`. The richer
+  `.section` shell + per-`[data-phase-state]` hover/border/box-
+  shadow chrome stay in styles.css until those raw rgba gradients
+  are reworked through palette tokens. The right-panel-card-radius
+  guard now reads `.section-body` from the surface and `.gwg-body`
+  from styles.css; theme-spacing-reset guard scans both files.
+  Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
