@@ -1,6 +1,8 @@
 # Overlay Architecture Refactor — 3-Layer Primitives + Surface Modularization
 
-Status: active. Phase 1 guardrails started on 2026-05-03.
+Status: paused by user request on 2026-05-03. Phase 1 guardrails
+started on 2026-05-03; implementation must resume from the checkpoint
+below instead of restarting or deleting the guard automation.
 
 Progress log:
 
@@ -731,6 +733,21 @@ Progress log:
   `.chat-empty-text` font-weight dropped from 650 to 600 — meta
   copy below an icon does not need extra emphasis. Bold-weight
   density ceiling tightens to `<= 41`.
+- 2026-05-03: Extended `styles/surfaces/conversation.css` with the
+  task-aware empty-state children: `.chat-empty-marker`,
+  `.chat-empty-copy`, `.chat-empty-kicker`, `.chat-empty-title`,
+  `.chat-empty-meta`, `.chat-empty-status` (+ `::before` indicator pip
+  + queued/failed/cancelled tone variants), `.chat-empty-path`, and
+  the nested `.chat-empty--task .chat-empty-marker .chat-empty-icon`
+  scope. `border-radius: 999px` on the status pip routes through
+  `var(--oc-radius-pill)`; `1px` border thickness routes through
+  `var(--oc-border-width)`. `.chat-empty-title` weight dropped from
+  720 to 600 — the heading already gets emphasis from font-size and
+  text-strong color. The shell `.chat-empty--task` selector + the three
+  body[data-theme]-mass-cluster overrides that govern its background /
+  border / border-color stay in styles.css until those rgba literals
+  are reworked through palette tokens. Bold-weight density ceiling
+  tightens to `<= 40`.
 
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
@@ -754,6 +771,67 @@ Progress log:
   `.chat-send` reappears there. The theme-layout counter now strips
   comments before scanning so historical explanation text no longer
   counts as live CSS debt.
+
+## Pause Checkpoint — 2026-05-03
+
+Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD
+`1a6af4d4d` (`refactor(overlay): seed surfaces/conversation.css with
+chat-empty placeholder`), pushed to origin. The refactor is not
+complete and the God CSS archive rule remains active: God CSS may be
+retired from runtime imports and archived as reference-only backup, but
+must not be physically deleted.
+
+Latest verified state before pause:
+
+- Architecture guard: `bun test packages/overlay/test/overlay-architecture-guards.test.ts`
+  passed with 70 tests.
+- SSE refresh/reconnect guard: `bun test packages/overlay/test/events-refresh.test.ts packages/overlay/test/sse-reconnect.test.ts packages/overlay/test/auth-change-stream.test.ts`
+  passed with 14 tests.
+- Overlay typecheck: `bunx tsc --noEmit -p packages/overlay/tsconfig.json`
+  passed during the final active slice.
+- Docs and i18n: `bun run docs:check` and `bun run --cwd packages/overlay check:i18n`
+  passed; pushed commits also passed pre-push typecheck, route, docs,
+  i18n, and secret-scan hooks.
+
+Known dirty files at pause that are not owned by this checkpoint
+commit:
+
+- `CLAUDE.md`
+- `packages/overlay/src/styles.css`
+- `packages/overlay/src/styles/surfaces/conversation.css`
+- `packages/overlay/src/utils/time.ts`
+- `packages/opencorvus/script/benchmark/assets/web-calculator-request.txt`
+- `packages/opencorvus/script/overlay-snap.ts`
+- `packages/overlay/script/iter-shots/`
+- `specs/chat ui.png`
+
+Do not revert or include those files unless the next user request
+explicitly owns them.
+
+Resume TODO, in order:
+
+1. Start with `git status --short --branch`, `git log --oneline -8`,
+   and `git pull --ff-only` if origin has advanced.
+2. Re-run the focused overlay guard before editing if another agent
+   has pushed new UI work.
+3. Continue the Conversation surface extraction from the current
+   boundary: move the richer `.chat-empty--task` task-aware empty
+   state and its status subparts into `styles/surfaces/conversation.css`,
+   convert raw `rgba()`/hex chrome to palette-token `color-mix()`,
+   remove the matching `body[data-theme]` overrides in the same commit,
+   and extend the conversation guard to reject theme selectors for
+   `.chat-empty--task`.
+4. Retire remaining theme reset clusters by whole surface families,
+   not one selector at a time: board intro / section / gwg surfaces,
+   primary button siblings (`.sidebar-btn-primary`, `.btn-primary`,
+   `.board-intro__cta-action`), badges, executor menu, and settings
+   navigation.
+5. Keep SSE refresh as a standing regression target for any work that
+   touches event, selected-task, sidebar refresh, or task-list surfaces.
+6. Do not collapse `main.tsx`'s 18 mount points or remove runtime
+   `styles.css` until the active CSS has moved into tokens,
+   primitives, surfaces, and palette-only themes with guards proving no
+   runtime double source remains.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
