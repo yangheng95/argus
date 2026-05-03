@@ -1107,6 +1107,24 @@ Progress log:
   `rgba(95,173,86)` and `rgba(212,167,44)` literals. Ceilings
   unchanged.
 
+- 2026-05-03: Moved the eval-checks list family into surfaces/
+  inspector.css: `.gwg-checks` (list container), `.gwg-check`
+  (row + `+` sibling separator + `:hover`), `.gwg-check-icon`,
+  `.gwg-check-name`, `.gwg-check-evidence`, plus the three
+  status modifiers (`.gwg-check--passed/--failed/--pending`)
+  with their `.gwg-check-icon` / `.gwg-check-name` child
+  overrides folded next to the modifier per rule 8. Token
+  conversions: every raw px wrapped in `calc(N * --ui-scale)`;
+  `1px` row separator border → `var(--oc-border-width)`; `1px`
+  inset rings on passed/failed icons routed through
+  `color-mix(var(--good) 35%, transparent)` /
+  `color-mix(var(--bad) 35%, transparent)`; the icon's earlier
+  10/10/10-bound clamp (whose min === max collapsed it to a
+  no-op already) replaced with plain `calc(10px * --ui-scale)`.
+  New ownership guard asserts five base classes + three
+  modifier-child rules + `.gwg-check + .gwg-check` separator
+  + absence of any `clamp(10px,` literal. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and

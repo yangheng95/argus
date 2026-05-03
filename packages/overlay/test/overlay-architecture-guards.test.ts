@@ -429,6 +429,34 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
   })
 
+  test("gwg checks list is owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "gwg-checks",
+      "gwg-check",
+      "gwg-check-icon",
+      "gwg-check-name",
+      "gwg-check-evidence",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const status of ["passed", "failed", "pending"]) {
+      expect(styles).not.toMatch(
+        new RegExp(`(^|\\n)\\.gwg-check--${status}(?:\\s+\\.gwg-check-(?:icon|name))?\\s*\\{`),
+      )
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.gwg-check--${status}(?:\\s+\\.gwg-check-(?:icon|name))?\\s*\\{`),
+      )
+    }
+
+    expect(inspectorSurface).toMatch(/\.gwg-check \+ \.gwg-check\s*\{/)
+    expect(inspectorSurface).not.toMatch(/clamp\([^,]*,\s*calc\(10px/)
+  })
+
   test("gwg step body, plan nodes, diff stats, verdict are owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
