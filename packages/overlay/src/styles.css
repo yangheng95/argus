@@ -13212,8 +13212,7 @@ body::after,
   border-radius: calc(5px * var(--ui-scale)) !important;
 }
 
-.engine-chip[data-active="true"],
-body[data-theme="light"] .engine-chip[data-active="true"] {
+.engine-chip[data-active="true"] {
   background: var(--accent-dim) !important;
   border-color: var(--accent) !important;
   color: var(--accent) !important;
@@ -13543,8 +13542,7 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 /* .chat-send / .chat-interrupt now live as the canonical rule near
  * line 4727; this block carried the stale duplicate. .btn-primary
  * keeps the same accent-on-flat treatment via the rule below. */
-.btn-primary,
-body[data-theme="light"] .btn-primary {
+.btn-primary {
   border-radius: var(--radius);
   border: 1px solid color-mix(in srgb, var(--accent) 46%, transparent);
   background: var(--accent);
@@ -13809,8 +13807,7 @@ body[data-theme="light"] .btn-primary {
   font-weight: 640;
 }
 
-.engine-chip[data-active="true"],
-body[data-theme="light"] .engine-chip[data-active="true"] {
+.engine-chip[data-active="true"] {
   background: color-mix(in srgb, var(--accent) 18%, var(--surface-inset)) !important;
 }
 

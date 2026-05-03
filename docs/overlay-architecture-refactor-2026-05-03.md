@@ -405,6 +405,11 @@ Progress log:
   titlebar control chrome and sidebar tool surfaces. The Button primitive
   already owns those visual states, so the legacy theme entries cannot
   render anything. `body[data-theme]` guard ceiling drops to `<= 128`.
+- 2026-05-03: Collapsed redundant theme prefixes from `.btn-primary` and
+  `.engine-chip[data-active="true"]` combined selectors. The
+  `body[data-theme="light"]` arm was a specificity-only duplicate of the
+  unscoped rule and could never change rendering on its own. With the
+  duplicates retired, `body[data-theme]` guard ceiling drops to `<= 125`.
 
 Trigger: user feedback (2026-05-03):
 
@@ -440,7 +445,7 @@ one theme contract, and no runtime God CSS path left behind.
 | `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,698 lines**                                                                         |
 | Total `!important` in stylesheets      | **183** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **128**                                                                                 |
+| `body[data-theme="…"]` theme overrides | **125**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
