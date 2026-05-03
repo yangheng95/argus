@@ -45,13 +45,16 @@ describe("delivery project evidence gate", () => {
     expect(manifest.checkResults.find((item) => item.name === "lint")?.status).toBe("failed")
     expect(manifest.checkResults.find((item) => item.name === "lint")?.failureSignature?.checkId).toBe("lint#1")
     expect(manifest.finalGate.status).toBe("failed")
+    // Required checks (build/test/lint) are blocking primary gates under the
+    // "功能完成度 + e2e测试结果" rule. The OLD model had lint in auxiliary;
+    // we now treat any required-check failure as a primary blocker.
     expect(manifest.functionalAssessment).toMatchObject({
-      status: "complete",
-      primaryFailureIds: [],
+      status: "incomplete",
+      primaryFailureIds: ["lint#1"],
     })
-    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("lint#1")
-    expect(manifest.finalGate.summary).toContain("Functional completion passed")
-    expect(manifest.finalGate.summary).toContain("auxiliary quality gate")
+    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toEqual([])
+    expect(manifest.finalGate.summary).toContain("Functional completion failed")
+    expect(manifest.finalGate.summary).toContain("primary blocker")
   })
 
   test("skips discovered lint by default because typecheck and tests are the delivery signal", async () => {
@@ -406,8 +409,13 @@ console.log("lint scope ok", cwd())
       category: "security",
       claim: expect.stringContaining("hardcoded secret-like value"),
     })
-    expect(manifest.finalGate.status).toBe("failed")
+    // Specialist reviews are advisory under the "其余全部作为警告" rule —
+    // they surface as auxiliary findings on the agent prompt but do NOT
+    // flip the final gate. The agent decides whether to act on them.
     expect(manifest.finalGate.failedReviewIds).toContain("specialist:security_data")
+    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("specialist:security_data")
+    expect(manifest.functionalAssessment?.primaryFailureIds).not.toContain("specialist:security_data")
+    expect(manifest.finalGate.status).toBe("passed")
   })
 
   test("fails non-trivial goal graph when integrity review evidence is missing", async () => {
@@ -437,8 +445,11 @@ console.log("lint scope ok", cwd())
       evidence: ["non-trivial goal graph requires integrity review, but task or spec snapshot identity is missing"],
       specSnapshotId: "spec_review",
     }])
-    expect(manifest.finalGate.status).toBe("failed")
+    // Integrity review is advisory: failure shows on failedReviewIds but
+    // does not block the gate.
     expect(manifest.finalGate.failedReviewIds).toEqual(["review:integrity"])
+    expect(manifest.finalGate.status).toBe("passed")
+    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("review:integrity")
   })
 
   test("requires observable browser interaction for structured runtime scenarios", () => {

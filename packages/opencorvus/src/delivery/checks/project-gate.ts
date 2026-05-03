@@ -189,6 +189,14 @@ async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
   return checkResults
 }
 
+/**
+ * Per the project rule "只看功能完成度和e2e测试结果，其余全部作为警告":
+ * primary blockers are required-check failures (build/typecheck/test/e2e)
+ * and goal-coverage failures (acceptance specs missing). Runtime probes
+ * (puppeteer renders, server-launch checks) and specialist reviews are
+ * advisory — they get reported as auxiliary so the agent can see and
+ * address them, but they do not block delivery acceptance on their own.
+ */
 function assessFunctionalCompletion(input: {
   failedCheckIds: string[]
   failedCoverageIds: string[]
@@ -197,50 +205,25 @@ function assessFunctionalCompletion(input: {
   specialistReviews: DeliverySpecialistReview[]
 }): DeliveryManifestFunctionalAssessment {
   const primaryFailureIds = [
-    ...input.failedCoverageIds,
-    ...input.failedRuntimeFlowIds,
-    ...input.failedReviewIds.filter((id) =>
-      specialistReviewBlocksFunctionalCompletion({ id, reviews: input.specialistReviews })
-    ),
-  ]
-  const primary = new Set(primaryFailureIds)
-  const auxiliaryFailureIds = [
     ...input.failedCheckIds,
-    ...input.failedReviewIds.filter((id) => !primary.has(id)),
+    ...input.failedCoverageIds,
+  ]
+  const auxiliaryFailureIds = [
+    ...input.failedRuntimeFlowIds,
+    ...input.failedReviewIds,
   ]
   const status = primaryFailureIds.length === 0 ? "complete" : "incomplete"
   const summary = status === "complete"
     ? auxiliaryFailureIds.length === 0
       ? "Functional completion passed and auxiliary quality gates passed."
-      : `Functional completion passed, but ${auxiliaryFailureIds.length} auxiliary quality gate(s) failed.`
-    : `Functional completion failed with ${primaryFailureIds.length} primary blocker(s) and ${auxiliaryFailureIds.length} auxiliary blocker(s).`
+      : `Functional completion passed, but ${auxiliaryFailureIds.length} auxiliary advisory gate(s) reported issues.`
+    : `Functional completion failed with ${primaryFailureIds.length} primary blocker(s) and ${auxiliaryFailureIds.length} auxiliary advisory issue(s).`
   return {
     status,
     primaryFailureIds: [...new Set(primaryFailureIds)].sort(),
     auxiliaryFailureIds: [...new Set(auxiliaryFailureIds)].sort(),
     summary,
   }
-}
-
-function specialistReviewBlocksFunctionalCompletion(input: {
-  id: string
-  reviews: DeliverySpecialistReview[]
-}) {
-  const reviewer = input.id.slice("specialist:".length)
-  const review = input.reviews.find((item) => item.reviewer === reviewer)
-  if (!review) return false
-  return review.findings.some((finding) =>
-    finding.proposedSeverity === "blocking" &&
-    (
-      finding.category === "startup" ||
-      finding.category === "runtime" ||
-      finding.category === "functional" ||
-      finding.category === "contract" ||
-      finding.category === "visual" ||
-      finding.category === "evidence_quality" ||
-      finding.category === "user_intent"
-    )
-  )
 }
 
 async function runSpecialistReviews(input: {

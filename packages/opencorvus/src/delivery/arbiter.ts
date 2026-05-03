@@ -9,9 +9,18 @@ import type { DeliveryVerdictType } from "./verdict"
 
 export type DeliveryArbiterDecision = {
   verdict: DeliveryVerdictType
-  source: "manifest" | "runtime_evidence" | "llm" | "visual_hard_gate"
+  source: "llm"
 }
 
+/**
+ * Delivery accept/reject is decided strictly by functional completeness
+ * (`failedCoverageIds`) and required-check / e2e test results
+ * (`failedCheckIds`). Runtime probes (puppeteer renders, server-launch checks)
+ * and specialist reviews are recorded for transparency but do NOT flip the
+ * gate status — they are advisory warnings shown to the delivery agent and
+ * the orchestrator. This matches the user-stated rule: "只看功能完成度和e2e
+ * 测试结果，其余全部作为警告" — anything else cannot block delivery.
+ */
 export function arbitrateDeliveryGate(input: {
   checks: DeliveryGateVerdict
   failedCoverageIds: string[]
@@ -23,8 +32,6 @@ export function arbitrateDeliveryGate(input: {
   const failedReviewIds = input.failedReviewIds ?? []
   const status = input.checks.failedCheckIds.length === 0
     && input.failedCoverageIds.length === 0
-    && failedRuntimeFlowIds.length === 0
-    && failedReviewIds.length === 0
     ? "passed"
     : "failed"
   return {
@@ -55,20 +62,39 @@ function deliveryGateSummary(input: {
   functionalAssessment?: DeliveryManifestFunctionalAssessment
   fallbackPassedSummary: string
 }) {
+  const advisoryNote = input.runtime + input.reviews > 0
+    ? ` Advisory warnings: ${input.runtime} runtime flow(s), ${input.reviews} review item(s).`
+    : ""
   if (input.status === "passed") {
-    return input.functionalAssessment?.summary ?? input.fallbackPassedSummary
+    const base = input.functionalAssessment?.summary ?? input.fallbackPassedSummary
+    return `${base}${advisoryNote}`
   }
   const counts =
-    `${input.checks} required check(s), ${input.coverage} coverage item(s), ` +
-    `${input.runtime} runtime flow(s), and ${input.reviews} review item(s)`
+    `${input.checks} required check(s) and ${input.coverage} coverage item(s)`
   if (!input.functionalAssessment) {
-    return `Delivery evidence gate failed ${counts}.`
+    return `Delivery evidence gate failed ${counts}.${advisoryNote}`
   }
   const primary = input.functionalAssessment.primaryFailureIds.join(", ") || "none"
   const auxiliary = input.functionalAssessment.auxiliaryFailureIds.join(", ") || "none"
-  return `${input.functionalAssessment.summary} Evidence gate failed ${counts}. Primary: ${primary}. Auxiliary: ${auxiliary}.`
+  return `${input.functionalAssessment.summary} Evidence gate failed ${counts}. Primary: ${primary}. Auxiliary: ${auxiliary}.${advisoryNote}`
 }
 
+/**
+ * Delivery verdict arbiter — pure passthrough of the LLM verdict.
+ *
+ * The host no longer overrides the delivery agent's decision. Manifest
+ * gate failures (functional completion / e2e tests) are surfaced to the
+ * agent in its prompt context, and runtime/visual probe failures are
+ * appended as advisory `deferred_checks` evidence on the returned verdict
+ * — but neither family can flip an agent-accepted verdict to rejected,
+ * nor can they synthesize a rejection when the agent did not reach one.
+ *
+ * Anchoring on the agent verdict preserves goal-level attribution (the
+ * agent owns rejection_details) and removes the historical "host gate
+ * forces rejected" loop that punished delivery rounds for transient
+ * environment problems (puppeteer launch failures, slow installs, etc.)
+ * unrelated to the artifact under review.
+ */
 export function arbitrateDeliveryVerdict(input: {
   manifest: DeliveryEvidenceManifest
   goalIds: readonly string[]
@@ -76,23 +102,19 @@ export function arbitrateDeliveryVerdict(input: {
   runtimeReport?: RuntimeEvidenceReport
   visualMetric?: VisualMetricResult | null
 }): DeliveryArbiterDecision | undefined {
-  const hostGateSource = hostGateFailureSource(input)
-  if (hostGateSource) {
-    if (!input.llmVerdict || input.llmVerdict.verdict !== "rejected") return undefined
-    return {
-      source: hostGateSource,
-      verdict: appendHostGateEvidence({
-        ...input.llmVerdict,
-        summary: `${input.llmVerdict.summary}\n\nHost gate: ${hostGateSummary(input)}`,
-      }, input),
-    }
-  }
-
   if (!input.llmVerdict) return undefined
+
+  const advisoryNote = hostGateAdvisorySummary(input)
+  const verdict = advisoryNote
+    ? {
+      ...input.llmVerdict,
+      summary: `${input.llmVerdict.summary}\n\nAdvisory host gates: ${advisoryNote}`,
+    }
+    : input.llmVerdict
 
   return {
     source: "llm",
-    verdict: appendHostGateEvidence(input.llmVerdict, input),
+    verdict: appendHostGateEvidence(verdict, input),
   }
 }
 
@@ -124,18 +146,7 @@ function appendManifestEvidence(
   }
 }
 
-function hostGateFailureSource(input: {
-  manifest: DeliveryEvidenceManifest
-  runtimeReport?: RuntimeEvidenceReport
-  visualMetric?: VisualMetricResult | null
-}): DeliveryArbiterDecision["source"] | undefined {
-  if (input.manifest.finalGate.status !== "passed") return "manifest"
-  if (input.runtimeReport && !input.runtimeReport.passed) return "runtime_evidence"
-  if (input.visualMetric && !input.visualMetric.passed) return "visual_hard_gate"
-  return undefined
-}
-
-function hostGateSummary(input: {
+function hostGateAdvisorySummary(input: {
   manifest: DeliveryEvidenceManifest
   runtimeReport?: RuntimeEvidenceReport
   visualMetric?: VisualMetricResult | null
@@ -143,15 +154,15 @@ function hostGateSummary(input: {
   const summaries: string[] = []
   if (input.manifest.finalGate.status !== "passed") summaries.push(input.manifest.finalGate.summary)
   if (input.runtimeReport && !input.runtimeReport.passed) {
-    summaries.push(`Runtime-evidence gate failed ${input.runtimeReport.violations.length} violation(s).`)
+    summaries.push(`Runtime-evidence advisory: ${input.runtimeReport.violations.length} violation(s).`)
   }
   if (input.visualMetric && !input.visualMetric.passed) {
     const failedGates = input.visualMetric.gates.filter((gate) => !gate.passed)
     summaries.push(
-      `Visual metric gate failed score=${input.visualMetric.score.toFixed(3)} with ${failedGates.length} failed gate(s).`,
+      `Visual metric advisory: score=${input.visualMetric.score.toFixed(3)} with ${failedGates.length} failed gate(s).`,
     )
   }
-  return summaries.join("\n")
+  return summaries.join(" | ")
 }
 
 function appendHostGateEvidence(

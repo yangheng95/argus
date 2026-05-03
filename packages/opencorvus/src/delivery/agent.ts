@@ -322,11 +322,16 @@ function buildUserPrompt(
         ? `\n\nFailure details:\n${detailLines.join("\n")}`
         : "") +
       (gate.status === "failed"
-        ? `\n\nThe host manifest is blocking this delivery. You must submit verdict='rejected'. ` +
-          `For each rejection_details entry, include goal_id only when the listed goal's ` +
-          `owned_paths, files_changed, or report evidence identify it as responsible; otherwise ` +
-          `leave the entry task-scoped and explain the project-level blocker.`
-        : ""),
+        ? `\n\nThe manifest gate failed on a primary blocker (functional completion or ` +
+          `configured check). You must submit verdict='rejected'. For each rejection_details ` +
+          `entry, include goal_id only when the listed goal's owned_paths, files_changed, or ` +
+          `report evidence identify it as responsible; otherwise leave the entry task-scoped ` +
+          `and explain the project-level blocker.`
+        : (gate.failedRuntimeFlowIds.length + gate.failedReviewIds.length > 0
+            ? `\n\nNote: failedRuntimeFlowIds and failedReviewIds above are ADVISORY warnings ` +
+              `(runtime probes / specialist reviews). They do not block acceptance on their ` +
+              `own; cite them in deferred_checks if they are material to the verdict.`
+            : "")),
       8_000,
     )
   }

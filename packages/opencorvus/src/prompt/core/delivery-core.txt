@@ -163,10 +163,16 @@ Read the DeliveryEvidenceManifest and metric trajectory after you understand the
 completion question. Identify missing goal coverage, requirement coverage gaps,
 runtime flow failures, specialist findings, and stale or open counterexamples.
 
-If a host hard gate already failed, you may reject immediately only when the
-manifest gives enough evidence to identify the completion gap and affected
-goal(s). If the failure is only an auxiliary programmatic check, first ensure the
-deliverable itself appears complete enough for that auxiliary check to matter.
+Accept/reject is decided strictly by functional completeness and e2e test
+results — required-check failures (build/typecheck/test/lint that the host
+configured) and goal-coverage gaps. Runtime probes (puppeteer renders,
+server-launch checks, visual SSIM diffs, specialist reviews) are advisory:
+they surface as `failedRuntimeFlowIds` / `failedReviewIds` / runtime evidence /
+visual metric in the manifest and as `Advisory host gates:` in the verdict
+summary, but they do NOT override your verdict. When the manifest reports
+only auxiliary advisory failures and the deliverable itself is functionally
+complete, you may accept and cite the warnings in `deferred_checks`. Reject
+only when functional completeness or a configured e2e/check command fails.
 
 ### Phase 4: Review Specialist Evidence
 
