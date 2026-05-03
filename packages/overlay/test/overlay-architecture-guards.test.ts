@@ -179,13 +179,29 @@ describe("overlay architecture guards", () => {
   test("card stylesheet duplicate selector debt cannot increase", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(countDuplicateSelectors(card)).toBeLessThanOrEqual(14)
+    expect(countDuplicateSelectors(card)).toBeLessThanOrEqual(6)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
     expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(84)
+  })
+
+  test("bold font-weight declarations cannot increase across overlay stylesheets", () => {
+    const sources = [
+      readText(join(OVERLAY_ROOT, "src/styles.css")),
+      readText(join(OVERLAY_ROOT, "src/styles/card.css")),
+      ...walkFiles(join(OVERLAY_ROOT, "src/styles/primitives"), (path) =>
+        path.endsWith(".css"),
+      ).map(readText),
+      ...walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) =>
+        path.endsWith(".css"),
+      ).map(readText),
+    ]
+    const text = sources.join("\n")
+    const boldDecls = count(/font-weight\s*:\s*(?:700|720|750|760|780|800|900|bold)\b/g, text)
+    expect(boldDecls).toBeLessThanOrEqual(50)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
