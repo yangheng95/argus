@@ -31,6 +31,7 @@ import ssim from "ssim.js"
 
 const log = Log.create({ service: "delivery.visual" })
 const RENDER_COMMAND_OUTPUT_TAIL_BYTES = 2_000
+const BUN_BINARY = process.platform === "win32" ? "bun.exe" : "bun"
 
 export interface VisualDiffOptions {
   /** Either an absolute file path to an html file, or http(s)/file URL. */
@@ -256,13 +257,20 @@ async function startProjectServer(
   // worktree, not a user source tree. Reusing the same directory across
   // delivery retries keeps node_modules warm and removes the cold-install
   // 3-min ceiling that the old "isolated render workspace" copy imposed.
+  // Cross-platform: spawn the bun binary directly with shell:false. On
+  // Windows the historical `shell: true` path wraps every call in cmd.exe,
+  // which serializes against conhost / antivirus and can hang for tens of
+  // minutes (the old `spawnSync C:\WINDOWS\system32\cmd.exe ETIMEDOUT`
+  // signature). Node's spawn does not auto-append .exe on Windows, so we
+  // pick the right filename per platform; both forms resolve through the
+  // OS PATH lookup (execvp on POSIX, CreateProcess+PATH on Windows).
   const hasPackageJson = existsSync(`${projectRoot}/package.json`)
   const hasNodeModules = existsSync(`${projectRoot}/node_modules`)
   if (hasPackageJson && !hasNodeModules) {
-    const install = spawnSync("bun", ["install"], {
+    const install = spawnSync(BUN_BINARY, ["install"], {
       cwd: projectRoot,
       stdio: ["ignore", "pipe", "pipe"],
-      shell: process.platform === "win32",
+      shell: false,
       timeout: 600_000,
     })
     if (install.error) {
@@ -289,10 +297,10 @@ async function startProjectServer(
     // tracked files into projectRoot, so delivery must materialize dist/
     // before launch. The build is idempotent — repeated delivery rounds
     // re-run it cheaply because Vite caches its own analysis.
-    const build = spawnSync("bun", ["run", script.buildScript], {
+    const build = spawnSync(BUN_BINARY, ["run", script.buildScript], {
       cwd: projectRoot,
       stdio: ["ignore", "pipe", "pipe"],
-      shell: process.platform === "win32",
+      shell: false,
       timeout: 600_000,
     })
     if (build.error) {
@@ -309,10 +317,10 @@ async function startProjectServer(
   }
 
   // Run via `bun run`; inherits PATH so npx/vite/tsx on the project lockfile resolve.
-  const child: ChildProcess = spawn("bun", ["run", script.script], {
+  const child: ChildProcess = spawn(BUN_BINARY, ["run", script.script], {
     cwd: projectRoot,
     stdio: ["ignore", "pipe", "pipe"],
-    shell: process.platform === "win32",
+    shell: false,
     detached: process.platform !== "win32",
   })
   const captured: string[] = []
