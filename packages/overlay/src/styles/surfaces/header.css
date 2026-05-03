@@ -47,6 +47,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font: var(--oc-header-title-font);
+  line-height: var(--oc-header-title-line-height);
   letter-spacing: var(--oc-header-title-letter-spacing);
   text-transform: var(--oc-header-title-transform);
   color: var(--text-strong);

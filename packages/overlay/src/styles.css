@@ -2232,11 +2232,6 @@ body[data-theme="light"] .section-badge {
   display: inline-flex;
   align-items: center;
   min-height: calc(16px * var(--ui-scale));
-  font-size: var(--title-size);
-  font-weight: var(--title-weight);
-  color: var(--text-strong);
-  letter-spacing: var(--title-track);
-  line-height: 1;
 }
 
 .sections-stack {
@@ -4316,11 +4311,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .chat-title {
   flex: none;
-  min-width: 0;
-  font-size: var(--title-size);
-  font-weight: var(--title-weight);
-  color: var(--text-strong);
-  letter-spacing: var(--title-track);
 }
 
 .workspace-toggle {
@@ -10309,16 +10299,7 @@ body[data-resizing="true"] * {
 }
 
 .sidebar-title {
-  min-width: 0;
   flex: 1 1 auto;
-  font-size: calc(var(--title-size) + 0.5px);
-  font-weight: 700;
-  color: var(--text-strong);
-  letter-spacing: 0.02em;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .sidebar-subtitle {
@@ -10976,10 +10957,6 @@ body[data-resizing="true"] * {
   min-width: 0;
   opacity: 0;
   pointer-events: none;
-}
-
-.sidebar-title {
-  font-size: var(--title-size);
 }
 
 .sidebar-subtitle,
@@ -13160,17 +13137,6 @@ body::after,
    the `!important` chain, tweaks at the canonical site take
    effect again. */
 
-/* iter6 dropped `<span class="brand-name">`. The selector is
-   removed from the casing-reset list below — the remaining
-   selectors still need their `letter-spacing: 0; text-transform:
-   none;` to override historical theme tracking. */
-.sections-title,
-.sidebar-title,
-.chat-title {
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .brand-guide,
 .engine-bar,
 .titlebar-btn,
@@ -13794,13 +13760,6 @@ body[data-theme="light"] .btn-primary {
    sections) are baked into each column's canonical block now,
    so the !important overrides that used to live here are gone. */
 
-.sidebar-title,
-.chat-title,
-.sections-title {
-  font-size: var(--ui-font-heading);
-  font-weight: 720;
-}
-
 .engine-chip {
   text-transform: none !important;
   letter-spacing: 0 !important;
@@ -14285,13 +14244,6 @@ body[data-theme="light"] .sections {
    nothing to override (border-color targets a non-existent
    border, box-shadow:none is already the canonical value). */
 
-body[data-theme="light"] .sidebar-title,
-body[data-theme="light"] .chat-title,
-body[data-theme="light"] .sections-title {
-  color: var(--text-strong);
-  font-weight: 760;
-}
-
 body[data-theme="light"] .sidebar-btn-primary,
 body[data-theme="light"] .chat-send,
 body[data-theme="light"] .btn-primary,
@@ -14557,13 +14509,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
    for the same reason the light-theme block above was removed —
    canonical containers carry no border + no shadow, so this
    override has nothing left to override. */
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-title,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-title,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-title {
-  color: var(--text-strong);
-  font-weight: 760;
-}
 
 /* iter19: dark-mode primary buttons. User feedback flagged the
    blue→violet multi-hue gradient as "weird" on the dark
