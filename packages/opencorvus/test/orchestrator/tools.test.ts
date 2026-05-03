@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -156,6 +158,14 @@ describe("orchestrator tools", () => {
         expect(workflowState.workflowID).toBe("pipeline")
       },
     })
+  })
+
+  test("publish gate failures remain rework feedback instead of terminal task failures", async () => {
+    const source = await fs.readFile(path.join(import.meta.dir, "../../src/orchestrator/tools.ts"), "utf8")
+
+    expect(source).toContain("publishGateReworkResult")
+    expect(source).not.toContain('await updateTask(currentTask, { status: "failed", error: publishResult.summary')
+    expect(source).not.toContain('await updateTask(task, { status: "failed", error: result.summary')
   })
 
   test("goal build success removes the completed worktree and clears goal workspace metadata", async () => {

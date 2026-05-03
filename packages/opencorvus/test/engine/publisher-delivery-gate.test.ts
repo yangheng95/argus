@@ -6,6 +6,7 @@ import os from "node:os"
 import path from "node:path"
 import { Instance } from "../../src/project/instance"
 import { Publisher } from "../../src/engine/publisher"
+import { EngineGit } from "../../src/engine/git"
 import type { DeliveryRow, RunRow, TaskRow } from "../../src/engine/store"
 
 describe("Publisher delivery gate", () => {
@@ -29,6 +30,66 @@ describe("Publisher delivery gate", () => {
 
       expect(result.status).toBe("failed")
       expect(result.summary).toContain("did not include 1 declared file")
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("exports declared ignored files once delivery round anchors them", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "oc-publisher-ignored-"))
+    try {
+      await fs.writeFile(path.join(dir, "file.txt"), "initial\n")
+      await fs.writeFile(path.join(dir, ".gitignore"), "dist/\n")
+      await $`git init`.cwd(dir).quiet()
+      await $`git add file.txt .gitignore`.cwd(dir).quiet()
+      await $`git -c user.name=test -c user.email=test@example.com commit -m init`.cwd(dir).quiet()
+      const baseline = (await $`git rev-parse HEAD`.cwd(dir).quiet().text()).trim()
+      await fs.mkdir(path.join(dir, "dist"), { recursive: true })
+      await fs.writeFile(path.join(dir, "dist", "index.html"), "<main>calculator</main>\n")
+
+      const result = await Instance.provide({
+        directory: dir,
+        fn: async () => {
+          const task = taskRow({ baseline })
+          await EngineGit.commitDeliveryRound({
+            task,
+            iteration: 0,
+            verdict: { verdict: "accepted", summary: "accepted", rejection_count: 0 },
+            declaredChangedFiles: ["dist/index.html"],
+          })
+          return Publisher.deliver({
+            task,
+            run: runRow(),
+            delivery: deliveryRow({ changedFiles: ["dist/index.html"] }),
+          })
+        },
+      })
+
+      expect(result.status).toBe("delivered")
+      const patch = result.artifacts.find((item) => item.label === "delivery.patch")?.payload.patch
+      expect(String(patch)).toContain("dist/index.html")
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("fails publish when baseline commit is missing", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "oc-publisher-no-baseline-"))
+    try {
+      await fs.writeFile(path.join(dir, "file.txt"), "initial\n")
+      await $`git init`.cwd(dir).quiet()
+      const result = await Instance.provide({
+        directory: dir,
+        fn: () => Publisher.deliver({
+          task: taskRow({ baseline: "" }),
+          run: runRow(),
+          delivery: deliveryRow(),
+        }),
+      })
+
+      expect(result.status).toBe("failed")
+      expect(result.publish.adapters.find((item) => item.id === "workspace_export")?.detail)
+        .toContain("baseline.commit")
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
@@ -80,8 +141,9 @@ function runRow(): RunRow {
   } as RunRow
 }
 
-function deliveryRow(): DeliveryRow {
+function deliveryRow(input?: { changedFiles?: string[] }): DeliveryRow {
   const now = Date.now()
+  const changedFiles = input?.changedFiles ?? ["file.txt"]
   return {
     id: "dlv_publish_gate",
     task_id: "tsk_publish_gate",
@@ -91,8 +153,8 @@ function deliveryRow(): DeliveryRow {
     summary: "Declared changes",
     result: {
       summary: "Declared changes",
-      changed_files: ["file.txt"],
-      diffs: [{ file: "file.txt" }],
+      changed_files: changedFiles,
+      diffs: changedFiles.map((file) => ({ file })),
     },
     time_created: now,
     time_updated: now,

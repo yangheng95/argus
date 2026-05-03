@@ -137,14 +137,10 @@ async function collectMainWorktreeDiff(
   baseRef: string | undefined,
 ): Promise<{ changedFiles: string[]; patch: string }> {
   const { $ } = await import("bun")
-  // EngineGit.prepare is the contract that puts task.metadata.git.baseline.commit
-  // in place; reaching here without it means the task bypassed prepare. Emit a
-  // loud warning and fall through to the working-tree diff so a misconfigured
-  // task still ships a non-empty patch when the agent left dirty edits.
   if (!baseRef) {
-    log.warn("publisher: workspace_export missing baseline commit — falling back to working-tree diff", { cwd })
+    throw new Error("workspace_export requires task.metadata.git.baseline.commit")
   }
-  const range = baseRef ? `${baseRef}..HEAD` : "HEAD"
+  const range = `${baseRef}..HEAD`
   const namesResult = await $`git -c core.quotepath=false diff --no-ext-diff --name-only ${range}`
     .cwd(cwd)
     .quiet()

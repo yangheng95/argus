@@ -7,6 +7,8 @@ import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { requireTask, type DeliveryRow, type PlanRow, type TaskRow } from "./store"
+import fs from "node:fs/promises"
+import path from "node:path"
 
 const log = Log.create({ service: "engine-git" })
 
@@ -401,6 +403,7 @@ async function commitDeliveryRound(input: {
   /** Caller passes the rejection_details length (or 0 for accepted) so this
    *  helper does not need to import the full DeliveryVerdict type. */
   verdict: { verdict: string; summary?: string; rejection_count?: number }
+  declaredChangedFiles?: string[]
 }): Promise<{ commit?: string; mode: "created_commit" | "skipped"; error?: string }> {
   const cwd = Instance.directory
   log.info("commitDeliveryRound: ensureGitignore start", { cwd, iteration: input.iteration })
@@ -412,6 +415,8 @@ async function commitDeliveryRound(input: {
     const err = added.stderr.toString().trim() || added.stdout.toString().trim() || "git add -A failed"
     return { mode: "skipped", error: err }
   }
+  const forceAdd = await forceAddDeclaredDeliveryFiles(input.declaredChangedFiles ?? [], cwd)
+  if (forceAdd.error) return { mode: "skipped", error: forceAdd.error }
   const issues = input.verdict.rejection_count ?? 0
   const subject = clip(`delivery round ${input.iteration} | verdict=${input.verdict.verdict} | issues=${issues}`)
   const body = (input.verdict.summary ?? "").trim()
@@ -428,6 +433,42 @@ async function commitDeliveryRound(input: {
   const sha = await head()
   log.info("commitDeliveryRound: head() done", { sha })
   return { mode: "created_commit", commit: sha }
+}
+
+async function forceAddDeclaredDeliveryFiles(files: string[], cwd: string): Promise<{ error?: string }> {
+  const paths = await declaredFilesPresentInWorktree(files, cwd)
+  if (paths.length === 0) return {}
+  const result = await git(["add", "--force", "--", ...paths], { cwd })
+  if (result.exitCode === 0) return {}
+  const detail = result.stderr.toString().trim() || result.stdout.toString().trim() || "git add --force failed"
+  return { error: `commitDeliveryRound: force-add declared delivery files failed: ${detail}` }
+}
+
+async function declaredFilesPresentInWorktree(files: string[], cwd: string) {
+  const unique = new Set<string>()
+  for (const file of files) {
+    const normalized = normalizeDeliveryPath(file)
+    if (!normalized) continue
+    const absolute = path.join(cwd, normalized)
+    try {
+      const stat = await fs.stat(absolute)
+      if (stat.isFile()) unique.add(normalized)
+    } catch {
+      // Missing declared files remain visible to the publish gate instead of
+      // being synthesized into the commit.
+    }
+  }
+  return [...unique]
+}
+
+function normalizeDeliveryPath(file: string) {
+  const trimmed = file.trim()
+  if (!trimmed || path.isAbsolute(trimmed)) return undefined
+  const normalized = path.normalize(trimmed).replaceAll("\\", "/")
+  if (!normalized || normalized === "." || normalized.startsWith("../") || normalized === "..") return undefined
+  const parts = normalized.split("/")
+  if (parts.includes(".git") || parts.includes(".opencorvus")) return undefined
+  return normalized
 }
 
 /**
