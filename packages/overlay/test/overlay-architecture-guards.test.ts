@@ -143,7 +143,7 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(333)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(226)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(222)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
@@ -218,6 +218,24 @@ describe("overlay architecture guards", () => {
     expect(evalErrorBody).toContain("background: linear-gradient")
     expect(evalErrorBody).toContain("rgba(224, 106, 99")
     expect(evalErrorBody).toContain("border: 0")
+  })
+
+  test("settings document/detail cards do not rely on theme chrome resets", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      if (!isThemeSelector) continue
+
+      expect(selector).not.toMatch(/(?:channel-doc-card|detail-card)/)
+    }
+
+    for (const selector of [".channel-doc-card", ".detail-card"]) {
+      const body = styles.match(new RegExp(`${selector.replace(".", "\\.")}\\s*\\{([^}]*)\\}`))?.[1] ?? ""
+      expect(body).toContain("background: var(--surface-inset)")
+      expect(body).toContain("border: 0")
+    }
   })
 
   test("new theme files only write root-scoped tokens", () => {
