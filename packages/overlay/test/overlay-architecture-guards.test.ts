@@ -2925,37 +2925,54 @@ describe("overlay architecture guards", () => {
   })
 
   test("board intro density and typography are canonical, not theme scoped", () => {
+    // .board-intro family canonicals moved from styles.css to
+    // surfaces/board.css. The theme-bleed assertion still scans
+    // styles.css (no theme overrides should remain there for any
+    // .board-intro descendant). The density/typography spot-checks
+    // now read board.css since that file owns the canonicals. The
+    // .board-intro__cta-action shared rule with .btn-primary /
+    // .sidebar-btn-primary stays in styles.css and is excluded from
+    // the theme-bleed scan as before.
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
+    const board = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/board.css")))
 
     expect(card).not.toMatch(/\.board-intro(?:__|\b)/)
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1] ?? ""
-      const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
-      if (!isThemeSelector || !/\.board-intro(?:__|\b)/.test(selector)) continue
-      if (/\.board-intro__cta-action\b/.test(selector)) continue
+    for (const source of [styles, board]) {
+      for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = match[1] ?? ""
+        const body = match[2] ?? ""
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+          selector,
+        )
+        if (!isThemeSelector || !/\.board-intro(?:__|\b)/.test(selector)) continue
+        if (/\.board-intro__cta-action\b/.test(selector)) continue
 
-      expect(body).not.toMatch(
-        /\b(?:display|gap|grid-template-columns|overflow|-webkit-line-clamp|-webkit-box-orient|font-size|line-height|letter-spacing|text-transform|padding(?:-[a-z]+)?|border|border-radius)\s*:/,
-      )
+        expect(body).not.toMatch(
+          /\b(?:display|gap|grid-template-columns|overflow|-webkit-line-clamp|-webkit-box-orient|font-size|line-height|letter-spacing|text-transform|padding(?:-[a-z]+)?|border|border-radius)\s*:/,
+        )
+      }
     }
 
-    expect(soloRuleBody(styles, ".board-intro")).toContain("gap: calc(1px * var(--ui-scale))")
-    expect(soloRuleBody(styles, ".board-intro")).toContain("padding: calc(1px * var(--ui-scale))")
-    expect(soloRuleBody(styles, ".board-intro__title")).toContain("font-size: var(--ui-font-body)")
-    expect(soloRuleBody(styles, ".board-intro__section")).toContain("border-radius: calc(4px * var(--ui-scale))")
-    expect(soloRuleBody(styles, ".board-intro__section")).toContain("border: 0")
-    expect(soloRuleBody(styles, ".board-intro__modes")).toContain(
+    expect(soloRuleBody(board, ".board-intro")).toContain("gap: calc(1px * var(--ui-scale))")
+    expect(soloRuleBody(board, ".board-intro")).toContain("padding: calc(1px * var(--ui-scale))")
+    expect(soloRuleBody(board, ".board-intro__title")).toContain("font-size: var(--ui-font-body)")
+    expect(soloRuleBody(board, ".board-intro__section")).toContain("border-radius: calc(4px * var(--ui-scale))")
+    expect(soloRuleBody(board, ".board-intro__section")).toContain("border: 0")
+    expect(soloRuleBody(board, ".board-intro__modes")).toContain(
       "grid-template-columns: repeat(auto-fit, minmax(calc(128px * var(--ui-scale)), 1fr))",
     )
-    expect(soloRuleBody(styles, ".board-intro__cta")).toContain("border-radius: calc(3px * var(--ui-scale))")
-    expect(soloRuleBody(styles, ".board-intro__mode-desc,\n.board-intro__agent-desc")).toContain(
+    expect(soloRuleBody(board, ".board-intro__cta")).toContain("border-radius: calc(3px * var(--ui-scale))")
+    expect(soloRuleBody(board, ".board-intro__mode-desc,\n.board-intro__agent-desc")).toContain(
       "-webkit-line-clamp: 2",
     )
+
+    // Single-source assertion: the canonicals no longer live in
+    // styles.css (only the cross-cutting .btn-primary multi-selector
+    // mentions .board-intro__cta-action there).
+    expect(styles).not.toMatch(/^\.board-intro\s*\{/m)
+    expect(styles).not.toMatch(/^\.board-intro__title\s*\{/m)
   })
 
   test("chat scroll layout is canonical, not theme scoped", () => {
