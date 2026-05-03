@@ -237,6 +237,11 @@ Progress log:
   `opacity: 0` but still occupied `height: 2px` in the `.chat` flex flow.
   The progress indicator now overlays the chat header via absolute positioning,
   and a guard pins it out of layout so hidden loading chrome cannot move headers.
+- 2026-05-03: Folded duplicated `.chat-scroll` layout padding out of
+  light/dark/vscode theme selectors and back into the canonical chat scroll
+  rule. Theme blocks now only change chat-scroll background palette for that
+  slice, and the architecture guard lowers the allowed theme layout/chrome
+  override count to 237.
 
 Trigger: user feedback (2026-05-03):
 

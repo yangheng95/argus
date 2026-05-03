@@ -13783,7 +13783,7 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 
 .chat-scroll {
   background: var(--chat-canvas) !important;
-  padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
 }
 
 /* iter5: the prior `.chat-empty` mini-block here (min-height 150px,
@@ -14278,7 +14278,6 @@ body[data-theme="light"] .diff-dialog-stat {
 
 body[data-theme="light"] .chat-scroll {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(248, 250, 255, 0.86)) !important;
-  padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
 }
 
 body[data-theme="light"] .chat-scroll > .card,
@@ -14516,7 +14515,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .diff-dialog-stat {
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-scroll {
   background: var(--chat-canvas) !important;
-  padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-scroll > .card,
