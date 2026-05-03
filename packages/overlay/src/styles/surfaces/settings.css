@@ -851,3 +851,90 @@
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent-hover);
 }
+
+/* ── Settings content panel + resizer ────────────────────── */
+
+/* Content panel: scrollable region to the right of the sidebar
+   nav. The clamp() bounds at 16/22 / 18/28 px wrapped in
+   `calc(N * --ui-scale)` so the panel padding scales uniformly. */
+.config-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding:
+    clamp(calc(16px * var(--ui-scale)), calc(20px * var(--ui-scale)), calc(22px * var(--ui-scale)))
+    clamp(calc(18px * var(--ui-scale)), calc(24px * var(--ui-scale)), calc(28px * var(--ui-scale)));
+}
+
+.config-tab-panel {
+  display: none;
+}
+
+.config-tab-panel.active {
+  display: block;
+}
+
+.config-tab-panel > .config-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--ui-scale));
+}
+
+/* Subsection density inside the content panel — overrides the
+   bare `.config-subsection-*` defaults to fit within the dialog
+   padding. */
+.config-content .config-subsection {
+  overflow: hidden;
+  margin-bottom: calc(8px * var(--ui-scale));
+}
+
+.config-content .config-subsection-head {
+  min-height: calc(40px * var(--ui-scale));
+  padding: calc(9px * var(--ui-scale)) calc(14px * var(--ui-scale));
+}
+
+.config-content .config-subsection-body {
+  padding: 0 calc(14px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  gap: calc(12px * var(--ui-scale));
+}
+
+.config-content .extension-head,
+.config-content .knowledge-toolbar {
+  gap: calc(12px * var(--ui-scale));
+}
+
+/* Sidebar resizer: thin column-resize gutter between the nav
+   sidebar and the content panel. The 1px center hairline
+   converted to `var(--oc-border-width)`; the 999px pill rounding
+   on the hairline → `var(--oc-radius-pill)`. */
+.config-resizer {
+  flex: 0 0 calc(4px * var(--ui-scale));
+  min-width: calc(4px * var(--ui-scale));
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.config-resizer::before {
+  content: "";
+  position: absolute;
+  top: calc(14px * var(--ui-scale));
+  bottom: calc(14px * var(--ui-scale));
+  left: 50%;
+  width: var(--oc-border-width);
+  transform: translateX(-50%);
+  border-radius: var(--oc-radius-pill);
+  background: var(--subtle-3);
+  transition: background 80ms;
+}
+
+.config-resizer:hover::before,
+.config-resizer[data-active="true"]::before {
+  background: var(--accent);
+}
+
+.config-nav-spacer {
+  flex: 1;
+}

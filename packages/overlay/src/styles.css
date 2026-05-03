@@ -6543,75 +6543,15 @@ select.field-input option {
    transparent)`. */
 
 /* ── Content Panel ── */
-.config-content {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: clamp(16px, calc(20px * var(--ui-scale)), 22px) clamp(18px, calc(24px * var(--ui-scale)), 28px);
-}
-
-.config-tab-panel {
-  display: none;
-}
-.config-tab-panel.active {
-  display: block;
-}
-
-.config-tab-panel > .config-section-body {
-  display: flex;
-  flex-direction: column;
-  gap: calc(14px * var(--ui-scale));
-}
-
-/* ── Subsections inside content (Extensions) ── */
-.config-content .config-subsection {
-  overflow: hidden;
-  margin-bottom: calc(8px * var(--ui-scale));
-}
-.config-content .config-subsection-head {
-  min-height: calc(40px * var(--ui-scale));
-  padding: calc(9px * var(--ui-scale)) calc(14px * var(--ui-scale));
-}
-.config-content .config-subsection-body {
-  padding: 0 calc(14px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  gap: calc(12px * var(--ui-scale));
-}
-.config-content .extension-head,
-.config-content .knowledge-toolbar {
-  gap: calc(12px * var(--ui-scale));
-}
-
-/* ── Config sidebar resizer ── */
-.config-resizer {
-  flex: 0 0 calc(4px * var(--ui-scale));
-  min-width: calc(4px * var(--ui-scale));
-  cursor: col-resize;
-  background: transparent;
-  position: relative;
-  touch-action: none;
-  user-select: none;
-}
-.config-resizer::before {
-  content: "";
-  position: absolute;
-  top: calc(14px * var(--ui-scale));
-  bottom: calc(14px * var(--ui-scale));
-  left: 50%;
-  width: 1px;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: var(--subtle-3);
-  transition: background 80ms;
-}
-.config-resizer:hover::before,
-.config-resizer[data-active="true"]::before {
-  background: var(--accent);
-}
-
-/* ── Config sidebar spacer ── */
-.config-nav-spacer {
-  flex: 1;
-}
+/* `.config-content` + `.config-tab-panel` (+ `.active`) +
+   `.config-tab-panel > .config-section-body` + `.config-content
+   .config-subsection` density rules + `.config-content
+   .extension-head, .config-content .knowledge-toolbar` gap +
+   `.config-resizer` (+ `::before` hairline + `:hover/[data-
+   active]::before`) + `.config-nav-spacer` live in
+   `styles/surfaces/settings.css` now. clamp() bounds wrapped in
+   `calc(N * --ui-scale)`; `1px` hairline → `var(--oc-border-
+   width)`; `999px` pill → `var(--oc-radius-pill)`. */
 
 /* ── About page ── */
 .about-body {
