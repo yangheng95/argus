@@ -594,3 +594,18 @@
   font-style: italic;
   color: var(--text);
 }
+
+/* Tool output, reasoning trace, and inline patch blobs share the
+ * same scrollable container contract. The 128px ceiling is denser
+ * than the inspector's 112px (.sections .plan-summary et al.)
+ * because tool output and reasoning are dense text that the
+ * operator scans, while inspector summaries are narrative they
+ * read line-by-line. */
+.msg-tool-output,
+.msg-reasoning,
+.msg-patch {
+  max-width: 100%;
+  max-height: calc(128px * var(--ui-scale));
+  overflow: auto;
+  overscroll-behavior: contain;
+}

@@ -1614,27 +1614,7 @@ body[data-resizing="true"] * {
   max-width: 100%;
 }
 
-.sections .plan-summary,
-.sections .overview-summary,
-.sections .overview-next-step,
-.sections .goal-desc,
-.sections .goal-criteria,
-.sections .change-path,
-.sections .eval-summary,
-.sections .eval-error-detail {
-  max-height: calc(112px * var(--ui-scale));
-  overflow: auto;
-  overscroll-behavior: contain;
-}
 
-.msg-tool-output,
-.msg-reasoning,
-.msg-patch {
-  max-width: 100%;
-  max-height: calc(128px * var(--ui-scale));
-  overflow: auto;
-  overscroll-behavior: contain;
-}
 
 .msg-tool-output {
   max-height: none;
