@@ -5689,7 +5689,10 @@ code .file-link:hover {
    iter14 / iter15 / iter16.
 
    Folded into one block. Flat: `border-radius: 0`, no
-   gradient, no shadow, no decorative ::before overlay. The
+   gradient, no shadow, no decorative ::before overlay. iter57
+   finished the theme-reset extraction: margin, compact padding,
+   accent border, palette background, and focus ring now live
+   here instead of in light/dark body[data-theme] blocks. The
    focus-within ring stays as the only chrome — it's the
    active-state affordance the user needs to see when typing. */
 .chat-input {
@@ -5697,12 +5700,13 @@ code .file-link:hover {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-  margin: calc(8px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale));
-  border: 1px solid var(--border-strong);
+  gap: calc(2px * var(--ui-scale));
+  margin: 0;
+  padding: calc(4px * var(--ui-scale));
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
   border-radius: 0;
-  background: var(--surface-inset);
+  background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
+  box-shadow: none;
   flex-shrink: 0;
   container-type: inline-size;
 }
@@ -13898,7 +13902,8 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
    stays — that's the only chrome the flat input keeps so
    the user can see when it's active. */
 .chat-input:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-strong));
+  border-color: color-mix(in srgb, var(--accent) 54%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 /* iter20: the late `.chat-textarea` background !important
@@ -14291,24 +14296,9 @@ body[data-theme="light"] .workspace-mount {
   border-color: rgba(116, 133, 184, 0.14) !important;
 }
 
-/* iter17 follow-up (CRON self-audit): the light-theme chat-input
-   override used to re-introduce an 18px border-radius which
-   directly defeated iter17's flat-corner intent (commit msg
-   said `border-radius: 0`, rendered visual still showed 18px).
-   Border-radius removed; theme palette (lighter accent border
-   + white background) stays. */
-body[data-theme="light"] .chat-input {
-  margin: calc(10px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  padding: calc(9px * var(--ui-scale));
-  border: 1px solid rgba(91, 95, 240, 0.28);
-  background: rgba(255, 255, 255, 0.9) !important;
-  box-shadow: none !important;
-}
-
-body[data-theme="light"] .chat-input:focus-within {
-  border-color: rgba(91, 95, 240, 0.48);
-  box-shadow: 0 0 0 2px rgba(91, 95, 240, 0.1) !important;
-}
+/* iter57: light-theme `.chat-input` chrome folded into the
+   canonical so themes no longer decide composer spacing,
+   border, background, or focus ring. */
 
 body[data-theme="light"] .chat-textarea {
   background: rgba(248, 250, 255, 0.92) !important;
@@ -14544,21 +14534,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-mount {
   border-color: color-mix(in srgb, var(--border) 84%, transparent) !important;
 }
 
-/* iter17 follow-up (CRON self-audit): same fix as the light
-   override above — drop the 18px border-radius that defeated
-   iter17's flat-corner intent in dark mode. */
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-input {
-  margin: calc(10px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  padding: calc(9px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
-  background: color-mix(in srgb, var(--surface) 94%, transparent) !important;
-  box-shadow: none !important;
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-input:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 54%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent) !important;
-}
+/* iter57: dark/vscode-dark `.chat-input` chrome folded into the
+   canonical for the same reason as light mode. */
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-textarea {
   background: color-mix(in srgb, var(--surface-inset) 90%, transparent) !important;
@@ -14629,7 +14606,6 @@ body[data-theme="vscode-dark"] .executor-chip {
   background: #2d2d30 !important;
 }
 
-body[data-theme="vscode-dark"] .chat-input,
 body[data-theme="vscode-dark"] .chat-scroll > .card,
 body[data-theme="vscode-dark"] .chat-scroll > .interaction-card,
 body[data-theme="vscode-dark"] .section,
@@ -14662,7 +14638,6 @@ body[data-theme="light"]
     .engine-chip-caret,
     .workspace-tab,
     .section-icon-btn,
-    .chat-input,
     .chat-toolbar-btn,
     .chat-cancel-btn,
     .chat-send,
@@ -14692,7 +14667,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .engine-chip-caret,
     .workspace-tab,
     .section-icon-btn,
-    .chat-input,
     .chat-toolbar-btn,
     .chat-cancel-btn,
     .chat-send,
@@ -14791,11 +14765,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   padding: calc(2px * var(--ui-scale)) !important;
 }
 
-body[data-theme="light"] .chat-input,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-input {
-  gap: calc(2px * var(--ui-scale)) !important;
-  padding: calc(4px * var(--ui-scale)) !important;
-}
+/* iter57: `.chat-input` compact gap/padding folded into canonical. */
 
 body[data-theme="light"] .task-dir-shell,
 body[data-theme="dark"] .task-dir-shell,

@@ -31,6 +31,9 @@
 // `!important`, the ::before decorative gradient gone too (the
 // flat input has no shape to overlay). The :focus-within state
 // keeps an accent border ring as the lone visible affordance.
+// Theme-scoped overrides are not legitimate: they were changing
+// margin, padding, border, background, and focus ring instead of
+// swapping root palette tokens.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
@@ -40,6 +43,7 @@ const STYLES = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles.css"),
   "utf8",
 )
+const CLEAN_STYLES = STYLES.replace(/\/\*[\s\S]*?\*\//g, "")
 
 function countSoloTopLevelRules(selector: string): number {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -73,6 +77,16 @@ describe(".chat-input is a single flat source", () => {
     expect(body).toMatch(/border-radius:\s*0(?:px)?\s*;/)
   })
 
+  test("the canonical declares the actually-rendered spacing and chrome", () => {
+    const body = soloRuleBody(".chat-input")
+    expect(body).toMatch(/\bgap:\s*calc\(2px \* var\(--ui-scale\)\)\s*;/)
+    expect(body).toMatch(/\bmargin:\s*0\s*;/)
+    expect(body).toMatch(/\bpadding:\s*calc\(4px \* var\(--ui-scale\)\)\s*;/)
+    expect(body).toMatch(/\bborder:\s*1px solid color-mix\(in srgb, var\(--accent\) 34%, transparent\)\s*;/)
+    expect(body).toMatch(/\bbackground:\s*color-mix\(in srgb, var\(--surface-strong\) 94%, transparent\)\s*;/)
+    expect(body).toMatch(/\bbox-shadow:\s*none\s*;/)
+  })
+
   test("no `.chat-input::before` decorative gradient survives", () => {
     // The ::before pseudo painted a radial gradient overlay
     // tied to the rounded shell. With border-radius: 0 the
@@ -81,21 +95,16 @@ describe(".chat-input is a single flat source", () => {
     expect(STYLES).not.toMatch(/\n\.chat-input::before\s*\{/)
   })
 
-  test("no theme override re-introduces a non-zero border-radius on .chat-input", () => {
-    // CRON self-audit on iter17 caught two theme overrides
-    // (`body[data-theme="light"] .chat-input` and the
-    // dark-theme equivalent) that quietly forced
-    // `border-radius: calc(18px * --ui-scale)` back onto
-    // .chat-input — so the rendered visual stayed rounded
-    // even though the canonical was flat. Walk every theme-
-    // scoped `.chat-input` rule body and assert none of them
-    // carry a non-zero border-radius declaration.
-    const headRe = /(^|\n)body[^{]*?\.chat-input(?![-\w])(?::focus-within)?\s*\{/g
-    for (const match of STYLES.matchAll(headRe)) {
-      const open = match.index + match[0].length - 1
-      const close = STYLES.indexOf("}", open)
-      const body = STYLES.slice(open + 1, close)
-      expect(body).not.toMatch(/border-radius:\s*(?!0)\S/)
+  test("theme selectors cannot own `.chat-input` chrome", () => {
+    for (const chunk of CLEAN_STYLES.split("}")) {
+      const openIdx = chunk.indexOf("{")
+      if (openIdx < 0) continue
+      const selector = chunk.slice(0, openIdx).trim()
+      const isThemeSelector =
+        /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      if (!isThemeSelector) continue
+
+      expect(selector).not.toMatch(/(?:^|\s|:is\([^)]*)\.chat-input(?:\b|[:.[#])/)
     }
   })
 })
