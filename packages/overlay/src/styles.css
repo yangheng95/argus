@@ -5155,103 +5155,18 @@ select.field-input option {
   color: var(--bad);
 }
 
-.extension-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.extension-block + .extension-block {
-  margin-top: 12px;
-}
-
-.extension-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--subtle-1);
-  transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
-}
-
-.extension-head:hover,
-.extension-head:focus-within {
-  background: var(--hover-accent-wash);
-  border-color: var(--hover-accent-border);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
+/* `.extension-block` (+ sibling spacing) + `.extension-head`
+   (+ `:hover` / `:focus-within`) + `.extension-list` +
+   `.extension-row` (+ `-main` + child rules + `-actions`) +
+   `.extension-policy` live in `styles/surfaces/settings.css`
+   now. `.extension-status` (+ data-state variants) stays in
+   styles.css until the shared dot-prefix primitive that fuses
+   it with `.llm-status` and `.gwg-priority-badge` gets a
+   palette-token sweep — extracting the lying pill canonical
+   alone would re-introduce a rule-8 split-source. */
 
 .channel-public-url-head .field {
   flex: 1;
-}
-
-.extension-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* Single source after iter30. The canonical here used to
-   declare `background: var(--subtle-1)`, but a late-tail
-   `!important` reset shared with .criteria-group /
-   .eval-error / .channel-doc-card / .detail-card /
-   .config-section forced `--surface-inset` over it, and a
-   later theme reset forced the row border to 0 — the source
-   said one thing, the browser rendered another (rule-8
-   active conflict, not just rule-9 redundancy). Updated
-   canonical to declare the rendered background and borderless
-   chrome directly so the row has one source across themes.
-   Padding switched from hardcoded `8px 10px` to the shared
-   `--ui-card-padding-*` tokens (rule 10) that the
-   multi-selector card-treatment already used. */
-.extension-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
-  border-radius: var(--radius);
-  border: 0;
-  background: var(--surface-inset);
-}
-
-.extension-row-main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.extension-row strong {
-  font-size: var(--ui-font-control);
-  color: var(--text-strong);
-}
-
-.extension-row span,
-.extension-row small {
-  font-size: var(--ui-font-control);
-  line-height: 1.4;
-  color: var(--text-soft);
-}
-
-.extension-row-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  flex-wrap: wrap;
-  flex-shrink: 0;
 }
 
 .prompt-grid {
@@ -5372,15 +5287,7 @@ select.field-input option {
   border-radius: 0 0 var(--radius) var(--radius);
 }
 
-.extension-policy {
-  min-width: 88px;
-  padding: 5px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface-inset);
-  color: var(--text);
-  font-size: var(--ui-font-control);
-}
+/* `.extension-policy` lives in surfaces/settings.css. */
 
 .channel-row-actions {
   display: flex;

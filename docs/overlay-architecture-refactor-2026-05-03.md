@@ -1257,6 +1257,33 @@ Progress log:
   variants + absence of the retired rgba(255,255,255,0.04)
   literal. Ceilings unchanged.
 
+- 2026-05-03: Extended surfaces/settings.css with the
+  ExtensionsPanel.tsx block + row family: `.extension-block` (+
+  sibling spacing), `.extension-head` (+ `:hover` /
+  `:focus-within` with `--hover-accent-*` token wash and inset
+  highlight via color-mix), `.extension-list`, `.extension-row`
+  (+ `-main` + `strong` / `span` / `small` typography children +
+  `-actions`), and `.extension-policy` select. The
+  `.extension-status` solo + 3 data-state variants stay in
+  styles.css until the shared dot-prefix primitive that fuses
+  them with `.llm-status` and `.gwg-priority-badge` gets a
+  palette-token sweep — extracting the lying pill canonical
+  alone would re-introduce a rule-8 split-source. The
+  `.extension-head .field-label` typography late-dupe at
+  ~7171/7867 stays in styles.css for now (pending a font-token
+  cleanup on `--title-*` / `--subhead-*`). Token conversions:
+  5× unscaled `1px` borders → `var(--oc-border-width)`; raw
+  `rgba(255, 255, 255, 0.04)` hover inset highlight →
+  `color-mix(in srgb, white 4%, transparent)`; ~10 unscaled px
+  wrapped in `calc(N * --ui-scale)`. Updated the existing
+  extension-rows-no-theme-resets guard to scan both styles.css
+  and the new settings.css and assert the `.extension-row`
+  background + borderless declaration lives in the surface.
+  New ownership guard adds 7 base classes + the multi-class
+  `:hover` / `:focus-within` selector + sibling-spacing rule +
+  `span`/`small` typography multi-class + absence of the
+  retired rgba inset literal. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
