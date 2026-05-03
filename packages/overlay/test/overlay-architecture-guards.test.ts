@@ -172,7 +172,7 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(138)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(137)
     expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(69)
   })
 
@@ -241,6 +241,23 @@ describe("overlay architecture guards", () => {
 
       expect(selector).not.toMatch(/\.chat-icon-col(?=$|[\s:{.#\[,>+~])/)
     }
+  })
+
+  test("conversation goals strip is owned by surfaces/conversation.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const conversationSurface = readText(
+      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
+    )
+
+    for (const className of ["chat-goals-strip", "goal-chip"]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(conversationSurface).toMatch(/\.chat-goals-strip:empty\s*\{/)
+    expect(conversationSurface).toMatch(/\.goal-chip\[data-status="passed"\]/)
+    expect(conversationSurface).toMatch(/\.goal-chip\[data-status="failed"\]/)
+    expect(conversationSurface).toMatch(/\.goal-chip\[data-status="in_progress"\]/)
   })
 
   test("conversation header + task-switch progress are owned by surfaces/conversation.css", () => {

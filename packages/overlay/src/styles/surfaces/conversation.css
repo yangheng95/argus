@@ -258,6 +258,66 @@
   box-shadow: none;
 }
 
+/* Goals strip (inline goal status above the chat scroll). The HTML
+   element is currently a stub (`#chatGoalsStrip` is never populated by
+   any runtime path), but the chrome stays so a future re-enable does
+   not need to re-derive the design. The earlier rgba-gradient backdrop
+   was overwritten by a late `var(--surface-inset) !important` override
+   in styles.css; the surface declares the rendered value directly. */
+.chat-goals-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  min-height: 0;
+  background: var(--surface-inset);
+}
+
+.chat-goals-strip:empty {
+  display: none;
+}
+
+.goal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: calc(10px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  background: var(--card-fill);
+  border: var(--oc-border-width) solid var(--border);
+  color: var(--text-soft);
+  white-space: nowrap;
+  max-width: calc(200px * var(--ui-scale));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, white 5%, transparent);
+}
+
+.goal-chip[data-status="passed"] {
+  background: var(--good-dim);
+  border-color: var(--good);
+  color: var(--good);
+}
+
+.goal-chip[data-status="failed"] {
+  background: var(--bad-dim);
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.goal-chip[data-status="in_progress"] {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.goal-chip .goal-chip-icon {
+  font-size: var(--ui-font-control);
+}
+
 .chat-empty {
   flex: 0 0 auto;
   display: flex;

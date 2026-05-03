@@ -792,6 +792,22 @@ Progress log:
   font-weight dropped from 620 to 600 — a copy-all text link does
   not need a special weight notch above the chat-header text-soft
   baseline.
+- 2026-05-03: Extracted the `.chat-goals-strip` strip + `:empty` and
+  the `.goal-chip` family (resting + three `[data-status]` variants
+  + nested `.goal-chip-icon`) from `styles.css` into
+  `styles/surfaces/conversation.css`. The canonical's earlier
+  rgba-gradient backdrop was already overridden by a late
+  `var(--surface-inset) !important` rule (now consolidated into the
+  surface canonical without `!important`). All raw px values converted
+  to `calc(Npx * var(--ui-scale))`; the `1px` border thickness through
+  `var(--oc-border-width)`; the inset `rgba(255, 255, 255, 0.05)`
+  highlight through `color-mix(in srgb, white 5%, transparent)`; the
+  `10px` chip radius scales through `calc(10px * var(--ui-scale))`.
+  Note: `#chatGoalsStrip` is currently a stub HTML element with no
+  runtime path that populates it — the chrome stays so a future
+  re-enable does not need to re-derive the design (rule 17: dead
+  code retire deferred to user review). Guard ceiling drops to
+  `!important <= 137`.
 
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
