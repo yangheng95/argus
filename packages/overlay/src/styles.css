@@ -5289,102 +5289,16 @@ select.field-input option {
 
 /* `.extension-policy` lives in surfaces/settings.css. */
 
-.channel-row-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-#channelFields {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-md);
-}
-
-/* iter36: canonical bg switched from var(--subtle-1) to
-   var(--surface-inset) so source matches what the late-tail
-   !important reset at line ~12428 was actually rendering.
-   Same single-source pass iter28 / iter30 / iter33 already
-   shipped for the four other shell sibling selectors. */
-.channel-doc-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-md);
-  flex-wrap: wrap;
-  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
-  border-radius: var(--radius);
-  border: 0;
-  background: var(--surface-inset);
-  box-shadow: none;
-}
-
-.channel-doc-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.channel-doc-title {
-  font-size: var(--ui-font-control);
-  line-height: 1.4;
-  color: var(--text-soft);
-}
-
-.channel-doc-credit {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-}
-
-.channel-doc-card .btn {
-  white-space: nowrap;
-}
-
-.market-card {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--subtle-1);
-}
-
-.market-card + .market-card {
-  margin-top: 8px;
-}
-
-.market-card-main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.market-card-main strong {
-  font-size: var(--ui-font-title);
-  color: var(--text-strong);
-}
-
-.market-card-main span,
-.market-card-main small {
-  font-size: var(--ui-font-control);
-  line-height: 1.4;
-  color: var(--text-soft);
-}
-
-.market-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-  flex-shrink: 0;
-}
+/* `.channel-row-actions` + `#channelFields` + `.channel-doc-*`
+   family + `.market-*` family live in
+   `styles/surfaces/settings.css` now. The `.channel-doc-card`
+   transition declaration that previously sat in a late-tail
+   dupe was folded into the canonical there per rule 8. The
+   `.market-card` shared chrome (border/radius/bg/padding) stays
+   in the cross-surface multi-class with `.goal-item, .knowledge-
+   item, .pref-item, .criteria-check`; the surface canonical
+   declares only the unique layout properties to avoid a
+   rule-8 double source. */
 
 .extension-status {
   flex-shrink: 0;
@@ -7866,13 +7780,8 @@ body[data-theme="light"] .config-close-btn:hover {
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
-.channel-doc-card {
-  transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
-}
+/* `.channel-doc-card` transition folded into the surface canonical
+   at styles/surfaces/settings.css. */
 
 .config-content .extension-head:hover,
 .config-content .extension-head:focus-within,
