@@ -357,6 +357,19 @@ Progress log:
   rules. The workflow report close action now has one transparent icon-button
   shape across light, dark, and vscode-dark themes; the guard explicitly
   rejects future theme-scoped report-close chrome.
+- 2026-05-03: Titlebar menus gained native Alt access behavior in
+  `TitlebarMenubar`: bare `Alt` focuses the first top-level menu and
+  `Alt+W/M/R/T/V/H` opens Workspace, Model, Run, Tools, View, or Help
+  directly. The shortcut contract is exposed through `aria-keyshortcuts`
+  and covered by a browser E2E test.
+- 2026-05-03: Titlebar menu text is now pinned to black through the
+  `--oc-titlebar-menu-text` design token instead of inheriting theme
+  palette text. The E2E assertion checks the rendered color is
+  `rgb(0, 0, 0)`.
+- 2026-05-03: User confirmed Claude Code will work in parallel with Codex.
+  This document is now also the cross-agent coordination source: both agents
+  must update this log, respect file ownership, run the same guard/test gates,
+  and avoid touching unrelated dirty files.
 
 Trigger: user feedback (2026-05-03):
 
@@ -370,6 +383,15 @@ Latest user clarification:
 > 例如不要圆角和非圆角大范围混用，各个栏 header 要统一风格，
 > 不要大小不一、形式各异。必须彻底根除所有技术债，不留后患。
 
+Latest execution clarification:
+
+> 不要拖节奏，浪费时间。Claude Code 会与 Codex 一起工作。
+
+Implication: future iterations should prefer larger surface-level
+retirements over one-selector cleanup when the risk is bounded by tests.
+Parallel agents must coordinate through this document and git history rather
+than starting independent rewrites of the same surface.
+
 This doc is the active implementation contract for the overlay
 UI/UX refactor. It is not only a file-layout cleanup. The end
 state must make design language enforceable: one set of
@@ -380,14 +402,14 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **15,212 lines / 2,070 top-level rules / 490 nested rules**                             |
-| `packages/overlay/src/styles/card.css` | 2,022 lines / 336 top-level rules                                                       |
+| `packages/overlay/src/styles.css`      | **15,172 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles/card.css` | **2,023 lines**                                                                         |
 | Total `!important` in stylesheets      | **234** current guard baseline                                                          |
 | `body[data-theme="…"]` theme overrides | **149**                                                                                 |
 | Theme layout/chrome overrides          | **85** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
-| Largest 5 components                   | TaskList 696 / LogViewer 579 / CardHeader 544 / MemoryPanel 444 / GoalWorkflowGroup 206 |
-| Total `.tsx` LOC across overlay        | 28,700                                                                                  |
+| Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
+| Total `.tsx` LOC under `packages/overlay/src` | **15,108**                                                                      |
 
 Early single-source iters proved the per-selector teardown discipline.
 The current baseline is materially lower, but the same rule still holds:
@@ -546,6 +568,32 @@ packages/overlay/src/components/
 | **5** | Retire legacy God CSS from runtime imports, archive it as reference-only backup, collapse `main.tsx` 18 mounts into single `App.tsx`, and remove dead mount placeholders. | 5–10            |
 
 Total: **100–120 iters** within the 1000-iter target.
+
+## Parallel Agent Coordination
+
+Codex and Claude Code may now work on the refactor at the same time. The
+coordination rule is file/surface ownership per commit, not hidden runtime
+fallbacks or temporary duplicate implementations.
+
+Required workflow for both agents:
+
+- Start each slice with `git status --short` and inspect the latest commits
+  on the current branch before editing.
+- Own a named surface or file set for the slice. Do not edit another agent's
+  active surface unless the previous commit is already pushed and the new slice
+  explicitly builds on it.
+- Keep unrelated dirty files out of commits. Current known unrelated files
+  include `packages/overlay/src/utils/time.ts`,
+  `packages/opencorvus/script/overlay-snap.ts`,
+  `packages/overlay/script/iter-shots/`, and `specs/chat ui.png`.
+- Prefer whole-surface retirement when tests bound the risk: move a complete
+  selector family from theme/God CSS into canonical primitive or surface CSS,
+  then delete the old runtime selector path in the same commit.
+- Every implementation slice must update this progress log when it changes
+  architecture, guard ceilings, theme behavior, mount structure, or known
+  debt inventory.
+- Every slice must run the relevant targeted tests, the architecture guard,
+  docs check when this file changes, and push without bypassing hooks.
 
 ## Replacement strategy
 
