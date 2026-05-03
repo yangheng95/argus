@@ -2644,3 +2644,24 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   color: var(--text-strong);
   font-weight: 500;
 }
+
+/* Inspector ("sections" container) bounds the height of the
+ * narrative blocks the operator scrolls through (plan summary,
+ * overview, overview-next-step, goal desc + criteria, change-path,
+ * eval summary + error-detail). Each card scrolls vertically
+ * inside the rail without pushing the rail itself off-screen. The
+ * 112px ceiling is a density choice for the rail-vs-content split
+ * — same value pre-extraction, just owned by the inspector
+ * surface instead of the legacy God CSS. */
+.sections .plan-summary,
+.sections .overview-summary,
+.sections .overview-next-step,
+.sections .goal-desc,
+.sections .goal-criteria,
+.sections .change-path,
+.sections .eval-summary,
+.sections .eval-error-detail {
+  max-height: calc(112px * var(--ui-scale));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
