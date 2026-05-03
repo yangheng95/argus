@@ -287,6 +287,12 @@ Progress log:
   density now live in canonical rules, reducing guard ceilings to
   `!important <= 263`, `body[data-theme] <= 175`, and theme layout/chrome
   overrides <= 151.
+- 2026-05-03: Moved right-panel empty hint density for
+  `.section-body > .empty-hint` and `#solidChangesPanel > .empty-hint` from the
+  light/dark/vscode `!important` reset into the canonical empty-state rule. The
+  compact panel hint shape is no longer theme-dependent, tightening guard
+  ceilings to `!important <= 259`, `body[data-theme] <= 174`, and theme
+  layout/chrome overrides <= 147.
 
 Trigger: user feedback (2026-05-03):
 

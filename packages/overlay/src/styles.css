@@ -2671,8 +2671,12 @@ body[data-theme="light"] .section-badge {
 
 .section-body > .empty-hint,
 #solidChangesPanel > .empty-hint {
+  gap: calc(4px * var(--ui-scale));
   width: 100%;
   max-width: none;
+  padding: calc(6px * var(--ui-scale));
+  border: 0;
+  border-radius: calc(4px * var(--ui-scale));
 }
 
 .diff-preview-empty .empty-hint,
@@ -14858,15 +14862,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   ) {
   border-color: transparent !important;
   box-shadow: none !important;
-}
-
-body[data-theme="light"] :is(.section-body > .empty-hint, #solidChangesPanel > .empty-hint),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(.section-body > .empty-hint, #solidChangesPanel > .empty-hint) {
-  gap: calc(4px * var(--ui-scale)) !important;
-  padding: calc(6px * var(--ui-scale)) !important;
-  border: 0 !important;
-  border-radius: calc(4px * var(--ui-scale)) !important;
 }
 
 body[data-theme="light"] .agent-workflow-panel,

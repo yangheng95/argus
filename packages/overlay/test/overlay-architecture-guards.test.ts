@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(263)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(175)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(259)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(174)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(151)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(147)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -406,6 +406,34 @@ describe("overlay architecture guards", () => {
     )
     expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("gap: calc(2px * var(--ui-scale))")
     expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("padding: calc(2px * var(--ui-scale))")
+  })
+
+  test("right-panel empty hint density is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      const hasRightPanelEmptyHint =
+        /\.section-body\s*>\s*\.empty-hint\b/.test(selector) ||
+        /#solidChangesPanel\s*>\s*\.empty-hint\b/.test(selector)
+      if (!isThemeSelector || !hasRightPanelEmptyHint) continue
+
+      expect(body).not.toMatch(/\b(?:gap|padding(?:-[a-z]+)?|border(?:-[a-z]+)?|border-radius)\s*:/)
+    }
+
+    const body = soloRuleBody(styles, ".section-body > .empty-hint,\n#solidChangesPanel > .empty-hint")
+    for (const declaration of [
+      "gap: calc(4px * var(--ui-scale))",
+      "padding: calc(6px * var(--ui-scale))",
+      "border: 0",
+      "border-radius: calc(4px * var(--ui-scale))",
+    ]) {
+      expect(body).toContain(declaration)
+    }
   })
 
   test("panel body shell chrome is canonical, not theme scoped", () => {
