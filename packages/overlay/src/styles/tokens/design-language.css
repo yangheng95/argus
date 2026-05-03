@@ -17,6 +17,7 @@
   --oc-header-gap: calc(7px * var(--ui-scale, 1));
   --oc-header-actions-padding: calc(var(--oc-border-width) * 2);
   --oc-header-title-font: 650 var(--ui-font-title, 12px) var(--font, sans-serif);
+  --oc-header-title-line-height: 1;
   --oc-header-title-letter-spacing: 0;
   --oc-header-title-transform: none;
   --oc-header-bg: var(--surface-strong);

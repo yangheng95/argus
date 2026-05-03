@@ -6,6 +6,19 @@ const SURFACE_HEADER_SOURCE = join(import.meta.dir, "../src/components/ui/Surfac
 const HEADER_CSS = join(import.meta.dir, "../src/styles/surfaces/header.css");
 const LEGACY_CSS = join(import.meta.dir, "../src/styles.css");
 
+function blocksForSelectors(css: string, classNames: string[]): Array<{ selector: string; body: string }> {
+  const blocks: Array<{ selector: string; body: string }> = [];
+  const re = /([^{}]+)\{([^{}]*)\}/g;
+  for (const match of css.matchAll(re)) {
+    const selector = match[1] ?? "";
+    const body = match[2] ?? "";
+    if (classNames.some((className) => new RegExp(`\\.${className}(?![-\\w])`).test(selector))) {
+      blocks.push({ selector, body });
+    }
+  }
+  return blocks;
+}
+
 test("SurfaceHeader owns the canonical header structure", () => {
   const source = readFileSync(SURFACE_HEADER_SOURCE, "utf8");
 
@@ -24,6 +37,7 @@ test("SurfaceHeader variants have surface CSS hooks", () => {
   expect(css).toContain('.oc-surface-header[data-surface="settings-group"]');
   expect(css).toContain(".sections-tabs.oc-surface-header__actions");
   expect(css).toContain("var(--oc-header-actions-padding)");
+  expect(css).toContain("var(--oc-header-title-line-height)");
 });
 
 test("legacy God CSS no longer owns base surface header chrome", () => {
@@ -37,4 +51,14 @@ test("surface header actions own action spacing outside theme resets", () => {
 
   expect(css).not.toMatch(/(^|\n)\.(?:sidebar-header-actions|chat-header-meta)\s*\{[^}]*\bgap\s*:/);
   expect(css).not.toMatch(/body[^{]*\.sidebar-header-actions(?![-\w])[^{}]*\{[^}]*\bgap\s*:/);
+});
+
+test("surface header titles own title typography outside theme resets", () => {
+  const css = readFileSync(LEGACY_CSS, "utf8");
+  const titleBlocks = blocksForSelectors(css, ["sidebar-title", "chat-title", "sections-title"]);
+  const typography = /\b(?:font(?:-size|-weight)?|line-height|color|letter-spacing|text-transform)\s*:/;
+
+  for (const block of titleBlocks) {
+    expect(block.body).not.toMatch(typography);
+  }
 });

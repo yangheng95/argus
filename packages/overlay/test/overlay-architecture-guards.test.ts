@@ -205,6 +205,7 @@ describe("overlay architecture guards", () => {
       "--oc-header-height",
       "--oc-header-padding-x",
       "--oc-header-gap",
+      "--oc-header-title-line-height",
       "--oc-radius-panel",
       "--oc-radius-card",
       "--oc-radius-control",

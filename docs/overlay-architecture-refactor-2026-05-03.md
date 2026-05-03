@@ -177,6 +177,10 @@ Progress log:
   `.oc-surface-header__actions`, removing local `.sidebar-header-actions` /
   `.chat-header-meta` gap declarations and the theme-scoped
   `.sidebar-header-actions` gap reset.
+- 2026-05-03: Moved primary header title typography fully under
+  `.oc-surface-header__title`, removing local `.sidebar-title` /
+  `.chat-title` / `.sections-title` font, weight, color, line-height, casing,
+  and theme typography overrides from God CSS.
 
 Trigger: user feedback (2026-05-03):
 
