@@ -1452,6 +1452,31 @@ Progress log:
   child rules + chevron rotation + 2 modifier variants.
   Ceilings unchanged.
 
+- 2026-05-03: Moved the ExecutorSelector dropdown menu family
+  (`.executor-menu*`) into surfaces/composer.css (it pops up
+  above the chat composer's executor chip): `.executor-menu`
+  shell + scrollbar pseudos, `.executor-menu-group`,
+  `.executor-menu-row` (+ `:hover:not(:disabled)` + `:disabled`
+  + `.executor-menu-group[data-active="true"] > .executor-menu-
+  row` active variant), `.executor-menu-current`,
+  `.executor-menu-models`, `.executor-menu-model` (+ `:hover` +
+  `[data-active="true"]`). Token conversions: 4× `1px` borders
+  → `var(--oc-border-width)`; raw shadow `rgba(0, 0, 0, X)`
+  pair → `color-mix(in srgb, black X%, transparent)` with
+  shadow px wrapped in `calc(N * --ui-scale)`; `4px` scrollbar
+  + thumb radius → calc-wrapped; `rgba(255, 255, 255, 0.06)`
+  row/model hover → `color-mix(white 6%, transparent)`; the
+  active-model gradient's accent-family near-miss light-blue
+  rgbs routed through `color-mix(var(--accent) X%, transparent)`
+  so the active state stays in design language; the active-
+  model text color routed to `var(--text-strong)`. The light-
+  theme overrides for `.executor-menu*` (which use raw `#fff` /
+  `#0f172a` / black rgba) stay in styles.css pending the broader
+  theme-palette tokenization pass. New ownership guard asserts
+  6 base classes + scrollbar pseudo + multi-class hover +
+  `[data-active]` group/model variants + absence of the 3
+  retired raw light-blue rgb literals. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
