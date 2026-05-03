@@ -429,6 +429,51 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
   })
 
+  test("integrity panel is owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "integrity",
+      "integrity__header",
+      "integrity__attempts",
+      "integrity__summary",
+      "integrity__section",
+      "integrity__section-title",
+      "integrity__list",
+      "integrity__dimension",
+      "integrity__dimension-name",
+      "integrity__dimension-counts",
+      "integrity__issue-desc",
+      "integrity__tag",
+      "integrity__correction-head",
+      "integrity__correction-reason",
+      "integrity__goal-id",
+      "integrity__diff",
+      "integrity__missing-title",
+      "integrity__missing-objective",
+      "integrity__missing-reason",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const verdict of ["pass", "concerns", "needs_correction"]) {
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.integrity__dimension\\[data-verdict="${verdict}"\\]\\s*\\{`),
+      )
+    }
+
+    for (const action of ["modify", "split", "remove"]) {
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.integrity__tag\\[data-action="${action}"\\]\\s*\\{`),
+      )
+    }
+
+    expect(inspectorSurface).toMatch(/\.integrity__diff dt\s*\{/)
+    expect(inspectorSurface).toMatch(/\.integrity__diff dd\s*\{/)
+  })
+
   test("requirements panel is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
