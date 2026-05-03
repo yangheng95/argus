@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(241)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(153)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(239)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(151)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(90)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(88)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -730,6 +730,31 @@ describe("overlay architecture guards", () => {
     ]) {
       expect(reportBody).toContain(declaration)
     }
+  })
+
+  test("workflow report dividers are canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      const hasReportDivider =
+        /\.agent-workflow-report-head\b/.test(selector) ||
+        /\.agent-workflow-report-section\b/.test(selector)
+      if (!isThemeSelector || !hasReportDivider) continue
+
+      expect(body).not.toMatch(/\bborder(?:-[a-z]+)?\s*:/)
+    }
+
+    expect(soloRuleBody(styles, ".agent-workflow-report-head")).toContain(
+      "border-bottom: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border))",
+    )
+    expect(soloRuleBody(styles, ".agent-workflow-report-section")).toContain(
+      "border-bottom: 1px solid color-mix(in srgb, var(--border) 58%, transparent)",
+    )
   })
 
   test("panel body shell chrome is canonical, not theme scoped", () => {

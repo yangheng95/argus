@@ -7694,7 +7694,7 @@ select.field-input option {
   justify-content: space-between;
   gap: calc(12px * var(--ui-scale));
   padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
   background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
 }
 
@@ -7721,7 +7721,7 @@ select.field-input option {
 
 .agent-workflow-report-section {
   padding: calc(12px * var(--ui-scale)) calc(16px * var(--ui-scale));
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
 }
 
 .agent-workflow-report-section:last-child {
@@ -14928,16 +14928,12 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 body[data-theme="light"]
   :is(
     .section:last-child,
-    .criteria-item,
-    .agent-workflow-report-head,
-    .agent-workflow-report-section
+    .criteria-item
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .section:last-child,
-    .criteria-item,
-    .agent-workflow-report-head,
-    .agent-workflow-report-section
+    .criteria-item
   ) {
   border: 0 !important;
   border-left: 0 !important;
@@ -15184,14 +15180,4 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh
 .agent-workflow-session {
   font-family: var(--mono);
   color: color-mix(in srgb, var(--workflow-tone) 72%, var(--text-muted));
-}
-
-body[data-theme="light"] .agent-workflow-report-head,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-report-head {
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border)) !important;
-}
-
-body[data-theme="light"] .agent-workflow-report-section,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-report-section {
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 58%, transparent) !important;
 }
