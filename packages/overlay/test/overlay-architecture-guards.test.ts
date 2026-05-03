@@ -98,7 +98,7 @@ const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
 
 function countThemeLayoutOverrides(css: string): number {
   let total = 0
-  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  for (const match of withoutComments(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const selector = match[1] ?? ""
     if (!/body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)) continue
     const body = match[2] ?? ""
@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(142)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(71)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(138)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(69)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(44)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(33)
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
@@ -243,6 +243,27 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("composer build/version row and reflow are owned by surfaces/composer.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+
+    for (const className of [
+      "chat-build",
+      "chat-version",
+      "chat-version-link",
+      "chat-version-sep",
+      "chat-compose-tip",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(composerSurface).toMatch(/@container \(max-width: 520px\)/)
+    expect(composerSurface).toMatch(/@media \(max-width: 700px\)/)
+    expect(composerSurface).toMatch(/\.chat-send-icon svg\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)\.chat-send-icon svg\s*\{/)
+  })
+
   test("composer attachments and compose row/meta are owned by surfaces/composer.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
@@ -281,6 +302,15 @@ describe("overlay architecture guards", () => {
     expect(styles).not.toMatch(/(^|\n)\.chat-send:disabled\s*\{/)
     expect(styles).not.toMatch(/body\[data-theme="light"\] \.chat-send\b/)
     expect(styles).not.toMatch(/body:is\([^)]*\) \.chat-send\b/)
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.chat-send\b/.test(selector)) continue
+
+      expect(selector).not.toMatch(/\.chat-send\b/)
+    }
     expect(composerSurface).toMatch(/\.chat-send:hover\s*\{/)
     expect(composerSurface).toMatch(/\.chat-send:disabled\s*\{/)
     expect(composerSurface).toMatch(/\.chat-send:focus-visible\s*\{/)
