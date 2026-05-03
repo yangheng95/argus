@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(324)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(213)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(322)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(212)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(220)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(207)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -378,6 +378,36 @@ describe("overlay architecture guards", () => {
       "border: 0",
       "border-radius: 0",
       "box-shadow: none",
+    ]) {
+      expect(body).toContain(declaration)
+    }
+  })
+
+  test("task bar shell layout is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/(?:^|[\s>+~,])\.task-bar(?:$|[\s:{.#\[,>+~])/.test(selector)) continue
+
+      expect(body).not.toMatch(
+        /\b(?:margin(?:-[a-z]+)?|padding(?:-[a-z]+)?|border-width|border-left|border-right|border-radius)\s*:/,
+      )
+    }
+
+    const bodies = Array.from(styles.matchAll(/(^|\n)\.task-bar\s*\{([^{}]*)\}/g)).map(
+      (match) => match[2] ?? "",
+    )
+    const body = bodies.at(-1) ?? ""
+    for (const declaration of [
+      "margin: 0",
+      "padding: 0 calc(6px * var(--ui-scale))",
+      "border-width: 0 0 1px",
+      "border-radius: 0",
     ]) {
       expect(body).toContain(declaration)
     }
