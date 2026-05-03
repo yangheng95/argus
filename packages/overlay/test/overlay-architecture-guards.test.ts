@@ -243,6 +243,29 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("conversation header + task-switch progress are owned by surfaces/conversation.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const conversationSurface = readText(
+      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
+    )
+
+    for (const className of [
+      "task-switch-progress",
+      "chat-header-main",
+      "chat-title",
+      "chat-header-status",
+      "chat-task-status",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(conversationSurface).toMatch(/@keyframes task-switch-progress-slide/)
+    expect(conversationSurface).toMatch(/\.task-switch-progress::before/)
+    expect(conversationSurface).toMatch(/\.chat-header-meta\s*\{/)
+    expect(conversationSurface).toMatch(/\.chat-count\s*\{/)
+  })
+
   test("conversation chat-scroll is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const conversationSurface = readText(
@@ -1485,8 +1508,11 @@ describe("overlay architecture guards", () => {
 
   test("chat task-switch progress overlays the header instead of creating a hidden gap", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const conversationSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
+    )
     const chatBody = soloRuleBody(styles, ".chat")
-    const progressBody = soloRuleBody(styles, ".task-switch-progress")
+    const progressBody = soloRuleBody(conversationSurface, ".task-switch-progress")
 
     expect(chatBody).toContain("position: relative")
     expect(progressBody).toContain("position: absolute")
