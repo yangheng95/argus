@@ -184,3 +184,190 @@
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
 }
+
+/* Task row mini: a single task entry in the sidebar list. Flat shell —
+   no border, no shadow — chrome shows up only on :hover/:focus-within
+   and on [data-active]. The state overrides themselves (hover +
+   active background) still live in styles.css until the action button
+   chrome is reworked, but the resting shell is the canonical here. */
+.task-row-mini {
+  display: flex;
+  align-items: stretch;
+  gap: calc(6px * var(--ui-scale));
+  flex: 0 0 auto;
+  padding:
+    calc(5px * var(--ui-scale))
+    calc(6px * var(--ui-scale))
+    calc(5px * var(--ui-scale))
+    calc(9px * var(--ui-scale));
+  border: var(--oc-border-width) solid transparent;
+  border-radius: 0;
+  position: relative;
+  transition: background 120ms;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+  min-height: calc(48px * var(--ui-scale));
+}
+
+.task-row-drag-handle {
+  width: calc(16px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--text-muted) 72%, transparent);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.task-row-mini[data-draggable="true"]:hover .task-row-drag-handle,
+.task-row-mini[data-dragging="true"] .task-row-drag-handle {
+  color: var(--text);
+  opacity: 1;
+}
+
+.task-row-main {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  border: 0 solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.task-row-head {
+  flex: 1;
+  min-width: 0;
+  display: block;
+}
+
+.task-row-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+.task-row-head .mini-badge {
+  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  font-size: var(--ui-font-meta);
+}
+
+.task-row-main strong {
+  display: block;
+  font-size: var(--ui-font-body);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-strong);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-row-stamp {
+  display: block;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: calc(var(--ui-font-meta) * 0.95);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* Status badge: a tiny dot indicator that uses the workflow tone
+   palette (info / good / warn / bad / muted). The dot is a 8x8
+   circle with a 1px halo of currentColor at 16% alpha. */
+.task-row-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(10px * var(--ui-scale));
+  min-width: calc(10px * var(--ui-scale));
+  min-height: calc(10px * var(--ui-scale));
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: var(--oc-radius-pill);
+  background: transparent;
+  color: var(--text-soft);
+  flex-shrink: 0;
+}
+
+.task-row-badge::before {
+  content: "";
+  display: block;
+  width: calc(8px * var(--ui-scale));
+  height: calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--subtle-4) 96%, transparent);
+  box-shadow: 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, currentColor 16%, transparent);
+}
+
+/* sr-only text for screen readers */
+.task-row-badge-text {
+  position: absolute;
+  width: calc(1px * var(--ui-scale));
+  height: calc(1px * var(--ui-scale));
+  padding: 0;
+  margin: calc(-1px * var(--ui-scale));
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.task-row-badge[data-status="active"] {
+  color: var(--accent);
+}
+
+.task-row-badge[data-status="active"]::before {
+  background: color-mix(in srgb, var(--accent) 84%, transparent);
+}
+
+.task-row-badge[data-status="queued"] {
+  color: var(--warn);
+}
+
+.task-row-badge[data-status="queued"]::before {
+  background: color-mix(in srgb, var(--warn) 82%, transparent);
+}
+
+.task-row-badge[data-status="completed"] {
+  color: var(--good);
+}
+
+.task-row-badge[data-status="completed"]::before {
+  background: color-mix(in srgb, var(--good) 82%, transparent);
+}
+
+.task-row-badge[data-status="failed"] {
+  color: var(--bad);
+}
+
+.task-row-badge[data-status="failed"]::before {
+  background: color-mix(in srgb, var(--bad) 82%, transparent);
+}
+
+.task-row-badge[data-status="completed"]::before,
+.task-row-badge[data-status="cancelled"]::before,
+.task-row-badge[data-status="idle"]::before {
+  background: color-mix(in srgb, var(--text-muted) 74%, transparent);
+}
+
+.task-row-badge[data-status="cancelled"],
+.task-row-badge[data-status="idle"] {
+  color: var(--text-muted);
+}

@@ -839,6 +839,22 @@ Progress log:
   cancelled `border: none` on the session panel routed through
   `var(--oc-border-width)` / `0 solid transparent`. Bold-weight
   density ceiling tightens to `<= 39`.
+- 2026-05-03: Extended `styles/surfaces/sidebar.css` with the
+  task-row-mini family: `.task-row-mini` shell, `.task-row-drag-handle`
+  (+ draggable hover scope), `.task-row-main` (+ `strong` typography),
+  `.task-row-head` (+ nested `.mini-badge`), `.task-row-meta`,
+  `.task-row-stamp`, `.task-row-badge` (+ `::before` dot + four
+  `[data-status]` tone variants + cancelled/idle muted color +
+  sr-only `-text` clipper). The badge dot's `border-radius: 999px`
+  literals route through `var(--oc-radius-pill)`; the sr-only clipper's
+  1px sizing scales through `calc(Npx * var(--ui-scale))`. Note: late
+  dupes at styles.css ~11506 / ~11514 / ~11520 / ~11525 / ~11848+
+  still partially redeclare `.task-row-main` / `-main strong` /
+  `-meta` / `-badge` shapes — those are tracked rule-8 violations to
+  fold into the surface canonical in a follow-up. Extraction guard
+  verifies surface ownership of eight task-row classes plus the
+  `::before` dot, four status-tone variants, and the draggable-handle
+  compound selector.
 
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
