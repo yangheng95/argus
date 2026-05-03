@@ -7048,15 +7048,15 @@ select.field-input option {
    declare `background: var(--subtle-1)`, but a late-tail
    `!important` reset shared with .criteria-group /
    .eval-error / .channel-doc-card / .detail-card /
-   .config-section forced `--surface-inset` over it — the
-   source said one thing, the browser rendered another (rule-
-   8 active conflict, not just rule-9 redundancy). Updated
-   canonical to declare `--surface-inset` directly so the
-   source matches the rendered visual. Padding switched from
-   hardcoded `8px 10px` to the shared `--ui-card-padding-*`
-   tokens (rule 10) that the multi-selector card-treatment
-   already used. The three reset chains drop `.extension-row`
-   from their lists. */
+   .config-section forced `--surface-inset` over it, and a
+   later theme reset forced the row border to 0 — the source
+   said one thing, the browser rendered another (rule-8
+   active conflict, not just rule-9 redundancy). Updated
+   canonical to declare the rendered background and borderless
+   chrome directly so the row has one source across themes.
+   Padding switched from hardcoded `8px 10px` to the shared
+   `--ui-card-padding-*` tokens (rule 10) that the
+   multi-selector card-treatment already used. */
 .extension-row {
   display: flex;
   align-items: flex-start;
@@ -7064,7 +7064,7 @@ select.field-input option {
   gap: 10px;
   padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
   border-radius: var(--radius);
-  border: 1px solid var(--border);
+  border: 0;
   background: var(--surface-inset);
 }
 
@@ -9940,7 +9940,6 @@ body[data-theme="light"] .config-close-btn:hover {
 .config-content .knowledge-toolbar:focus-within,
 .config-content .channel-doc-card:hover,
 .config-content .channel-doc-card:focus-within,
-.config-content .extension-row:hover,
 .config-content .market-card:hover,
 .config-content .knowledge-item:hover,
 .config-content .pref-item:hover {
@@ -13216,19 +13215,16 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   padding: calc(8px * var(--ui-scale));
 }
 
-/* iter28 dropped `.config-subsection`; iter30 dropped
-   `.extension-row` — both canonicals now declare the same
-   --surface-inset bg / var(--border) border / var(--radius)
-   radius / no shadow this reset block was force-asserting,
-   so the !important defense is no longer needed for them.
-   The remaining siblings (.section, .gwg, .delivery-panel,
-   .criteria-group, .eval-error, .channel-doc-card,
-   .detail-card, .config-section) keep the reset until they
-   get the same single-source pass. */
+/* iter28 dropped `.config-subsection`; iter30 started the
+   `.extension-row` extraction by moving rendered background /
+   radius / padding into the canonical. iter55 finished that
+   extraction by folding the later borderless theme result into
+   the canonical and removing the row from theme/local reset
+   chains. */
 /* iter28 dropped `.config-subsection`; iter30 dropped
    `.extension-row`; iter33 dropped `.config-section` —
    their canonicals all declare the same --surface-inset bg
-   / var(--border) border / var(--radius) radius / no shadow
+   / owned border policy / var(--radius) radius / no shadow
    directly. The remaining siblings (.section, .gwg,
    .delivery-panel, .criteria-group, .eval-error,
    .channel-doc-card, .detail-card) keep the reset until
@@ -13236,8 +13232,8 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 /* iter28/30/33/36 progressively pulled .config-subsection /
    .extension-row / .config-section / .channel-doc-card /
    .detail-card out of this !important reset — each canonical
-   now declares the same chrome (--surface-inset bg, 1px
-   var(--border) border, var(--radius) radius, no shadow)
+   now declares the same chrome family (--surface-inset bg,
+   owned border policy, var(--radius) radius, no shadow)
    directly, so the !important defense is unnecessary for
    them. The remaining 5 shell-level siblings (.section /
    .gwg / .delivery-panel / .criteria-group / .eval-error)
@@ -14348,7 +14344,6 @@ body[data-theme="light"] .chat-toolbar-btn[data-active] {
 
 body[data-theme="light"] .section,
 body[data-theme="light"] .gwg,
-body[data-theme="light"] .extension-row,
 body[data-theme="light"] .config-section,
 body[data-theme="light"] .config-subsection {
   background: rgba(255, 255, 255, 0.72) !important;
@@ -14593,7 +14588,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-toolbar-btn[data-
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .gwg,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .extension-row,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .config-section,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .config-subsection {
   background: color-mix(in srgb, var(--surface) 82%, transparent) !important;
@@ -14651,7 +14645,6 @@ body[data-theme="vscode-dark"] .chat-scroll > .card,
 body[data-theme="vscode-dark"] .chat-scroll > .interaction-card,
 body[data-theme="vscode-dark"] .section,
 body[data-theme="vscode-dark"] .gwg,
-body[data-theme="vscode-dark"] .extension-row,
 body[data-theme="vscode-dark"] .config-section,
 body[data-theme="vscode-dark"] .config-subsection,
 body[data-theme="vscode-dark"] .board-intro,
@@ -15146,7 +15139,6 @@ body[data-theme="light"]
   :is(
     .section,
     .gwg,
-    .extension-row,
     .config-section,
     .config-subsection,
     .board-intro,
@@ -15163,7 +15155,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .section,
     .gwg,
-    .extension-row,
     .config-section,
     .config-subsection,
     .board-intro,
