@@ -416,6 +416,10 @@ Progress log:
   variants set white via the late primary cluster, and the canonical was
   declaring an unrendered `#08110f` text color that never reached the page.
   `body[data-theme]` guard ceiling drops to `<= 123`.
+- 2026-05-03: Folded card header/body/badge/interaction/trace-panel
+  declarations out of the `styles/card.css` final override layer and into
+  their canonical first-owner rules. `card.css` duplicate-selector guard drops
+  from `<= 52` to `<= 27`.
 
 Trigger: user feedback (2026-05-03):
 
@@ -449,7 +453,7 @@ one theme contract, and no runtime God CSS path left behind.
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
-| `packages/overlay/src/styles/card.css` | **1,698 lines**                                                                         |
+| `packages/overlay/src/styles/card.css` | **1,612 lines**                                                                         |
 | Total `!important` in stylesheets      | **183** current guard baseline                                                          |
 | `body[data-theme="…"]` theme overrides | **123**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
