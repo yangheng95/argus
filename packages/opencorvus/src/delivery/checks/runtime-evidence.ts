@@ -3,8 +3,8 @@
  *
  * goal-agent 不得仅靠 `mirror/scaffold.json` + `App.tsx` 级文本脚手架就标记完成
  * （ainvest 事故的上游根因）。本 check 在 delivery verdict 之前独立采集：
- *   1. 必须找到可被 puppeteer render 的 build artifact（dist/ / build/ / .next/ /
- *      可运行 `bun run start|preview|server`）
+ *   1. 必须拿到 live preview URL；启动项目由 agent / preview resolver 完成，
+ *      runtime evidence 不推断 package manager、不启动 server、不读静态文件。
  *   2. 必须真实渲染出非空 DOM（textLength ≥ 阈值，非 `<div id="root"></div>` 空壳）
  *   3. 产出的 rendered.png 与 dom metrics 向下游（P0-B 硬门 / 调试 artifact）复用
  *      单次 render（rule 22：禁双源）
@@ -14,10 +14,9 @@
  * rejection_details。
  */
 import { captureRuntimePage } from "@/delivery/runtime-capture"
-import { findRenderedIndex } from "./visual"
 
 export type RuntimeEvidenceViolationKind =
-  | "no_build_artifact"
+  | "no_live_preview"
   | "render_failed"
   | "empty_root_shell"
   | "dom_too_thin"
@@ -34,7 +33,7 @@ export interface RuntimeEvidenceReport {
   violations: RuntimeEvidenceViolation[]
   evidence: {
     projectDir: string
-    buildArtifactPath?: string
+    previewUrl?: string
     renderedPngPath?: string
     viewport?: { width: number; height: number }
     dom?: {
@@ -67,7 +66,8 @@ export const RUNTIME_EVIDENCE_THRESHOLDS = {
 export async function computeRuntimeEvidence(input: {
   projectDir: string
   outDir: string
-  /** 供 SSIM / 硬门共享的视口；缺失时用 reference 自适应或默认 1440×900。 */
+  previewUrl?: string
+  /** 供视觉证据共享的视口；缺失时用 reference 自适应或默认 1440×900。 */
   referenceForViewport?: string
   viewport?: { width: number; height: number }
   requireInteraction?: boolean
@@ -79,23 +79,21 @@ export async function computeRuntimeEvidence(input: {
     evidence: { projectDir: input.projectDir },
   }
 
-  // 1. 找 build artifact / 入口 index.html
-  const indexHtml = await findRenderedIndex(input.projectDir)
-  if (!indexHtml) {
+  // 1. 只接受 live preview URL。项目启动由 agent 或 preview resolver 负责。
+  if (!input.previewUrl) {
     violations.push({
-      kind: "no_build_artifact",
+      kind: "no_live_preview",
       detail:
-        `no index.html found under ${input.projectDir} (dist/build/.next/out/ 皆缺，` +
-        `且项目未暴露 start|preview|server 脚本）。goal-agent 必须产出真实可运行的前端，` +
-        `仅靠 mirror/scaffold.json + App.tsx 文本不算完成。`,
+        `no live frontend preview URL resolved for ${input.projectDir}. ` +
+        `delivery capture is URL-only; agent must start the app or expose a previewUrl before runtime evidence runs.`,
     })
     return report
   }
-  report.evidence.buildArtifactPath = indexHtml
+  report.evidence.previewUrl = input.previewUrl
 
   // 2. 真实 render + DOM 快照。delivery 只从 RuntimeCapture 读取截图和页面层证据。
   const render = await captureRuntimePage({
-    url: indexHtml,
+    url: input.previewUrl,
     outDir: input.outDir,
     viewport_width: input.viewport?.width,
     viewport_height: input.viewport?.height,
@@ -106,7 +104,7 @@ export async function computeRuntimeEvidence(input: {
   if (!render.captured) {
     violations.push({
       kind: "render_failed",
-      detail: `runtime capture 渲染 build artifact 失败: ${render.capture_error.message}`,
+      detail: `runtime capture 渲染 live preview 失败: ${render.capture_error.message}`,
     })
     return report
   }

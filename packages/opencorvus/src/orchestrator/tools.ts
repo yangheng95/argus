@@ -812,7 +812,7 @@ export function createOrchestratorTools(input: {
           .describe(
             "Any number of design-reference URLs: live pages, design-tool share links " +
             "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
-            "Non-Figma URLs are screenshot-rendered via headless Chromium and attached as visual_reference; " +
+            "Non-Figma URLs are screenshot-rendered in Chromium and attached as visual_reference; " +
             "Figma URLs use the REST API path. design-analyst receives those PNGs directly and does not use webfetch.",
           ),
         figma_url: z.string().optional().describe(
@@ -945,7 +945,7 @@ export function createOrchestratorTools(input: {
         }
 
         // --- Generic URL screenshots -----------------------------------------
-        // Any non-Figma URL is rendered via headless Chromium so design-tool
+        // Any non-Figma URL is rendered in Chromium so design-tool
         // share links (Sketch Cloud, Adobe XD, Framer, InVision, Zeplin, …)
         // and plain live pages contribute pixel references, not just markup.
         //
@@ -2748,7 +2748,7 @@ export function createOrchestratorTools(input: {
         // per-goal evaluator because only the merged worktree represents
         // the final artifact users see.
         let renderedAttachment:
-          | { sha: string; url: string; mime: string; size: number; filename?: string; intent: "rendered_output"; source: "puppeteer" }
+          | { sha: string; url: string; mime: string; size: number; filename?: string; intent: "rendered_output"; source: "runtime_capture" }
           | undefined
         // P0-0.B — for any task that ships visual references (user attachments
         // or design-analysis screenshots), rendering the merged worktree to a
@@ -2758,7 +2758,7 @@ export function createOrchestratorTools(input: {
         // sees reference" downgrade path the spec forbids (rule 1, no
         // fallback). We surface the failure as a structured reject signal and
         // skip the agent run entirely.
-        let renderFailure: { kind: "no_index" | "render_threw"; detail: string } | undefined
+        let renderFailure: { kind: "no_live_preview" | "render_threw"; detail: string } | undefined
         try {
           const liveTask = requireTask(taskID)
           // Visual references for sizing the render viewport: union of user
@@ -2778,13 +2778,17 @@ export function createOrchestratorTools(input: {
                 typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string",
               )
           if (imageAttachments.length > 0) {
-            const { findRenderedIndex, renderPage } = await import("@/delivery/checks/visual")
+            const { captureRuntimePage } = await import("@/delivery/runtime-capture")
+            const { resolveFrontendPreview } = await import("@/preview/frontend")
             const { AttachmentStore } = await import("@/storage/attachment-store")
-            const renderedHtml = await findRenderedIndex(Instance.directory)
-            if (!renderedHtml) {
+            const preview = await resolveFrontendPreview({
+              directory: Instance.directory,
+              requireOwnedProcess: true,
+            })
+            if (!preview.url) {
               renderFailure = {
-                kind: "no_index",
-                detail: `merged worktree at ${Instance.directory} has no index.html — visual deliverable cannot be rendered`,
+                kind: "no_live_preview",
+                detail: `merged worktree at ${Instance.directory} has no live preview URL — visual deliverable cannot be rendered`,
               }
             } else {
               // Pick the first image attachment to size the viewport. All
@@ -2802,16 +2806,19 @@ export function createOrchestratorTools(input: {
                 })
               }
               const visualOut = path.join(Instance.directory, ".opencorvus", "visual-diff")
-              const { renderedPath, size } = await renderPage({
-                rendered: renderedHtml,
+              const rendered = await captureRuntimePage({
+                url: preview.url,
                 outDir: visualOut,
                 referenceForViewport: refPath,
-                viewport: refPath ? undefined : { width: 1440, height: 900 },
+                viewport_width: refPath ? undefined : 1440,
+                viewport_height: refPath ? undefined : 900,
+                fileLabel: "rendered",
               })
+              if (!rendered.captured) throw new Error(rendered.capture_error.message)
               // Persist the rendered screenshot to the attachment store so
               // the delivery agent's multimodal prompt can inline it the
               // same way it inlines user-provided references.
-              const bytes = await (await import("node:fs/promises")).readFile(renderedPath)
+              const bytes = await (await import("node:fs/promises")).readFile(rendered.path)
               const written = await AttachmentStore.write(
                 liveTask.project_id,
                 bytes,
@@ -2825,7 +2832,7 @@ export function createOrchestratorTools(input: {
                 size: written.size,
                 filename: written.filename,
                 intent: "rendered_output",
-                source: "puppeteer",
+                source: "runtime_capture",
               }
               // System-generated visual evidence — lives in system_artifacts,
               // not the user-contract attachments column. Replace-by-intent so
@@ -2836,7 +2843,7 @@ export function createOrchestratorTools(input: {
                 renderedAttachment,
               )
               log.info("deliver: rendered merged worktree", {
-                taskID, renderedPath, size, sha: renderedAttachment.sha,
+                taskID, renderedPath: rendered.path, size: rendered.size, sha: renderedAttachment.sha,
               })
             }
           }

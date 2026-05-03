@@ -28,6 +28,7 @@ import {
   type RuntimeEvidenceReport,
 } from "./checks/runtime-evidence"
 import { buildDeliveryEvidenceManifest } from "./checks/project-gate"
+import { resolveFrontendPreview } from "@/preview/frontend"
 import {
   deliveryManifestFailureDetails,
   formatDeliveryManifestFailureDetails,
@@ -128,8 +129,16 @@ export namespace DeliveryService {
     let runtimeEvidenceFailures: string[] = [...(input.delivery.runtimeEvidenceFailures ?? [])]
     if (referencePath && manifest.finalGate.status === "passed") {
       try {
+        const manifestPreviewUrl = manifest.runtimeFlows.find((flow) => flow.previewUrl)?.previewUrl
+        const preview = manifestPreviewUrl
+          ? { url: manifestPreviewUrl }
+          : await resolveFrontendPreview({
+              directory: Filesystem.resolve(Instance.directory),
+              requireOwnedProcess: true,
+            })
         runtimeReport = await computeRuntimeEvidence({
           projectDir: Filesystem.resolve(Instance.directory),
+          previewUrl: preview.url ?? undefined,
           outDir: path.join(
             Filesystem.resolve(Instance.directory),
             ".opencorvus",

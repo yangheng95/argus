@@ -378,7 +378,7 @@ console.log("lint scope ok", cwd())
       name: "Web Runtime Render",
       status: "failed",
     }])
-    expect(manifest.runtimeFlows[0]?.evidence[0]).toContain("no_build_artifact")
+    expect(manifest.runtimeFlows[0]?.evidence[0]).toContain("no_live_preview")
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual(["runtime:web:."])
   })
 

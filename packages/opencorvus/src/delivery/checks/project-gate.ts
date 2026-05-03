@@ -18,6 +18,7 @@ import type { DeliverySurfaceManifest } from "../surface-detector"
 import { arbitrateDeliveryGate } from "../arbiter"
 import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
 import { runSecurityDataReview } from "../specialists/security-data"
+import { isLoopbackHttpUrl, resolveFrontendPreview } from "@/preview/frontend"
 import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
@@ -94,6 +95,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     requiredChecks,
     checkResults: [],
     goals: input.goals,
+    metadata: input.metadata,
   })
   const failedRuntimeFlowIds = runtimeFlows
     .filter((item) => item.status === "failed")
@@ -367,6 +369,7 @@ async function runRuntimeFlows(input: {
   requiredChecks: DeliveryRequiredCheck[]
   checkResults: DeliveryCheckResult[]
   goals?: Array<{ runtime_scenario_count?: number }>
+  metadata?: Record<string, unknown>
 }): Promise<DeliveryRuntimeFlowResult[]> {
   const flows: DeliveryRuntimeFlowResult[] = []
   if (!input.surfaceManifest.surfaces.includes("frontend")) {
@@ -388,8 +391,16 @@ async function runRuntimeFlows(input: {
     })
     return flows
   }
+  const explicitPreviewUrl = previewUrlFromMetadata(input.metadata)
+  const preview = explicitPreviewUrl
+    ? { url: explicitPreviewUrl }
+    : await resolveFrontendPreview({
+        directory: root,
+        requireOwnedProcess: true,
+      })
   const report = await computeRuntimeEvidence({
     projectDir: root,
+    previewUrl: preview.url ?? undefined,
     outDir: path.join(
       root,
       ".opencorvus",
@@ -407,7 +418,7 @@ async function runRuntimeFlows(input: {
     evidence: report.passed
       ? [
           [
-            `rendered ${report.evidence.buildArtifactPath ?? "app"}`,
+            `rendered ${report.evidence.previewUrl ?? "live preview"}`,
             `text=${report.evidence.dom?.textLength ?? "n/a"}`,
             `nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
             report.evidence.interaction
@@ -417,10 +428,18 @@ async function runRuntimeFlows(input: {
         ]
       : report.violations.map((item) => `${item.kind}: ${item.detail}`),
     screenshotPath: report.evidence.renderedPngPath,
+    previewUrl: report.evidence.previewUrl,
     dom: report.evidence.dom,
     interaction: report.evidence.interaction,
   })
   return flows
+}
+
+function previewUrlFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
+  const raw = metadata?.previewUrl ?? metadata?.frontendPreviewUrl
+  if (typeof raw !== "string") return undefined
+  const trimmed = raw.trim()
+  return isLoopbackHttpUrl(trimmed) ? trimmed : undefined
 }
 
 function buildCoverage(goals: Array<{

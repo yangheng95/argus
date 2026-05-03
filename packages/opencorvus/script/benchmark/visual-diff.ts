@@ -3,8 +3,7 @@
 // Visual-diff CLI — thin wrapper around `src/delivery/checks/visual.ts`.
 //
 // Usage:
-//   --rendered <htmlPath | url>   page to evaluate (or use --rendered-dir)
-//   --rendered-dir <dir>          auto-discover index.html under dir
+//   --rendered <url>              live page URL to evaluate
 //   --reference <pngPath>         reference screenshot
 //   --viewport <WxH>              puppeteer viewport (default: reference image size)
 //   --threshold <0..1>            mean SSIM floor (default 0.85)
@@ -17,7 +16,7 @@
 // evaluator can run the same gate without shelling out.
 
 import path from "node:path"
-import { findRenderedIndex, runVisualDiff, summarizeVisualReport } from "../../src/delivery/checks/visual"
+import { runVisualDiff, summarizeVisualReport } from "../../src/delivery/checks/visual"
 
 function flag(name: string): string | undefined {
   const prefix = `${name}=`
@@ -48,9 +47,12 @@ function parseViewport(value: string): { width: number; height: number } | undef
 
 async function main() {
   const renderedFlag = flag("--rendered")
-  const renderedDirFlag = flag("--rendered-dir")
-  if (!renderedFlag && !renderedDirFlag) {
-    console.error("[visual-diff] must provide --rendered or --rendered-dir")
+  if (!renderedFlag) {
+    console.error("[visual-diff] must provide --rendered with a live http(s) URL")
+    process.exit(2)
+  }
+  if (!/^https?:\/\//i.test(renderedFlag)) {
+    console.error(`[visual-diff] --rendered must be a live http(s) URL: ${renderedFlag}`)
     process.exit(2)
   }
   const reference = required("--reference")
@@ -60,15 +62,7 @@ async function main() {
   const viewportFlag = flag("--viewport")
   const viewport = viewportFlag ? parseViewport(viewportFlag) : undefined
 
-  const rendered = renderedFlag ?? (async () => {
-    const found = await findRenderedIndex(path.resolve(renderedDirFlag!))
-    if (!found) {
-      console.error(`[visual-diff] no index.html found under --rendered-dir=${renderedDirFlag}`)
-      process.exit(1)
-    }
-    return found
-  })()
-  const renderedResolved = typeof rendered === "string" ? rendered : await rendered
+  const renderedResolved = renderedFlag
 
   console.log(`[visual-diff] rendered=${renderedResolved} reference=${reference}`)
 

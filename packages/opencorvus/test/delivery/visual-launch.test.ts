@@ -1,99 +1,89 @@
 import { afterEach, expect, test } from "bun:test"
 import fs from "node:fs/promises"
+import http from "node:http"
 import os from "node:os"
 import path from "node:path"
-import {
-  announcedLocalUrlFromOutput,
-  renderWorkspaceCommandFailureMessage,
-  resolveProjectLaunchScript,
-} from "../../src/delivery/checks/visual"
+import { renderPage } from "../../src/delivery/checks/visual"
 
+const servers: http.Server[] = []
 const tempDirs: string[] = []
 
 afterEach(async () => {
+  for (const server of servers.splice(0)) {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
-async function fixture(scripts: Record<string, string>, files: Record<string, string> = {}) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-visual-launch-"))
+test("delivery render rejects local files instead of starting a server", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-url-only-render-"))
   tempDirs.push(dir)
-  await fs.writeFile(
-    path.join(dir, "package.json"),
-    JSON.stringify({ scripts }, null, 2),
-  )
-  for (const [rel, text] of Object.entries(files)) {
-    const abs = path.join(dir, ...rel.split("/"))
-    await fs.mkdir(path.dirname(abs), { recursive: true })
-    await fs.writeFile(abs, text)
-  }
-  return dir
+  const htmlPath = path.join(dir, "index.html")
+  await fs.writeFile(htmlPath, "<!doctype html><html><body><main>local file</main></body></html>")
+
+  await expect(renderPage({
+    rendered: htmlPath,
+    outDir: dir,
+    viewport: { width: 320, height: 240 },
+    settleMs: 0,
+  })).rejects.toThrow("URL-only")
+})
+
+test("delivery render accepts a live http URL without package-manager launch", async () => {
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-url-only-render-"))
+  tempDirs.push(outDir)
+  const url = await serveHtml(`
+<!doctype html>
+<html>
+  <body>
+    <main>
+      <h1>Live Preview</h1>
+      <section><p>Runtime capture uses the running page, keeps the real browser URL as the only source, and never starts package manager scripts.</p></section>
+      <section><p>This fixture is intentionally long enough to pass the HTTP body-size integrity floor.</p></section>
+    </main>
+  </body>
+</html>
+`)
+
+  const render = await renderPage({
+    rendered: url,
+    outDir,
+    viewport: { width: 640, height: 480 },
+    minDomDescendants: 2,
+    settleMs: 0,
+  })
+
+  expect(render.capture.targetUrl).toBe(url)
+  expect(render.capture.layers.http.passed).toBe(true)
+  expect(await exists(render.renderedPath)).toBe(true)
+})
+
+test("delivery visual render source has no package-manager or static-server path", async () => {
+  const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/delivery/checks/visual.ts"), "utf8")
+
+  expect(source).not.toContain("BUN_BINARY")
+  expect(source).not.toContain("bun install")
+  expect(source).not.toContain("bun run")
+  expect(source).not.toContain("startStaticServer")
+  expect(source).not.toContain("resolveProjectLaunchScript")
+  expect(source).not.toContain("headless: true")
+})
+
+async function serveHtml(html: string): Promise<string> {
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(html)
+  })
+  servers.push(server)
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject)
+    server.listen(0, "127.0.0.1", () => resolve())
+  })
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("test server did not bind a TCP port")
+  return `http://127.0.0.1:${address.port}/`
 }
 
-test("preview launch schedules build when compiled output is absent", async () => {
-  const dir = await fixture({
-    build: "vite build",
-    preview: "vite preview --host 127.0.0.1",
-  })
-
-  await expect(resolveProjectLaunchScript(dir)).resolves.toEqual({
-    script: "preview",
-    command: "vite preview --host 127.0.0.1",
-    buildScript: "build",
-  })
-})
-
-test("preview launch always declares its build dependency, even when dist already exists", async () => {
-  // The render call site decides whether to re-run build; the resolver only
-  // reports what the project ships. Subsequent delivery rounds can reuse the
-  // previous dist/ in projectRoot when the source is unchanged.
-  const dir = await fixture(
-    {
-      build: "vite build",
-      preview: "vite preview --host 127.0.0.1",
-    },
-    {
-      "dist/index.html": "<div id=\"root\">built</div>",
-    },
-  )
-
-  await expect(resolveProjectLaunchScript(dir)).resolves.toEqual({
-    script: "preview",
-    command: "vite preview --host 127.0.0.1",
-    buildScript: "build",
-  })
-})
-
-test("announcedLocalUrlFromOutput parses ANSI-colored vite preview port", () => {
-  const output = [
-    "$ vite preview",
-    "Port 4179 is in use, trying another one...",
-    "\x1b[32m➜\x1b[39m \x1b[1mLocal\x1b[22m: \x1b[36mhttp://localhost:\x1b[1m4180\x1b[22m/\x1b[39m",
-  ].join("\n")
-
-  expect(announcedLocalUrlFromOutput(output)).toBe("http://localhost:4180")
-})
-
-test("announcedLocalUrlFromOutput refuses localhost URLs without an explicit port", () => {
-  expect(announcedLocalUrlFromOutput("Local: http://localhost/")).toBeUndefined()
-})
-
-test("announcedLocalUrlFromOutput only normalizes wildcard host", () => {
-  expect(announcedLocalUrlFromOutput("Local: http://0.0.0.0:4180/")).toBe("http://127.0.0.1:4180")
-  expect(announcedLocalUrlFromOutput("Local: http://127.0.0.1:4180/")).toBe("http://127.0.0.1:4180")
-})
-
-test("render install timeout message preserves stderr tail", () => {
-  const stderr = `${"x".repeat(2_200)}\nerror: package registry timeout while resolving puppeteer-core\n`
-  const message = renderWorkspaceCommandFailureMessage({
-    command: "bun install",
-    projectRoot: "C:/tmp/app",
-    error: new Error("ETIMEDOUT"),
-    stdout: "installing dependencies\n",
-    stderr,
-  })
-
-  expect(message).toContain("ETIMEDOUT")
-  expect(message).toContain("stderr:")
-  expect(message).toContain("package registry timeout while resolving puppeteer-core")
-  expect(message.length).toBeLessThan(2_300)
-})
+async function exists(filePath: string): Promise<boolean> {
+  return fs.access(filePath).then(() => true, () => false)
+}
