@@ -246,6 +246,10 @@ Progress log:
   and their mobile media duplicates. `.panel` now owns its zero-padding layout
   in the canonical rule, and the theme layout/chrome override ceiling drops to
   234.
+- 2026-05-03: Folded `.panel-body` shell layout/chrome out of light/dark
+  theme selectors. Gap, padding, margin, border, radius, and shadow now live in
+  the canonical panel-body rule; theme-specific blocks only keep background and
+  backdrop palette behavior. The guard ceiling drops to 220.
 
 Trigger: user feedback (2026-05-03):
 
