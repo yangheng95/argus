@@ -10,7 +10,6 @@ import { tool } from "ai"
 import z from "zod"
 import fs from "fs/promises"
 import path from "path"
-import crypto from "node:crypto"
 import { createCodebaseTools } from "@/engine/codebase-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
@@ -19,15 +18,18 @@ import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { EngineService } from "@/task-api"
 import { findTask } from "@/engine/store"
-import { renderPage, findBrowserExecutable } from "@/delivery/checks/visual"
+import {
+  captureRuntimePage,
+  normalizeRuntimeCaptureRequest,
+  normalizeRuntimeCaptureViewport,
+  type RuntimeCaptureRequest,
+} from "@/delivery/runtime-capture"
 import { buildMultimodalToolResult } from "@/delivery/tool-result"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { buildTaskUpstreamAgentContextSections } from "@/prompt/upstream-context"
 import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 
 const TASK_CHAIN_DEPTH_LIMIT = 3
-const DELIVERY_SCREENSHOT_VIEWPORT_MAX = { width: 1440, height: 1080 } as const
-
 const log = Log.create({ service: "delivery-tools" })
 
 type DeliveryToolAttachment = {
@@ -53,13 +55,11 @@ export function normalizeDeliveryScreenshotViewport(input: { width: number; heig
   height: number
   capped: boolean
 } {
-  const width = Math.min(input.width, DELIVERY_SCREENSHOT_VIEWPORT_MAX.width)
-  const height = Math.min(input.height, DELIVERY_SCREENSHOT_VIEWPORT_MAX.height)
-  return {
-    width,
-    height,
-    capped: width !== input.width || height !== input.height,
-  }
+  return normalizeRuntimeCaptureViewport(input)
+}
+
+export function normalizeVerifyPageIntegrityInput(args: RuntimeCaptureRequest) {
+  return normalizeRuntimeCaptureRequest(args)
 }
 
 /**
@@ -476,7 +476,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
 
     screenshot: tool({
       description:
-        "Capture a PNG screenshot of a URL or a local HTML file via puppeteer and write it to the " +
+        "Capture a PNG screenshot of a URL or a local HTML file via the delivery runtime capture engine and write it to the " +
         "project's .opencorvus/delivery-screenshots/ directory. Use this to produce visual evidence " +
         "that the running application actually renders, or to capture before/after images around a " +
         "fix. The screenshot is saved to disk; reference the returned absolute path and sha when " +
@@ -493,37 +493,34 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         label: z.string().optional().describe("Short label used in the output filename, e.g. 'after-fix-1' or 'chart-area'. Alphanum / dash only."),
       }),
       execute: async ({ url, viewport_width, viewport_height, label }) => {
-        const viewport = normalizeDeliveryScreenshotViewport({ width: viewport_width, height: viewport_height })
         const safeLabel = (label ?? "shot").replace(/[^a-zA-Z0-9-_]/g, "-").slice(0, 40) || "shot"
         const outDir = path.join(projectDir, ".opencorvus", "delivery-screenshots")
         await fs.mkdir(outDir, { recursive: true })
         const stamp = new Date().toISOString().replace(/[:.]/g, "-")
-        const workDir = path.join(outDir, `${stamp}-${safeLabel}`)
+        const captureDir = path.join(outDir, `${stamp}-${safeLabel}`)
         try {
-          const rendered = await renderPage({
-            rendered: url,
-            outDir: workDir,
-            viewport,
+          const capture = await captureRuntimePage({
+            url,
+            outDir: captureDir,
+            viewport_width,
+            viewport_height,
+            fileLabel: safeLabel,
           })
-          const buf = await fs.readFile(rendered.renderedPath)
-          const sha = crypto.createHash("sha256").update(buf).digest("hex").slice(0, 16)
-          const variance = luminanceVariance(buf)
-          const finalPath = path.join(outDir, `${stamp}-${safeLabel}-${sha}.png`)
-          await fs.rename(rendered.renderedPath, finalPath).catch(async () => {
-            await fs.copyFile(rendered.renderedPath, finalPath)
-          })
-          await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined)
+          if (!capture.captured) {
+            return JSON.stringify(capture, null, 2)
+          }
+          const variance = capture.layers.pixel.variance
           return JSON.stringify(
             {
               ok: true,
-              path: finalPath,
-              sha,
-              bytes: buf.length,
-              width: rendered.size.width,
-              height: rendered.size.height,
-              requested_viewport: { width: viewport_width, height: viewport_height },
-              viewport: rendered.viewport,
-              viewport_capped: viewport.capped,
+              path: capture.path,
+              sha: capture.sha,
+              bytes: capture.bytes,
+              width: capture.size.width,
+              height: capture.size.height,
+              requested_viewport: capture.requested_viewport,
+              viewport: capture.viewport,
+              viewport_capped: capture.viewport.capped,
               pixel_variance: Number(variance.toFixed(2)),
               degenerate: variance < 25,
               note: variance < 25
@@ -535,7 +532,6 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
           )
         } catch (err) {
           log.warn("screenshot failed", { url, err })
-          await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined)
           // P0-0: failures stay text-only — there is no PNG to attach. Do NOT
           // return a stale prior-run image (rule 1: no fallback that lies
           // about what was captured this turn).
@@ -547,7 +543,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
     verify_page_integrity: tool({
       description:
         "Hard verification that a URL actually serves a live, interactive application — NOT a curl " +
-        "bypass. One puppeteer session attaches 5 observers (request failures, response bodies, " +
+        "bypass. One runtime capture session attaches 5 observers (request failures, response bodies, " +
         "console errors, page errors, unhandled rejections) and runs six checks simultaneously:\n" +
         "  1. HTTP: status 2xx + content-type text/html + body ≥ 200B at the page URL.\n" +
         "  2. Asset: every <script src>/<link href>/<img src> loads with status 2xx (no 404/blocked).\n" +
@@ -567,170 +563,40 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         min_dom_descendants: z.number().int().min(1).max(10000).default(20).describe("Minimum descendant count under document.body. 20 is a reasonable floor for any non-trivial app shell."),
         expect_selectors: z.array(z.string()).default([]).describe("CSS selectors that MUST resolve to at least one element. Cite ids/classes from your spec."),
         expect_texts: z.array(z.string()).default([]).describe("Substrings that MUST appear in document.body.textContent (case-sensitive). Use for headers, visible labels, data markers."),
-        wait_for_selector: z.string().optional().describe("Optional CSS selector to wait for before assertions run (e.g. '.chart canvas'). Default: just waitUntil networkidle0."),
+        wait_for_selector: z.string().optional().describe("Optional CSS selector to wait for before assertions run (e.g. '.chart canvas'). Default: load + settle without selector wait."),
         wait_timeout_ms: z.number().int().min(1000).max(120000).default(30000),
       }),
-      execute: async (args) => {
-        let puppeteer: typeof import("puppeteer-core")
-        try {
-          puppeteer = (await import("puppeteer-core")).default as any
-        } catch (err) {
-          return `verify_page_integrity: puppeteer-core unavailable — ${err instanceof Error ? err.message : String(err)}`
-        }
-        let executablePath: string
-        try {
-          executablePath = await findBrowserExecutable()
-        } catch (err) {
-          return `verify_page_integrity: no browser — ${err instanceof Error ? err.message : String(err)}`
-        }
-
-        const report = {
+      execute: async (rawArgs) => {
+        const args = normalizeVerifyPageIntegrityInput(rawArgs)
+        const outDir = path.join(
+          projectDir,
+          ".opencorvus",
+          "delivery-screenshots",
+          `verify-${new Date().toISOString().replace(/[:.]/g, "-")}`,
+        )
+        const capture = await captureRuntimePage({
           url: args.url,
-          passed: false,
-          requested_viewport: { width: args.viewport_width, height: args.viewport_height },
-          viewport: normalizeDeliveryScreenshotViewport({ width: args.viewport_width, height: args.viewport_height }),
-          layers: {
-            http: { passed: false, status: 0, content_type: "", body_length: 0, reason: "" },
-            asset: { passed: false, total: 0, failed: [] as Array<{ url: string; status: number; reason: string }> },
-            dom: { passed: false, body_descendants: 0, required: args.min_dom_descendants },
-            js: { passed: false, console_errors: [] as string[], page_errors: [] as string[] },
-            pixel: { passed: false, variance: 0, floor: 25, screenshot_path: "" },
-            expected: {
-              passed: false,
-              missing_selectors: [] as string[],
-              missing_texts: [] as string[],
-            },
-          },
-          summary: "",
-        }
-
-        const browser = await puppeteer.launch({
-          executablePath,
-          headless: true,
-          args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+          outDir,
+          viewport_width: args.viewport_width,
+          viewport_height: args.viewport_height,
+          min_dom_descendants: args.min_dom_descendants,
+          expect_selectors: args.expect_selectors,
+          expect_texts: args.expect_texts,
+          wait_for_selector: args.wait_for_selector,
+          wait_timeout_ms: args.wait_timeout_ms,
+          settle_ms: args.settle_ms,
+          fileLabel: "verify",
         })
-        try {
-          const page = await browser.newPage()
-          await page.setViewport({
-            width: report.viewport.width,
-            height: report.viewport.height,
-            deviceScaleFactor: 1,
-          })
-
-          const failedRequests: Array<{ url: string; status: number; reason: string }> = []
-          let totalRequests = 0
-          page.on("response", (res) => {
-            totalRequests += 1
-            const status = res.status()
-            if (status >= 400 && status < 600) {
-              failedRequests.push({ url: res.url(), status, reason: res.statusText() || `HTTP ${status}` })
+        const report = capture.captured
+          ? {
+              url: capture.url,
+              passed: capture.passed,
+              requested_viewport: capture.requested_viewport,
+              viewport: capture.viewport,
+              layers: capture.layers,
+              summary: capture.summary,
             }
-          })
-          page.on("requestfailed", (req) => {
-            failedRequests.push({ url: req.url(), status: 0, reason: req.failure()?.errorText ?? "request failed" })
-          })
-          const consoleErrors: string[] = []
-          page.on("console", (msg) => {
-            if (msg.type() === "error") consoleErrors.push(msg.text().slice(0, 400))
-          })
-          const pageErrors: string[] = []
-          page.on("pageerror", (err) => {
-            const e = err as Error
-            pageErrors.push(e.message?.slice(0, 400) ?? String(err))
-          })
-
-          // Layer 1 — HTTP / content-type
-          const response = await page.goto(args.url, {
-            waitUntil: "networkidle0",
-            timeout: args.wait_timeout_ms,
-          })
-          const status = response?.status() ?? 0
-          const contentType = String(response?.headers()["content-type"] ?? "").toLowerCase()
-          const bodyBuf = response ? await response.buffer().catch(() => Buffer.alloc(0)) : Buffer.alloc(0)
-          report.layers.http.status = status
-          report.layers.http.content_type = contentType
-          report.layers.http.body_length = bodyBuf.length
-          if (status < 200 || status >= 300) {
-            report.layers.http.reason = `status=${status}`
-          } else if (!contentType.includes("text/html")) {
-            report.layers.http.reason = `content-type=${contentType || "(missing)"} — app root must serve text/html`
-          } else if (bodyBuf.length < 200) {
-            report.layers.http.reason = `body=${bodyBuf.length}B — too small to be an app shell`
-          } else {
-            report.layers.http.passed = true
-          }
-
-          if (args.wait_for_selector) {
-            try {
-              await page.waitForSelector(args.wait_for_selector, { timeout: args.wait_timeout_ms })
-            } catch {
-              // surface as selector miss in layer 6; do NOT throw
-            }
-          }
-
-          // Layer 2 — asset loads
-          report.layers.asset.total = totalRequests
-          report.layers.asset.failed = failedRequests
-          report.layers.asset.passed = failedRequests.length === 0
-
-          // Layer 3 — DOM descendants
-          const bodyDescendants = await page.evaluate(() =>
-            document.body ? document.body.getElementsByTagName("*").length : 0,
-          )
-          report.layers.dom.body_descendants = bodyDescendants
-          report.layers.dom.passed = bodyDescendants >= args.min_dom_descendants
-
-          // Layer 4 — JS errors
-          report.layers.js.console_errors = consoleErrors
-          report.layers.js.page_errors = pageErrors
-          report.layers.js.passed = consoleErrors.length === 0 && pageErrors.length === 0
-
-          // Layer 5 — pixel variance on a screenshot
-          const shotDir = path.join(projectDir, ".opencorvus", "delivery-screenshots")
-          await fs.mkdir(shotDir, { recursive: true })
-          const shotPath = path.join(
-            shotDir,
-            `verify-${new Date().toISOString().replace(/[:.]/g, "-")}.png`,
-          )
-          await page.screenshot({ path: shotPath as `${string}.png`, type: "png" })
-          const shotBuf = await fs.readFile(shotPath)
-          const variance = luminanceVariance(shotBuf)
-          report.layers.pixel.variance = Number(variance.toFixed(2))
-          report.layers.pixel.screenshot_path = shotPath
-          report.layers.pixel.passed = variance >= report.layers.pixel.floor
-
-          // Layer 6 — expected selectors / texts
-          const missingSelectors: string[] = []
-          for (const sel of args.expect_selectors ?? []) {
-            const found = await page.$(sel).then((e) => !!e).catch(() => false)
-            if (!found) missingSelectors.push(sel)
-          }
-          const bodyText = await page.evaluate(() => document.body?.textContent ?? "")
-          const missingTexts = (args.expect_texts ?? []).filter((t) => !bodyText.includes(t))
-          report.layers.expected.missing_selectors = missingSelectors
-          report.layers.expected.missing_texts = missingTexts
-          report.layers.expected.passed = missingSelectors.length === 0 && missingTexts.length === 0
-
-          report.passed =
-            report.layers.http.passed &&
-            report.layers.asset.passed &&
-            report.layers.dom.passed &&
-            report.layers.js.passed &&
-            report.layers.pixel.passed &&
-            report.layers.expected.passed
-
-          const failedLayers = Object.entries(report.layers)
-            .filter(([, v]) => !(v as { passed: boolean }).passed)
-            .map(([k]) => k)
-          report.summary = report.passed
-            ? `all 6 layers passed on ${args.url}`
-            : `failed layers: ${failedLayers.join(", ")}`
-        } catch (err) {
-          report.summary = `verify_page_integrity crashed: ${err instanceof Error ? err.message : String(err)}`
-          log.warn("verify_page_integrity failed", { url: args.url, err })
-        } finally {
-          await browser.close().catch(() => undefined)
-        }
+          : capture
         return JSON.stringify(report, null, 2)
       },
     }),
@@ -963,33 +829,4 @@ function forbiddenCheckReason(rawCommand: string): string | undefined {
   if (/^ls\b\s+(-[a-zA-Z]+\s+)?\S+/.test(stripped) && !/[|;&]/.test(stripped)) return "ls / file-listing is not acceptance evidence"
   if (/^cat\b/.test(stripped) && !/[|;&]/.test(stripped)) return "cat of own artifact is not acceptance evidence"
   return
-}
-
-/** Stride-sampled luminance variance on a PNG buffer. A blank page, a JSON
- *  error body rendered on white, and a pre-hydration stub all land near zero
- *  (empirical floor: ~25/255² for real app shells). Used by screenshot and
- *  verify_page_integrity as a fast structural sanity gate on the capture. */
-function luminanceVariance(pngBuffer: Buffer): number {
-  // Decode via pngjs on demand — dependency is already pulled by checks/visual.ts.
-  const { PNG } = require("pngjs") as typeof import("pngjs")
-  let png: import("pngjs").PNG
-  try {
-    png = PNG.sync.read(pngBuffer)
-  } catch {
-    return 0
-  }
-  const data = png.data
-  const stride = 64 * 4
-  let sum = 0
-  let sumSq = 0
-  let samples = 0
-  for (let i = 0; i + 2 < data.length; i += stride) {
-    const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
-    sum += lum
-    sumSq += lum * lum
-    samples += 1
-  }
-  if (samples === 0) return 0
-  const mean = sum / samples
-  return sumSq / samples - mean * mean
 }

@@ -484,6 +484,23 @@ async function decodePNG(filePath: string): Promise<PNG> {
   })
 }
 
+function pngLuminanceVariance(png: PNG): number {
+  const data = png.data
+  const stride = 64 * 4
+  let sum = 0
+  let sumSq = 0
+  let samples = 0
+  for (let i = 0; i + 2 < data.length; i += stride) {
+    const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+    sum += lum
+    sumSq += lum * lum
+    samples += 1
+  }
+  if (samples === 0) return 0
+  const mean = sum / samples
+  return sumSq / samples - mean * mean
+}
+
 const DISCOVERY_SKIP_DIRS = new Set([
   ".git",
   // `.opencorvus` covers both our scratch (attachments, visual-diff) AND
@@ -570,6 +587,18 @@ export async function findRenderedIndex(rootDir: string): Promise<string | undef
   return candidates[0].path
 }
 
+export interface RenderPageCapture {
+  targetUrl: string
+  layers: {
+    http: { passed: boolean; status: number; content_type: string; body_length: number; reason: string }
+    asset: { passed: boolean; total: number; failed: Array<{ url: string; status: number; reason: string }> }
+    dom: { passed: boolean; body_descendants: number; required: number }
+    js: { passed: boolean; console_errors: string[]; page_errors: string[] }
+    pixel: { passed: boolean; variance: number; floor: number; screenshot_path: string }
+    expected: { passed: boolean; missing_selectors: string[]; missing_texts: string[] }
+  }
+}
+
 /** Pure-render API — renders an HTML/URL target into `<outDir>/rendered.png`
  *  and returns the absolute path. No SSIM / no comparison. The delivery
  *  pipeline uses this to hand the LLM a screenshot of the actual built
@@ -588,6 +617,16 @@ export async function renderPage(opts: {
   browserExecutable?: string
   /** Override puppeteer page.goto navigation timeout. Default: 90_000ms. */
   navigationTimeoutMs?: number
+  /** Extra settle delay after window load. Default: 2_500ms. */
+  settleMs?: number
+  /** Optional selector that must appear before assertions are evaluated. */
+  waitForSelector?: string
+  /** Minimum body descendant count for integrity checks. */
+  minDomDescendants?: number
+  /** CSS selectors expected to exist after render. */
+  expectSelectors?: string[]
+  /** Text fragments expected in document.body.textContent after render. */
+  expectTexts?: string[]
   /** Run a generic user-interaction probe in the same browser page after first paint. */
   probeInteractions?: boolean
 }): Promise<{
@@ -599,11 +638,13 @@ export async function renderPage(opts: {
   dom: {
     textLength: number
     nodeCount: number
+    bodyDescendantCount: number
     hasBodyChildren: boolean
     /** React 根「<div id=\"root\"></div>」空壳（未 hydrate / hydrate 了空 App）。 */
     isEmptyRootShell: boolean
   }
   interaction?: RuntimeInteractionProbe
+  capture: RenderPageCapture
 }> {
   let viewport = opts.viewport
   if (!viewport) {
@@ -666,13 +707,36 @@ export async function renderPage(opts: {
   let dom: {
     textLength: number
     nodeCount: number
+    bodyDescendantCount: number
     hasBodyChildren: boolean
     isEmptyRootShell: boolean
   }
   let interaction: RuntimeInteractionProbe | undefined
+  let capture: RenderPageCapture | undefined
   try {
     const page = await browser.newPage()
     await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 })
+    const failedRequests: Array<{ url: string; status: number; reason: string }> = []
+    let totalResponses = 0
+    page.on("response", (res) => {
+      totalResponses += 1
+      const status = res.status()
+      if (status >= 400 && status < 600) {
+        failedRequests.push({ url: res.url(), status, reason: res.statusText() || `HTTP ${status}` })
+      }
+    })
+    page.on("requestfailed", (req) => {
+      failedRequests.push({ url: req.url(), status: 0, reason: req.failure()?.errorText ?? "request failed" })
+    })
+    const consoleErrors: string[] = []
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text().slice(0, 400))
+    })
+    const pageErrors: string[] = []
+    page.on("pageerror", (err) => {
+      const e = err as Error
+      pageErrors.push(e.message?.slice(0, 400) ?? String(err))
+    })
     // Same reasoning as startProjectServer's 90s budget — a cold merged
     // worktree can need a non-trivial first-paint window once the server
     // accepts connections, especially when `vite preview` still triggers a
@@ -686,16 +750,34 @@ export async function renderPage(opts: {
     // `load` fires when DOM + initial CSS/JS/fonts are loaded, which is
     // sufficient for a faithful screenshot. The settle wait below covers
     // React hydration that runs after the load event.
-    await page.goto(target, { waitUntil: "load", timeout: navigationTimeoutMs })
+    const response = await page.goto(target, { waitUntil: "load", timeout: navigationTimeoutMs })
+    const status = response?.status() ?? 0
+    const contentType = String(response?.headers()["content-type"] ?? "").toLowerCase()
+    const bodyBuf = response ? await response.buffer().catch(() => Buffer.alloc(0)) : Buffer.alloc(0)
+    let httpReason = ""
+    if (status < 200 || status >= 300) {
+      httpReason = `status=${status}`
+    } else if (!contentType.includes("text/html")) {
+      httpReason = `content-type=${contentType || "(missing)"} — app root must serve text/html`
+    } else if (bodyBuf.length < 200) {
+      httpReason = `body=${bodyBuf.length}B — too small to be an app shell`
+    }
+    let missingWaitSelector: string | undefined
+    if (opts.waitForSelector) {
+      await page.waitForSelector(opts.waitForSelector, { timeout: navigationTimeoutMs }).catch(() => {
+        missingWaitSelector = opts.waitForSelector
+      })
+    }
     // React/Vue/SPA hydration often fires after `load`. Without this delay
     // the screenshot can capture the un-hydrated shell ("Loading…" / empty
     // root). 2.5s is a conservative cap — most apps hydrate in <500ms but
     // a cold first-paint with code-splitting can stretch to 1-2s.
-    await new Promise((r) => setTimeout(r, 2_500))
+    await new Promise((r) => setTimeout(r, opts.settleMs ?? 2_500))
     const collectDom = () => page.evaluate(() => {
       const body = document.body
       const text = body ? (body.innerText ?? "").trim() : ""
       const nodeCount = document.querySelectorAll("*").length
+      const bodyDescendantCount = body ? body.getElementsByTagName("*").length : 0
       const hasBodyChildren = !!body && body.children.length > 0
       // 检测 Vite/CRA 空壳：`<div id="root">` 是 body 的唯一非脚本子元素且其内部
       // 元素 <= 1。React SPA 渲染失败 / 未 hydrate / hydrate 了空 App 都会命中。
@@ -712,6 +794,7 @@ export async function renderPage(opts: {
       return {
         textLength: text.length,
         nodeCount,
+        bodyDescendantCount,
         hasBodyChildren,
         isEmptyRootShell,
       }
@@ -728,9 +811,63 @@ export async function renderPage(opts: {
       type: "png",
       clip: { x: 0, y: 0, width: viewport.width, height: viewport.height },
     })
+    const rendered = await decodePNG(renderedPath)
+    const variance = pngLuminanceVariance(rendered)
+    const missingSelectors: string[] = []
+    for (const sel of opts.expectSelectors ?? []) {
+      const found = await page.$(sel).then((e) => !!e).catch(() => false)
+      if (!found) missingSelectors.push(sel)
+    }
+    if (missingWaitSelector && !missingSelectors.includes(missingWaitSelector)) {
+      missingSelectors.push(missingWaitSelector)
+    }
+    const bodyText = await page.evaluate(() => document.body?.textContent ?? "")
+    const missingTexts = (opts.expectTexts ?? []).filter((text) => !bodyText.includes(text))
+    const requiredDomDescendants = opts.minDomDescendants ?? 1
+    capture = {
+      targetUrl: target,
+      layers: {
+        http: {
+          passed: status >= 200 && status < 300 && contentType.includes("text/html") && bodyBuf.length >= 200,
+          status,
+          content_type: contentType,
+          body_length: bodyBuf.length,
+          reason: httpReason,
+        },
+        asset: {
+          passed: failedRequests.length === 0,
+          total: totalResponses,
+          failed: failedRequests,
+        },
+        dom: {
+          passed: dom.bodyDescendantCount >= requiredDomDescendants,
+          body_descendants: dom.bodyDescendantCount,
+          required: requiredDomDescendants,
+        },
+        js: {
+          passed: consoleErrors.length === 0 && pageErrors.length === 0,
+          console_errors: consoleErrors,
+          page_errors: pageErrors,
+        },
+        pixel: {
+          passed: variance >= 25,
+          variance: Number(variance.toFixed(2)),
+          floor: 25,
+          screenshot_path: renderedPath,
+        },
+        expected: {
+          passed: missingSelectors.length === 0 && missingTexts.length === 0,
+          missing_selectors: missingSelectors,
+          missing_texts: missingTexts,
+        },
+      },
+    }
   } finally {
     await browser.close()
     if (staticServer) await staticServer.close()
+  }
+  if (!capture) {
+    throw new Error("renderPage: capture was not produced")
   }
   const rendered = await decodePNG(renderedPath)
   return {
@@ -739,6 +876,7 @@ export async function renderPage(opts: {
     size: { width: rendered.width, height: rendered.height },
     dom,
     interaction,
+    capture,
   }
 }
 
