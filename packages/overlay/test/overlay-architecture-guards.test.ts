@@ -404,6 +404,25 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
   })
 
+  test("section phase-state variants are owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const variant of ["related", "active"]) {
+      expect(styles).not.toMatch(new RegExp(`\\.section\\[data-phase-state="${variant}"\\]\\s*\\{`))
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.section\\[data-phase-state="${variant}"\\]\\s*\\{`),
+      )
+    }
+
+    expect(inspectorSurface).toMatch(
+      /\.section\[data-phase-state="active"\] \.section-badge:not\(:empty\)::before\s*\{/,
+    )
+    expect(inspectorSurface).toContain("color-mix(in srgb, black 10%, transparent)")
+    expect(inspectorSurface).not.toMatch(/rgba\(91,\s*141,\s*239/)
+    expect(inspectorSurface).not.toMatch(/rgba\(10,\s*16,\s*24/)
+  })
+
   test("conversation goals strip is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const conversationSurface = readText(

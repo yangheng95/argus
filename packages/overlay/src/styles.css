@@ -1442,62 +1442,11 @@ body[data-theme="light"] .msg-reasoning {
    in that chain (.gwg / .delivery-panel / .criteria-group /
    .eval-error) for future single-source passes. */
 /* The .section shell + :last-child border + .section-head baseline /
-   markers / :hover live in styles/surfaces/inspector.css now. The
-   per-`[data-phase-state]` chrome (related / active variants) stays
-   here because its linear-gradient layers still use raw rgba on the
-   accent — those need a palette-token pass before extraction. */
-
-.section[data-phase-state="related"] {
-  border-color: color-mix(in srgb, var(--accent) 12%, var(--border));
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.034), transparent 72%),
-    color-mix(in srgb, var(--surface) 91%, var(--surface-inset) 9%);
-}
-
-.section[data-phase-state="related"] > .section-head::before {
-  border-left-color: var(--accent);
-}
-
-.section[data-phase-state="related"] .section-icon {
-  color: var(--accent);
-}
-
-.section[data-phase-state="active"] {
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.046), transparent 74%),
-    color-mix(in srgb, var(--surface) 92%, var(--surface-inset) 8%);
-  box-shadow:
-    inset 0 0 0 1px rgba(91, 141, 239, 0.05),
-    0 10px 22px rgba(10, 16, 24, 0.1);
-}
-
-.section[data-phase-state="active"] > .section-head {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 72%),
-    color-mix(in srgb, var(--accent) 7%, var(--surface-strong));
-  box-shadow: none;
-  animation: none;
-}
-
-.section[data-phase-state="active"] > .section-head::before {
-  border-left-color: var(--accent);
-}
-
-.section[data-phase-state="active"] .section-icon,
-.section[data-phase-state="active"] .section-title {
-  color: var(--text-strong);
-}
-
-.section[data-phase-state="active"] .section-badge:not(:empty) {
-  color: var(--accent);
-  background: transparent;
-  border-color: transparent;
-}
-
-.section[data-phase-state="active"] .section-badge:not(:empty)::before {
-  background: color-mix(in srgb, var(--accent) 86%, transparent);
-}
+   markers / :hover live in styles/surfaces/inspector.css now. Per-
+   [data-phase-state] chrome (related / active variants) lives in the
+   same surface; raw rgba accent gradients converted to color-mix
+   on var(--accent), and the active-card glow shadow routes through
+   color-mix(black, 10%) so the surface stays palette-clean. */
 
 /* The .section content rails — icon / title / badge family
    (with tone + variant) / head-action / .section-body / disclosure
