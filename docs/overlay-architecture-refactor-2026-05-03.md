@@ -669,6 +669,25 @@ Progress log:
   classes plus the `:focus`, `[data-expanded]`, and `::placeholder`
   variants, and asserts no `body[data-theme]` rule still targets
   `.chat-textarea`.
+- 2026-05-03: Extracted the composer send action family
+  (`.chat-send` resting + `:hover` + `:disabled` + `:focus-visible`,
+  `.chat-interrupt` + `:hover` + `:focus-visible`, plus
+  `.chat-send-icon` and `.chat-send-label`) from `styles.css` into
+  `styles/surfaces/composer.css`. The `#ffffff` text-on-accent literal
+  now uses the `white` keyword (no need for a token; primary buttons
+  are always blue with white text). The `1px` border routes through
+  `--oc-border-width`; the `2px` focus rings scale through
+  `calc(2px * var(--ui-scale))`. Bold weight dropped from 700 to 600.
+  Late `body[data-theme="light"] .chat-send` and
+  `body:is([data-theme="dark"|"vscode-dark"]) .chat-send` overrides
+  retired — the canonical resolves the per-theme accent palette
+  (`var(--accent)`, `var(--accent-hover)`, `var(--accent-ring)`)
+  directly, so the late `!important` chains had no semantic role
+  for `.chat-send` (the gradient treatment in light theme was a
+  decorative aside that violated the "calm/flat" design language).
+  Guard ceilings drop to `body[data-theme] <= 78`; the gradient
+  override remains for the still-unmoved `.sidebar-btn-primary`,
+  `.btn-primary`, and `.board-intro__cta-action` siblings.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散

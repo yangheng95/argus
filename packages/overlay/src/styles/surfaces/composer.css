@@ -90,6 +90,80 @@
   word-break: break-word;
 }
 
+/* Composer send button: solid accent fill with white-on-accent text in
+   every theme. Calm/flat treatment — flat accent, 1px accent-tinted
+   border, no gradient or shadow. Disabled/hover/focus states stay
+   tonally aligned. */
+.chat-send {
+  align-self: stretch;
+  height: 100%;
+  min-width: calc(78px * var(--ui-scale));
+  min-height: calc(72px * var(--ui-scale) * var(--chat-compose-scale));
+  padding: 0 calc(12px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 46%, transparent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(7px * var(--ui-scale) * var(--chat-compose-scale));
+  flex-shrink: 0;
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: none;
+  transition:
+    background 120ms,
+    opacity 120ms,
+    box-shadow 120ms;
+}
+
+.chat-send:hover {
+  background: var(--accent-hover);
+}
+
+.chat-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.chat-send:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--accent-ring);
+}
+
+/* Interrupt state: same shell as chat-send but flips to the bad palette
+   so the operator can tell the action is destructive (cancel an
+   in-flight task). */
+.chat-interrupt {
+  border-color: color-mix(in srgb, var(--bad) 36%, transparent);
+  background: var(--bad-dim);
+  color: var(--bad);
+  box-shadow: none;
+}
+
+.chat-interrupt:hover {
+  background: color-mix(in srgb, var(--bad) 18%, var(--bad-dim));
+}
+
+.chat-interrupt:focus-visible {
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--bad) 36%, transparent);
+}
+
+.chat-send-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chat-send-label {
+  white-space: nowrap;
+}
+
 .chat-placeholder-caret {
   display: inline-block;
   width: 0.42em;

@@ -27,6 +27,12 @@
   --oc-titlebar-gap: calc(2px * var(--ui-scale, 1));
   --oc-titlebar-status-radius: calc(10px * var(--ui-scale, 1));
   --oc-titlebar-status-icon: calc(14px * var(--ui-scale, 1));
+  --oc-control-bg: var(--surface-inset);
+  --oc-control-bg-hover: var(--surface-hover);
+  --oc-control-border: var(--border);
+  --oc-control-border-hover: var(--border-hover);
+  --oc-control-focus-ring: color-mix(in srgb, var(--accent) 18%, transparent);
+  --oc-control-shadow: none;
 
   /* Theme swatch previews: the titlebar theme-picker shows a 12x12 chip
      for each available theme. These previews are metadata about *other*
