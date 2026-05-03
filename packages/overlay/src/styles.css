@@ -2106,10 +2106,6 @@ body[data-theme="light"] .executor-menu-model:hover {
   color: #0f172a;
 }
 
-body[data-theme="light"] .task-bar {
-  background: var(--subtle-1);
-}
-
 body[data-theme="light"] .titlebar-task-status {
   background: var(--subtle-3);
 }
@@ -2125,13 +2121,6 @@ body[data-theme="light"] .task-flag {
 body[data-theme="light"] .msg-reasoning {
   background: rgba(37, 99, 235, 0.06);
   border-color: rgba(37, 99, 235, 0.14);
-}
-
-/* Light theme: section badges */
-body[data-theme="light"] .section-badge {
-  color: #526277;
-  background: transparent;
-  border-color: transparent;
 }
 
 /* ── Sections Container (right column) ──
