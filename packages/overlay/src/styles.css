@@ -5569,44 +5569,11 @@ select.field-input option {
    `data-verdict` attribute on `.delivery-panel`. The rail is not a
    border, so right-panel card chrome can stay borderless while the
    delivery verdict remains visually scannable. */
-.delivery-panel {
-  --delivery-panel-accent: var(--text-muted);
-  position: relative;
-  padding: calc(6px * var(--ui-scale));
-  border: 0;
-  border-radius: calc(5px * var(--ui-scale));
-  background: var(--surface-inset);
-  box-shadow: none;
-  margin-top: calc(2px * var(--ui-scale));
-  display: grid;
-  gap: calc(4px * var(--ui-scale));
-  overflow: hidden;
-}
-.delivery-panel::before {
-  content: "";
-  position: absolute;
-  inset-block: calc(6px * var(--ui-scale));
-  inset-inline-start: 0;
-  width: calc(2px * var(--ui-scale));
-  border-radius: 999px;
-  background: var(--delivery-panel-accent);
-  pointer-events: none;
-}
-.delivery-panel[data-verdict="accepted"] {
-  --delivery-panel-accent: var(--good);
-}
-.delivery-panel[data-verdict="rejected"] {
-  --delivery-panel-accent: var(--bad);
-}
-.delivery-panel[data-verdict="inflight"] {
-  --delivery-panel-accent: var(--accent, #63a2ff);
-}
-.delivery-panel[data-verdict="empty"] {
-  background: transparent;
-}
-.delivery-panel[data-verdict="empty"]::before {
-  display: none;
-}
+/* `.delivery-panel` family lives in `styles/surfaces/inspector.css`
+   now. The `var(--accent, #63a2ff)` fallback hex on the inflight
+   verdict was dropped — `--accent` is always defined at :root, so
+   the fallback was dead. The 999px pill border-radius converted to
+   `var(--oc-radius-pill)`. */
 
 /* ── Agent Workflow Root Tab ── */
 .agent-workflow-panel {
