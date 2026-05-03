@@ -21,6 +21,12 @@ describe("delivery arbiter", () => {
       failedCoverageIds: ["goal:gol_one"],
       failedRuntimeFlowIds: ["runtime:web:."],
       failedReviewIds: ["specialist:visual_runtime"],
+      functionalAssessment: {
+        status: "incomplete",
+        summary: "Functional completion failed.",
+        primaryFailureIds: ["goal:gol_one"],
+        auxiliaryFailureIds: ["runtime:web:.", "specialist:visual_runtime"],
+      },
     })
 
     expect(verdict).toMatchObject({

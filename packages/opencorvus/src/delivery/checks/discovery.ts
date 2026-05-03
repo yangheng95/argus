@@ -232,9 +232,9 @@ function namedGroups(
         })),
       } satisfies CommandGroup]
     }
-    const fallback = discovered[key]
-    if (!fallback) return []
-    return [fallback]
+    const discoveredGroup = discovered[key]
+    if (!discoveredGroup) return []
+    return [discoveredGroup]
   })
 }
 
