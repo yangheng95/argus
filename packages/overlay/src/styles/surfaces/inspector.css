@@ -773,3 +773,165 @@
   color: var(--text-soft);
   line-height: 1.4;
 }
+
+/* GWG header action buttons (edit / delete) — hidden until the
+   parent card is hovered or focus-within. Tone shifts on hover via
+   surface-inset wash, and the delete variant tints to var(--bad). */
+.gwg-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+  line-height: 1;
+  cursor: pointer;
+  border-radius: var(--oc-radius-pill);
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(1px * var(--ui-scale)));
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.gwg:hover .gwg-action-btn,
+.gwg:focus-within .gwg-action-btn {
+  opacity: 0.9;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.gwg-action-btn:hover {
+  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  color: var(--text);
+}
+
+.gwg-action-delete:hover {
+  background: var(--bad-dim);
+  color: var(--bad);
+}
+
+/* Disclosure chevron — round chip on the trailing edge. The
+   `.gwg--expanded` modifier flips the rotation to indicate the
+   open state. */
+.gwg-chevron {
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  background: color-mix(in srgb, var(--surface-inset) 58%, transparent);
+  border-radius: var(--oc-radius-pill);
+  transition: transform 200ms ease;
+  flex-shrink: 0;
+}
+
+.gwg--expanded .gwg-chevron {
+  transform: rotate(180deg);
+}
+
+/* GWG body: container that opens beneath the header when a goal is
+   expanded. Top border separates header from body, with a faint
+   white wash gradient on top to lift the panel. */
+.gwg-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+  padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--subtle-3) 72%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, white 1.5%, transparent), transparent 26%);
+}
+
+/* Objective block: Architect-written 1-2 sentence execution
+   directive that lives at the top of the body. Padded card with
+   subtle inset background and a 12-radius corner. */
+.gwg-objective {
+  margin-bottom: 0;
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  border: var(--oc-border-width) solid var(--subtle-4);
+  border-radius: calc(12px * var(--ui-scale));
+}
+
+.gwg-objective-label {
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  margin-bottom: calc(3px * var(--ui-scale));
+}
+
+.gwg-objective-text {
+  font-size: var(--ui-font-body);
+  color: var(--text);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* Done-definition block — Architect's success criteria for this
+   goal. Same chrome as the objective; carried in a sibling card. */
+.gwg-done-definition {
+  margin-bottom: 0;
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  border: var(--oc-border-width) solid var(--subtle-4);
+  border-radius: calc(12px * var(--ui-scale));
+}
+
+.gwg-done-definition-label {
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  margin-bottom: calc(3px * var(--ui-scale));
+}
+
+.gwg-done-definition-text {
+  font-size: var(--ui-font-body);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* Markdown reset for goal-card prose blocks: nuke the default
+   margins so the content sits flush against the card's own
+   padding. The descendant selector list also covers
+   `.gwg-plan-node-*` and `.gwg-eval-summary` rendered prose. */
+.gwg-objective-text .msg-text,
+.gwg-objective-text .md-frozen-block,
+.gwg-objective-text .md-active-block,
+.gwg-done-definition-text .msg-text,
+.gwg-done-definition-text .md-frozen-block,
+.gwg-done-definition-text .md-active-block,
+.gwg-plan-node-title .msg-text,
+.gwg-plan-node-brief .msg-text,
+.gwg-eval-summary .msg-text,
+.gwg-eval-summary .md-frozen-block,
+.gwg-eval-summary .md-active-block {
+  margin: 0;
+}
+
+.gwg-objective-text .msg-text > :first-child,
+.gwg-done-definition-text .msg-text > :first-child,
+.gwg-plan-node-title .msg-text > :first-child,
+.gwg-plan-node-brief .msg-text > :first-child,
+.gwg-eval-summary .msg-text > :first-child {
+  margin-top: 0;
+}
+
+.gwg-objective-text .msg-text > :last-child,
+.gwg-done-definition-text .msg-text > :last-child,
+.gwg-plan-node-title .msg-text > :last-child,
+.gwg-plan-node-brief .msg-text > :last-child,
+.gwg-eval-summary .msg-text > :last-child {
+  margin-bottom: 0;
+}

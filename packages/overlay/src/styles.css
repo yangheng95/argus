@@ -9079,148 +9079,15 @@ body[data-resizing="true"] * {
 /* `.gwg-revision` lives in surfaces/inspector.css; 999px pill →
    var(--oc-radius-pill). */
 
-/* Header action buttons (edit / delete) */
-.gwg-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--ui-font-control);
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 999px;
-  flex-shrink: 0;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(calc(1px * var(--ui-scale)));
-  transition:
-    background 150ms ease,
-    color 150ms ease,
-    opacity 150ms ease,
-    transform 150ms ease;
-}
-.gwg:hover .gwg-action-btn,
-.gwg:focus-within .gwg-action-btn {
-  opacity: 0.9;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-.gwg-action-btn:hover {
-  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
-  color: var(--text);
-}
-.gwg-action-delete:hover {
-  background: var(--bad-dim);
-  color: var(--bad);
-}
-
-.gwg-chevron {
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-  background: color-mix(in srgb, var(--surface-inset) 58%, transparent);
-  border-radius: 999px;
-  transition: transform 200ms ease;
-  flex-shrink: 0;
-}
-.gwg--expanded .gwg-chevron {
-  transform: rotate(180deg);
-}
-
-/* ── Body ────────────────────────────────────────────────── */
-.gwg-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-sm);
-  padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-top: 1px solid color-mix(in srgb, var(--subtle-3) 72%, transparent);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 26%);
-}
-
-/* Objective block (Architect-written 1–2 sentence execution directive) */
-.gwg-objective {
-  margin-bottom: 0;
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
-  border: 1px solid var(--subtle-4);
-  border-radius: calc(12px * var(--ui-scale));
-}
-/* Tier-2 section subtitle inside a goal card. Was a tier-3 ALL-CAPS pill
-   (font-tiny / weight 700 / 0.08em letter-spacing), which clashed with
-   the surrounding Title-Case section titles ("Goals", "Files") and made
-   the right panel read as two competing design languages. Now matches
-   .gwg-done-definition-label and .criteria-family-head. */
-.gwg-objective-label {
-  font-size: var(--ui-font-control);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--text-muted);
-  margin-bottom: 3px;
-}
-.gwg-objective-text {
-  font-size: var(--ui-font-body);
-  color: var(--text);
-  line-height: 1.6;
-  word-break: break-word;
-}
-.gwg-objective-text .msg-text,
-.gwg-objective-text .md-frozen-block,
-.gwg-objective-text .md-active-block,
-.gwg-done-definition-text .msg-text,
-.gwg-done-definition-text .md-frozen-block,
-.gwg-done-definition-text .md-active-block,
-.gwg-plan-node-title .msg-text,
-.gwg-plan-node-brief .msg-text,
-.gwg-eval-summary .msg-text,
-.gwg-eval-summary .md-frozen-block,
-.gwg-eval-summary .md-active-block {
-  margin: 0;
-}
-.gwg-objective-text .msg-text > :first-child,
-.gwg-done-definition-text .msg-text > :first-child,
-.gwg-plan-node-title .msg-text > :first-child,
-.gwg-plan-node-brief .msg-text > :first-child,
-.gwg-eval-summary .msg-text > :first-child {
-  margin-top: 0;
-}
-.gwg-objective-text .msg-text > :last-child,
-.gwg-done-definition-text .msg-text > :last-child,
-.gwg-plan-node-title .msg-text > :last-child,
-.gwg-plan-node-brief .msg-text > :last-child,
-.gwg-eval-summary .msg-text > :last-child {
-  margin-bottom: 0;
-}
-
-/* Done-definition block (what "done" means for this goal) */
-.gwg-done-definition {
-  margin-bottom: 0;
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
-  border: 1px solid var(--subtle-4);
-  border-radius: calc(12px * var(--ui-scale));
-}
-/* Tier-2 section subtitle — see .gwg-objective-label for the rationale. */
-.gwg-done-definition-label {
-  font-size: var(--ui-font-control);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--text-muted);
-  margin-bottom: 3px;
-}
-.gwg-done-definition-text {
-  font-size: var(--ui-font-body);
-  color: var(--text);
-  line-height: 1.6;
-}
+/* `.gwg-action-btn` family + `.gwg-chevron` (+ `.gwg--expanded`
+   variant) + `.gwg-body` + `.gwg-objective` (+ -label / -text) +
+   `.gwg-done-definition` (+ -label / -text) + the goal-card md
+   reset multi-class rules live in `styles/surfaces/inspector.css`
+   now. `999px` pills → `var(--oc-radius-pill)`, `1px` borders →
+   `var(--oc-border-width)`, the body's `rgba(255, 255, 255, 0.015)`
+   wash → `color-mix(in srgb, white 1.5%, transparent)`, and the
+   tier-2 label's unscaled `margin-bottom: 3px` wrapped in
+   `calc(3px * --ui-scale)`. */
 
 /* ── Step row ────────────────────────────────────────────── */
 .gwg-step {
