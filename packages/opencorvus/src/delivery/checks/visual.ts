@@ -737,6 +737,23 @@ export async function renderPage(opts: {
       const e = err as Error
       pageErrors.push(e.message?.slice(0, 400) ?? String(err))
     })
+    await page.exposeFunction("__opencorvusCaptureUnhandledRejection", (message: string) => {
+      pageErrors.push(`unhandledrejection: ${message}`.slice(0, 400))
+    })
+    await page.evaluateOnNewDocument(() => {
+      const globalWindow = window as unknown as {
+        __opencorvusCaptureUnhandledRejection?: (message: string) => void
+      }
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason
+        const message = reason instanceof Error
+          ? reason.message
+          : typeof reason === "string"
+            ? reason
+            : JSON.stringify(reason)
+        globalWindow.__opencorvusCaptureUnhandledRejection?.(message)
+      })
+    })
     // Same reasoning as startProjectServer's 90s budget — a cold merged
     // worktree can need a non-trivial first-paint window once the server
     // accepts connections, especially when `vite preview` still triggers a
