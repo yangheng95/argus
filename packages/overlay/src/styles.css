@@ -1410,6 +1410,7 @@ a {
   display: flex;
   align-items: center;
   gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
   min-width: 0;
 }
 
@@ -1424,6 +1425,12 @@ a {
   flex: 1 1 auto;
   min-width: 0;
 }
+
+.task-dir-shell.task-cwd-dropdown {
+  padding-inline: calc(2px * var(--ui-scale));
+  padding-block: calc(2px * var(--ui-scale));
+}
+
 .task-cwd-dropdown:hover,
 .task-cwd-dropdown:focus-visible {
   background: var(--subtle-3);
@@ -10249,8 +10256,8 @@ body[data-resizing="true"] * {
 .sidebar-toolset {
   display: inline-flex;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
   border-radius: 999px;
   background:
@@ -14731,30 +14738,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.titlebar-btn, .tit
   padding: 0 !important;
 }
 
-body[data-theme="light"] :is(.sidebar-toolset, .task-dir-shell),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(.sidebar-toolset, .task-dir-shell) {
-  gap: calc(2px * var(--ui-scale)) !important;
-  padding: calc(2px * var(--ui-scale)) !important;
-}
-
 /* iter57: `.chat-input` compact gap/padding folded into canonical. */
-
-body[data-theme="light"] .task-dir-shell,
-body[data-theme="dark"] .task-dir-shell,
-body[data-theme="vscode-dark"] .task-dir-shell {
-  gap: calc(2px * var(--ui-scale)) !important;
-  padding: calc(2px * var(--ui-scale)) !important;
-  padding-inline: calc(2px * var(--ui-scale)) !important;
-  padding-block: calc(2px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] .task-dir-shell.task-cwd-dropdown,
-body[data-theme="dark"] .task-dir-shell.task-cwd-dropdown,
-body[data-theme="vscode-dark"] .task-dir-shell.task-cwd-dropdown {
-  padding-inline: calc(2px * var(--ui-scale)) !important;
-  padding-block: calc(2px * var(--ui-scale)) !important;
-}
 
 body[data-theme="light"]
   :is(
@@ -14874,17 +14858,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   ) {
   border-color: transparent !important;
   box-shadow: none !important;
-}
-
-@media (max-width: 520px) {
-}
-
-.task-dir-shell,
-.sidebar-toolset {
-  gap: calc(2px * var(--ui-scale)) !important;
-  padding: calc(2px * var(--ui-scale)) !important;
-  padding-inline: calc(2px * var(--ui-scale)) !important;
-  padding-block: calc(2px * var(--ui-scale)) !important;
 }
 
 body[data-theme="light"] :is(.section-body > .empty-hint, #solidChangesPanel > .empty-hint),

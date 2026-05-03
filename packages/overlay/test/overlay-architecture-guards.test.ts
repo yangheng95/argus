@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(275)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(182)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(263)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(175)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(159)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(151)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -380,6 +380,32 @@ describe("overlay architecture guards", () => {
     ]) {
       expect(body).toContain(declaration)
     }
+  })
+
+  test("directory and sidebar toolset spacing are canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.(?:task-dir-shell|sidebar-toolset)\b/.test(selector)) continue
+
+      expect(body).not.toMatch(/\b(?:gap|padding(?:-[a-z]+)?)\s*:/)
+    }
+
+    expect(soloRuleBody(styles, ".task-dir-shell")).toContain("gap: calc(2px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".task-dir-shell")).toContain("padding: calc(2px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".task-dir-shell.task-cwd-dropdown")).toContain(
+      "padding-inline: calc(2px * var(--ui-scale))",
+    )
+    expect(soloRuleBody(styles, ".task-dir-shell.task-cwd-dropdown")).toContain(
+      "padding-block: calc(2px * var(--ui-scale))",
+    )
+    expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("gap: calc(2px * var(--ui-scale))")
+    expect(soloRuleBody(styles, ".sidebar-toolset")).toContain("padding: calc(2px * var(--ui-scale))")
   })
 
   test("panel body shell chrome is canonical, not theme scoped", () => {
