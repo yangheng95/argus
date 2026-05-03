@@ -304,6 +304,11 @@ Progress log:
   rule. Workflow body spacing is now theme-invariant, reducing guard ceilings to
   `!important <= 256`, `body[data-theme] <= 169`, and theme layout/chrome
   overrides <= 133.
+- 2026-05-03: Promoted `.agent-workflow-row` lane shift, rail column, gap,
+  min-height, and row spacing from the Calm workflow map theme override into the
+  canonical row rule. Workflow row geometry is no longer theme-controlled,
+  reducing guard ceilings to `!important <= 256`, `body[data-theme] <= 168`,
+  and theme layout/chrome overrides <= 127.
 
 Trigger: user feedback (2026-05-03):
 
