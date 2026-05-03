@@ -439,176 +439,9 @@ a {
    `.brand-guide` now wraps the logo directly and stays the
    quick-guide popover anchor. */
 
-.brand-guide {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border: 1px solid transparent;
-  border-radius: calc(10px * var(--ui-scale));
-  cursor: help;
-  outline: none;
-  background: transparent;
-  transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
-  -webkit-app-region: no-drag;
-}
-
-.brand-guide:hover,
-.brand-guide:focus-visible,
-.brand-guide:focus-within {
-  border-color: var(--hover-accent-border);
-  background: var(--hover-accent-wash);
-  box-shadow: var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
-
-.brand-guide:focus-visible {
-  box-shadow:
-    0 0 0 2px rgba(91, 141, 239, 0.18),
-    var(--hover-accent-shadow);
-}
-
-.brand-guide-card {
-  position: absolute;
-  top: calc(100% + calc(8px * var(--ui-scale)));
-  left: 0;
-  width: min(calc(380px * var(--ui-scale)), calc(100vw - 32px));
-  display: grid;
-  gap: calc(12px * var(--ui-scale));
-  padding: calc(14px * var(--ui-scale));
-  border: 1px solid var(--guide-card-border);
-  border-radius: calc(14px * var(--ui-scale));
-  background: var(--guide-card-bg);
-  box-shadow: var(--guide-card-shadow);
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(calc(8px * var(--ui-scale)));
-  pointer-events: none;
-  transition:
-    opacity 120ms,
-    transform 120ms,
-    visibility 0ms linear 120ms;
-  z-index: 24;
-  user-select: text;
-  -webkit-user-select: text;
-  -webkit-app-region: no-drag;
-}
-
-.brand-guide-card::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  height: calc(12px * var(--ui-scale));
-}
-
-.brand-guide-card::after {
-  content: "";
-  position: absolute;
-  top: calc(-7px * var(--ui-scale));
-  left: calc(24px * var(--ui-scale));
-  width: calc(12px * var(--ui-scale));
-  height: calc(12px * var(--ui-scale));
-  background: var(--surface-strong);
-  border-left: 1px solid var(--guide-card-border);
-  border-top: 1px solid var(--guide-card-border);
-  transform: rotate(45deg);
-}
-
-.brand-guide:hover .brand-guide-card,
-.brand-guide:focus-visible .brand-guide-card,
-.brand-guide:focus-within .brand-guide-card {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-  pointer-events: auto;
-  transition-delay: 0ms;
-}
-
-.brand-guide-kicker {
-  font-size: var(--ui-font-tiny);
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.brand-guide-section {
-  display: grid;
-  gap: calc(6px * var(--ui-scale));
-}
-
-.brand-guide-title {
-  font-size: var(--ui-font-meta);
-  font-weight: 700;
-  color: var(--text-strong);
-  letter-spacing: 0.02em;
-}
-
-.brand-guide-copy {
-  color: var(--text-soft);
-  line-height: 1.55;
-  /* zh-CN copy here can stretch ~2x the en-US length; without min-width:0
-     the inner text may push the parent's flex/grid track and clip behind
-     the panel border. overflow-wrap break-word handles long compound
-     terms (URLs, code identifiers) that have no natural break. */
-  min-width: 0;
-  overflow-wrap: break-word;
-}
-
-.brand-guide-steps {
-  display: grid;
-  gap: calc(8px * var(--ui-scale));
-}
-
-.brand-guide-step {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: calc(8px * var(--ui-scale));
-  align-items: start;
-}
-
-.brand-guide-step-index {
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid rgba(91, 141, 239, 0.22);
-  background: var(--accent-dim);
-  color: var(--accent);
-  font-size: var(--ui-font-tiny);
-  font-weight: 700;
-  line-height: 1;
-  margin-top: calc(1px * var(--ui-scale));
-}
-
-.brand-guide-step-copy {
-  color: var(--text-soft);
-  line-height: 1.5;
-  min-width: 0;
-  overflow-wrap: break-word;
-}
-
-/* `.titlebar-nav/-nav-group/-utility/-actions/-status-cluster/-window-controls`
-   layout containers, the `.conn-badge*` family, and the matching
-   `@media (max-width: 760px)` `.titlebar` flow reset all live in
-   `styles/surfaces/titlebar.css` now. The `@media` brand-guide-card
-   width tweak stays here because the brand-guide family has not been
-   extracted yet (rgba literal in its focus ring). */
-@media (max-width: 760px) {
-  .brand-guide-card {
-    left: calc(-8px * var(--ui-scale));
-    width: min(calc(320px * var(--ui-scale)), calc(100vw - 20px));
-  }
-}
+/* The `.brand-guide*` family (anchor, popover card, kicker, title, steps,
+   step-index, step-copy) plus its `@media (max-width: 760px)` width tweak
+   live in `styles/surfaces/titlebar.css` now. */
 
 /* `.titlebar-menubar*` (bar shell, slot, trigger, panel, group, item,
    toggle, range, note, theme-options shortcut) plus the @media (max-width:
@@ -13592,18 +13425,6 @@ body[data-theme="light"] {
   background: linear-gradient(135deg, #fbfdff 0%, #f4f7ff 42%, #eef1ff 100%) !important;
 }
 
-body[data-theme="light"] .brand-guide {
-  background: rgba(255, 255, 255, 0.74) !important;
-  border: 1px solid rgba(116, 133, 184, 0.16) !important;
-  color: var(--text-strong);
-}
-
-body[data-theme="light"] .brand-guide:hover {
-  background: rgba(246, 248, 255, 0.94) !important;
-  border-color: rgba(91, 95, 240, 0.26) !important;
-  color: var(--accent);
-}
-
 body[data-theme="light"] .task-bar {
   border-color: rgba(116, 133, 184, 0.14);
   background: rgba(255, 255, 255, 0.62) !important;
@@ -13739,18 +13560,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) {
   background: var(--bg) !important;
 }
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .brand-guide {
-  background: var(--surface-strong) !important;
-  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent) !important;
-  color: var(--text-strong);
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .brand-guide:hover {
-  background: color-mix(in srgb, var(--surface-hover) 92%, transparent) !important;
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent) !important;
-  color: var(--accent);
-}
-
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
   border-color: color-mix(in srgb, var(--border) 88%, transparent);
   background: var(--chrome) !important;
@@ -13880,7 +13689,6 @@ body[data-theme="vscode-dark"] .chat {
   background: #1e1e1e !important;
 }
 
-body[data-theme="vscode-dark"] .brand-guide,
 body[data-theme="vscode-dark"] .sidebar-tool,
 body[data-theme="vscode-dark"] .sidebar-toolset,
 body[data-theme="vscode-dark"] .task-dir-shell,
@@ -13897,11 +13705,6 @@ body[data-theme="vscode-dark"] .chat-empty--task {
 
 body[data-theme="light"]
   :is(
-    .brand-guide,
-    .titlebar-menubar-trigger,
-    .titlebar-status-chip,
-    .titlebar-setup-cta,
-    .titlebar-status-icon,
     .titlebar-btn,
     .sidebar-btn,
     .sidebar-btn-primary,
@@ -13926,11 +13729,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .brand-guide,
-    .titlebar-menubar-trigger,
-    .titlebar-status-chip,
-    .titlebar-setup-cta,
-    .titlebar-status-icon,
     .titlebar-btn,
     .sidebar-btn,
     .sidebar-btn-primary,
@@ -13958,10 +13756,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 
 body[data-theme="light"]
   :is(
-    .brand-guide,
-    .titlebar-menubar-trigger,
-    .titlebar-status-chip,
-    .titlebar-setup-cta,
     .sidebar-btn,
     .sidebar-btn-primary,
     .sidebar-tool,
@@ -13975,10 +13769,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .brand-guide,
-    .titlebar-menubar-trigger,
-    .titlebar-status-chip,
-    .titlebar-setup-cta,
     .sidebar-btn,
     .sidebar-btn-primary,
     .sidebar-tool,
@@ -13998,11 +13788,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 
 body[data-theme="light"]
   :is(
-    .brand-guide,
-    .titlebar-menubar-trigger,
-    .titlebar-status-chip,
-    .titlebar-setup-cta,
-    .titlebar-status-icon,
     .titlebar-btn,
     .sidebar-btn,
     .sidebar-btn-primary,
@@ -14027,11 +13812,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .brand-guide,
-    .titlebar-menubar-trigger,
-    .titlebar-status-chip,
-    .titlebar-setup-cta,
-    .titlebar-status-icon,
     .titlebar-btn,
     .sidebar-btn,
     .sidebar-btn-primary,
@@ -14060,12 +13840,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 
 body[data-theme="light"]
   :is(
-    .brand-guide:hover,
-    .titlebar-menubar-trigger:hover,
-    .titlebar-menubar-trigger:focus-visible,
-    .titlebar-status-chip:hover,
-    .titlebar-setup-cta:hover,
-    .titlebar-status-icon:hover,
     .titlebar-btn:hover,
     .sidebar-tool:hover,
     .task-cwd-dropdown:hover,
@@ -14087,12 +13861,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .brand-guide:hover,
-    .titlebar-menubar-trigger:hover,
-    .titlebar-menubar-trigger:focus-visible,
-    .titlebar-status-chip:hover,
-    .titlebar-setup-cta:hover,
-    .titlebar-status-icon:hover,
     .titlebar-btn:hover,
     .sidebar-tool:hover,
     .task-cwd-dropdown:hover,
@@ -14154,11 +13922,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 
 body[data-theme="light"]
   :is(
-    .brand-guide,
-    .titlebar-menubar-trigger,
-    .titlebar-status-chip,
-    .titlebar-setup-cta,
-    .titlebar-status-icon,
     .titlebar-btn,
     .sidebar-btn,
     .sidebar-tool,
@@ -14179,11 +13942,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .brand-guide,
-    .titlebar-menubar-trigger,
-    .titlebar-status-chip,
-    .titlebar-setup-cta,
-    .titlebar-status-icon,
     .titlebar-btn,
     .sidebar-btn,
     .sidebar-tool,
@@ -14209,13 +13967,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 
 body[data-theme="light"]
   :is(
-    .brand-guide:hover,
-    .titlebar-menubar-trigger:hover,
-    .titlebar-menubar-trigger:focus-visible,
-    .titlebar-menubar-trigger[data-active="true"],
-    .titlebar-status-chip:hover,
-    .titlebar-setup-cta:hover,
-    .titlebar-status-icon:hover,
     .titlebar-btn:hover,
     .sidebar-btn:hover,
     .sidebar-btn[data-active="true"],
@@ -14241,13 +13992,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .brand-guide:hover,
-    .titlebar-menubar-trigger:hover,
-    .titlebar-menubar-trigger:focus-visible,
-    .titlebar-menubar-trigger[data-active="true"],
-    .titlebar-status-chip:hover,
-    .titlebar-setup-cta:hover,
-    .titlebar-status-icon:hover,
     .titlebar-btn:hover,
     .sidebar-btn:hover,
     .sidebar-btn[data-active="true"],

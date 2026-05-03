@@ -182,6 +182,168 @@
   .titlebar-spacer {
     display: none;
   }
+
+  .brand-guide-card {
+    left: calc(-8px * var(--ui-scale));
+    width: min(calc(320px * var(--ui-scale)), calc(100vw - calc(20px * var(--ui-scale))));
+  }
+}
+
+.brand-guide {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid transparent;
+  border-radius: calc(10px * var(--ui-scale));
+  cursor: help;
+  outline: none;
+  background: transparent;
+  transition:
+    border-color 120ms,
+    background 120ms,
+    box-shadow 120ms,
+    transform 120ms;
+  -webkit-app-region: no-drag;
+}
+
+.brand-guide:hover,
+.brand-guide:focus-visible,
+.brand-guide:focus-within {
+  border-color: var(--hover-accent-border);
+  background: var(--hover-accent-wash);
+  box-shadow: var(--hover-accent-shadow);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.brand-guide:focus-visible {
+  box-shadow:
+    0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 18%, transparent),
+    var(--hover-accent-shadow);
+}
+
+.brand-guide-card {
+  position: absolute;
+  top: calc(100% + calc(8px * var(--ui-scale)));
+  left: 0;
+  width: min(calc(380px * var(--ui-scale)), calc(100vw - calc(32px * var(--ui-scale))));
+  display: grid;
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(14px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--guide-card-border);
+  border-radius: calc(14px * var(--ui-scale));
+  background: var(--guide-card-bg);
+  box-shadow: var(--guide-card-shadow);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(calc(8px * var(--ui-scale)));
+  pointer-events: none;
+  transition:
+    opacity 120ms,
+    transform 120ms,
+    visibility 0ms linear 120ms;
+  z-index: 24;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-app-region: no-drag;
+}
+
+.brand-guide-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: calc(12px * var(--ui-scale));
+}
+
+.brand-guide-card::after {
+  content: "";
+  position: absolute;
+  top: calc(-7px * var(--ui-scale));
+  left: calc(24px * var(--ui-scale));
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
+  background: var(--surface-strong);
+  border-left: var(--oc-border-width) solid var(--guide-card-border);
+  border-top: var(--oc-border-width) solid var(--guide-card-border);
+  transform: rotate(45deg);
+}
+
+.brand-guide:hover .brand-guide-card,
+.brand-guide:focus-visible .brand-guide-card,
+.brand-guide:focus-within .brand-guide-card {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition-delay: 0ms;
+}
+
+.brand-guide-kicker {
+  font-size: var(--ui-font-tiny);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.brand-guide-section {
+  display: grid;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.brand-guide-title {
+  font-size: var(--ui-font-meta);
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+}
+
+.brand-guide-copy {
+  color: var(--text-soft);
+  line-height: 1.55;
+  /* zh-CN copy stretches ~2x the en-US length; min-width:0 keeps the inner
+     text from pushing the parent's flex/grid track. overflow-wrap
+     break-word handles long compound terms with no natural break. */
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.brand-guide-steps {
+  display: grid;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.brand-guide-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: calc(8px * var(--ui-scale));
+  align-items: start;
+}
+
+.brand-guide-step-index {
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--oc-radius-pill);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 22%, transparent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: var(--ui-font-tiny);
+  font-weight: 600;
+  line-height: 1;
+  margin-top: calc(1px * var(--ui-scale));
+}
+
+.brand-guide-step-copy {
+  color: var(--text-soft);
+  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"] {
