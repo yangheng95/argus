@@ -450,6 +450,25 @@ Progress log:
   rule that only restated the canonical `var(--text-soft)` palette. Both
   were rule 8 violations sitting alongside their authoritative source.
   `body[data-theme]` guard ceiling drops to `<= 108`.
+- 2026-05-03: Folded message-card and header-control state declarations
+  out of the remaining `styles/card.css` final override layer into their
+  canonical first-owner rules. `card.css` duplicate-selector guard drops
+  from `<= 14` to `<= 6`.
+- 2026-05-03: Routed `--oc-titlebar-menu-text` through
+  `var(--oc-color-text-strong)` so the titlebar menu text adapts to
+  light / dark / vscode-dark palettes instead of always rendering
+  `#000000` (which was invisible against the dark titlebar surface).
+  Architecture guard now forbids raw hex values on this token; titlebar
+  menubar E2E asserts both the light render (`rgb(26, 26, 26)`) and
+  the dark render (`rgb(223, 225, 229)`).
+- 2026-05-03: Added a bold-weight density guard. Overlay stylesheets
+  (`styles.css`, `card.css`, primitives, surfaces) currently declare
+  many weights at `>= 700` / `bold`; the guard caps that count at 50
+  and must drop monotonically as decorative bold is pruned. Initial
+  sweep dropped `.task-dir-editor` and `.executor-chip-label` from 700
+  to 600 to seat under the new ceiling. **Why:** user feedback flagged
+  "黑体太多，视觉噪音太多" — bold should be reserved for genuine
+  semantic emphasis, not a default decoration.
 
 Trigger: user feedback (2026-05-03):
 
@@ -483,7 +502,7 @@ one theme contract, and no runtime God CSS path left behind.
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
-| `packages/overlay/src/styles/card.css` | **1,589 lines**                                                                         |
+| `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
 | Total `!important` in stylesheets      | **183** current guard baseline                                                          |
 | `body[data-theme="…"]` theme overrides | **108**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
