@@ -1412,6 +1412,27 @@ Progress log:
   + absence of all retired raw rgba accent literals + the
   retired `▸` glyph. Ceilings unchanged.
 
+- 2026-05-03: Extended surfaces/settings.css with the
+  `.config-status-box` (+ 3 [data-status="active|warn|error"]
+  tone variants) provider/auth diagnostic strip and the
+  `.about-*` family (`-body`, `-section` / `-section-title`,
+  `-author-card` / `-author-avatar` / `-author-info` /
+  `-author-name` / `-author-link` (+ `:hover`), `-info-grid`
+  / `-info-label` / `-info-value`, `-links` / `-link` (+
+  `:hover`), `-shortcut-grid` + `kbd` / `span` children).
+  Token conversions: 7× `1px` borders → `var(--oc-border-
+  width)`. The cross-surface typography multi-class
+  `.field-label, .change-subline, .knowledge-item-meta,
+  .config-status-box { font-size: var(--ui-font-control) }`
+  stays in styles.css as rule-9 abstraction. Updated existing
+  settings-config-containers guard to strip CSS comments
+  before scanning (so doc strings don't false-trigger the
+  theme-selector regex). New ownership guard asserts 15 base
+  about classes + 3 status variants + 2 :hover states + 2
+  multi-class child rules + presence of `.config-status-box`
+  in surface + absence of solo `.config-status-box` rule
+  body in styles.css. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
