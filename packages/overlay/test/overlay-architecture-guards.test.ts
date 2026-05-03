@@ -429,6 +429,48 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
   })
 
+  test("task dir bar (TaskDirBar) is owned by surfaces/conversation.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const conversationSurface = readText(
+      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
+    )
+
+    for (const className of [
+      "task-meta",
+      "task-cwd",
+      "task-dir",
+      "task-workspace",
+      "task-workspace-row",
+      "vcs-badge",
+      "vcs-badge-icon",
+      "vcs-badge-branch",
+      "task-dir-shell",
+      "task-cwd-dropdown",
+      "task-cwd-caret",
+      "task-dir-actions",
+      "task-dir-path",
+      "task-dir-tool",
+      "task-dir-node",
+      "task-dir-step",
+      "task-dir-empty",
+      "task-dir-editor",
+      "task-dir-tool-label",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const tone of ["good", "warn", "bad"]) {
+      expect(conversationSurface).toMatch(new RegExp(`\\.vcs-badge\\[data-tone="${tone}"\\]\\s*\\{`))
+    }
+    expect(conversationSurface).toMatch(/\.task-cwd-dropdown:hover,\s*\.task-cwd-dropdown:focus-visible\s*\{/)
+    expect(conversationSurface).toMatch(/\.task-cwd-dropdown\[data-open="true"\]\s*\{/)
+    expect(conversationSurface).toMatch(/\.task-dir-tool\.danger:hover\s*\{/)
+    expect(conversationSurface).not.toMatch(/#94a3b8/)
+    expect(conversationSurface).not.toMatch(/#e5e7eb/)
+    expect(conversationSurface).not.toMatch(/rgba\(248,\s*113,\s*113/)
+  })
+
   test("conn-banner cross-surface notification primitive routes through palette tokens", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
@@ -1790,30 +1832,39 @@ describe("overlay architecture guards", () => {
 
   test("directory, sidebar, and workspace controls are canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const surfaceTexts = [
+      "src/styles/surfaces/conversation.css",
+      "src/styles/surfaces/sidebar.css",
+    ].map((path) => withoutComments(readText(join(OVERLAY_ROOT, path))))
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
-      const hasHeaderControl =
-        /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|sidebar-tool|workspace-toggle)\b/.test(selector)
-      if (!isThemeSelector || !hasHeaderControl) continue
+    for (const source of [styles, ...surfaceTexts]) {
+      for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = match[1] ?? ""
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+          selector,
+        )
+        const hasHeaderControl =
+          /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|sidebar-tool|workspace-toggle)\b/.test(selector)
+        if (!isThemeSelector || !hasHeaderControl) continue
 
-      expect(selector).not.toMatch(
-        /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|sidebar-tool|workspace-toggle)\b/,
-      )
+        expect(selector).not.toMatch(
+          /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|sidebar-tool|workspace-toggle)\b/,
+        )
+      }
     }
 
-    expect(soloRuleBody(styles, ".task-dir-shell")).toContain("gap: calc(2px * var(--ui-scale))")
-    expect(soloRuleBody(styles, ".task-dir-shell")).toContain("padding: calc(2px * var(--ui-scale))")
-    expect(soloRuleBody(styles, ".task-dir-shell")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
-    expect(soloRuleBody(styles, ".task-dir-shell")).toContain("border-radius: var(--oc-radius-control)")
-    expect(soloRuleBody(styles, ".task-dir-shell")).toContain("background: var(--oc-control-bg)")
-    expect(soloRuleBody(styles, ".task-dir-shell.task-cwd-dropdown")).toContain(
+    const conversationSurface = readText(
+      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
+    )
+    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("gap: calc(2px * var(--ui-scale))")
+    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("padding: calc(2px * var(--ui-scale))")
+    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
+    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("background: var(--oc-control-bg)")
+    expect(soloRuleBody(conversationSurface, ".task-dir-shell.task-cwd-dropdown")).toContain(
       "padding-inline: calc(2px * var(--ui-scale))",
     )
-    expect(soloRuleBody(styles, ".task-dir-shell.task-cwd-dropdown")).toContain(
+    expect(soloRuleBody(conversationSurface, ".task-dir-shell.task-cwd-dropdown")).toContain(
       "padding-block: calc(2px * var(--ui-scale))",
     )
     const sidebarSurface = withoutComments(
