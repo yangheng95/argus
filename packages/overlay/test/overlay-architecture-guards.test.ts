@@ -461,6 +461,31 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("executor menu dropdown is owned by surfaces/composer.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+
+    for (const className of [
+      "executor-menu",
+      "executor-menu-group",
+      "executor-menu-row",
+      "executor-menu-current",
+      "executor-menu-models",
+      "executor-menu-model",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(composerSurface).toMatch(/\.executor-menu::-webkit-scrollbar\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-menu-row:hover:not\(:disabled\)\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-menu-group\[data-active="true"\] \> \.executor-menu-row\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-menu-model\[data-active="true"\]\s*\{/)
+    expect(composerSurface).not.toMatch(/rgba\(146,\s*184,\s*252/)
+    expect(composerSurface).not.toMatch(/rgba\(86,\s*126,\s*196/)
+    expect(composerSurface).not.toMatch(/rgba\(196,\s*215,\s*252/)
+  })
+
   test("prompt catalog is owned by surfaces/settings.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
