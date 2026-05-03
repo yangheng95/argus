@@ -1956,112 +1956,6 @@ select.field-input option {
   position: relative;
 }
 
-.config-panel-group {
-  display: flex;
-  flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
-}
-
-.config-panel-group-title {
-  min-width: 0;
-  flex: 1 1 auto;
-  font-size: var(--ui-font-control);
-  font-weight: 600;
-  color: var(--text-muted);
-  margin: 0;
-  padding: 0 calc(2px * var(--ui-scale));
-}
-
-.config-panel-group-head {
-  display: flex;
-  align-items: center;
-  gap: calc(12px * var(--ui-scale));
-  min-width: 0;
-}
-
-.config-panel-card {
-  display: flex;
-  flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
-  border: 1px solid var(--border);
-  border-radius: calc(10px * var(--ui-scale));
-  background: var(--subtle-1);
-  transition:
-    border-color 120ms,
-    background 120ms;
-}
-
-.config-panel-card:hover {
-  border-color: var(--border-hover);
-}
-
-.config-panel-card-head {
-  display: flex;
-  align-items: flex-start;
-  gap: calc(12px * var(--ui-scale));
-  min-width: 0;
-}
-
-.config-panel-card-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--ui-font-title);
-  font-weight: 600;
-  color: var(--text-strong);
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.config-panel-card-actions {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-}
-
-.config-panel-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.config-panel-list-row {
-  display: flex;
-  align-items: center;
-  gap: calc(12px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) 0;
-  border-bottom: 1px solid var(--color-border, #333);
-  font-size: var(--ui-font-control);
-}
-
-.config-panel-list-row:last-child {
-  border-bottom: none;
-}
-
-.config-panel-list-main {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.config-panel-list-meta {
-  flex: none;
-  color: var(--text-muted);
-  white-space: nowrap;
-  text-align: right;
-}
-
-.config-panel-card .field-label {
-  text-transform: none;
-  font-size: var(--ui-font-body);
-  font-weight: 500;
-  color: var(--text-soft);
-  letter-spacing: normal;
-}
-
-.config-panel-card .dialog-actions {
-  padding-top: calc(4px * var(--ui-scale));
-}
 
 .agent-model-table {
   display: flex;
@@ -2325,9 +2219,6 @@ select.field-input option {
   letter-spacing: var(--subhead-track);
 }
 
-.config-content .btn.mini {
-  font-size: var(--ui-font-control);
-}
 
 .field-label,
 .change-subline,
@@ -2396,39 +2287,6 @@ select.field-input option {
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
-.config-content .extension-head:hover,
-.config-content .extension-head:focus-within,
-.config-content .knowledge-toolbar:hover,
-.config-content .knowledge-toolbar:focus-within,
-.config-content .channel-doc-card:hover,
-.config-content .channel-doc-card:focus-within,
-.config-content .market-card:hover,
-.config-content .knowledge-item:hover,
-.config-content .pref-item:hover {
-  border-color: var(--guide-card-border);
-  background: var(--guide-card-bg);
-  box-shadow: var(--guide-card-shadow);
-  transform: none;
-}
-
-.config-content .config-subsection-head:hover,
-.config-content .config-subsection-head:focus-visible {
-  border-color: var(--hover-accent-border);
-  background: var(--hover-accent-wash);
-  box-shadow: var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
-
-.config-content .config-subsection:hover > .config-subsection-body,
-.config-content .config-subsection:focus-within > .config-subsection-body,
-.config-content .config-subsection[open]:hover > .config-subsection-body,
-.config-content .config-subsection[open]:focus-within > .config-subsection-body {
-  background: var(--hover-accent-wash);
-  border-color: var(--hover-accent-border);
-  border-top-color: transparent;
-  box-shadow: var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
 
 .pref-item {
   border-bottom: none;
