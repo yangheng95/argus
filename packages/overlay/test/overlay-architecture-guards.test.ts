@@ -202,6 +202,20 @@ describe("overlay architecture guards", () => {
     expect(titlebarSurface).toContain("var(--oc-titlebar-status-icon)")
   })
 
+  test("titlebar status chip and setup CTA are owned by surfaces/titlebar.css", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
+
+    expect(styles).not.toMatch(/^\.titlebar-status-chip\b/m)
+    expect(styles).not.toMatch(/^\.titlebar-setup-cta\b/m)
+    expect(styles).not.toMatch(/^\.titlebar-status-label\b/m)
+    expect(styles).not.toMatch(/^\.titlebar-status-value\b/m)
+    expect(titlebarSurface).toMatch(/\.titlebar-status-chip\s*\{/)
+    expect(titlebarSurface).toMatch(/\.titlebar-setup-cta\s*\{/)
+    expect(titlebarSurface).toMatch(/\.titlebar-status-label\s*\{/)
+    expect(titlebarSurface).toMatch(/\.titlebar-status-value\s*\{/)
+  })
+
   test("bold font-weight declarations cannot increase across overlay stylesheets", () => {
     const sources = [
       readText(join(OVERLAY_ROOT, "src/styles.css")),
@@ -1163,6 +1177,13 @@ describe("overlay architecture guards", () => {
 
   test("icon button padding is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const titlebarSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")),
+    )
+    const composerSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")),
+    )
+    const combined = `${styles}\n${titlebarSurface}\n${composerSurface}`
     const iconButtonClasses = [".titlebar-btn", ".titlebar-status-icon", ".chat-toolbar-btn"]
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -1182,7 +1203,7 @@ describe("overlay architecture guards", () => {
     for (const className of iconButtonClasses) {
       const escaped = className.replace(".", "\\.")
       const ruleBodies = Array.from(
-        styles.matchAll(new RegExp(`(^|[\\n,])\\s*${escaped}[^{},]*\\{([^{}]*)\\}`, "g")),
+        combined.matchAll(new RegExp(`(^|[\\n,])\\s*${escaped}[^{},]*\\{([^{}]*)\\}`, "g")),
       ).map((match) => match[2] ?? "")
       const bodyText = ruleBodies.join("\n")
       expect(bodyText).toContain("padding: 0")
@@ -1233,11 +1254,20 @@ describe("overlay architecture guards", () => {
     expect(headerText).toMatch(/background:\s*var\(--oc-header-bg\)/)
   })
 
-  test("new surface style files do not introduce raw color or pixel literals", () => {
+  test("new surface style files do not introduce raw color or unscaled pixel literals", () => {
     const files = walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) => path.endsWith(".css"))
-    const rawValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|(?<![\w-])-?\d+(?:\.\d+)?px\b/i
+    const rawColorValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i
+    const pxLiteral = /(?<![\w-])-?\d+(?:\.\d+)?px\b/g
+
     for (const file of files) {
-      expect(readText(file)).not.toMatch(rawValue)
+      const text = readText(file)
+      expect(text).not.toMatch(rawColorValue)
+
+      for (const match of text.matchAll(pxLiteral)) {
+        const start = match.index ?? 0
+        const window = text.slice(Math.max(0, start - 80), start + match[0].length + 80)
+        expect(window).toMatch(/calc\([^)]*\bvar\(--ui-scale[^)]*\)[^)]*\)/)
+      }
     }
   })
 

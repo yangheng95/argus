@@ -497,6 +497,20 @@ Progress log:
   surface declares the migrated rules. **Why:** styles.css must end
   empty so it can leave the runtime import graph; this is the first
   full extraction rather than another internal fold.
+- 2026-05-03: Surface guard relaxed to recognize the project's
+  canonical `calc(Npx * var(--ui-scale))` scaling pattern. The earlier
+  blanket `Npx` ban forced a token wrapper around every scaled length,
+  which would have exploded the design-language token table for one-off
+  surface-internal values. The guard still rejects any unscaled raw
+  px and any hex / rgba / hsla literal — the design intent (no fixed
+  sizes, no theme-locked colors) is preserved.
+- 2026-05-03: Extracted the titlebar status chip family
+  (`.titlebar-status-chip`, `.titlebar-setup-cta`,
+  `.titlebar-status-label`, `.titlebar-status-value`, plus the dead
+  `.titlebar-status-icon` rule retained for completeness) from
+  `styles.css` into `styles/surfaces/titlebar.css`. New guard asserts
+  none of the four classes are owned by `styles.css` and all are
+  declared in the surface file.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
