@@ -314,6 +314,11 @@ Progress log:
   canonical rail rule. The workflow timeline rail no longer changes geometry by
   theme, lowering guard ceilings to `!important <= 256`,
   `body[data-theme] <= 167`, and theme layout/chrome overrides <= 122.
+- 2026-05-03: Promoted `.agent-workflow-stack` display, gap, min-width, and
+  bottom stack padding from the Calm workflow map theme override into the
+  canonical stack rule. Workflow card stacking density is now theme-invariant,
+  reducing guard ceilings to `!important <= 256`, `body[data-theme] <= 166`,
+  and theme layout/chrome overrides <= 117.
 
 Trigger: user feedback (2026-05-03):
 
