@@ -1334,6 +1334,27 @@ Progress log:
   retired `var(--token, #hex)` fallbacks and the `--border-
   subtle` rgba fallback. Ceilings unchanged.
 
+- 2026-05-03: Extended surfaces/settings.css with the dialog
+  shell + sidebar nav: `.config-dialog-form`, `.config-dialog-
+  head`, `.config-close-btn` (+ `:hover`), `.config-dialog-
+  layout` (solo only — the cross-surface multi-class
+  `.sections, .config-dialog-layout` CSS-var declaration that
+  feeds `.section` internals across both inspector and settings
+  stays in styles.css), `.config-sidebar`, `.config-nav-item`
+  (+ `:hover` + `.active` + `.active::before` rail), `.config-
+  nav-icon` (+ `.active` child opacity bump), `.config-nav-
+  badge` (+ `:empty` + `.active` child). Token conversions:
+  `clamp()` bounds at 176/220px and shell raw `32px`/`980px`/
+  `760px` wrapped in `calc(N * --ui-scale)` so the dialog
+  scales with UI; `.active` lift's raw
+  `rgba(84, 138, 247, X)` (= literal expansion of `--accent`)
+  routed through `color-mix(var(--accent) X%, transparent)`;
+  3× `1px` borders → `var(--oc-border-width)`. New ownership
+  guard asserts 7 base classes + the solo `.config-dialog-
+  layout` rule body presence + 5 `.active` state child rules
+  + absence of the 2 retired raw rgba accent literals.
+  Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and

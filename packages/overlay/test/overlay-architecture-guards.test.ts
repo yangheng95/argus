@@ -461,6 +461,39 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("settings dialog shell + sidebar nav are owned by surfaces/settings.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    for (const className of [
+      "config-dialog-form",
+      "config-dialog-head",
+      "config-close-btn",
+      "config-sidebar",
+      "config-nav-item",
+      "config-nav-icon",
+      "config-nav-badge",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(settingsSurface).toMatch(/(^|\n)\.config-dialog-layout\s*\{/)
+    const layoutBody =
+      settingsSurface.match(/(^|\n)\.config-dialog-layout\s*\{([^}]*)\}/)?.[2] ?? ""
+    expect(layoutBody).toContain("display: flex")
+    expect(layoutBody).toContain("flex: 1")
+    expect(layoutBody).toContain("overflow: hidden")
+
+    expect(settingsSurface).toMatch(/\.config-close-btn:hover\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-nav-item\.active\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-nav-item\.active::before\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-nav-item\.active \.config-nav-icon\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-nav-item\.active \.config-nav-badge\s*\{/)
+    expect(settingsSurface).not.toMatch(/rgba\(84,\s*138,\s*247,\s*0\.15\)/)
+    expect(settingsSurface).not.toMatch(/rgba\(84,\s*138,\s*247,\s*0\.2\)/)
+  })
+
   test("log viewer is owned by surfaces/settings.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
