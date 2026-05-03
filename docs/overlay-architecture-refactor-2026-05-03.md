@@ -991,6 +991,34 @@ Progress log:
   variants stay in styles.css until their raw rgba accent washes
   get a palette-token pass. Ceilings unchanged.
 
+- 2026-05-03: Moved the `.gwg` (Goal-Workflow-Graph) card shell +
+  `::before` rail + `:hover` + `--expanded` background +
+  `--passed` / `--failed` / `--running` status modifiers into
+  surfaces/inspector.css. Per rule 8, the late border-color rules
+  for the three status modifiers (which lived in a separate block
+  at the styles.css tail and used raw `rgba(247,84,100,0.3)` and
+  `rgba(84,138,247,0.32)`) were folded into the surface canonical
+  next to their `::before` siblings; the rgba was the literal
+  expansion of `--bad` and `--accent`, so they routed through
+  `color-mix(var(--bad) 30%, transparent)` and
+  `color-mix(var(--accent) 32%, transparent)`. The `#c3d2ee` hex
+  literal that anchored the muted-blue passed-rail color was
+  retired in favor of `var(--text-soft)` so the muted-accent
+  result picks up the theme. `1px` border → `var(--oc-border-width)`,
+  `2px` rail width → `calc(2px * --ui-scale)`, `999px` pill →
+  `var(--oc-radius-pill)`, `rgba(0,0,0,0.12)` hover shadow →
+  `color-mix(black 12%, transparent)` with shadow px scaled,
+  `--expanded` linear-gradient stops routed through
+  `color-mix(white 2.8%, transparent)` and
+  `color-mix(var(--accent) 1.2%, transparent)`. Right-panel-card-
+  radius guard now reads `.gwg` from the surface; new ownership
+  guard asserts the shell + `::before` + `:hover` + four `--*`
+  modifier selectors plus presence of `var(--text-soft)` on
+  `--passed::before` and absence of any `#c3d2ee` literal. The
+  richer `.gwg-header` / `-title` / `-revision` / `-objective` /
+  `-step` / `-verdict` / `-checks` family stays in styles.css
+  until each block gets a token sweep. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and

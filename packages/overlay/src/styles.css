@@ -9038,49 +9038,14 @@ body[data-resizing="true"] * {
    (last shell sibling consumed). The ::before left-rail
    decoration below is independent of border-left and renders
    regardless. */
-.gwg {
-  position: relative;
-  border: 1px solid var(--border);
-  border-radius: calc(5px * var(--ui-scale));
-  background: var(--surface-inset);
-  overflow: hidden;
-  transition:
-    border-color 160ms ease,
-    background 160ms ease;
-}
-.gwg::before {
-  content: "";
-  position: absolute;
-  left: calc(11px * var(--ui-scale));
-  top: calc(12px * var(--ui-scale));
-  bottom: calc(12px * var(--ui-scale));
-  width: 2px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--subtle-5) 86%, transparent);
-  transition:
-    background 160ms ease,
-    box-shadow 160ms ease;
-  pointer-events: none;
-}
-.gwg:hover {
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
-  box-shadow: 0 9px 18px rgba(0, 0, 0, 0.12);
-}
-.gwg--expanded {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(84, 138, 247, 0.012)),
-    color-mix(in srgb, var(--surface) 96%, transparent);
-}
-.gwg--passed::before {
-  background: color-mix(in srgb, var(--accent) 52%, #c3d2ee);
-}
-.gwg--failed::before {
-  background: color-mix(in srgb, var(--bad) 82%, white 4%);
-}
-.gwg--running::before {
-  background: var(--accent);
-  box-shadow: none;
-}
+/* `.gwg` shell + `::before` rail + `:hover` + `--expanded` + three
+   status modifiers (`--passed` / `--failed` / `--running`) live in
+   `styles/surfaces/inspector.css` now. The literal light-blue hex
+   sibling on `--passed` was retired in favor of `var(--text-soft)`
+   so the muted-accent hue stays theme-adaptive. The richer
+   `.gwg-header` / `-title` / `-revision` / `-objective` / `-step` /
+   `-verdict` / `-checks` family still lives below until each block
+   gets a token sweep. */
 
 /* ── Header ──────────────────────────────────────────────── */
 .gwg-header {
@@ -9747,16 +9712,10 @@ body[data-resizing="true"] * {
   color: var(--text-muted);
 }
 
-/* ── Goal group border accents (paired with ::before ribbon) ── */
-.gwg--passed {
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
-}
-.gwg--failed {
-  border-color: rgba(247, 84, 100, 0.3);
-}
-.gwg--running {
-  border-color: rgba(84, 138, 247, 0.32);
-}
+/* `.gwg--passed/--failed/--running` border-color rules folded into
+   the surface canonical at styles/surfaces/inspector.css. The
+   previous raw rgba(247,84,100,0.3) and rgba(84,138,247,0.32) were
+   color-mix-ed onto var(--bad) and var(--accent) respectively. */
 
 /* ═══════════════════════════════════════════════════════════════════
    MiniWorkflow — RequirementsPanel
