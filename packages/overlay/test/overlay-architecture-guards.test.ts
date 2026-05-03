@@ -974,6 +974,9 @@ describe("overlay architecture guards", () => {
 
   test("board intro density and typography are canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/card.css")))
+
+    expect(card).not.toMatch(/\.board-intro(?:__|\b)/)
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
