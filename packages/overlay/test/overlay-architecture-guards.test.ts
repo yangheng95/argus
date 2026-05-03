@@ -173,7 +173,26 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(81)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(22)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(20)
+  })
+
+  test("each theme has at most one solo body[data-theme=…] palette block", () => {
+    // Pre-2026-05-04 styles.css carried two `body[data-theme="light"]`
+    // blocks (line 208 + 7261) and two `body[data-theme="vscode-dark"]`
+    // blocks (line 155 + 7182). The early block ran the IntelliJ-Light /
+    // VS Code-Dark palette and the late block re-painted with the
+    // workbench palette; the cascade winner was always the late block,
+    // so the early values rendered nowhere AND the early-only tokens
+    // (--hover-accent-border, --guide-card-bg, --accent-glow, etc.)
+    // were stuck on the OLD accent's rgb expansion (e.g. #2470b3
+    // instead of the active #5b5ff0). This guard pins the single-block
+    // invariant so any future palette tweak lands in one place.
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    for (const theme of ["light", "dark", "vscode-dark"] as const) {
+      const head = new RegExp(`body\\[data-theme="${theme}"\\]\\s*\\{`, "g")
+      const matches = [...styles.matchAll(head)]
+      expect(matches.length).toBeLessThanOrEqual(1)
+    }
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
