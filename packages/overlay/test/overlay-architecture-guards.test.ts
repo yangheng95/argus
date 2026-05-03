@@ -164,7 +164,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(239)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(237)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -331,6 +331,29 @@ describe("overlay architecture guards", () => {
     expect(body).toContain("padding: calc(4px * var(--ui-scale))")
     expect(body).toContain("gap: calc(2px * var(--ui-scale))")
     expect(body).toContain("border-radius: 0")
+  })
+
+  test("chat scroll layout is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.chat-scroll\b/.test(selector)) continue
+
+      expect(body).not.toMatch(/\bpadding(?:-[a-z]+)?\s*:/)
+    }
+
+    const bodies = Array.from(styles.matchAll(/(^|\n)\.chat-scroll\s*\{([^{}]*)\}/g)).map(
+      (match) => match[2] ?? "",
+    )
+    const body = bodies.at(-1) ?? ""
+    expect(body).toContain(
+      "padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale))",
+    )
   })
 
   test("chat task-switch progress overlays the header instead of creating a hidden gap", () => {
