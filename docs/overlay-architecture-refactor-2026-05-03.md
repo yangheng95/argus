@@ -1678,6 +1678,33 @@ Progress log:
   button + section / sections single-source tests pass; tsc clean;
   vite build green (4.36s, 324.15KB CSS).
 
+- 2026-05-04 (CRON slice, Claude `dfb6bceac` follow-up): Consolidated
+  the duplicate per-theme palette blocks. styles.css used to declare
+  `body[data-theme="light"]` twice (line 208 IntelliJ-Light defaults +
+  line 7261 workbench palette) and `body[data-theme="vscode-dark"]`
+  twice (line 155 + line 7182). The cascade winner was always the late
+  block, so 37 + 34 = 71 token definitions in the early blocks rendered
+  nowhere — but the early blocks also contributed 15 + 5 = 20 unique
+  early-only tokens (`--hover-accent-border` /
+  `--hover-accent-wash` / `--hover-accent-shadow` / `--guide-card-*` /
+  `--accent-glow` / `--ok` / `--warning` / `--danger` / `--text-dim` /
+  `--dialog-backdrop` / `--panel-fill`(-hover) / `--card-fill`(-hover))
+  whose rgba literals expanded the OLD palette accent (#2470b3 in
+  light, #007acc in vscode-dark). For light, the active `--accent` is
+  #5b5ff0 — the early-only `--hover-accent-border:
+  rgba(36, 112, 179, 0.25)` rendered an old-blue hover over the new
+  violet UI. Migrated all 20 early-only tokens into the late blocks
+  with accent-tinted rgba routed through `color-mix(in srgb,
+  var(--accent) X%, transparent)` so the tints follow whichever accent
+  the theme resolves; achromatic literals (whites / blacks / shadows)
+  kept as-is. Deleted both early blocks. Guard ceilings: `!important`
+  unchanged at 81 (early blocks had no !important), `body[data-theme]`
+  22→20, theme layout overrides unchanged at 7. Added 1 ownership test
+  asserting each theme has at most one solo `body[data-theme=…]`
+  block. All 120 architecture guards + SSE + button-primitive +
+  dark-mode-primary-button + section / sections single-source +
+  default-theme tests pass; tsc clean; vite build green (3.83s).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD

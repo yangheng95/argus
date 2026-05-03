@@ -152,125 +152,24 @@
     linear-gradient(180deg, rgba(84, 138, 247, 0.12), rgba(255, 255, 255, 0.02) 68%), var(--surface-hover);
 }
 
-body[data-theme="vscode-dark"] {
-  color-scheme: dark;
-  --bg: #1e1e1e;
-  --surface: #252526;
-  --surface-hover: #2a2d2e;
-  --surface-inset: #181818;
-  --surface-strong: #333333;
-  --chrome: #3c3c3c;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(0, 122, 204, 0.5);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --text: #cccccc;
-  --text-strong: #d4d4d4;
-  --text-soft: #9d9d9d;
-  --text-muted: #717171;
-  --accent: #007acc;
-  --accent-dim: rgba(0, 122, 204, 0.18);
-  --accent-hover: #1a8fd4;
-  --hover-accent-border: rgba(0, 122, 204, 0.35);
-  --hover-accent-wash: linear-gradient(
-    180deg,
-    rgba(0, 122, 204, 0.18),
-    rgba(0, 122, 204, 0.06) 58%,
-    rgba(255, 255, 255, 0.02)
-  );
-  --hover-accent-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
-  --guide-card-border: rgba(0, 122, 204, 0.25);
-  --guide-card-bg: linear-gradient(180deg, rgba(0, 122, 204, 0.14), rgba(0, 122, 204, 0) 44%), #1e1e1e;
-  --guide-card-shadow: var(--shadow-lg);
-  --good: #73c991;
-  --good-dim: rgba(115, 201, 145, 0.14);
-  --warn: #cca700;
-  --warn-dim: rgba(204, 167, 0, 0.15);
-  --bad: #f48771;
-  --bad-dim: rgba(244, 135, 113, 0.14);
-  --accent-glow: rgba(0, 122, 204, 0.28);
-  --scrollbar-thumb: rgba(121, 121, 121, 0.4);
-  --scrollbar-thumb-hover: rgba(121, 121, 121, 0.6);
-  --session-scrollbar-track: rgba(255, 255, 255, 0.03);
-  --dialog-bg: #252526;
-  --menu-panel-bg: #1f1f1f;
-  --divider-soft: rgba(255, 255, 255, 0.06);
-  --panel-fill:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01) 58%, rgba(255, 255, 255, 0.02)),
-    var(--surface);
-  --panel-fill-hover:
-    linear-gradient(180deg, rgba(0, 122, 204, 0.12), rgba(255, 255, 255, 0.02) 58%, rgba(255, 255, 255, 0.02)),
-    var(--surface-hover);
-  --card-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01) 72%), var(--subtle-1);
-  --card-fill-hover:
-    linear-gradient(180deg, rgba(0, 122, 204, 0.12), rgba(255, 255, 255, 0.015) 68%), var(--surface-hover);
-}
+/* Early vscode-dark :root override retired. It duplicated 34 of the
+ * tokens in the late vscode-dark block (cascade winner) and contributed
+ * 5 early-only tokens: --hover-accent-shadow, --guide-card-border,
+ * --guide-card-bg, --guide-card-shadow, --accent-glow. Those were
+ * migrated into the late block, with accent-tinted rgba literals
+ * re-routed through `color-mix(in srgb, var(--accent) X%, transparent)`. */
 
-body[data-theme="light"] {
-  color-scheme: light;
-  /* IntelliJ IDEA Light / PyCharm Light palette */
-  --bg: #f2f2f2;
-  --surface: #ffffff;
-  --surface-hover: #f0f0f0;
-  --surface-inset: #ebebeb;
-  --surface-strong: #f8f8f8;
-  --chrome: #e8e8e8;
-  --border: rgba(0, 0, 0, 0.12);
-  --border-hover: rgba(36, 112, 179, 0.35);
-  --border-strong: rgba(0, 0, 0, 0.18);
-  --text: #3c3f41;
-  --text-strong: #1a1a1a;
-  --text-soft: #6e6e6e;
-  --text-muted: #999999;
-  --accent: #2470b3;
-  --accent-dim: rgba(36, 112, 179, 0.12);
-  --accent-hover: #1a5e9a;
-  --hover-accent-border: rgba(36, 112, 179, 0.25);
-  --hover-accent-wash: linear-gradient(
-    180deg,
-    rgba(36, 112, 179, 0.1),
-    rgba(36, 112, 179, 0.03) 58%,
-    rgba(255, 255, 255, 0.5)
-  );
-  --hover-accent-shadow: 0 18px 34px rgba(0, 0, 0, 0.1);
-  --guide-card-border: rgba(36, 112, 179, 0.2);
-  --guide-card-bg: linear-gradient(180deg, rgba(36, 112, 179, 0.1), rgba(36, 112, 179, 0) 42%), #f2f2f2;
-  --good: #499c54;
-  --good-dim: rgba(73, 156, 84, 0.12);
-  --warn: #c48a15;
-  --warn-dim: rgba(196, 138, 21, 0.12);
-  --bad: #e03c3c;
-  --bad-dim: rgba(224, 60, 60, 0.12);
-  --ok: var(--good);
-  --warning: var(--warn);
-  --danger: var(--bad);
-  --info: var(--accent);
-  --text-dim: var(--text-muted);
-  --shadow: 0 20px 48px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  --shadow-md: 0 14px 30px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --shadow-lg: 0 28px 60px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --accent-glow: rgba(36, 112, 179, 0.18);
-  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.28);
-  --session-scrollbar-track: rgba(0, 0, 0, 0.04);
-  --subtle-1: rgba(0, 0, 0, 0.03);
-  --subtle-2: rgba(0, 0, 0, 0.05);
-  --subtle-3: rgba(0, 0, 0, 0.07);
-  --subtle-4: rgba(0, 0, 0, 0.1);
-  --subtle-5: rgba(0, 0, 0, 0.14);
-  --dialog-backdrop: rgba(0, 0, 0, 0.4);
-  --dialog-bg: #f2f2f2;
-  --menu-panel-bg: #f8f8f8;
-  --divider-soft: rgba(0, 0, 0, 0.08);
-  --panel-fill:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 58%, rgba(255, 255, 255, 0.5)),
-    var(--surface);
-  --panel-fill-hover:
-    linear-gradient(180deg, rgba(36, 112, 179, 0.1), rgba(255, 255, 255, 0.4) 58%, rgba(255, 255, 255, 0.6)),
-    var(--surface-hover);
-  --card-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 72%), var(--subtle-1);
-  --card-fill-hover:
-    linear-gradient(180deg, rgba(36, 112, 179, 0.08), rgba(255, 255, 255, 0.5) 68%), var(--surface-hover);
-}
+/* Early light theme :root override retired. The pre-iter-22 IntelliJ-
+ * Light palette (--bg #f2f2f2, --accent #2470b3, --good #499c54, ...)
+ * was a complete duplicate of the late light block at line 7261 with
+ * different values — the cascade winner was always the late block, so
+ * the early values rendered nowhere and any change here had no effect
+ * on the rendered theme. Early-only tokens (--hover-accent-border,
+ * --guide-card-bg, --accent-glow, --panel-fill, --card-fill-hover, the
+ * --ok/--warning/--danger/--text-dim aliases, etc.) were migrated into
+ * the late light block, with accent-tinted rgba literals re-routed
+ * through `color-mix(in srgb, var(--accent) X%, transparent)` so the
+ * tints follow the single palette token. */
 
 /* ui-scale is driven at runtime from the active viewport size */
 
@@ -7256,6 +7155,21 @@ body[data-theme="vscode-dark"] {
   --ui-panel-header-height: calc(42px * var(--ui-scale));
   --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
   --ui-sections-width: clamp(calc(310px * var(--ui-scale)), 25vw, calc(430px * var(--ui-scale)));
+
+  /* Migrated from the retired early vscode-dark :root override. The
+     accent-tinted decorations route through `color-mix` on the palette
+     token so any future accent change cascades automatically. */
+  --hover-accent-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  --guide-card-border: color-mix(in srgb, var(--accent) 25%, transparent);
+  --guide-card-bg:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 14%, transparent),
+      color-mix(in srgb, var(--accent) 0%, transparent) 44%
+    ),
+    var(--bg);
+  --guide-card-shadow: var(--shadow-lg);
+  --accent-glow: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 body[data-theme="light"] {
@@ -7320,6 +7234,51 @@ body[data-theme="light"] {
   --ui-panel-header-height: calc(42px * var(--ui-scale));
   --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
   --ui-sections-width: clamp(calc(310px * var(--ui-scale)), 25vw, calc(430px * var(--ui-scale)));
+
+  /* Migrated from the retired early light :root override. The previous
+     definitions painted the IntelliJ-Light blue (#2470b3) directly via
+     rgba literals, while the active accent here is #5b5ff0 — that
+     mismatch was the source of the "different theme cascade conflict"
+     bug. Routing every accent-tinted token through `color-mix` on the
+     palette token means the tint follows whichever accent the theme
+     ultimately resolves. */
+  --hover-accent-border: color-mix(in srgb, var(--accent) 25%, transparent);
+  --hover-accent-wash: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 10%, transparent),
+    color-mix(in srgb, var(--accent) 3%, transparent) 58%,
+    rgba(255, 255, 255, 0.5)
+  );
+  --hover-accent-shadow: 0 18px 34px rgba(0, 0, 0, 0.1);
+  --guide-card-border: color-mix(in srgb, var(--accent) 20%, transparent);
+  --guide-card-bg:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      color-mix(in srgb, var(--accent) 0%, transparent) 42%
+    ),
+    var(--bg);
+  --accent-glow: color-mix(in srgb, var(--accent) 18%, transparent);
+  --dialog-backdrop: rgba(0, 0, 0, 0.4);
+  /* Semantic aliases used by checks / banners. Resolve once here so the
+     consuming rules can read `--ok` / `--warning` / `--danger` /
+     `--text-dim` without referencing palette tokens directly. */
+  --ok: var(--good);
+  --warning: var(--warn);
+  --danger: var(--bad);
+  --text-dim: var(--text-muted);
+  /* Card / panel fill stacks: a translucent white wash over the surface
+     palette token so the inner panels feel like glass on the soft
+     light canvas. */
+  --panel-fill:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 58%, rgba(255, 255, 255, 0.5)),
+    var(--surface);
+  --panel-fill-hover:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), rgba(255, 255, 255, 0.4) 58%, rgba(255, 255, 255, 0.6)),
+    var(--surface-hover);
+  --card-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 72%), var(--subtle-1);
+  --card-fill-hover:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, transparent), rgba(255, 255, 255, 0.5) 68%), var(--surface-hover);
 }
 
 body {
