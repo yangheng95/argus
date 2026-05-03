@@ -1355,6 +1355,25 @@ Progress log:
   + absence of the 2 retired raw rgba accent literals.
   Ceilings unchanged.
 
+- 2026-05-03: Extended surfaces/settings.css with the content
+  panel + resizer family: `.config-content` (with clamp()
+  padding bounds wrapped in `calc(N * --ui-scale)`),
+  `.config-tab-panel` (+ `.active`), `.config-tab-panel >
+  .config-section-body`, `.config-content .config-subsection`
+  density overrides (`-head` min-height/padding, `-body`
+  padding/gap), the `.config-content .extension-head, .config-
+  content .knowledge-toolbar` shared gap multi-class,
+  `.config-resizer` (+ `::before` hairline + `:hover/[data-
+  active]::before` accent state), and `.config-nav-spacer`.
+  Token conversions: `1px` resizer hairline →
+  `var(--oc-border-width)`; `999px` pill →
+  `var(--oc-radius-pill)`. New ownership guard asserts 4 base
+  classes + `.active` variant + `> .config-section-body` child
+  + `.config-content` density multi-class + the shared
+  extension-head/knowledge-toolbar gap multi-class + `::before`
+  + the resizer hover/active state multi-class. Ceilings
+  unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and

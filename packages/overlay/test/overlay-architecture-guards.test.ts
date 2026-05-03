@@ -461,6 +461,32 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("settings content panel + resizer are owned by surfaces/settings.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    for (const className of [
+      "config-content",
+      "config-tab-panel",
+      "config-resizer",
+      "config-nav-spacer",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(settingsSurface).toMatch(/\.config-tab-panel\.active\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-tab-panel \> \.config-section-body\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-content \.config-subsection\s*\{/)
+    expect(settingsSurface).toMatch(
+      /\.config-content \.extension-head,\s*\.config-content \.knowledge-toolbar\s*\{/,
+    )
+    expect(settingsSurface).toMatch(/\.config-resizer::before\s*\{/)
+    expect(settingsSurface).toMatch(
+      /\.config-resizer:hover::before,\s*\.config-resizer\[data-active="true"\]::before\s*\{/,
+    )
+  })
+
   test("settings dialog shell + sidebar nav are owned by surfaces/settings.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
