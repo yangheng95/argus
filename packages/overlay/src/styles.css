@@ -6011,7 +6011,7 @@ code .file-link:hover {
   border: 1px solid color-mix(in srgb, var(--accent) 46%, transparent);
   border-radius: var(--radius);
   background: var(--accent);
-  color: #08110f;
+  color: #ffffff;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -6027,9 +6027,6 @@ code .file-link:hover {
     background 120ms,
     opacity 120ms,
     box-shadow 120ms;
-}
-body[data-theme="light"] .chat-send {
-  color: #ffffff;
 }
 .chat-send:hover {
   background: var(--accent-hover);
@@ -13546,14 +13543,10 @@ body::after,
   border-radius: var(--radius);
   border: 1px solid color-mix(in srgb, var(--accent) 46%, transparent);
   background: var(--accent);
-  color: #08110f;
+  color: #ffffff;
   box-shadow: none;
   font-weight: 700;
   letter-spacing: 0;
-}
-
-body[data-theme="light"] .btn-primary {
-  color: #ffffff;
 }
 
 .btn-primary:hover {

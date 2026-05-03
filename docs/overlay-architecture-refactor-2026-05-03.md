@@ -410,6 +410,12 @@ Progress log:
   `body[data-theme="light"]` arm was a specificity-only duplicate of the
   unscoped rule and could never change rendering on its own. With the
   duplicates retired, `body[data-theme]` guard ceiling drops to `<= 125`.
+- 2026-05-03: Folded the `body[data-theme="light"] { color: #ffffff }`
+  overrides for `.chat-send` and `.btn-primary` into the canonical rules.
+  The accent-on-flat primary button always renders white text — the dark
+  variants set white via the late primary cluster, and the canonical was
+  declaring an unrendered `#08110f` text color that never reached the page.
+  `body[data-theme]` guard ceiling drops to `<= 123`.
 
 Trigger: user feedback (2026-05-03):
 
@@ -445,7 +451,7 @@ one theme contract, and no runtime God CSS path left behind.
 | `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,698 lines**                                                                         |
 | Total `!important` in stylesheets      | **183** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **125**                                                                                 |
+| `body[data-theme="…"]` theme overrides | **123**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |
