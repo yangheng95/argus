@@ -1,13 +1,10 @@
-/* ── OpenCorvus Overlay ── */
+
 
 :root {
   color-scheme: dark;
   --ui-scale: 1;
   --ui-window-opacity: 1;
-  /* Foreground colour painted on top of any --accent-* surface. White is
-     the contrast-correct choice across all three palettes (light accent
-     #2470b3, dark accent #548af7, vscode-dark accent #007acc). Routed
-     through a token so primary-action buttons stop hardcoding "#ffffff". */
+
   --text-on-accent: #ffffff;
   --diff-add-fg: color-mix(in srgb, var(--accent) 58%, var(--text-strong) 42%);
   --diff-add-bg: color-mix(in srgb, var(--accent) 12%, transparent);
@@ -22,13 +19,7 @@
   --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
   --session-scrollbar-size: calc(12px * var(--ui-scale));
   --dialog-backdrop: rgba(0, 0, 0, 0.6);
-  /* iter48: user feedback (2026-05-03) "以标题栏菜单的字体大小
-     为准，任何其余字体都不允许比他字体更大". The titlebar
-     menubar trigger uses var(--ui-font-body) (≈12px). Cap
-     display/heading/title to body so no surface in the overlay
-     renders text larger than the menubar. Single-source — every
-     selector that consumed --ui-font-display / --ui-font-heading
-     / --ui-font-title now resolves to the body value. */
+
   --ui-font-label: var(--ui-font-meta);
   --ui-gap-xs: calc(4px * var(--ui-scale));
   --ui-gap-sm: calc(6px * var(--ui-scale));
@@ -70,27 +61,6 @@
   --subhead-size: var(--ui-font-control);
 }
 
-/* Early vscode-dark :root override retired. It duplicated 34 of the
- * tokens in the late vscode-dark block (cascade winner) and contributed
- * 5 early-only tokens: --hover-accent-shadow, --guide-card-border,
- * --guide-card-bg, --guide-card-shadow, --accent-glow. Those were
- * migrated into the late block, with accent-tinted rgba literals
- * re-routed through `color-mix(in srgb, var(--accent) X%, transparent)`. */
-
-/* Early light theme :root override retired. The pre-iter-22 IntelliJ-
- * Light palette (--bg #f2f2f2, --accent #2470b3, --good #499c54, ...)
- * was a complete duplicate of the late light block at line 7261 with
- * different values — the cascade winner was always the late block, so
- * the early values rendered nowhere and any change here had no effect
- * on the rendered theme. Early-only tokens (--hover-accent-border,
- * --guide-card-bg, --accent-glow, --panel-fill, --card-fill-hover, the
- * --ok/--warning/--danger/--text-dim aliases, etc.) were migrated into
- * the late light block, with accent-tinted rgba literals re-routed
- * through `color-mix(in srgb, var(--accent) X%, transparent)` so the
- * tints follow the single palette token. */
-
-/* ui-scale is driven at runtime from the active viewport size */
-
 *,
 *::before,
 *::after {
@@ -123,50 +93,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-body::before,
-body::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-body::before {
-  z-index: -2;
-  background:
-    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 24%),
-    radial-gradient(circle at 88% 4%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 22%),
-    linear-gradient(180deg, #17191d, #181b1f 38%, #14171a 100%);
-}
-
-body::after {
-  z-index: -1;
-  opacity: 0.08;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.02)),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.03), transparent 72%);
-}
-
-body[data-theme="light"]::before {
-  background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 6%, transparent), transparent 30%),
-    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 8%, transparent), transparent 32%),
-    linear-gradient(180deg, #f2f2f2, #eeeeee 46%, #ebebeb 96%);
-}
-
-body[data-theme="light"]::after {
-  opacity: 0.1;
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.02), transparent 16%, transparent 84%, rgba(0, 0, 0, 0.02)),
-    repeating-linear-gradient(
-      90deg,
-      transparent 0,
-      transparent 104px,
-      rgba(0, 0, 0, 0.03) 104px,
-      rgba(0, 0, 0, 0.03) 105px
-    );
-}
-
 button,
 input,
 textarea,
@@ -178,13 +104,6 @@ a {
   text-decoration: none;
 }
 
-/* ── Scrollbar ──
-   webkit rules cover Chromium/WebView2 (the primary Tauri target).
-   The Firefox-only `scrollbar-width` + `scrollbar-color` keep parity for
-   `bun run dev:vite` outside the webview, where Chrome devtools may
-   render via the Firefox-style standard scrollbar API. The pair stays
-   tight so a thumbtack-thin scrollbar appears in both engines instead
-   of one engine showing the platform default. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
@@ -235,54 +154,6 @@ a {
   background-clip: padding-box;
 }
 
-/* ── Titlebar ──
-   Single source after iter14. Used to be three blocks:
-   1) flex layout + 12px gap + gradient bg + 12px-deep shadow
-      (canonical at this site)
-   2) layout switcher near line ~11597 that flipped display:flex
-      to display:grid with a 3-column template (titlebar-left,
-      spacer, titlebar-utility)
-   3) calm/flat override near line ~12149 that clobbered padding,
-      min-height, background, box-shadow with !important so the
-      titlebar dropped the gradient + deep shadow
-   The override stack made the canonical block lie about the
-   final visual; tweaks at any one site silently lost to the
-   late !important. Folded into one block below — grid layout
-   + chrome live together. The two duplicate blocks are gone. */
-/* `.titlebar` shell + `.titlebar-left/-brand/-spacer` layout containers
-   and `.brand-logo` live in `styles/surfaces/titlebar.css` now. */
-
-/* iter6: the OpenCorvus wordmark used to live in the titlebar next
-   to the logo (`<span class="brand-name">`), and the connection
-   badge sat right after it inside `.brand-heading`. The wordmark is
-   gone (the logo carries the brand) and the badge moved to
-   `.titlebar-utility` on the far right. So `.brand-heading` and
-   `.brand-name` have no DOM consumers any more — both removed.
-   `.brand-guide` now wraps the logo directly and stays the
-   quick-guide popover anchor. */
-
-/* The `.brand-guide*` family (anchor, popover card, kicker, title, steps,
-   step-index, step-copy) plus its `@media (max-width: 760px)` width tweak
-   live in `styles/surfaces/titlebar.css` now. */
-
-/* `.titlebar-menubar*` (bar shell, slot, trigger, panel, group, item,
-   toggle, range, note, theme-options shortcut) plus the @media (max-width:
-   520px) panel adjustment all live in `styles/surfaces/titlebar.css` now. */
-
-/* `.titlebar-status-cluster` lives in `styles/surfaces/titlebar.css` now. */
-
-/* `.titlebar-status-chip`, `.titlebar-setup-cta`, `.titlebar-status-label`,
-   `.titlebar-status-value`, and the dead `.titlebar-status-icon` rules
-   live in `styles/surfaces/titlebar.css` now. */
-
-/* `.titlebar-theme-options*` family lives in
-   `styles/surfaces/titlebar.css` now. */
-
-/* `.titlebar-window-controls` lives in `styles/surfaces/titlebar.css` now.
-   The dead `.titlebar-btn` / `.titlebar-close` static class rules were
-   retired after the window controls moved to the Button primitive. */
-
-/* ── Panel ── */
 .panel {
   flex: 1;
   display: flex;
@@ -293,7 +164,6 @@ a {
   background: transparent;
 }
 
-/* ── Panel Body (horizontal split) ── */
 .panel-body {
   flex: 1;
   display: flex;
@@ -303,41 +173,6 @@ a {
   gap: 0;
   padding: 0;
 }
-
-/* ── Task Bar ── */
-/* `.task-bar` / `.task-bar-main` / `.task-status` / `.status-label` /
-   `.elapsed` family lives in `styles/surfaces/conversation.css` now.
-   `.titlebar-task-status` and `.status-icon` live in
-   `styles/surfaces/titlebar.css`. */
-
-/* TaskDirBar.tsx family + `.task-bar` / `.task-status` / `.status-label`
-   / `.elapsed` / `.task-cwd-actions` / `.task-flag` / `.recent-dir-panel*`
-   family all live in `styles/surfaces/conversation.css` now. */
-
-/* `.executor-chip*` family + executor-menu light-theme overrides live
-   in `styles/surfaces/composer.css` now. `.task-bar` / `.task-status`
-   / `.task-flag` / `.recent-dir-panel*` live in
-   `styles/surfaces/conversation.css` now. */
-
-/* Light-theme `.msg-reasoning` override retired. The canonical now
- * reads `color-mix(in srgb, var(--accent) X%, transparent)` and `--accent`
- * differs per theme, so the callout adapts without a selector. */
-
-/* ── Sections Container (right column) ──
-   Single source after iter15. Used to be four blocks: a chromed
-   canonical here (border + gradient + 14px-deep shadow + hover
-   chrome), plus three !important overrides at the file tail
-   that knocked out border / border-radius / background /
-   box-shadow so the rendered `.sections` was actually flat —
-   the canonical lied about the visual. Folded into one flat
-   block matching the calm/flat direction shipped in iter4 /
-   iter5 / iter14. The hover state is gone with the chrome
-   (no border to color, no shadow to lift). */
-/* `.sections` shell + `.sections-title` / `-stack` / `-tab-body` family
-   live in `styles/surfaces/inspector.css` now. The shared `.sections,
-   .config-dialog-layout` CSS-var declaration stays here because the
-   variables are consumed inside .section internals across both
-   surfaces (right-panel inspector and config dialog). */
 
 .sections,
 .config-dialog-layout {
@@ -361,40 +196,10 @@ a {
   min-height: 0;
 }
 
-/* `.section-icon-btn` and `.frontend-preview*` family live in
-   `styles/surfaces/inspector.css` now. Late theme-scoped chrome
-   overrides on `.section-icon-btn` still live here until the theme
-   override sweep retires them. */
-
 #solidFrontendPreviewMount {
   height: 100%;
   min-height: 0;
 }
-
-/* ── Section (details/summary) ──
-   Single source after iter40. The canonical here used to
-   declare rich chrome (gradient + --surface tinted bg, 14px
-   radius, drop shadow + inset highlight) that the !important
-   reset chain at line ~12449 forced to flat (`--surface-inset`
-   bg, `var(--radius)` ≈10px, no shadow). Canonical lied —
-   same iter28/30/33/36 active rule-8 conflict. Updated to
-   declare the actually-rendered flat values directly so
-   source matches rendered. `.section` drops out of the
-   !important reset chain, leaving only 4 remaining shells
-   in that chain (.gwg / .delivery-panel / .criteria-group /
-   .eval-error) for future single-source passes. */
-/* The .section shell + :last-child border + .section-head baseline /
-   markers / :hover live in styles/surfaces/inspector.css now. Per-
-   [data-phase-state] chrome (related / active variants) lives in the
-   same surface; raw rgba accent gradients converted to color-mix
-   on var(--accent), and the active-card glow shadow routes through
-   color-mix(black, 10%) so the surface stays palette-clean. */
-
-/* The .section content rails — icon / title / badge family
-   (with tone + variant) / head-action / .section-body / disclosure
-   caret pseudo — live in styles/surfaces/inspector.css now.
-   Phase-state badge tints stay here until the per-phase chrome
-   rgba gradients get a palette-token pass. */
 
 .empty-hint {
   display: block;
@@ -404,15 +209,6 @@ a {
   padding: calc(2px * var(--ui-scale)) 0;
 }
 
-/* Shared empty-state shells for the primary overlay work surfaces.
-   The `.empty-hint--card` modifier opts panels OUT of having to nest
-   their empty hint under `.section-body` / `.sidebar-list-cluster` etc
-   in order to inherit the bordered-card chrome. Any panel that wants a
-   right-panel-style empty state now writes
-   `<p class="empty-hint empty-hint--card">…</p>` directly. Single
-   source — replaces the per-panel `.arch-empty` / `.req-empty` /
-   `.agent-workflow-empty` / `.integrity__empty` / `.delivery-empty-hint`
-   rules that used to drift independently (rule 8). */
 .sidebar-list-cluster > .empty-hint,
 .section-body > .empty-hint,
 #solidChangesPanel > .empty-hint,
@@ -526,11 +322,6 @@ a {
   cursor: progress;
 }
 
-/* ── CommandPalette (Cmd+K) ──
-   Modal floating dialog with a single search input + filterable
-   command list. Backdrop covers the full viewport with a subtle blur
-   so the workflow underneath stays visually present (operators want
-   the palette to feel like a transient overlay, not a takeover). */
 .cmdk-backdrop {
   position: fixed;
   inset: 0;
@@ -605,9 +396,7 @@ a {
   background: var(--accent-dim);
   color: var(--text-strong);
 }
-/* iter11: command-palette group label. Plain subheader, not a
-   pill — Title Case fits the i18n strings ("task", "settings",
-   "appearance", "tools"). */
+
 .cmdk-item-group {
   flex: none;
   font-size: var(--ui-font-meta);
@@ -652,11 +441,6 @@ a {
   color: var(--text-soft);
 }
 
-/* ProvidersPanel test-connection result chip. data-ok flips between
-   --good (success) and --bad (failure) tints. The chip sits inside the
-   provider card so it's visually attached to the row that ran the test.
-   Long error messages wrap rather than truncate — the operator wants to
-   read the actual upstream message (rate limit / 401 / DNS) in full. */
 .provider-test-result {
   display: flex;
   align-items: flex-start;
@@ -688,9 +472,6 @@ a {
   overflow-wrap: break-word;
 }
 
-/* ProvidersPanel header action cluster. The catalog `Refresh` button
-   sits to the left of `+ Add` and shows a spinning ↻ glyph + relative
-   "Updated 3 min ago" hint while keeping the panel header compact. */
 .provider-head-actions {
   display: inline-flex;
   align-items: center;
@@ -728,11 +509,6 @@ a {
   }
 }
 
-/* ProvidersPanel save / delete / form-validation failure surface.
-   Same --bad vocabulary as the test-result error chip so the user
-   reads UI failures with one consistent visual rule. Wrapping is
-   essential — server validation messages can be long (e.g.
-   "config.provider.foo: models: Expected object, received string"). */
 .provider-form-error {
   margin-top: var(--ui-gap-sm);
   padding: var(--ui-gap-xs) var(--ui-gap-md);
@@ -745,9 +521,6 @@ a {
   overflow-wrap: break-word;
 }
 
-/* TaskDetailOverlay header error chip — same color vocabulary as the
-   task-list error banner. Sits inline next to the loading hint so the
-   operator sees both states without the chrome moving. */
 .task-overlay-error {
   display: inline-flex;
   align-items: center;
@@ -784,10 +557,6 @@ a {
   outline-offset: 1px;
 }
 
-/* AgentModelsPanel inline-style refugees (rule 10: no hardcoded
-   font-size / spacing / colors in TSX). Each replaced inline `style="…"`
-   with one of these classes so the design tokens own the spacing &
-   typography, not the component template. */
 .agent-models-info {
   margin: var(--ui-gap-xs) 0 var(--ui-gap-lg) 0;
   font-size: var(--ui-font-meta);
@@ -807,10 +576,6 @@ a {
   color: var(--bad);
 }
 
-/* ProvidersPanel inline-style refugees — same rule 10 cleanup. The
-   three `<div style="font-size … opacity … margin-bottom …">` rows
-   collapse into one class; `--last` strips the trailing margin so the
-   list has no orphan space at the bottom. */
 .provider-settings-flat {
   gap: calc(14px * var(--ui-scale));
 }
@@ -882,8 +647,7 @@ a {
   flex-direction: column;
   gap: var(--ui-gap-sm);
 }
-/* iter11: provider-catalog section label ("Custom Providers",
-   "Available"). Subtitle inside the list, not a pill. */
+
 .provider-section-label {
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
@@ -1034,9 +798,6 @@ a {
   }
 }
 
-/* AgentModelsPanel loading state — replaces the bare "Loading…" text
-   with a spinner + label so the operator can distinguish "still
-   fetching" from "fetched but empty" at a glance. */
 .agent-models-loading {
   display: flex;
   align-items: center;
@@ -1063,9 +824,6 @@ a {
   }
 }
 
-/* AgentModelsPanel error banner — same vocabulary as task-list-error so
-   the operator's eye recognizes "load failed, click to retry" instantly,
-   instead of the prior inline-styled red sentence with no action. */
 .agent-models-error {
   display: flex;
   align-items: center;
@@ -1083,11 +841,6 @@ a {
   min-width: 0;
 }
 
-/* TaskList search — appears once the operator has more than 4 tasks (the
-   threshold below which scanning beats searching) or whenever the search
-   field already has a value (so the operator never sees the input vanish
-   under their own typing). Compact pill input matching the toolbar
-   aesthetic, with a clear button only when there's text to clear. */
 .task-list-search {
   display: flex;
   align-items: center;
@@ -1147,10 +900,6 @@ a {
   outline-offset: 1px;
 }
 
-/* TaskList loading skeleton — three pulse-animated bars stand in for
-   actual task rows during the first fetch, so the operator sees motion
-   instead of an empty pane. Hidden once boardStore.tasksLoaded flips
-   true (regardless of whether the project actually has tasks). */
 .task-list-skeleton {
   display: flex;
   flex-direction: column;
@@ -1181,7 +930,6 @@ a {
   }
 }
 
-/* ── Plan Body ── */
 .plan-summary {
   font-size: var(--ui-font-control);
   color: var(--text-soft);
@@ -1216,7 +964,6 @@ a {
   opacity: 0.7;
 }
 
-/* ── Files / Diff ── */
 .changes-summary {
   display: flex;
   align-items: center;
@@ -1249,14 +996,6 @@ a {
   gap: 4px;
 }
 
-/*
- * Goal-grouping tabs above the changes list — vertical list.
- *
- * Stacked one goal per row so a long goal list is naturally scannable
- * top-to-bottom without horizontal scrolling and without wrapping
- * artifacts. Active tab gets a left accent rail + bold text; counts
- * render inline at the right edge as subdued tabular numbers.
- */
 .changes-tabs {
   display: flex;
   flex-direction: column;
@@ -1265,11 +1004,6 @@ a {
   margin: calc(4px * var(--ui-scale)) 0 calc(6px * var(--ui-scale));
 }
 
-/* iter49: custom Goal-grouping dropdown that replaces the
-   previous vertical `.changes-tabs` list. No native <select>
-   chrome — fully styled to match the overlay's calm/flat
-   chip vocabulary. The trigger reads as a single chip; the
-   menu pops below as a borderless list of selectable rows. */
 .changes-goal-picker {
   position: relative;
   margin: calc(4px * var(--ui-scale)) 0 calc(6px * var(--ui-scale));
@@ -1488,7 +1222,6 @@ a {
   min-width: 0;
 }
 
-/* iter12: change-row subline (path / context). Plain subtitle. */
 .change-subline {
   font-size: var(--ui-font-control);
   color: var(--text-muted);
@@ -1547,7 +1280,6 @@ a {
   color: var(--bad);
 }
 
-/* ── Goals Body ── */
 .goals-list {
   display: flex;
   flex-direction: column;
@@ -1719,7 +1451,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   background: var(--subtle-3);
 }
 
-/* ── EvaluationCriteriaPanel ── */
 .criteria-panel {
   display: flex;
   flex-direction: column;
@@ -1751,10 +1482,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   flex-direction: column;
   gap: calc(4px * var(--ui-scale));
 }
-/* Tier-2 section subtitle — Title Case is produced by familyLabel() in
-   utils/criteria.ts, so the CSS does NOT force-uppercase. Keeping this
-   parallel with .gwg-objective-label / .gwg-done-definition-label so the
-   right panel reads as a single typographic hierarchy. */
+
 .criteria-family-head {
   font-size: var(--ui-font-control);
   font-weight: 600;
@@ -1793,25 +1521,12 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   margin-top: calc(2px * var(--ui-scale));
 }
 
-/* ── Criteria Checkboxes ── */
 .criteria-list {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   gap: calc(8px * var(--ui-scale));
 }
-
-/* Single source after iter57. Earlier canonicals said
-   `.criteria-group` had a bordered card shell, while the theme
-   reset tail forced compact spacing, a small radius, and no
-   visible border. Fold the rendered chrome here so criteria
-   groups no longer depend on theme layout/chrome overrides. */
-/* `.criteria-group` baseline + `-head` / `-icon` (incl. svg) /
-   `-title` / `-count` / `-list` live in
-   `styles/surfaces/inspector.css` now. The shared multi-class
-   `:hover` rule below + the richer `.criteria-item` interactive
-   row stay here until their raw rgba accent washes get a
-   palette-token pass. */
 
 .criteria-item {
   display: grid;
@@ -1940,26 +1655,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   display: none;
 }
 
-/* ── Evaluation Errors ── */
-/* `.eval-error*` family + `.eval-summary` live in
-   `styles/surfaces/inspector.css` now. Background gradients
-   converted from raw rgba(224, 106, 99) red to color-mix on
-   var(--bad) for design-language consistency. The cross-surface
-   `min-width: 0 / max-width: 100%` group below still references
-   `.eval-error` and `.eval-error-detail` — that is a layout
-   primitive, not chrome, so it stays. */
-
-/* ── Chat (middle column) ──
-   Single source after iter16. Used to be a chromed canonical
-   (border + shadow + transition) plus three !important reset
-   chains near the file tail (.sidebar, .chat { … } at ~12249,
-   .chat { background: var(--chat-canvas) … } at ~12787, and
-   another .sidebar, .chat { border: 0; … } at ~12795) that
-   knocked it back to flat with the chat-canvas background.
-   Folded into one flat block. Theme-scoped overrides
-   (`body[data-theme="..."] .chat { … }`) stay legitimate.
-   The hover transition is gone with the chrome (no border to
-   color, no shadow to lift). */
 .chat {
   flex: 999 1 var(--ui-chat-priority-width);
   position: relative;
@@ -1975,36 +1670,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   overflow: hidden;
 }
 
-/* iter16 follow-up: hover/focus chrome dropped — calm/flat
-   .chat has no border to color and no shadow to lift, so the
-   hover state was a no-op once the !important resets clobbered
-   it. The symmetric `.sidebar:hover` rule was deleted in
-   iter16; this one was missed in the same pass and would have
-   re-introduced gradient+shadow on hover. CRON self-audit
-   caught it. */
-
-/* `.task-switch-progress` family + `@keyframes task-switch-progress-slide`,
-   plus `.chat-header-main` / `.chat-title` live in
-   `styles/surfaces/conversation.css` now. */
-
-/* workspace-toggle family → styles/surfaces/workspace.css */
-
-/* `.chat-header-status` + `.chat-task-status*` family live in
-   `styles/surfaces/conversation.css` now. */
-
-/* `.btn-terminate` removed (2026-05-04 dead-code sweep). The terminate
- * action UI now renders through the `Button` primitive's `tone="danger"`
- * variant — the legacy `.btn-terminate` class had zero consumers in
- * tsx/html sources. */
-
-/* `.chat-count` and `.chat-header-meta` live in
-   `styles/surfaces/conversation.css` now. */
-
-/* `.chat-goals-strip` and the `.goal-chip*` family live in
-   `styles/surfaces/conversation.css` now. */
-
-/* workspace-mount, pane-resizer-workspace family → styles/surfaces/workspace.css */
-
 body[data-resizing="row"] {
   cursor: row-resize;
   user-select: none;
@@ -2013,28 +1678,6 @@ body[data-resizing="row"] * {
   cursor: row-resize !important;
 }
 
-/* workspace, workspace-header/tabs/tab/close, workspace-body/view → styles/surfaces/workspace.css */
-
-/* diff-preview-*, file-view-*, code .file-link → styles/surfaces/workspace.css */
-
-/* `.chat-scroll` shell + descendant card layout + matching @media
-   (max-width: 900px) reflow live in `styles/surfaces/conversation.css`
-   now. */
-
-/* `.chat-empty` is the flat placeholder shown when a task has no
-   messages yet ("Conversation updates will appear here"). This used
-   to be defined three times (a rich card here at the top, then two
-   later blocks at lines ~12715/12896 that knocked out the chrome with
-   !important and shrank the box). Merged into a single source per
-   CLAUDE.md rule 8 — same treatment that was already applied to
-   `.empty-hint`. The richer task-aware variant is `.chat-empty--task`
-   below; that one keeps its own bordered card because it surfaces
-   live task status, not just "no data". */
-/* `.chat-empty` placeholder + icon + text, and `.chat-follow-label` live
-   in `styles/surfaces/conversation.css` now. The richer
-   `.chat-empty--task` variant + theme overrides will follow. */
-
-/* Text parts — prominent */
 .msg-text {
   font-size: var(--ui-font-body);
   line-height: 1.78;
@@ -2042,19 +1685,13 @@ body[data-resizing="row"] * {
   word-break: break-word;
 }
 
-/* Add spacing before text that follows tool calls */
 .msg-tool + .msg-text,
 .msg-patch + .msg-text {
   margin-top: 8px;
 }
 
-/* Tool calls — compact inline */
 .msg-tool {
-  /* Two-row chip: row 1 = icon + name + status (always visible at a
-   * glance), row 2 = detail (file path / command / query) wrapping to
-   * full width. The previous single-row layout forced detail into a
-   * horizontal-scroll on the SAME line as the name, which buried any
-   * path > ~40 chars and made multi-line scripts unreadable. */
+
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -2095,11 +1732,6 @@ body[data-resizing="row"] * {
   background: color-mix(in srgb, var(--bad) 82%, transparent);
 }
 
-/* Visual order on the chip:
- *   row 1 → icon (0) · name (1) · spacer · status (2)
- *   row 2 → detail (3, flex-basis 100%)
- * DOM order is icon → name → detail → status, so we use flex `order` to
- * keep status next to the name and push detail to its own row. */
 .tool-icon {
   flex-shrink: 0;
   font-size: var(--ui-font-body);
@@ -2117,7 +1749,7 @@ body[data-resizing="row"] * {
 }
 
 .tool-detail {
-  /* Full-width second row — wraps naturally, no horizontal scroll. */
+
   flex: 0 0 100%;
   order: 3;
   min-width: 0;
@@ -2135,8 +1767,7 @@ body[data-resizing="row"] * {
 .tool-status {
   flex-shrink: 0;
   margin-left: auto;
-  /* Pin status pill to row 1 so it sits next to the tool name regardless
-   * of whether detail wrapped to row 2. */
+
   order: 2;
   display: inline-flex;
   align-items: center;
@@ -2167,11 +1798,6 @@ body[data-resizing="row"] * {
   background: var(--subtle-2);
 }
 
-/* msg-tool-output-details — collapsible wrapper for shell/stdout output
-   past the audit-driven thresholds (12 lines / 1500 chars). Short output
-   skips the wrapper entirely so noise stays minimal. The summary chip
-   reads "<lines> line(s) · <chars> chars — preview…" so the operator
-   knows what they're choosing to expand without clicking through. */
 .msg-tool-output-details {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
 }
@@ -2227,7 +1853,6 @@ body[data-resizing="row"] * {
   text-overflow: ellipsis;
 }
 
-/* Tool output */
 .msg-tool-output {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
@@ -2242,11 +1867,7 @@ body[data-resizing="row"] * {
   word-break: break-word;
   overflow-x: auto;
 }
-/* Streaming tool input — shows partial JSON as LLM generates it.
- * No height clamp: this only renders inside an EXPANDED card body, which
- * the operator has explicitly opened. Truncating here forced a nested
- * scroll on top of the page scroll — the "high-not-成-low-not-就" pattern
- * that buried the bottom of any input over ~12 lines. */
+
 .msg-tool-input {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
@@ -2355,7 +1976,6 @@ body[data-resizing="row"] * {
   overflow: hidden;
 }
 
-/* Structured todo list (todowrite / todoread / updateplan tool body) */
 .msg-todo-card {
   display: flex;
   flex-direction: column;
@@ -2385,8 +2005,7 @@ body[data-resizing="row"] * {
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
 }
-/* iter12: todo-card label ("In progress", "Pending", …). Plain
-   subtitle, no pill chrome. */
+
 .msg-todo-card__label {
   color: var(--text-soft);
   font-size: var(--ui-font-small);
@@ -2564,7 +2183,7 @@ body[data-resizing="row"] * {
   background: color-mix(in srgb, var(--subtle-2) 88%, transparent);
   border: 1px solid var(--subtle-4);
 }
-/* iter12: read-reminder label — plain content subtitle. */
+
 .msg-read-reminder__label {
   color: var(--text-muted);
   font-size: var(--ui-font-small);
@@ -2581,7 +2200,6 @@ body[data-resizing="row"] * {
   margin-bottom: 0;
 }
 
-/* ── Agent Card (single-session stage container) ── */
 .agent-card {
   --agent-accent: rgba(110, 183, 255, 0.82);
   --agent-bg: rgba(110, 183, 255, 0.08);
@@ -2722,7 +2340,6 @@ body[data-resizing="row"] * {
   mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
 }
 
-/* Individual tool entries — item row + optional output block */
 .executor-tool-entry {
   border-radius: calc(4px * var(--ui-scale));
   transition: opacity 0.15s ease;
@@ -2781,7 +2398,6 @@ body[data-resizing="row"] * {
   color: var(--warn);
 }
 
-/* Tool output block */
 .executor-tool-output {
   margin: calc(2px * var(--ui-scale)) 0 calc(4px * var(--ui-scale)) calc(28px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
@@ -2797,19 +2413,13 @@ body[data-resizing="row"] * {
   overflow-y: auto;
 }
 
-/* Reasoning */
 .msg-reasoning {
   display: flex;
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: calc(14px * var(--ui-scale));
-  /* Accent-tinted callout. The previous canonical hardcoded
-     rgba(122, 167, 245, …) (a light-blue near `--accent`) and a light-
-     theme override painted a separate rgba(37, 99, 235, …); both are
-     theme-blind. Routing through `color-mix` on `--accent` reuses the
-     single palette token so the callout matches the active theme's
-     accent without any `body[data-theme]` selector. */
+
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--accent) 16%, transparent),
@@ -2854,7 +2464,6 @@ body[data-resizing="row"] * {
   }
 }
 
-/* Patch — compact inline */
 .msg-patch {
   display: flex;
   align-items: center;
@@ -2867,91 +2476,6 @@ body[data-resizing="row"] * {
   font-family: var(--mono);
 }
 
-/* ── Chat Input ──
-   Single source after iter17. User feedback (2026-05-02):
-   "把输入框的圆角也去掉" — also drop the chat input rounded
-   corners. The composer container used to be defined three
-   times — a chromed canonical here (16px radius via
-   `calc(20px * --ui-scale * 0.8)`, gradient bg, drop shadow,
-   ::before radial overlay), then a `.chat-input { … !important }`
-   override around line ~12476 that flipped scale to 1 and
-   set `border-radius: var(--panel-radius)` (= 10px), then a
-   third override around line ~12963 that re-set background +
-   margin/padding with !important. Same dual-source-with-late-
-   override anti-pattern collapsed for the shell containers in
-   iter14 / iter15 / iter16.
-
-   Folded into one block. Flat: `border-radius: 0`, no
-   gradient, no shadow, no decorative ::before overlay. iter57
-   finished the theme-reset extraction: margin, compact padding,
-   accent border, palette background, and focus ring now live
-   here instead of in light/dark body[data-theme] blocks. The
-   focus-within ring stays as the only chrome — it's the
-   active-state affordance the user needs to see when typing. */
-/* `.chat-input` shell + `:focus-within` ring live in
-   `styles/surfaces/composer.css` now. */
-
-/* ── Chat Attachments ── */
-/* `.chat-attachment*` family lives in `styles/surfaces/composer.css` now. */
-
-/* ── Chat icon column + toolbar buttons ── */
-
-/* Single source after iter22. Was four sites — a chromed
-   canonical here (16px radius, gradient bg, inset shadow)
-   and three later overrides at lines ~12515 / ~12728 /
-   ~12976 that flipped radius to 10px, swapped backgrounds,
-   and re-asserted `align-self: stretch`. The canonical lied
-   about radius (16px in source, 10px rendered) — same
-   pattern collapsed for the chat-input shell in iter17 and
-   the chat-textarea in iter20.
-
-   Visually: after iter17/iter20 the parent `.chat-input` and
-   the inner textarea were both flat (border-radius: 0); the
-   icon column was the last rounded chip in the row, which
-   read as a leftover bolted-on island. Drop the radius so
-   the column reads as a flush slice of the same flat
-   composer surface. */
-/* `.chat-icon-col` lives in `styles/surfaces/composer.css` now.
-   The dead `.chat-toolbar-btn` / `.chat-cancel-btn` static class rules
-   were retired after composer toolbar actions moved to Button. */
-
-/* `.chat-input[data-dragover] .chat-compose-row` and `.chat-compose-row`
-   live in `styles/surfaces/composer.css` now. */
-
-/* iter20 follow-up (CRON self-audit): the wrap and the
-   inner textarea historically shared `min-height` via three
-   stacked multi-selector rules whose final value was 62px.
-   iter20 folded the textarea side into its canonical and
-   left the wrap declaring 72px in scaled units, which made
-   the wrap render ~10px taller than before — a silent
-   regression caught by the post-commit grep. Wrap and
-   textarea now match at 62px (the pre-iter20 user-visible
-   value) and the chat-compose-scale multiplier is gone
-   because iter17 already pinned --chat-compose-scale to 1. */
-/* `.chat-textarea*` family + `.chat-placeholder*` overlay live in
-   `styles/surfaces/composer.css` now. */
-
-/* ────────────────────────────────────────────────────────────────────
- * Chat send button — single source of truth.
- *
- * Earlier this file contained four .chat-send blocks (here, plus three
- * later overrides at lines ~11360 / 11543 / 11854) that re-declared
- * background, height, padding, etc. with conflicting values. R22
- * violation; the late-source-order override always won and silently
- * killed any tweak made here. Consolidated into THIS one rule.
- * ────────────────────────────────────────────────────────────────── */
-/* `.chat-send` + `.chat-interrupt` (resting, hover, disabled,
-   focus-visible) and `.chat-send-icon` / `.chat-send-label`
-   live in `styles/surfaces/composer.css` now. */
-
-/* `.chat-compose-meta*` family lives in
-   `styles/surfaces/composer.css` now. */
-
-/* `.chat-build`, `.chat-version*`, `.chat-compose-tip`, plus the
-   composer-internal `@container (max-width: 520px)` adjustments live in
-   `styles/surfaces/composer.css` now. */
-
-/* ── Dialogs ── */
 .dialog {
   position: fixed;
   inset: 0;
@@ -2964,7 +2488,7 @@ body[data-resizing="row"] * {
   width: 100%;
   height: 100%;
 }
-/* appDialog must render above configDialog when both are modal (WebView2 top-layer fix) */
+
 #appDialog {
   z-index: 200;
 }
@@ -3080,11 +2604,6 @@ body[data-resizing="row"] * {
   margin: 0;
 }
 
-/* iter10: modal-dialog subtitle. Was force-uppercased even though
-   it has no pill chrome (no background, no radius, no accent
-   color), so the all-caps rendering fought the Title Case dialog
-   header sitting right above it. Title Case + the existing weight/
-   color now reads as a clean section subtitle. */
 .dialog-subtitle {
   font-size: var(--ui-font-meta);
   font-weight: 600;
@@ -3148,16 +2667,6 @@ body[data-resizing="row"] * {
   accent-color: var(--accent);
 }
 
-/* Form-label primitive used across every settings panel. iter7
-   dropped `text-transform: uppercase` so the i18n strings (already
-   Title Case: "Server URL", "API Key", "Default Model", …) render
-   as written. The wider --subhead-track was paired with all-caps
-   to keep tracking readable; with Title Case the wide tracking
-   just looks loose, so the rule simply omits letter-spacing and
-   inherits 0 from the cascade. Tier-3 status pills (req-type,
-   req-status, gwg-step-status, verdict-pill, …) keep their own
-   uppercase styling — those are short single-word color-coded
-   chips where the all-caps pill convention reads as a status tag. */
 .field-label {
   font-size: var(--subhead-size);
   font-weight: var(--subhead-weight);
@@ -3181,7 +2690,8 @@ body[data-resizing="row"] * {
 .field-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(91, 141, 239, 0.24);
+
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
 }
 textarea.field-input {
   resize: vertical;
@@ -3250,8 +2760,6 @@ textarea.field-input {
   color: var(--accent);
 }
 
-/* `.config-status-box` (+ data-status variants) lives in
-   `styles/surfaces/settings.css`. */
 .path-box {
   font-family: var(--mono);
   font-size: var(--ui-font-control);
@@ -3275,7 +2783,7 @@ textarea.field-input {
   cursor: default;
   color: var(--text-muted);
 }
-/* status variants moved to settings.css */
+
 select.field-input {
   appearance: none;
   cursor: pointer;
@@ -3475,9 +2983,6 @@ select.field-input option {
   gap: var(--ui-gap-md);
 }
 
-/* iter36: canonical bg switched from var(--subtle-1) to
-   var(--surface-inset) so source matches the late-tail
-   !important reset rendering. */
 .detail-card {
   display: flex;
   flex-direction: column;
@@ -3617,16 +3122,6 @@ select.field-input option {
   width: 100%;
 }
 
-/* ── Buttons ──
-   Action labels are Title Case (the i18n strings already are: "Copy
-   All", "Set up", "Refresh", …). The primitive used to force-uppercase
-   them with `text-transform: uppercase` + `letter-spacing: 0.05em`,
-   which clashed with every section title / tab / field label across
-   the overlay (all Title Case) and contradicted the calm/flat design
-   direction of recent commits. Tier-3 status pills (verdict-pill,
-   req-type, req-status, gwg-step-status, …) keep their own uppercase
-   styling — those are color-coded short-word chips where the pill
-   convention reads as a status tag, not as a screaming action. */
 .btn {
   padding: var(--ui-btn-padding-y) var(--ui-btn-padding-x);
   min-height: calc(32px * var(--ui-scale));
@@ -3657,18 +3152,10 @@ select.field-input option {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-/* Pre-iter22 `.btn-primary` carrying its own raw rgba gradient + hardcoded
- * `#fff` was retired; the active canonical lives near line 7577 with
- * `.sidebar-btn-primary` and `.board-intro__cta-action` and reads the
- * `--accent-gradient` / `--text-on-accent` palette tokens. The
- * `.btn-primary:disabled` opacity rule is folded into that canonical so
- * the disabled treatment is single-source as well. */
-
 .hidden {
   display: none !important;
 }
 
-/* ── Action buttons in sections ── */
 .section-actions {
   display: flex;
   gap: var(--ui-gap-sm);
@@ -3726,10 +3213,7 @@ select.field-input option {
 }
 
 .btn.mini {
-  /* Mini variant renders flat: no border, no gradient bg, no shadow.
-   * The `.btn` parent canonical declares all three; previously the
-   * multi-class `:is(.btn.mini, …) { … !important }` reset re-painted
-   * the rendered look. Declaring flat here makes it the single source. */
+
   padding: var(--ui-btn-mini-padding-y) var(--ui-btn-mini-padding-x);
   font-size: var(--ui-font-small);
   border: 0;
@@ -3742,36 +3226,9 @@ select.field-input option {
   color: var(--bad);
 }
 
-/* `.extension-block` (+ sibling spacing) + `.extension-head`
-   (+ `:hover` / `:focus-within`) + `.extension-list` +
-   `.extension-row` (+ `-main` + child rules + `-actions`) +
-   `.extension-policy` live in `styles/surfaces/settings.css`
-   now. `.extension-status` (+ data-state variants) stays in
-   styles.css until the shared dot-prefix primitive that fuses
-   it with `.llm-status` and `.gwg-priority-badge` gets a
-   palette-token sweep — extracting the lying pill canonical
-   alone would re-introduce a rule-8 split-source. */
-
 .channel-public-url-head .field {
   flex: 1;
 }
-
-/* `.prompt-*` (PromptCatalog) family lives in
-   `styles/surfaces/settings.css` now. 3× `1px` borders →
-   `var(--oc-border-width)`; inset 1px shadow → same. */
-
-/* `.extension-policy` lives in surfaces/settings.css. */
-
-/* `.channel-row-actions` + `#channelFields` + `.channel-doc-*`
-   family + `.market-*` family live in
-   `styles/surfaces/settings.css` now. The `.channel-doc-card`
-   transition declaration that previously sat in a late-tail
-   dupe was folded into the canonical there per rule 8. The
-   `.market-card` shared chrome (border/radius/bg/padding) stays
-   in the cross-surface multi-class with `.goal-item, .knowledge-
-   item, .pref-item, .criteria-check`; the surface canonical
-   declares only the unique layout properties to avoid a
-   rule-8 double source. */
 
 .extension-status {
   flex-shrink: 0;
@@ -3801,23 +3258,6 @@ select.field-input option {
   color: var(--text-muted);
 }
 
-/* Interaction cards (permission / question) live in styles/card.css under
-   `.interaction-card`. Their old `.interaction-alert*` selectors and the
-   never-rendered `.interaction-modal-*`, `.interaction-auto-*` blocks were
-   removed during the unified card-system migration. */
-
-/* ── Delivery panel ── single source for the right-column delivery card.
-   Verdict drives a left-edge pseudo-element rail via the single
-   `data-verdict` attribute on `.delivery-panel`. The rail is not a
-   border, so right-panel card chrome can stay borderless while the
-   delivery verdict remains visually scannable. */
-/* `.delivery-panel` family lives in `styles/surfaces/inspector.css`
-   now. The `var(--accent, #63a2ff)` fallback hex on the inflight
-   verdict was dropped — `--accent` is always defined at :root, so
-   the fallback was dead. The 999px pill border-radius converted to
-   `var(--oc-radius-pill)`. */
-
-/* ── Agent Workflow Root Tab ── */
 .agent-workflow-panel {
   position: relative;
   isolation: isolate;
@@ -3879,11 +3319,6 @@ select.field-input option {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
 }
 
-/* `.agent-workflow-warning` keeps its own bordered card because it
-   surfaces a non-empty diagnostic ("trace disabled — turn it on to see
-   data"). The empty-state was migrated to `.empty-hint--card` so the
-   "no data yet" treatment matches every other right-panel empty.
-   Margin still wraps the warning so it sits inside the panel padding. */
 .agent-workflow-warning {
   margin: calc(12px * var(--ui-scale));
   padding: calc(12px * var(--ui-scale));
@@ -4290,7 +3725,6 @@ select.field-input option {
   white-space: nowrap;
 }
 
-/* -- Markdown in sections -- */
 .md-content {
   word-break: break-word;
 }
@@ -4334,11 +3768,6 @@ select.field-input option {
   color: var(--text-strong);
 }
 
-/* GFM tables emitted by marked. Without dedicated styling, tables
-   inherited the default browser look — mismatched padding, no border on
-   the header row, body rows with the platform-default thin gray lines
-   that fight the dark theme. Now they read as a card-internal data table:
-   subtle separators, sticky-friendly thead, monospace-numeric cells. */
 .md-content table {
   border-collapse: collapse;
   margin: var(--ui-gap-sm) 0;
@@ -4369,10 +3798,6 @@ select.field-input option {
   background: var(--subtle-1);
 }
 
-/* GFM task-lists ([ ] / [x]). marked emits `<input type="checkbox">`
-   inside the <li>; the default checkbox doesn't visually align with the
-   text baseline and looks like a stray form control inside the message
-   body. Re-style as a tight glyph that integrates with the bullet flow. */
 .md-content ul li input[type="checkbox"] {
   margin: 0 6px 0 -16px;
   vertical-align: -2px;
@@ -4383,9 +3808,6 @@ select.field-input option {
   list-style: none;
 }
 
-/* Blockquotes — used by docs-style assistant replies. Default browser
-   style is a flush black left margin; recolor to the accent so it reads
-   as a callout, not a missing-CSS artifact. */
 .md-content blockquote {
   margin: var(--ui-gap-sm) 0;
   padding: var(--ui-gap-xs) var(--ui-gap-md);
@@ -4401,8 +3823,6 @@ select.field-input option {
   margin-bottom: 0;
 }
 
-/* Horizontal rule — same treatment, otherwise renders as a stark white
-   line that doesn't match any other divider in the UI. */
 .md-content hr {
   border: 0;
   height: 1px;
@@ -4457,7 +3877,6 @@ select.field-input option {
   margin-bottom: 0;
 }
 
-/* ── Markdown Rendering ── */
 .md-h1,
 .md-h2,
 .md-h3,
@@ -4526,7 +3945,6 @@ select.field-input option {
   margin: 3px 0;
 }
 
-/* Standard HTML tags from marked — scoped to message/content containers */
 .msg-text h1,
 .msg-text h2,
 .msg-text h3,
@@ -4610,7 +4028,6 @@ select.field-input option {
   color: inherit;
 }
 
-/* ── highlight.js syntax theme (integrated with overlay palette) ── */
 .hljs {
   color: var(--text);
 }
@@ -4662,12 +4079,6 @@ select.field-input option {
   font-weight: bold;
 }
 
-/* ── Markdown code-block wrapper ──
-   wrapCodeBlock() in utils/markdown.ts emits a <div.md-code> shell with a
-   toolbar (language label + copy button) and a <pre><code> body. The
-   toolbar is hover-revealed so it doesn't crowd the body when reading;
-   data-copied flips the icon-color to var(--good) for the 1.4s feedback
-   window the global click listener manages. */
 .md-code {
   position: relative;
   margin: var(--ui-gap-sm) 0;
@@ -4727,12 +4138,6 @@ select.field-input option {
   background: var(--good-dim);
 }
 
-/* ── ConnectionBanner ──
-   Persistent floating notice when SSE has been offline for >2.5s, so the
-   operator notices the live stream has dropped without staring at the small
-   ConnectionBadge in the title bar. Sits above all panels (z-index above
-   the workspace mount) but below modals. The pulsing red dot adds motion
-   so the eye catches it on glance. */
 .conn-banner {
   position: fixed;
   bottom: calc(20px * var(--ui-scale));
@@ -4803,16 +4208,11 @@ select.field-input option {
   outline-offset: calc(2px * var(--ui-scale));
 }
 
-/* ── Tool code block ──
- * No max-height: file content (write/edit/read) renders in full when the
- * card is expanded. The previous 600px nested scroll forced the operator
- * to scroll-inside-scroll for any file >~30 lines and routinely hid the
- * tail of patches. */
 .msg-tool-code {
   margin: 4px 0 2px 0;
 }
 .msg-tool-code pre {
-  /* no height clamp — show every line */
+
 }
 .msg-tool-expand {
   display: block;
@@ -4860,7 +4260,6 @@ select.field-input option {
   border: 1px solid var(--border);
 }
 
-/* marked outputs standard HTML — style via .md-content parent scope */
 .md-content table,
 .msg-text table {
   width: 100%;
@@ -4908,11 +4307,6 @@ select.field-input option {
   margin: 3px 0;
 }
 
-/* ── Non-image file parts (video / audio / PDF / fallback) ──
-   All auth-proxied media share the same frame so the conversation card
-   stays visually consistent regardless of MIME. Dimensions follow the
-   content but are capped by `max-width: 100%` to respect the host card
-   width. */
 .msg-video-wrap,
 .msg-audio-wrap,
 .msg-pdf-wrap {
@@ -5002,42 +4396,6 @@ select.field-input option {
   color: var(--text);
 }
 
-/* ── Config Dialog: Sidebar + Content Layout ── */
-/* `.config-dialog-form` shell, `.config-dialog-head`,
-   `.config-close-btn` (+ `:hover`), `.config-dialog-layout`,
-   `.config-sidebar`, `.config-nav-item` (+ `:hover` + `.active`
-   + `.active::before`), `.config-nav-icon` (+ `.active` child),
-   `.config-nav-badge` (+ `:empty` + `.active` child) live in
-   `styles/surfaces/settings.css` now. The clamp() bounds at
-   176/220px and shell px at 32/980/760 wrapped in `calc(N *
-   --ui-scale)` so the dialog scales with UI; `.active` lift's
-   raw `rgba(84, 138, 247, X)` (= literal expansion of
-   `--accent`) routed through `color-mix(var(--accent) X%,
-   transparent)`. */
-
-/* ── Content Panel ── */
-/* `.config-content` + `.config-tab-panel` (+ `.active`) +
-   `.config-tab-panel > .config-section-body` + `.config-content
-   .config-subsection` density rules + `.config-content
-   .extension-head, .config-content .knowledge-toolbar` gap +
-   `.config-resizer` (+ `::before` hairline + `:hover/[data-
-   active]::before`) + `.config-nav-spacer` live in
-   `styles/surfaces/settings.css` now. clamp() bounds wrapped in
-   `calc(N * --ui-scale)`; `1px` hairline → `var(--oc-border-
-   width)`; `999px` pill → `var(--oc-radius-pill)`. */
-
-/* `.about-*` family lives in `styles/surfaces/settings.css` now.
-   `1px` borders → `var(--oc-border-width)`. */
-
-/* Light-theme `.config-sidebar` / `.config-nav-item` / `.config-nav-badge`
- * / `.config-close-btn` overrides retired. The canonicals in
- * `surfaces/settings.css` already read palette tokens (`--subtle-1` for
- * the rail bg, `color-mix(in srgb, var(--accent) X%, transparent)` for
- * the active gradient + nav badge highlight, `--subtle-3` for the
- * close-btn hover); each token differs per theme so the rendered chrome
- * adapts automatically. The bespoke rgba literals here were patch debt
- * — they slightly drifted from the palette values without justification. */
-
 #channelConfigBody {
   min-height: 0;
 }
@@ -5047,26 +4405,6 @@ select.field-input option {
   padding-right: 2px;
 }
 
-/* `.config-section` + `[open]` + hover/focus-within +
-   `[open]:hover/focus-within` + `.config-section-head` (+ ::-
-   webkit-details-marker / ::marker / ::before CSS-chevron /
-   `[open] > ::before` rotation / :hover) + `.config-section-body`
-   (+ hover/focus-within child) + mirror `.config-subsection`
-   family + `.config-subsection-body` (+ hover/focus-within
-   child) + `.ext-group` family live in `styles/surfaces/
-   settings.css` now. Per rule 8 + the iter29 audit comment, the
-   early `::before { content: "▸" }` Unicode-glyph chevron + its
-   `[open]` rotate(90deg) sibling were dropped (they were
-   already documented dead — fully shadowed by the late CSS-
-   drawn chevron pair). Raw `rgba(91, 141, 239, X)` accent washes
-   (= literal expansion of `--accent`) routed through `color-mix
-   (var(--accent) X%, transparent)`; raw `rgba(255, 255, 255, X)`
-   inset highlights → `color-mix(white X%, transparent)`. */
-
-/* `.extension-head .field-label` typography late-dupe: same
-   `--title-size/-weight/-track` declaration as line ~7859's
-   multi-class. Stays here pending font-token cleanup pass on
-   `--title-*` / `--subhead-*`. */
 .extension-head .field-label {
   font-size: var(--title-size);
   font-weight: var(--title-weight);
@@ -5179,8 +4517,6 @@ select.field-input option {
   color: var(--bad);
 }
 
-/* ── Config Panel Groups (General, LLM dialog panels) ── */
-
 .general-panel,
 .llm-panel {
   display: flex;
@@ -5198,9 +4534,6 @@ select.field-input option {
   gap: calc(10px * var(--ui-scale));
 }
 
-/* iter9: settings panels' group titles ("Default Model",
-   "Connections", …) drop tier-3 pill styling so they share the
-   typographic voice of `.field-label` and `.about-section-title`. */
 .config-panel-group-title {
   min-width: 0;
   flex: 1 1 auto;
@@ -5302,7 +4635,6 @@ select.field-input option {
   padding-top: calc(4px * var(--ui-scale));
 }
 
-/* Agent Models — compact tree-row table, per specs/new-arch/07-panel.md */
 .agent-model-table {
   display: flex;
   flex-direction: column;
@@ -5312,9 +4644,6 @@ select.field-input option {
   overflow: hidden;
 }
 
-/* iter9: agent-model panel tier divider — dropped tier-3 pill
-   styling so the label sits in the same typographic register as
-   the surrounding settings labels. */
 .agent-model-tier-label {
   font-size: var(--ui-font-meta);
   color: var(--text-muted);
@@ -5367,7 +4696,6 @@ select.field-input option {
   text-align: right;
 }
 
-/* Toggle list (behaviour switches) */
 .config-toggle-list {
   display: flex;
   flex-direction: column;
@@ -5419,7 +4747,6 @@ select.field-input option {
   cursor: pointer;
 }
 
-/* Opacity slider */
 .opacity-field {
   gap: calc(6px * var(--ui-scale));
 }
@@ -5447,8 +4774,6 @@ select.field-input option {
   cursor: pointer;
   margin: calc(4px * var(--ui-scale)) 0;
 }
-
-/* ── LLM Panel (config dialog) ── */
 
 .llm-summary-row {
   display: flex;
@@ -5550,18 +4875,6 @@ select.field-input option {
   padding: calc(24px * var(--ui-scale));
 }
 
-/* ── Knowledge: Memory ── */
-
-/* `.knowledge-*` (MemoryPanel) family + sibling `.memory-detail-*`
-   live in `styles/surfaces/settings.css` now. The cross-surface
-   multi-class shared chrome rules that include `.knowledge-item`
-   (card-shell border/bg/radius/padding at line ~8060, transition
-   at ~8077, hover-accent-wash at ~8091) and the pill-shape
-   declaration that includes `.knowledge-scope` at ~8034 stay in
-   styles.css as cross-surface primitives. Surface-specific raw
-   px / rgba converted to tokens or color-mix. */
-
-/* UI normalization */
 .criteria-result,
 .pref-item-key {
   font-family: var(--font);
@@ -5616,17 +4929,6 @@ select.field-input option {
   letter-spacing: 0.03em;
 }
 
-/* .change-row is intentionally excluded from this card-style group —
- * file-change rows render as a flat compact list (no per-row border /
- * background / lift). The canonical .change-row rule lives near
- * line 2663 and uses just a row separator + hover wash. */
-/* iter30: `.extension-row` dropped — its canonical at line
-   ~6551 already declares the same border/radius/padding plus
-   the actually-rendered --surface-inset bg (whereas this
-   shared block declares --subtle-1, which the !important
-   reset at ~12327 used to clobber). The other 6 siblings
-   keep the --subtle-1 treatment until they get the same
-   single-source pass. */
 .goal-item,
 .market-card,
 .knowledge-item,
@@ -5638,12 +4940,6 @@ select.field-input option {
   padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
 }
 
-/* iter30: `.extension-row` dropped from this transition
-   helper too — the canonical at line ~6551 doesn't declare
-   a transition, so neither should the canonical's iter
-   contract. (Hover/focus rules still get whatever transition
-   the browser default provides, which matches the calm/flat
-   trajectory.) */
 .goal-item,
 .market-card,
 .knowledge-item,
@@ -5671,9 +4967,6 @@ select.field-input option {
     var(--hover-accent-shadow);
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
-
-/* `.channel-doc-card` transition folded into the surface canonical
-   at styles/surfaces/settings.css. */
 
 .config-content .extension-head:hover,
 .config-content .extension-head:focus-within,
@@ -5709,12 +5002,6 @@ select.field-input option {
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
-/* `.knowledge-list` solo + the `.knowledge-item` half of the
-   shared `border-bottom: none` reset + the `.knowledge-item-
-   title` half of the shared font-size declaration folded into
-   the surface canonical at styles/surfaces/settings.css. The
-   `.pref-item` halves stay here until .pref-* moves to the
-   surface. */
 .pref-item {
   border-bottom: none;
 }
@@ -5727,22 +5014,6 @@ select.field-input option {
   cursor: pointer;
 }
 
-/* `.log-level-select`, `.log-viewer`, `.log-path`, `.log-line` (+
-   `:last-child`), `.log-line-head`, `.log-level` (+ debug/info/
-   warn/error variants), `.log-ts`, `.log-delta`, `.log-service`,
-   `.log-msg`, `.log-fields`, `.log-chip`, `.log-detail` (+
-   `> summary`), `.log-detail-block + .log-detail-block`,
-   `.log-detail-title`, `.log-detail-pre` live in
-   `styles/surfaces/settings.css` now. The `.log-source` family
-   stays here because the `[data-source="pipeline"]` color is a
-   raw `#7b54c9` purple that has no canonical token in the design
-   language — extracting alone would split a per-source color
-   set, and minting a new token needs design judgement. */
-
-/* Log source pill: 3 distinct tones for server / overlay /
-   pipeline sources. The pipeline color uses a raw hex literal
-   because the design language has no purple token; flagged for
-   a future design-token decision. */
 .log-source {
   display: inline-flex;
   align-items: center;
@@ -5764,7 +5035,6 @@ select.field-input option {
   color: #7b54c9;
 }
 
-/* Sidebar workspace layout */
 .workspace-main {
   flex: 1;
   min-width: 0;
@@ -5772,14 +5042,6 @@ select.field-input option {
   display: flex;
   overflow: hidden;
 }
-
-/* iter16: Sidebar (left column) — single source. Was chromed
-   canonical + three !important resets at the file tail; now
-   flat with the rail-surface background baked in. Width
-   transition stays because the sidebar collapses on user
-   action and that animation is part of the layout, not chrome. */
-/* `.sidebar` shell + `[data-collapsed="true"]` width override live in
-   `styles/surfaces/sidebar.css` now. */
 
 .pane-resizer {
   position: relative;
@@ -5793,8 +5055,6 @@ select.field-input option {
   z-index: 10;
 }
 
-/* The divider consumes one layout pixel; ::after supplies the drag target
-   without reintroducing visual gutter between panes. */
 .pane-resizer::before {
   content: "";
   position: absolute;
@@ -5838,25 +5098,11 @@ body[data-resizing="true"] * {
   cursor: col-resize !important;
 }
 
-/* `.sidebar-toolset`, `.sidebar-tool` (+ :hover + :focus-visible),
-   `.sidebar-title`, `.sidebar-subtitle`, and `.sidebar-header-actions`
-   live in `styles/surfaces/sidebar.css` now. The `.sidebar-btn` family
-   stays in styles.css until its gradient/rgba chrome is reworked. */
-
 .sidebar-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--oc-control-focus-ring);
 }
 
-/* `.sidebar-btn` is only ever rendered alongside `.sidebar-btn-primary`
- * (see index.html — `class="sidebar-btn sidebar-btn-primary"`). The
- * primary canonical at line 7585 paints the accent gradient; this base
- * rule supplies size + typography only so the two compose cleanly,
- * with no chromed bg / border / shadow that the primary canonical
- * would have to undo. The previous gradient + raw rgba(91, 141, 239,
- * …) literals + drop-shadow rendered nowhere because the multi-class
- * `:is(.sidebar-btn, …) { background: transparent !important }` reset
- * masked the chrome — pure dual-source debt. Now flat by design. */
 .sidebar-btn {
   display: inline-flex;
   align-items: center;
@@ -5892,11 +5138,6 @@ body[data-resizing="true"] * {
   justify-content: center;
   flex-shrink: 0;
 }
-
-/* `.sidebar-body`, `.sidebar-footer` (+ anchor), `.sidebar-list`,
-   `.task-list-panel`, `.sidebar-list.session-list-panel`,
-   `.sidebar-list-group`, `.sidebar-list-heading`, and
-   `.sidebar-list-cluster` live in `styles/surfaces/sidebar.css` now. */
 
 .project-group {
   padding: calc(4px * var(--ui-scale)) 0 0;
@@ -5949,42 +5190,6 @@ body[data-resizing="true"] * {
   min-width: 0;
 }
 
-/* Single source after iter25. Was three solo top-level rules
-   — a chromed canonical here (10px radius, align-items
-   center, gap 4px, padding 4/6) plus two later overrides at
-   ~12388 (align-items stretch, gap 6px, padding 4px,
-   var(--radius) ≈ 10px, 1px transparent border,
-   `background: transparent !important`) and ~12822
-   (position relative redundant, min-height 54px, padding
-   5/6/5/9). The canonical lied about padding (4/6 in source,
-   5/6/5/9 rendered) and gap (4px in source, 6px rendered).
-
-   After iter15 / iter16 made the surrounding `.sidebar`
-   shell flat (border-radius: 0), the task rows still
-   rendered with 10px rounded corners — pill-on-flat.
-   Border-radius drops to 0 so the row reads as a flush
-   slice of the flat sidebar.
-
-   Pseudo-state rules (`:hover`, `:focus-within`, drag
-   states, `[data-active="true"]`) and theme overrides are
-   untouched in this iter — those carry distinct visual
-   states; their own dual-source duplicates (e.g. two
-   `:hover` rules at lines ~10134 and ~12397) are scoped
-   to a follow-up. */
-/* `.task-row-mini` shell + `.task-row-drag-handle`, `.task-row-main`
-   (+ strong typography), `.task-row-head` (+ .mini-badge scope),
-   `.task-row-meta`, `.task-row-stamp`, and `.task-row-badge` (+ ::before
-   + status tone variants + badge-text sr-only) live in
-   `styles/surfaces/sidebar.css` now. The `.task-row-right` /
-   `-actions` / `-delete` / `-cancel` action chrome and the late
-   :hover/:focus-within state overrides stay in styles.css until those
-   action buttons are reworked. */
-
-/* iter45: right column wrapping stamp (top) + cancel/delete
-   actions (bottom). Anchored to the row's right edge so the
-   stamp + actions for the same row share one visual axis,
-   per user feedback (2026-05-03) "时间和停止/删除按钮处于
-   上下层关系，都位于最右侧". */
 .task-row-right {
   display: flex;
   flex-direction: column;
@@ -6079,10 +5284,6 @@ body[data-resizing="true"] * {
   outline-offset: 1px;
 }
 
-/* ── Cancel button ── */
-/* Mirrors .task-row-delete (same size, same two-step confirm affordance),
-   but sits to the left of it and uses --warn so users can visually tell
-   cancel (stop the run) from delete (remove the task). */
 .task-row-cancel {
   position: static;
   width: calc(22px * var(--ui-scale));
@@ -6145,23 +5346,12 @@ body[data-resizing="true"] * {
   display: inline-flex;
 }
 
-/* iter26: the dead `.task-row-mini:hover { background: gradient }`
-   and `.task-row-mini[data-active="true"] { background: gradient
-   + box-shadow inset stripe }` rules that lived here lost the
-   specificity war to !important blocks at the file tail
-   (~12415 hover, ~12421 + ~12839 active) — anyone editing
-   here saw no rendered change. Removed; the late-tail
-   blocks are now consolidated into single-source canonicals
-   for both pseudo states. */
-
-/* Global view toggle button */
 .sidebar-btn[data-active="true"] {
   background: var(--accent-dim);
   border-color: var(--accent);
   color: var(--accent);
 }
 
-/* Global task rows */
 .global-task-row .task-row-head {
   display: block;
 }
@@ -6211,9 +5401,6 @@ body[data-resizing="true"] * {
   padding-inline: calc(10px * var(--ui-scale));
 }
 
-/* `.sidebar[data-collapsed="true"] .sidebar-toggle svg` lives in
-   `styles/surfaces/sidebar.css` now. */
-
 .sidebar[data-collapsed="true"] + .pane-resizer-left {
   flex-basis: 0;
   min-width: 0;
@@ -6226,7 +5413,6 @@ body[data-resizing="true"] * {
   font-size: var(--ui-font-meta);
 }
 
-/* Child containment */
 .sidebar,
 .chat,
 .sections,
@@ -6291,11 +5477,6 @@ body[data-resizing="true"] * {
   max-width: 100%;
 }
 
-/* `.sections .delivery-summary` deliberately omitted from this height-clamp
-   block — the panel's own `[data-clamped="true"]` Solid-driven toggle is
-   the single source of truth for "show more/less" on the agent summary
-   text. Letting both rules apply would race (CSS scroll vs. line-clamp)
-   and re-introduce the rule 8 dual-source the redesign just collapsed. */
 .sections .plan-summary,
 .sections .overview-summary,
 .sections .overview-next-step,
@@ -6319,7 +5500,6 @@ body[data-resizing="true"] * {
   overscroll-behavior: contain;
 }
 
-/* Main conversation tool outputs: no height limit */
 .msg-tool-output {
   max-height: none;
   overflow-y: visible;
@@ -6343,16 +5523,12 @@ body[data-resizing="true"] * {
   max-width: 100%;
 }
 
-/* #goalsSection head-action absolute positioning removed —
-   btnCreateGoal no longer exists in the DOM. */
-
 #goalsSection > .section-body {
   max-height: none;
   overflow-y: visible;
   overscroll-behavior: auto;
 }
 
-/* ── NDJSON Event Log ── */
 .ndjson-panel {
   display: flex;
   flex-direction: column;
@@ -6466,59 +5642,12 @@ body[data-resizing="true"] * {
   letter-spacing: 0.05em;
 }
 
-/* WorkflowProgressBar / .wf-* rules removed 2026-04-25: pipeline progress
-   bar replaced by the live TracePanel in the right panel (Board.tsx). */
-/* ═══════════════════════════════════════════════════════════════════
-   MiniWorkflow — GoalWorkflowGroup
-   ═══════════════════════════════════════════════════════════════════ */
-
 .gwg-list {
   display: flex;
   flex-direction: column;
   gap: calc(10px * var(--ui-scale));
 }
 
-/* ── Goal card shell ─────────────────────────────────────────
-   Single source after iter54. Pre-iter54 canonical declared
-   rich chrome (gradient + surface 92% bg, 16px radius, color-
-   mixed border) that the !important reset chain at line ~12674
-   forced to flat (--surface-inset bg, var(--radius) ≈10px,
-   plain var(--border) border). Same iter28-30-33-36-40-47-52
-   active rule-8 conflict — canonical lied. Updated canonical
-   to declare the rendered values directly so source matches.
-   `.gwg` drops out of the reset chain — chain is now empty
-   (last shell sibling consumed). The ::before left-rail
-   decoration below is independent of border-left and renders
-   regardless. */
-/* `.gwg` shell + `::before` rail + `:hover` + `--expanded` + three
-   status modifiers (`--passed` / `--failed` / `--running`) live in
-   `styles/surfaces/inspector.css` now. The literal light-blue hex
-   sibling on `--passed` was retired in favor of `var(--text-soft)`
-   so the muted-accent hue stays theme-adaptive. The richer
-   `.gwg-header` / `-title` / `-revision` / `-objective` / `-step` /
-   `-verdict` / `-checks` family still lives below until each block
-   gets a token sweep. */
-
-/* `.gwg-header` + `:focus-visible` + `-title-row` + `-header-actions`
-   + `-status-icon` (with three status-modifier variants) +
-   `-title` + `-revision` family lives in
-   `styles/surfaces/inspector.css` now. The unscaled `2px` outline,
-   the `clamp(10px, …, 11px)` font cap (whose absolute bounds
-   escaped --ui-scale), the `1px` inset shadow, and the `999px`
-   pill all converted to surface-clean tokens. The
-   `.gwg--*.gwg-status-icon` per-status overrides moved alongside
-   the base so per-status chrome stays in one place per rule 8. */
-
-/* iter37: deleted the lying pill-chrome canonical that lived
-   here (font-tiny + uppercase + 999px radius + warn-dim bg
-   + 8px pill padding). The late-tail multi-selector at
-   line ~11958 — shared with .extension-status / .llm-status
-   — REWRITES `.gwg-priority-badge` to a dot-prefix status
-   row (border: none, border-radius: 0, background:
-   transparent, padding-left: 10px, ::before 5px dot). The
-   pill chrome never rendered. The actual warn-tone color
-   lives in the solo rule near line ~12053; the shared
-   dot-prefix layout is the single source for layout. */
 .gwg-priority-badge {
   flex-shrink: 0;
   text-transform: uppercase;
@@ -6528,85 +5657,6 @@ body[data-resizing="true"] * {
   color: var(--warn);
 }
 
-/* `.gwg-revision` lives in surfaces/inspector.css; 999px pill →
-   var(--oc-radius-pill). */
-
-/* `.gwg-action-btn` family + `.gwg-chevron` (+ `.gwg--expanded`
-   variant) + `.gwg-body` + `.gwg-objective` (+ -label / -text) +
-   `.gwg-done-definition` (+ -label / -text) + the goal-card md
-   reset multi-class rules live in `styles/surfaces/inspector.css`
-   now. `999px` pills → `var(--oc-radius-pill)`, `1px` borders →
-   `var(--oc-border-width)`, the body's `rgba(255, 255, 255, 0.015)`
-   wash → `color-mix(in srgb, white 1.5%, transparent)`, and the
-   tier-2 label's unscaled `margin-bottom: 3px` wrapped in
-   `calc(3px * --ui-scale)`. */
-
-/* ── Step row ────────────────────────────────────────────── */
-/* `.gwg-step` family + 5 status modifiers + `.gwg-step-detail`
-   <details> shell + `.gwg-step-count` live in
-   `styles/surfaces/inspector.css` now. The unscaled `1px` bias on
-   the row's vertical padding wrapped via `calc(... + 1px * --ui-
-   scale)`; `clamp(10px, …, 11px)` font cap on the icon dropped
-   (same rationale as the goal-card status icon); `box-shadow`
-   inset rings' raw rgba(84, 138, 247) / rgba(247, 84, 100) routed
-   through color-mix on `--accent` / `--bad`; the `1px 6px /
-   3px` status pill pad/radius and the `0 4px` step-count pad
-   wrapped in `calc(N * --ui-scale)`. */
-
-/* `.gwg-step-body` + `.gwg-plan-nodes` family + `.gwg-changed-files`
-   family + `.gwg-open-session` family + `.gwg-verdict` (+ 3
-   variants) + `.gwg-eval-summary` + `.gwg-step-messages` (with
-   webkit scrollbar pseudos) live in `styles/surfaces/inspector.css`
-   now. All raw px wrapped in `calc(N * --ui-scale)` (with scaled
-   term first when nested with another var() to satisfy the
-   surface guard); `999px` pills → `var(--oc-radius-pill)`; `1px`
-   borders → `var(--oc-border-width)`; verdict-ring rgba on
-   `--good` / `--bad` / `--warn` routed through color-mix on the
-   matching semantic token. */
-
-/* `.gwg-checks` + `.gwg-check` family + `.gwg-check-icon` /
-   `-name` / `-evidence` + `.gwg-check--passed/--failed/--pending`
-   modifier-children live in `styles/surfaces/inspector.css` now.
-   Raw px wrapped in `calc(N * --ui-scale)`; `1px` border on the
-   row separator → `var(--oc-border-width)`; `1px` inset rings
-   on passed/failed icons routed through `color-mix(--good 35%,
-   transparent)` / `color-mix(--bad 35%, transparent)`; the
-   collapsed `clamp(10px, …, 10px)` on the icon font-size (where
-   min === max already made the clamp a no-op) replaced with
-   plain `calc(10px * --ui-scale)`. */
-
-/* `.gwg--passed/--failed/--running` border-color rules folded into
-   the surface canonical at styles/surfaces/inspector.css. The
-   previous raw color-mix(in srgb, var(--bad) 30%, transparent) and color-mix(in srgb, var(--accent) 32%, transparent) were
-   color-mix-ed onto var(--bad) and var(--accent) respectively. */
-
-/* ═══════════════════════════════════════════════════════════════════
-   MiniWorkflow — RequirementsPanel
-   ═══════════════════════════════════════════════════════════════════ */
-
-/* `.req-*` (RequirementsPanel) family lives in
-   `styles/surfaces/inspector.css` now. `1px` border + `2px`
-   left-rail wrapped in `var(--oc-border-width)` / `calc(2px *
-   --ui-scale)`; two `999px` pills → `var(--oc-radius-pill)`;
-   raw `4px` scrollbar width / `2px` thumb radius / `160px` /
-   `200px` max-heights wrapped in `calc(N * --ui-scale)`. */
-
-/* ═══════════════════════════════════════════════════════════════════
-   Integrity review — native card for the architecture integrity verdict.
-   Replaces the raw-JSON reasoning block that used to appear in the
-   requirements agent card when the integrity LLM's stream was piped into
-   `ProviderLLM.stream.onChunk`. See components/IntegrityCard.tsx.
-   ═══════════════════════════════════════════════════════════════════ */
-
-/* `.integrity__*` family lives in `styles/surfaces/inspector.css`
-   now. Shared `.verdict-pill` primitive (used by IntegrityCard +
-   Board) stays here until its raw-rgba/hex chrome gets a
-   palette-token sweep. */
-/* ── verdict-pill ── shared verdict pill primitive used by IntegrityCard,
-   DeliveryPanel, and any future verdict surface. Single source of shape
-   (radius, padding, font, casing) + all `[data-verdict]` color variants
-   in one place — replaced the per-component `.integrity__verdict` block
-   so both surfaces stay in lockstep without copy-paste. */
 .verdict-pill {
   align-self: flex-start;
   padding: calc(3px * var(--ui-scale)) var(--ui-gap-md);
@@ -6644,32 +5694,9 @@ body[data-resizing="true"] * {
   color: var(--text-muted);
   box-shadow: 0 0 0 var(--oc-border-width) var(--border) inset;
 }
-/* Remaining `.integrity__*` rules moved to surfaces/inspector.css. */
-
-/* ═══════════════════════════════════════════════════════════════════
-   MiniWorkflow — ArchitectPanel
-   ═══════════════════════════════════════════════════════════════════ */
-
-/* `.arch-*` (ArchitectPanel) family lives in
-   `styles/surfaces/inspector.css` now. `999px` cat-badge pill →
-   `var(--oc-radius-pill)`; `1px` decision-card border →
-   `var(--oc-border-width)`. */
-
-/* `.perm-*` (PermissionsPanel) family lives in
-   `styles/surfaces/settings.css` now. `1px` border on the action
-   button → `var(--oc-border-width)`; `2px` focus-ring outset
-   wrapped in `calc(2px * --ui-scale)`. The new settings.css file
-   is the seed for the broader settings-dialog migration —
-   `.config-*` / `.extension-*` / `.knowledge-*` / `.pref-*` /
-   `.market-*` / `.channel-doc-*` will follow as each block gets
-   a token sweep. */
 
 @media (prefers-reduced-motion: reduce) {
-  /* WCAG 2.3.3: when the operator opts out of motion at the OS level,
-     all our decorative animations stop. Keep the spinner (functional —
-     conveys "still loading") but freeze the pulses, shimmers, and
-     fade-ins. The corresponding --copied / --active states still flip
-     instantly, just without the animated transition. */
+
   .conn-banner__dot,
   .board-intro__cta,
   .task-list-skeleton-row {
@@ -6679,13 +5706,10 @@ body[data-resizing="true"] * {
     animation: none !important;
   }
   .agent-models-loading-spinner {
-    /* Spinner is functional, not decorative — slow it but don't stop. */
+
     animation-duration: 2s;
   }
-  /* task-switch-progress slide is decorative (the same active flag also
-     drives the inline `aria-busy="true"` state which screen readers
-     announce). Stop the slide animation but keep the bar visible so the
-     operator still gets the visual "task is loading" cue. */
+
   .task-switch-progress[data-active="true"]::before {
     animation: none;
     transform: translateX(0);
@@ -6694,22 +5718,6 @@ body[data-resizing="true"] * {
   }
 }
 
-/* iter14: the `.titlebar` rule that lived here (grid layout
-   switcher) was folded into the canonical block near line ~382.
-   The grid-column placements for `.titlebar-left` /
-   `.titlebar-spacer` / `.titlebar-utility` stay because they
-   only apply once the parent's grid is in effect. */
-
-/* `.titlebar-left/-brand/-spacer` grid placements + their narrow-width
-   reset live in `styles/surfaces/titlebar.css` now. */
-
-/*
-  Zero-reconcile tab switching: every group's rows are mounted once inside
-  `.changes-list-chunk[data-group-id=<id>]`. Switching tabs only flips each
-  chunk's `data-active` attribute (Solid tracks this reactively without
-  re-rendering the `<For>` of rows inside). CSS hides inactive chunks so
-  tab clicks are O(1) regardless of goal × file count.
-*/
 .changes-list-chunk[data-active="false"] {
   display: none;
 }
@@ -6718,10 +5726,6 @@ body[data-resizing="true"] * {
   flex-direction: column;
   gap: calc(2px * var(--ui-scale));
 }
-
-/* `.chat-count` (+ :empty + ::before) and `.chat-header-meta`
-   #btnChatCopyAll / .workspace-toggle scoped chrome live in
-   `styles/surfaces/conversation.css` now. */
 
 .task-actions-buttons .btn {
   min-height: auto;
@@ -6868,19 +5872,6 @@ body[data-resizing="true"] * {
   background: color-mix(in srgb, var(--warn) 82%, transparent);
 }
 
-/* iter37: `.gwg-priority-badge` warn-tone color folded into
-   the canonical near line ~10628 alongside the typography
-   bits (font-size / weight / uppercase / letter-spacing).
-   The shared dot-prefix layout still lives in the
-   multi-selector partner at ~11958. */
-
-/* ==========================================================================
-   Overlay Workbench Redesign
-   Final visual layer for the overlay as the single operational entry point.
-   This intentionally neutralizes the older atmospheric/marketing chrome and
-   makes the task rail, timeline, inspector, and command bar read as one tool.
-   ========================================================================== */
-
 :root,
 body[data-theme="dark"] {
   color-scheme: dark;
@@ -6892,10 +5883,7 @@ body[data-theme="dark"] {
   --rail-surface: rgba(25, 30, 52, 0.88);
   --chat-canvas: rgba(18, 22, 40, 0.82);
   --inspector-surface: rgba(25, 30, 52, 0.9);
-  /* Body / panel-body palette tokens. Both dark variants resolve to
-     `var(--bg)` (the canvas) with no backdrop blur — themes only swap
-     palette behind the canonical's `background: var(--body-bg);
-     backdrop-filter: var(--panel-body-blur);` declaration. */
+
   --body-bg: var(--bg);
   --panel-body-bg: var(--bg);
   --panel-body-blur: none;
@@ -6913,10 +5901,7 @@ body[data-theme="dark"] {
   --accent-start: #4b8dff;
   --accent-mid: #7b83ff;
   --accent-end: #9b62ff;
-  /* Dark surfaces flatten the gradient to the accent palette: a saturated
-     gradient on the dark canvas reads as retro candy. Single-source the
-     decision in the palette token so themes stay palette-only and no
-     theme selector touches button chrome. */
+
   --accent-gradient: var(--accent);
   --accent-gradient-hover: var(--accent-hover);
   --accent-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 24%, transparent);
@@ -6959,9 +5944,7 @@ body[data-theme="dark"] {
   --title-track: 0;
   --subhead-weight: 700;
   --subhead-track: 0;
-  /* iter48: cap display/heading/title to body (12px). Same
-     reason as the :root block — no overlay text larger than
-     the titlebar menubar font (--ui-font-body). */
+
   --ui-font-display: calc(12px * var(--ui-scale));
   --ui-font-heading: calc(12px * var(--ui-scale));
   --ui-font-title: calc(12px * var(--ui-scale));
@@ -7009,20 +5992,14 @@ body[data-theme="vscode-dark"] {
   --accent-start: #007acc;
   --accent-mid: #0e639c;
   --accent-end: #3794ff;
-  /* vscode-dark flattens the gradient to the accent palette for the same
-     reason as dark — see comment in the dark block. */
+
   --accent-gradient: var(--accent);
   --accent-gradient-hover: var(--accent-hover);
-  /* vscode-dark prefers solid panel surfaces (#252526 / #1e1e1e) over the
-     translucent rgba defaults. Folding the values into the palette token
-     means the canonical (`background: var(--rail-surface)` etc.) renders
-     correctly without any `body[data-theme="vscode-dark"]` override
-     touching shell chrome. */
+
   --rail-surface: #252526;
   --chat-canvas: #1e1e1e;
   --inspector-surface: #252526;
-  /* vscode-dark uses solid #1e1e1e for both body root and the inner
-     panel-body canvas. No backdrop blur. */
+
   --body-bg: var(--bg);
   --panel-body-bg: #1e1e1e;
   --panel-body-blur: none;
@@ -7063,9 +6040,6 @@ body[data-theme="vscode-dark"] {
   --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
   --ui-sections-width: clamp(calc(310px * var(--ui-scale)), 25vw, calc(430px * var(--ui-scale)));
 
-  /* Migrated from the retired early vscode-dark :root override. The
-     accent-tinted decorations route through `color-mix` on the palette
-     token so any future accent change cascades automatically. */
   --hover-accent-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
   --guide-card-border: color-mix(in srgb, var(--accent) 25%, transparent);
   --guide-card-bg:
@@ -7089,9 +6063,7 @@ body[data-theme="light"] {
   --rail-surface: rgba(250, 252, 255, 0.86);
   --chat-canvas: rgba(255, 255, 255, 0.78);
   --inspector-surface: rgba(250, 252, 255, 0.9);
-  /* Light body root paints the soft AI-workbench gradient; .panel-body
-     adds a translucent white wash + backdrop blur. Both ride palette
-     tokens so themes never own component chrome. */
+
   --body-bg: linear-gradient(135deg, #fbfdff 0%, #f4f7ff 42%, #eef1ff 100%);
   --panel-body-bg: rgba(255, 255, 255, 0.44);
   --panel-body-blur: blur(20px);
@@ -7142,13 +6114,6 @@ body[data-theme="light"] {
   --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
   --ui-sections-width: clamp(calc(310px * var(--ui-scale)), 25vw, calc(430px * var(--ui-scale)));
 
-  /* Migrated from the retired early light :root override. The previous
-     definitions painted the IntelliJ-Light blue (#2470b3) directly via
-     rgba literals, while the active accent here is #5b5ff0 — that
-     mismatch was the source of the "different theme cascade conflict"
-     bug. Routing every accent-tinted token through `color-mix` on the
-     palette token means the tint follows whichever accent the theme
-     ultimately resolves. */
   --hover-accent-border: color-mix(in srgb, var(--accent) 25%, transparent);
   --hover-accent-wash: linear-gradient(
     180deg,
@@ -7167,16 +6132,12 @@ body[data-theme="light"] {
     var(--bg);
   --accent-glow: color-mix(in srgb, var(--accent) 18%, transparent);
   --dialog-backdrop: rgba(0, 0, 0, 0.4);
-  /* Semantic aliases used by checks / banners. Resolve once here so the
-     consuming rules can read `--ok` / `--warning` / `--danger` /
-     `--text-dim` without referencing palette tokens directly. */
+
   --ok: var(--good);
   --warning: var(--warn);
   --danger: var(--bad);
   --text-dim: var(--text-muted);
-  /* Card / panel fill stacks: a translucent white wash over the surface
-     palette token so the inner panels feel like glass on the soft
-     light canvas. */
+
   --panel-fill:
     linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 58%, rgba(255, 255, 255, 0.5)),
     var(--surface);
@@ -7197,30 +6158,6 @@ body {
   isolation: isolate;
 }
 
-body::before,
-body::after,
-.tech-atlas,
-.titlebar::before,
-.titlebar::after,
-.sidebar::before,
-.sidebar::after,
-.chat::before,
-.chat::after,
-.sections::before,
-.sections::after,
-.sections-header::after,
-.section[data-phase-state="active"] > .section-head::after,
-.dialog-form::before {
-  display: none !important;
-  content: none !important;
-  animation: none !important;
-}
-
-/* iter14: the `.titlebar` calm/flat override that lived here
-   was folded into the canonical block near line ~382. Without
-   the `!important` chain, tweaks at the canonical site take
-   effect again. */
-
 .brand-guide,
 .engine-bar,
 .sidebar-btn,
@@ -7230,12 +6167,6 @@ body::after,
   border-radius: var(--radius) !important;
   box-shadow: none !important;
 }
-
-/* `.engine-bar`, `.engine-chip`, `.engine-chip-caret`, and the
- * `.engine-chip[data-active]` rules removed (2026-05-04 dead-code
- * sweep). The engine selector UI moved to the executor-chip
- * primitive in surfaces/composer.css; the legacy classes had zero
- * consumers in tsx/html sources. */
 
 .panel-body {
   gap: 0;
@@ -7250,23 +6181,6 @@ body::after,
   padding: 0;
 }
 
-/* .pane-resizer canonical rule lives at line 8278 (single source). The
- * old workbench-redesign duplicate that lived here was a R22 violation
- * — it only re-applied flex-basis / min-width and re-skinned the rail,
- * both of which the canonical rule already does via --ui-resizer-width
- * + var(--border) / var(--accent) tokens that adapt per theme. */
-
-/* iter16: `.sidebar`, `.chat`, `.sections` all carry their
-   own flat canonicals now (rail-surface / chat-canvas /
-   inspector-surface backgrounds, no border, no shadow). The
-   multi-selector !important resets that used to live here
-   are gone. Theme-scoped overrides
-   (`body[data-theme="..."] .sidebar { … }`) stay legitimate
-   per-context tweaks. */
-
-/* Cap inner widget chrome to 28px so the unified 42px bar reads as one
-   calm strip — pills/buttons keep their round affordance but stop
-   dominating the bar height-wise. */
 .sidebar-header .sidebar-btn,
 .sidebar-header .sidebar-tool,
 .chat-header .chat-task-status,
@@ -7280,58 +6194,6 @@ body::after,
 .sidebar-header .sidebar-btn {
   padding: 0 calc(12px * var(--ui-scale));
 }
-
-/* `.sections-stack` late override (gap 4px / padding 4px) folded into
-   surfaces/inspector.css canonical. */
-
-/* iter28 dropped `.config-subsection`; iter30 started the
-   `.extension-row` extraction by moving rendered background /
-   radius / padding into the canonical. iter55 finished that
-   extraction by folding the later borderless theme result into
-   the canonical and removing the row from theme/local reset
-   chains. */
-/* iter28 dropped `.config-subsection`; iter30 dropped
-   `.extension-row`; iter33 dropped `.config-section` —
-   their canonicals all declare the same --surface-inset bg
-   / owned border policy / var(--radius) radius / no shadow
-   directly. The remaining siblings (.section, .gwg,
-   .delivery-panel, .criteria-group, .eval-error,
-   .channel-doc-card, .detail-card) keep the reset until
-   each gets its own single-source pass. */
-/* iter28/30/33/36 progressively pulled .config-subsection /
-   .extension-row / .config-section / .channel-doc-card /
-   .detail-card out of this !important reset — each canonical
-   now declares the same chrome family (--surface-inset bg,
-   owned border policy, var(--radius) radius, no shadow)
-   directly, so the !important defense is unnecessary for
-   them. The remaining 5 shell-level siblings (.section /
-   .gwg / .delivery-panel / .criteria-group / .eval-error)
-   keep the reset until each gets its own single-source pass. */
-/* iter28/30/33/36/40 progressively pulled .config-subsection /
-   .extension-row / .config-section / .channel-doc-card /
-   .detail-card / .section out of this !important reset —
-   each canonical now declares the same chrome directly. The
-   remaining 4 siblings (.gwg / .delivery-panel /
-   .criteria-group / .eval-error) keep the reset until each
-   gets its own single-source pass. */
-/* iter47 dropped `.eval-error` — its canonical at line ~3885
-   declares semantic ERROR-tone chrome (red gradient bg + red
-   border) that the !important neutral reset was overshadowing.
-   The reset's neutral surface-inset bg fought the red error
-   palette and won via specificity, defeating the canonical's
-   semantic intent. Now `.eval-error` keeps its red error
-   palette directly. The remaining 3 siblings stay until each
-   canonical is verified. */
-/* iter52 dropped `.criteria-group`. Reset chain now down to 2
-   shell-level siblings (.gwg / .delivery-panel) for future
-   single-source passes. */
-/* iter28-54 fully retired this !important shell-reset chain.
-   Every former segment (.config-subsection / .extension-row /
-   .config-section / .channel-doc-card / .detail-card /
-   .section / .eval-error / .criteria-group / .delivery-panel
-   / .gwg) now declares its chrome directly in its canonical
-   block — no defensive !important left to clobber. The chain
-   block is gone. */
 
 .section[open] > .section-head,
 .config-section[open] > .config-section-head,
@@ -7357,39 +6219,20 @@ body::after,
   font-weight: 600;
 }
 
-/* `.sidebar-body` padding + `.task-list-panel` /
-   `.sidebar-list-group` / `.sidebar-list-cluster` gap consolidated
-   into `styles/surfaces/sidebar.css`. */
-
 .project-group + .project-group {
   margin-top: calc(8px * var(--ui-scale));
   padding-top: calc(8px * var(--ui-scale));
 }
 
-/* iter8 folded `.sidebar-list-heading` back to Title Case at its
-   canonical rule. `.project-group-heading` keeps its own padding
-   override here — it inherits Title Case from its canonical rule
-   already, but the 6px padding-left is a tweak the merged source
-   block doesn't otherwise carry. */
 .project-group-heading {
   padding-left: calc(6px * var(--ui-scale));
 }
-
-/* iter25: `.task-row-mini` base override here was folded into
-   the canonical near line ~9800 (flat border-radius: 0,
-   align-items stretch, gap 6px, transparent border + bg). */
 
 .task-row-mini:hover,
 .task-row-mini:focus-within {
   background: var(--surface-hover) !important;
   border-color: var(--border);
 }
-
-/* iter26: `.task-row-mini[data-active="true"]` body folded
-   into the late-tail canonical near line ~12846 (which
-   sets the actual rendered values: color-mix(--accent 10%,
-   --surface-hover) bg + accent 34% border). The prior
-   middle-tier `--accent-dim` bg + 42% border were dead. */
 
 .task-row-mini[data-draggable="true"] {
   cursor: grab;
@@ -7405,12 +6248,6 @@ body::after,
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 72%, transparent);
 }
 
-/* `.task-row-main` (grid layout), `-main strong` (650 weight + 0
-   letter-spacing), `-meta` (space-between + muted color),
-   `-badge` (chip shape + status tone borders), `-badge::before`
-   (6px pip), `-badge-text` (visible inline label), and the four
-   status-tone variants all live in `styles/surfaces/sidebar.css` now. */
-
 .task-row-actions {
   align-items: center;
   padding-top: 0;
@@ -7422,41 +6259,6 @@ body::after,
   border-radius: calc(5px * var(--ui-scale));
 }
 
-/* `.chat-scroll` and its `> .card / > .interaction-card` chrome are
-   owned by `styles/surfaces/conversation.css` now. */
-
-/* `.chat-goals-strip` background + spacing folded into the canonical
-   in `styles/surfaces/conversation.css`. */
-
-/* iter17: `.chat-input` and `.chat-input::before` overrides
-   folded into the canonical block near line ~5236. The
-   canonical now matches the rendered visual directly (flat,
-   no decorative gradient overlay). */
-
-/* `.chat-compose-row` gap consolidated into the canonical (8px) in
-   `styles/surfaces/composer.css`. */
-
-/* `.chat-textarea:focus` lives in `styles/surfaces/composer.css` now
-   (the simpler ring superseded the earlier multi-rgba stack). */
-
-/* iter22: the `.chat-icon-col` override block was folded into its
-   canonical surface rule (flat border-radius: 0). The dead static
-   `.chat-toolbar-btn:hover` reset was retired with the old class. */
-
-/* Primary action buttons share one canonical chrome layer driven entirely
- * by palette tokens. `--accent-gradient` resolves to a gradient on light
- * (`themes/light` keeps the gradient palette) and to `var(--accent)` on
- * dark / vscode-dark (those themes flatten the palette token). No
- * `body[data-theme]` selector touches button chrome — themes change
- * palette only.
- *
- * Each consumer keeps its own size / shape canonical (`.btn-primary`
- * inherits its container shape from the dialog `.btn` family;
- * `.sidebar-btn-primary` from `.sidebar-btn`; `.board-intro__cta-action`
- * declares its own width / padding). The shared rule below only sets
- * the chrome (background / text colour / border / shadow / margin) and
- * the per-class block adds `.btn-primary` typography for the dialog
- * variant. */
 .btn-primary,
 .sidebar-btn-primary,
 .board-intro__cta-action {
@@ -7544,9 +6346,7 @@ body::after,
 }
 
 @media (max-width: 760px) {
-  /* `.titlebar` narrow-width tweaks live in the consolidated
-     block near line ~641 (iter14). Sibling selectors stay
-     here for the layout reset (flex-basis 100%, etc.). */
+
   .titlebar-left,
   .titlebar-utility {
     flex-basis: 100%;
@@ -7587,8 +6387,7 @@ body::after,
     text-overflow: ellipsis;
   }
 
-  /* `.titlebar-menubar` narrow-width compact layout lives in
-     `styles/surfaces/titlebar.css` now. */
+
 
   .conn-badge__label {
     display: none;
@@ -7628,30 +6427,6 @@ body::after,
   }
 }
 
-/* (rule 8: single source) — `.empty-hint` was defined twice (rich
-   gradient at the top, flat-via-!important at the tail); both are
-   now merged into the canonical block above. `.chat-empty` had the
-   same dual-source pattern — three definitions plus !important
-   overrides — also collapsed into the canonical block above as of
-   iter5 of the design-language sweep. Don't reintroduce the
-   override stack: regression test
-   `test/chat-empty-single-source.test.ts` will fail. */
-
-/* `.chat-compose-row` align-items consolidated into the canonical
-   (end) in `styles/surfaces/composer.css`. */
-
-/* `.chat-textarea[data-expanded="true"]` lives in
-   `styles/surfaces/composer.css` now (the late 210px wins; the canonical
-   has been updated to match). */
-
-/* iter22: `.chat-icon-col { align-self: stretch }` folded —
-   the canonical near line ~5347 already declares it. */
-
-/* `.chat-send-icon svg` lives in `styles/surfaces/composer.css` now. */
-
-/* The `@media (max-width: 700px)` composer reflow lives in
-   `styles/surfaces/composer.css` now. */
-
 .panel-body {
   gap: 0;
   padding: 0;
@@ -7667,18 +6442,6 @@ body::after,
   margin: 0;
   padding: 0;
 }
-
-/* iter16: per-column background tokens (--rail-surface for
-   sidebar, --chat-canvas for chat, --inspector-surface for
-   sections) are baked into each column's canonical block now,
-   so the !important overrides that used to live here are gone. */
-
-/* The remaining `.engine-chip` rule fragments removed alongside the
- * earlier dead-code block — engine-chip family has no live consumer. */
-
-/* iter25: `.task-row-mini` late override (min-height + the
-   final padding values) folded into the canonical near line
-   ~9800. */
 
 .task-row-mini::before {
   content: "";
@@ -7699,18 +6462,6 @@ body::after,
 .task-row-mini[data-active="true"]::before {
   background: var(--accent);
 }
-
-/* `.task-row-main strong`, `-meta`, `-badge`, and the active/queued
-   chip backgrounds live in `styles/surfaces/sidebar.css` now. */
-
-/* `.chat-scroll` background + padding live in
-   `styles/surfaces/conversation.css` now (no `!important` needed
-   because nothing in the runtime fights the surface rule). */
-
-/* iter5: the prior `.chat-empty` mini-block here (min-height 150px,
-   opacity 0.9) was folded into the canonical rule near line ~4418
-   so there's a single source. `.chat-empty--task` keeps its own
-   bordered-card chrome because it is a live task-status surface. */
 
 .chat-empty--task {
   display: grid;
@@ -7736,46 +6487,6 @@ body::after,
   border-left-color: var(--bad) !important;
 }
 
-/* `.chat-empty-marker`, `-copy`, `-kicker`, `-title`, `-meta`,
-   `-status` (+ ::before + [data-status] tones), `-path`, and the
-   nested marker icon scope live in `styles/surfaces/conversation.css`
-   now. The `.chat-empty--task` shell + `[data-status]` border-color
-   variants stay in styles.css until their theme overrides are
-   reworked in a follow-up. */
-
-/* `.chat-input:focus-within` ring lives in
-   `styles/surfaces/composer.css` now. */
-
-/* iter20: the late `.chat-textarea` background !important
-   override and the third min-height duplicate were folded
-   into the canonical block near line ~5462. */
-
-/* iter22: late `.chat-icon-col { background: ... }` override
-   here was folded into the canonical near line ~5347.
-   Theme-scoped overrides at lines ~13400 (light) and ~13673
-   (dark) still apply per-theme palettes. */
-
-/* .chat-send / .chat-send:hover canonical rule lives near line 4727.
- * The deeper-theme tint that was here is now folded into the canonical
- * rule via var(--accent) / var(--accent-hover); no per-theme override
- * needed. */
-
-/* iter28/30/36 retired the !important border-color reset
-   rule body but left these five selectors dangling without
-   a closing `{ … }`. CSS treated the trailing `,` as
-   "list continues" and fused them with the next rule
-   (`.board-intro`), accidentally applying board-intro's
-   `display: flex; flex-direction: column; padding:
-   var(--ui-gap-lg); …` to .section / .gwg /
-   .delivery-panel / .criteria-group / .eval-error too.
-   Caught by iter39's 5-prefix grep. Selectors deleted. */
-
-/* ── BoardIntro ──
-   Right-panel empty state shown when no task is selected. Previously
-   shipped with zero CSS, so the operator's first impression of the
-   right pane was browser-default <h2>/<h3>/<ul> styling — black
-   bullets, mismatched font sizes, no visual hierarchy. Token-based
-   layout below so it reads as part of the design system. */
 .board-intro {
   display: flex;
   flex-direction: column;
@@ -7817,9 +6528,7 @@ body::after,
   border: 0;
   box-shadow: none;
 }
-/* iter12: board-intro section title ("Modes", "Agents"). Plain
-   subtitle, sits in the same Title Case register as section
-   titles elsewhere on the board. */
+
 .board-intro__section-title {
   margin: 0;
   font-size: var(--ui-font-meta);
@@ -7888,11 +6597,7 @@ body::after,
 .board-intro__mode[data-mode="build"] .board-intro__mode-label::before {
   background: var(--good);
 }
-/* Cold-start CTA — high-contrast callout that appears when
-   settingsStore.directory is empty. Stronger fill than the regular
-   board-intro__section so the eye lands on it before the explanatory
-   text below. Pulses subtly to draw attention without being
-   obnoxious. */
+
 .board-intro__cta {
   display: flex;
   align-items: flex-start;
@@ -7936,10 +6641,7 @@ body::after,
   line-height: 1.25;
   overflow-wrap: break-word;
 }
-/* Size + shape only. Chrome (background / colour / border / shadow /
- * hover) is provided by the shared primary-action canonical near line
- * 7585; pulling it out here would re-create the dual-source pattern
- * the theme overrides used to enforce. */
+
 .board-intro__cta-action {
   align-self: flex-start;
   min-height: calc(30px * var(--ui-scale));
@@ -7963,195 +6665,6 @@ body::after,
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
 }
-
-/* ── Reference Light Default ──
-   Final light-theme skin for the default Overlay experience. It keeps the
-   existing task/workspace/inspector structure and only retunes the visual
-   system so cold starts match the provided soft AI-workbench reference. */
-/* Light-theme body root + .panel-body chrome overrides retired. The body
- * canonical reads `var(--body-bg)` and the .panel-body canonical reads
- * `var(--panel-body-bg)` + `var(--panel-body-blur)`; both palette tokens
- * are declared per theme so the gradient + translucent white + blur
- * combination renders without a `body[data-theme]` selector. */
-
-/* Light-theme `.sidebar` / `.chat` / `.sections` shell overrides retired.
- * The canonicals in `surfaces/sidebar.css` (`.sidebar`),
- * `surfaces/inspector.css` (`.sections`), and styles.css line 2148
- * (`.chat`) read `var(--rail-surface)` / `var(--chat-canvas)` /
- * `var(--inspector-surface)` palette tokens directly, and the light
- * theme `:root` block already declares those tokens with the
- * appropriate translucent white-blue values. No theme selector is
- * needed to repaint the shells. */
-
-/* iter16 follow-up: light-theme hover-chrome flatteners removed.
-   The canonical .sidebar / .chat / .sections blocks have no
-   border + no shadow now, so this entire hover override has
-   nothing to override (border-color targets a non-existent
-   border, box-shadow:none is already the canonical value). */
-
-/* Light-theme primary chrome override retired — `--accent-gradient` /
- * `--accent-gradient-hover` palette tokens differ per theme so the
- * canonical at line 7585 already paints the correct background without a
- * `body[data-theme]` selector. */
-
-/* iter64: directory/sidebar/workspace controls read `--oc-control-*`
-   canonical tokens. Themes only swap the palette behind those tokens. */
-
-/* iter25: light-theme override used to set min-height + 10px
-   border-radius — both belonged in the canonical (sizing
-   doesn't change between themes; radius should stay 0 for the
-   flat sidebar). Folded into the canonical near line ~9800
-   (min-height now 48px matching the user-visible value, radius
-   0 matching the flat shell). The light-theme override is
-   gone entirely — none of its declarations were
-   theme-specific. */
-
-/* iter58: task-row hover/active chrome is canonical. Themes swap
-   `--surface-hover`, `--accent`, and `--text-strong`; they no longer
-   own row backgrounds, borders, or active rails. */
-
-/* Light-theme chrome override on the inline-pill family retired. The
- * canonical for each class (task-row-badge in surfaces/sidebar.css,
- * section-badge in surfaces/inspector.css, change-status / diff-dialog-stat
- * near line 1693, extension-status / llm-status / gwg-priority-badge in the
- * iter15+ "dot-prefix" rewrite near line 6974) declares `background:
- * transparent; border: none;` with status variants providing differentiated
- * tints via `--good-dim` / `--bad-dim` / `--accent-dim` / color-mix and the
- * leading dot ::before pseudo-element. The theme override here was
- * masking those variants — removing it restores variant differentiation
- * and stops themes from owning component chrome. */
-
-/* iter59: `.chat-scroll` and its card descendants resolve through
-   canonical conversation/card rules. Themes only provide palette tokens. */
-
-/* iter60: chat goals strip and workspace mount chrome is canonical;
-   themes only provide `--surface-inset` and `--border` palette tokens. */
-
-/* iter57: light-theme `.chat-input` chrome folded into the
-   canonical so themes no longer decide composer spacing,
-   border, background, or focus ring. */
-
-/* `body[data-theme="light"] .chat-textarea` and `.chat-placeholder-float`
-   were redundant — the canonical now resolves `--surface-inset` /
-   `--text-muted` palette per theme via `styles/surfaces/composer.css`. */
-
-/* Light-theme `.section` / `.gwg` / `.board-intro` / `.chat-empty--task`
- * + board-intro children chrome overrides retired. Each canonical uses
- * palette tokens (`--surface-inset` / `--border` / `--subtle-1` /
- * `--subtle-2` / color-mix on `--accent` / `--surface`) that already
- * adapt per theme; the bespoke rgba(255, 255, 255, …) +
- * rgba(116, 133, 184, …) literals here were patch debt. */
-
-/* ── Reference Dark Variants ──
-   The dark themes keep their contrast, but share the same workbench shell:
-   rounded panels, softened borders, theme-native primary actions, and a
-   single quiet canvas instead of stacked divider chrome. */
-/* Dark / vscode-dark body root + .panel-body chrome overrides retired
- * alongside the light counterparts — palette tokens drive everything. */
-
-/* Dark / vscode-dark `.sidebar` / `.chat` / `.sections` shell overrides
- * retired alongside the light counterparts. They were force-painting
- * the same `--rail-surface` / `--chat-canvas` / `--inspector-surface`
- * palette tokens that the canonicals already read; pure `!important`
- * noise. */
-
-/* iter16 follow-up: dark-theme hover-chrome flatteners removed
-   for the same reason the light-theme block above was removed —
-   canonical containers carry no border + no shadow, so this
-   override has nothing left to override. */
-
-/* iter19 / dark-mode primary chrome override retired. The "candy bar"
- * complaint is now solved at the palette layer: dark + vscode-dark
- * `:root` blocks override `--accent-gradient` to `var(--accent)` so the
- * canonical reads a flat accent on dark surfaces and a gradient on
- * light without any `body:is(...)` selector touching button chrome. */
-
-/* iter64: dark/vscode-dark use the same directory/sidebar/workspace
-   control chrome as light mode; only palette tokens differ. */
-
-/* iter58: dark/vscode-dark task-row hover and active states now use
-   the same canonical row state grammar as light mode. */
-
-/* Dark / vscode-dark inline-pill chrome override retired alongside the
- * light counterpart. See the comment block in the light section near
- * line 8153 — both blocks were masking the canonical "transparent +
- * dot-prefix or variant-tint" design and reintroducing themes that
- * owned component chrome. */
-
-/* iter59: dark/vscode-dark conversation stream chrome now uses the
-   same canonical `.chat-scroll` and `card.css` sources as light mode. */
-
-/* iter60: dark/vscode-dark use the same canonical chat goals/workspace
-   chrome grammar as light mode. */
-
-/* iter57: dark/vscode-dark `.chat-input` chrome folded into the
-   canonical for the same reason as light mode. */
-
-/* `body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-textarea`
-   was redundant — the canonical resolves `--surface-inset` / `--border`
-   palette per theme via `styles/surfaces/composer.css`. */
-
-/* Dark / vscode-dark `.section` / `.gwg` / `.board-intro` /
- * `.chat-empty--task` + board-intro children chrome overrides retired
- * for the same reason as the light counterparts. The canonicals already
- * paint via palette tokens that differ per theme. */
-
-/* vscode-dark `.sidebar` / `.sections` / `.chat` shell overrides retired.
- * The desired #252526 / #1e1e1e values now live in the vscode-dark `:root`
- * palette (`--rail-surface` / `--inspector-surface` / `--chat-canvas`),
- * so the canonicals render the right shell automatically. The vscode-dark
- * `.panel-body` solid #1e1e1e override has now been folded into
- * `--panel-body-bg` in the vscode-dark `:root` palette block. */
-
-/* vscode-dark `.section` / `.gwg` / `.board-intro` / `.chat-empty--task`
- * solid #252526 override retired. The vscode-dark `:root` palette already
- * resolves `--surface-inset` (the canonical's chosen background) to
- * `rgba(30, 30, 30, 0.96)`, which renders as a near-solid panel against
- * the canvas; no theme selector needs to repaint the inner cards. */
-
-/* The six multi-class scale-override `:is(...)` blocks that lived
- * here have been retired. They reset margin / gap+padding-inline /
- * border + box-shadow / hover border-color + box-shadow / background /
- * hover+active background for `.sidebar-btn`, `.btn.mini`,
- * `.btn-terminate`, `.engine-chip`(-caret), `.workspace-tab`,
- * `.section-icon-btn`, and `.conn-banner__action` — all with
- * `!important` to win over the canonicals. The slice landed today
- * (2026-05-04) cleared the dual source by:
- * - Deleting the dead `.btn-terminate`, `.engine-chip`,
- *   `.engine-chip-caret`, and `.engine-bar` canonicals (zero
- *   consumers in tsx/html sources).
- * - Rewriting `.sidebar-btn` and `.btn.mini` canonicals to declare
- *   flat chrome directly (`background: transparent; border: 0;
- *   box-shadow: none; margin: 0`) so the override `!important`
- *   resets are no longer needed.
- * - Trusting the chromed canonicals for `.workspace-tab` (in
- *   surfaces/workspace.css), `.section-icon-btn` (in
- *   surfaces/inspector.css), and `.conn-banner__action` (line ~4788
- *   here) — those declare deliberate borders / backgrounds and the
- *   override was masking them. */
-
-/* `.section` / `.gwg` / `.chat-empty--task` / `.agent-workflow-warning`
- * theme-driven border + shadow stripping retired. The canonical for
- * each (.section / .gwg in surfaces/inspector.css, .chat-empty--task at
- * line 7849, .agent-workflow-warning in surfaces/inspector.css) already
- * declares the desired border/shadow chrome via palette tokens; the
- * theme-driven `border: 0; box-shadow: none` reset was masking the
- * canonical and reintroducing themes that own component chrome. */
-
-/* `.section:last-child` / `.criteria-item` border-stripping override
- * retired. The .section:last-child canonical lives in surfaces/inspector.css
- * line 316 (`.section:last-child { border-bottom: var(--oc-border-width)
- * solid var(--border) }`); the deliberate bottom border there is the
- * design intent, not the `border: 0` reset that lived here. .criteria-item
- * keeps its own border canonical near line 1957. */
-
-/* The two remaining `:is(...)` background-reset blocks (one base + one
- * hover/active) were retired alongside the four block above — same
- * single-source slice. */
-
-/* iter19 per-theme gradient/flat split retired — `--accent-gradient`
- * palette token already differs per theme. The shared canonical near
- * line 7585 reads it directly without any theme selector. */
 
 .agent-workflow-orb {
   position: relative;

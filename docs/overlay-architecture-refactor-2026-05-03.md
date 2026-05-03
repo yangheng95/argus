@@ -1824,6 +1824,44 @@ Progress log:
   default-theme tests pass; tsc clean; vite build green (3.98s,
   ~324KB CSS).
 
+- 2026-05-04 (CRON slice, Claude `13d8149c6` follow-up): Retired the
+  body atmospheric pseudo-element layers + their kill rule. Dead-
+  code chain: styles.css line 126-167 declared `body::before` /
+  `body::after` (radial accent washes + linear canvas gradient) at
+  `z-index: -2 / -1` — always occluded by the opaque
+  `body { background: var(--body-bg) }` declaration on every theme
+  (light gradient, dark `var(--bg)`, vscode-dark `var(--bg)`). The
+  companion kill rule near line 7200 then force-stripped them with
+  `display: none !important; content: none !important; animation:
+  none !important;` against a wide selector list (body / .tech-atlas
+  / titlebar / sidebar / chat / sections / section-head /
+  dialog-form pseudo-elements). The kill rule's selector list
+  ALSO matched `.titlebar::after` from surfaces/titlebar.css — a
+  deliberate 1px gradient separator at the titlebar bottom — so
+  the architecturally-intended separator never rendered. Deleted
+  both the body atmospheric declarations and the kill rule;
+  `.titlebar::after` now renders the gradient separator that
+  surfaces/titlebar.css declares (design intent restored).
+  Dropped two `body[data-theme="light"]::before / ::after`
+  declarations (dead atmospheric override on light theme — same
+  occluded-by-body-bg story). Fixed `.field-input:focus` raw
+  rgba(91, 141, 239, 0.24) focus ring → `color-mix(in srgb,
+  var(--accent) 24%, transparent)` so the ring follows whichever
+  theme's `--accent` resolves (was painting a stale teal-blue under
+  every theme — same theme-bleed family the earlier slices retired).
+  Updated `titlebar-single-source.test.ts` and
+  `titlebar-utility-single-source.test.ts` to read the canonical
+  from `surfaces/titlebar.css` (the previous migration left those
+  tests pinning the old styles.css location). Guard ceilings:
+  `!important` 27 → 24 (-3, the kill rule's three `!important`
+  declarations gone), `body[data-theme]` 5 → 3 (-2, the light
+  pseudo-element atmospheric overrides gone), theme layout overrides
+  unchanged at 0. All 122 architecture guards + SSE refresh +
+  button primitive + dark-mode-primary-button + section / sections
+  single-source + default-theme + titlebar single-source +
+  titlebar-utility single-source tests pass; tsc clean; vite build
+  green (4.76s, ~324KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD

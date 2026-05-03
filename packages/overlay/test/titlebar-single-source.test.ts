@@ -1,32 +1,21 @@
-// Regression for iter14 of the design-language audit.
+// Regression for iter14 of the design-language audit, refreshed for
+// the 2026-05-04 surface migration: `.titlebar` canonical now lives
+// in `src/styles/surfaces/titlebar.css`, not styles.css. The original
+// fix retired three duplicate `.titlebar { … }` blocks (canonical +
+// layout switcher + calm/flat !important override) inside styles.css;
+// the subsequent migration moved the resulting single canonical out
+// to the surface file and the iter14 dual-source pattern stays gone.
 //
-// `.titlebar` was defined three times in styles.css:
+// New contract:
+// - styles.css must NOT define `.titlebar` at all (the migration is
+//   the single source).
+// - surfaces/titlebar.css declares exactly one solo top-level
+//   `.titlebar { … }` rule with no `!important` and the grid layout
+//   declaration.
 //
-//   - line ~382:  the canonical block — flex layout, 12px gap, 8/12px
-//                 padding, 48px min-height, gradient + chrome bg,
-//                 12px-deep box-shadow, transparent bottom-border.
-//   - line ~11597: layout switcher — flips display from flex to
-//                 grid with a 3-column template (titlebar-left /
-//                 spacer / titlebar-utility).
-//   - line ~12149: calm/flat override — clobbers padding,
-//                 min-height, background, box-shadow, gap with
-//                 !important so the titlebar drops the gradient
-//                 and the deep shadow.
-//
-// Same dual-source-with-late-override anti-pattern collapsed for
-// `.chat-empty` in iter5 and `.sidebar-list-heading` in iter8.
-// Reading just the canonical block left a contributor convinced
-// the titlebar still had a 12px shadow and a gradient; touching
-// any of the three sites silently lost to the !important chain.
-//
-// Pin a single source: one canonical `.titlebar { … }` rule with
-// no `!important`. Layout (display: grid, grid-template-columns)
-// + chrome (background, border, shadow) live together.
-//
-// Companion cleanup: iter6 deleted the `<span class="brand-name">`
-// from index.html. The `.brand-name` selector survived in a
-// multi-selector rule (`.brand-name, .sections-title, …`) and is
-// now dead CSS per CLAUDE.md rule 16. Drop it.
+// Companion cleanup (iter6) — `<span class="brand-name">` removed
+// from index.html and no styles.css selector references `.brand-
+// name` outside comments — still pins below.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
@@ -36,42 +25,46 @@ const STYLES = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles.css"),
   "utf8",
 )
+const TITLEBAR_SURFACE = readFileSync(
+  path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "titlebar.css"),
+  "utf8",
+)
 const HTML = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "index.html"),
   "utf8",
 )
 
-function countRulesStartingWith(selector: string): number {
+function countRulesStartingWith(text: string, selector: string): number {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  // Top-level rules only (no leading indentation) so @media-nested
-  // rules don't trip the count. Each top-level dual definition is
-  // a rule-8 violation; @media-nested overrides at narrow widths
-  // are legitimate per-context tweaks (consolidated separately).
   const re = new RegExp(`(^|\\n)${escaped}\\s*\\{`, "g")
-  return Array.from(STYLES.matchAll(re)).length
+  return Array.from(text.matchAll(re)).length
 }
 
-function ruleBody(selector: string): string {
+function ruleBody(text: string, selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const head = new RegExp(`(^|\\n)\\s*${escaped}\\s*\\{`, "m").exec(STYLES)
-  if (!head) throw new Error(`selector ${selector} not found in styles.css`)
+  const head = new RegExp(`(^|\\n)\\s*${escaped}\\s*\\{`, "m").exec(text)
+  if (!head) throw new Error(`selector ${selector} not found`)
   const open = head.index + head[0].length - 1
-  const close = STYLES.indexOf("}", open)
+  const close = text.indexOf("}", open)
   if (close < 0) throw new Error(`malformed block for ${selector}`)
-  return STYLES.slice(open + 1, close)
+  return text.slice(open + 1, close)
 }
 
 describe(".titlebar is defined exactly once", () => {
-  test("only one top-level `.titlebar { … }` rule exists", () => {
-    expect(countRulesStartingWith(".titlebar")).toBe(1)
+  test("styles.css no longer defines `.titlebar` at all (migrated to surfaces/titlebar.css)", () => {
+    expect(countRulesStartingWith(STYLES, ".titlebar")).toBe(0)
+  })
+
+  test("surfaces/titlebar.css declares exactly one solo top-level `.titlebar { … }` rule", () => {
+    expect(countRulesStartingWith(TITLEBAR_SURFACE, ".titlebar")).toBe(1)
   })
 
   test("the canonical .titlebar body uses no `!important`", () => {
-    expect(ruleBody(".titlebar")).not.toContain("!important")
+    expect(ruleBody(TITLEBAR_SURFACE, ".titlebar")).not.toContain("!important")
   })
 
-  test("the canonical .titlebar carries the grid layout (so the layout switcher block is gone)", () => {
-    expect(ruleBody(".titlebar")).toContain("display: grid")
+  test("the canonical .titlebar carries the grid layout", () => {
+    expect(ruleBody(TITLEBAR_SURFACE, ".titlebar")).toContain("display: grid")
   })
 })
 
