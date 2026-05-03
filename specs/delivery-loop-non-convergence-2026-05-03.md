@@ -54,6 +54,33 @@ closes the one-way feedback channel by making the executor prompt consume the
 same persisted delivery artifacts as the orchestrator, instead of relying on
 the orchestrator to summarize them correctly.
 
+## 2026-05-03 Recheck: Closed Feedback Path Versus Remaining Gate Semantics
+
+The recheck found the feedback chain is now covered at the mechanism level:
+
+1. `DeliveryService.verify` builds and persists `DeliveryEvidenceManifest`
+   before the delivery agent returns a verdict.
+2. `delivery-agent-verdict` artifacts remain the single source for the latest
+   rejected delivery result.
+3. `composeLatestDeliveryFeedbackForBuild` hydrates the next build context
+   directly from those persisted artifacts, including the canonical JSON packet.
+4. `BuildAgent` renders the same `deliveryFeedback` field for request-scope,
+   goal-scope, MirrorCode, Codex, and Claude Code executor launches.
+5. Regression coverage now proves persisted rejected verdict + manifest rows
+   become build retry feedback without depending on an orchestrator summary.
+
+This means the prior "5KB artifact -> short natural-language reason -> executor
+guesswork" failure mode should not silently return.
+
+The remaining r42 class is different: `runtime-evidence` still uses fixed DOM
+thinness thresholds (`min_dom_text_length=120`, `min_dom_node_count=60`) as a
+hard runtime gate. Complete feedback can tell the executor exactly why the host
+failed the page, but it cannot by itself decide that the gate is semantically
+wrong for a compact functional UI. That requires a separate gate-design fix:
+either make the threshold part of the acceptance contract, or replace the fixed
+DOM-thinness hard gate with visual/functional evidence reviewed in the delivery
+completion path.
+
 ## Out Of Scope
 
 - Do not add a new blocked task state or state-machine gate for repeated delivery failures. The existing guard stops identical rework; this refactor verifies and strengthens that path rather than adding a second source.
