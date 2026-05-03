@@ -1112,6 +1112,7 @@ a {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  padding: 0;
   background: transparent;
 }
 
@@ -14155,10 +14156,6 @@ body[data-theme="light"] .titlebar-btn:hover {
   color: var(--accent);
 }
 
-body[data-theme="light"] .panel {
-  padding: 0;
-}
-
 body[data-theme="light"] .task-bar {
   margin: 0;
   border-width: 0 0 1px;
@@ -14389,10 +14386,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar-btn:hover {
   background: color-mix(in srgb, var(--surface-hover) 92%, transparent) !important;
   border-color: color-mix(in srgb, var(--accent) 32%, transparent) !important;
   color: var(--accent);
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel {
-  padding: 0;
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
@@ -14920,11 +14913,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
     border-left: 0;
     border-right: 0;
     border-radius: 0;
-  }
-
-  body[data-theme="light"] .panel,
-  body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel {
-    padding: 0;
   }
 
   body[data-theme="light"] .task-bar,
