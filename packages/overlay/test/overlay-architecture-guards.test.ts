@@ -461,6 +461,41 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("channel docs + market cards are owned by surfaces/settings.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    for (const className of [
+      "channel-row-actions",
+      "channel-doc-card",
+      "channel-doc-copy",
+      "channel-doc-title",
+      "channel-doc-credit",
+      "market-card",
+      "market-card-main",
+      "market-card-actions",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(styles).not.toMatch(/(^|\n)#channelFields\s*\{/)
+    expect(settingsSurface).toMatch(/#channelFields\s*\{/)
+    expect(settingsSurface).toMatch(/\.market-card \+ \.market-card\s*\{/)
+    expect(settingsSurface).toMatch(/\.market-card-main strong\s*\{/)
+    expect(settingsSurface).toMatch(/\.market-card-main span,\s*\.market-card-main small\s*\{/)
+
+    const channelDocBody =
+      settingsSurface.match(/(^|\n)\.channel-doc-card\s*\{([^}]*)\}/)?.[2] ?? ""
+    expect(channelDocBody).toContain("transition:")
+    expect(channelDocBody).toContain("border: 0")
+
+    const marketCardBody = settingsSurface.match(/(^|\n)\.market-card\s*\{([^}]*)\}/)?.[2] ?? ""
+    expect(marketCardBody).not.toMatch(/border:/)
+    expect(marketCardBody).not.toMatch(/border-radius:/)
+    expect(marketCardBody).not.toMatch(/background:/)
+  })
+
   test("extensions panel block + row is owned by surfaces/settings.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
@@ -1342,20 +1377,26 @@ describe("overlay architecture guards", () => {
 
   test("settings document/detail cards do not rely on theme chrome resets", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
-      if (!isThemeSelector) continue
+    for (const source of [styles, settingsSurface]) {
+      for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = match[1] ?? ""
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+        if (!isThemeSelector) continue
 
-      expect(selector).not.toMatch(/(?:channel-doc-card|detail-card)/)
+        expect(selector).not.toMatch(/(?:channel-doc-card|detail-card)/)
+      }
     }
 
-    for (const selector of [".channel-doc-card", ".detail-card"]) {
-      const body = styles.match(new RegExp(`${selector.replace(".", "\\.")}\\s*\\{([^}]*)\\}`))?.[1] ?? ""
-      expect(body).toContain("background: var(--surface-inset)")
-      expect(body).toContain("border: 0")
-    }
+    const channelDocBody =
+      settingsSurface.match(/\.channel-doc-card\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(channelDocBody).toContain("background: var(--surface-inset)")
+    expect(channelDocBody).toContain("border: 0")
+
+    const detailCardBody = styles.match(/\.detail-card\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(detailCardBody).toContain("background: var(--surface-inset)")
+    expect(detailCardBody).toContain("border: 0")
   })
 
   test("settings extension rows do not rely on theme or local important chrome resets", () => {

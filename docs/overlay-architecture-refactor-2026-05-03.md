@@ -1284,6 +1284,29 @@ Progress log:
   `span`/`small` typography multi-class + absence of the
   retired rgba inset literal. Ceilings unchanged.
 
+- 2026-05-03: Extended surfaces/settings.css with the channel-doc
+  + market-card families: `.channel-row-actions`, `#channelFields`
+  layout container, `.channel-doc-card` (+ folded transition
+  declaration that previously sat in a late-tail dupe per rule
+  8) + `.channel-doc-copy` / `-title` / `-credit` +
+  `.channel-doc-card .btn`, `.market-card` (layout only) +
+  `.market-card + .market-card` sibling spacing +
+  `.market-card-main` + `strong` + `span` / `small` typography
+  multi-class + `.market-card-actions`. The `.market-card` shared
+  card chrome (border / radius / background / padding) stays in
+  the cross-surface multi-class with `.goal-item, .knowledge-
+  item, .pref-item, .criteria-check`; the surface canonical
+  declares only the unique layout properties to avoid a rule-8
+  double-source. Token conversions: ~10 unscaled px wrapped in
+  `calc(N * --ui-scale)`. Updated the existing settings-
+  document-cards-no-theme-resets guard to scan both styles.css
+  and settings.css and assert the `.channel-doc-card`
+  `background: var(--surface-inset)` + `border: 0` lives in the
+  surface (the `.detail-card` half stays in styles.css until it
+  too gets a sweep). New ownership guard adds 8 base classes +
+  `#channelFields` id + 3 multi-class child rules + assertion
+  that `.market-card` declares no chrome. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and

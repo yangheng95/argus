@@ -416,3 +416,111 @@
   color: var(--text);
   font-size: var(--ui-font-control);
 }
+
+/* ── ChannelsPanel.tsx (channel docs + actions) ──────────── */
+
+.channel-row-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#channelFields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-md);
+}
+
+/* Channel-doc card: borderless inset card carrying the channel's
+   docs link + credit + CTA button. The transition declaration
+   that previously lived in a late-tail dupe at the styles.css
+   tail is folded into the canonical here per rule 8. */
+.channel-doc-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-md);
+  flex-wrap: wrap;
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  border-radius: var(--radius);
+  border: 0;
+  background: var(--surface-inset);
+  box-shadow: none;
+  transition:
+    border-color 120ms,
+    background 120ms,
+    box-shadow 120ms,
+    transform 120ms;
+}
+
+.channel-doc-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--ui-scale));
+}
+
+.channel-doc-title {
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+
+.channel-doc-credit {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+}
+
+.channel-doc-card .btn {
+  white-space: nowrap;
+}
+
+/* ── SkillMarketPanel.tsx ────────────────────────────────── */
+
+/* Market card layout: each registry entry renders as a card with
+   a copy block (title + meta) + actions cluster. The card chrome
+   (border / radius / background / padding) is owned by the
+   shared `.goal-item, .market-card, .knowledge-item, .pref-item,
+   .criteria-check` multi-class in styles.css; the surface here
+   only declares the unique layout properties to avoid a rule-8
+   double source on the shared chrome. */
+.market-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+}
+
+.market-card + .market-card {
+  margin-top: calc(8px * var(--ui-scale));
+}
+
+.market-card-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.market-card-main strong {
+  font-size: var(--ui-font-title);
+  color: var(--text-strong);
+}
+
+.market-card-main span,
+.market-card-main small {
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+
+.market-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: calc(6px * var(--ui-scale));
+  flex-shrink: 0;
+}
