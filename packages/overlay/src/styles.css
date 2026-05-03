@@ -13174,6 +13174,8 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 
 .workspace-main {
   gap: 0;
+  margin: 0;
+  padding: 0;
 }
 
 /* .pane-resizer canonical rule lives at line 8278 (single source). The
@@ -13225,8 +13227,8 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 }
 
 .sections-stack {
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale));
 }
 
 /* iter28 dropped `.config-subsection`; iter30 started the
@@ -13735,6 +13737,8 @@ body[data-theme="light"] .btn-primary {
 
 .workspace-main {
   gap: 0;
+  margin: 0;
+  padding: 0;
 }
 
 /* iter16: per-column background tokens (--rail-surface for
@@ -14869,13 +14873,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   box-shadow: none !important;
 }
 
-body[data-theme="light"] .workspace-main,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
-  gap: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
 @media (max-width: 520px) {
   body[data-theme="light"] .titlebar,
   body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar {
@@ -14893,12 +14890,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
   padding: calc(2px * var(--ui-scale)) !important;
   padding-inline: calc(2px * var(--ui-scale)) !important;
   padding-block: calc(2px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] .sections-stack,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-stack {
-  gap: calc(4px * var(--ui-scale)) !important;
-  padding: calc(4px * var(--ui-scale)) !important;
 }
 
 body[data-theme="light"] :is(.section, .gwg),

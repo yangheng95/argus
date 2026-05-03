@@ -261,6 +261,10 @@ Progress log:
   theme-scoped column rules are palette backgrounds only. Guard ceilings drop
   to `!important <= 311`, `body[data-theme] <= 201`, and theme layout/chrome
   overrides <= 198.
+- 2026-05-03: Folded `.workspace-main` and `.sections-stack` spacing out of
+  light/dark theme resets. Their gap/margin/padding now live in canonical
+  layout rules, reducing guard ceilings to `!important <= 306`,
+  `body[data-theme] <= 199`, and theme layout/chrome overrides <= 193.
 
 Trigger: user feedback (2026-05-03):
 
