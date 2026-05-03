@@ -169,6 +169,10 @@ Progress log:
 - 2026-05-03: Removed `.chat-icon-col` from the late shared
   gap/padding reset chain so its existing canonical rule remains the single
   source for composer icon-column layout.
+- 2026-05-03: Retired the legacy `.sidebar-header`, `.chat-header`, and
+  `.sections-header` base chrome blocks from God CSS. The three primary
+  column headers now share the runtime `styles/surfaces/header.css`
+  surface contract for height, padding, border, background, radius, and shadow.
 
 Trigger: user feedback (2026-05-03):
 

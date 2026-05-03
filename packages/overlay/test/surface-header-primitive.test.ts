@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 const SURFACE_HEADER_SOURCE = join(import.meta.dir, "../src/components/ui/SurfaceHeader.tsx");
 const HEADER_CSS = join(import.meta.dir, "../src/styles/surfaces/header.css");
+const LEGACY_CSS = join(import.meta.dir, "../src/styles.css");
 
 test("SurfaceHeader owns the canonical header structure", () => {
   const source = readFileSync(SURFACE_HEADER_SOURCE, "utf8");
@@ -23,4 +24,10 @@ test("SurfaceHeader variants have surface CSS hooks", () => {
   expect(css).toContain('.oc-surface-header[data-surface="settings-group"]');
   expect(css).toContain(".sections-tabs.oc-surface-header__actions");
   expect(css).toContain("var(--oc-header-actions-padding)");
+});
+
+test("legacy God CSS no longer owns base surface header chrome", () => {
+  const css = readFileSync(LEGACY_CSS, "utf8");
+
+  expect(css).not.toMatch(/(^|\n)\.(?:sidebar-header|chat-header|sections-header)\s*\{/);
 });
