@@ -19,7 +19,6 @@
  *     images all produce explicit failures.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process"
-import { randomUUID } from "node:crypto"
 import { existsSync } from "node:fs"
 import fs from "node:fs/promises"
 import http from "node:http"
@@ -182,130 +181,6 @@ export async function resolveProjectLaunchScript(projectRoot: string): Promise<P
   return undefined
 }
 
-const RENDER_WORKSPACE_EXCLUDED_NAMES = new Set([
-  ".git",
-  ".opencorvus",
-  "node_modules",
-])
-
-export async function createIsolatedRenderWorkspace(
-  projectRoot: string,
-): Promise<{ directory: string; cleanup: () => Promise<void> }> {
-  const scratchParent = path.join(projectRoot, ".opencorvus", "delivery-render-workspaces")
-  await fs.mkdir(scratchParent, { recursive: true })
-  const scratchRoot = await fs.mkdtemp(path.join(scratchParent, `${randomUUID()}-`))
-  const directory = path.join(scratchRoot, "workspace")
-  try {
-    await copyTreeIntoRenderWorkspace(projectRoot, directory, projectRoot)
-  } catch (err) {
-    await cleanupIsolatedRenderWorkspace(scratchRoot)
-    throw err
-  }
-  return {
-    directory,
-    cleanup: () => cleanupIsolatedRenderWorkspace(scratchRoot),
-  }
-}
-
-export async function cleanupIsolatedRenderWorkspace(scratchRoot: string): Promise<void> {
-  let lastError: unknown
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      await fs.rm(scratchRoot, {
-        recursive: true,
-        force: true,
-        maxRetries: 3,
-        retryDelay: 200,
-      })
-      return
-    } catch (err) {
-      lastError = err
-      if (process.platform === "win32" && isWindowsLockedPathError(err)) {
-        await killWindowsProcessesReferencingPath(scratchRoot)
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
-    }
-  }
-  log.warn("delivery render workspace cleanup failed", {
-    scratchRoot,
-    err: lastError,
-  })
-}
-
-function isWindowsLockedPathError(err: unknown): boolean {
-  const lockedPathCodes = new Set(["EACCES", "EBUSY", "EPERM"])
-  return typeof err === "object"
-    && err !== null
-    && "code" in err
-    && lockedPathCodes.has(String((err as { code?: unknown }).code))
-}
-
-async function killWindowsProcessesReferencingPath(targetDir: string): Promise<void> {
-  const target = path.resolve(targetDir).toLowerCase()
-  const targetBase64 = Buffer.from(target, "utf8").toString("base64")
-  const script = [
-    `$needle = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${targetBase64}'))`,
-    "$own = $PID",
-    "Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $own -and $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($needle) } | ForEach-Object { & taskkill.exe /PID ([string]$_.ProcessId) /F /T | Out-Null }",
-  ].join("\n")
-  const encoded = Buffer.from(script, "utf16le").toString("base64")
-  await new Promise<void>((resolve) => {
-    const proc = spawn("powershell.exe", [
-      "-NoProfile",
-      "-NonInteractive",
-      "-EncodedCommand",
-      encoded,
-    ], {
-      stdio: "ignore",
-      windowsHide: true,
-    })
-    const timer = setTimeout(() => {
-      proc.kill("SIGKILL")
-      resolve()
-    }, 5_000)
-    proc.once("exit", () => {
-      clearTimeout(timer)
-      resolve()
-    })
-    proc.once("error", () => {
-      clearTimeout(timer)
-      resolve()
-    })
-  })
-}
-
-async function copyTreeIntoRenderWorkspace(source: string, destination: string, sourceRoot: string): Promise<void> {
-  if (!shouldCopyIntoRenderWorkspace(sourceRoot, source)) return
-  const stat = await fs.lstat(source)
-  if (stat.isDirectory()) {
-    await fs.mkdir(destination, { recursive: true })
-    const entries = await fs.readdir(source)
-    for (const entry of entries) {
-      await copyTreeIntoRenderWorkspace(
-        path.join(source, entry),
-        path.join(destination, entry),
-        sourceRoot,
-      )
-    }
-    return
-  }
-  if (stat.isSymbolicLink()) {
-    const target = await fs.readlink(source)
-    await fs.symlink(target, destination)
-    return
-  }
-  if (stat.isFile()) {
-    await fs.mkdir(path.dirname(destination), { recursive: true })
-    await fs.copyFile(source, destination)
-  }
-}
-
-function shouldCopyIntoRenderWorkspace(sourceRoot: string, candidate: string) {
-  const relative = path.relative(sourceRoot, candidate)
-  if (!relative) return true
-  return relative.split(path.sep).every((part) => !RENDER_WORKSPACE_EXCLUDED_NAMES.has(part))
-}
-
 const ANSI_ESCAPE_PATTERN = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g
 const ANNOUNCED_LOCAL_URL_PATTERN = /https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d{1,5})\/?/i
 
@@ -332,7 +207,7 @@ export function renderWorkspaceCommandFailureMessage(input: {
     ? "spawn_error"
     : `exit code=${input.status}`
   const outputTail = renderCommandOutputTail(input)
-  return `${input.command} pre-launch failed (${status}) in isolated render workspace for ${input.projectRoot}: ${outputTail}`
+  return `${input.command} pre-launch failed (${status}) in ${input.projectRoot}: ${outputTail}`
 }
 
 function renderCommandOutputTail(input: {
@@ -374,24 +249,23 @@ async function startProjectServer(
   opts: { timeoutMs?: number } = {},
 ): Promise<{ url: string; close: () => Promise<void> }> {
   const timeoutMs = opts.timeoutMs ?? 90_000
-  const isolated = await createIsolatedRenderWorkspace(projectRoot)
-  const launchRoot = isolated.directory
 
-  // Render launches run from an isolated copy of the merged primary tree.
-  // Build agents publish only tracked files back to primary, so dependencies
-  // and compiled output are absent in the copy by design. Install/build here
-  // to make preview/start faithful without mutating the primary worktree.
-  const hasPackageJson = existsSync(`${launchRoot}/package.json`)
-  const hasNodeModules = existsSync(`${launchRoot}/node_modules`)
+  // Install + build run directly in projectRoot. node_modules/dist are
+  // gitignored by every scaffold we generate, so they never round-trip into
+  // upstream commits — and projectRoot is itself a per-task ephemeral
+  // worktree, not a user source tree. Reusing the same directory across
+  // delivery retries keeps node_modules warm and removes the cold-install
+  // 3-min ceiling that the old "isolated render workspace" copy imposed.
+  const hasPackageJson = existsSync(`${projectRoot}/package.json`)
+  const hasNodeModules = existsSync(`${projectRoot}/node_modules`)
   if (hasPackageJson && !hasNodeModules) {
     const install = spawnSync("bun", ["install"], {
-      cwd: launchRoot,
+      cwd: projectRoot,
       stdio: ["ignore", "pipe", "pipe"],
       shell: process.platform === "win32",
-      timeout: 180_000,
+      timeout: 600_000,
     })
     if (install.error) {
-      await isolated.cleanup()
       throw new Error(renderWorkspaceCommandFailureMessage({
         command: "bun install",
         projectRoot,
@@ -401,7 +275,6 @@ async function startProjectServer(
       }))
     }
     if (install.status !== 0) {
-      await isolated.cleanup()
       throw new Error(renderWorkspaceCommandFailureMessage({
         command: "bun install",
         projectRoot,
@@ -412,32 +285,32 @@ async function startProjectServer(
     }
   }
   if (script.buildScript) {
-    // `vite preview` serves compiled output; in the cold merged worktree that
-    // output is not tracked, so delivery must materialize it before launch.
+    // `vite preview` serves compiled output; integration only carries
+    // tracked files into projectRoot, so delivery must materialize dist/
+    // before launch. The build is idempotent — repeated delivery rounds
+    // re-run it cheaply because Vite caches its own analysis.
     const build = spawnSync("bun", ["run", script.buildScript], {
-      cwd: launchRoot,
+      cwd: projectRoot,
       stdio: ["ignore", "pipe", "pipe"],
       shell: process.platform === "win32",
-      timeout: 180_000,
+      timeout: 600_000,
     })
     if (build.error) {
-      await isolated.cleanup()
       throw new Error(
-        `bun run ${script.buildScript} pre-launch failed in isolated render workspace for ${projectRoot}: ${build.error.message}`,
+        `bun run ${script.buildScript} pre-launch failed in ${projectRoot}: ${build.error.message}`,
       )
     }
     if (build.status !== 0) {
-      await isolated.cleanup()
       const output = `${build.stdout?.toString() ?? ""}${build.stderr?.toString() ?? ""}`.slice(-1200) || "<no output>"
       throw new Error(
-        `bun run ${script.buildScript} pre-launch exited code=${build.status} in isolated render workspace for ${projectRoot}: ${output}`,
+        `bun run ${script.buildScript} pre-launch exited code=${build.status} in ${projectRoot}: ${output}`,
       )
     }
   }
 
   // Run via `bun run`; inherits PATH so npx/vite/tsx on the project lockfile resolve.
   const child: ChildProcess = spawn("bun", ["run", script.script], {
-    cwd: launchRoot,
+    cwd: projectRoot,
     stdio: ["ignore", "pipe", "pipe"],
     shell: process.platform === "win32",
     detached: process.platform !== "win32",
@@ -469,17 +342,8 @@ async function startProjectServer(
     resolve()
   }))
 
-  let cleaned = false
-  const cleanupLaunchRoot = async () => {
-    if (cleaned) return
-    cleaned = true
-    await isolated.cleanup()
-  }
   const close = async () => {
-    if (child.exitCode !== null) {
-      await cleanupLaunchRoot()
-      return
-    }
+    if (child.exitCode !== null) return
     try {
       await Shell.killTree(child, { exited: () => exited })
       const raced = await Promise.race([
@@ -491,7 +355,6 @@ async function startProjectServer(
       /* ignore */
     }
     await closed.catch(() => {})
-    await cleanupLaunchRoot()
   }
 
   const deadline = Date.now() + timeoutMs
