@@ -1019,6 +1019,23 @@ Progress log:
   `-step` / `-verdict` / `-checks` family stays in styles.css
   until each block gets a token sweep. Ceilings unchanged.
 
+- 2026-05-03: Moved the GWG header bar into surfaces/inspector.css
+  — `.gwg-header` + `:focus-visible`, `-title-row`, `-header-
+  actions`, `-status-icon` + 3 status-modifier variants (`.gwg--
+  passed/--failed/--running .gwg-status-icon`), `-title`, and
+  `-revision`. The status-modifier child rules moved alongside the
+  base per rule 8 so per-status chrome lives in one place. Token
+  conversions: unscaled `2px` outline + `-2px` outline-offset
+  wrapped in `calc(N * --ui-scale)`; `clamp(10px, …, 11px)` font
+  cap dropped (its absolute bounds escaped `--ui-scale`; the
+  chip's font now plainly scales — the icon is a 1-2 char glyph
+  that never overflows visually); `1px` inset shadow →
+  `var(--oc-border-width)`; `999px` pill →
+  `var(--oc-radius-pill)`. New ownership guard asserts six base
+  classes + `:focus-visible` + three modifier-child rules +
+  absence of any `clamp(10px,` and presence of
+  `var(--oc-radius-pill)` on `.gwg-revision`. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
