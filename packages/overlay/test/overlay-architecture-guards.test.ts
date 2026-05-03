@@ -158,13 +158,13 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(241)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(156)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(155)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(96)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(95)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -664,6 +664,32 @@ describe("overlay architecture guards", () => {
       "line-height: 1.4",
     ]) {
       expect(cardBody).toContain(declaration)
+    }
+  })
+
+  test("workflow attempt chip chrome is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.agent-workflow-attempt\b/.test(selector)) continue
+
+      expect(body).not.toMatch(/\b(?:border|background|color)\s*:/)
+    }
+
+    const body = soloRuleBody(styles, ".agent-workflow-attempt")
+    for (const declaration of [
+      "border: 1px solid color-mix(in srgb, var(--workflow-tone) 38%, transparent)",
+      "border-radius: calc(999px * var(--ui-scale))",
+      "padding: 0 calc(6px * var(--ui-scale))",
+      "background: color-mix(in srgb, var(--workflow-tone) 13%, transparent)",
+      "color: color-mix(in srgb, var(--workflow-tone) 82%, var(--text-strong))",
+    ]) {
+      expect(body).toContain(declaration)
     }
   })
 

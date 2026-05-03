@@ -330,6 +330,11 @@ Progress log:
   card text weight, body min-height, color, font size, and line-height no longer
   vary by theme, reducing guard ceilings to `!important <= 241`,
   `body[data-theme] <= 156`, and theme layout/chrome overrides <= 96.
+- 2026-05-03: Moved `.agent-workflow-attempt` chip border, background, and text
+  color from theme selectors into the canonical attempt chip rule. Attempt chips
+  now inherit semantic tone through component variables, reducing guard ceilings
+  to `!important <= 241`, `body[data-theme] <= 155`, and theme layout/chrome
+  overrides <= 95.
 
 Trigger: user feedback (2026-05-03):
 
