@@ -65,6 +65,104 @@ import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
 
 const log = Log.create({ service: "task-tools" })
 
+async function composeLatestDeliveryFeedbackForBuild(input: {
+  taskID: string
+  goalID?: string
+}): Promise<string | undefined> {
+  const verdictArtifact = findLatestDeliveryVerdictArtifact(input.taskID)
+  const verdictPayload = (verdictArtifact?.payload ?? {}) as Record<string, unknown>
+  if (!verdictArtifact || verdictPayload.verdict !== "rejected") return undefined
+
+  const rejectionDetails = Array.isArray(verdictPayload.rejection_details)
+    ? (verdictPayload.rejection_details as Array<Record<string, unknown>>)
+    : []
+  const scopedDetails = input.goalID
+    ? rejectionDetails.filter((detail) => detail.goal_id === input.goalID)
+    : rejectionDetails
+
+  const {
+    deliveryManifestFailureDetails,
+    findLatestDeliveryEvidenceManifest,
+    formatDeliveryManifestFailureDetails,
+  } = await import("@/delivery/manifest")
+  const deliveryID = verdictArtifact.delivery_id ?? undefined
+  const manifest = deliveryID
+    ? findLatestDeliveryEvidenceManifest({ deliveryID })
+    : undefined
+  const manifestFailureDetails = manifest
+    ? formatDeliveryManifestFailureDetails(manifest)
+    : []
+  const failedRuntimeFlowIds = new Set(manifest?.finalGate.failedRuntimeFlowIds ?? [])
+  const failedReviewIds = new Set(manifest?.finalGate.failedReviewIds ?? [])
+  const packet = {
+    verdict_artifact_id: verdictArtifact.id,
+    delivery_id: deliveryID,
+    scope: input.goalID ? "goal" : "integrated_tree",
+    goal_id: input.goalID,
+    verdict: {
+      verdict: verdictPayload.verdict,
+      summary: typeof verdictPayload.summary === "string" ? verdictPayload.summary : "",
+      rejection_details: scopedDetails,
+      all_rejection_detail_count: rejectionDetails.length,
+    },
+    manifest: manifest
+      ? {
+          id: manifest.id,
+          iteration: manifest.iteration,
+          finalGate: manifest.finalGate,
+          failureDetails: deliveryManifestFailureDetails(manifest),
+          runtimeFlows: manifest.runtimeFlows.filter((flow) =>
+            flow.status === "failed" || failedRuntimeFlowIds.has(flow.id)
+          ),
+          reviewEvidence: manifest.reviewEvidence.filter((review) =>
+            review.status === "failed" || failedReviewIds.has(review.id)
+          ),
+        }
+      : undefined,
+  }
+
+  return composeDeliveryRetryFeedback({
+    iteration: typeof manifest?.iteration === "number" ? manifest.iteration : 0,
+    verdict: String(verdictPayload.verdict),
+    summary: typeof verdictPayload.summary === "string" ? verdictPayload.summary : "",
+    manifestFailureDetails,
+    ownDetails: scopedDetails.map((detail) => ({
+      category: typeof detail.category === "string" ? detail.category : "unknown",
+      error: typeof detail.error === "string" ? detail.error : JSON.stringify(detail),
+      goal_id: typeof detail.goal_id === "string" ? detail.goal_id : undefined,
+      file: typeof detail.file === "string" ? detail.file : undefined,
+      suggestion: typeof detail.suggestion === "string" ? detail.suggestion : undefined,
+      visual_spec_id: typeof detail.visual_spec_id === "string" ? detail.visual_spec_id : undefined,
+    })),
+    scope: input.goalID ? "goal" : "integrated_tree",
+    rawFeedbackPacket: packet,
+  })
+}
+
+async function loadLatestRenderedRetryAttachment(input: {
+  taskID: string
+  enabled: boolean
+}): Promise<import("@/build/agent").BuildAgent.BuildContext["retryAttachments"]> {
+  if (!input.enabled) return undefined
+  const fsMod = await import("node:fs/promises")
+  const pathMod = await import("node:path")
+  const renderedPath = pathMod.join(
+    Instance.directory,
+    ".opencorvus",
+    "delivery-hard-gate",
+    input.taskID,
+    "rendered.png",
+  )
+  const stat = await fsMod.stat(renderedPath).catch(() => undefined)
+  if (!stat?.isFile()) return undefined
+  const bytes = await fsMod.readFile(renderedPath)
+  return [{
+    url: `data:image/png;base64,${bytes.toString("base64")}`,
+    mime: "image/png",
+    filename: "previous-attempt-rendered.png",
+  }]
+}
+
 /**
  * Lightweight MIME guess from filename extension. Covers the design-material
  * spectrum: images (inlined multimodal), PDFs (multimodal), text / markdown /
@@ -4169,37 +4267,20 @@ export function createOrchestratorTools(input: {
                   "- If the root cause sits outside owned_paths, surface it as a SCOPE BLOCKER instead of widening scope.",
                 ].join("\n")
               : undefined
+            const deliveryFeedback = await composeLatestDeliveryFeedbackForBuild({
+              taskID,
+              goalID: goal.id,
+            })
 
             // Visual feedback closure-loop: when delivery rejected on visual
             // grounds, attach the previous rendered.png so the build LLM
             // physically compares its output to the user reference instead of
             // re-painting from text alone. The path is the same one the
             // delivery service writes via runtime-evidence.
-            let retryAttachments: import("@/build/agent").BuildAgent.BuildContext["retryAttachments"]
-            if (retryEntries.length > 0) {
-              try {
-                const fsMod = await import("node:fs/promises")
-                const pathMod = await import("node:path")
-                const renderedPath = pathMod.join(
-                  Instance.directory,
-                  ".opencorvus",
-                  "delivery-hard-gate",
-                  taskID,
-                  "rendered.png",
-                )
-                const stat = await fsMod.stat(renderedPath).catch(() => undefined)
-                if (stat?.isFile()) {
-                  const bytes = await fsMod.readFile(renderedPath)
-                  retryAttachments = [{
-                    url: `data:image/png;base64,${bytes.toString("base64")}`,
-                    mime: "image/png",
-                    filename: "previous-attempt-rendered.png",
-                  }]
-                }
-              } catch {
-                /* best-effort: missing rendered.png is not fatal — retry feedback text still drives the rework */
-              }
-            }
+            const retryAttachments = await loadLatestRenderedRetryAttachment({
+              taskID,
+              enabled: retryEntries.length > 0 || Boolean(deliveryFeedback),
+            })
 
             context = {
               requirements: requirements.length > 0 ? requirements : undefined,
@@ -4207,10 +4288,22 @@ export function createOrchestratorTools(input: {
               dependencies: dependencies.length > 0 ? dependencies : undefined,
               designSpecs,
               retryFeedback,
+              deliveryFeedback,
               retryAttachments,
             }
           } else {
             target = { kind: "request", text: request }
+            const deliveryFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID })
+            const retryAttachments = await loadLatestRenderedRetryAttachment({
+              taskID,
+              enabled: Boolean(deliveryFeedback),
+            })
+            context = deliveryFeedback || retryAttachments
+              ? {
+                  deliveryFeedback,
+                  retryAttachments,
+                }
+              : undefined
           }
 
           // Open the goal_run BEFORE handing off to BuildAgent.run so the
