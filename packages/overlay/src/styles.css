@@ -436,17 +436,6 @@ a {
   white-space: pre-wrap;
 }
 
-.task-actions-buttons {
-  display: flex;
-  gap: var(--ui-gap-sm);
-  flex-wrap: wrap;
-  padding: var(--ui-gap-sm) var(--ui-section-padding-x);
-}
-
-.task-actions-buttons .btn {
-  padding: calc(4px * var(--ui-scale)) var(--ui-section-padding-x);
-  font-size: var(--ui-font-control);
-}
 
 .plan-version {
   font-size: var(--ui-font-control);
@@ -2270,53 +2259,6 @@ body[data-resizing="true"] * {
   gap: calc(2px * var(--ui-scale));
 }
 
-.task-actions-buttons .btn {
-  min-height: auto;
-  padding: 0 0 0 var(--ui-btn-mini-padding-x);
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  position: relative;
-  color: var(--text-soft);
-  font-weight: 620;
-}
-
-.task-actions-buttons .btn::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: calc(5px * var(--ui-scale));
-  height: calc(5px * var(--ui-scale));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--subtle-4) 94%, transparent);
-  transform: translateY(-50%);
-}
-
-.task-actions-buttons .btn:hover {
-  background: transparent;
-  color: var(--text-strong);
-  box-shadow: none;
-}
-
-.task-actions-buttons .btn:focus-visible {
-  outline: 1px solid color-mix(in srgb, var(--accent) 36%, transparent);
-  outline-offset: 2px;
-  box-shadow: none;
-}
-
-.task-actions-buttons .btn[data-task-action="retry"] {
-  color: var(--accent);
-}
-
-.task-actions-buttons .btn[data-task-action="retry"]::before {
-  background: color-mix(in srgb, var(--accent) 84%, transparent);
-}
-
-.task-actions-buttons .btn:disabled {
-  background: transparent;
-}
 
 .extension-status,
 .llm-status,
