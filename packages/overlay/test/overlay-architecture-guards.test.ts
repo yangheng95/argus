@@ -429,6 +429,27 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
   })
 
+  test("conn-banner cross-surface notification primitive routes through palette tokens", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+
+    const block = styles.match(
+      /\.conn-banner\s*\{[\s\S]*?\.conn-banner__action:focus-visible\s*\{[^}]*\}/,
+    )?.[0]
+    expect(block).toBeTruthy()
+    const body = block ?? ""
+
+    expect(body).toContain("var(--oc-radius-pill)")
+    expect(body).toContain("var(--oc-border-width)")
+    expect(body).not.toMatch(/border-radius:\s*999px/)
+    expect(body).not.toMatch(/border:\s*1px solid/)
+    expect(body).not.toMatch(/rgba\(0,\s*0,\s*0/)
+
+    // Status variants must remain.
+    expect(body).toMatch(/\.conn-banner\[data-status="connecting"\]\s*\{/)
+    expect(body).toMatch(/\.conn-banner__dot\s*\{/)
+    expect(body).toMatch(/@keyframes conn-banner-pulse\s*\{/)
+  })
+
   test("shared .verdict-pill primitive routes verdict tones through palette tokens", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 

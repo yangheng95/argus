@@ -1477,6 +1477,24 @@ Progress log:
   `[data-active]` group/model variants + absence of the 3
   retired raw light-blue rgb literals. Ceilings unchanged.
 
+- 2026-05-03: Token-swept the cross-surface `.conn-banner`
+  notification primitive (rendered globally above all panels via
+  ConnectionBanner.tsx) without relocating — it is a top-level
+  overlay-shell component without a clear surface home, and a
+  Phase-5 dedicated location can absorb it later. Conversions:
+  2× `border-radius: 999px` → `var(--oc-radius-pill)`; 2× `1px`
+  borders → `var(--oc-border-width)`; raw shadow `rgba(0, 0, 0,
+  0.32)` → `color-mix(in srgb, black 32%, transparent)` with the
+  18/40 px wrapped in `calc(N * --ui-scale)`; `8px` dot size /
+  `6px` keyframe pulse outset / `2px 10px` action padding /
+  `2px` focus-ring outset + offset all wrapped. New ownership
+  guard scans the full `.conn-banner*` block in styles.css and
+  asserts presence of `var(--oc-radius-pill)` and `var(--oc-
+  border-width)` plus absence of any `999px` / `1px solid` /
+  `rgba(0,0,0,…)` literal, plus that the `[data-status="
+  connecting"]` variant + `__dot` element + `@keyframes conn-
+  banner-pulse` rule are all preserved. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
