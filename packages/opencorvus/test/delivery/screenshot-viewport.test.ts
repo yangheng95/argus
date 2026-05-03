@@ -95,6 +95,34 @@ describe("delivery screenshot viewport", () => {
     expect(await fileExists(capture.path)).toBe(true)
   })
 
+  test("runtime capture treats browser unhandled rejections as JS integrity failures", async () => {
+    const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-runtime-capture-"))
+    tempDirs.push(outDir)
+    const url = await serveHtml(`
+<!doctype html>
+<html>
+  <body>
+    <main><h1>Unhandled Rejection Fixture</h1><section><p>Enough page structure for capture.</p></section></main>
+    <script>setTimeout(() => Promise.reject(new Error("fixture async failure")), 0)</script>
+  </body>
+</html>
+`)
+
+    const capture = await captureRuntimePage({
+      url,
+      outDir,
+      viewport_width: 800,
+      viewport_height: 600,
+      min_dom_descendants: 2,
+      settle_ms: 100,
+    })
+
+    expect(capture.captured).toBe(true)
+    if (!capture.captured) throw new Error(capture.summary)
+    expect(capture.layers.js.passed).toBe(false)
+    expect(capture.layers.js.page_errors.join("\n")).toContain("fixture async failure")
+  })
+
   test("verify_page_integrity delegates browser work to runtime capture", async () => {
     const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/delivery/tools.ts"), "utf8")
     const start = source.indexOf("verify_page_integrity: tool")
