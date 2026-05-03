@@ -2182,6 +2182,7 @@ select.field-input option {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
 
 .msg-file-chip {
   display: inline-flex;
