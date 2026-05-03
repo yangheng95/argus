@@ -461,6 +461,34 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("architect panel is owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "arch-panel",
+      "arch-overview",
+      "arch-summary",
+      "arch-count",
+      "arch-count-label",
+      "arch-categories",
+      "arch-cat-badge",
+      "arch-detail",
+      "arch-decisions",
+      "arch-decision",
+      "arch-decision-head",
+      "arch-decision-key",
+      "arch-decision-goal",
+      "arch-decision-value",
+      "arch-decision-reason",
+      "arch-generating",
+      "arch-generating-label",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+  })
+
   test("integrity panel is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
