@@ -727,8 +727,8 @@ Progress log:
   background, hover chrome, or shadow. The guard now rejects any future
   theme selector that targets this control family and pins the canonical
   radius/border/background declarations. Guard ceilings drop to
-  `!important <= 142`, `body[data-theme] <= 71`, and theme
-  layout/chrome overrides `<= 37` after the guard now strips comments
+  `!important <= 138`, `body[data-theme] <= 69`, and theme
+  layout/chrome overrides `<= 33` after the guard now strips comments
   before counting real declarations.
 - 2026-05-03: Removed `.chat-send` and `.chat-send:hover` from the
   remaining theme reset `:is(...)` chains. This does not move the
@@ -771,11 +771,11 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **12,436 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles.css`      | **12,327 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
-| Total `!important` in stylesheets      | **142** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **71**                                                                                  |
-| Theme layout/chrome overrides          | **37** current guard baseline                                                           |
+| Total `!important` in stylesheets      | **138** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **69**                                                                                  |
+| Theme layout/chrome overrides          | **33** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 857 / ProvidersPanel 819 / SkillMarketPanel 649 / TaskList 648 / ChatComposer 553 |
 | Total `.tsx` LOC under `packages/overlay/src` | **14,074**                                                                      |
