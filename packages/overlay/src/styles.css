@@ -5004,91 +5004,8 @@ code .file-link:hover {
    textarea now match at 62px (the pre-iter20 user-visible
    value) and the chat-compose-scale multiplier is gone
    because iter17 already pinned --chat-compose-scale to 1. */
-.chat-textarea-wrap {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-self: stretch;
-  min-height: calc(62px * var(--ui-scale));
-}
-.chat-textarea-wrap > .chat-textarea {
-  flex: 1;
-}
-.chat-placeholder-float {
-  position: absolute;
-  inset: 0;
-  padding: calc(10px * var(--ui-scale) * var(--chat-compose-scale))
-    calc(12px * var(--ui-scale) * var(--chat-compose-scale));
-  font-size: var(--ui-font-body);
-  line-height: 1.45;
-  color: var(--text-muted);
-  pointer-events: none;
-  overflow: hidden;
-  opacity: 0.85;
-}
-.chat-placeholder-text {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.chat-placeholder-caret {
-  display: inline-block;
-  width: 0.42em;
-  height: 0.42em;
-  margin-left: 4px;
-  vertical-align: middle;
-  background: var(--accent);
-  border-radius: 50%;
-  transform: translateY(-0.05em);
-  opacity: 0.6;
-}
-/* Removed `chat-placeholder-pulse` infinite animation: caret pulsed every
-   1.4s on every visible composer, keeping the WebView2 compositor awake
-   even when the user was nowhere near the window. Static dot is enough. */
-
-/* Single source after iter20. Was defined six times — a
-   chromed canonical here (16px radius + gradient bg + drop
-   shadow + 72px min-height + transition) plus five later
-   blocks that overrode `border-radius` to 10px, `background`
-   and `box-shadow` with !important, and re-set min-height
-   four times (64px → 68px → 62px). After iter17 made the
-   parent `.chat-input` flat (border-radius: 0), the inner
-   textarea was still rendering with a 10px radius — a
-   rounded textarea nested in a flat container. Folded into
-   one canonical flat block: 0 radius matches the parent,
-   no shadow, no gradient, no transition (the chrome that
-   the transition animated is gone). */
-.chat-textarea {
-  flex: 1;
-  min-width: 0;
-  min-height: calc(62px * var(--ui-scale));
-  resize: none;
-  border: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--surface-inset);
-  color: var(--text-strong);
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  font-size: var(--ui-font-body);
-  line-height: 1.45;
-  overflow-y: auto;
-}
-.chat-textarea[data-expanded="true"] {
-  min-height: calc(220px * var(--ui-scale) * var(--chat-compose-scale));
-}
-.chat-textarea:focus {
-  outline: none;
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--subtle-4));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(91, 141, 239, 0.025) 68%, transparent),
-    color-mix(in srgb, var(--surface-inset) 88%, transparent);
-  box-shadow:
-    0 0 0 3px rgba(91, 141, 239, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 8px 18px rgba(20, 30, 49, 0.16);
-}
-.chat-textarea::placeholder {
-  color: var(--text-muted);
-}
+/* `.chat-textarea*` family + `.chat-placeholder*` overlay live in
+   `styles/surfaces/composer.css` now. */
 
 /* ────────────────────────────────────────────────────────────────────
  * Chat send button — single source of truth.
@@ -12582,15 +12499,8 @@ body::after,
   gap: calc(8px * var(--ui-scale));
 }
 
-/* iter20: the duplicate `.chat-textarea-wrap, .chat-textarea
-   { min-height: ... }` and the !important `.chat-textarea`
-   override that lived here are folded into the canonical
-   block near line ~5462. */
-
-.chat-textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-ring) !important;
-}
+/* `.chat-textarea:focus` lives in `styles/surfaces/composer.css` now
+   (the simpler ring superseded the earlier multi-rgba stack). */
 
 /* iter22: the `.chat-icon-col` override block was folded into its
    canonical surface rule (flat border-radius: 0). The dead static
@@ -12767,13 +12677,9 @@ body::after,
   align-items: end;
 }
 
-/* iter20: this duplicate min-height pair was folded into the
-   canonical block near line ~5462 (which now declares the
-   final 62px min-height directly). The expanded-state
-   override below stays — it's a different state. */
-.chat-textarea[data-expanded="true"] {
-  min-height: calc(210px * var(--ui-scale));
-}
+/* `.chat-textarea[data-expanded="true"]` lives in
+   `styles/surfaces/composer.css` now (the late 210px wins; the canonical
+   has been updated to match). */
 
 /* iter22: `.chat-icon-col { align-self: stretch }` folded —
    the canonical near line ~5347 already declares it. */
@@ -13321,15 +13227,9 @@ body[data-theme="light"] .diff-dialog-stat {
    canonical so themes no longer decide composer spacing,
    border, background, or focus ring. */
 
-body[data-theme="light"] .chat-textarea {
-  background: rgba(248, 250, 255, 0.92) !important;
-  border-color: rgba(116, 133, 184, 0.14);
-  color: var(--text-strong);
-}
-
-body[data-theme="light"] .chat-placeholder-float {
-  color: var(--text-muted);
-}
+/* `body[data-theme="light"] .chat-textarea` and `.chat-placeholder-float`
+   were redundant — the canonical now resolves `--surface-inset` /
+   `--text-muted` palette per theme via `styles/surfaces/composer.css`. */
 
 body[data-theme="light"] .section,
 body[data-theme="light"] .gwg {
@@ -13446,11 +13346,9 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .diff-dialog-stat {
 /* iter57: dark/vscode-dark `.chat-input` chrome folded into the
    canonical for the same reason as light mode. */
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-textarea {
-  background: color-mix(in srgb, var(--surface-inset) 90%, transparent) !important;
-  border-color: color-mix(in srgb, var(--border) 82%, transparent);
-  color: var(--text-strong);
-}
+/* `body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-textarea`
+   was redundant — the canonical resolves `--surface-inset` / `--border`
+   palette per theme via `styles/surfaces/composer.css`. */
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .gwg {

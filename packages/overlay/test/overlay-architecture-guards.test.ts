@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(152)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(81)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(147)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(80)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -241,6 +241,30 @@ describe("overlay architecture guards", () => {
 
       expect(selector).not.toMatch(/\.chat-icon-col(?=$|[\s:{.#\[,>+~])/)
     }
+  })
+
+  test("composer chat-textarea family is owned by surfaces/composer.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+
+    for (const className of [
+      "chat-textarea",
+      "chat-textarea-wrap",
+      "chat-placeholder-float",
+      "chat-placeholder-text",
+      "chat-placeholder-caret",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(styles).not.toMatch(/(^|\n)\.chat-textarea:focus\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)\.chat-textarea\[data-expanded="true"\]\s*\{/)
+    expect(styles).not.toMatch(/body\[data-theme="light"\] \.chat-textarea\b/)
+    expect(styles).not.toMatch(/body:is\([^)]*\) \.chat-textarea\b/)
+    expect(composerSurface).toMatch(/\.chat-textarea:focus\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-textarea\[data-expanded="true"\]\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-textarea::placeholder\s*\{/)
   })
 
   test("composer chat-input shell is owned by surfaces/composer.css", () => {
@@ -1486,7 +1510,7 @@ describe("overlay architecture guards", () => {
     const mediaBreakpoint = /\(\s*(?:min|max)-(?:width|height)\s*:\s*-?\d+(?:\.\d+)?px\s*\)/g
 
     for (const file of files) {
-      const text = readText(file)
+      const text = withoutComments(readText(file))
       expect(text).not.toMatch(rawColorValue)
 
       const breakpointPxOffsets = new Set<number>()

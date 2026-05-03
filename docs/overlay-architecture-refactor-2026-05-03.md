@@ -646,6 +646,29 @@ Progress log:
   "composer shell does not rely on theme chrome resets" guard now
   reads `.chat-input` from the surface file. New extraction guard
   pins `.chat-input` and `:focus-within` to the surface.
+- 2026-05-03: Extracted the composer chat-textarea family
+  (`.chat-textarea-wrap`, `.chat-textarea-wrap > .chat-textarea`,
+  `.chat-textarea`, `[data-expanded="true"]`, `:focus`, `::placeholder`)
+  plus the floating placeholder overlay (`.chat-placeholder-float`,
+  `.chat-placeholder-text`, `.chat-placeholder-caret`) from
+  `styles.css` into `styles/surfaces/composer.css`. Three rule-8
+  duplicate sources collapsed in the move: the canonical
+  `:focus` block had a five-rgba multi-shadow stack that was
+  unconditionally overwritten by a late `box-shadow: ... !important`
+  override (the simpler late ring is now the single source); the
+  canonical `[data-expanded]` declared 220px while a late block
+  redeclared 210px (210px wins, canonical updated); and the redundant
+  `body[data-theme="light"] .chat-textarea` + `body:is(...) .chat-textarea`
+  background overrides went away because the canonical now resolves
+  through palette tokens that already adapt per theme. The placeholder
+  caret's `4px` margin scaled through `calc(4px * var(--ui-scale))`.
+  Surface guard's `pxLiteral` walker now strips comments before
+  scanning so commented-out unscaled px in copy text doesn't trip the
+  guard. Guard ceilings drop to `!important <= 147` and
+  `body[data-theme] <= 80`. New extraction guard pins five composer
+  classes plus the `:focus`, `[data-expanded]`, and `::placeholder`
+  variants, and asserts no `body[data-theme]` rule still targets
+  `.chat-textarea`.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
