@@ -158,13 +158,13 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(256)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(168)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(167)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(127)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(122)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -529,6 +529,35 @@ describe("overlay architecture guards", () => {
       "margin-left: var(--lane-shift)",
       "margin-bottom: calc(14px * var(--ui-scale))",
       "padding-left: 0",
+    ]) {
+      expect(body).toContain(declaration)
+    }
+  })
+
+  test("workflow rail geometry is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.agent-workflow-rail\b/.test(selector)) continue
+
+      expect(body).not.toMatch(
+        /\b(?:position|display|place-items|width|min-height|background(?:-[a-z]+)?)\s*:/,
+      )
+    }
+
+    const body = soloRuleBody(styles, ".agent-workflow-rail")
+    for (const declaration of [
+      "position: relative",
+      "display: grid",
+      "place-items: start center",
+      "width: auto",
+      "min-height: calc(104px * var(--ui-scale))",
+      "background: transparent",
     ]) {
       expect(body).toContain(declaration)
     }

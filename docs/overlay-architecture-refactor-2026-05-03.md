@@ -309,6 +309,11 @@ Progress log:
   canonical row rule. Workflow row geometry is no longer theme-controlled,
   reducing guard ceilings to `!important <= 256`, `body[data-theme] <= 168`,
   and theme layout/chrome overrides <= 127.
+- 2026-05-03: Moved `.agent-workflow-rail` placement, width, min-height, and
+  transparent background from the Calm workflow map theme override into the
+  canonical rail rule. The workflow timeline rail no longer changes geometry by
+  theme, lowering guard ceilings to `!important <= 256`,
+  `body[data-theme] <= 167`, and theme layout/chrome overrides <= 122.
 
 Trigger: user feedback (2026-05-03):
 
