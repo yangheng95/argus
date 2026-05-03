@@ -938,3 +938,317 @@
 .config-nav-spacer {
   flex: 1;
 }
+
+/* ── Settings collapsible section + subsection ───────────── */
+
+/* Outer collapsible card (one per top-level config tab body
+   group). Hover/focus-within wash uses raw rgba on `--accent`
+   (rgb(91,141,239) is the literal expansion of `--accent`,
+   `#548af7`) — routed through `color-mix(var(--accent) X%,
+   transparent)`. Inset white highlight at 4% alpha was
+   replaced with `color-mix(white X%, transparent)` direct. */
+.config-section {
+  border: 0;
+  border-radius: var(--section-corner);
+  background: var(--surface-inset);
+  overflow: hidden;
+  box-shadow: none;
+  transition:
+    border-color 120ms,
+    background 120ms,
+    box-shadow 120ms,
+    transform 120ms;
+}
+
+.config-section[open] {
+  background: var(--subtle-2);
+}
+
+.config-section:hover,
+.config-section:focus-within {
+  border-color: var(--hover-accent-border);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
+      transparent
+    ),
+    var(--subtle-1);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    var(--hover-accent-shadow);
+}
+
+.config-section[open]:hover,
+.config-section[open]:focus-within {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
+      transparent
+    ),
+    var(--subtle-2);
+}
+
+/* Section head: clickable summary row. The early `::before`
+   Unicode-glyph chevron + its `[open]` rotate(90deg) sibling
+   that lived in styles.css were dead source — fully shadowed by
+   the late CSS-drawn chevron pair (`content: "" + border-right/
+   border-bottom + rotate(-45/45)`) that's now the canonical
+   below. Dropped per rule 8 (already known dead per iter29). */
+.config-section-head {
+  font-size: var(--title-size);
+  font-weight: var(--title-weight);
+  color: var(--text-strong);
+  letter-spacing: var(--title-track);
+  line-height: 1.2;
+  box-sizing: border-box;
+  min-height: calc(32px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--section-field-gap);
+  border: var(--oc-border-width) solid transparent;
+  border-bottom-color: var(--divider-soft);
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--oc-header-bg);
+  box-shadow: none;
+  position: relative;
+  transition:
+    background 120ms,
+    border-color 120ms,
+    box-shadow 120ms,
+    color 120ms,
+    transform 120ms;
+}
+
+.config-section-head::-webkit-details-marker {
+  display: none;
+}
+
+.config-section-head::marker {
+  content: "";
+}
+
+/* CSS-drawn chevron — single source after iter29. The closed
+   state rotates -45deg (right-pointing arrow); `[open]` flips
+   to +45deg (down-pointing). */
+.config-section-head::before {
+  content: "";
+  width: calc(7px * var(--ui-scale));
+  height: calc(7px * var(--ui-scale));
+  flex-shrink: 0;
+  border-right: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
+  border-bottom: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
+  transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease;
+}
+
+.config-section[open] > .config-section-head::before {
+  transform: rotate(45deg) translateY(calc(-1px * var(--ui-scale)));
+}
+
+.config-section-head:hover {
+  color: var(--text-strong);
+  background: var(--hover-accent-wash);
+  border-top-color: var(--hover-accent-border);
+  border-right-color: var(--hover-accent-border);
+  border-bottom-color: var(--hover-accent-border);
+  border-left-color: var(--hover-accent-border);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    0 0 0 var(--oc-border-width) var(--hover-accent-border);
+}
+
+.config-section-body {
+  padding: var(--section-body-padding-y) var(--section-body-padding-x) calc(8px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-field-gap);
+  border: var(--oc-border-width) solid transparent;
+  border-top: none;
+  border-radius: 0 0 var(--section-corner) var(--section-corner);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.config-section:hover > .config-section-body,
+.config-section:focus-within > .config-section-body {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 6%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 68%,
+      transparent
+    );
+  border-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-top-color: transparent;
+  box-shadow: inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 3%, transparent);
+}
+
+/* Inner collapsible (one per group inside Extensions). Mirrors
+   the outer .config-section chrome with the same accent wash +
+   inset highlight tokens. */
+.config-subsection {
+  border: 0;
+  border-radius: var(--section-corner);
+  background: var(--surface-inset);
+  box-shadow: none;
+  transition:
+    border-color 120ms,
+    background 120ms,
+    box-shadow 120ms,
+    transform 120ms;
+}
+
+.config-subsection[open] {
+  background: var(--subtle-2);
+}
+
+.config-subsection:hover,
+.config-subsection:focus-within {
+  border-color: var(--hover-accent-border);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
+      transparent
+    ),
+    var(--surface-inset);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    var(--hover-accent-shadow);
+}
+
+.config-subsection[open]:hover,
+.config-subsection[open]:focus-within {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
+      transparent
+    ),
+    var(--subtle-2);
+}
+
+.config-subsection-head {
+  font-size: var(--ui-font-body);
+  font-weight: 600;
+  color: var(--text-strong);
+  padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--section-field-gap);
+  min-height: calc(32px * var(--ui-scale));
+  line-height: 1.2;
+  border: var(--oc-border-width) solid transparent;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--oc-header-bg);
+  box-shadow: none;
+  transition:
+    background 120ms,
+    border-color 120ms,
+    box-shadow 120ms,
+    color 120ms,
+    transform 120ms;
+}
+
+.config-subsection-head::-webkit-details-marker {
+  display: none;
+}
+
+.config-subsection-head::marker {
+  content: "";
+}
+
+.config-subsection-head::before {
+  content: "";
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  flex-shrink: 0;
+  border-right: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
+  border-bottom: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
+  transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease;
+}
+
+.config-subsection[open] > .config-subsection-head::before {
+  transform: rotate(45deg) translateY(calc(-1px * var(--ui-scale)));
+}
+
+.config-subsection-head:hover {
+  background: var(--hover-accent-wash);
+  border-top-color: var(--hover-accent-border);
+  border-right-color: var(--hover-accent-border);
+  border-bottom-color: var(--hover-accent-border);
+  border-left-color: var(--hover-accent-border);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    0 0 0 var(--oc-border-width) var(--hover-accent-border);
+}
+
+.config-subsection-body {
+  padding: 0 calc(9px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-row-gap);
+  border: var(--oc-border-width) solid transparent;
+  border-top: none;
+  border-radius: 0 0 var(--section-corner) var(--section-corner);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.config-subsection:hover > .config-subsection-body,
+.config-subsection:focus-within > .config-subsection-body {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 6%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 68%,
+      transparent
+    );
+  border-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-top-color: transparent;
+  box-shadow: inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 3%, transparent);
+}
+
+/* Flat (non-collapsible) groups inside the Extensions tab —
+   replaces nested <details class="config-subsection"> that
+   produced redundant collapsible bars inside an already-
+   collapsible outer section. */
+.ext-group {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.ext-group + .ext-group {
+  margin-top: calc(10px * var(--ui-scale));
+  padding-top: calc(10px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid var(--border);
+}
+
+.ext-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+}
