@@ -173,7 +173,7 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(152)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(82)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(81)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(53)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(45)
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
