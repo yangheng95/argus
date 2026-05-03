@@ -216,6 +216,24 @@ describe("overlay architecture guards", () => {
     expect(titlebarSurface).toMatch(/\.titlebar-status-value\s*\{/)
   })
 
+  test("composer icon column and cancel button are owned by surfaces/composer.css", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+
+    for (const className of [
+      "chat-icon-col",
+      "chat-toolbar-btn",
+      "chat-cancel-btn",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(composerSurface).toMatch(/\.chat-icon-col\[data-disabled="true"\]/)
+    expect(composerSurface).toMatch(/\.chat-toolbar-btn\[data-active\]/)
+    expect(composerSurface).toMatch(/\.chat-cancel-btn:hover:not\(:disabled\)/)
+  })
+
   test("titlebar theme picker is owned by surfaces/titlebar.css", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
@@ -280,6 +298,17 @@ describe("overlay architecture guards", () => {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(titlebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
+  })
+
+  test("dead static titlebar window button classes stay retired", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const titlebarSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")),
+    )
+    const combined = `${styles}\n${titlebarSurface}`
+
+    expect(combined).not.toMatch(/(^|\n)\.titlebar-btn\b/)
+    expect(combined).not.toMatch(/(^|\n)\.titlebar-close\b/)
   })
 
   test("titlebar shell and brand layout are owned by surfaces/titlebar.css", () => {
@@ -1339,7 +1368,7 @@ describe("overlay architecture guards", () => {
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")),
     )
     const combined = `${styles}\n${titlebarSurface}\n${composerSurface}`
-    const iconButtonClasses = [".titlebar-btn", ".titlebar-status-icon", ".chat-toolbar-btn"]
+    const iconButtonClasses = [".titlebar-status-icon", ".chat-toolbar-btn"]
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
