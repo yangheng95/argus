@@ -599,58 +599,6 @@ body[data-resizing="row"] * {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
-.session-msg {
-  display: flex;
-  flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-radius: calc(14px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  background: color-mix(in srgb, var(--surface) 84%, transparent);
-}
-
-.session-msg[data-role="assistant"] {
-  border-color: color-mix(in srgb, var(--accent) 16%, var(--border));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), color-mix(in srgb, var(--accent) 1.2%, transparent) 74%, transparent),
-    color-mix(in srgb, var(--surface) 88%, transparent);
-}
-
-.session-msg[data-role="user"] {
-  width: min(100%, calc(560px * var(--ui-scale)));
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
-  background: color-mix(in srgb, var(--accent-dim) 68%, transparent);
-}
-
-.session-msg-role {
-  font-size: var(--ui-font-tiny);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-soft);
-}
-
-.session-msg[data-role="assistant"] .session-msg-role {
-  color: var(--accent);
-}
-
-.session-msg-text {
-  font-size: var(--ui-font-small);
-  color: var(--text-base);
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-  max-height: calc(200px * var(--ui-scale));
-  overflow-y: auto;
-}
-
-.session-msg .msg-tool {
-  margin: 0;
-}
-
-.session-msg .tool-detail {
-  font-size: var(--ui-font-small);
-}
 
 /* `.section-dialog-form` removed (2026-05-04 dead-code sweep). Zero
  * consumers across tsx/html — superseded by the right-panel section
