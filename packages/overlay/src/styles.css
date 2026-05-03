@@ -532,137 +532,19 @@ body[data-resizing="row"] * {
   font-family: var(--mono);
 }
 
-.dialog {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  border: none;
-  background: transparent;
-  padding: 0;
-  max-width: 100%;
-  max-height: 100%;
-  width: 100%;
-  height: 100%;
-}
-
-#appDialog {
-  z-index: 200;
-}
-/* Single canonical for `.dialog::backdrop`: previously this rule
- * lived TWICE in styles.css — first as a 3-layer gradient
- * (radial accent halo + vertical dim wash + var(--dialog-backdrop)
- * fallback) and then later as a flat `rgba(0, 0, 0, 0.46)`. The
- * second occurrence won via cascade order, killing the gradient.
- * Rule 8 cleanup: merged into one rule using a token-only flat
- * overlay that matches the cascade winner without the dead artwork
- * underneath.
- */
-.dialog::backdrop {
-  background: color-mix(in srgb, black 46%, transparent);
-}
-
-.dialog-form {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: calc(100% - calc(32px * var(--ui-scale)));
-  max-width: var(--ui-dialog-width);
-  max-height: calc(100vh - calc(80px * var(--ui-scale)));
-  overflow-y: auto;
-  background: var(--dialog-bg);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--panel-radius);
-  box-shadow: none;
-  padding: calc(18px * var(--ui-scale)) calc(20px * var(--ui-scale));
-  display: flex;
-  flex-direction: column;
-  gap: calc(16px * var(--ui-scale));
-}
-
-.dialog-wide .dialog-form {
-  max-width: var(--ui-dialog-wide-width);
-}
-
-/* Compound selector raises specificity to (0, 2, 0) so the diff dialog
- * width wins over the wider-dialog default `.dialog-wide .dialog-form`
- * at the same level, cascading by source order. The previous bare
- * `.diff-dialog-form` selector lost on specificity and needed
- * `!important` to defend its width. */
-.dialog-wide .diff-dialog-form {
-  max-width: var(--ui-dialog-diff-width);
-}
-
-.session-dialog-body {
-  overflow-y: auto;
-  max-height: calc(70vh * var(--ui-scale));
-  display: flex;
-  flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(14px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: calc(18px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, white 3.8%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
-    color-mix(in srgb, var(--surface-inset) 94%, transparent);
-  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, white 3%, transparent);
-}
 
 
-/* `.section-dialog-form` removed (2026-05-04 dead-code sweep). Zero
- * consumers across tsx/html — superseded by the right-panel section
- * surface migration. */
 
-.dialog-title {
-  font-size: clamp(18px, calc(19px * var(--ui-scale)), 22px);
-  font-weight: 600;
-  color: var(--text-strong);
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  margin: 0;
-}
 
-.dialog-subtitle {
-  font-size: var(--ui-font-meta);
-  font-weight: 600;
-  color: var(--text-strong);
-  margin-top: var(--ui-gap-xs);
-}
 
-.dialog-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-lg);
-}
 
-.dialog-form > .dialog-head:not(.config-dialog-head),
-.dialog-form > .dialog-header {
-  margin: calc(-18px * var(--ui-scale)) calc(-20px * var(--ui-scale)) 0;
-  padding: calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));
-  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, white 5%, transparent), color-mix(in srgb, white 0%, transparent) 72%),
-    color-mix(in srgb, var(--surface-strong) 74%, transparent);
-  box-shadow: inset 0 calc(-1px * var(--ui-scale)) 0 color-mix(in srgb, white 2%, transparent);
-  flex-shrink: 0;
-}
 
-.dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(12px * var(--ui-scale));
-}
 
-.dialog-header-actions,
-.dialog-actions.compact {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: calc(8px * var(--ui-scale));
-}
+
+
+
+
+
 
 
 .path-box {
@@ -707,60 +589,12 @@ body[data-resizing="row"] * {
   padding: calc(4px * var(--ui-scale)) var(--ui-input-padding-x);
 }
 
-.dialog-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--ui-gap-md);
-  margin-top: var(--ui-gap-xs);
-}
 
-.dialog-form > .dialog-actions:not(.compact) {
-  margin: auto calc(-20px * var(--ui-scale)) calc(-18px * var(--ui-scale));
-  padding: calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
-  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
-  background:
-    linear-gradient(0deg, color-mix(in srgb, white 4%, transparent), color-mix(in srgb, white 0%, transparent) 76%),
-    color-mix(in srgb, var(--surface-strong) 72%, transparent);
-}
 
-.dialog-actions.compact {
-  margin-top: 0;
-}
 
-.session-actions .btn {
-  flex: 1 1 160px;
-  min-width: 160px;
-}
 
-.section-dialog-head {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-sm);
-}
 
-.section-dialog-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ui-gap-sm);
-  align-items: center;
-}
 
-.section-dialog-body {
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: calc(18px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.034), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
-    color-mix(in srgb, var(--surface-inset) 95%, transparent);
-  overflow: auto;
-  max-height: calc(100vh - (180px * var(--ui-scale)));
-  padding: calc(14px * var(--ui-scale));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-  user-select: text;
-  -webkit-user-select: text;
-}
 
 .detail-stack {
   display: flex;
