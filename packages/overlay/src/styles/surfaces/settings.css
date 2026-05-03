@@ -1,0 +1,116 @@
+/* Settings surface — owns the settings dialog tabs (Permissions,
+   Providers, AgentModels, Channels, Skills, Knowledge, etc.). Each
+   tab module's classes are added here as they get a token sweep
+   and clean extraction. The richer `.config-*` / `.extension-*` /
+   `.knowledge-*` / `.pref-*` / `.market-*` / `.channel-doc-*`
+   blocks still live in styles.css until each gets a token sweep. */
+
+/* ── PermissionsPanel.tsx ────────────────────────────────── */
+
+.perm-panel {
+  padding: var(--ui-gap-lg) calc(var(--ui-gap-lg) * 1.5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-lg);
+}
+
+.perm-panel-intro {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 var(--ui-gap-xs);
+}
+
+.perm-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+}
+
+.perm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-lg);
+  padding: var(--ui-gap-md) var(--ui-gap-lg);
+  border-radius: var(--radius);
+  background: var(--subtle-1);
+  transition: background 0.15s;
+}
+
+.perm-row:hover {
+  background: var(--subtle-2);
+}
+
+.perm-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  min-width: 0;
+  flex: 1;
+}
+
+.perm-row-label {
+  font-size: var(--ui-font-body);
+  font-weight: 500;
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+.perm-row-desc {
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.perm-row-actions {
+  display: flex;
+  gap: var(--ui-gap-xs);
+  flex-shrink: 0;
+}
+
+/* Permission action button: tri-state allow/ask/deny pill. The
+   active variant routes through `color-mix` on the matching
+   semantic token (`--good` / `--warn` / `--bad`). */
+.perm-action-btn {
+  padding: var(--ui-gap-xs) var(--ui-gap-md);
+  border-radius: calc(var(--radius) * 0.6);
+  border: var(--oc-border-width) solid var(--border);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s;
+  white-space: nowrap;
+}
+
+.perm-action-btn:hover {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+}
+
+.perm-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.perm-action-btn[data-active="true"][data-action="allow"] {
+  background: color-mix(in srgb, var(--good) 24%, transparent);
+  border-color: color-mix(in srgb, var(--good) 60%, transparent);
+  color: var(--good);
+}
+
+.perm-action-btn[data-active="true"][data-action="ask"] {
+  background: color-mix(in srgb, var(--warn) 24%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 60%, transparent);
+  color: var(--warn);
+}
+
+.perm-action-btn[data-active="true"][data-action="deny"] {
+  background: color-mix(in srgb, var(--bad) 24%, transparent);
+  border-color: color-mix(in srgb, var(--bad) 60%, transparent);
+  color: var(--bad);
+}

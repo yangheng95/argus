@@ -461,6 +461,41 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("permissions panel is owned by surfaces/settings.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+    const html = readText(join(OVERLAY_ROOT, "src/index.html"))
+
+    for (const className of [
+      "perm-panel",
+      "perm-panel-intro",
+      "perm-list",
+      "perm-row",
+      "perm-row-info",
+      "perm-row-label",
+      "perm-row-desc",
+      "perm-row-actions",
+      "perm-action-btn",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const action of ["allow", "ask", "deny"]) {
+      expect(settingsSurface).toMatch(
+        new RegExp(`\\.perm-action-btn\\[data-active="true"\\]\\[data-action="${action}"\\]\\s*\\{`),
+      )
+    }
+
+    expect(settingsSurface).toMatch(/\.perm-action-btn:focus-visible\s*\{/)
+    expect(settingsSurface).toContain("var(--oc-border-width)")
+
+    const settingsAt = html.indexOf('href="styles/surfaces/settings.css"')
+    const stylesAt = html.indexOf('href="styles.css"')
+    expect(settingsAt).toBeGreaterThan(-1)
+    expect(settingsAt).toBeLessThan(stylesAt)
+  })
+
   test("architect panel is owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
