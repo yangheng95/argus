@@ -2556,3 +2556,62 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   color: var(--text-muted);
   box-shadow: 0 0 0 var(--oc-border-width) var(--border) inset;
 }
+
+/* The session viewer dialog (rendered by services/dialog.ts when an
+ * operator opens an executor session from the inspector workspace)
+ * shows a list of role-tagged messages. The .session-msg base + the
+ * two role variants ([data-role="assistant"|"user"]) plus the role
+ * label and message text canonicals live here next to the rest of
+ * the inspector-side dialogs. */
+.session-msg {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-radius: calc(14px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+}
+
+.session-msg[data-role="assistant"] {
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 74%, transparent),
+    color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.session-msg[data-role="user"] {
+  width: min(100%, calc(560px * var(--ui-scale)));
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--accent-dim) 68%, transparent);
+}
+
+.session-msg-role {
+  font-size: var(--ui-font-tiny);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+}
+
+.session-msg[data-role="assistant"] .session-msg-role {
+  color: var(--accent);
+}
+
+.session-msg-text {
+  font-size: var(--ui-font-small);
+  color: var(--text-base);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  max-height: calc(200px * var(--ui-scale));
+  overflow-y: auto;
+}
+
+.session-msg .msg-tool {
+  margin: 0;
+}
+
+.session-msg .tool-detail {
+  font-size: var(--ui-font-small);
+}
