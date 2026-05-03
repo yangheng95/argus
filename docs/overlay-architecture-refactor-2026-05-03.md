@@ -1056,6 +1056,32 @@ Progress log:
   `.gwg--expanded .gwg-chevron` modifier-child selector +
   presence of the white color-mix wash. Ceilings unchanged.
 
+- 2026-05-03: Moved the `.gwg-step` row family into surfaces/
+  inspector.css — base `.gwg-step` + `-icon` + `-label` +
+  `-summary` + `-status`, the five status modifiers (`--pending` /
+  `--running` / `--done` / `--failed` / `--skipped`) including the
+  `--running` / `--failed` row gradient backgrounds and the icon /
+  label / status child overrides for each, the `.gwg-step-detail`
+  `<details>` shell with cursor / list-style-none / open-radius /
+  hover / marker overrides, plus `.gwg-step-count`. Token
+  conversions: row's `calc(var(--ui-gap-xs) + 1px)` padding bias
+  rewritten as `calc(1px * --ui-scale + var(--ui-gap-xs))` (with
+  the scaled term first so the surface guard recognizes the
+  scaled-px pattern); `clamp(10px, …, 11px)` font cap dropped
+  (same rationale as the goal-card status icon); `box-shadow`
+  inset rings' raw `rgba(84,138,247,0.4)` and `rgba(247,84,100,
+  0.35)` routed through `color-mix(var(--accent) 40%, transparent)`
+  and `color-mix(var(--bad) 35%, transparent)` respectively, with
+  the `1px` ring → `var(--oc-border-width)`; status-pill `padding:
+  1px 6px` and `border-radius: 3px` wrapped in `calc(N * --ui-
+  scale)`; `font-size: calc(var(--ui-font-tiny) + 0.5px)` rewritten
+  with the scaled term first; `.gwg-step-count` `padding: 0 4px`
+  wrapped. New ownership guard asserts seven base classes + five
+  modifier-child rules + the `.gwg-step-detail > .gwg-step:hover`
+  + the `::-webkit-details-marker` selector + absence of the
+  retired `clamp(10px,` and the two raw rgba rings. Ceilings
+  unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
