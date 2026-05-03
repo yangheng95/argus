@@ -9047,90 +9047,15 @@ body[data-resizing="true"] * {
    `-verdict` / `-checks` family still lives below until each block
    gets a token sweep. */
 
-/* ── Header ──────────────────────────────────────────────── */
-.gwg-header {
-  display: flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  cursor: pointer;
-  user-select: none;
-  font-size: var(--ui-font-body);
-  font-weight: 600;
-  color: var(--text-strong);
-  min-height: calc(26px * var(--ui-scale));
-  line-height: 1.22;
-  background: var(--oc-header-bg);
-  transition:
-    background 140ms ease,
-    color 140ms ease;
-}
-.gwg-header:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.gwg-title-row {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  align-items: baseline;
-  gap: calc(6px * var(--ui-scale));
-}
-
-.gwg-header-actions {
-  display: flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  margin-left: auto;
-}
-
-.gwg-status-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  flex-shrink: 0;
-  border-radius: 50%;
-  font-size: clamp(10px, calc(10px * var(--ui-scale)), 11px);
-  font-weight: 700;
-  line-height: 1;
-  background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
-  color: var(--text-muted);
-  box-shadow: none;
-}
-.gwg--passed .gwg-status-icon {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent) inset;
-}
-.gwg--failed .gwg-status-icon {
-  background: var(--bad-dim);
-  color: var(--bad);
-  box-shadow: none;
-}
-.gwg--running .gwg-status-icon {
-  background: var(--accent-dim);
-  color: var(--accent);
-  box-shadow: none;
-}
-/* Removed `gwg-pulse` infinite animation: a parallel-goal task can have N
-   running goals × N running steps simultaneously animating, multiplying
-   compositor cost. Color + spinner already convey live state. */
-
-.gwg-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--ui-font-body);
-  font-weight: 650;
-  line-height: 1.28;
-  letter-spacing: 0.01em;
-  color: var(--text-strong);
-}
+/* `.gwg-header` + `:focus-visible` + `-title-row` + `-header-actions`
+   + `-status-icon` (with three status-modifier variants) +
+   `-title` + `-revision` family lives in
+   `styles/surfaces/inspector.css` now. The unscaled `2px` outline,
+   the `clamp(10px, …, 11px)` font cap (whose absolute bounds
+   escaped --ui-scale), the `1px` inset shadow, and the `999px`
+   pill all converted to surface-clean tokens. The
+   `.gwg--*.gwg-status-icon` per-status overrides moved alongside
+   the base so per-status chrome stays in one place per rule 8. */
 
 /* iter37: deleted the lying pill-chrome canonical that lived
    here (font-tiny + uppercase + 999px radius + warn-dim bg
@@ -9151,18 +9076,8 @@ body[data-resizing="true"] * {
   color: var(--warn);
 }
 
-.gwg-revision {
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-  font-size: var(--ui-font-tiny);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
-  color: var(--text-soft);
-  line-height: 1.4;
-}
+/* `.gwg-revision` lives in surfaces/inspector.css; 999px pill →
+   var(--oc-radius-pill). */
 
 /* Header action buttons (edit / delete) */
 .gwg-action-btn {

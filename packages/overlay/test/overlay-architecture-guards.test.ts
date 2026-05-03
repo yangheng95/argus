@@ -404,6 +404,37 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
   })
 
+  test("gwg header + status icon are owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "gwg-header",
+      "gwg-title-row",
+      "gwg-header-actions",
+      "gwg-status-icon",
+      "gwg-title",
+      "gwg-revision",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(inspectorSurface).toMatch(/\.gwg-header:focus-visible\s*\{/)
+    for (const variant of ["passed", "failed", "running"]) {
+      expect(styles).not.toMatch(
+        new RegExp(`(^|\\n)\\.gwg--${variant} \\.gwg-status-icon\\s*\\{`),
+      )
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.gwg--${variant} \\.gwg-status-icon\\s*\\{`),
+      )
+    }
+    expect(inspectorSurface).not.toMatch(/clamp\(10px,/)
+    expect(inspectorSurface).toMatch(
+      /\.gwg-revision[\s\S]*?border-radius:\s*var\(--oc-radius-pill\)/,
+    )
+  })
+
   test("gwg shell + status modifiers are owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))

@@ -665,3 +665,111 @@
   background: var(--accent);
   box-shadow: none;
 }
+
+/* GWG header bar: clickable summary row carrying the status icon,
+   goal title, optional priority/revision tags, and edit/delete
+   actions. The status-icon child rotates background + color
+   through the three status modifier classes — those variants
+   live next to the base so per-status chrome stays in one place. */
+.gwg-header {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--ui-font-body);
+  font-weight: 600;
+  color: var(--text-strong);
+  min-height: calc(26px * var(--ui-scale));
+  line-height: 1.22;
+  background: var(--oc-header-bg);
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.gwg-header:focus-visible {
+  outline: calc(2px * var(--ui-scale)) solid var(--accent);
+  outline-offset: calc(-2px * var(--ui-scale));
+}
+
+.gwg-title-row {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.gwg-header-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  margin-left: auto;
+}
+
+/* Status icon: 18x18 round chip showing the status glyph. The
+   `clamp()` cap that used to fence the font-size between absolute
+   10-11px bounds was dropped because the bounds escaped the
+   `--ui-scale` token (and the icon already auto-scales with the
+   chip). The base font is now plainly scaled. */
+.gwg-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: calc(10px * var(--ui-scale));
+  font-weight: 700;
+  line-height: 1;
+  background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.gwg--passed .gwg-status-icon {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 24%, transparent) inset;
+}
+
+.gwg--failed .gwg-status-icon {
+  background: var(--bad-dim);
+  color: var(--bad);
+  box-shadow: none;
+}
+
+.gwg--running .gwg-status-icon {
+  background: var(--accent-dim);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.gwg-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ui-font-body);
+  font-weight: 650;
+  line-height: 1.28;
+  letter-spacing: 0.01em;
+  color: var(--text-strong);
+}
+
+.gwg-revision {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--ui-font-tiny);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  color: var(--text-soft);
+  line-height: 1.4;
+}
