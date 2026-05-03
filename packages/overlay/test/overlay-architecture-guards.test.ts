@@ -172,8 +172,8 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(179)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(103)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(167)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(96)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(70)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(64)
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
@@ -216,6 +216,31 @@ describe("overlay architecture guards", () => {
     expect(titlebarSurface).toMatch(/\.titlebar-status-value\s*\{/)
   })
 
+  test("titlebar menubar family is owned by surfaces/titlebar.css", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
+
+    for (const className of [
+      "titlebar-menubar",
+      "titlebar-menubar-slot",
+      "titlebar-menubar-trigger",
+      "titlebar-menubar-panel",
+      "titlebar-menubar-group",
+      "titlebar-menubar-group-title",
+      "titlebar-menubar-item",
+      "titlebar-menubar-toggle",
+      "titlebar-menubar-range",
+      "titlebar-menubar-note",
+      "titlebar-menubar-item-title",
+      "titlebar-menubar-item-meta",
+      "titlebar-menubar-range-copy",
+      "titlebar-theme-options-menubar",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`^\\.${className}\\b`, "m"))
+      expect(titlebarSurface).toMatch(new RegExp(`\\.${className}\\b`))
+    }
+  })
+
   test("bold font-weight declarations cannot increase across overlay stylesheets", () => {
     const sources = [
       readText(join(OVERLAY_ROOT, "src/styles.css")),
@@ -229,7 +254,7 @@ describe("overlay architecture guards", () => {
     ]
     const text = sources.join("\n")
     const boldDecls = count(/font-weight\s*:\s*(?:700|720|750|760|780|800|900|bold)\b/g, text)
-    expect(boldDecls).toBeLessThanOrEqual(45)
+    expect(boldDecls).toBeLessThanOrEqual(44)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -1082,7 +1107,7 @@ describe("overlay architecture guards", () => {
       )
       if (!isThemeSelector || !/\.chat-scroll\b/.test(selector)) continue
 
-      expect(body).not.toMatch(/\bpadding(?:-[a-z]+)?\s*:/)
+      expect(body).not.toMatch(/\b(?:padding(?:-[a-z]+)?|background|border(?:-[a-z]+)?|box-shadow)\s*:/)
     }
 
     const bodies = Array.from(styles.matchAll(/(^|\n)\.chat-scroll\s*\{([^{}]*)\}/g)).map(
@@ -1258,13 +1283,23 @@ describe("overlay architecture guards", () => {
     const files = walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) => path.endsWith(".css"))
     const rawColorValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i
     const pxLiteral = /(?<![\w-])-?\d+(?:\.\d+)?px\b/g
+    const mediaBreakpoint = /\(\s*(?:min|max)-(?:width|height)\s*:\s*-?\d+(?:\.\d+)?px\s*\)/g
 
     for (const file of files) {
       const text = readText(file)
       expect(text).not.toMatch(rawColorValue)
 
+      const breakpointPxOffsets = new Set<number>()
+      for (const match of text.matchAll(mediaBreakpoint)) {
+        const start = match.index ?? 0
+        for (const inner of match[0].matchAll(pxLiteral)) {
+          breakpointPxOffsets.add(start + (inner.index ?? 0))
+        }
+      }
+
       for (const match of text.matchAll(pxLiteral)) {
         const start = match.index ?? 0
+        if (breakpointPxOffsets.has(start)) continue
         const window = text.slice(Math.max(0, start - 80), start + match[0].length + 80)
         expect(window).toMatch(/calc\([^)]*\bvar\(--ui-scale[^)]*\)[^)]*\)/)
       }

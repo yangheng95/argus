@@ -765,185 +765,9 @@ a {
   flex-shrink: 0;
 }
 
-.titlebar-menubar {
-  display: flex;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  min-width: 0;
-  -webkit-app-region: no-drag;
-}
-
-.titlebar-menubar-slot {
-  position: relative;
-  display: flex;
-}
-
-/* iter43: user feedback (2026-05-03) "标题栏的菜单字体小了，
-   应该改成黑体". Bumped from var(--ui-font-control) (≈11px at
-   ui-scale 1) up to var(--ui-font-body) (≈12px) and weight
-   600 ("黑体" = bold/heavier weight) so the menubar reads
-   as a primary navigation surface, not a secondary control.
-   color stays --text-soft for resting state — only weight
-   + size change. The :hover / [data-active] state still
-   lifts color to --text-strong. */
-.titlebar-menubar-trigger {
-  height: var(--ui-titlebar-btn-height);
-  padding: 0 calc(9px * var(--ui-scale));
-  border: 1px solid transparent;
-  border-radius: calc(4px * var(--ui-scale));
-  background: transparent;
-  color: var(--text-soft);
-  font-size: var(--ui-font-body);
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.titlebar-menubar-trigger:hover,
-.titlebar-menubar-trigger:focus-visible,
-.titlebar-menubar-trigger[data-active="true"] {
-  color: var(--text-strong);
-  background: var(--subtle-3);
-  border-color: var(--border);
-  outline: none;
-}
-
-.titlebar-menubar-panel {
-  position: absolute;
-  top: calc(100% + calc(7px * var(--ui-scale)));
-  left: 0;
-  z-index: 10050;
-  width: min(calc(340px * var(--ui-scale)), calc(100vw - 24px));
-  box-sizing: border-box;
-  max-height: min(calc(620px * var(--ui-scale)), calc(100vh - 88px));
-  overflow: auto;
-  display: grid;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(7px * var(--ui-scale));
-  border: 1px solid var(--border);
-  border-radius: calc(7px * var(--ui-scale));
-  background: var(--menu-panel-bg);
-  box-shadow: var(--shadow-lg);
-  -webkit-app-region: no-drag;
-}
-
-@media (max-width: 520px) {
-  .titlebar-menubar-panel {
-    position: fixed;
-    top: calc(var(--ui-titlebar-height) + calc(8px * var(--ui-scale)));
-    left: calc(12px * var(--ui-scale));
-    right: calc(12px * var(--ui-scale));
-    width: auto;
-    max-height: calc(100vh - var(--ui-titlebar-height) - calc(24px * var(--ui-scale)));
-  }
-}
-
-.titlebar-menubar-group {
-  display: grid;
-  gap: calc(4px * var(--ui-scale));
-}
-
-.titlebar-menubar-group + .titlebar-menubar-group {
-  padding-top: calc(6px * var(--ui-scale));
-  border-top: 1px solid var(--divider-soft);
-}
-
-/* iter11: titlebar dropdown group title (e.g. "Theme", "Locale").
-   Plain group subheader inside a menu list — no pill chrome. */
-.titlebar-menubar-group-title {
-  padding: calc(3px * var(--ui-scale)) calc(7px * var(--ui-scale));
-  color: var(--text-muted);
-  font-size: var(--ui-font-tiny);
-  font-weight: 700;
-}
-
-.titlebar-menubar-item,
-.titlebar-menubar-toggle,
-.titlebar-menubar-range {
-  width: 100%;
-  min-height: calc(32px * var(--ui-scale));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border: 1px solid transparent;
-  border-radius: calc(6px * var(--ui-scale));
-  background: transparent;
-  color: var(--text-soft);
-  text-align: left;
-}
-
-.titlebar-menubar-item:not(:disabled) {
-  cursor: pointer;
-}
-
-.titlebar-menubar-item:hover:not(:disabled),
-.titlebar-menubar-item:focus-visible,
-.titlebar-menubar-toggle:hover,
-.titlebar-menubar-range:hover {
-  background: var(--subtle-3);
-  border-color: var(--border);
-  color: var(--text-strong);
-  outline: none;
-}
-
-.titlebar-menubar-item:disabled {
-  opacity: 0.58;
-}
-
-.titlebar-menubar-item-title {
-  color: var(--text-strong);
-  font-size: var(--ui-font-control);
-  line-height: 1.2;
-}
-
-.titlebar-menubar-item-meta {
-  color: var(--text-muted);
-  font-size: var(--ui-font-small);
-  line-height: 1.25;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: right;
-}
-
-.titlebar-menubar-note {
-  min-width: 0;
-  padding: calc(7px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border: 1px solid var(--border);
-  border-radius: calc(6px * var(--ui-scale));
-  background: var(--subtle-2);
-  color: var(--text-soft);
-  font-size: var(--ui-font-small);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.titlebar-menubar-toggle > span,
-.titlebar-menubar-range-copy {
-  min-width: 0;
-  display: grid;
-  gap: calc(2px * var(--ui-scale));
-}
-
-.titlebar-menubar-toggle input[type="checkbox"] {
-  flex: none;
-  accent-color: var(--accent);
-}
-
-.titlebar-menubar-range input[type="range"] {
-  width: calc(116px * var(--ui-scale));
-  flex: none;
-  accent-color: var(--accent);
-}
-
-.titlebar-theme-options-menubar {
-  margin-left: 0;
-  padding: calc(4px * var(--ui-scale));
-}
+/* `.titlebar-menubar*` (bar shell, slot, trigger, panel, group, item,
+   toggle, range, note, theme-options shortcut) plus the @media (max-width:
+   520px) panel adjustment all live in `styles/surfaces/titlebar.css` now. */
 
 .titlebar-status-cluster {
   display: flex;
@@ -13443,35 +13267,8 @@ body::after,
     text-overflow: ellipsis;
   }
 
-  .titlebar-menubar {
-    flex: 1 1 auto;
-    min-width: 0;
-    gap: calc(1px * var(--ui-scale));
-  }
-
-  .titlebar-menubar-trigger {
-    width: calc(24px * var(--ui-scale));
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    font-size: 0;
-  }
-
-  .titlebar-menubar-trigger::after {
-    content: attr(data-compact);
-    font-size: var(--ui-font-control);
-  }
-
-  .titlebar-menubar-panel {
-    position: fixed;
-    top: calc(var(--ui-titlebar-height) + calc(13px * var(--ui-scale)));
-    left: calc(12px * var(--ui-scale));
-    right: calc(12px * var(--ui-scale));
-    width: auto;
-    max-height: calc(100vh - calc(var(--ui-titlebar-height) + calc(28px * var(--ui-scale))));
-  }
+  /* `.titlebar-menubar` narrow-width compact layout lives in
+     `styles/surfaces/titlebar.css` now. */
 
   .conn-badge__label {
     display: none;
@@ -14311,8 +14108,7 @@ body[data-theme="vscode-dark"] .sections {
 }
 
 body[data-theme="vscode-dark"] .panel-body,
-body[data-theme="vscode-dark"] .chat,
-body[data-theme="vscode-dark"] .chat-scroll {
+body[data-theme="vscode-dark"] .chat {
   background: #1e1e1e !important;
 }
 
@@ -14326,8 +14122,6 @@ body[data-theme="vscode-dark"] .task-cwd-dropdown {
   background: #2d2d30 !important;
 }
 
-body[data-theme="vscode-dark"] .chat-scroll > .card,
-body[data-theme="vscode-dark"] .chat-scroll > .interaction-card,
 body[data-theme="vscode-dark"] .section,
 body[data-theme="vscode-dark"] .gwg,
 body[data-theme="vscode-dark"] .board-intro,
