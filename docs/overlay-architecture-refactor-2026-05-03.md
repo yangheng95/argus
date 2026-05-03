@@ -977,6 +977,20 @@ Progress log:
   the `--good` / `--bad` cascade vars and absence of any
   `#63a2ff` literal. Ceilings unchanged.
 
+- 2026-05-03: Moved the `.criteria-group` baseline + `-head` /
+  `-icon` (with svg child) / `-title` / `-count` / `-list` into
+  surfaces/inspector.css. Block was already token-clean (no
+  rgba/hex literals), so this was a straight relocation. The
+  shared multi-class `:hover` rule (which also targets `.goal-item`,
+  `.extension-row`, `.channel-doc-card`, `.market-card`, `.knowledge-
+  item`, `.pref-item`, `.criteria-check`) stays in styles.css —
+  it is shared cross-surface chrome that wraps `--hover-accent-
+  wash` / `--hover-accent-border` / `--hover-accent-shadow` tokens
+  defined at :root, so the surface-local boundary doesn't apply.
+  The richer `.criteria-item` interactive row + check-mark
+  variants stay in styles.css until their raw rgba accent washes
+  get a palette-token pass. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
