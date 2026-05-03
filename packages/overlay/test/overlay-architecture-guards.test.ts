@@ -461,6 +461,29 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("extensions panel block + row is owned by surfaces/settings.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    for (const className of [
+      "extension-block",
+      "extension-head",
+      "extension-list",
+      "extension-row",
+      "extension-row-main",
+      "extension-row-actions",
+      "extension-policy",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(settingsSurface).toMatch(/\.extension-head:hover,\s*\.extension-head:focus-within\s*\{/)
+    expect(settingsSurface).toMatch(/\.extension-block \+ \.extension-block\s*\{/)
+    expect(settingsSurface).toMatch(/\.extension-row span,\s*\.extension-row small\s*\{/)
+    expect(settingsSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.04\)/)
+  })
+
   test("knowledge / memory panel is owned by surfaces/settings.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
@@ -1337,24 +1360,27 @@ describe("overlay architecture guards", () => {
 
   test("settings extension rows do not rely on theme or local important chrome resets", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1] ?? ""
-      const body = match[2] ?? ""
-      const hasExtensionRow = /(?:^|\s|:is\([^)]*)\.extension-row(?:\b|[:.[#])/.test(selector)
-      if (!hasExtensionRow) continue
+    for (const source of [styles, settingsSurface]) {
+      for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = match[1] ?? ""
+        const body = match[2] ?? ""
+        const hasExtensionRow = /(?:^|\s|:is\([^)]*)\.extension-row(?:\b|[:.[#])/.test(selector)
+        if (!hasExtensionRow) continue
 
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
-      const usesChromeImportant =
-        /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(body)
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+          selector,
+        )
+        const usesChromeImportant =
+          /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(body)
 
-      expect(isThemeSelector).toBe(false)
-      expect(usesChromeImportant).toBe(false)
+        expect(isThemeSelector).toBe(false)
+        expect(usesChromeImportant).toBe(false)
+      }
     }
 
-    const body = styles.match(/\.extension-row\s*\{([^}]*)\}/)?.[1] ?? ""
+    const body = settingsSurface.match(/\.extension-row\s*\{([^}]*)\}/)?.[1] ?? ""
     expect(body).toContain("background: var(--surface-inset)")
     expect(body).toContain("border: 0")
   })
