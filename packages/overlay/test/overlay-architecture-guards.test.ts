@@ -164,7 +164,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(237)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(234)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -331,6 +331,24 @@ describe("overlay architecture guards", () => {
     expect(body).toContain("padding: calc(4px * var(--ui-scale))")
     expect(body).toContain("gap: calc(2px * var(--ui-scale))")
     expect(body).toContain("border-radius: 0")
+  })
+
+  test("panel shell padding is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/(?:^|[\s>+~,])\.panel(?:$|[\s:{.#\[,>+~])/.test(selector)) continue
+
+      expect(body).not.toMatch(/\bpadding(?:-[a-z]+)?\s*:/)
+    }
+
+    const body = soloRuleBody(styles, ".panel")
+    expect(body).toContain("padding: 0")
   })
 
   test("chat scroll layout is canonical, not theme scoped", () => {

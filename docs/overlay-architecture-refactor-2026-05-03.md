@@ -242,6 +242,10 @@ Progress log:
   rule. Theme blocks now only change chat-scroll background palette for that
   slice, and the architecture guard lowers the allowed theme layout/chrome
   override count to 237.
+- 2026-05-03: Folded `.panel` shell padding out of light/dark theme selectors
+  and their mobile media duplicates. `.panel` now owns its zero-padding layout
+  in the canonical rule, and the theme layout/chrome override ceiling drops to
+  234.
 
 Trigger: user feedback (2026-05-03):
 
