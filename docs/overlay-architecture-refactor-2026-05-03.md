@@ -855,6 +855,21 @@ Progress log:
   verifies surface ownership of eight task-row classes plus the
   `::before` dot, four status-tone variants, and the draggable-handle
   compound selector.
+- 2026-05-03: Folded the late `.task-row-main` / `-main strong` /
+  `-meta` / `-badge` / `-badge::before` / `-badge-text` rule-8
+  duplicate sources into the surface canonical and deleted them from
+  styles.css. The earlier extraction declared a 10x10 dot-only badge
+  while a late override at line ~11525 turned it into an 18px-min-
+  height auto-width chip with `1px` border, and another late at
+  ~11791 added active/queued background tints — those late winners
+  are now the surface canonical, so the badge renders identically
+  before and after this slice. `.task-row-main strong` weight settled
+  at the rendered `650`; `letter-spacing: 0` and `color:
+  var(--text-muted)` were merged into the meta/typography rules. Per
+  rule 8, no bare `.task-row-mini` / `-main` / `-head` / `-meta` /
+  `-stamp` / `-badge` / `-badge-text` / `-drag-handle` selector
+  remains in styles.css; the extraction guard now negative-asserts
+  that as well.
 
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
