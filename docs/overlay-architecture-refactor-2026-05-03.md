@@ -923,6 +923,20 @@ Progress log:
   from styles.css; theme-spacing-reset guard scans both files.
   Ceilings unchanged.
 
+- 2026-05-03: Extracted the `.section` shell + `:last-child` border
+  + `.section-head` baseline + `::-webkit-details-marker` + `::marker`
+  + `:hover` into surfaces/inspector.css. The hover wash's
+  `rgba(255, 255, 255, 0.03)` now uses
+  `color-mix(in srgb, white 3%, transparent)` to stay surface-clean
+  without an rgba literal. Border `1px` converted to
+  `var(--oc-border-width)`. The per-`[data-phase-state]` chrome
+  (related / active variants) stays in styles.css because its
+  linear-gradient layers still use raw rgba on the accent — those
+  need a palette-token pass before extraction. Right-panel-card-
+  radius guard now reads `.section` from the surface; new ownership
+  guard asserts the four selectors plus the white-color-mix hover.
+  Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and

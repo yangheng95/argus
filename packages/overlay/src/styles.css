@@ -1441,47 +1441,11 @@ body[data-theme="light"] .msg-reasoning {
    !important reset chain, leaving only 4 remaining shells
    in that chain (.gwg / .delivery-panel / .criteria-group /
    .eval-error) for future single-source passes. */
-.section {
-  border: 1px solid var(--border);
-  border-radius: calc(5px * var(--ui-scale));
-  background: var(--surface-inset);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.section:last-child {
-  border-bottom: 1px solid var(--border);
-}
-
-.section-head {
-  display: flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border: none;
-  border-radius: inherit;
-  cursor: pointer;
-  user-select: none;
-  list-style: none;
-  min-height: calc(26px * var(--ui-scale));
-  transition:
-    background 140ms ease,
-    color 140ms ease,
-    border-color 140ms ease;
-  line-height: 1.25;
-  background: var(--oc-header-bg);
-}
-.section-head::-webkit-details-marker {
-  display: none;
-}
-.section-head::marker {
-  display: none;
-  content: "";
-}
-.section-head:hover {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 74%),
-    color-mix(in srgb, var(--surface-strong) 66%, var(--surface-inset) 34%);
-}
+/* The .section shell + :last-child border + .section-head baseline /
+   markers / :hover live in styles/surfaces/inspector.css now. The
+   per-`[data-phase-state]` chrome (related / active variants) stays
+   here because its linear-gradient layers still use raw rgba on the
+   accent — those need a palette-token pass before extraction. */
 
 .section[data-phase-state="related"] {
   border-color: color-mix(in srgb, var(--accent) 12%, var(--border));

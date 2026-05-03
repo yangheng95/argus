@@ -300,3 +300,56 @@
 .section[open] > .section-head::before {
   transform: rotate(90deg);
 }
+
+/* Section shell — flat card matching the calm/flat direction shipped
+   in iter4 / iter5 / iter14. The hover state lives on the head, not
+   the shell. The `:last-child` rule re-asserts the bottom border so a
+   stack of sections doesn't collapse the dividers. */
+.section {
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: calc(5px * var(--ui-scale));
+  background: var(--surface-inset);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.section:last-child {
+  border-bottom: var(--oc-border-width) solid var(--border);
+}
+
+/* Section head — clickable summary. The 3% white hover wash is
+   expressed via `color-mix` so the surface stays palette-clean
+   without an rgba literal. */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: none;
+  border-radius: inherit;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  min-height: calc(26px * var(--ui-scale));
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+  line-height: 1.25;
+  background: var(--oc-header-bg);
+}
+
+.section-head::-webkit-details-marker {
+  display: none;
+}
+
+.section-head::marker {
+  display: none;
+  content: "";
+}
+
+.section-head:hover {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 74%),
+    color-mix(in srgb, var(--surface-strong) 66%, var(--surface-inset) 34%);
+}
