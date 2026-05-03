@@ -255,6 +255,12 @@ Progress log:
   radius now live in the canonical task-bar rule; theme blocks keep only
   unresolved color/backdrop differences. The guard ceiling drops to 207, while
   `!important` drops to 322 and `body[data-theme]` to 212.
+- 2026-05-03: Folded primary column shell chrome for `.sidebar`, `.chat`, and
+  `.sections` out of light/dark theme resets. Border, radius, shadow, and
+  backdrop behavior now live in the canonical column rules; remaining
+  theme-scoped column rules are palette backgrounds only. Guard ceilings drop
+  to `!important <= 311`, `body[data-theme] <= 201`, and theme layout/chrome
+  overrides <= 198.
 
 Trigger: user feedback (2026-05-03):
 
