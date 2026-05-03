@@ -142,14 +142,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(342)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(232)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(333)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(228)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(248)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(243)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -186,6 +186,21 @@ describe("overlay architecture guards", () => {
 
       expect(selector).not.toMatch(/criteria-group(?:-list)?/)
     }
+  })
+
+  test("delivery panel keeps verdict accent outside theme chrome resets", () => {
+    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      if (!isThemeSelector) continue
+
+      expect(selector).not.toMatch(/delivery-panel/)
+    }
+
+    expect(styles).toMatch(/\.delivery-panel::before\s*\{[^}]*background:\s*var\(--delivery-panel-accent\)/)
+    expect(styles).not.toMatch(/\.delivery-panel\s*\{[^}]*border-left\s*:/)
   })
 
   test("new theme files only write root-scoped tokens", () => {

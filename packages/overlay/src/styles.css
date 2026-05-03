@@ -7352,44 +7352,47 @@ select.field-input option {
    removed during the unified card-system migration. */
 
 /* ── Delivery panel ── single source for the right-column delivery card.
-   Verdict drives the left-edge accent via a single `data-verdict` attribute
-   on `.delivery-panel`; lifecycle status (publishing) is folded in via a
-   subtle pulsing border later if needed. Row + group styling pulls on the
-   shared `.verdict-pill` primitive — no per-row color rules here. */
-/* iter53: canonical bg switched from `var(--surface, …)` to
-   `var(--surface-inset)` to match the rendered value the
-   !important reset was forcing. Crucially, the 4px left
-   accent rail (`border-left: 4px solid var(--text-muted)`
-   plus the verdict-tone overrides at lines below) WAS
-   being killed by the reset's `border: 1px solid
-   var(--border) !important` shorthand — the !important
-   shorthand overwrote ALL four border sides including
-   border-left, so the verdict-accent rail never rendered
-   despite being declared. Dropping `.delivery-panel` from
-   the reset chain restores the accent rail. */
+   Verdict drives a left-edge pseudo-element rail via the single
+   `data-verdict` attribute on `.delivery-panel`. The rail is not a
+   border, so right-panel card chrome can stay borderless while the
+   delivery verdict remains visually scannable. */
 .delivery-panel {
-  padding: 12px;
-  border-radius: var(--radius);
+  --delivery-panel-accent: var(--text-muted);
+  position: relative;
+  padding: calc(6px * var(--ui-scale));
+  border: 0;
+  border-radius: calc(5px * var(--ui-scale));
   background: var(--surface-inset);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--text-muted);
-  margin-top: 4px;
+  box-shadow: none;
+  margin-top: calc(2px * var(--ui-scale));
   display: grid;
-  gap: 10px;
+  gap: calc(4px * var(--ui-scale));
+  overflow: hidden;
+}
+.delivery-panel::before {
+  content: "";
+  position: absolute;
+  inset-block: calc(6px * var(--ui-scale));
+  inset-inline-start: 0;
+  width: calc(2px * var(--ui-scale));
+  border-radius: 999px;
+  background: var(--delivery-panel-accent);
+  pointer-events: none;
 }
 .delivery-panel[data-verdict="accepted"] {
-  border-left-color: var(--good);
+  --delivery-panel-accent: var(--good);
 }
 .delivery-panel[data-verdict="rejected"] {
-  border-left-color: var(--bad);
+  --delivery-panel-accent: var(--bad);
 }
 .delivery-panel[data-verdict="inflight"] {
-  border-left-color: var(--accent, #63a2ff);
+  --delivery-panel-accent: var(--accent, #63a2ff);
 }
 .delivery-panel[data-verdict="empty"] {
-  border-left-color: var(--border);
   background: transparent;
-  border-color: transparent;
+}
+.delivery-panel[data-verdict="empty"]::before {
+  display: none;
 }
 
 /* ── Agent Workflow Root Tab ── */
@@ -14344,7 +14347,6 @@ body[data-theme="light"] .chat-toolbar-btn[data-active] {
 
 body[data-theme="light"] .section,
 body[data-theme="light"] .gwg,
-body[data-theme="light"] .delivery-panel,
 body[data-theme="light"] .eval-error,
 body[data-theme="light"] .extension-row,
 body[data-theme="light"] .channel-doc-card,
@@ -14593,7 +14595,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-toolbar-btn[data-
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .gwg,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .delivery-panel,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .eval-error,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .extension-row,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .channel-doc-card,
@@ -14655,7 +14656,6 @@ body[data-theme="vscode-dark"] .chat-scroll > .card,
 body[data-theme="vscode-dark"] .chat-scroll > .interaction-card,
 body[data-theme="vscode-dark"] .section,
 body[data-theme="vscode-dark"] .gwg,
-body[data-theme="vscode-dark"] .delivery-panel,
 body[data-theme="vscode-dark"] .eval-error,
 body[data-theme="vscode-dark"] .extension-row,
 body[data-theme="vscode-dark"] .channel-doc-card,
@@ -15010,8 +15010,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-stack {
   padding: calc(4px * var(--ui-scale)) !important;
 }
 
-body[data-theme="light"] :is(.section, .gwg, .delivery-panel),
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section, .gwg, .delivery-panel) {
+body[data-theme="light"] :is(.section, .gwg),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section, .gwg) {
   border-radius: calc(5px * var(--ui-scale)) !important;
 }
 
@@ -15104,20 +15104,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__foot {
   padding-top: calc(4px * var(--ui-scale)) !important;
 }
 
-body[data-theme="light"] .delivery-panel,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .delivery-panel {
-  gap: calc(4px * var(--ui-scale)) !important;
-  margin-top: calc(2px * var(--ui-scale)) !important;
-  padding: calc(6px * var(--ui-scale)) !important;
-  border-left-width: calc(2px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] .delivery-panel[data-verdict="empty"],
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .delivery-panel[data-verdict="empty"] {
-  border-left-width: 0 !important;
-  background: transparent !important;
-}
-
 body[data-theme="light"] :is(.section-body > .empty-hint, #solidChangesPanel > .empty-hint),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(.section-body > .empty-hint, #solidChangesPanel > .empty-hint) {
@@ -15168,7 +15154,6 @@ body[data-theme="light"]
   :is(
     .section,
     .gwg,
-    .delivery-panel,
     .eval-error,
     .extension-row,
     .channel-doc-card,
@@ -15189,7 +15174,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .section,
     .gwg,
-    .delivery-panel,
     .eval-error,
     .extension-row,
     .channel-doc-card,
@@ -15214,7 +15198,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 body[data-theme="light"]
   :is(
     .section:last-child,
-    .delivery-panel[data-verdict],
     .criteria-item,
     .board-intro__foot,
     .agent-workflow-report-head,
@@ -15223,7 +15206,6 @@ body[data-theme="light"]
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .section:last-child,
-    .delivery-panel[data-verdict],
     .criteria-item,
     .board-intro__foot,
     .agent-workflow-report-head,

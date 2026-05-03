@@ -108,12 +108,15 @@ test("DeliveryPanel drives chrome via [data-verdict] (not the lifecycle status m
   expect(board).not.toContain("empty.delivery");
 });
 
-test("styles.css maps verdict tone to the panel's left-edge accent (red on rejected, green on accepted)", async () => {
+test("styles.css maps verdict tone to the panel's pseudo-element left-edge accent", async () => {
   const css = await readSrc("src/styles.css");
   // Per-tone left-edge colors — rejected MUST be red, accepted MUST be green.
-  // No more "always green" `.delivery-card` block.
-  expect(css).toMatch(/\.delivery-panel\[data-verdict="accepted"\]\s*\{[^}]*var\(--good\)/);
-  expect(css).toMatch(/\.delivery-panel\[data-verdict="rejected"\]\s*\{[^}]*var\(--bad\)/);
+  // The accent is a pseudo-element rail, not a decorative border, so the
+  // right-panel no-border chrome contract and verdict semantics can coexist.
+  expect(css).toMatch(/\.delivery-panel::before\s*\{[^}]*background:\s*var\(--delivery-panel-accent\)/);
+  expect(css).toMatch(/\.delivery-panel\[data-verdict="accepted"\]\s*\{[^}]*--delivery-panel-accent:\s*var\(--good\)/);
+  expect(css).toMatch(/\.delivery-panel\[data-verdict="rejected"\]\s*\{[^}]*--delivery-panel-accent:\s*var\(--bad\)/);
+  expect(css).not.toMatch(/\.delivery-panel\s*\{[^}]*border-left\s*:/);
   // The deleted `.delivery-card` family must not survive — every theme
   // override at lines 9822 / 11890 / 12628 was migrated to `.delivery-panel`.
   expect(css).not.toMatch(/\.delivery-card\b/);
