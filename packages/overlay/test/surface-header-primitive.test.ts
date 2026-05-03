@@ -19,6 +19,13 @@ function blocksForSelectors(css: string, classNames: string[]): Array<{ selector
   return blocks;
 }
 
+function exactBlockBody(css: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`(^|\\n)${escaped}\\s*\\{([^{}]*)\\}`).exec(css);
+  if (!match) throw new Error(`Missing CSS block for ${selector}`);
+  return match[2] ?? "";
+}
+
 test("SurfaceHeader owns the canonical header structure", () => {
   const source = readFileSync(SURFACE_HEADER_SOURCE, "utf8");
 
@@ -51,6 +58,15 @@ test("surface header actions own action spacing outside theme resets", () => {
 
   expect(css).not.toMatch(/(^|\n)\.(?:sidebar-header-actions|chat-header-meta)\s*\{[^}]*\bgap\s*:/);
   expect(css).not.toMatch(/body[^{]*\.sidebar-header-actions(?![-\w])[^{}]*\{[^}]*\bgap\s*:/);
+});
+
+test("surface header main and action slots own flex layout primitives", () => {
+  const css = readFileSync(LEGACY_CSS, "utf8");
+  const primitiveLayout = /\b(?:display|align-items|min-width|gap)\s*:/;
+
+  expect(exactBlockBody(css, ".chat-header-main")).not.toMatch(primitiveLayout);
+  expect(exactBlockBody(css, ".chat-header-meta")).not.toMatch(primitiveLayout);
+  expect(exactBlockBody(css, ".sidebar-header-actions")).not.toMatch(primitiveLayout);
 });
 
 test("surface header titles own title typography outside theme resets", () => {

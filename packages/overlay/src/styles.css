@@ -4302,11 +4302,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 
 .chat-header-main {
-  min-width: 0;
   justify-self: start;
-  display: flex;
-  align-items: center;
-  gap: calc(10px * var(--ui-scale));
 }
 
 .chat-title {
@@ -4397,9 +4393,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .chat-header-meta {
   justify-self: end;
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
   justify-content: flex-end;
 }
 
@@ -10312,8 +10305,6 @@ body[data-resizing="true"] * {
 }
 
 .sidebar-header-actions {
-  display: flex;
-  align-items: center;
   flex-wrap: nowrap;
   justify-content: flex-end;
   flex-shrink: 0;
