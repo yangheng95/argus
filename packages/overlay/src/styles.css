@@ -1992,22 +1992,10 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 /* `.chat-header-status` + `.chat-task-status*` family live in
    `styles/surfaces/conversation.css` now. */
 
-.btn-terminate {
-  color: var(--danger, #e55);
-  border-color: var(--danger, #e55);
-  font-size: var(--ui-font-meta);
-  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  margin-left: calc(4px * var(--ui-scale));
-  line-height: 1.2;
-  white-space: nowrap;
-}
-.btn-terminate:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger, #e55) 12%, transparent);
-}
-.btn-terminate:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+/* `.btn-terminate` removed (2026-05-04 dead-code sweep). The terminate
+ * action UI now renders through the `Button` primitive's `tone="danger"`
+ * variant — the legacy `.btn-terminate` class had zero consumers in
+ * tsx/html sources. */
 
 /* `.chat-count` and `.chat-header-meta` live in
    `styles/surfaces/conversation.css` now. */
@@ -3738,8 +3726,16 @@ select.field-input option {
 }
 
 .btn.mini {
+  /* Mini variant renders flat: no border, no gradient bg, no shadow.
+   * The `.btn` parent canonical declares all three; previously the
+   * multi-class `:is(.btn.mini, …) { … !important }` reset re-painted
+   * the rendered look. Declaring flat here makes it the single source. */
   padding: var(--ui-btn-mini-padding-y) var(--ui-btn-mini-padding-x);
   font-size: var(--ui-font-small);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  margin: 0;
 }
 
 .btn.danger {
@@ -5852,41 +5848,34 @@ body[data-resizing="true"] * {
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--oc-control-focus-ring);
 }
 
+/* `.sidebar-btn` is only ever rendered alongside `.sidebar-btn-primary`
+ * (see index.html — `class="sidebar-btn sidebar-btn-primary"`). The
+ * primary canonical at line 7585 paints the accent gradient; this base
+ * rule supplies size + typography only so the two compose cleanly,
+ * with no chromed bg / border / shadow that the primary canonical
+ * would have to undo. The previous gradient + raw rgba(91, 141, 239,
+ * …) literals + drop-shadow rendered nowhere because the multi-class
+ * `:is(.sidebar-btn, …) { background: transparent !important }` reset
+ * masked the chrome — pure dual-source debt. Now flat by design. */
 .sidebar-btn {
   display: inline-flex;
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
   min-height: calc(34px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(3px * var(--ui-scale))
-    calc(10px * var(--ui-scale));
-  border-radius: 999px;
-  border: 1px solid rgba(91, 141, 239, 0.16);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(91, 141, 239, 0.1) 100%),
-    color-mix(in srgb, var(--surface-strong) 82%, transparent);
-  color: var(--accent);
+  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: 0;
+  background: transparent;
   font-size: var(--ui-font-meta);
   font-weight: 700;
   letter-spacing: 0.01em;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: 0 10px 18px rgba(22, 34, 54, 0.12);
+  box-shadow: none;
+  margin: 0;
   transition:
-    border-color 80ms,
     background 80ms,
     color 80ms,
-    transform 80ms,
-    box-shadow 80ms;
-}
-
-.sidebar-btn:hover {
-  border-color: rgba(91, 141, 239, 0.24);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(91, 141, 239, 0.14) 100%),
-    color-mix(in srgb, var(--surface-strong) 88%, transparent);
-  color: var(--text-strong);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-  box-shadow: 0 14px 22px rgba(22, 34, 54, 0.14);
+    transform 80ms;
 }
 
 .sidebar-btn-primary .sidebar-btn-icon {
@@ -7242,22 +7231,11 @@ body::after,
   box-shadow: none !important;
 }
 
-.engine-bar {
-  background: var(--surface-inset) !important;
-  border: 1px solid var(--border) !important;
-}
-
-.engine-chip,
-.engine-chip-caret {
-  border-radius: calc(5px * var(--ui-scale)) !important;
-}
-
-.engine-chip[data-active="true"] {
-  background: var(--accent-dim) !important;
-  border-color: var(--accent) !important;
-  color: var(--accent) !important;
-  box-shadow: none !important;
-}
+/* `.engine-bar`, `.engine-chip`, `.engine-chip-caret`, and the
+ * `.engine-chip[data-active]` rules removed (2026-05-04 dead-code
+ * sweep). The engine selector UI moved to the executor-chip
+ * primitive in surfaces/composer.css; the legacy classes had zero
+ * consumers in tsx/html sources. */
 
 .panel-body {
   gap: 0;
@@ -7695,18 +7673,8 @@ body::after,
    sections) are baked into each column's canonical block now,
    so the !important overrides that used to live here are gone. */
 
-.engine-chip {
-  text-transform: none !important;
-  letter-spacing: 0 !important;
-}
-
-.engine-chip {
-  font-weight: 640;
-}
-
-.engine-chip[data-active="true"] {
-  background: color-mix(in srgb, var(--accent) 18%, var(--surface-inset)) !important;
-}
+/* The remaining `.engine-chip` rule fragments removed alongside the
+ * earlier dead-code block — engine-chip family has no live consumer. */
 
 /* iter25: `.task-row-mini` late override (min-height + the
    final padding values) folded into the canonical near line
@@ -8141,76 +8109,26 @@ body::after,
  * `rgba(30, 30, 30, 0.96)`, which renders as a near-solid panel against
  * the canvas; no theme selector needs to repaint the inner cards. */
 
-/* Pre-2026-05-04 this block was a `body[data-theme="light"] :is(…),
- * body:is(…data-theme…) :is(…)` chain — both arms targeted the same
- * classes with the same body. Themes never differed here, so the
- * theme-prefix gained nothing but specificity over the canonical. The
- * primary-action siblings (`.sidebar-btn-primary` / `.board-intro__
- * cta-action`) are out — their margin lives in the shared primary
- * canonical at line 7585. The remaining classes still need the
- * `!important` reset until each canonical is updated to declare flat
- * margin directly; collapsing to a non-themed `:is(...)` removes the
- * theme noise without changing behavior. */
-:is(
-  .sidebar-btn,
-  .btn.mini,
-  .btn-terminate,
-  .engine-chip,
-  .engine-chip-caret,
-  .workspace-tab,
-  .section-icon-btn,
-  .conn-banner__action
-) {
-  margin: 0 !important;
-}
-
-/* Same theme-noise collapse as the margin block above. `.sidebar-btn-
- * primary` / `.board-intro__cta-action` already pull gap + padding-
- * inline from the shared primary-action canonical at line 7585; the
- * three classes here keep the `!important` reset until their canonicals
- * declare flat gap + padding directly. */
-:is(
-  .sidebar-btn,
-  .btn-terminate,
-  .engine-chip
-) {
-  gap: calc(2px * var(--ui-scale)) !important;
-  padding-inline: calc(6px * var(--ui-scale)) !important;
-}
-
-/* iter57: `.chat-input` compact gap/padding folded into canonical. */
-
-/* Same theme-noise collapse. `.sidebar-btn-primary` /
- * `.board-intro__cta-action` border:0 + box-shadow:none live in the
- * shared primary-action canonical at line 7585. */
-:is(
-  .sidebar-btn,
-  .btn.mini,
-  .btn-terminate,
-  .engine-chip,
-  .engine-chip-caret,
-  .workspace-tab,
-  .section-icon-btn,
-  .conn-banner__action
-) {
-  border: 0 !important;
-  box-shadow: none !important;
-}
-
-/* Same theme-noise collapse for the hover/active reset. `.board-intro_
- * _cta-action:hover` lives in the shared primary-action :hover canonical
- * at line 7604. */
-:is(
-  .engine-chip:hover,
-  .workspace-tab:hover,
-  .workspace-tab[data-active="true"],
-  .section-icon-btn:hover,
-  .section-icon-btn:focus-visible,
-  .conn-banner__action:hover
-) {
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
+/* The six multi-class scale-override `:is(...)` blocks that lived
+ * here have been retired. They reset margin / gap+padding-inline /
+ * border + box-shadow / hover border-color + box-shadow / background /
+ * hover+active background for `.sidebar-btn`, `.btn.mini`,
+ * `.btn-terminate`, `.engine-chip`(-caret), `.workspace-tab`,
+ * `.section-icon-btn`, and `.conn-banner__action` — all with
+ * `!important` to win over the canonicals. The slice landed today
+ * (2026-05-04) cleared the dual source by:
+ * - Deleting the dead `.btn-terminate`, `.engine-chip`,
+ *   `.engine-chip-caret`, and `.engine-bar` canonicals (zero
+ *   consumers in tsx/html sources).
+ * - Rewriting `.sidebar-btn` and `.btn.mini` canonicals to declare
+ *   flat chrome directly (`background: transparent; border: 0;
+ *   box-shadow: none; margin: 0`) so the override `!important`
+ *   resets are no longer needed.
+ * - Trusting the chromed canonicals for `.workspace-tab` (in
+ *   surfaces/workspace.css), `.section-icon-btn` (in
+ *   surfaces/inspector.css), and `.conn-banner__action` (line ~4788
+ *   here) — those declare deliberate borders / backgrounds and the
+ *   override was masking them. */
 
 /* `.section` / `.gwg` / `.chat-empty--task` / `.agent-workflow-warning`
  * theme-driven border + shadow stripping retired. The canonical for
@@ -8227,38 +8145,9 @@ body::after,
  * design intent, not the `border: 0` reset that lived here. .criteria-item
  * keeps its own border canonical near line 1957. */
 
-/* Same theme-noise collapse for the background reset. */
-:is(
-  .sidebar-btn,
-  .btn-terminate,
-  .engine-chip,
-  .engine-chip-caret,
-  .workspace-tab,
-  .section-icon-btn,
-  .conn-banner__action
-) {
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-}
-
-/* Same theme-noise collapse for the hover/active background reset. */
-:is(
-  .sidebar-btn:hover,
-  .sidebar-btn[data-active="true"],
-  .btn-terminate:hover,
-  .engine-chip:hover,
-  .engine-chip[data-active="true"],
-  .workspace-tab:hover,
-  .workspace-tab[data-active="true"],
-  .section-icon-btn:hover,
-  .section-icon-btn:focus-visible,
-  .conn-banner__action:hover
-) {
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-}
+/* The two remaining `:is(...)` background-reset blocks (one base + one
+ * hover/active) were retired alongside the four block above — same
+ * single-source slice. */
 
 /* iter19 per-theme gradient/flat split retired — `--accent-gradient`
  * palette token already differs per theme. The shared canonical near
