@@ -13713,6 +13713,11 @@ body[data-theme="light"] .btn-primary {
 .panel-body {
   gap: 0;
   padding: 0;
+  margin: 0;
+  border: 0;
+  border-top: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .workspace-main {
@@ -14166,14 +14171,7 @@ body[data-theme="light"] .task-bar {
 }
 
 body[data-theme="light"] .panel-body {
-  gap: 0;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  border-top: 0;
-  border-radius: 0;
   background: rgba(255, 255, 255, 0.44);
-  box-shadow: none;
   backdrop-filter: blur(20px);
 }
 
@@ -14398,14 +14396,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body {
-  gap: 0;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  border-top: 0;
-  border-radius: 0;
   background: var(--bg);
-  box-shadow: none;
   backdrop-filter: none;
 }
 
@@ -14897,8 +14888,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
   box-shadow: none !important;
 }
 
-body[data-theme="light"] .panel-body,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body,
 body[data-theme="light"] .workspace-main,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
   gap: 0 !important;
@@ -14916,9 +14905,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
   }
 
   body[data-theme="light"] .task-bar,
-  body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar,
-  body[data-theme="light"] .panel-body,
-  body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body {
+  body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
     margin-left: 0;
     margin-right: 0;
     border-left: 0;
