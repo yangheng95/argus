@@ -243,6 +243,27 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("sidebar body + list family are owned by surfaces/sidebar.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const sidebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css"))
+
+    for (const className of [
+      "sidebar-body",
+      "sidebar-footer",
+      "sidebar-list",
+      "task-list-panel",
+      "sidebar-list-group",
+      "sidebar-list-heading",
+      "sidebar-list-cluster",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(sidebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(sidebarSurface).toMatch(/\.sidebar-footer a:hover\s*\{/)
+    expect(sidebarSurface).toMatch(/\.sidebar-list\.session-list-panel\s*\{/)
+  })
+
   test("sidebar shell + tool family are owned by surfaces/sidebar.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const sidebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css"))
@@ -646,7 +667,7 @@ describe("overlay architecture guards", () => {
     ]
     const text = sources.join("\n")
     const boldDecls = count(/font-weight\s*:\s*(?:700|720|750|760|780|800|900|bold)\b/g, text)
-    expect(boldDecls).toBeLessThanOrEqual(40)
+    expect(boldDecls).toBeLessThanOrEqual(39)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
