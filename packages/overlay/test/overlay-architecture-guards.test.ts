@@ -404,6 +404,31 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
   })
 
+  test("gwg actions + chevron + body + objective are owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const className of [
+      "gwg-action-btn",
+      "gwg-chevron",
+      "gwg-body",
+      "gwg-objective",
+      "gwg-objective-label",
+      "gwg-objective-text",
+      "gwg-done-definition",
+      "gwg-done-definition-label",
+      "gwg-done-definition-text",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(inspectorSurface).toMatch(/\.gwg:hover \.gwg-action-btn,/)
+    expect(inspectorSurface).toMatch(/\.gwg-action-delete:hover\s*\{/)
+    expect(inspectorSurface).toMatch(/\.gwg--expanded \.gwg-chevron\s*\{/)
+    expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
+  })
+
   test("gwg header + status icon are owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
@@ -1764,7 +1789,7 @@ describe("overlay architecture guards", () => {
     expect(soloRuleBody(inspectorSurface, ".section-body")).toContain(
       "padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))",
     )
-    expect(soloRuleBody(styles, ".gwg-body")).toContain(
+    expect(soloRuleBody(inspectorSurface, ".gwg-body")).toContain(
       "padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))",
     )
   })

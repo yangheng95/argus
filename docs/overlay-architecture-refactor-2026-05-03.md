@@ -1036,6 +1036,26 @@ Progress log:
   absence of any `clamp(10px,` and presence of
   `var(--oc-radius-pill)` on `.gwg-revision`. Ceilings unchanged.
 
+- 2026-05-03: Moved more of the goal-card body into surfaces/
+  inspector.css: `.gwg-action-btn` (+ multi-class hover/focus-
+  within reveal selector + `:hover` + `-delete:hover`), `.gwg-
+  chevron` (+ `.gwg--expanded .gwg-chevron`), `.gwg-body`,
+  `.gwg-objective` (+ `-label` / `-text`), `.gwg-done-definition`
+  (+ `-label` / `-text`), and the goal-card md-prose reset
+  multi-class rules (`.gwg-objective-text .msg-text` etc., plus
+  `:first-child` / `:last-child` margin-trim variants for
+  `.gwg-plan-node-title`/`-brief` + `.gwg-eval-summary`). Token
+  conversions: two `999px` pills → `var(--oc-radius-pill)`, three
+  `1px` borders → `var(--oc-border-width)`, the body's
+  `rgba(255, 255, 255, 0.015)` wash → `color-mix(in srgb, white
+  1.5%, transparent)`, and the tier-2 label's unscaled
+  `margin-bottom: 3px` wrapped in `calc(3px * --ui-scale)`. Right-
+  panel-card-radius guard now reads `.gwg-body` from the surface;
+  new ownership guard asserts nine base classes + the multi-class
+  hover/focus-within selector + `-delete:hover` + the
+  `.gwg--expanded .gwg-chevron` modifier-child selector +
+  presence of the white color-mix wash. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
