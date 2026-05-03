@@ -17,11 +17,11 @@
 //                 `--subtle-1`. Different bg colors. Late
 //                 winner; canonical lied.
 //
-// Pin: canonical declares `--surface-inset` directly (the
-// actually-rendered value). The reset chain drops
-// `.config-section` from its selector list. Other siblings
-// in the chain keep the reset until each gets its own
-// single-source pass.
+// Pin: canonical declares `--surface-inset` and `border: 0`
+// directly (the actually-rendered values). Theme reset chains
+// and local important chains drop `.config-section` from their
+// selector lists. Other siblings in those chains keep the reset
+// until each gets its own single-source pass.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
@@ -77,7 +77,11 @@ describe(".config-section base rule is a single source", () => {
     )
   })
 
-  test("no rule body using !important on background still lists `.config-section` as a top-level segment", () => {
+  test("the canonical body declares the actually-rendered borderless chrome", () => {
+    expect(soloRuleBody(".config-section")).toMatch(/\bborder:\s*0\s*;/)
+  })
+
+  test("no rule body using !important on chrome still lists `.config-section`", () => {
     for (const chunk of STYLES.split("}")) {
       const openIdx = chunk.indexOf("{")
       if (openIdx < 0) continue
@@ -90,9 +94,24 @@ describe(".config-section base rule is a single source", () => {
       const lastLine = raw.slice(lastNewline + 1)
       if (lastLine !== lastLine.trimStart()) continue
       const body = chunk.slice(openIdx + 1)
-      if (!/background:[^;]*!important/.test(body)) continue
+      if (!/(background|border|border-color|border-radius|box-shadow):[^;]*!important/.test(body)) continue
       const segments = head.split(",").map((s) => s.trim())
-      expect(segments).not.toContain(".config-section")
+      for (const segment of segments) {
+        expect(segment).not.toMatch(/(?:^|\s|:is\([^)]*)\.config-section(?:\b|[:.[#])/)
+      }
+    }
+  })
+
+  test("theme selectors cannot own `.config-section` chrome", () => {
+    for (const chunk of STYLES.split("}")) {
+      const openIdx = chunk.indexOf("{")
+      if (openIdx < 0) continue
+      const selector = chunk.slice(0, openIdx).trim()
+      const isThemeSelector =
+        /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      if (!isThemeSelector) continue
+
+      expect(selector).not.toMatch(/(?:^|\s|:is\([^)]*)\.config-section(?:\b|[:.[#])/)
     }
   })
 })
