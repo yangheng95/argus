@@ -420,6 +420,13 @@ Progress log:
   declarations out of the `styles/card.css` final override layer and into
   their canonical first-owner rules. `card.css` duplicate-selector guard drops
   from `<= 52` to `<= 27`.
+- 2026-05-03: Routed `.status-label` and `.elapsed` text colors through
+  theme-aware `var(--text-strong)` / `var(--text-soft)` tokens instead of
+  the hardcoded `#dbe3ee` / `#94a3b8` literals. Light-theme `body[data-theme]`
+  overrides for `.status-label`, `.elapsed`, and `.reasoning-text` were
+  redundant once the canonical resolved through tokens; only the
+  `.msg-reasoning` light background/border tint remained. `body[data-theme]`
+  guard ceiling drops to `<= 120`.
 
 Trigger: user feedback (2026-05-03):
 
@@ -455,7 +462,7 @@ one theme contract, and no runtime God CSS path left behind.
 | `packages/overlay/src/styles.css`      | **13,913 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,612 lines**                                                                         |
 | Total `!important` in stylesheets      | **183** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **123**                                                                                 |
+| `body[data-theme="…"]` theme overrides | **120**                                                                                 |
 | Theme layout/chrome overrides          | **84** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | Board 915 / ProvidersPanel 869 / TaskList 696 / SkillMarketPanel 686 / ChatComposer 599 |

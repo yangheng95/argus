@@ -173,7 +173,7 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(183)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(123)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(120)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
