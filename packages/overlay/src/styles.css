@@ -8150,16 +8150,16 @@ body[data-theme="light"] .sections {
    `--surface-hover`, `--accent`, and `--text-strong`; they no longer
    own row backgrounds, borders, or active rails. */
 
-body[data-theme="light"] .task-row-badge,
-body[data-theme="light"] .section-badge,
-body[data-theme="light"] .extension-status,
-body[data-theme="light"] .llm-status,
-body[data-theme="light"] .gwg-priority-badge,
-body[data-theme="light"] .change-status,
-body[data-theme="light"] .diff-dialog-stat {
-  background: rgba(255, 255, 255, 0.68);
-  border-color: rgba(116, 133, 184, 0.14);
-}
+/* Light-theme chrome override on the inline-pill family retired. The
+ * canonical for each class (task-row-badge in surfaces/sidebar.css,
+ * section-badge in surfaces/inspector.css, change-status / diff-dialog-stat
+ * near line 1693, extension-status / llm-status / gwg-priority-badge in the
+ * iter15+ "dot-prefix" rewrite near line 6974) declares `background:
+ * transparent; border: none;` with status variants providing differentiated
+ * tints via `--good-dim` / `--bad-dim` / `--accent-dim` / color-mix and the
+ * leading dot ::before pseudo-element. The theme override here was
+ * masking those variants — removing it restores variant differentiation
+ * and stops themes from owning component chrome. */
 
 /* iter59: `.chat-scroll` and its card descendants resolve through
    canonical conversation/card rules. Themes only provide palette tokens. */
@@ -8238,16 +8238,11 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
 /* iter58: dark/vscode-dark task-row hover and active states now use
    the same canonical row state grammar as light mode. */
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-row-badge,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .section-badge,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .extension-status,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .llm-status,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .gwg-priority-badge,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .change-status,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .diff-dialog-stat {
-  background: color-mix(in srgb, var(--surface-strong) 66%, transparent);
-  border-color: color-mix(in srgb, var(--border) 82%, transparent);
-}
+/* Dark / vscode-dark inline-pill chrome override retired alongside the
+ * light counterpart. See the comment block in the light section near
+ * line 8153 — both blocks were masking the canonical "transparent +
+ * dot-prefix or variant-tint" design and reintroducing themes that
+ * owned component chrome. */
 
 /* iter59: dark/vscode-dark conversation stream chrome now uses the
    same canonical `.chat-scroll` and `card.css` sources as light mode. */

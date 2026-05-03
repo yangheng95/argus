@@ -173,7 +173,7 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(106)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(56)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(49)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
@@ -185,7 +185,7 @@ describe("overlay architecture guards", () => {
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(22)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(20)
   })
 
   test("primary action button siblings have no theme chrome override", () => {
@@ -224,6 +224,31 @@ describe("overlay architecture guards", () => {
     expect(styles).toMatch(
       /body\[data-theme="vscode-dark"\][\s\S]*?--accent-gradient-hover:\s*var\(--accent-hover\)/,
     )
+  })
+
+  test("inline-pill family has no theme chrome override", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    // task-row-badge / section-badge / extension-status / llm-status /
+    // gwg-priority-badge / change-status / diff-dialog-stat all converged on
+    // the iter15+ "dot-prefix" canonical (transparent base + variant tint
+    // via dim tokens + colored ::before). No theme selector is allowed to
+    // re-paint a panel-tint background or border-color over them — that
+    // pattern masks the variant differentiation and reintroduces themes
+    // owning component chrome.
+    for (const cls of [
+      "task-row-badge",
+      "section-badge",
+      "extension-status",
+      "llm-status",
+      "gwg-priority-badge",
+      "change-status",
+      "diff-dialog-stat",
+    ]) {
+      const themeSelector = new RegExp(
+        `body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))[^{]*\\.${cls}\\b`,
+      )
+      expect(styles).not.toMatch(themeSelector)
+    }
   })
 
   test("primary action canonical reads palette tokens, not literals", () => {

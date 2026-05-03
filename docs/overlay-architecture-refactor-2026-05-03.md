@@ -1597,6 +1597,30 @@ Progress log:
   not chrome. All 115 architecture guards + 14 SSE refresh tests + button
   primitive tests pass; vite build green.
 
+- 2026-05-04 (CRON slice, Claude `14c456000` follow-up): Retired the
+  inline-pill family (`.task-row-badge`, `.section-badge`,
+  `.extension-status`, `.llm-status`, `.gwg-priority-badge`,
+  `.change-status`, `.diff-dialog-stat`) from every theme selector in
+  styles.css. Deleted the `body[data-theme="light"]` panel-tint block
+  (rgba(255, 255, 255, 0.68) bg + rgba slate border-color) and the
+  `body:is([data-theme="dark"], [data-theme="vscode-dark"])` palette-
+  tint counterpart. Both blocks were masking the iter15+ "transparent
+  base + dot-prefix or variant tint" canonical that already lives in
+  `surfaces/sidebar.css` (task-row-badge), `surfaces/inspector.css`
+  (section-badge), and the multi-class rewrite at line 6974
+  (extension-status / llm-status / gwg-priority-badge) plus the
+  `.change-status` / `.diff-dialog-stat` block at line 1693. Removing
+  the override blocks restores variant differentiation (active /
+  queued / completed / failed render their tinted backgrounds again
+  via `--accent-dim` / `--good-dim` / `--bad-dim` and color-mix on
+  palette tokens) and stops themes from owning component chrome.
+  Guard ceilings tightened: `body[data-theme]` 56→49, theme layout
+  overrides 22→20, `!important` unchanged at 106. Added 1 ownership
+  test asserting the seven inline-pill classes never appear inside any
+  `body[data-theme=…]` or `body:is(…data-theme…)` selector. All 116
+  architecture guards + 14 SSE refresh tests + i18n + tsc pass; vite
+  build green (3.76s, 327.5KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD
