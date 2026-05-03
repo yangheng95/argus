@@ -1169,6 +1169,31 @@ Progress log:
   verdict variants + 3 tag action variants + `dt` / `dd` child
   rules. Ceilings unchanged.
 
+- 2026-05-03: Token-swept the cross-surface `.verdict-pill`
+  primitive (used by Board.tsx + IntegrityCard.tsx) without
+  moving it. Stays in styles.css because it crosses the
+  conversation/inspector surface boundary — extracting would
+  split a shared visual primitive between two surface files.
+  Conversions: `padding: 3px var(--ui-gap-md)` →
+  `calc(3px * --ui-scale) var(--ui-gap-md)`; `border-radius:
+  999px` → `var(--oc-radius-pill)`; five `box-shadow: 0 0 0 1px
+  rgba(...)` inset rings rewritten as `0 0 0
+  var(--oc-border-width) color-mix(in srgb, var(--good/--bad/
+  --warn/--accent) 35%, transparent) inset`. The rgb literals
+  for the warn-ring `rgb(217, 158, 79)` and the inflight-ring
+  `rgb(99, 162, 255)` were tailwind-palette near-misses that
+  did not match the design tokens (`--warn` is rgb(212, 167,
+  44), `--accent` is rgb(84, 138, 247)); routing them through
+  color-mix on the canonical tokens reconciles the verdict
+  pill with the design language. The dead `var(--accent,
+  #63a2ff)` fallback hex on the inflight color was dropped.
+  New primitive guard scans the whole `.verdict-pill` block,
+  asserts presence of `var(--oc-radius-pill)` and
+  `var(--oc-border-width)` plus absence of all five retired
+  rgb literals + the `999px` value + the `#63a2ff` hex, and
+  enumerates all seven `[data-verdict]` variants are still
+  declared. Ceilings unchanged.
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and
