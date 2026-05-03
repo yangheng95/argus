@@ -590,6 +590,13 @@ Progress log:
   bold-weight density guard tightens to `<= 42`. New extraction guard
   pins ten brand-guide classes plus the two pseudo-elements to the
   surface file.
+- 2026-05-03: Retired the dead `.titlebar-btn` / `.titlebar-close`
+  static window-control CSS from God CSS after the runtime callers had
+  already moved to the `Button` primitive. The remaining titlebar button
+  sizing tokens stay because the primitive/surface rules still consume
+  them for menubar/status/window-control dimensions. New guard blocks the
+  dead static classes from returning to either God CSS or the titlebar
+  surface, and the icon-button padding guard now tracks only live classes.
 - 2026-05-03: Extracted the `.titlebar-theme-options*` picker family
   (grid wrapper, option button, hover/active states, label,
   preview-swatch base, four `[data-theme]` swatch variants) from
@@ -603,6 +610,19 @@ Progress log:
   language instead of being inlined hex literals on selectors. New
   guard pins four classes plus the four data-theme variants and asserts
   the four swatch tokens exist.
+- 2026-05-03: First composer surface extraction — moved `.chat-icon-col`
+  + `[data-disabled]` state, the dead `.chat-toolbar-btn` rule family
+  (canonical, hover, two `[data-active]` variants), and the
+  `.chat-cancel-btn` family (canonical, disabled, hover) from
+  `styles.css` into `styles/surfaces/composer.css`. The two raw rgba
+  literals on `.chat-toolbar-btn[data-active]` (`rgba(91, 141, 239, …)`
+  background variants) plus the `var(--accent, #5b8def)` fallback hex
+  routed through `color-mix(var(--accent) NN%, transparent)`. The
+  `min(... 4px)` literal on `.chat-icon-col` padding was a fixed cap;
+  it is now `calc(3px * var(--ui-scale))` since the cap is dominated by
+  the calc at any sane scale. New extraction guard pins the three
+  classes, the `[data-disabled]` / `[data-active]` / disabled-hover
+  variants to the surface file.
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
 > 也造成设计语言的统一和覆盖难题。我需要重新抽象 UI/UX，打散
@@ -633,7 +653,7 @@ one theme contract, and no runtime God CSS path left behind.
 
 | Dimension                              | Value                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/overlay/src/styles.css`      | **12,991 lines** and still on the runtime path                                          |
+| `packages/overlay/src/styles.css`      | **12,892 lines** and still on the runtime path                                          |
 | `packages/overlay/src/styles/card.css` | **1,568 lines**                                                                         |
 | Total `!important` in stylesheets      | **152** current guard baseline                                                          |
 | `body[data-theme="…"]` theme overrides | **82**                                                                                  |

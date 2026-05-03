@@ -456,42 +456,9 @@ a {
 /* `.titlebar-theme-options*` family lives in
    `styles/surfaces/titlebar.css` now. */
 
-/* `.titlebar-window-controls` lives in `styles/surfaces/titlebar.css` now. */
-
-.titlebar-btn {
-  width: var(--ui-titlebar-btn-width);
-  height: var(--ui-titlebar-btn-height);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  background: var(--subtle-3);
-  border: 1px solid var(--border);
-  color: var(--text-soft);
-  cursor: pointer;
-  border-radius: calc(4px * var(--ui-scale));
-  transition:
-    background 100ms,
-    color 100ms,
-    border-color 100ms;
-  box-shadow: none;
-}
-.titlebar-btn svg {
-  width: calc(14px * var(--ui-scale));
-  height: calc(14px * var(--ui-scale));
-}
-.titlebar-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.16);
-  color: var(--text-strong);
-}
-.titlebar-btn[data-maximized="true"] svg {
-  transform: translateY(calc(-0.5px * var(--ui-scale)));
-}
-.titlebar-close:hover {
-  background: rgba(248, 113, 113, 0.15);
-  color: var(--bad);
-}
+/* `.titlebar-window-controls` lives in `styles/surfaces/titlebar.css` now.
+   The dead `.titlebar-btn` / `.titlebar-close` static class rules were
+   retired after the window controls moved to the Button primitive. */
 
 /* ── Panel ── */
 .panel {
@@ -5020,87 +4987,9 @@ code .file-link:hover {
    read as a leftover bolted-on island. Drop the radius so
    the column reads as a flush slice of the same flat
    composer surface. */
-.chat-icon-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  align-self: stretch;
-  gap: calc(2px * var(--ui-scale));
-  flex-shrink: 0;
-  padding: min(calc(3px * var(--ui-scale)), 4px);
-  border: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--surface-inset);
-}
-
-.chat-toolbar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(26px * var(--ui-scale) * var(--chat-compose-scale));
-  height: calc(26px * var(--ui-scale) * var(--chat-compose-scale));
-  border: none;
-  border-radius: calc(9px * var(--ui-scale) * var(--chat-compose-scale));
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0;
-  transition:
-    color 120ms,
-    background 120ms,
-    transform 120ms;
-}
-/* When the textarea is disabled, the entire icon column (attach / web
-   search / expand) should follow — otherwise the buttons look clickable
-   but click does nothing or worse: they intercept focus and the operator
-   thinks the composer is broken. data-disabled on the column flips
-   pointer-events + opacity so the visual matches the textarea. */
-.chat-icon-col[data-disabled="true"] {
-  opacity: 0.4;
-  pointer-events: none;
-}
-.chat-toolbar-btn:hover {
-  color: var(--text-strong);
-  background: color-mix(in srgb, var(--surface-strong) 90%, transparent);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
-.chat-toolbar-btn[data-active] {
-  color: var(--accent, #5b8def);
-  background: rgba(91, 141, 239, 0.12);
-}
-.chat-toolbar-btn[data-active]:hover {
-  background: rgba(91, 141, 239, 0.2);
-}
-
-.chat-cancel-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  min-width: var(--ui-chat-send-size);
-  min-height: var(--ui-chat-send-size);
-  background: transparent;
-  border: 1px solid var(--border-muted);
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: calc(10px * var(--ui-scale));
-  padding: 0 calc(6px * var(--ui-scale));
-  transition:
-    color 80ms,
-    background 80ms,
-    border-color 80ms;
-}
-.chat-cancel-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-  pointer-events: none;
-}
-.chat-cancel-btn:hover:not(:disabled) {
-  color: var(--bad);
-  background: color-mix(in srgb, var(--bad) 10%, transparent);
-  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
-}
+/* `.chat-icon-col`, the dead `.chat-toolbar-btn` rules, and
+   `.chat-cancel-btn` (rest, disabled, hover) live in
+   `styles/surfaces/composer.css` now. */
 
 .chat-input[data-dragover] .chat-compose-row {
   outline: 2px dashed rgba(59, 130, 246, 0.5);
@@ -12371,7 +12260,6 @@ body::after,
 
 .brand-guide,
 .engine-bar,
-.titlebar-btn,
 .task-status,
 .task-dir-shell,
 .task-cwd-dropdown,
@@ -13646,7 +13534,6 @@ body[data-theme="vscode-dark"] .chat-empty--task {
 
 body[data-theme="light"]
   :is(
-    .titlebar-btn,
     .sidebar-btn,
     .sidebar-btn-primary,
     .sidebar-tool,
@@ -13670,7 +13557,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .titlebar-btn,
     .sidebar-btn,
     .sidebar-btn-primary,
     .sidebar-tool,
@@ -13729,7 +13615,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 
 body[data-theme="light"]
   :is(
-    .titlebar-btn,
     .sidebar-btn,
     .sidebar-btn-primary,
     .sidebar-tool,
@@ -13753,7 +13638,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .titlebar-btn,
     .sidebar-btn,
     .sidebar-btn-primary,
     .sidebar-tool,
@@ -13781,7 +13665,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 
 body[data-theme="light"]
   :is(
-    .titlebar-btn:hover,
     .sidebar-tool:hover,
     .task-cwd-dropdown:hover,
     .task-cwd-dropdown:focus-visible,
@@ -13802,7 +13685,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .titlebar-btn:hover,
     .sidebar-tool:hover,
     .task-cwd-dropdown:hover,
     .task-cwd-dropdown:focus-visible,
@@ -13863,7 +13745,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 
 body[data-theme="light"]
   :is(
-    .titlebar-btn,
     .sidebar-btn,
     .sidebar-tool,
     .sidebar-toolset,
@@ -13883,7 +13764,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .titlebar-btn,
     .sidebar-btn,
     .sidebar-tool,
     .sidebar-toolset,
@@ -13908,7 +13788,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
 
 body[data-theme="light"]
   :is(
-    .titlebar-btn:hover,
     .sidebar-btn:hover,
     .sidebar-btn[data-active="true"],
     .sidebar-tool:hover,
@@ -13933,7 +13812,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .titlebar-btn:hover,
     .sidebar-btn:hover,
     .sidebar-btn[data-active="true"],
     .sidebar-tool:hover,
