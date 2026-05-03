@@ -1,0 +1,336 @@
+/* ── Workspace Panel Surface ──
+ * Owns: workspace-toggle button, workspace-mount shell,
+ * pane-resizer (row variant), workspace panel + tabs + body,
+ * diff-preview panel, file-view panel, code .file-link inline.
+ * Loaded in index.html before styles.css.
+ * Do not add solo rules for these classes anywhere else. */
+
+/* ── Workspace Toggle (show/hide workspace panel button) ── */
+.workspace-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid transparent;
+  border-radius: var(--oc-radius-control);
+  background: transparent;
+  color: var(--text-soft);
+  transition:
+    background 100ms,
+    border-color 100ms,
+    color 100ms;
+}
+.workspace-toggle:hover {
+  background: var(--oc-control-bg-hover);
+  border-color: var(--oc-control-border-hover);
+  color: var(--text-strong);
+}
+.workspace-toggle[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+/* ── Workspace Mount Shell ── */
+.workspace-mount {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 0;
+  width: 100%;
+  height: clamp(calc(200px * var(--ui-scale)), 40vh, calc(560px * var(--ui-scale)));
+  background: var(--surface-inset);
+}
+.workspace-mount[hidden] {
+  display: none;
+}
+
+/* ── Row-resize pane handle (workspace variant) ──
+ * Double-class (.pane-resizer.pane-resizer-workspace) bumps specificity
+ * above the generic .pane-resizer col-resize rule in styles.css. */
+.pane-resizer.pane-resizer-workspace {
+  flex: 0 0 var(--ui-resizer-width);
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  cursor: row-resize;
+  background: transparent;
+  position: relative;
+}
+.pane-resizer.pane-resizer-workspace[hidden] {
+  display: none;
+}
+.pane-resizer.pane-resizer-workspace::before {
+  content: "";
+  position: absolute;
+  left: calc(14px * var(--ui-scale));
+  right: calc(14px * var(--ui-scale));
+  top: 50%;
+  bottom: auto;
+  width: auto;
+  transform: translateY(-50%);
+  height: calc(1px * var(--ui-scale));
+  background: color-mix(in srgb, var(--border) 42%, transparent);
+  border-radius: var(--oc-radius-pill);
+  transition:
+    background 80ms ease,
+    box-shadow 80ms ease;
+}
+.pane-resizer.pane-resizer-workspace:hover::before,
+.pane-resizer.pane-resizer-workspace[data-active="true"]::before {
+  background: var(--accent);
+  height: calc(2px * var(--ui-scale));
+  box-shadow: none;
+}
+
+/* ── Workspace Panel ── */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--panel-radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  border-bottom: var(--oc-border-width) solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  padding-right: calc(6px * var(--ui-scale));
+}
+
+.workspace-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.workspace-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* Sub-tab strip inside the workspace body — subordinate to the parent
+ * Tabs primitive (Workflow / Workspace / Preview). Smaller font, tighter
+ * padding, thinner accent stripe so the parent nav reads as primary. */
+.workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  background: transparent;
+  border: none;
+  border-right: var(--oc-border-width) solid var(--border);
+  border-bottom: var(--oc-border-width) solid transparent;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  cursor: pointer;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: calc(280px * var(--ui-scale));
+  transition:
+    color 120ms,
+    border-color 120ms,
+    background 120ms;
+}
+.workspace-tab:hover {
+  color: var(--text-strong);
+  background: color-mix(in srgb, white 4%, transparent);
+}
+.workspace-tab[data-active="true"] {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 3%, transparent);
+}
+.workspace-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.workspace-tab-file {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+}
+
+.workspace-close {
+  align-self: center;
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: var(--oc-border-width) solid transparent;
+  border-radius: calc(4px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-heading);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 120ms,
+    background 120ms,
+    border-color 120ms;
+}
+.workspace-close:hover {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
+}
+
+.workspace-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+}
+
+.workspace-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* Both views stay mounted (resource-cache survives tab toggle);
+ * data-active=false collapses the inactive one out of layout. */
+.workspace-view[data-active="false"] {
+  display: none;
+}
+
+/* ── Diff Preview Panel ── */
+.diff-preview-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.diff-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  background: var(--subtle-1);
+}
+
+.diff-preview-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+/* File-scope context label inside the diff preview header. */
+.diff-preview-scope {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+}
+
+.diff-preview-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: var(--ui-font-code);
+  color: var(--text-strong);
+}
+
+.diff-preview-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+.diff-preview-body {
+  flex: 1;
+  overflow: auto;
+  padding: calc(6px * var(--ui-scale));
+}
+
+.diff-preview-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px * var(--ui-scale));
+  background: radial-gradient(
+    circle at 50% 0%,
+    color-mix(in srgb, var(--accent) 5%, transparent),
+    transparent 58%
+  );
+}
+
+/* ── File View Panel ── */
+.file-view-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.file-view-head {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  background: var(--subtle-1);
+}
+
+.file-view-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: var(--ui-font-code);
+  color: var(--text-strong);
+}
+
+.file-view-body {
+  flex: 1;
+  overflow: auto;
+  padding: calc(6px * var(--ui-scale));
+}
+
+.file-view-body pre {
+  margin: 0;
+}
+
+.file-view-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px * var(--ui-scale));
+  background: radial-gradient(
+    circle at 50% 0%,
+    color-mix(in srgb, var(--accent) 5%, transparent),
+    transparent 58%
+  );
+}
+
+/* ── File Link (inline code → workspace file opener) ── */
+code .file-link {
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+code .file-link:hover {
+  text-decoration: underline;
+}
