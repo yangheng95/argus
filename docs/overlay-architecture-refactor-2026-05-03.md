@@ -1621,6 +1621,36 @@ Progress log:
   architecture guards + 14 SSE refresh tests + i18n + tsc pass; vite
   build green (3.76s, 327.5KB CSS).
 
+- 2026-05-04 (CRON slice, Claude `3ca4d2453` follow-up): Retired the
+  workbench shell + content-shell theme override family in one pass.
+  Eight selector classes — `.sidebar`, `.chat`, `.sections` (3-column
+  shell), `.section`, `.gwg` (inspector cards), `.board-intro`,
+  `.chat-empty--task` (empty states), and `.agent-workflow-warning` —
+  plus the four `.board-intro__{section,mode,agent,cta}` children no
+  longer appear in any `body[data-theme]` or `body:is(...data-theme...)`
+  selector. Removed five override blocks (light shell, dark shell,
+  vscode-dark `.sidebar/.sections` solid, vscode-dark `.panel-body/.chat`
+  solid → split so only `.panel-body` remains for a future slice,
+  light+dark content shell tints, light+dark board-intro children
+  tints, light+dark `.section/.gwg/.chat-empty--task/.agent-workflow-
+  warning` border:0 reset, light+dark `.section:last-child/.criteria-
+  item` border:0 reset). Folded the desired vscode-dark solid surface
+  values (#252526 / #1e1e1e / #252526) into the vscode-dark `:root`
+  palette as `--rail-surface` / `--chat-canvas` / `--inspector-surface`,
+  so the shell canonicals (`var(--rail-surface)` etc.) render the
+  correct value per theme without any selector. Updated
+  `sections-single-source.test.ts` and `section-canonical-flat.test.ts`
+  to read the canonical from its new home in
+  `surfaces/inspector.css` (the previous migration into the surface
+  file left those tests pinning the old styles.css location). Guard
+  ceilings tightened: `!important` 106→85, `body[data-theme]` 49→30,
+  theme layout overrides 20→8. Added 2 ownership tests: 12-class
+  shell family absent from any theme selector; vscode-dark `:root`
+  block declares the solid `--rail-surface`/`--chat-canvas`/
+  `--inspector-surface` values. All 118 architecture guards + SSE +
+  button-primitive + dark-mode-primary-button + section / sections
+  single-source tests pass; vite build green (5.21s, 324.74KB CSS).
+
 ## Pause Checkpoint — 2026-05-03
 
 Paused at branch `codex/opencode-upstream-infra-adapt`, HEAD

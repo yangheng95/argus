@@ -1,24 +1,19 @@
-// Regression for iter40 — finishing the iter28/30/33/36 single-
-// source pass for `.section` (the inner collapsible card
-// primitive in the right-panel section column). iter15 already
-// flattened `.sections` (plural — the outer container); this
-// iter aligns the inner card canonical with the actually-
-// rendered flat values forced by the !important reset chain
-// at line ~12449 of styles.css.
+// Regression for iter40 — single-source pass for `.section` (the
+// inner collapsible card primitive in the right-panel section
+// column). Refreshed for the 2026-05-04 container-shell theme-
+// override retirement: the `.section` canonical was migrated out of
+// styles.css and into `surfaces/inspector.css` along with the rest
+// of the right-column shell. The flat chrome (--surface-inset bg,
+// no drop-shadow) is now expressed directly via palette tokens, and
+// the `body[data-theme]` `border: 0 !important` reset that used to
+// strip the canonical's border has been retired.
 //
-// Pre-iter40 the canonical at line ~2290 declared:
-//   - gradient + --surface tinted bg
-//   - 14px border-radius
-//   - drop-shadow (`inset highlight + 8px blur`)
-//   - rich chrome that NEVER rendered.
-//
-// The reset chain forced `--surface-inset` bg, `var(--radius)`
-// (≈10px) radius, `box-shadow: none`. Same active rule-8
-// conflict iter28/30/33/36 collapsed for the other shells.
-//
-// Pin: canonical declares the actually-rendered flat values
-// directly. `.section` drops out of the !important reset
-// chain, leaving only 4 remaining shells in that chain.
+// Pin the new contract:
+// - The canonical lives in surfaces/inspector.css with --surface-inset
+//   background, no 14px chrome radius, no rich drop-shadow.
+// - No top-level styles.css selector with `background: ... !important`
+//   lists `.section` — the !important reset chain that used to clobber
+//   the canonical is gone.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
@@ -29,9 +24,14 @@ const RAW = readFileSync(
   "utf8",
 )
 const STYLES = RAW.replace(/\/\*[\s\S]*?\*\//g, "")
+const INSPECTOR_RAW = readFileSync(
+  path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "inspector.css"),
+  "utf8",
+)
+const INSPECTOR_SURFACE = INSPECTOR_RAW.replace(/\/\*[\s\S]*?\*\//g, "")
 
-function soloRuleBody(selector: string): string {
-  for (const chunk of STYLES.split("}")) {
+function soloRuleBody(text: string, selector: string): string {
+  for (const chunk of text.split("}")) {
     const openIdx = chunk.indexOf("{")
     if (openIdx < 0) continue
     const raw = chunk.slice(0, openIdx)
@@ -47,18 +47,18 @@ function soloRuleBody(selector: string): string {
 
 describe(".section canonical matches the actually-rendered flat chrome", () => {
   test("canonical body declares --surface-inset background", () => {
-    expect(soloRuleBody(".section")).toMatch(
+    expect(soloRuleBody(INSPECTOR_SURFACE, ".section")).toMatch(
       /background:\s*var\(--surface-inset\)/,
     )
   })
 
   test("canonical body uses var(--radius) (≈10px), not the dead 14px chrome value", () => {
-    const body = soloRuleBody(".section")
+    const body = soloRuleBody(INSPECTOR_SURFACE, ".section")
     expect(body).not.toMatch(/border-radius:\s*calc\(14px/)
   })
 
   test("canonical body does NOT declare the dead drop-shadow chrome", () => {
-    const body = soloRuleBody(".section")
+    const body = soloRuleBody(INSPECTOR_SURFACE, ".section")
     expect(body).not.toMatch(/box-shadow:[^;]*8px[^;]*18px/)
   })
 })
