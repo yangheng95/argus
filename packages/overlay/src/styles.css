@@ -3051,47 +3051,13 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 
 /* ── Evaluation Errors ── */
-.eval-error {
-  margin-top: calc(4px * var(--ui-scale));
-  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border: 0;
-  border-radius: calc(5px * var(--ui-scale));
-  background: linear-gradient(180deg, rgba(224, 106, 99, 0.16), rgba(224, 106, 99, 0.08));
-  box-shadow: none;
-}
-.eval-error-name {
-  font-size: var(--ui-font-title);
-  font-weight: 600;
-  color: var(--bad);
-}
-.eval-error-meta {
-  margin-top: 1px;
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.eval-error-detail {
-  margin-top: 2px;
-  font-size: var(--ui-font-body);
-  color: var(--text);
-  font-family: var(--mono);
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 60px;
-  overflow: auto;
-  line-height: 1.4;
-}
-.eval-error + .eval-error {
-  margin-top: 3px;
-}
-
-.eval-summary {
-  font-size: var(--ui-font-title);
-  color: var(--text);
-  margin-top: 4px;
-  line-height: 1.4;
-}
+/* `.eval-error*` family + `.eval-summary` live in
+   `styles/surfaces/inspector.css` now. Background gradients
+   converted from raw rgba(224, 106, 99) red to color-mix on
+   var(--bad) for design-language consistency. The cross-surface
+   `min-width: 0 / max-width: 100%` group below still references
+   `.eval-error` and `.eval-error-detail` — that is a layout
+   primitive, not chrome, so it stays. */
 
 /* ── Chat (middle column) ──
    Single source after iter16. Used to be a chromed canonical
