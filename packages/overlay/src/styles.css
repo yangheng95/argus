@@ -6530,138 +6530,17 @@ select.field-input option {
 }
 
 /* ── Config Dialog: Sidebar + Content Layout ── */
-.config-dialog-form {
-  width: min(calc(100vw - 32px), 980px);
-  max-width: none;
-  height: min(80vh, 760px);
-  max-height: calc(100vh - 32px);
-  padding: 0;
-  gap: 0;
-  overflow: hidden;
-  background: var(--dialog-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--panel-radius);
-  box-shadow: none;
-}
-
-.config-dialog-head {
-  padding: calc(16px * var(--ui-scale)) calc(20px * var(--ui-scale));
-  border-bottom: 1px solid var(--divider-soft);
-  flex-shrink: 0;
-}
-
-.config-close-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(28px * var(--ui-scale));
-  height: calc(28px * var(--ui-scale));
-  border: none;
-  border-radius: calc(6px * var(--ui-scale));
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background 120ms,
-    color 120ms;
-}
-.config-close-btn:hover {
-  background: var(--subtle-3);
-  color: var(--text-strong);
-}
-
-.config-dialog-layout {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* ── Sidebar Navigation ── */
-.config-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-  width: clamp(176px, calc(200px * var(--ui-scale)), 220px);
-  min-width: clamp(176px, calc(200px * var(--ui-scale)), 220px);
-  padding: calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-right: 1px solid var(--divider-soft);
-  background: var(--subtle-1);
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
-.config-nav-item {
-  display: flex;
-  align-items: center;
-  gap: calc(10px * var(--ui-scale));
-  width: 100%;
-  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border: none;
-  border-radius: calc(8px * var(--ui-scale));
-  background: transparent;
-  color: var(--text-soft);
-  font-size: var(--ui-font-body);
-  font-family: var(--font);
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 120ms,
-    color 120ms;
-  position: relative;
-}
-.config-nav-item:hover {
-  background: var(--subtle-2);
-  color: var(--text-strong);
-}
-.config-nav-item.active {
-  background: linear-gradient(135deg, rgba(84, 138, 247, 0.15), rgba(84, 138, 247, 0.06));
-  color: var(--accent-hover);
-  font-weight: 600;
-}
-.config-nav-item.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: calc(6px * var(--ui-scale));
-  bottom: calc(6px * var(--ui-scale));
-  width: calc(3px * var(--ui-scale));
-  border-radius: calc(2px * var(--ui-scale));
-  background: var(--accent);
-}
-
-.config-nav-icon {
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  flex-shrink: 0;
-  opacity: 0.7;
-}
-.config-nav-item.active .config-nav-icon {
-  opacity: 1;
-}
-
-.config-nav-badge {
-  margin-left: auto;
-  min-width: calc(20px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  padding: 0 calc(5px * var(--ui-scale));
-  border-radius: calc(9px * var(--ui-scale));
-  background: var(--subtle-3);
-  color: var(--text-soft);
-  font-size: var(--ui-font-control);
-  font-weight: 600;
-  line-height: calc(18px * var(--ui-scale));
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-.config-nav-badge:empty {
-  display: none;
-}
-.config-nav-item.active .config-nav-badge {
-  background: rgba(84, 138, 247, 0.2);
-  color: var(--accent-hover);
-}
+/* `.config-dialog-form` shell, `.config-dialog-head`,
+   `.config-close-btn` (+ `:hover`), `.config-dialog-layout`,
+   `.config-sidebar`, `.config-nav-item` (+ `:hover` + `.active`
+   + `.active::before`), `.config-nav-icon` (+ `.active` child),
+   `.config-nav-badge` (+ `:empty` + `.active` child) live in
+   `styles/surfaces/settings.css` now. The clamp() bounds at
+   176/220px and shell px at 32/980/760 wrapped in `calc(N *
+   --ui-scale)` so the dialog scales with UI; `.active` lift's
+   raw `rgba(84, 138, 247, X)` (= literal expansion of
+   `--accent`) routed through `color-mix(var(--accent) X%,
+   transparent)`. */
 
 /* ── Content Panel ── */
 .config-content {

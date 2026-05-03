@@ -687,3 +687,167 @@
   word-break: break-word;
   overflow: auto;
 }
+
+/* ── Settings dialog shell + sidebar nav ─────────────────── */
+
+/* Dialog shell: settings root <dialog> form. Width/height clamp
+   via min() so the dialog fits typical screens but never grows
+   beyond ~980x760. The 32/980/760 raw px wrapped in
+   `calc(N * --ui-scale)` so the dialog scales with the UI. */
+.config-dialog-form {
+  width: min(calc(100vw - calc(32px * var(--ui-scale))), calc(980px * var(--ui-scale)));
+  max-width: none;
+  height: min(80vh, calc(760px * var(--ui-scale)));
+  max-height: calc(100vh - calc(32px * var(--ui-scale)));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  background: var(--dialog-bg);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--panel-radius);
+  box-shadow: none;
+}
+
+.config-dialog-head {
+  padding: calc(16px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--divider-soft);
+  flex-shrink: 0;
+}
+
+.config-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  border: none;
+  border-radius: calc(6px * var(--ui-scale));
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 120ms,
+    color 120ms;
+}
+
+.config-close-btn:hover {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+}
+
+/* `.config-dialog-layout` only adds flex layout; the shared CSS-
+   var defaults (`--section-stack-gap`, `--section-control-
+   height`, etc.) on `.sections, .config-dialog-layout` stay in
+   styles.css because they cross the inspector / settings
+   surface boundary. */
+.config-dialog-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Sidebar nav rail: vertical list of tab buttons inside the
+   dialog shell. The width clamp's 176/220 raw bounds are wrapped
+   in calc so the rail scales with UI scale just like the
+   preferred 200px middle. */
+.config-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+  width: clamp(calc(176px * var(--ui-scale)), calc(200px * var(--ui-scale)), calc(220px * var(--ui-scale)));
+  min-width: clamp(calc(176px * var(--ui-scale)), calc(200px * var(--ui-scale)), calc(220px * var(--ui-scale)));
+  padding: calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-right: var(--oc-border-width) solid var(--divider-soft);
+  background: var(--subtle-1);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+/* Tab nav button. `.active` lift uses an accent-tinted
+   linear-gradient — raw `rgba(84, 138, 247, X)` (which is the
+   literal expansion of `--accent`) routed through `color-mix`
+   on the canonical token. */
+.config-nav-item {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--ui-scale));
+  width: 100%;
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border: none;
+  border-radius: calc(8px * var(--ui-scale));
+  background: transparent;
+  color: var(--text-soft);
+  font-size: var(--ui-font-body);
+  font-family: var(--font);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 120ms,
+    color 120ms;
+  position: relative;
+}
+
+.config-nav-item:hover {
+  background: var(--subtle-2);
+  color: var(--text-strong);
+}
+
+.config-nav-item.active {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent) 15%, transparent),
+      color-mix(in srgb, var(--accent) 6%, transparent)
+    );
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
+.config-nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(6px * var(--ui-scale));
+  bottom: calc(6px * var(--ui-scale));
+  width: calc(3px * var(--ui-scale));
+  border-radius: calc(2px * var(--ui-scale));
+  background: var(--accent);
+}
+
+.config-nav-icon {
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.config-nav-item.active .config-nav-icon {
+  opacity: 1;
+}
+
+/* Numeric badge that hangs off the right edge of nav rows. */
+.config-nav-badge {
+  margin-left: auto;
+  min-width: calc(20px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  padding: 0 calc(5px * var(--ui-scale));
+  border-radius: calc(9px * var(--ui-scale));
+  background: var(--subtle-3);
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  line-height: calc(18px * var(--ui-scale));
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.config-nav-badge:empty {
+  display: none;
+}
+
+.config-nav-item.active .config-nav-badge {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent-hover);
+}
