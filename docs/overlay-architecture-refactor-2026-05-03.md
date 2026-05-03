@@ -871,6 +871,25 @@ Progress log:
   remains in styles.css; the extraction guard now negative-asserts
   that as well.
 
+- 2026-05-03: Seeded `styles/surfaces/inspector.css` with the right-
+  panel column shell + tab-body containers (`.sections`,
+  `.sections-title`, `.sections-stack`, `.sections-tab-body` with its
+  `[data-active]` / `[data-panel-tab]` variants) and folded the late
+  `.sections-stack` override (gap 4px / padding 4px) into the surface
+  canonical so the rendered values match. The `.sections,
+  .config-dialog-layout` shared CSS-var declaration stays in
+  styles.css because the variables are consumed by `.section`
+  internals across both inspector and config-dialog surfaces. The
+  primary-column chrome guard now reads `.sections` chrome from the
+  inspector surface, and a new ownership guard asserts the four base
+  selectors live there with `var(--inspector-surface)` background.
+  Richer `.section` / `.gwg` card chrome stays in styles.css until
+  its hover + per-phase variants get a deliberate token sweep. Guard
+  ceilings unchanged (`!important <= 137`, `body[data-theme] <= 69`,
+  theme layout overrides `<= 33`); styles.css -62 net lines from this
+  slice (~75 selector lines moved out, ~13 explanatory comments left
+  behind for traceability).
+
 - 2026-05-03: Canonicalized the directory/sidebar/workspace control
   chrome behind `--oc-control-*` tokens. `.task-dir-shell`,
   `.task-cwd-dropdown`, `.sidebar-toolset`, `.sidebar-tool`, and

@@ -318,6 +318,31 @@ describe("overlay architecture guards", () => {
     expect(sidebarAt).toBeLessThan(stylesAt)
   })
 
+  test("inspector right panel shell is owned by surfaces/inspector.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+    const html = readText(join(OVERLAY_ROOT, "src/index.html"))
+
+    for (const className of [
+      "sections",
+      "sections-title",
+      "sections-stack",
+      "sections-tab-body",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(inspectorSurface).toMatch(/\.sections-tab-body\[data-active="false"\]/)
+    expect(inspectorSurface).toMatch(/\.sections-tab-body\[data-panel-tab="inspector"\]/)
+    expect(inspectorSurface).toContain("var(--inspector-surface)")
+
+    const inspectorAt = html.indexOf('href="styles/surfaces/inspector.css"')
+    const stylesAt = html.indexOf('href="styles.css"')
+    expect(inspectorAt).toBeGreaterThan(-1)
+    expect(inspectorAt).toBeLessThan(stylesAt)
+  })
+
   test("conversation goals strip is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const conversationSurface = readText(
@@ -1454,10 +1479,13 @@ describe("overlay architecture guards", () => {
     const sidebarSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")),
     )
+    const inspectorSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")),
+    )
     for (const [selector, source] of [
       [".sidebar", sidebarSurface],
       [".chat", styles],
-      [".sections", styles],
+      [".sections", inspectorSurface],
     ] as const) {
       const body = soloRuleBody(source, selector)
       for (const declaration of [
@@ -1473,16 +1501,21 @@ describe("overlay architecture guards", () => {
 
   test("workspace and inspector stack spacing are canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const inspectorSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")),
+    )
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1] ?? ""
-      const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
-      if (!isThemeSelector || !/\.(?:workspace-main|sections-stack)\b/.test(selector)) continue
+    for (const source of [styles, inspectorSurface]) {
+      for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = match[1] ?? ""
+        const body = match[2] ?? ""
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+          selector,
+        )
+        if (!isThemeSelector || !/\.(?:workspace-main|sections-stack)\b/.test(selector)) continue
 
-      expect(body).not.toMatch(/\b(?:gap|margin(?:-[a-z]+)?|padding(?:-[a-z]+)?)\s*:/)
+        expect(body).not.toMatch(/\b(?:gap|margin(?:-[a-z]+)?|padding(?:-[a-z]+)?)\s*:/)
+      }
     }
 
     const workspaceBodies = Array.from(styles.matchAll(/(^|\n)\.workspace-main\s*\{([^{}]*)\}/g)).map(
@@ -1493,9 +1526,9 @@ describe("overlay architecture guards", () => {
       expect(workspaceBody).toContain(declaration)
     }
 
-    const sectionsBodies = Array.from(styles.matchAll(/(^|\n)\.sections-stack\s*\{([^{}]*)\}/g)).map(
-      (match) => match[2] ?? "",
-    )
+    const sectionsBodies = Array.from(
+      inspectorSurface.matchAll(/(^|\n)\.sections-stack\s*\{([^{}]*)\}/g),
+    ).map((match) => match[2] ?? "")
     const sectionsBody = sectionsBodies.at(-1) ?? ""
     expect(sectionsBody).toContain("gap: calc(4px * var(--ui-scale))")
     expect(sectionsBody).toContain("padding: calc(4px * var(--ui-scale))")
