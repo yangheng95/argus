@@ -328,6 +328,41 @@ export function createOrchestratorTools(input: {
     }
   }
 
+  async function publishGateReworkResult(input: {
+    deliveryID: string
+    runID: string
+    summary: string
+    source: "deliver_auto_publish" | "publish_delivery"
+  }) {
+    const detail =
+      `Publish gate blocked delivery ${input.deliveryID}: ${input.summary}. ` +
+      `This is a rework signal, not a terminal task failure. The orchestrator must fix the ` +
+      `workspace/export mismatch, then run deliver again.`
+    try {
+      const { createDecisionLog } = await import("@/decision-log")
+      createDecisionLog(taskID).append({
+        phase: "delivery",
+        key: `publish_gate_rework_${Date.now()}`,
+        value: detail,
+        reason: input.source,
+      })
+    } catch {
+      /* best effort */
+    }
+    return SubAgentProtocol.yieldResult({
+      headline:
+        `Publish gate blocked delivery, but task remains active for rework. ` +
+        `Fix the workspace/export mismatch and re-run deliver.`,
+      fields: [
+        ["delivery_id", input.deliveryID],
+        ["run_id", input.runID],
+        ["publish_gate", input.summary],
+        ["next", "inspect declared changed files vs exported workspace; build/restart_from_stage as needed; then deliver again"],
+      ],
+      pointer: `delivery ${input.deliveryID}; publish gate failure is rework feedback`,
+    })
+  }
+
   function taskLevelBuildEligibility(task: TaskRow): { allowed: true } | { allowed: false; reason: string } {
     if (task.kind === "build") return { allowed: true }
     const latestDelivery = findLatestDeliveryVerdictArtifact(task.id)
@@ -3036,6 +3071,7 @@ export function createOrchestratorTools(input: {
             task: roundCommitTask,
             iteration,
             verdict: roundCommitVerdict,
+            declaredChangedFiles: deliveryInfo.changedFiles,
           })
           log.info("deliver: round commit", {
             taskID, iteration, mode: roundCommit.mode,
@@ -3226,8 +3262,12 @@ export function createOrchestratorTools(input: {
                 const cleanupNote = cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
                 return `Delivery published and task completed successfully.${cleanupNote} You can call refine to analyze the project and suggest improvements for the next iteration.`
               }
-              await updateTask(currentTask, { status: "failed", error: publishResult.summary, time_completed: completed }, publishResult.summary)
-              return `Publish returned non-delivered status: ${publishResult.summary}`
+              return publishGateReworkResult({
+                deliveryID: delivery.id,
+                runID: run.id,
+                summary: publishResult.summary,
+                source: "deliver_auto_publish",
+              })
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
               log.error("deliver: auto-publish failed", { taskID, error: msg, stack: err instanceof Error ? err.stack : undefined })
@@ -3785,8 +3825,12 @@ export function createOrchestratorTools(input: {
           return `Delivery published and task completed successfully.${cleanupNote} You can call refine to analyze the project and suggest improvements for the next iteration.`
         }
 
-        await updateTask(task, { status: "failed", error: result.summary, time_completed: completed }, result.summary)
-        return `Publish returned non-delivered status: ${result.summary}`
+        return publishGateReworkResult({
+          deliveryID: delivery.id,
+          runID: run.id,
+          summary: result.summary,
+          source: "publish_delivery",
+        })
       },
     }),
 
