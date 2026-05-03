@@ -173,13 +173,13 @@ describe("overlay architecture guards", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(183)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(110)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(108)
   })
 
   test("card stylesheet duplicate selector debt cannot increase", () => {
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(countDuplicateSelectors(card)).toBeLessThanOrEqual(27)
+    expect(countDuplicateSelectors(card)).toBeLessThanOrEqual(14)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {

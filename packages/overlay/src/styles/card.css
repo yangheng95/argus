@@ -494,21 +494,21 @@ body[data-theme="light"] .card__round {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: calc(22px * var(--ui-scale, 1));
+  height: calc(22px * var(--ui-scale, 1));
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: 4px;
-  opacity: 0.4;
+  border-radius: calc(5px * var(--ui-scale, 1));
+  opacity: 0.52;
   transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 .card__head:hover .card__copy,
 .card__copy:focus-visible,
 .card__copy--done {
-  opacity: 0.96;
+  opacity: 1;
 }
 .card__copy:hover {
   color: var(--text-strong);
@@ -526,22 +526,22 @@ body[data-theme="light"] .card__round {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: calc(22px * var(--ui-scale, 1));
+  height: calc(22px * var(--ui-scale, 1));
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: 4px;
-  opacity: 0.4;
+  border-radius: calc(5px * var(--ui-scale, 1));
+  opacity: 0.52;
   font-size: 14px;
   line-height: 1;
   transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 .card__head:hover .card__rewind,
 .card__rewind:focus-visible {
-  opacity: 0.96;
+  opacity: 1;
 }
 .card__rewind:hover {
   color: var(--accent-warning, #f0b429);
@@ -1258,28 +1258,31 @@ body[data-theme="light"] .card__round {
 /* ── AgentTrace surface (per-session 🔍 button + inline TracePanel) ── */
 
 .card__trace,
-.card__agent-cancel {
+.card__agent-cancel,
+.card__agent-reply-toggle {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: calc(22px * var(--ui-scale, 1));
+  height: calc(22px * var(--ui-scale, 1));
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: 4px;
-  opacity: 0.4;
+  border-radius: calc(5px * var(--ui-scale, 1));
+  opacity: 0.52;
   transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 .card__head:hover .card__trace,
 .card__head:hover .card__agent-cancel,
+.card__head:hover .card__agent-reply-toggle,
 .card__trace:focus-visible,
 .card__agent-cancel:focus-visible,
+.card__agent-reply-toggle:focus-visible,
 .card__trace--open {
-  opacity: 0.96;
+  opacity: 1;
 }
 .card__trace:hover {
   color: var(--accent-info, #6cb6ff);
@@ -1537,36 +1540,8 @@ body[data-theme="light"] .card__round {
    decorative card stack. Conversation items should scan like an event log.
    ========================================================================== */
 
-.card__copy,
-.card__rewind,
-.card__trace,
-.card__agent-cancel,
-.card__agent-reply-toggle,
 .card__chevron {
   border-radius: calc(5px * var(--ui-scale, 1));
-}
-
-.card__copy,
-.card__rewind,
-.card__trace,
-.card__agent-cancel,
-.card__agent-reply-toggle {
-  width: calc(22px * var(--ui-scale, 1));
-  height: calc(22px * var(--ui-scale, 1));
-  opacity: 0.52;
-}
-
-.card__head:hover .card__copy,
-.card__head:hover .card__rewind,
-.card__head:hover .card__trace,
-.card__head:hover .card__agent-cancel,
-.card__head:hover .card__agent-reply-toggle,
-.card__copy:focus-visible,
-.card__rewind:focus-visible,
-.card__trace:focus-visible,
-.card__agent-cancel:focus-visible,
-.card__agent-reply-toggle:focus-visible {
-  opacity: 1;
 }
 
 .card[data-kind="message"] {
