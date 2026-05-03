@@ -137,3 +137,76 @@
   -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
   mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
 }
+
+.executor-tool-entry {
+  border-radius: calc(4px * var(--ui-scale));
+  transition: opacity 0.15s ease;
+}
+.executor-tool-entry[data-status="completed"] {
+  opacity: 0.55;
+}
+.executor-tool-entry[data-status="failed"] {
+  opacity: 0.85;
+}
+.executor-tool-entry[data-live="true"] {
+  opacity: 1;
+  background: color-mix(in srgb, var(--executor-accent) 10%, transparent);
+}
+
+.executor-tool-item {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
+}
+
+.executor-tool-icon {
+  flex-shrink: 0;
+  font-size: var(--ui-font-control);
+  line-height: 1;
+  width: calc(18px * var(--ui-scale));
+  text-align: center;
+}
+.executor-tool-name {
+  font-weight: 600;
+  color: var(--text-strong);
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  flex-shrink: 0;
+}
+.executor-tool-status {
+  flex-shrink: 0;
+  width: calc(14px * var(--ui-scale));
+  text-align: center;
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+}
+.executor-tool-status[data-status="completed"] {
+  color: var(--good);
+}
+.executor-tool-status[data-status="running"] {
+  color: var(--executor-accent);
+}
+.executor-tool-status[data-status="failed"] {
+  color: var(--bad);
+}
+.executor-tool-status[data-status="blocked"] {
+  color: var(--warn);
+}
+
+.executor-tool-output {
+  margin: calc(2px * var(--ui-scale)) 0 calc(4px * var(--ui-scale)) calc(28px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  background: color-mix(in srgb, black 20%, transparent);
+  border-radius: calc(4px * var(--ui-scale));
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: calc(120px * var(--ui-scale));
+  overflow-y: auto;
+}
