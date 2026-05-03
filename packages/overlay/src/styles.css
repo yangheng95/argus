@@ -2519,8 +2519,13 @@ body[data-resizing="row"] * {
   max-width: var(--ui-dialog-wide-width);
 }
 
-.diff-dialog-form {
-  max-width: var(--ui-dialog-diff-width) !important;
+/* Compound selector raises specificity to (0, 2, 0) so the diff dialog
+ * width wins over the wider-dialog default `.dialog-wide .dialog-form`
+ * at the same level, cascading by source order. The previous bare
+ * `.diff-dialog-form` selector lost on specificity and needed
+ * `!important` to defend its width. */
+.dialog-wide .diff-dialog-form {
+  max-width: var(--ui-dialog-diff-width);
 }
 
 .session-dialog-body {
@@ -2591,9 +2596,9 @@ body[data-resizing="row"] * {
   font-size: var(--ui-font-small);
 }
 
-.section-dialog-form {
-  max-width: calc(960px * var(--ui-scale)) !important;
-}
+/* `.section-dialog-form` removed (2026-05-04 dead-code sweep). Zero
+ * consumers across tsx/html — superseded by the right-panel section
+ * surface migration. */
 
 .dialog-title {
   font-size: clamp(18px, calc(19px * var(--ui-scale)), 22px);
@@ -6222,7 +6227,13 @@ body {
 .gwg-priority-badge,
 .change-status,
 .diff-dialog-stat {
-  border-radius: calc(5px * var(--ui-scale)) !important;
+  /* This rule lives later in the cascade than every individual
+   * canonical (`.section-badge, .extension-status, ...` at 4927
+   * declares 999px pill; the iter15+ dot-prefix multi-class at 5789
+   * declares 0; per-class rules at 1241 / 3243 / 4814 / 5662 declare
+   * their own variants). Same class specificity → cascade order
+   * resolves to this 5px-rounded value without `!important`. */
+  border-radius: calc(5px * var(--ui-scale));
   letter-spacing: 0;
   font-weight: 600;
 }
