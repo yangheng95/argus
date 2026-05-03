@@ -1981,3 +1981,84 @@
 .arch-generating-label {
   color: var(--accent);
 }
+
+.delivery-evidence-group {
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+}
+.delivery-evidence-group[open] {
+  background: transparent;
+}
+.delivery-evidence-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  cursor: pointer;
+  font-size: var(--ui-font-control);
+  list-style: none;
+}
+.delivery-evidence-group-head::-webkit-details-marker {
+  display: none;
+}
+.delivery-evidence-group-head::before {
+  content: "▸";
+  margin-right: calc(6px * var(--ui-scale));
+  color: var(--text-muted);
+  transition: transform 120ms ease;
+}
+.delivery-evidence-group[open] > .delivery-evidence-group-head::before {
+  transform: rotate(90deg);
+  display: inline-block;
+}
+.delivery-evidence-group-label {
+  font-weight: 600;
+  color: var(--text);
+}
+.delivery-evidence-group-count {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.delivery-evidence-list {
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+  margin: 0;
+  padding: 0 calc(10px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  list-style: none;
+}
+
+.delivery-evidence-row {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) max-content;
+  gap: calc(8px * var(--ui-scale));
+  align-items: center;
+  font-size: var(--ui-font-control);
+}
+.delivery-evidence-row:not([data-has-pill]) {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.delivery-evidence-goal-pill {
+  background: var(--surface-inset);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-pill);
+  padding: calc(1px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  font-size: var(--ui-font-tiny);
+  font-family: var(--mono);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.delivery-evidence-goal-pill:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.delivery-evidence-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
