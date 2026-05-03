@@ -524,3 +524,166 @@
   gap: calc(6px * var(--ui-scale));
   flex-shrink: 0;
 }
+
+/* ── LogViewer.tsx (Diagnostics tab) ─────────────────────── */
+
+/* Log level selector — small monospace dropdown above the viewer
+   that filters lines by severity. */
+.log-level-select {
+  background: var(--surface-inset);
+  color: var(--text);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--radius);
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  font-family: var(--mono);
+  cursor: pointer;
+  outline: none;
+}
+
+.log-level-select:focus {
+  border-color: var(--accent);
+}
+
+/* Log viewer container — scrollable mono-font region that holds
+   the log lines. The 520px max-height was already calc-wrapped
+   in styles.css; everything else converted here. */
+.log-viewer {
+  max-height: calc(520px * var(--ui-scale));
+  overflow-y: auto;
+  background: var(--surface-inset);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--radius);
+  padding: calc(8px * var(--ui-scale));
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-path {
+  margin-bottom: calc(10px * var(--ui-scale));
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+/* Log line: each row uses content-visibility: auto to skip layout
+   for off-screen rows, and contain-intrinsic-size reserves a
+   ~48px slot so the scrollbar stays accurate. The previous
+   border-bottom routed through a `--border-subtle` fallback hex
+   that has no canonical token; replaced with a direct
+   `color-mix` on white so the surface stays palette-clean. */
+.log-line {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) 0;
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, white 4%, transparent);
+  content-visibility: auto;
+  contain-intrinsic-size: 0 calc(48px * var(--ui-scale));
+}
+
+.log-line:last-child {
+  border-bottom: none;
+}
+
+.log-line-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+}
+
+/* Log level tone tokens — drop the dead `var(--good, #hex)` /
+   `var(--accent, #hex)` / `var(--warn, #hex)` / `var(--bad,
+   #hex)` fallback hexes (tokens are always defined at :root). */
+.log-level {
+  font-weight: 700;
+}
+
+.log-level-debug {
+  color: var(--text-soft);
+}
+
+.log-level-info {
+  color: var(--accent);
+}
+
+.log-level-warn {
+  color: var(--warn);
+}
+
+.log-level-error {
+  color: var(--bad);
+}
+
+.log-ts {
+  color: var(--text-muted);
+}
+
+.log-delta {
+  color: var(--text-muted);
+}
+
+.log-service {
+  color: var(--good);
+}
+
+.log-msg {
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--ui-scale));
+}
+
+/* Log field chip: pill-shaped tag carrying a key=value pair. */
+.log-chip {
+  display: inline-flex;
+  max-width: 100%;
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--subtle-2);
+  border: var(--oc-border-width) solid var(--subtle-4);
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Log detail collapsible: <details><summary> shell that expands
+   to show structured field blocks. */
+.log-detail {
+  margin: 0;
+}
+
+.log-detail > summary {
+  cursor: pointer;
+  color: var(--text-soft);
+}
+
+.log-detail-block + .log-detail-block {
+  margin-top: calc(8px * var(--ui-scale));
+}
+
+.log-detail-title {
+  margin-bottom: calc(4px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+}
+
+.log-detail-pre {
+  margin: 0;
+  padding: calc(8px * var(--ui-scale));
+  border-radius: var(--radius);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--subtle-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+}

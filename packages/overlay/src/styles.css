@@ -7835,147 +7835,41 @@ body[data-theme="light"] .config-close-btn:hover {
   cursor: pointer;
 }
 
-/* -- Log Viewer -- */
-.log-level-select {
-  background: var(--surface-inset);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 2px 6px;
-  font-size: var(--ui-font-control);
-  font-family: var(--mono);
-  cursor: pointer;
-  outline: none;
-}
-.log-level-select:focus {
-  border-color: var(--accent);
-}
-.log-viewer {
-  max-height: calc(520px * var(--ui-scale));
-  overflow-y: auto;
-  background: var(--surface-inset);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 8px;
-  font-family: var(--mono);
-  font-size: var(--ui-font-control);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-.log-path {
-  margin-bottom: 10px;
-  color: var(--text-muted);
-  word-break: break-word;
-}
-.log-line {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.04));
-  /* Native lazy-render: browser skips layout/paint for off-screen rows.
-     contain-intrinsic-size reserves ~48px so the scrollbar stays accurate. */
-  content-visibility: auto;
-  contain-intrinsic-size: 0 48px;
-}
-.log-line:last-child {
-  border-bottom: none;
-}
-.log-line-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
+/* `.log-level-select`, `.log-viewer`, `.log-path`, `.log-line` (+
+   `:last-child`), `.log-line-head`, `.log-level` (+ debug/info/
+   warn/error variants), `.log-ts`, `.log-delta`, `.log-service`,
+   `.log-msg`, `.log-fields`, `.log-chip`, `.log-detail` (+
+   `> summary`), `.log-detail-block + .log-detail-block`,
+   `.log-detail-title`, `.log-detail-pre` live in
+   `styles/surfaces/settings.css` now. The `.log-source` family
+   stays here because the `[data-source="pipeline"]` color is a
+   raw `#7b54c9` purple that has no canonical token in the design
+   language — extracting alone would split a per-source color
+   set, and minting a new token needs design judgement. */
+
+/* Log source pill: 3 distinct tones for server / overlay /
+   pipeline sources. The pipeline color uses a raw hex literal
+   because the design language has no purple token; flagged for
+   a future design-token decision. */
 .log-source {
   display: inline-flex;
   align-items: center;
-  padding: 0 6px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  padding: 0 calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  border: var(--oc-border-width) solid var(--border);
   color: var(--text-soft);
 }
+
 .log-source[data-source="server"] {
-  color: var(--good, #3fb950);
+  color: var(--good);
 }
+
 .log-source[data-source="overlay"] {
-  color: var(--accent, #58a6ff);
+  color: var(--accent);
 }
+
 .log-source[data-source="pipeline"] {
   color: #7b54c9;
-}
-.log-level {
-  font-weight: 700;
-}
-.log-level-debug {
-  color: var(--text-soft);
-}
-.log-level-info {
-  color: var(--accent, #58a6ff);
-}
-.log-level-warn {
-  color: var(--warn, #d29922);
-}
-.log-level-error {
-  color: var(--bad, #f85149);
-}
-.log-ts {
-  color: var(--text-muted);
-}
-.log-delta {
-  color: var(--text-muted);
-}
-.log-service {
-  color: var(--good, #3fb950);
-}
-.log-msg {
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.log-fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.log-chip {
-  display: inline-flex;
-  max-width: 100%;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--subtle-2);
-  border: 1px solid var(--subtle-4);
-  color: var(--text-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.log-detail {
-  margin: 0;
-}
-.log-detail > summary {
-  cursor: pointer;
-  color: var(--text-soft);
-}
-.log-detail-block + .log-detail-block {
-  margin-top: 8px;
-}
-/* iter12: log-viewer detail block title. Plain subtitle. */
-.log-detail-title {
-  margin-bottom: 4px;
-  color: var(--text-muted);
-  font-size: var(--ui-font-control);
-}
-.log-detail-pre {
-  margin: 0;
-  padding: 8px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--subtle-2);
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow: auto;
 }
 
 /* Sidebar workspace layout */

@@ -461,6 +461,44 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("log viewer is owned by surfaces/settings.css", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    for (const className of [
+      "log-level-select",
+      "log-viewer",
+      "log-path",
+      "log-line",
+      "log-line-head",
+      "log-level",
+      "log-level-debug",
+      "log-level-info",
+      "log-level-warn",
+      "log-level-error",
+      "log-ts",
+      "log-delta",
+      "log-service",
+      "log-msg",
+      "log-fields",
+      "log-chip",
+      "log-detail",
+      "log-detail-title",
+      "log-detail-pre",
+    ]) {
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    expect(settingsSurface).toMatch(/\.log-detail-block \+ \.log-detail-block\s*\{/)
+    expect(settingsSurface).toMatch(/\.log-detail \> summary\s*\{/)
+    expect(settingsSurface).not.toMatch(/var\(--good,\s*#3fb950\)/)
+    expect(settingsSurface).not.toMatch(/var\(--accent,\s*#58a6ff\)/)
+    expect(settingsSurface).not.toMatch(/var\(--warn,\s*#d29922\)/)
+    expect(settingsSurface).not.toMatch(/var\(--bad,\s*#f85149\)/)
+    expect(settingsSurface).not.toMatch(/var\(--border-subtle,\s*rgba/)
+  })
+
   test("channel docs + market cards are owned by surfaces/settings.css", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
