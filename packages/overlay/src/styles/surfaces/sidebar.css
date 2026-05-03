@@ -736,3 +736,63 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+
+.project-group {
+  padding: calc(4px * var(--ui-scale)) 0 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* The .project-group + sibling rule and the .project-group-heading
+ * canonical previously appeared twice in styles.css. The earlier
+ * pair (~1745) set margin-top:6px / padding-top:10px and a separate
+ * heading padding shorthand `0 0 6px 8px`; the later pair (~2557)
+ * overrode those with margin-top:8px / padding-top:8px and a
+ * heading padding-left:6px. The merged canonicals here take the
+ * cascade-winning values (rule 9), so only one source for each
+ * selector survives.
+ */
+.project-group + .project-group {
+  margin-top: calc(8px * var(--ui-scale));
+  padding-top: calc(8px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 74%, transparent);
+}
+
+.project-group[data-active-project="true"] > .project-group-heading {
+  color: var(--accent);
+}
+
+.project-group[data-active-project="true"] > .project-group-heading .project-group-name {
+  color: var(--text-strong);
+}
+
+.project-group-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  padding: 0 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  font-size: calc(var(--ui-font-meta) * 1.02);
+  color: var(--text-muted);
+}
+
+.project-group-name {
+  font-size: var(--ui-font-body);
+  font-weight: 650;
+  letter-spacing: 0.015em;
+  color: var(--text-strong);
+}
+
+.project-group-parent {
+  flex: 1 0 100%;
+  padding-left: 0;
+  font-size: calc(var(--ui-font-meta) * 0.92);
+  color: color-mix(in srgb, var(--text-muted) 92%, var(--text-soft));
+  opacity: 0.88;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
