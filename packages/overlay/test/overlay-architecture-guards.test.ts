@@ -157,14 +157,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(259)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(171)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(256)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(169)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(137)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(133)
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
@@ -473,6 +473,33 @@ describe("overlay architecture guards", () => {
       "mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 84%, transparent)",
     ]) {
       expect(beforeBody).toContain(declaration)
+    }
+  })
+
+  test("workflow canvas layout is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.agent-workflow-canvas\b/.test(selector)) continue
+
+      expect(body).not.toMatch(/\b(?:display|gap|padding(?:-[a-z]+)?)\s*:/)
+    }
+
+    const body = soloRuleBody(styles, ".agent-workflow-canvas")
+    for (const declaration of [
+      "display: block",
+      "flex: 1 1 0",
+      "min-height: 0",
+      "overflow-y: auto",
+      "padding: calc(18px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(38px * var(--ui-scale))",
+      "calc(10px * var(--ui-scale))",
+    ]) {
+      expect(body).toContain(declaration)
     }
   })
 

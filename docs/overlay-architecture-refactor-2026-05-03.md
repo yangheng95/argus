@@ -299,6 +299,11 @@ Progress log:
   Themes no longer own workflow panel display, spacing, padding, overflow,
   isolation, or backdrop geometry; guard ceilings are now `!important <= 259`,
   `body[data-theme] <= 171`, and theme layout/chrome overrides <= 137.
+- 2026-05-03: Moved `.agent-workflow-canvas` display and padding from the
+  compact theme reset plus Calm workflow map override into the canonical canvas
+  rule. Workflow body spacing is now theme-invariant, reducing guard ceilings to
+  `!important <= 256`, `body[data-theme] <= 169`, and theme layout/chrome
+  overrides <= 133.
 
 Trigger: user feedback (2026-05-03):
 
