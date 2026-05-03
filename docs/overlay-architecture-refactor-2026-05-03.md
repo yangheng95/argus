@@ -352,6 +352,11 @@ Progress log:
   without theme-owned button geometry, reducing guard ceilings to
   `!important <= 234`, `body[data-theme] <= 149`, and theme layout/chrome
   overrides <= 85.
+- 2026-05-03: Moved `.agent-workflow-report-close` ghost button chrome and
+  hover background from broad theme reset lists into canonical report-close
+  rules. The workflow report close action now has one transparent icon-button
+  shape across light, dark, and vscode-dark themes; the guard explicitly
+  rejects future theme-scoped report-close chrome.
 
 Trigger: user feedback (2026-05-03):
 
@@ -377,20 +382,17 @@ one theme contract, and no runtime God CSS path left behind.
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `packages/overlay/src/styles.css`      | **15,212 lines / 2,070 top-level rules / 490 nested rules**                             |
 | `packages/overlay/src/styles/card.css` | 2,022 lines / 336 top-level rules                                                       |
-| Total `!important` in stylesheets      | **324** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **213**                                                                                 |
-| Theme layout/chrome overrides          | **239** current guard baseline                                                          |
+| Total `!important` in stylesheets      | **234** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **149**                                                                                 |
+| Theme layout/chrome overrides          | **85** current guard baseline                                                           |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | TaskList 696 / LogViewer 579 / CardHeader 544 / MemoryPanel 444 / GoalWorkflowGroup 206 |
 | Total `.tsx` LOC across overlay        | 28,700                                                                                  |
 
-53 single-source iters (iter5 / iter8 / iter14 / iter15 /
-iter16 / iter17 / iter20 / iter22 / iter23 / iter25 / iter26 /
-iter27 / iter28 / iter29 / iter30 / iter33 / iter36 / iter37 /
-iter40 / iter47 / iter52 / iter53 / iter54) retired roughly
-**~30 of the 380 `!important`** — 8% in 53 iters. The current
-slope means clearing the `!important` debt at the per-selector
-pace would take ~600 more iters.
+Early single-source iters proved the per-selector teardown discipline.
+The current baseline is materially lower, but the same rule still holds:
+each migrated selector must leave a testable single owner and must not
+rely on theme-scoped chrome or `!important` defenses.
 
 ## Top problems (severity order)
 

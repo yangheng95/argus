@@ -788,6 +788,37 @@ describe("overlay architecture guards", () => {
     )
   })
 
+  test("workflow report close button chrome is canonical, not theme scoped", () => {
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+
+    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1] ?? ""
+      const body = match[2] ?? ""
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+        selector,
+      )
+      if (!isThemeSelector || !/\.agent-workflow-report-close\b/.test(selector)) continue
+
+      expect(body).not.toMatch(/\b(?:border|background|box-shadow|color)\s*:/)
+    }
+
+    const body = soloRuleBody(styles, ".agent-workflow-report-close")
+    for (const declaration of [
+      "width: calc(28px * var(--ui-scale))",
+      "padding: 0",
+      "border: 0",
+      "background: transparent",
+      "box-shadow: none",
+      "color: var(--text-soft)",
+    ]) {
+      expect(body).toContain(declaration)
+    }
+
+    expect(soloRuleBody(styles, ".agent-workflow-report-close:hover")).toContain(
+      "background: color-mix(in srgb, var(--accent) 10%, transparent)",
+    )
+  })
+
   test("panel body shell chrome is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
 

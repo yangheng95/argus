@@ -7725,7 +7725,16 @@ select.field-input option {
 .agent-workflow-report-close {
   width: calc(28px * var(--ui-scale));
   padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-soft);
   flex: 0 0 auto;
+}
+
+.agent-workflow-report-close:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-strong);
 }
 
 .agent-workflow-report-section {
@@ -14916,16 +14925,14 @@ body[data-theme="light"]
     .section,
     .gwg,
     .chat-empty--task,
-    .agent-workflow-warning,
-    .agent-workflow-report-close
+    .agent-workflow-warning
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
     .section,
     .gwg,
     .chat-empty--task,
-    .agent-workflow-warning,
-    .agent-workflow-report-close
+    .agent-workflow-warning
   ) {
   border: 0 !important;
   border-color: transparent !important;
@@ -14972,8 +14979,7 @@ body[data-theme="light"]
     .section-icon-btn,
     .chat-toolbar-btn,
     .chat-cancel-btn,
-    .conn-banner__action,
-    .agent-workflow-report-close
+    .conn-banner__action
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
@@ -14998,8 +15004,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .section-icon-btn,
     .chat-toolbar-btn,
     .chat-cancel-btn,
-    .conn-banner__action,
-    .agent-workflow-report-close
+    .conn-banner__action
   ) {
   background: transparent !important;
   background-color: transparent !important;
@@ -15036,8 +15041,7 @@ body[data-theme="light"]
     .chat-toolbar-btn:hover,
     .chat-toolbar-btn[data-active],
     .chat-cancel-btn:hover:not(:disabled),
-    .conn-banner__action:hover,
-    .agent-workflow-report-close:hover
+    .conn-banner__action:hover
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
@@ -15069,8 +15073,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .chat-toolbar-btn:hover,
     .chat-toolbar-btn[data-active],
     .chat-cancel-btn:hover:not(:disabled),
-    .conn-banner__action:hover,
-    .agent-workflow-report-close:hover
+    .conn-banner__action:hover
   ) {
   background: transparent !important;
   background-color: transparent !important;
