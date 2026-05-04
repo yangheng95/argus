@@ -1,0 +1,64 @@
+// ── Section ──
+// Collapsible right-rail section built on native <details>/<summary>.
+// Renders .oc-section with icon + title + optional badge in the header.
+//
+// Usage:
+//   <Section title="Requirements" icon={<Icon name="requirement" />} defaultOpen>
+//     {children}
+//   </Section>
+//
+//   Controlled open state — hold a ref and set detailsEl.open imperatively,
+//   or pass `id` so DOM accessors (like board's deliverySection) resolve:
+//   <Section id="deliverySection" ref={el => detailsEl = el} ...>
+//
+// CSS: src/styles/primitives/section.css
+// Migration target: Step 9.E — Board / FilesSection / GoalWorkflowGroup sections.
+
+import { type JSX, splitProps, Show } from "solid-js";
+
+export interface SectionProps {
+  /** Section title displayed in the header. */
+  title: string;
+  /** Icon slot rendered left of the title (wrap in <Icon> or a span). */
+  icon?: JSX.Element;
+  /** Open on first render. Default: false. */
+  defaultOpen?: boolean;
+  /** Trailing badge content (verdict pill, count chip, etc.). */
+  badge?: JSX.Element;
+  /** id forwarded to the <details> root — used by DOM accessors. */
+  id?: string;
+  /** Ref forwarded to the <details> element. */
+  ref?: ((el: HTMLDetailsElement) => void) | HTMLDetailsElement;
+  /** Extra class names on the root. */
+  class?: string;
+  /** data-* attributes forwarded to root. */
+  [key: `data-${string}`]: string | boolean | undefined;
+  children: JSX.Element;
+}
+
+export function Section(rawProps: SectionProps) {
+  const [local, rest] = splitProps(rawProps, [
+    "title", "icon", "defaultOpen", "badge", "id", "ref", "class", "children",
+  ]);
+
+  return (
+    <details
+      id={local.id}
+      class={["oc-section", local.class].filter(Boolean).join(" ")}
+      open={local.defaultOpen}
+      ref={local.ref as any}
+      {...rest}
+    >
+      <summary class="oc-section__head">
+        <Show when={local.icon}>
+          <span class="oc-section__icon" aria-hidden="true">{local.icon}</span>
+        </Show>
+        <span class="oc-section__title">{local.title}</span>
+        <Show when={local.badge}>
+          <span class="oc-section__badge">{local.badge}</span>
+        </Show>
+      </summary>
+      <div class="oc-section__body">{local.children}</div>
+    </details>
+  );
+}

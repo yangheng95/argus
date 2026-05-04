@@ -89,6 +89,7 @@
   --oc-header-shadow: none;
   --oc-titlebar-gap: calc(2px * var(--ui-scale, 1));
   --oc-titlebar-status-icon: calc(14px * var(--ui-scale, 1));
+  --oc-icon-size: calc(14px * var(--ui-scale, 1));
   --oc-control-shadow: none;
 
   /* Structural layout tokens — non-themed physical constants. Moved
