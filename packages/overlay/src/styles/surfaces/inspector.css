@@ -81,7 +81,7 @@
 /* Section icon-button: small 26x24 action button used inside section
    heads. Reuses overlay control vocab: 1-unit border, accent-tinted
    hover/focus chrome, opacity-only disabled. */
-.section-icon-btn {
+.oc-section__icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -94,14 +94,14 @@
   cursor: pointer;
 }
 
-.section-icon-btn:hover,
-.section-icon-btn:focus-visible {
+.oc-section__icon-btn:hover,
+.oc-section__icon-btn:focus-visible {
   border-color: var(--hover-accent-border);
   color: var(--accent);
   outline: none;
 }
 
-.section-icon-btn:disabled {
+.oc-section__icon-btn:disabled {
   opacity: var(--ui-opacity-faint);
   cursor: default;
 }
@@ -170,7 +170,7 @@
    and the disclosure caret pseudo. The richer `.section` shell + the
    per-phase-state hover/border/box-shadow chrome stay in styles.css
    until those raw rgba gradients are reworked through palette tokens. */
-.section-icon {
+.oc-section__icon {
   display: flex;
   align-items: center;
   color: var(--text-soft);
@@ -179,16 +179,16 @@
   height: calc(16px * var(--ui-scale));
 }
 
-.section-icon svg {
+.oc-section__icon svg {
   width: 100%;
   height: 100%;
 }
 
-.section[open] .section-icon {
+.oc-section[open] .oc-section__icon {
   color: var(--accent);
 }
 
-.section-title {
+.oc-section__title {
   flex: 1;
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-medium);
@@ -197,7 +197,7 @@
   text-transform: none;
 }
 
-.section-badge {
+.oc-section__badge {
   margin-left: auto;
   position: relative;
   font-size: calc(var(--ui-font-meta) * 0.98);
@@ -217,11 +217,11 @@
   white-space: nowrap;
 }
 
-.section-badge:empty {
+.oc-section__badge:empty {
   display: none;
 }
 
-.section-badge::before {
+.oc-section__badge::before {
   content: "";
   position: absolute;
   left: 0;
@@ -233,45 +233,45 @@
   transform: translateY(-50%);
 }
 
-.section-badge[data-variant="metric"] {
+.oc-section__badge[data-variant="metric"] {
   padding-left: 0;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
 
-.section-badge[data-variant="metric"]::before {
+.oc-section__badge[data-variant="metric"]::before {
   display: none;
 }
 
-.section-badge[data-tone="good"] {
+.oc-section__badge[data-tone="good"] {
   color: color-mix(in srgb, var(--accent) 82%, var(--text-soft));
 }
 
-.section-badge[data-tone="good"]::before {
+.oc-section__badge[data-tone="good"]::before {
   background: color-mix(in srgb, var(--accent) 84%, transparent);
 }
 
-.section-badge[data-tone="bad"] {
+.oc-section__badge[data-tone="bad"] {
   color: var(--bad);
 }
 
-.section-badge[data-tone="bad"]::before {
+.oc-section__badge[data-tone="bad"]::before {
   background: color-mix(in srgb, var(--bad) 84%, transparent);
 }
 
-.section-badge[data-tone="warn"] {
+.oc-section__badge[data-tone="warn"] {
   color: var(--warn);
 }
 
-.section-badge[data-tone="warn"]::before {
+.oc-section__badge[data-tone="warn"]::before {
   background: color-mix(in srgb, var(--warn) 84%, transparent);
 }
 
-.section-badge[data-tone="accent"] {
+.oc-section__badge[data-tone="accent"] {
   color: var(--accent);
 }
 
-.section-badge[data-tone="accent"]::before {
+.oc-section__badge[data-tone="accent"]::before {
   background: color-mix(in srgb, var(--accent) 84%, transparent);
 }
 
@@ -284,11 +284,11 @@
   line-height: 1;
 }
 
-.section-body {
+.oc-section__body {
   padding: 0 var(--ui-gap-sm) var(--ui-gap-sm);
 }
 
-.section-head::before {
+.oc-section__head::before {
   content: "▸";
   font-size: var(--ui-font-control);
   color: var(--text-muted);
@@ -296,7 +296,7 @@
   transition: transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 
-.section[open] > .section-head::before {
+.oc-section[open] > .oc-section__head::before {
   transform: rotate(90deg);
 }
 
@@ -310,8 +310,8 @@
  * The `:last-child` border-bottom re-assertion that compensated for
  * collapsing dividers also went away with the parent border. The
  * left-edge accent stripe (rule §2.2 C) is rendered in
- * `.section[data-phase-state="active"]` below. */
-.section {
+ * `.oc-section[data-phase-state="active"]` below. */
+.oc-section {
   position: relative;
   border: 0;
   border-radius: var(--oc-radius-soft);
@@ -323,7 +323,7 @@
 /* Section head — clickable summary. The 3% white hover wash is
    expressed via `color-mix` so the surface stays palette-clean
    without an rgba literal. */
-.section-head {
+.oc-section__head {
   display: flex;
   align-items: center;
   gap: var(--ui-gap-sm);
@@ -342,16 +342,16 @@
   background: var(--oc-header-bg);
 }
 
-.section-head::-webkit-details-marker {
+.oc-section__head::-webkit-details-marker {
   display: none;
 }
 
-.section-head::marker {
+.oc-section__head::marker {
   display: none;
   content: "";
 }
 
-.section-head:hover {
+.oc-section__head:hover {
   background:
     linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 74%),
     color-mix(in srgb, var(--surface-strong) 66%, var(--surface-inset) 34%);
@@ -367,27 +367,27 @@
  * rendered via `::after`, plus the existing background wash. The
  * stripe pattern matches `.delivery-panel::before` in this same
  * file, which is the established left-rail accent idiom. */
-.section[data-phase-state="related"] {
+.oc-section[data-phase-state="related"] {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 3%, transparent), transparent 72%),
     color-mix(in srgb, var(--surface) 91%, var(--surface-inset) 9%);
 }
 
-.section[data-phase-state="related"] > .section-head::before {
+.oc-section[data-phase-state="related"] > .oc-section__head::before {
   border-left-color: var(--accent);
 }
 
-.section[data-phase-state="related"] .section-icon {
+.oc-section[data-phase-state="related"] .oc-section__icon {
   color: var(--accent);
 }
 
-.section[data-phase-state="active"] {
+.oc-section[data-phase-state="active"] {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 74%),
     color-mix(in srgb, var(--surface) 92%, var(--surface-inset) 8%);
 }
 
-.section[data-phase-state="active"]::after {
+.oc-section[data-phase-state="active"]::after {
   content: "";
   position: absolute;
   inset-block: calc(6px * var(--ui-scale));
@@ -398,7 +398,7 @@
   pointer-events: none;
 }
 
-.section[data-phase-state="active"] > .section-head {
+.oc-section[data-phase-state="active"] > .oc-section__head {
   background:
     linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 72%),
     color-mix(in srgb, var(--accent) 7%, var(--surface-strong));
@@ -406,21 +406,21 @@
   animation: none;
 }
 
-.section[data-phase-state="active"] > .section-head::before {
+.oc-section[data-phase-state="active"] > .oc-section__head::before {
   border-left-color: var(--accent);
 }
 
-.section[data-phase-state="active"] .section-icon,
-.section[data-phase-state="active"] .section-title {
+.oc-section[data-phase-state="active"] .oc-section__icon,
+.oc-section[data-phase-state="active"] .oc-section__title {
   color: var(--text-strong);
 }
 
-.section[data-phase-state="active"] .section-badge:not(:empty) {
+.oc-section[data-phase-state="active"] .oc-section__badge:not(:empty) {
   color: var(--accent);
   background: transparent;
 }
 
-.section[data-phase-state="active"] .section-badge:not(:empty)::before {
+.oc-section[data-phase-state="active"] .oc-section__badge:not(:empty)::before {
   background: color-mix(in srgb, var(--accent) 86%, transparent);
 }
 
@@ -606,13 +606,10 @@
    the cleanup pays off. */
 .gwg {
   position: relative;
-  border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
   background: var(--surface-inset);
   overflow: hidden;
-  transition:
-    border-color var(--ui-duration-slow) var(--ui-timing-standard),
-    background var(--ui-duration-slow) var(--ui-timing-standard);
+  transition: background var(--ui-duration-slow) var(--ui-timing-standard);
 }
 
 .gwg::before {
@@ -631,7 +628,6 @@
 }
 
 .gwg:hover {
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
   box-shadow: 0 calc(9px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, black 12%, transparent);
 }
 
@@ -645,31 +641,13 @@
     color-mix(in srgb, var(--surface) 96%, transparent);
 }
 
-/* `.gwg--*` status modifiers — rail tone via `::before` plus a
-   subtle border tint on the host. The `::before` and border rules
-   were originally split (rail bg here, border-color in a late
-   block at the styles.css tail); folded together per rule 8.
-   The previous light-blue hex sibling on `--passed` was retired
-   in favor of `var(--text-soft)` so the muted-accent hue stays
-   theme-adaptive without a literal color. */
-.gwg--passed {
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
-}
-
+/* `.gwg--*` status modifiers — rail tone via `::before`. */
 .gwg--passed::before {
   background: color-mix(in srgb, var(--accent) 52%, var(--text-soft));
 }
 
-.gwg--failed {
-  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
-}
-
 .gwg--failed::before {
   background: color-mix(in srgb, var(--bad) 82%, white 4%);
-}
-
-.gwg--running {
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .gwg--running::before {
@@ -2756,7 +2734,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
-#goalsSection > .section-body {
+#goalsSection > .oc-section__body {
   max-height: none;
   overflow-y: visible;
   overscroll-behavior: auto;
@@ -2765,7 +2743,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .gwg-list {
   display: flex;
   flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
+  gap: 0;
 }
 
 .gwg-priority-badge {

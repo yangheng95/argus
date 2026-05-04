@@ -11,7 +11,7 @@
 // CSS: src/styles/primitives/panel.css
 // Migration target: Step 9.E — 11 workspace and inspector panels.
 
-import { type JSX, mergeProps, splitProps } from "solid-js";
+import { Show, type JSX, mergeProps, splitProps } from "solid-js";
 import { Dynamic } from "solid-js/web";
 
 export interface PanelProps {
@@ -41,9 +41,13 @@ export function Panel(rawProps: PanelProps) {
       ref={local.ref as any}
       {...rest}
     >
-      {local.header && <div class="oc-panel__header">{local.header}</div>}
+      <Show when={local.header}>
+        <div class="oc-panel__header">{local.header}</div>
+      </Show>
       <div class="oc-panel__body">{local.children}</div>
-      {local.footer && <div class="oc-panel__footer">{local.footer}</div>}
+      <Show when={local.footer}>
+        <div class="oc-panel__footer">{local.footer}</div>
+      </Show>
     </Dynamic>
   );
 }

@@ -6,6 +6,7 @@
 import { createResource, Show } from "solid-js";
 import { apiJson } from "../services/api";
 import { extToLang, renderCodeBlock } from "../utils/markdown";
+import { Panel } from "./primitives/Panel";
 import { t } from "../utils/i18n";
 
 export interface FileViewPanelProps {
@@ -38,7 +39,16 @@ export function FileViewPanel(props: FileViewPanelProps) {
   const err = () => file.error as Error | undefined;
 
   return (
-    <div class="file-view-panel">
+    <Panel
+      class="file-view-panel"
+      header={
+        props.filePath ? (
+          <span class="file-view-path" title={props.filePath}>
+            {props.filePath}
+          </span>
+        ) : undefined
+      }
+    >
       <Show
         when={props.filePath}
         fallback={
@@ -47,45 +57,40 @@ export function FileViewPanel(props: FileViewPanelProps) {
           </div>
         }
       >
-        <header class="file-view-head">
-          <span class="file-view-path" title={props.filePath || ""}>
-            {props.filePath}
-          </span>
-        </header>
-        <div class="file-view-body">
+        <Show
+          when={!loading()}
+          fallback={
+            <div class="file-view-empty">
+              <p class="empty-hint">{t("workspace.file_loading")}</p>
+            </div>
+          }
+        >
           <Show
-            when={!loading()}
+            when={!err()}
             fallback={
               <div class="file-view-empty">
-                <p class="empty-hint">{t("workspace.file_loading")}</p>
+                <p class="empty-hint">
+                  {t("workspace.file_error", { message: err()?.message ?? "" })}
+                </p>
               </div>
             }
           >
             <Show
-              when={!err()}
+              when={file() && file()!.type === "text"}
               fallback={
                 <div class="file-view-empty">
-                  <p class="empty-hint">
-                    {t("workspace.file_error", { message: err()?.message ?? "" })}
-                  </p>
+                  <p class="empty-hint">{t("workspace.file_binary")}</p>
                 </div>
               }
             >
-              <Show
-                when={file() && file()!.type === "text"}
-                fallback={
-                  <div class="file-view-empty">
-                    <p class="empty-hint">{t("workspace.file_binary")}</p>
-                  </div>
-                }
-              >
+              <div class="file-view-body">
                 <FileBody path={props.filePath!} content={file()!.content} />
-              </Show>
+              </div>
             </Show>
           </Show>
-        </div>
+        </Show>
       </Show>
-    </div>
+    </Panel>
   );
 }
 

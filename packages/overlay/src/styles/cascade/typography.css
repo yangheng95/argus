@@ -12,7 +12,7 @@
    ───────────────────────────────────────────────────────────── */
 
 .dialog-title,
-.section-title,
+.oc-section__title,
 .config-section-head {
   font-size: var(--ui-font-title);
   font-weight: var(--ui-font-weight-strong);
@@ -40,7 +40,7 @@
   letter-spacing: 0.03em;
 }
 
-.section-badge,
+.oc-section__badge,
 .knowledge-scope,
 .mini-badge {
   display: inline-flex;
@@ -64,7 +64,7 @@
   font-weight: var(--ui-font-weight-strong);
 }
 
-.section-title,
+.oc-section__title,
 .config-section-head-text,
 .config-subsection-head {
   font-weight: var(--ui-font-weight-medium);
