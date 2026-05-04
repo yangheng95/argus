@@ -18,6 +18,7 @@ import {
 } from "../../services/llm";
 import { nativeConfirm, nativeOpen, nativePrompt, nativeSelect } from "../../utils/native";
 import { nativeMessage } from "../../services/app-dialog";
+import { Icon } from "../Icon";
 import { Button } from "../ui/Button";
 import { SurfaceHeader } from "../ui/SurfaceHeader";
 
@@ -570,7 +571,7 @@ export default function ProvidersPanel() {
                 aria-label={t("common.clear")}
                 data-testid="provider-search-clear"
               >
-                ×
+                <Icon name="close" />
               </button>
             </Show>
           </label>

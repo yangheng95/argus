@@ -8,6 +8,7 @@ import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { FileViewPanel } from "./FileViewPanel";
 import type { DiffTarget } from "../services/diff";
 import { t } from "../utils/i18n";
+import { Icon } from "./Icon";
 
 export type WorkspaceView =
   | { kind: "diff"; target: DiffTarget }
@@ -91,7 +92,7 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
           aria-label={t("workspace.close")}
           onClick={props.onClose}
         >
-          ×
+          <Icon name="close" />
         </button>
       </header>
       <div class="workspace-body">

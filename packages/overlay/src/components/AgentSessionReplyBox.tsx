@@ -15,6 +15,7 @@
 
 import { createSignal, Show } from "solid-js";
 import { t } from "../utils/i18n";
+import { Icon } from "./Icon";
 
 export interface AgentSessionReplyBoxProps {
   /** Send the message to the agent session. Resolves when the API
@@ -78,7 +79,9 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
             onClick={() => setError("")}
             aria-label={t("common.clear")}
             title={t("common.clear")}
-          >×</button>
+          >
+            <Icon name="close" />
+          </button>
         </div>
       </Show>
       <div class="card__agent-reply-actions">

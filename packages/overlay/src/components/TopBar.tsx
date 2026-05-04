@@ -10,6 +10,7 @@
 import { Show } from "solid-js";
 import { settingsStore } from "../store/settings";
 import { applyDirectory, pickDirectory } from "../services/workspace";
+import { Icon } from "./Icon";
 
 export interface TopBarProps {
   /** Slot for the right-side controls (connection badge, window controls). */
@@ -45,11 +46,15 @@ export function TopBar(props: TopBarProps) {
         title={settingsStore.directory || "Choose project directory"}
         onClick={switchCwd}
       >
-        <span class="top-bar-cwd-icon" aria-hidden="true">📁</span>
+        <span class="top-bar-cwd-icon" aria-hidden="true">
+          <Icon name="folder" />
+        </span>
         <span class="top-bar-cwd-path">
           {shortenPath(settingsStore.directory ?? "", 56) || "Choose project…"}
         </span>
-        <span class="top-bar-cwd-caret" aria-hidden="true">▾</span>
+        <span class="top-bar-cwd-caret" aria-hidden="true">
+          <Icon name="caret-down" />
+        </span>
       </button>
       <div class="top-bar-spacer" />
       <Show when={props.rightSlot}>

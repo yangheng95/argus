@@ -14,6 +14,7 @@ import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
 import { settingsStore } from "../store/settings";
 import { browseDirectory } from "../services/workspace";
+import { Icon } from "./Icon";
 
 const MODES = ["workflow", "build"] as const;
 
@@ -51,7 +52,9 @@ export function BoardIntro() {
           role="status"
           aria-live="polite"
         >
-          <span class="board-intro__cta-icon" aria-hidden="true">📁</span>
+          <span class="board-intro__cta-icon" aria-hidden="true">
+            <Icon name="folder" />
+          </span>
           <span class="board-intro__cta-body">
             <strong class="board-intro__cta-title">{t("intro.directory_required_title")}</strong>
             <span class="board-intro__cta-text">{t("intro.directory_required_body")}</span>

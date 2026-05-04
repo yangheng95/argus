@@ -8,6 +8,7 @@ import { settingsStore } from "../store/settings";
 import { reorderTaskQueue } from "../services/task-queue";
 import { t } from "../utils/i18n";
 import { stamp, fullStampWithRelative } from "../utils/time";
+import { Icon } from "./Icon";
 
 // ── Task status constants ──
 
@@ -597,7 +598,9 @@ export function TaskList(props: TaskListProps) {
               onClick={() => setSearchQuery("")}
               title={t("common.clear")}
               aria-label={t("common.clear")}
-            >×</button>
+            >
+              <Icon name="close" />
+            </button>
           </Show>
         </div>
       </Show>

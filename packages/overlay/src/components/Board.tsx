@@ -20,6 +20,7 @@ import { InteractionCardList, type InteractionData } from "./InteractionCard";
 import { BoardIntro } from "./BoardIntro";
 import { taskScopeSectionVisibility } from "../utils/task-scope-sections";
 import { Button } from "./ui/Button";
+import { Icon, type IconName } from "./Icon";
 
 // ── Status utilities ──
 
@@ -303,7 +304,9 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
   return (
     <details id="deliverySection" class="section" open>
       <summary class="section-head">
-        <span class="section-icon" aria-hidden="true" innerHTML={SECTION_ICONS.delivery} />
+        <span class="section-icon" aria-hidden="true">
+          <Icon name="delivery" />
+        </span>
         <span class="section-title">{t("section.delivery")}</span>
         <span
           class="section-badge"
@@ -469,7 +472,10 @@ interface SectionFrameProps {
   id: string;
   title: string;
   bodyId: string;
-  icon?: string;
+  /** Section header icon. Identifier resolves through the Icon
+   * primitive registry (components/Icon.tsx); inline innerHTML svg
+   * strings were retired 2026-05-04 (flat-redesign Step 3). */
+  icon?: IconName;
   badgeId?: string;
   badgeText?: string;
   badgeTone?: string;
@@ -479,19 +485,6 @@ interface SectionFrameProps {
   defaultOpen?: boolean;
   children: any;
 }
-
-// 16x16 SVG icons for section headers — all use currentColor so they
-// inherit the section-icon color (soft text / accent when open).
-const SECTION_ICONS: Record<string, string> = {
-  overview: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>`,
-  spec: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.5L9.5 2Z"/><polyline points="9.5,2 9.5,4.5 12,4.5"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="9.5" x2="10" y2="9.5"/></svg>`,
-  plan: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="13" y2="4"/><line x1="6" y1="8" x2="13" y2="8"/><line x1="6" y1="12" x2="13" y2="12"/><circle cx="3.5" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="8" r="0.8" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="0.8" fill="currentColor" stroke="none"/></svg>`,
-  goals: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="0.8" fill="currentColor" stroke="none"/></svg>`,
-  executor: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.6L11.3 8 6 11.4Z"/></svg>`,
-  criteria: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="10" height="12" rx="1.2"/><path d="M6 6l1.2 1.2L9.5 5"/><line x1="6" y1="9.5" x2="10" y2="9.5"/><line x1="6" y1="11.5" x2="9" y2="11.5"/></svg>`,
-  delivery: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z"/><polyline points="2.5,5.5 8,8.5 13.5,5.5"/><line x1="8" y1="8.5" x2="8" y2="13.5"/></svg>`,
-  files: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5L9 2Z"/><polyline points="9,2 9,5 12,5"/></svg>`,
-};
 
 function SectionFrame(props: SectionFrameProps) {
   let detailsEl: HTMLDetailsElement | undefined;
@@ -521,11 +514,11 @@ function SectionFrame(props: SectionFrameProps) {
       attr:data-phase-state={props.phaseState || undefined}
     >
       <summary class="section-head">
-        <span
-          class="section-icon"
-          aria-hidden="true"
-          innerHTML={props.icon || ""}
-        />
+        <Show when={props.icon}>
+          <span class="section-icon" aria-hidden="true">
+            <Icon name={props.icon!} />
+          </span>
+        </Show>
         <span class="section-title">{props.title}</span>
         <span
           class="section-badge"
@@ -725,7 +718,7 @@ export function Board(props: BoardProps) {
         <SectionFrame
           id="requirementsSection"
           title={t("workflow.requirements")}
-          icon={SECTION_ICONS.spec}
+          icon="spec"
           bodyId="requirementsBody"
           badgeId="requirementsBadge"
           phaseState={phaseFor("requirements")}
@@ -759,7 +752,7 @@ export function Board(props: BoardProps) {
         <SectionFrame
           id="architectSection"
           title={t("workflow.architect")}
-          icon={SECTION_ICONS.plan}
+          icon="plan"
           bodyId="architectBody"
           badgeId="architectBadge"
           phaseState={phaseFor("architect")}
@@ -773,7 +766,7 @@ export function Board(props: BoardProps) {
       <SectionFrame
         id="goalWorkflowsSection"
         title={t("workflow.goals")}
-        icon={SECTION_ICONS.goals}
+        icon="goals"
         bodyId="goalWorkflowsBody"
         badgeId="goalWorkflowsBadge"
         phaseState={phaseFor("goalWorkflows")}
@@ -809,7 +802,7 @@ export function Board(props: BoardProps) {
         <SectionFrame
           id="evaluationCriteriaSection"
           title={t("section.criteria") || "评估指标"}
-          icon={SECTION_ICONS.criteria}
+          icon="criteria"
           bodyId="evaluationCriteriaBody"
           badgeId="evaluationCriteriaBadge"
           badgeText={(() => {
@@ -838,7 +831,7 @@ export function Board(props: BoardProps) {
       <SectionFrame
         id="deliverySection"
         title={t("section.delivery")}
-        icon={SECTION_ICONS.delivery}
+        icon="delivery"
         bodyId="deliveryBody"
         badgeId="deliveryBadge"
         phaseState={phaseFor("delivery")}
@@ -895,7 +888,7 @@ export function Board(props: BoardProps) {
       <SectionFrame
         id="interactionsSection"
         title={t("workflow.interactions")}
-        icon={SECTION_ICONS.criteria}
+        icon="criteria"
         bodyId="interactionsBody"
         badgeId="interactionsBadge"
         phaseState={phaseFor("interactions")}
