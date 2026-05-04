@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import type { CardNode } from "../store/card-tree";
 import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree";
-import { defaultExpandedForNode } from "../utils/card-tree";
+import { collectActivityCounts, defaultExpandedForNode } from "../utils/card-tree";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { boardStore, rootTaskSessionID } from "../store/board";
 import { cancelAgentSession, replyToAgentSession } from "../services/task";
@@ -51,6 +51,18 @@ export function Card(props: { node: CardNode; depth: number }) {
 
   const expanded = () =>
     cardExpanded(props.node.id, props.node.status, defaultExpanded());
+
+  // Foot stats: tool / message / agent / skill activity rolled up from the
+  // card's descendants. Surface on stage cards (agent/phase/step) regardless
+  // of expand state — when collapsed they back-fill what the body would
+  // have shown; when expanded they sit at the bottom as a quick summary
+  // of "how much happened in this step".
+  const footActivity = createMemo(() => {
+    if (!isStageCard() || props.node.kind === "tool") return null;
+    const counts = collectActivityCounts(props.node);
+    if ((counts.messages + counts.tools + counts.agents + counts.skills) === 0) return null;
+    return counts;
+  });
 
   const shouldLockInlineSize = () =>
     (props.depth === 0 &&
@@ -342,6 +354,39 @@ export function Card(props: { node: CardNode; depth: number }) {
             </div>
           </Show>
         </div>
+      </Show>
+      <Show when={footActivity()}>
+        {(counts) => (
+          <div
+            class="card__foot"
+            title={`messages ${counts().messages} · tools ${counts().tools} · agents ${counts().agents} · skills ${counts().skills}`}
+          >
+            <Show when={counts().tools > 0}>
+              <span class="card__stat" data-kind="tools" title={`${counts().tools} tool calls`}>
+                <span class="card__stat-icon" aria-hidden="true">{"\u{1F6E0}"}</span>
+                <span class="card__stat-value">{counts().tools}</span>
+              </span>
+            </Show>
+            <Show when={counts().messages > 0}>
+              <span class="card__stat" data-kind="messages" title={`${counts().messages} messages`}>
+                <span class="card__stat-icon" aria-hidden="true">{"\u{1F4AC}"}</span>
+                <span class="card__stat-value">{counts().messages}</span>
+              </span>
+            </Show>
+            <Show when={counts().agents > 0}>
+              <span class="card__stat" data-kind="agents" title={`${counts().agents} agent spawns`}>
+                <span class="card__stat-icon" aria-hidden="true">{"\u{1F916}"}</span>
+                <span class="card__stat-value">{counts().agents}</span>
+              </span>
+            </Show>
+            <Show when={counts().skills > 0}>
+              <span class="card__stat" data-kind="skills" title={`${counts().skills} skill invocations`}>
+                <span class="card__stat-icon" aria-hidden="true">{"\u{1F3AF}"}</span>
+                <span class="card__stat-value">{counts().skills}</span>
+              </span>
+            </Show>
+          </div>
+        )}
       </Show>
     </article>
   );
