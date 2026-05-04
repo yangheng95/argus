@@ -419,7 +419,6 @@
 
   height: var(--ui-titlebar-btn-height);
   white-space: nowrap;
-  font: 600 var(--ui-font-body) var(--font);
 }
 
 .titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"] {
@@ -555,7 +554,6 @@
 .titlebar-menubar-toggle:hover,
 .titlebar-menubar-range:hover {
   background: var(--subtle-3);
-  border-color: var(--border);
   color: var(--text-strong);
   outline: none;
 }
@@ -758,24 +756,17 @@
   color: var(--text-muted);
 }
 
+/* status-icon — the Icon primitive sets stroke="currentColor" +
+ * fill="none" on the svg root, so the legacy per-path
+ * `[data-stroke="true"]` / `[data-fill="true"]` selectors that the
+ * old Board.statusIcon() innerHTML strings carried have been retired
+ * (Step 8b, 2026-05-04). The `.status-icon[data-status="..."]` color
+ * rules below still drive `currentColor` through to the path. */
 .status-icon svg {
   width: 100%;
   height: 100%;
   overflow: visible;
-}
-
-.status-icon svg [data-stroke="true"] {
   vector-effect: non-scaling-stroke;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.status-icon svg [data-fill="true"] {
-  fill: currentColor;
-  stroke: none;
 }
 
 .status-icon[data-status="idle"] {

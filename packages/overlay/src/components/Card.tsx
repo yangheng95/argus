@@ -8,6 +8,7 @@ import { cancelAgentSession, replyToAgentSession } from "../services/task";
 import { apiRequest } from "../services/api";
 import { normalizeAgentRole } from "../utils/message";
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox";
+import { Icon } from "./Icon";
 import { CardHeader } from "./CardHeader";
 import { CardParts } from "./CardParts";
 import { InlineToolPart } from "./InlineToolPart";
@@ -345,9 +346,7 @@ export function Card(props: { node: CardNode; depth: number }) {
                 aria-label={t("card.collapse_title")}
               >
                 <span class="card__collapse-toggle-icon" aria-hidden="true">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
+                  <Icon name="chevron-up" size={14} />
                 </span>
                 <span class="card__collapse-toggle-label">{t("card.collapse")}</span>
               </button>

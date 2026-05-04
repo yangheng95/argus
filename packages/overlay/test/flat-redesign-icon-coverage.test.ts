@@ -32,10 +32,16 @@ const ICON_TSX = readFileSync(join(COMPONENTS_ROOT, "Icon.tsx"), "utf8")
 
 function registeredIconsFromSource(): string[] {
   // Carve out the union body between `export type IconName =` and the
-  // terminating `;`. Comments inside the union are tolerated.
+  // terminating `;`. Strip comments first — block comments like
+  // `/* ... */` and line comments like `// ... \n` may carry sample
+  // strings (e.g. `"..."`) that would otherwise be picked up as
+  // bogus IconName entries.
   const m = ICON_TSX.match(/export type IconName\s*=\s*([\s\S]*?);/)
   if (!m) throw new Error("IconName union not found in Icon.tsx")
-  return [...m[1]!.matchAll(/"([^"]+)"/g)].map((mm) => mm[1]!)
+  const stripped = m[1]!
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "")
+  return [...stripped.matchAll(/"([^"]+)"/g)].map((mm) => mm[1]!)
 }
 
 function listTsx(dir: string, exclude: ReadonlySet<string>): string[] {
@@ -139,6 +145,33 @@ describe("flat-redesign character-icon callsites are gone", () => {
     const board = readFileSync(join(COMPONENTS_ROOT, "Board.tsx"), "utf8")
     expect(board).not.toMatch(/const SECTION_ICONS\s*[:=]/)
     expect(board).not.toMatch(/innerHTML=\{[^}]*SECTION_ICONS/)
+  })
+
+  test("no inline 16x16 svg literal across components/ (Icon.tsx is the single source)", () => {
+    // Step 8b (2026-05-04): every 16x16 icon must render through the
+    // Icon primitive, not as an inline JSX <svg>. Larger viewBoxes
+    // (illustrations like chat-empty 40x40 or agent-workflow-beam
+    // 28x104) are deliberately out of scope — they're not icons.
+    //
+    // Files exempt: Icon.tsx (the primitive itself).
+    const EXEMPT = new Set([join(COMPONENTS_ROOT, "Icon.tsx")])
+    const files = listTsx(COMPONENTS_ROOT, EXEMPT)
+    const violations: string[] = []
+    for (const file of files) {
+      const text = readFileSync(file, "utf8")
+      // Match an inline JSX <svg> opening tag with viewBox="0 0 16 16"
+      // (allow optional attributes between `<svg` and `viewBox`).
+      if (/<svg\b[^>]*viewBox="0 0 16 16"/.test(text)) {
+        violations.push(file)
+      }
+    }
+    if (violations.length > 0) {
+      throw new Error(
+        `inline 16x16 svg literal regressed in:\n  ${violations.join("\n  ")}\n` +
+          `Use <Icon name="..." /> from components/Icon.tsx — add a new IconName ` +
+          `to the registry if no existing icon fits.`,
+      )
+    }
   })
 
   test("retired body-scope alias tokens have no consumers", () => {

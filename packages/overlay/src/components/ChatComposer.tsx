@@ -14,6 +14,7 @@ import {
 } from "../services/chat-attach-limits";
 import { fileToDataUrl } from "../services/file-to-data-url";
 import { Button } from "./ui/Button";
+import { Icon } from "./Icon";
 
 // ── Types ──
 
@@ -482,15 +483,7 @@ export function ChatComposer(props: ChatComposerProps) {
             aria-label={t("chat.attach_title")}
             onClick={() => fileInputRef?.click()}
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <Icon name="attach" size={14} />
           </Button>
           <Button
             type="button"
@@ -505,17 +498,7 @@ export function ChatComposer(props: ChatComposerProps) {
             aria-pressed={webSearch()}
             onClick={() => setWebSearch((v) => !v)}
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.2"/>
-              <path
-                d="M8 1.5C8 1.5 5.5 4.5 5.5 8S8 14.5 8 14.5M8 1.5C8 1.5 10.5 4.5 10.5 8S8 14.5 8 14.5"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-              <path d="M1.5 8h13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-            </svg>
+            <Icon name="web-search" size={14} />
           </Button>
           <Button
             type="button"
@@ -529,17 +512,8 @@ export function ChatComposer(props: ChatComposerProps) {
             aria-pressed={expanded()}
             onClick={() => setExpanded((v) => !v)}
           >
-            <Show
-              when={expanded()}
-              fallback={
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              }
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+            <Show when={expanded()} fallback={<Icon name="chevron-up" size={14} />}>
+              <Icon name="chevron-down" size={14} />
             </Show>
           </Button>
         </div>
@@ -561,24 +535,8 @@ export function ChatComposer(props: ChatComposerProps) {
           }}
         >
           <span class="chat-send-icon" aria-hidden="true">
-            <Show
-              when={props.busy}
-              fallback={
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M2 8l10-5-3 5 3 5z" fill="currentColor" />
-                </svg>
-              }
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <rect
-                  x="4.25"
-                  y="4.25"
-                  width="7.5"
-                  height="7.5"
-                  rx="1.2"
-                  fill="currentColor"
-                />
-              </svg>
+            <Show when={props.busy} fallback={<Icon name="send" />}>
+              <Icon name="stop" />
             </Show>
           </span>
           <span class="chat-send-label">{sendLabel()}</span>

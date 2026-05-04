@@ -16,6 +16,7 @@
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { appStore } from "../store/app";
 import { settingsStore, setSettingsStore, saveSettings, sanitizeExecutor } from "../store/settings";
+import { Icon } from "./Icon";
 import {
   executorCurrentModel,
   executorHasModelChoice,
@@ -180,15 +181,7 @@ export function ExecutorSelector() {
             {executorModel() || t("agent_models.option_not_set")}
           </span>
           <span class="executor-chip-caret" aria-hidden="true">
-            <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-              <path
-                d="M2 6.5L5 3.5L8 6.5"
-                stroke="currentColor"
-                stroke-width="1.4"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <Icon name="caret-up" size={8} />
           </span>
         </Button>
 

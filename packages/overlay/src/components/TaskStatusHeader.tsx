@@ -7,7 +7,8 @@
 
 import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js";
 import { boardStore } from "../store/board";
-import { statusIcon as statusIconSvg } from "./Board";
+import { statusIconName } from "./Board";
+import { Icon } from "./Icon";
 import { t } from "../utils/i18n";
 import { formatDuration } from "../utils/time";
 
@@ -61,10 +62,9 @@ export function TaskStatusHeader() {
           id="statusIcon"
           data-status={status()}
           aria-hidden="true"
-          // statusIconSvg returns a static SVG string per status — using
-          // innerHTML is the right Solid pattern for trusted static markup.
-          innerHTML={statusIconSvg(status())}
-        />
+        >
+          <Icon name={statusIconName(status())} />
+        </span>
         <span class="status-copy">
           <span class="status-label" id="statusLabel">{labelText()}</span>
           <span class="elapsed" id="taskElapsed">{elapsedText()}</span>
