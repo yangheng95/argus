@@ -8,6 +8,7 @@ import type {
 import { createTask, panelRequestBody } from "../src/services/task";
 import {
   applySettings,
+  bootstrapOverlaySettings,
   DEFAULT_SETTINGS,
   loadSettings,
   sanitizeExecutor,
@@ -97,5 +98,20 @@ describe("executor settings", () => {
 
   test("panel request body sanitizes explicit executor input", () => {
     expect(panelRequestBody("hello", {}, "req_1", [], "opencode").executor).toBe("mirrorcode");
+  });
+
+  test("native settings task id alias restores the workspace task", () => {
+    applySettings({
+      ...DEFAULT_SETTINGS,
+      workspaceTaskId: "tsk_native",
+    } as Partial<typeof DEFAULT_SETTINGS> & { workspaceTaskId: string });
+
+    expect(settingsStore.workspaceTaskID).toBe("tsk_native");
+  });
+
+  test("bootstrap settings writes the native workspace task id field", () => {
+    setSettingsStore("workspaceTaskID", "tsk_saved");
+
+    expect((bootstrapOverlaySettings(settingsStore) as any).workspaceTaskId).toBe("tsk_saved");
   });
 });

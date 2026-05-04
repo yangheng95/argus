@@ -162,6 +162,19 @@ export const [settingsStore, setSettingsStore] =
 // ── applySettings ──
 
 export function applySettings(input: Partial<OverlaySettings>): void {
+  const nativeInput = input as Partial<OverlaySettings> & {
+    workspaceTaskId?: unknown;
+  };
+  const canonicalWorkspaceTaskID =
+    typeof input?.workspaceTaskID === "string"
+      ? input.workspaceTaskID.trim()
+      : "";
+  const workspaceTaskID =
+    canonicalWorkspaceTaskID
+      ? canonicalWorkspaceTaskID
+      : typeof nativeInput?.workspaceTaskId === "string"
+        ? nativeInput.workspaceTaskId.trim()
+        : DEFAULT_SETTINGS.workspaceTaskID;
   const serverUrl =
     typeof input?.serverUrl === "string" && input.serverUrl.trim()
       ? input.serverUrl.trim()
@@ -194,10 +207,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     ),
     directory:
       typeof input?.directory === "string" ? input.directory.trim() : "",
-    workspaceTaskID:
-      typeof input?.workspaceTaskID === "string"
-        ? input.workspaceTaskID.trim()
-        : DEFAULT_SETTINGS.workspaceTaskID,
+    workspaceTaskID,
     workspaceDirectory:
       typeof input?.workspaceDirectory === "string"
         ? input.workspaceDirectory.trim()
@@ -350,8 +360,10 @@ export function bootstrapOverlaySettings(
   sectionsWidth?: number;
   workspacePanelHeight?: number;
   workspaceTaskID?: string;
+  workspaceTaskId?: string;
   workspaceDirectory?: string;
 } {
+  const workspaceTaskID = input.workspaceTaskID || undefined;
   return {
     serverUrl: input.serverUrl ?? DEFAULT_SETTINGS.serverUrl,
     autoServer: input.autoServer ?? DEFAULT_SETTINGS.autoServer,
@@ -369,7 +381,8 @@ export function bootstrapOverlaySettings(
     locale: input.locale ?? DEFAULT_SETTINGS.locale,
     desktopNotifications: input.desktopNotifications ?? DEFAULT_SETTINGS.desktopNotifications,
     directory: input.savedDirectory || undefined,
-    workspaceTaskID: input.workspaceTaskID || undefined,
+    workspaceTaskID,
+    workspaceTaskId: workspaceTaskID,
     workspaceDirectory: input.workspaceDirectory || undefined,
     toolPermissions: input.toolPermissions ?? DEFAULT_SETTINGS.toolPermissions,
   };

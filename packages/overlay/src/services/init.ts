@@ -305,6 +305,35 @@ export async function loadConfigInfo(
 
 // ── Workspace restoration ──
 
+const RESTORABLE_RUNNING_TASK_STATUSES = new Set(["active", "queued"]);
+
+function taskIDFromItem(item: any): string {
+  const id = item?.task?.id ?? item?.id;
+  return typeof id === "string" ? id.trim() : "";
+}
+
+function taskStatusFromItem(item: any): string {
+  const status = item?.task?.status ?? item?.status;
+  return typeof status === "string" ? status.trim() : "";
+}
+
+export function initialRestoreTaskID(
+  tasks: any[],
+  savedTaskID: string,
+  options: { selectRunningWhenUnmatched?: boolean } = {},
+): string {
+  const list = Array.isArray(tasks) ? tasks : [];
+  const saved = typeof savedTaskID === "string" ? savedTaskID.trim() : "";
+  if (saved && list.some((item: any) => taskIDFromItem(item) === saved)) {
+    return saved;
+  }
+  if (options.selectRunningWhenUnmatched === false) return "";
+  const running = list.find((item: any) =>
+    RESTORABLE_RUNNING_TASK_STATUSES.has(taskStatusFromItem(item)),
+  );
+  return taskIDFromItem(running);
+}
+
 /**
  * Restore the last workspace state (task selection + directory) that was
  * persisted to settings before the overlay was last closed.
@@ -319,7 +348,6 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
   if (settingsStore.workspaceEpoch > 0) return false;
 
   const base = activeDir || "";
-  const taskID = workspaceTaskID || "";
   const directory = workspaceRestoreDirectory(workspaceDirectory || "");
   const moved = !!directory && !!base && directory !== base;
 
@@ -329,7 +357,13 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
     bumpDirectoryEpoch();
   }
 
-  if (taskID && tasks.some((item: any) => item?.task?.id === taskID)) {
+  const taskID = initialRestoreTaskID(
+    tasks,
+    workspaceTaskID || "",
+    { selectRunningWhenUnmatched: !moved },
+  );
+
+  if (taskID) {
     if (boardStore.selectedTaskID !== taskID || !boardStore.board) {
       await selectTask(taskID);
     }
