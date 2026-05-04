@@ -24,6 +24,7 @@ import {
   normalizeGoalContractUpdate,
 } from "@/pipeline/goal-contract.schema"
 import type { AcceptanceSpec } from "@/acceptance/types"
+import type { VisualSpec } from "@/design-analyst/types"
 import type {
   ArchitectChallengeSeed,
   ArchitectContract,
@@ -32,6 +33,12 @@ import type {
   ArchitectGoalMetricSpec,
   TraceabilityEntry,
 } from "./types"
+import {
+  architectFidelityIssues,
+  AssemblyOwnerEntrySchema,
+  ReferenceCoverageEntrySchema,
+  SourceCoverageEntrySchema,
+} from "./fidelity"
 
 /**
  * Recommended diagnostic metric names. Acceptance gating is owned by
@@ -83,6 +90,9 @@ export interface ArchitectCollector {
   global_metric_specs: ArchitectGlobalMetricSpec[]
   challenge_seeds: ArchitectChallengeSeed[]
   traceability: TraceabilityEntry[]
+  source_coverage: Array<z.infer<typeof SourceCoverageEntrySchema>>
+  reference_coverage: Array<z.infer<typeof ReferenceCoverageEntrySchema>>
+  assembly_owners: Array<z.infer<typeof AssemblyOwnerEntrySchema>>
   contracts: RegisteredContract[]
   /** Goal IDs the agent has explicitly removed during a re-run session. */
   removed_goal_ids: string[]
@@ -116,6 +126,9 @@ function emptyCollector(): ArchitectCollector {
     global_metric_specs: [],
     challenge_seeds: [],
     traceability: [],
+    source_coverage: [],
+    reference_coverage: [],
+    assembly_owners: [],
     contracts: [],
     removed_goal_ids: [],
     summary: "",
@@ -123,7 +136,10 @@ function emptyCollector(): ArchitectCollector {
   }
 }
 
-export function architectValidationIssues(collector: ArchitectCollector): string[] {
+export function architectValidationIssues(
+  collector: ArchitectCollector,
+  input?: { workDir?: string; designSpecs?: VisualSpec[]; requireReferenceCoverage?: boolean },
+): string[] {
   const issues: string[] = []
 
   if (collector.goals.length === 0) {
@@ -253,11 +269,28 @@ export function architectValidationIssues(collector: ArchitectCollector): string
     }
   }
 
+  issues.push(
+    ...architectFidelityIssues({
+      goals: collector.goals.map((goal) => ({ id: goal.id, owned_paths: goal.owned_paths })),
+      fidelity: {
+        sourceCoverage: collector.source_coverage,
+        referenceCoverage: collector.reference_coverage,
+        assemblyOwners: collector.assembly_owners,
+      },
+      designSpecs: input?.designSpecs,
+      workDir: input?.workDir,
+      requireReferenceCoverage: input?.requireReferenceCoverage,
+    }),
+  )
+
   return issues
 }
 
-export function isArchitectReadyToFinalize(collector: ArchitectCollector): boolean {
-  return architectValidationIssues(collector).length === 0
+export function isArchitectReadyToFinalize(
+  collector: ArchitectCollector,
+  input?: { workDir?: string; designSpecs?: VisualSpec[]; requireReferenceCoverage?: boolean },
+): boolean {
+  return architectValidationIssues(collector, input).length === 0
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +304,8 @@ export function createArchitectOutputTools(input: {
    */
   existingGoals?: RegisteredGoal[]
   workDir?: string
+  designSpecs?: VisualSpec[]
+  requireReferenceCoverage?: boolean
 }) {
   let collector = emptyCollector()
   const dir = input.workDir ?? Instance.directory
@@ -383,6 +418,11 @@ export function createArchitectOutputTools(input: {
           challenge_seeds: 0,
           traceability_rows: 0,
           traceability_refs: 0,
+          source_coverage_rows: 0,
+          source_coverage_refs: 0,
+          reference_coverage_rows: 0,
+          reference_coverage_refs: 0,
+          assembly_owners: 0,
           contracts: 0,
           contract_refs: 0,
         }
@@ -415,6 +455,42 @@ export function createArchitectOutputTools(input: {
         }
         collector.traceability = traceNext
 
+        const sourceCoverageNext: ArchitectCollector["source_coverage"] = []
+        for (const row of collector.source_coverage) {
+          if (!row.goal_ids.includes(id)) {
+            sourceCoverageNext.push(row)
+            continue
+          }
+          const filtered = row.goal_ids.filter((goalID) => goalID !== id)
+          cascade.source_coverage_refs++
+          if (filtered.length === 0) {
+            cascade.source_coverage_rows++
+            continue
+          }
+          sourceCoverageNext.push({ ...row, goal_ids: filtered })
+        }
+        collector.source_coverage = sourceCoverageNext
+
+        const referenceCoverageNext: ArchitectCollector["reference_coverage"] = []
+        for (const row of collector.reference_coverage) {
+          if (!row.goal_ids.includes(id)) {
+            referenceCoverageNext.push(row)
+            continue
+          }
+          const filtered = row.goal_ids.filter((goalID) => goalID !== id)
+          cascade.reference_coverage_refs++
+          if (filtered.length === 0) {
+            cascade.reference_coverage_rows++
+            continue
+          }
+          referenceCoverageNext.push({ ...row, goal_ids: filtered })
+        }
+        collector.reference_coverage = referenceCoverageNext
+
+        const beforeAssemblyOwners = collector.assembly_owners.length
+        collector.assembly_owners = collector.assembly_owners.filter((row) => row.goal_id !== id)
+        cascade.assembly_owners = beforeAssemblyOwners - collector.assembly_owners.length
+
         const contractNext: RegisteredContract[] = []
         for (const c of collector.contracts) {
           if (!c.goalIDs.includes(id)) {
@@ -439,6 +515,17 @@ export function createArchitectOutputTools(input: {
             `${cascade.traceability_refs} traceability ref(s) (${cascade.traceability_rows} row(s) dropped)`,
           )
         }
+        if (cascade.source_coverage_rows || cascade.source_coverage_refs) {
+          cascadeBits.push(
+            `${cascade.source_coverage_refs} source coverage ref(s) (${cascade.source_coverage_rows} row(s) dropped)`,
+          )
+        }
+        if (cascade.reference_coverage_rows || cascade.reference_coverage_refs) {
+          cascadeBits.push(
+            `${cascade.reference_coverage_refs} reference coverage ref(s) (${cascade.reference_coverage_rows} row(s) dropped)`,
+          )
+        }
+        if (cascade.assembly_owners) cascadeBits.push(`${cascade.assembly_owners} assembly owner row(s)`)
         if (cascade.contracts || cascade.contract_refs) {
           cascadeBits.push(
             `${cascade.contract_refs} contract ref(s) (${cascade.contracts} contract(s) dropped)`,
@@ -596,6 +683,54 @@ export function createArchitectOutputTools(input: {
       },
     }),
 
+    register_source_coverage: tool({
+      description:
+        "Register which existing source files or modules are intentionally reused, modified, preserved, or replaced, and which goals own that work.",
+      inputSchema: SourceCoverageEntrySchema,
+      execute: async (input) => {
+        const parsed = SourceCoverageEntrySchema.parse(input)
+        const existingIdx = collector.source_coverage.findIndex((row) => row.id === parsed.id)
+        if (existingIdx >= 0) {
+          collector.source_coverage[existingIdx] = parsed
+          return `OK: source coverage "${parsed.id}" overwritten (${collector.source_coverage.length} total)`
+        }
+        collector.source_coverage.push(parsed)
+        return `OK: source coverage "${parsed.id}" registered (${collector.source_coverage.length} total)`
+      },
+    }),
+
+    register_reference_coverage: tool({
+      description:
+        "Register which authoritative reference surface or visual spec ids each goal must restore. Required for reference-driven work.",
+      inputSchema: ReferenceCoverageEntrySchema,
+      execute: async (input) => {
+        const parsed = ReferenceCoverageEntrySchema.parse(input)
+        const existingIdx = collector.reference_coverage.findIndex((row) => row.id === parsed.id)
+        if (existingIdx >= 0) {
+          collector.reference_coverage[existingIdx] = parsed
+          return `OK: reference coverage "${parsed.id}" overwritten (${collector.reference_coverage.length} total)`
+        }
+        collector.reference_coverage.push(parsed)
+        return `OK: reference coverage "${parsed.id}" registered (${collector.reference_coverage.length} total)`
+      },
+    }),
+
+    register_assembly_owner: tool({
+      description:
+        "Register the single goal that owns final stitching for a shared user-visible or integration surface.",
+      inputSchema: AssemblyOwnerEntrySchema,
+      execute: async (input) => {
+        const parsed = AssemblyOwnerEntrySchema.parse(input)
+        const existingIdx = collector.assembly_owners.findIndex((row) => row.surface === parsed.surface)
+        if (existingIdx >= 0) {
+          collector.assembly_owners[existingIdx] = parsed
+          return `OK: assembly owner "${parsed.surface}" overwritten (${collector.assembly_owners.length} total)`
+        }
+        collector.assembly_owners.push(parsed)
+        return `OK: assembly owner "${parsed.surface}" registered (${collector.assembly_owners.length} total)`
+      },
+    }),
+
     register_contract: tool({
       description:
         "Register a cross-goal consensus contract. Each contract is written to " +
@@ -661,7 +796,11 @@ export function createArchitectOutputTools(input: {
       }),
       execute: async ({ summary }) => {
         collector.summary = summary
-        const issues = architectValidationIssues(collector)
+        const issues = architectValidationIssues(collector, {
+          workDir: dir,
+          designSpecs: input.designSpecs,
+          requireReferenceCoverage: input.requireReferenceCoverage,
+        })
         const categories = new Set(collector.contracts.map((c) => c.category))
 
         if (issues.length === 0) {
@@ -672,6 +811,7 @@ export function createArchitectOutputTools(input: {
             `  ${collector.goal_metric_specs.length} goal metrics, ${collector.global_metric_specs.length} global metrics,`,
             `  ${collector.challenge_seeds.length} challenge seeds,`,
             `  ${collector.traceability.length} traceability mappings,`,
+            `  ${collector.source_coverage.length} source coverage rows, ${collector.reference_coverage.length} reference coverage rows, ${collector.assembly_owners.length} assembly owners,`,
             `  ${collector.contracts.length} cross-goal contracts across ${categories.size} categories.`,
           ].join("\n")
         }

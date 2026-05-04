@@ -145,6 +145,11 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           spec: "```ts\nexport function runMain(): void\n```",
           goalIDs: ["goal_main", "goal_tests"],
         })
+        collector.assembly_owners.push({
+          surface: "final-deliverable",
+          goal_id: "goal_main",
+          rationale: "One goal must own final stitching for the shared deliverable.",
+        })
         expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(true)
         collector.finalized = true
         expect(input.terminalTool.isSatisfied(input.toolKit.getCollector())).toBe(true)

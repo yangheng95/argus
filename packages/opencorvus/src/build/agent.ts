@@ -46,6 +46,11 @@ import { Message } from "@/session/message"
 import { MCPServe } from "@/mcp/serve"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import type {
+  AssemblyOwnerEntry,
+  ReferenceCoverageEntry,
+  SourceCoverageEntry,
+} from "@/architect/fidelity"
 import type { FileDiff } from "@/snapshot/types"
 import { BuildAgentContractError, BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
 import { AttachmentStore } from "@/storage/attachment-store"
@@ -107,6 +112,12 @@ export namespace BuildAgent {
      *  verdict / manifest artifacts. Unlike retryFeedback, this is not an
      *  orchestrator-written summary and also exists for task-scope rework. */
     deliveryFeedback?: string
+    /** Task-wide fidelity contract derived from architect coverage rows. */
+    fidelity?: {
+      sourceCoverage?: SourceCoverageEntry[]
+      referenceCoverage?: ReferenceCoverageEntry[]
+      assemblyOwners?: AssemblyOwnerEntry[]
+    }
     /** Pre-formatted multimodal file parts produced by upstream evidence —
      *  typically the previous attempt's rendered.png from delivery's visual
      *  hard gate so the build LLM can see what it actually produced versus
@@ -1737,6 +1748,49 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
           "Implement the subset relevant to this goal's owned files, UI surface, and interactions; ignore specs targeting unrelated regions.",
         ],
       }))
+      lines.push("")
+    }
+
+    const sourceCoverage = context?.fidelity?.sourceCoverage ?? []
+    if (sourceCoverage.length > 0) {
+      lines.push("## Source Coverage Contract")
+      lines.push("")
+      lines.push(
+        "These existing source surfaces are part of the architect's fidelity contract for this goal. Respect the declared action instead of silently bypassing or re-inventing the local implementation.",
+      )
+      lines.push("")
+      for (const row of sourceCoverage) {
+        lines.push(`- **${row.id}** [${row.action}] paths=${row.paths.join(", ")} — ${row.rationale}`)
+      }
+      lines.push("")
+    }
+
+    const referenceCoverage = context?.fidelity?.referenceCoverage ?? []
+    if (referenceCoverage.length > 0) {
+      lines.push("## Reference Coverage Contract")
+      lines.push("")
+      lines.push(
+        "These reference surfaces are authoritative for this goal. Restore them 1:1 and cover the named visual specs; do not reinterpret or redesign them.",
+      )
+      lines.push("")
+      for (const row of referenceCoverage) {
+        const specIDs = row.visual_spec_ids.length > 0 ? ` visual_specs=${row.visual_spec_ids.join(", ")}` : ""
+        lines.push(`- **${row.id}** surface=${row.surface}${specIDs} — ${row.expectation}`)
+      }
+      lines.push("")
+    }
+
+    const assemblyOwners = context?.fidelity?.assemblyOwners ?? []
+    if (assemblyOwners.length > 0) {
+      lines.push("## Assembly Ownership")
+      lines.push("")
+      lines.push(
+        "These are the shared assembly surfaces and their final owners. If another goal owns a stitched surface, do not expand your edits into it; if you own it, close the integration loop intentionally.",
+      )
+      lines.push("")
+      for (const row of assemblyOwners) {
+        lines.push(`- surface=${row.surface} owner=${row.goal_id} — ${row.rationale}`)
+      }
       lines.push("")
     }
 
