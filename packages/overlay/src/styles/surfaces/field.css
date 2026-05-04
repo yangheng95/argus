@@ -218,3 +218,20 @@ select.field-input option {
   min-width: 0;
   min-height: 0;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Field-input + custom-select + status-box + dir-panel + engine-
+   model-panel chrome reset (extracted 2026-05-04). All five share
+   the same surface-inset background + border-color + shadow:none
+   contract.
+   ───────────────────────────────────────────────────────────── */
+
+.field-input,
+.custom-select,
+.config-status-box,
+.recent-dir-panel,
+.engine-model-panel {
+  background: var(--surface-inset);
+  border-color: var(--border);
+  box-shadow: none;
+}

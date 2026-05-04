@@ -1,0 +1,108 @@
+/* ─────────────────────────────────────────────────────────────
+   Dark theme legacy palette + chrome (extracted from styles.css
+   2026-05-04). Lives under styles/cascade/ rather than styles/themes/
+   because the themes/ directory is guarded as palette-only / oc-color-
+   prefix-only — these legacy --bg / --surface / --accent / etc. tokens
+   are the pre-design-language chrome that consumers haven't migrated
+   off yet. The architecture decision to retire these in favor of the
+   --oc-color-* set is tracked as a separate path 1A/1B redesign.
+
+   Doubles as the :root fallback (combined selector) — overlay
+   defaults to dark when no data-theme is set.
+   ───────────────────────────────────────────────────────────── */
+
+:root,
+body[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111528;
+  --surface: rgba(28, 33, 58, 0.86);
+  --surface-hover: rgba(39, 45, 77, 0.96);
+  --surface-inset: rgba(20, 24, 44, 0.92);
+  --surface-strong: rgba(34, 39, 68, 0.94);
+  --rail-surface: rgba(25, 30, 52, 0.9);
+  --chat-canvas: rgba(18, 22, 40, 0.82);
+  --inspector-surface: rgba(25, 30, 52, 0.9);
+
+  --body-bg: var(--bg);
+  --panel-body-bg: var(--bg);
+  --panel-body-blur: none;
+  --chrome: rgba(23, 28, 50, 0.82);
+  --border: rgba(170, 183, 236, 0.15);
+  --border-hover: rgba(124, 134, 255, 0.38);
+  --border-strong: rgba(184, 196, 246, 0.24);
+  --text: #c8d0ee;
+  --text-strong: #f6f8ff;
+  --text-soft: #9ea9d1;
+  --text-muted: #727fa9;
+  --accent: #7b83ff;
+  --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-hover: #9b82ff;
+  --accent-start: #4b8dff;
+  --accent-mid: #7b83ff;
+  --accent-end: #9b62ff;
+
+  --accent-gradient: var(--accent);
+  --accent-gradient-hover: var(--accent-hover);
+  --accent-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 24%, transparent);
+  --accent-ring: color-mix(in srgb, var(--accent) 26%, transparent);
+  --hover-accent-border: color-mix(in srgb, var(--accent) 32%, transparent);
+  --hover-accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
+  --hover-accent-shadow: 0 12px 30px rgba(42, 52, 112, 0.2);
+  --info: #78a8ff;
+  --info-dim: rgba(120, 168, 255, 0.12);
+  --good: #70c990;
+  --good-dim: rgba(112, 201, 144, 0.14);
+  --warn: #d7a15e;
+  --warn-dim: rgba(215, 161, 94, 0.13);
+  --bad: #ef7f86;
+  --bad-dim: rgba(239, 127, 134, 0.14);
+  --radius: calc(12px * var(--ui-scale));
+  --radius-lg: calc(18px * var(--ui-scale));
+  --panel-radius: calc(10px * var(--ui-scale));
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --scrollbar-thumb: rgba(170, 183, 236, 0.22);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 36%, transparent);
+  --session-scrollbar-track: rgba(255, 255, 255, 0.04);
+  --subtle-1: color-mix(in srgb, var(--accent) 4%, transparent);
+  --subtle-2: color-mix(in srgb, var(--accent) 6%, transparent);
+  --subtle-3: color-mix(in srgb, var(--accent) 8%, transparent);
+  --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
+  --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
+  --dialog-bg: #1c213a;
+  --menu-panel-bg: rgba(28, 33, 58, 0.96);
+  --divider-soft: rgba(170, 183, 236, 0.11);
+  --panel-fill: var(--surface);
+  --panel-fill-hover: var(--surface-hover);
+  --card-fill: var(--surface-inset);
+  --card-fill-hover: var(--surface-hover);
+  --font: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  --mono: "Cascadia Code", "JetBrains Mono", ui-monospace, monospace;
+  --title-weight: 700;
+  --title-track: 0;
+  --subhead-weight: 700;
+  --subhead-track: 0;
+
+  --ui-font-display: calc(12px * var(--ui-scale));
+  --ui-font-heading: calc(12px * var(--ui-scale));
+  --ui-font-title: calc(12px * var(--ui-scale));
+  --ui-font-body: calc(12px * var(--ui-scale));
+  --ui-font-control: calc(11px * var(--ui-scale));
+  --ui-font-meta: calc(11px * var(--ui-scale));
+  --ui-font-small: calc(10px * var(--ui-scale));
+  --ui-font-tiny: calc(10px * var(--ui-scale));
+  --ui-font-code: calc(11px * var(--ui-scale));
+  --ui-titlebar-height: calc(44px * var(--ui-scale));
+  --ui-panel-padding-x: calc(10px * var(--ui-scale));
+  --ui-panel-padding-y: calc(8px * var(--ui-scale));
+  --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
+  --ui-rail-min-width: calc(210px * var(--ui-scale));
+  --ui-sections-width: clamp(calc(310px * var(--ui-scale)), 25vw, calc(430px * var(--ui-scale)));
+  --ui-sidebar-width: var(--ui-rail-width);
+  --ui-chat-priority-width: calc(640px * var(--ui-scale));
+  --ui-chat-min-width: calc(500px * var(--ui-scale));
+  --ui-panel-header-height: calc(42px * var(--ui-scale));
+  --ui-capsule-height: calc(28px * var(--ui-scale));
+  --ui-resizer-width: 1px;
+}

@@ -1,0 +1,100 @@
+/* ─────────────────────────────────────────────────────────────
+   Light theme legacy palette + chrome (extracted from styles.css
+   2026-05-04). See cascade/dark.css for context.
+   ───────────────────────────────────────────────────────────── */
+
+body[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef3ff;
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-hover: rgba(243, 247, 255, 0.96);
+  --surface-inset: #f7f9ff;
+  --surface-strong: rgba(255, 255, 255, 0.94);
+  --rail-surface: rgba(250, 252, 255, 0.9);
+  --chat-canvas: rgba(255, 255, 255, 0.78);
+  --inspector-surface: rgba(250, 252, 255, 0.9);
+
+  --body-bg: linear-gradient(135deg, #fbfdff 0%, #f4f7ff 42%, #eef1ff 100%);
+  --panel-body-bg: rgba(255, 255, 255, 0.44);
+  --panel-body-blur: blur(20px);
+  --chrome: rgba(255, 255, 255, 0.78);
+  --border: rgba(92, 112, 163, 0.16);
+  --border-hover: rgba(85, 101, 238, 0.34);
+  --border-strong: rgba(84, 103, 165, 0.22);
+  --text: #35405c;
+  --text-strong: #101527;
+  --text-soft: #66708e;
+  --text-muted: #8a94b2;
+  --accent: #5b5ff0;
+  --accent-dim: color-mix(in srgb, var(--accent) 11%, transparent);
+  --accent-hover: #474add;
+  --accent-start: #4b8dff;
+  --accent-mid: #6757f2;
+  --accent-end: #8a4df3;
+  --accent-gradient: linear-gradient(135deg, var(--accent-start), var(--accent-mid) 52%, var(--accent-end));
+  --accent-gradient-hover: linear-gradient(135deg, #367cff, #5748ec 56%, #7c40ea);
+  --accent-ring: color-mix(in srgb, var(--accent) 20%, transparent);
+  --info: #2f80ed;
+  --info-dim: rgba(47, 128, 237, 0.1);
+  --good: #28a66a;
+  --good-dim: rgba(40, 166, 106, 0.12);
+  --warn: #c98924;
+  --warn-dim: rgba(201, 137, 36, 0.12);
+  --bad: #d85666;
+  --bad-dim: rgba(216, 86, 102, 0.12);
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --scrollbar-thumb: rgba(95, 111, 162, 0.24);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 34%, transparent);
+  --session-scrollbar-track: rgba(255, 255, 255, 0.48);
+  --subtle-1: color-mix(in srgb, var(--accent) 4%, transparent);
+  --subtle-2: color-mix(in srgb, var(--accent) 6.5%, transparent);
+  --subtle-3: color-mix(in srgb, var(--accent) 8.5%, transparent);
+  --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
+  --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
+  --dialog-bg: #ffffff;
+  --menu-panel-bg: rgba(255, 255, 255, 0.96);
+  --divider-soft: rgba(92, 112, 163, 0.12);
+  --radius: calc(12px * var(--ui-scale));
+  --radius-lg: calc(18px * var(--ui-scale));
+  --panel-radius: calc(10px * var(--ui-scale));
+  --ui-titlebar-height: calc(44px * var(--ui-scale));
+  --ui-panel-header-height: calc(42px * var(--ui-scale));
+  --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
+  --ui-sections-width: clamp(calc(310px * var(--ui-scale)), 25vw, calc(430px * var(--ui-scale)));
+
+  --hover-accent-border: color-mix(in srgb, var(--accent) 25%, transparent);
+  --hover-accent-wash: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 10%, transparent),
+    color-mix(in srgb, var(--accent) 3%, transparent) 58%,
+    rgba(255, 255, 255, 0.5)
+  );
+  --hover-accent-shadow: 0 18px 34px rgba(0, 0, 0, 0.1);
+  --guide-card-border: color-mix(in srgb, var(--accent) 20%, transparent);
+  --guide-card-bg:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      color-mix(in srgb, var(--accent) 0%, transparent) 42%
+    ),
+    var(--bg);
+  --accent-glow: color-mix(in srgb, var(--accent) 18%, transparent);
+  --dialog-backdrop: rgba(0, 0, 0, 0.4);
+
+  --ok: var(--good);
+  --warning: var(--warn);
+  --danger: var(--bad);
+  --text-dim: var(--text-muted);
+
+  --panel-fill:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 58%, rgba(255, 255, 255, 0.5)),
+    var(--surface);
+  --panel-fill-hover:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), rgba(255, 255, 255, 0.4) 58%, rgba(255, 255, 255, 0.6)),
+    var(--surface-hover);
+  --card-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 72%), var(--subtle-1);
+  --card-fill-hover:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, transparent), rgba(255, 255, 255, 0.5) 68%), var(--surface-hover);
+}

@@ -282,21 +282,19 @@ describe("overlay architecture guards", () => {
   })
 
   test("dark themes flatten --accent-gradient to --accent so palette drives the gradient/flat split", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
-    // Both dark and vscode-dark `:root` blocks must override
-    // `--accent-gradient` to `var(--accent)` and the matching hover token —
-    // that is the single source for "dark surfaces don't render the candy
-    // bar gradient" without resorting to `body:is(…)` selectors.
-    expect(styles).toMatch(
+    // Theme palette blocks moved to styles/cascade/{dark,vscode-dark}.css 2026-05-04.
+    const dark = readText(join(OVERLAY_ROOT, "src/styles/cascade/dark.css"))
+    const vscodeDark = readText(join(OVERLAY_ROOT, "src/styles/cascade/vscode-dark.css"))
+    expect(dark).toMatch(
       /body\[data-theme="dark"\][\s\S]*?--accent-gradient:\s*var\(--accent\)/,
     )
-    expect(styles).toMatch(
+    expect(dark).toMatch(
       /body\[data-theme="dark"\][\s\S]*?--accent-gradient-hover:\s*var\(--accent-hover\)/,
     )
-    expect(styles).toMatch(
+    expect(vscodeDark).toMatch(
       /body\[data-theme="vscode-dark"\][\s\S]*?--accent-gradient:\s*var\(--accent\)/,
     )
-    expect(styles).toMatch(
+    expect(vscodeDark).toMatch(
       /body\[data-theme="vscode-dark"\][\s\S]*?--accent-gradient-hover:\s*var\(--accent-hover\)/,
     )
   })
@@ -337,36 +335,30 @@ describe("overlay architecture guards", () => {
   })
 
   test("body root + .panel-body chrome canonicals read palette tokens, not literals", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
-    // The canonical body rule reads `var(--body-bg)` and the .panel-body
-    // canonical reads `var(--panel-body-bg)` + `var(--panel-body-blur)`.
-    // Each :root block (light, dark, vscode-dark) declares the right
-    // palette value so themes never repaint the shells via selectors.
-    expect(styles).toMatch(/^body\s*\{[^}]*background:\s*var\(--body-bg\)\s*;/m)
-    expect(styles).toMatch(/^\.panel-body\s*\{[^}]*background:\s*var\(--panel-body-bg\)/m)
-    expect(styles).toMatch(
+    // body baseline moved to styles/cascade/base.css; .panel-body to
+    // surfaces/workspace.css; theme blocks to styles/cascade/{dark,vscode-dark,light}.css. 2026-05-04.
+    const base = readText(join(OVERLAY_ROOT, "src/styles/cascade/base.css"))
+    const workspace = readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css"))
+    expect(base).toMatch(/^body\s*\{[^}]*background:\s*var\(--body-bg\)\s*;/m)
+    expect(workspace).toMatch(/^\.panel-body\s*\{[^}]*background:\s*var\(--panel-body-bg\)/m)
+    expect(workspace).toMatch(
       /^\.panel-body\s*\{[^}]*backdrop-filter:\s*var\(--panel-body-blur\)/m,
     )
-    // Each theme :root must declare the new tokens (otherwise the
-    // canonical would fall through to `unset`).
-    for (const theme of [
-      'body\\[data-theme="dark"\\]',
-      'body\\[data-theme="vscode-dark"\\]',
-      'body\\[data-theme="light"\\]',
-    ]) {
+    for (const [theme, file] of [
+      ['body\\[data-theme="dark"\\]', "dark.css"],
+      ['body\\[data-theme="vscode-dark"\\]', "vscode-dark.css"],
+      ['body\\[data-theme="light"\\]', "light.css"],
+    ] as const) {
+      const cascade = readText(join(OVERLAY_ROOT, "src/styles/cascade", file))
       const head = new RegExp(`${theme}\\s*\\{`)
-      const idx = styles.search(head)
+      const idx = cascade.search(head)
       expect(idx).toBeGreaterThan(-1)
     }
   })
 
   test("vscode-dark :root surfaces solid palette tokens for shell columns", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
-    // Pre-2026-05-04, vscode-dark used translucent rgba defaults for
-    // --rail-surface / --chat-canvas / --inspector-surface and an
-    // override block forced #252526 / #1e1e1e on .sidebar / .chat /
-    // .sections to win the rendered look. Both the override and the
-    // dual values are gone; the palette token is the single source.
+    // Theme palette block moved to styles/cascade/vscode-dark.css 2026-05-04.
+    const styles = readText(join(OVERLAY_ROOT, "src/styles/cascade/vscode-dark.css"))
     const headRe = /body\[data-theme="vscode-dark"\]\s*\{/g
     let match: RegExpExecArray | null = null
     let lastBlock: string | null = null
@@ -2766,9 +2758,12 @@ describe("overlay architecture guards", () => {
   })
 
   test("panel body shell chrome is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    // .panel-body canonical moved to surfaces/workspace.css 2026-05-04.
+    const workspace = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
+    )
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    for (const match of workspace.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
       const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
@@ -2781,7 +2776,7 @@ describe("overlay architecture guards", () => {
       )
     }
 
-    const bodies = Array.from(styles.matchAll(/(^|\n)\.panel-body\s*\{([^{}]*)\}/g)).map(
+    const bodies = Array.from(workspace.matchAll(/(^|\n)\.panel-body\s*\{([^{}]*)\}/g)).map(
       (match) => match[2] ?? "",
     )
     const body = bodies.at(-1) ?? ""
@@ -2875,12 +2870,15 @@ describe("overlay architecture guards", () => {
   })
 
   test("workspace and inspector stack spacing are canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    // .workspace-main canonical moved to surfaces/workspace.css 2026-05-04.
+    const workspace = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
+    )
     const inspectorSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")),
     )
 
-    for (const source of [styles, inspectorSurface]) {
+    for (const source of [workspace, inspectorSurface]) {
       for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         const selector = match[1] ?? ""
         const body = match[2] ?? ""
@@ -2893,7 +2891,7 @@ describe("overlay architecture guards", () => {
       }
     }
 
-    const workspaceBodies = Array.from(styles.matchAll(/(^|\n)\.workspace-main\s*\{([^{}]*)\}/g)).map(
+    const workspaceBodies = Array.from(workspace.matchAll(/(^|\n)\.workspace-main\s*\{([^{}]*)\}/g)).map(
       (match) => match[2] ?? "",
     )
     const workspaceBody = workspaceBodies.at(-1) ?? ""

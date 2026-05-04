@@ -499,3 +499,66 @@ body[data-resizing="true"] * {
   height: 100%;
   min-height: 0;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Workspace shell zero-overrides (extracted 2026-05-04): kill any
+   inherited gap / margin / padding / border on .panel-body and
+   .workspace-main, plus the responsive @media (max-width: 1120px)
+   stack-collapse for the panel-body, sidebar, and sections.
+   ───────────────────────────────────────────────────────────── */
+
+.panel-body {
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-top: 0;
+  border-radius: 0;
+  background: var(--panel-body-bg);
+  backdrop-filter: var(--panel-body-blur);
+  box-shadow: none;
+}
+
+.workspace-main {
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.section[open] > .section-head,
+.config-section[open] > .config-section-head,
+.config-subsection[open] > .config-subsection-head {
+  border-bottom: 0;
+}
+
+@media (max-width: 1120px) {
+  .panel-body {
+    flex-direction: column;
+  }
+
+  .workspace-main {
+    flex-direction: column;
+  }
+
+  .sidebar,
+  .sidebar[data-collapsed="true"],
+  .sections {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex-basis: auto;
+  }
+
+  .sidebar {
+    max-height: min(36vh, calc(320px * var(--ui-scale)));
+  }
+
+  .sections {
+    max-height: min(42vh, calc(420px * var(--ui-scale)));
+  }
+
+  .pane-resizer-left,
+  .pane-resizer-right {
+    display: none;
+  }
+}
