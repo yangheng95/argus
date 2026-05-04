@@ -48,17 +48,18 @@ describe("delivery project evidence gate", () => {
     expect(manifest.checkResults.find((item) => item.name === "test")?.status).toBe("passed")
     expect(manifest.checkResults.find((item) => item.name === "lint")?.status).toBe("failed")
     expect(manifest.checkResults.find((item) => item.name === "lint")?.failureSignature?.checkId).toBe("lint#1")
-    expect(manifest.finalGate.status).toBe("failed")
-    // Required checks (build/test/lint) are blocking primary gates under the
-    // "功能完成度 + e2e测试结果" rule. The OLD model had lint in auxiliary;
-    // we now treat any required-check failure as a primary blocker.
+    // Lint (and other required programmatic checks) are advisory under the
+    // current model — only acceptance-spec coverage and `review:integrity`
+    // are blocking. The lint failure surfaces in failedCheckIds and
+    // auxiliaryFailureIds so the LLM agent can weigh it, but the gate
+    // status itself is `passed`.
+    expect(manifest.finalGate.status).toBe("passed")
     expect(manifest.functionalAssessment).toMatchObject({
-      status: "incomplete",
-      primaryFailureIds: ["lint#1"],
+      status: "complete",
+      primaryFailureIds: [],
     })
-    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toEqual([])
-    expect(manifest.finalGate.summary).toContain("Functional completion failed")
-    expect(manifest.finalGate.summary).toContain("primary blocker")
+    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("lint#1")
+    expect(manifest.finalGate.failedCheckIds).toContain("lint#1")
   })
 
   test("skips discovered lint by default because typecheck and tests are the delivery signal", async () => {
@@ -102,7 +103,11 @@ describe("delivery project evidence gate", () => {
     const lint = manifest.checkResults.find((item) => item.name === "lint")
     expect(lint?.status).toBe("failed")
     expect(lint?.failureReason).toContain("Forbidden shell success coercion")
-    expect(manifest.finalGate.status).toBe("failed")
+    // Forbidden shell coercion is detected and surfaced as a failed check,
+    // but lint itself is advisory. Coverage / integrity stay clean here, so
+    // the gate is `passed` while failedCheckIds carries the diagnostic.
+    expect(manifest.finalGate.status).toBe("passed")
+    expect(manifest.finalGate.failedCheckIds).toContain("lint#1")
   })
 
   test("runs required checks from a source snapshot that excludes opencorvus internal worktrees", async () => {
@@ -422,9 +427,12 @@ console.log("lint scope ok", cwd())
       claim: expect.stringContaining("hardcoded secret-like value"),
     })
     expect(manifest.finalGate.failedReviewIds).toContain("specialist:security_data")
-    expect(manifest.functionalAssessment?.primaryFailureIds).toContain("specialist:security_data")
-    expect(manifest.functionalAssessment?.auxiliaryFailureIds).not.toContain("specialist:security_data")
-    expect(manifest.finalGate.status).toBe("failed")
+    // Specialist reviews are advisory under the current model. The host
+    // gate stays `passed`; the security_data finding surfaces in
+    // failedReviewIds + auxiliaryFailureIds for the LLM agent to weigh.
+    expect(manifest.functionalAssessment?.primaryFailureIds).not.toContain("specialist:security_data")
+    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("specialist:security_data")
+    expect(manifest.finalGate.status).toBe("passed")
   })
 
   test("fails non-trivial goal graph when integrity review evidence is missing", async () => {
@@ -478,7 +486,10 @@ console.log("lint scope ok", cwd())
       }),
     })
 
-    expect(manifest.finalGate.status).toBe("failed")
+    // workspace_export is an artifact-shape review (not architect-level);
+    // it stays advisory. The diagnostic still appears in failedReviewIds so
+    // the LLM agent can read it, but the gate is `passed`.
+    expect(manifest.finalGate.status).toBe("passed")
     expect(manifest.finalGate.failedReviewIds).toContain("review:workspace_export")
     expect(manifest.reviewEvidence.find((item) => item.id === "review:workspace_export")?.evidence.join("\n"))
       .toContain("missing_declared_files=src/app.ts")

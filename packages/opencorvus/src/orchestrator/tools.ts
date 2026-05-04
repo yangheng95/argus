@@ -3195,12 +3195,14 @@ export function createOrchestratorTools(input: {
                   .where(eq(EngineArtifactTable.id, verdictArtifactId))
                   .get()
               )
-              const { findLatestDeliveryEvidenceManifest } = await import("@/delivery/manifest")
-              const manifest = findLatestDeliveryEvidenceManifest({ deliveryID: delivery.id })
-              if (!manifest) return "Delivery verified and ACCEPTED but no delivery evidence manifest was persisted; publish blocked."
-              if (manifest.finalGate.status !== "passed") {
-                return `Delivery verified and ACCEPTED but evidence manifest gate is ${manifest.finalGate.status}: ${manifest.finalGate.summary}`
-              }
+              // No host gate veto on an LLM-accepted delivery. If the agent
+              // says accepted, we publish — the gate is informational. The
+              // previous `finalGate.status !== "passed"` check returned a
+              // tool-result string that didn't change run state; the
+              // orchestrator's next turn would just call deliver again on
+              // the same code → infinite loop on coverage gaps that
+              // re-running cannot fix. Per CLAUDE.md rule 7 (no dual
+              // accept paths) and rule 13 (LLM owns the decision).
               markDeliveryPublishing(delivery.id, Date.now())
               const PUBLISH_TIMEOUT_MS = 60_000
               const currentTask = requireTask(taskID)

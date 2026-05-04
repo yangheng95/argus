@@ -173,6 +173,101 @@ describe("delivery arbiter", () => {
     expect(decision.verdict.deferred_checks.some((item) => item.evidence.includes("tsc exited"))).toBe(true)
   })
 
+  describe("blocking vs advisory split (CLAUDE.md rule 7 — single semantic source)", () => {
+    test("acceptance-spec coverage gap is a primary blocker", () => {
+      const verdict = arbitrateDeliveryGate({
+        checks: {
+          status: "passed",
+          summary: "",
+          failedCheckIds: [],
+          failedCoverageIds: [],
+          failedRuntimeFlowIds: [],
+          failedReviewIds: [],
+        },
+        failedCoverageIds: ["goal:gol_one"],
+        failedRuntimeFlowIds: [],
+        failedReviewIds: [],
+        functionalAssessment: {
+          status: "incomplete",
+          summary: "incomplete",
+          primaryFailureIds: ["goal:gol_one"],
+          auxiliaryFailureIds: [],
+        },
+      })
+      expect(verdict.status).toBe("failed")
+    })
+
+    test("review:integrity failure is a primary blocker (architect-level soundness)", () => {
+      const verdict = arbitrateDeliveryGate({
+        checks: {
+          status: "passed",
+          summary: "",
+          failedCheckIds: [],
+          failedCoverageIds: [],
+          failedRuntimeFlowIds: [],
+          failedReviewIds: [],
+        },
+        failedCoverageIds: [],
+        failedRuntimeFlowIds: [],
+        failedReviewIds: ["review:integrity"],
+        functionalAssessment: {
+          status: "incomplete",
+          summary: "integrity failed",
+          primaryFailureIds: ["review:integrity"],
+          auxiliaryFailureIds: [],
+        },
+      })
+      expect(verdict.status).toBe("failed")
+    })
+
+    test("build/test/lint, runtime probes, and non-integrity reviews are advisory only", () => {
+      const verdict = arbitrateDeliveryGate({
+        checks: {
+          status: "passed",
+          summary: "",
+          failedCheckIds: ["check:build", "check:test"],
+          failedCoverageIds: [],
+          failedRuntimeFlowIds: [],
+          failedReviewIds: [],
+        },
+        failedCoverageIds: [],
+        failedRuntimeFlowIds: ["runtime:web:."],
+        failedReviewIds: ["review:workspace_export", "specialist:frontend"],
+        functionalAssessment: {
+          status: "complete",
+          summary: "ok",
+          primaryFailureIds: [],
+          auxiliaryFailureIds: [
+            "check:build",
+            "check:test",
+            "runtime:web:.",
+            "review:workspace_export",
+            "specialist:frontend",
+          ],
+        },
+      })
+      expect(verdict.status).toBe("passed")
+    })
+
+    test("integrity failure overrides an LLM accept via host_gate", () => {
+      const accepted: DeliveryVerdictType = {
+        verdict: "accepted",
+        summary: "accepted by reviewer",
+        startup_verification: { attempted: true, success: true },
+        frontend_check: { attempted: false },
+        deferred_checks: [],
+        tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
+      }
+      const decision = arbitrateDeliveryVerdict({
+        manifest: manifestWithFailedIntegrityReview(),
+        goalIds: ["gol_one"],
+        llmVerdict: accepted,
+      })
+      expect(decision?.source).toBe("host_gate")
+      expect(decision?.verdict.verdict).toBe("rejected")
+    })
+  })
+
   test("formats manifest failures with enough detail for orchestrator routing", () => {
     expect(formatDeliveryManifestFailureDetails(manifestWithFailedBuildCheck())).toEqual([
       "[check] check:build Build status=failed exit=1 command=bun run build: tsc exited with code 1",
@@ -222,7 +317,7 @@ describe("delivery arbiter", () => {
     ]))
   })
 
-  test("runtime evidence failure overrides an LLM accept", () => {
+  test("runtime evidence failure stays advisory and does not override an LLM accept", () => {
     const rejected: DeliveryVerdictType = {
       verdict: "rejected",
       summary: "Agent traced the empty DOM to the UI goal hydration code.",
@@ -267,9 +362,8 @@ describe("delivery arbiter", () => {
       llmVerdict: accepted,
       runtimeReport,
     })
-    expect(acceptedDecision?.source).toBe("host_gate")
-    expect(acceptedDecision?.verdict.verdict).toBe("rejected")
-    expect(acceptedDecision?.verdict.summary).toContain("Delivery rejected by required host gates")
+    expect(acceptedDecision?.source).toBe("llm")
+    expect(acceptedDecision?.verdict.verdict).toBe("accepted")
     expect(acceptedDecision?.verdict.deferred_checks.some((item) => item.name === "runtime_evidence")).toBe(true)
     expect(acceptedDecision?.verdict.tool_call_evidence.some((item) => item.tool === "runtime_evidence")).toBe(true)
 
@@ -288,7 +382,7 @@ describe("delivery arbiter", () => {
     expect(decision.verdict.tool_call_evidence.some((item) => item.tool === "runtime_evidence")).toBe(true)
   })
 
-  test("visual metric failure overrides an LLM accept", () => {
+  test("visual metric failure stays advisory and does not override an LLM accept", () => {
     const rejected: DeliveryVerdictType = {
       verdict: "rejected",
       summary: "Agent attributed the visual mismatch to the UI shell layout.",
@@ -332,9 +426,8 @@ describe("delivery arbiter", () => {
       llmVerdict: accepted,
       visualMetric,
     })
-    expect(acceptedDecision?.source).toBe("host_gate")
-    expect(acceptedDecision?.verdict.verdict).toBe("rejected")
-    expect(acceptedDecision?.verdict.summary).toContain("Delivery rejected by required host gates")
+    expect(acceptedDecision?.source).toBe("llm")
+    expect(acceptedDecision?.verdict.verdict).toBe("accepted")
     expect(acceptedDecision?.verdict.deferred_checks.some((item) => item.name === "visual_metric")).toBe(true)
 
     const decision = arbitrateDeliveryVerdict({
@@ -489,6 +582,32 @@ function manifestWithSpecialistClientContractFailure(timeCreated: number): Deliv
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
       failedReviewIds: ["specialist:client_contract"],
+    },
+  }
+}
+
+function manifestWithFailedIntegrityReview(): DeliveryEvidenceManifest {
+  return {
+    ...baseManifest(),
+    reviewEvidence: [{
+      id: "review:integrity",
+      name: "Integrity Review",
+      status: "failed",
+      evidence: ["verdict=fail", "issues_count=2", "missing_count=1"],
+    }],
+    functionalAssessment: {
+      status: "incomplete",
+      primaryFailureIds: ["review:integrity"],
+      auxiliaryFailureIds: [],
+      summary: "Functional completion failed with 1 blocker(s) (coverage and/or integrity).",
+    },
+    finalGate: {
+      status: "failed",
+      summary: "Functional completion failed with 1 blocker(s) (coverage and/or integrity).",
+      failedCheckIds: [],
+      failedCoverageIds: [],
+      failedRuntimeFlowIds: [],
+      failedReviewIds: ["review:integrity"],
     },
   }
 }

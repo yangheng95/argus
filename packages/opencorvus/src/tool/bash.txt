@@ -8,6 +8,8 @@ Missing tools: if a command fails with "command not found" / "not recognized" / 
 
 CRITICAL: You share a process namespace with the orchestrator. NEVER kill processes by name (killall, pkill, taskkill /IM, ps|grep|xargs kill). To stop a server you started, use the PID from the start command (e.g. `kill $!`) or kill by port (e.g. `lsof -ti :3000 | xargs kill` or `fuser -k 3000/tcp`). Killing by process name will destroy the orchestrator and all sibling tasks. The orchestrator's PID is protected by a shell-level guard — attempts to `kill` the host process PID will be refused automatically.
 
+Foreground vs background: by default the spawned process is killed (process tree torn down) the moment this tool call returns. To run a long-lived server (dev/preview/serve) that must outlive a single tool call so delivery checks can probe it, pass `background: true`. The tool then returns a few hundred ms after start with `metadata.pid` set, while the process keeps running. You are responsible for stopping it later (`kill <pid>` or `lsof -ti :<port> | xargs kill`). Do not pass `background: true` for short commands — they will not wait for completion and you will not see their full output.
+
 Before executing the command, please follow these steps:
 
 1. Directory Verification:

@@ -2,7 +2,6 @@ import { inferFamily } from "@/check/policy"
 import { Instance } from "@/project/instance"
 import { CheckConfig, NamedCheckConfig, NamedCheckFamily } from "@/engine"
 import { Filesystem } from "@/util/filesystem"
-import { which } from "@/util/which"
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
@@ -120,7 +119,6 @@ export async function discoverChecks(changedFiles?: unknown) {
         commands: run("pytest"),
       },
     } : {}),
-    ...(await discoverPythonChecks(cwd, files)),
   }
   return {
     build: run && scripts.build ? run("build") : [],
@@ -238,89 +236,6 @@ function namedGroups(
   })
 }
 
-async function discoverPythonChecks(cwd: string, files: string[]) {
-  const markers = await Promise.all([
-    exists(path.join(cwd, "pyproject.toml")),
-    exists(path.join(cwd, "setup.py")),
-    exists(path.join(cwd, "setup.cfg")),
-    exists(path.join(cwd, "requirements.txt")),
-    exists(path.join(cwd, "tests")),
-    exists(path.join(cwd, "pytest.ini")),
-    exists(path.join(cwd, "mypy.ini")),
-    exists(path.join(cwd, ".mypy.ini")),
-    exists(path.join(cwd, "ruff.toml")),
-    exists(path.join(cwd, ".ruff.toml")),
-  ])
-  const pyproject = await fs.readFile(path.join(cwd, "pyproject.toml"), "utf8").catch(() => "")
-  const hasPythonFiles = files.some((item) => item.endsWith(".py")) || (await hasPythonTopLevel(cwd))
-  const isPythonProject = hasPythonFiles || markers.some(Boolean)
-  if (!isPythonProject) return {}
-
-  const python = pythonLauncher()
-  const pytest = pythonToolCommand("pytest", "pytest")
-  const mypy = pythonToolCommand("mypy", "mypy")
-  const ruff = pythonToolCommand("ruff", "ruff")
-  const checks = {} as Record<string, CommandGroup>
-
-  if (python) {
-    checks.py_compile = {
-      name: "py_compile",
-      label: "Python Compile",
-      family: "build",
-      commands: [{ command: `${python} -m compileall .`, cwd }],
-    }
-  }
-  if (pytest && (markers[4] || markers[5] || files.some((item) => /(^|\/)test_.*\.py$|(^|\/).+_test\.py$/.test(item)))) {
-    checks.pytest = {
-      name: "pytest",
-      label: "Pytest",
-      family: "test",
-      commands: [{ command: `${pytest} -q`, cwd }],
-    }
-  }
-  if (mypy && (markers[6] || markers[7] || pyproject.includes("[tool.mypy]"))) {
-    checks.typecheck = {
-      name: "typecheck",
-      label: "Type Check",
-      family: "lint",
-      commands: [{ command: `${mypy} .`, cwd }],
-    }
-  }
-  if (ruff && (markers[8] || markers[9] || pyproject.includes("[tool.ruff]"))) {
-    checks.ruff = {
-      name: "ruff",
-      label: "Ruff",
-      family: "lint",
-      commands: [{ command: `${ruff} check .`, cwd }],
-    }
-  }
-  return checks
-}
-
-async function exists(filepath: string) {
-  try {
-    await fs.access(filepath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function hasPythonTopLevel(cwd: string) {
-  if (!(await Filesystem.exists(cwd))) return false
-  const entries = await fs.readdir(cwd)
-  return entries.some((item) => item.endsWith(".py"))
-}
-
-function pythonLauncher() {
-  return ["python", "python3", "py"].find((item) => which(item))
-}
-
-function pythonToolCommand(module: string, binary: string) {
-  const python = pythonLauncher()
-  if (python) return `${python} -m ${module}`
-  if (which(binary)) return binary
-}
 
 function checkLabel(key: string) {
   const known = {

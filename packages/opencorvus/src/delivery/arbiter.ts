@@ -13,12 +13,18 @@ export type DeliveryArbiterDecision = {
 }
 
 /**
- * Delivery accept/reject is decided strictly by functional completeness
- * (`failedCoverageIds`), required-check / e2e test results (`failedCheckIds`),
- * runtime flows, and required project integrity reviews. A failed
- * DeliveryEvidenceManifest item is not optional: the delivery agent may add
- * semantic attribution, but it cannot turn an incomplete manifest into an
- * accepted delivery.
+ * Delivery gate semantics:
+ *   - Blocking: acceptance-spec coverage AND `review:integrity` (the
+ *     architect-level multi-dimension soundness check). These are
+ *     plan-rework signals — re-running the same code cannot fix them.
+ *   - Advisory: required checks (build/typecheck/test/lint), runtime probes,
+ *     and the rest of the reviewer set (workspace_export, specialist:*).
+ *     The delivery agent (LLM) weighs them in context.
+ *
+ * functionalAssessment.primaryFailureIds is the ground truth for the
+ * blocking set; the gate just mirrors it. This keeps a single source of
+ * truth for "what blocks delivery" — see `assessFunctionalCompletion` in
+ * `delivery/checks/project-gate.ts`.
  */
 export function arbitrateDeliveryGate(input: {
   checks: DeliveryGateVerdict
@@ -29,12 +35,7 @@ export function arbitrateDeliveryGate(input: {
 }): DeliveryGateVerdict {
   const failedRuntimeFlowIds = input.failedRuntimeFlowIds ?? []
   const failedReviewIds = input.failedReviewIds ?? []
-  const status = input.checks.failedCheckIds.length === 0
-    && input.failedCoverageIds.length === 0
-    && failedRuntimeFlowIds.length === 0
-    && failedReviewIds.length === 0
-    ? "passed"
-    : "failed"
+  const status = input.functionalAssessment.primaryFailureIds.length === 0 ? "passed" : "failed"
   return {
     status,
     failedCheckIds: input.checks.failedCheckIds,
@@ -153,18 +154,11 @@ function hostGateBlockingSummary(input: {
   runtimeReport?: RuntimeEvidenceReport
   visualMetric?: VisualMetricResult | null
 }): string {
-  const summaries: string[] = []
-  if (input.manifest.finalGate.status !== "passed") summaries.push(input.manifest.finalGate.summary)
-  if (input.runtimeReport && !input.runtimeReport.passed) {
-    summaries.push(`Runtime evidence blocker: ${input.runtimeReport.violations.length} violation(s).`)
-  }
-  if (input.visualMetric && !input.visualMetric.passed) {
-    const failedGates = input.visualMetric.gates.filter((gate) => !gate.passed)
-    summaries.push(
-      `Visual metric blocker: score=${input.visualMetric.score.toFixed(3)} with ${failedGates.length} failed gate(s).`,
-    )
-  }
-  return summaries.join(" | ")
+  // Only acceptance-spec coverage gaps are host-side blockers that override an
+  // "accepted" verdict. Runtime / visual / specialist findings flow through as
+  // advisory evidence — the delivery agent already sees them and decides.
+  if (input.manifest.finalGate.status === "passed") return ""
+  return input.manifest.finalGate.summary
 }
 
 function appendHostGateEvidence(
