@@ -17,6 +17,7 @@ import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { appStore } from "../store/app";
 import { settingsStore, setSettingsStore, saveSettings, sanitizeExecutor } from "../store/settings";
 import { Icon } from "./Icon";
+import { useDisclosure } from "../solid/disclosure";
 import {
   executorCurrentModel,
   executorHasModelChoice,
@@ -44,7 +45,7 @@ function projectModelFromConfig(): string {
 const INTERNAL_EXECUTOR_ID = "mirrorcode"
 
 export function ExecutorSelector() {
-  const [open, setOpen] = createSignal(false);
+  const menu = useDisclosure();
 
   // Chip renders from settingsStore after the same executor-id validation
   // used by task submission. The menu still iterates appStore.executors
@@ -89,13 +90,13 @@ export function ExecutorSelector() {
   let rootRef: HTMLDivElement | undefined;
 
   const onDocClick = (event: MouseEvent) => {
-    if (!open()) return;
+    if (!menu.open()) return;
     const target = event.target as Node | null;
     if (rootRef && target && rootRef.contains(target)) return;
-    setOpen(false);
+    menu.close();
   };
   const onKey = (event: KeyboardEvent) => {
-    if (event.key === "Escape" && open()) setOpen(false);
+    if (event.key === "Escape" && menu.open()) menu.close();
   };
   if (typeof document !== "undefined") {
     document.addEventListener("click", onDocClick, { capture: true });
@@ -112,11 +113,11 @@ export function ExecutorSelector() {
       setSettingsStore("executor", sanitizeExecutor(id));
       saveSettings();
     }
-    if (!executorHasModelChoice(id)) setOpen(false);
+    if (!executorHasModelChoice(id)) menu.close();
   }
 
   async function pickModel(executorID: string, model: string) {
-    setOpen(false);
+    menu.close();
     if (executorID !== activeID()) {
       setSettingsStore("executor", sanitizeExecutor(executorID));
       saveSettings();
@@ -133,7 +134,7 @@ export function ExecutorSelector() {
     // cold-start gap before loadExecutors() resolves, full afterwards.
     <div
       class="executor-selector"
-      data-open={open() ? "true" : "false"}
+      data-open={menu.open() ? "true" : "false"}
       ref={(el) => (rootRef = el)}
     >
         <Button
@@ -145,11 +146,11 @@ export function ExecutorSelector() {
           data-active="true"
           data-has-external="true"
           aria-haspopup="listbox"
-          aria-expanded={open() ? "true" : "false"}
+          aria-expanded={menu.open() ? "true" : "false"}
           title={chipTitle()}
           onClick={(event) => {
             event.stopPropagation();
-            setOpen((value) => !value);
+            menu.toggle();
           }}
         >
           <span class="executor-chip-label">{activeLabel()}</span>
@@ -185,7 +186,7 @@ export function ExecutorSelector() {
           </span>
         </Button>
 
-        <Show when={open()}>
+        <Show when={menu.open()}>
           <div class="executor-menu" role="listbox" aria-label={t("executor.group")}>
             <For each={executors()}>
               {(item) => {

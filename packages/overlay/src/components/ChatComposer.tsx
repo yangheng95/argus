@@ -15,6 +15,7 @@ import {
 import { fileToDataUrl } from "../services/file-to-data-url";
 import { Button } from "./ui/Button";
 import { Icon } from "./Icon";
+import { useDisclosure } from "../solid/disclosure";
 
 // ── Types ──
 
@@ -124,7 +125,8 @@ export function ChatComposer(props: ChatComposerProps) {
   };
   const [dragover, setDragover] = createSignal(false);
   const [webSearch, setWebSearch] = createSignal(false);
-  const [expanded, setExpanded] = createSignal(false);
+  const composerExpanded = useDisclosure();
+  const expanded = composerExpanded.open;
   const [focused, setFocused] = createSignal(false);
   const [hintText, setHintText] = createSignal("");
   const [submitting, setSubmitting] = createSignal(false);
@@ -302,7 +304,7 @@ export function ChatComposer(props: ChatComposerProps) {
       await props.onSubmit(trimmed, sentAttachments, webSearch());
       setText("");
       setAttachments([]);
-      setExpanded(false);
+      composerExpanded.close();
       if (textareaRef) textareaRef.value = "";
     } catch (error) {
       console.error("[ChatComposer] submit failed", error);
@@ -510,7 +512,7 @@ export function ChatComposer(props: ChatComposerProps) {
             title={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}
             aria-label={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}
             aria-pressed={expanded()}
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => composerExpanded.toggle()}
           >
             <Show when={expanded()} fallback={<Icon name="chevron-up" size={14} />}>
               <Icon name="chevron-down" size={14} />

@@ -3361,6 +3361,12 @@ describe("overlay architecture guards", () => {
         const start = match.index ?? 0
         if (breakpointPxOffsets.has(start)) continue
         const window = text.slice(Math.max(0, start - 80), start + match[0].length + 80)
+        // --px-exact is an escape-hatch CSS custom property for px values
+        // that MUST stay at exactly 1px (visually-hidden / layout-collapse).
+        // Use a wider context slice because the property declaration can sit
+        // more than 80 chars before the first 1px usage in the same block.
+        const ctx = text.slice(Math.max(0, start - 300), start + match[0].length + 80)
+        if (ctx.includes("--px-exact")) continue
         // The window must hold a `calc(...)` scope and a
         // `var(--ui-scale)` reference — proving the px scales with the
         // overlay's ui-scale knob. Earlier the regex matched a single
