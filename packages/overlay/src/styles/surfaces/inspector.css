@@ -2331,7 +2331,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .goal-desc-inline {
   flex-shrink: 0;
   font-size: var(--ui-font-control);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-strong);
   letter-spacing: 0.02em;
 }

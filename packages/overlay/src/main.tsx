@@ -1615,6 +1615,15 @@ void (async () => {
     cmdkHost.id = "commandPaletteHost";
     document.body.appendChild(cmdkHost);
     render(() => <CommandPalette />, cmdkHost);
+    // First-run startup: if no working directory is set after init,
+    // pop the OS folder picker immediately so the operator does not
+    // start at a half-bricked composer (input is disabled until
+    // settingsStore.directory is non-empty). Restored 2026-05-04 per
+    // user request — the inline BoardIntro CTA stays as a fallback
+    // for when the picker is dismissed without a selection.
+    if (!settingsStore.directory) {
+      void browseDirectory().catch((err) => console.warn("startup picker", err));
+    }
   } catch (error) {
     console.error(error);
   } finally {

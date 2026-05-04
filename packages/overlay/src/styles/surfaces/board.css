@@ -87,7 +87,7 @@
 
 .board-intro__mode-label,
 .board-intro__agent-name {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-strong);
   font-size: var(--ui-font-control);
   line-height: 1.2;

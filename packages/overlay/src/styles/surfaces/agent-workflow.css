@@ -241,14 +241,14 @@
   white-space: nowrap;
   color: var(--text-strong);
   font-size: var(--ui-font-small);
-  font-weight: 780;
+  font-weight: 500;
 }
 
 .agent-workflow-time,
 .agent-workflow-card-foot {
   color: var(--text-muted);
   font-size: var(--ui-font-tiny);
-  font-weight: 650;
+  font-weight: 400;
 }
 
 .agent-workflow-card-body {
