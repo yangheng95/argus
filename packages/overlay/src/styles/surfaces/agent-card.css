@@ -88,7 +88,7 @@
 }
 
 .agent-card-label {
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   color: var(--agent-accent);
   max-width: calc(280px * var(--ui-scale));
   overflow: hidden;
@@ -170,7 +170,7 @@
   text-align: center;
 }
 .executor-tool-name {
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
   font-family: var(--mono);
   font-size: var(--ui-font-control);
@@ -181,7 +181,7 @@
   width: calc(14px * var(--ui-scale));
   text-align: center;
   font-size: var(--ui-font-control);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
 }
 .executor-tool-status[data-status="completed"] {
   color: var(--good);

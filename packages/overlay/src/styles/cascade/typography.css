@@ -14,17 +14,17 @@
 .dialog-title,
 .section-title,
 .config-section-head {
-  font-size: var(--title-size);
-  font-weight: var(--title-weight);
-  letter-spacing: var(--title-track);
+  font-size: var(--ui-font-title);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0;
 }
 
 .dialog-subtitle,
 .config-subsection-head,
 .extension-head .field-label {
-  font-size: var(--subhead-size);
-  font-weight: 600;
-  letter-spacing: var(--subhead-track);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0;
 }
 
 .field-label,
@@ -50,7 +50,7 @@
   padding: var(--ui-pill-padding-y) var(--ui-pill-padding-x);
   border-radius: var(--oc-radius-pill);
   font-size: var(--ui-font-small);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0.03em;
 }
 
@@ -61,12 +61,12 @@
   background: var(--accent-dim);
   color: var(--accent);
   font-size: var(--ui-font-small);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
 }
 
 .section-title,
 .config-section-head-text,
 .config-subsection-head {
-  font-weight: 500;
+  font-weight: var(--ui-font-weight-medium);
   letter-spacing: 0;
 }

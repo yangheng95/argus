@@ -66,8 +66,9 @@
   --ui-chat-min-height: calc(58px * var(--ui-scale));
   --ui-chat-max-height: calc(140px * var(--ui-scale));
   --ui-select-padding-right: calc(28px * var(--ui-scale));
-  --title-size: var(--ui-font-title);
-  --subhead-size: var(--ui-font-control);
+  /* --title-size / --subhead-size aliases retired 2026-05-04 (Step 5
+   * v3, rule 8). Consumers reference --ui-font-title / --ui-font-
+   * control directly. */
 }
 
 *,

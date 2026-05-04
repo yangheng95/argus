@@ -20,8 +20,8 @@
 }
 
 .field-label {
-  font-size: var(--subhead-size);
-  font-weight: var(--subhead-weight);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
   color: var(--text-soft);
 }
 .field-label em {

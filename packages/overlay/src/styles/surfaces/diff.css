@@ -27,7 +27,7 @@
   color: var(--text-soft);
   text-transform: none;
   letter-spacing: 0;
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   font-size: calc(var(--ui-font-meta) * 0.94);
 }
 

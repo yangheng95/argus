@@ -175,7 +175,7 @@
   display: block;
   padding: calc(2px * var(--ui-scale)) 0 calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
   font-size: calc(var(--ui-font-meta) * 0.88);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   color: var(--text-muted);
 }
 
@@ -265,7 +265,7 @@
 .task-row-main strong {
   display: block;
   font-size: var(--ui-font-body);
-  font-weight: 650;
+  font-weight: var(--ui-font-weight-strong);
   line-height: 1.3;
   letter-spacing: 0;
   color: var(--text-strong);
@@ -704,7 +704,7 @@
   border-radius: var(--oc-radius-soft);
   background: transparent;
   font-size: var(--ui-font-meta);
-  font-weight: 700;
+  font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0.01em;
   cursor: pointer;
   white-space: nowrap;
@@ -780,7 +780,7 @@
 
 .project-group-name {
   font-size: var(--ui-font-body);
-  font-weight: 650;
+  font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0.015em;
   color: var(--text-strong);
 }

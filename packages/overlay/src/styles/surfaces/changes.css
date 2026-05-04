@@ -74,7 +74,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
 }
 .changes-goal-picker-count {
   flex: 0 0 auto;
@@ -133,7 +133,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
+  font-weight: var(--ui-font-weight-medium);
 }
 .changes-goal-picker-row-count {
   flex: 0 0 auto;
@@ -180,7 +180,7 @@
 
 .changes-tab-label {
   font-size: var(--ui-font-control);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -284,7 +284,7 @@
   color: var(--text-soft);
   text-transform: none;
   letter-spacing: 0;
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   font-size: calc(var(--ui-font-meta) * 0.94);
 }
 
