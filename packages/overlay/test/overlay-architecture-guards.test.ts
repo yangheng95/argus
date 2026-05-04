@@ -2596,7 +2596,9 @@ describe("overlay architecture guards", () => {
 
     const agentBody = soloRuleBody(surface, ".agent-workflow-agent")
     expect(agentBody).toContain("font-size: var(--ui-font-small)")
-    expect(agentBody).toContain("font-weight: 780")
+    // Flat-redesign 2026-05-04: bold-tier 780 retired (user feedback —
+    // no bold on the active-agent identity label). Now medium 500.
+    expect(agentBody).toContain("font-weight: 500")
 
     const cardBody = soloRuleBody(surface, ".agent-workflow-card-body")
     for (const declaration of [
