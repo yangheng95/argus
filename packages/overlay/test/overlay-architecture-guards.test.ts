@@ -11,6 +11,26 @@ function readText(path: string): string {
   return readFileSync(path, "utf8")
 }
 
+// styles.css was dissolved 2026-05-04 into styles/cascade/*.css (cross-
+// cutting plumbing) and styles/surfaces/*.css (per-surface chrome). Many
+// guards read "src/styles.css" to assert "no theme override / no raw
+// literal / canonical here, not theme scoped" patterns. Those assertions
+// remain meaningful — they just need to scan the new cascade layer
+// instead. This shim resolves any "src/styles.css" read to the
+// concatenated content of the cascade files that absorbed its rules.
+function readLegacyStylesCss(_path: string): string {
+  const cascadeFiles = [
+    "src/styles/cascade/base.css",
+    "src/styles/cascade/typography.css",
+    "src/styles/cascade/dark.css",
+    "src/styles/cascade/vscode-dark.css",
+    "src/styles/cascade/light.css",
+  ]
+  return cascadeFiles
+    .map((file) => readFileSync(join(OVERLAY_ROOT, file), "utf8"))
+    .join("\n")
+}
+
 function walkFiles(dir: string, predicate: (path: string) => boolean): string[] {
   if (!existsSync(dir)) return []
   const out: string[] = []
@@ -173,7 +193,7 @@ describe("overlay architecture guards", () => {
     // (e.g., `/* this `!important` reset retired */`) shouldn't count as
     // live cascade debt. The live count tracks rule bodies and selectors
     // that the browser actually evaluates.
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(6)
@@ -181,7 +201,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("styles.css has no hard-coded accent/bad/warn rgb expansions outside comments", () => {
-    const raw = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const raw = readLegacyStylesCss("src/styles.css")
     const stripped = raw.replace(/\/\*[\s\S]*?\*\//g, "")
     // Pre-2026-05-04, styles.css carried 32 literal expansions of palette
     // accent / bad / warn rgb values in rule bodies. Each one painted the
@@ -214,7 +234,7 @@ describe("overlay architecture guards", () => {
     // was always the late block, so the early :root values rendered
     // nowhere. This guard ensures the dual-source pattern stays
     // retired so any palette tweak lands in one place.
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     function tokens(headPattern: string): Set<string> {
       const m = new RegExp(headPattern).exec(styles)
       if (!m) return new Set()
@@ -243,7 +263,7 @@ describe("overlay architecture guards", () => {
     // were stuck on the OLD accent's rgb expansion (e.g. #2470b3
     // instead of the active #5b5ff0). This guard pins the single-block
     // invariant so any future palette tweak lands in one place.
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     for (const theme of ["light", "dark", "vscode-dark"] as const) {
       const head = new RegExp(`body\\[data-theme="${theme}"\\]\\s*\\{`, "g")
       const matches = [...styles.matchAll(head)]
@@ -258,7 +278,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
 
     expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(7)
   })
@@ -268,7 +288,7 @@ describe("overlay architecture guards", () => {
     // `body[data-theme]` as a literal phrase explaining what was retired;
     // a non-comment-aware regex would walk from that prose into the
     // canonical's selector list and report a false positive.
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     // Each of the three sibling classes must not appear inside any
     // selector that starts with `body[data-theme=…]` or `body:is(…data-theme…)`.
     // Theme palette (`--accent-gradient`) drives the gradient↔flat split
@@ -300,7 +320,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("container shell + content shell families have no theme chrome override", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     // The shell families (`.sidebar` / `.chat` / `.sections` for the
     // three workbench columns; `.section` / `.gwg` for inspector cards;
     // `.board-intro` / `.chat-empty--task` for empty states; the four
@@ -375,7 +395,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("inline-pill family has no theme chrome override", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     // task-row-badge / section-badge / extension-status / gwg-priority-badge /
     // change-status / diff-dialog-stat all converged on the iter15+
     // "dot-prefix" canonical (transparent base + variant tint via dim tokens
@@ -422,7 +442,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
 
     expect(styles).not.toMatch(/^\.titlebar-task-status\b/m)
@@ -436,7 +456,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("titlebar status chip and setup CTA are owned by surfaces/titlebar.css", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
 
     expect(styles).not.toMatch(/^\.titlebar-status-chip\b/m)
@@ -450,7 +470,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("composer icon column is owned by surfaces/composer.css", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
     for (const className of ["chat-icon-col"]) {
@@ -463,7 +483,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("composer icon column chrome is not controlled by legacy theme selectors", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -477,7 +497,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("sidebar task-row-mini + badge family are owned by surfaces/sidebar.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const sidebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css"))
 
     for (const className of [
@@ -505,7 +525,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("sidebar body + list family are owned by surfaces/sidebar.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const sidebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css"))
 
     for (const className of [
@@ -526,7 +546,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("sidebar shell + tool family are owned by surfaces/sidebar.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const sidebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
@@ -546,13 +566,11 @@ describe("overlay architecture guards", () => {
     expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\] \.sidebar-toggle svg/)
 
     const sidebarAt = html.indexOf('href="styles/surfaces/sidebar.css"')
-    const stylesAt = html.indexOf('href="styles.css"')
     expect(sidebarAt).toBeGreaterThan(-1)
-    expect(sidebarAt).toBeLessThan(stylesAt)
   })
 
   test("inspector right panel shell is owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
@@ -571,13 +589,11 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("var(--inspector-surface)")
 
     const inspectorAt = html.indexOf('href="styles/surfaces/inspector.css"')
-    const stylesAt = html.indexOf('href="styles.css"')
     expect(inspectorAt).toBeGreaterThan(-1)
-    expect(inspectorAt).toBeLessThan(stylesAt)
   })
 
   test("inspector preview tab + section icon button are owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -599,7 +615,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("section content rails (icon, title, badge, body, caret) are owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -622,7 +638,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("section shell + head baseline are owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const selector of ["section", "section-head"]) {
@@ -638,7 +654,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("gwg actions + chevron + body + objective are owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -663,7 +679,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("task dir bar (TaskDirBar) is owned by surfaces/conversation.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(
       join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
     )
@@ -705,7 +721,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("task bar, task status, task flag, and recent dir panel are owned by surfaces/conversation.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(
       join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
     )
@@ -750,7 +766,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("executor chip and selector family are owned by surfaces/composer.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
     for (const className of [
@@ -784,7 +800,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workspace panel, diff preview, and file view are owned by surfaces/workspace.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const workspaceSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
@@ -830,9 +846,7 @@ describe("overlay architecture guards", () => {
     expect(workspaceSurface).not.toMatch(/var\(--accent,\s*#/)
 
     const workspaceAt = html.indexOf('href="styles/surfaces/workspace.css"')
-    const stylesAt = html.indexOf('href="styles.css"')
     expect(workspaceAt).toBeGreaterThan(-1)
-    expect(workspaceAt).toBeLessThan(stylesAt)
 
     expect(workspaceSurface).toMatch(/\.workspace-toggle:hover\s*\{/)
     expect(workspaceSurface).toMatch(/\.workspace-toggle\[aria-pressed="true"\]\s*\{/)
@@ -877,7 +891,7 @@ describe("overlay architecture guards", () => {
     // verdict-pill is rendered by Board.tsx + IntegrityCard inside the
     // inspector workspace, so the inspector surface owns it.
     const inspector = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
 
     const verdictBlock = inspector.match(
       /\.verdict-pill\s*\{[\s\S]*?\.verdict-pill\[data-verdict="empty"\]\s*\{[^}]*\}/,
@@ -914,7 +928,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("executor menu dropdown is owned by surfaces/composer.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
     for (const className of [
@@ -939,7 +953,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("prompt catalog is owned by surfaces/settings.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const className of [
@@ -964,7 +978,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("config-status-box and about panel are owned by surfaces/settings.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     // .config-status-box appears in a cross-surface multi-class
@@ -1041,12 +1055,12 @@ describe("overlay architecture guards", () => {
     // styles.css. We probe via soloRuleBody — the helper requires
     // the selector to start at column 0, which excludes multi-class
     // typography rules like `.dialog-title, .config-section-head`.
-    expect(() => soloRuleBody(readText(join(OVERLAY_ROOT, "src/styles.css")), ".config-section")).toThrow()
-    expect(() => soloRuleBody(readText(join(OVERLAY_ROOT, "src/styles.css")), ".config-subsection")).toThrow()
+    expect(() => soloRuleBody(readLegacyStylesCss("src/styles.css"), ".config-section")).toThrow()
+    expect(() => soloRuleBody(readLegacyStylesCss("src/styles.css"), ".config-subsection")).toThrow()
   })
 
   test("settings content panel + resizer are owned by surfaces/settings.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const className of [
@@ -1072,7 +1086,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("settings dialog shell + sidebar nav are owned by surfaces/settings.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const className of [
@@ -1105,7 +1119,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("log viewer is owned by surfaces/settings.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const className of [
@@ -1143,7 +1157,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("channel docs + market cards are owned by surfaces/settings.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const className of [
@@ -1178,7 +1192,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("extensions panel block + row is owned by surfaces/settings.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const className of [
@@ -1201,7 +1215,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("knowledge / memory panel is owned by surfaces/settings.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const className of [
@@ -1235,7 +1249,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("permissions panel is owned by surfaces/settings.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
@@ -1264,13 +1278,11 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).toContain("var(--oc-border-width)")
 
     const settingsAt = html.indexOf('href="styles/surfaces/settings.css"')
-    const stylesAt = html.indexOf('href="styles.css"')
     expect(settingsAt).toBeGreaterThan(-1)
-    expect(settingsAt).toBeLessThan(stylesAt)
   })
 
   test("architect panel is owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -1298,7 +1310,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("integrity panel is owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -1343,7 +1355,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("requirements panel is owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -1377,7 +1389,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("gwg checks list is owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -1405,7 +1417,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("gwg step body, plan nodes, diff stats, verdict are owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -1441,7 +1453,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("gwg step row family is owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -1474,7 +1486,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("gwg header + status icon are owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -1505,7 +1517,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("gwg shell + status modifiers are owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     expect(styles).not.toMatch(/(^|\n)\.gwg\s*\{/)
@@ -1526,7 +1538,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("criteria group baseline is owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -1545,7 +1557,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("delivery panel chrome is owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     expect(styles).not.toMatch(/(^|\n)\.delivery-panel\s*\{/)
@@ -1565,7 +1577,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("eval error + summary chrome is owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
@@ -1585,7 +1597,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("section phase-state variants are owned by surfaces/inspector.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const variant of ["related", "active"]) {
@@ -1604,7 +1616,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("conversation goals strip is owned by surfaces/conversation.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(
       join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
     )
@@ -1621,7 +1633,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("conversation header + task-switch progress are owned by surfaces/conversation.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(
       join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
     )
@@ -1644,7 +1656,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("conversation chat-scroll is owned by surfaces/conversation.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(
       join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
     )
@@ -1656,7 +1668,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("conversation chat-empty task-children are owned by surfaces/conversation.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(
       join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
     )
@@ -1682,7 +1694,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("conversation chat-empty placeholder is owned by surfaces/conversation.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(
       join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
     )
@@ -1695,14 +1707,11 @@ describe("overlay architecture guards", () => {
 
     expect(html).toContain('href="styles/surfaces/conversation.css"')
     const conversationAt = html.indexOf('href="styles/surfaces/conversation.css"')
-    const stylesAt = html.indexOf('href="styles.css"')
     expect(conversationAt).toBeGreaterThan(-1)
-    expect(stylesAt).toBeGreaterThan(-1)
-    expect(conversationAt).toBeLessThan(stylesAt)
   })
 
   test("composer build/version row and reflow are owned by surfaces/composer.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
     for (const className of [
@@ -1723,7 +1732,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("composer attachments and compose row/meta are owned by surfaces/composer.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
     for (const className of [
@@ -1748,7 +1757,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("composer chat-send and chat-interrupt are owned by surfaces/composer.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
     for (const className of ["chat-send", "chat-interrupt", "chat-send-icon", "chat-send-label"]) {
@@ -1776,7 +1785,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("composer chat-textarea family is owned by surfaces/composer.css", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
     for (const className of [
@@ -1800,7 +1809,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("composer chat-input shell is owned by surfaces/composer.css", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
     expect(styles).not.toMatch(/(^|\n)\.chat-input\s*\{/)
@@ -1810,7 +1819,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("dead static composer toolbar button classes stay retired", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")),
     )
@@ -1821,7 +1830,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("titlebar theme picker is owned by surfaces/titlebar.css", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
     const tokenText = readText(join(OVERLAY_ROOT, "src/styles/tokens/design-language.css"))
 
@@ -1844,7 +1853,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("brand-guide family is owned by surfaces/titlebar.css", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
 
     for (const className of [
@@ -1869,7 +1878,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("titlebar layout containers and connection badge are owned by surfaces/titlebar.css", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
 
     for (const className of [
@@ -1887,7 +1896,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("dead static titlebar window button classes stay retired", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const titlebarSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")),
     )
@@ -1898,7 +1907,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("titlebar shell and brand layout are owned by surfaces/titlebar.css", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
 
     for (const className of [
@@ -1916,7 +1925,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("migrated titlebar chrome is not controlled by legacy theme selectors", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const migratedTitlebarClasses = [
       "titlebar",
       "titlebar-menubar-trigger",
@@ -1943,7 +1952,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("titlebar menubar family is owned by surfaces/titlebar.css", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
 
     for (const className of [
@@ -1969,7 +1978,7 @@ describe("overlay architecture guards", () => {
 
   test("bold font-weight declarations cannot increase across overlay stylesheets", () => {
     const sources = [
-      readText(join(OVERLAY_ROOT, "src/styles.css")),
+      readLegacyStylesCss("src/styles.css"),
       ...walkFiles(join(OVERLAY_ROOT, "src/styles/primitives"), (path) =>
         path.endsWith(".css"),
       ).map(readText),
@@ -1983,19 +1992,19 @@ describe("overlay architecture guards", () => {
   })
 
   test("right-panel inner headers do not rely on theme reset chrome", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
 
     expect(styles).not.toMatch(/body[^{]*(?:delivery-panel-header|criteria-group-head)[^{]*\{/)
   })
 
   test("right-panel primary headers do not rely on theme spacing resets", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
 
     expect(styles).not.toMatch(/body[^{]*(?:section-head|gwg-header)[^{]*\{[^}]*\b(?:min-height|gap|padding)\s*:/)
   })
 
   test("right-panel primary and config headers do not rely on theme chrome resets", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2007,7 +2016,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("criteria groups do not rely on theme layout or chrome resets", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2019,7 +2028,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("delivery panel keeps verdict accent outside theme chrome resets", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -2037,7 +2046,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("evaluation errors keep semantic error chrome outside theme resets", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -2056,7 +2065,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("settings document/detail cards do not rely on theme chrome resets", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const source of [styles, settingsSurface]) {
@@ -2080,7 +2089,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("settings extension rows do not rely on theme or local important chrome resets", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    const styles = readLegacyStylesCss("src/styles.css")
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const source of [styles, settingsSurface]) {
@@ -2107,7 +2116,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("settings config containers do not rely on theme or local important chrome resets", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css")))
 
     for (const source of [styles, settingsSurface]) {
@@ -2137,7 +2146,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("composer shell does not rely on theme chrome resets", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2169,7 +2178,7 @@ describe("overlay architecture guards", () => {
 
   test("panel shell padding is canonical, not theme scoped", () => {
     // Canonical extracted to surfaces/workspace.css 2026-05-04.
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const workspace = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
     )
@@ -2191,7 +2200,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("titlebar shell layout is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const titlebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -2224,7 +2233,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("directory, sidebar, and workspace controls are canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surfaceTexts = [
       "src/styles/surfaces/conversation.css",
       "src/styles/surfaces/sidebar.css",
@@ -2311,7 +2320,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow panel shell is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2360,7 +2369,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow canvas layout is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2390,7 +2399,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow row geometry is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2428,7 +2437,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow rail geometry is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2460,7 +2469,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow stack layout is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2493,7 +2502,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow card chrome and tones are canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2551,7 +2560,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow card text density is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2587,7 +2596,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow attempt chip chrome is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2616,7 +2625,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow report shell chrome is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2662,7 +2671,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow report dividers are canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2690,7 +2699,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow refresh button chrome is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2724,7 +2733,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("workflow report close button chrome is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const surface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/agent-workflow.css")),
     )
@@ -2793,7 +2802,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("task bar shell layout is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
     )
@@ -2826,7 +2835,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("primary column shell chrome is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const columnClass = String.raw`(?:sidebar|chat|sections)`
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -2908,7 +2917,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("right panel card radius and body padding are canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")),
     )
@@ -2955,7 +2964,7 @@ describe("overlay architecture guards", () => {
     // .board-intro__cta-action shared rule with .btn-primary /
     // .sidebar-btn-primary stays in styles.css and is excluded from
     // the theme-bleed scan as before.
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
     const board = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/board.css")))
 
@@ -2998,7 +3007,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("chat scroll layout is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
     )
@@ -3024,7 +3033,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("conversation auxiliary surfaces keep chrome out of theme selectors", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const workspaceSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
     )
@@ -3200,8 +3209,8 @@ describe("overlay architecture guards", () => {
     ])
 
     const cssFiles: string[] = [
-      join(OVERLAY_ROOT, "src/styles.css"),
       ...walkFiles(join(OVERLAY_ROOT, "src/styles/tokens"), (path) => path.endsWith(".css")),
+      ...walkFiles(join(OVERLAY_ROOT, "src/styles/cascade"), (path) => path.endsWith(".css")),
       ...walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) => path.endsWith(".css")),
       ...walkFiles(join(OVERLAY_ROOT, "src/styles/components"), (path) => path.endsWith(".css")),
     ]
@@ -3234,7 +3243,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("icon button padding is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const titlebarSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")),
     )
@@ -3269,7 +3278,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("titlebar layout container gaps are canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const titlebarSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")),
     )
@@ -3357,11 +3366,16 @@ describe("overlay architecture guards", () => {
   })
 
   test("shared header surface is loaded after legacy styles while God CSS retires", () => {
+    // styles.css was deleted 2026-05-04. The cascade now loads (in order):
+    // tokens → themes → cascade/* → surfaces/* → header.css → card.css.
+    // header.css must still load *after* the cross-cutting cascade layer
+    // so its specificity wins. Anchor the assertion to cascade/typography.css
+    // which is the last cross-cutting cascade file before per-surface chrome.
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
-    const legacyAt = html.indexOf('href="styles.css"')
+    const cascadeAt = html.indexOf('href="styles/cascade/typography.css"')
     const headerAt = html.indexOf('href="styles/surfaces/header.css"')
-    expect(legacyAt).toBeGreaterThan(-1)
-    expect(headerAt).toBeGreaterThan(legacyAt)
+    expect(cascadeAt).toBeGreaterThan(-1)
+    expect(headerAt).toBeGreaterThan(cascadeAt)
 
     for (const className of ["sidebar-header", "chat-header", "sections-header"]) {
       expect(html).toContain(`${className} oc-surface-header`)
