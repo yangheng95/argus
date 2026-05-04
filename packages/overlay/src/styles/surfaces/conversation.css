@@ -1159,3 +1159,28 @@ body[data-theme="vscode-dark"] .task-bar {
   min-width: 0;
   max-width: 100%;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Chat responsive collapse (extracted 2026-05-04). At max-width
+   760px, the chat header collapses to two columns + status hides;
+   user / system message bubbles stretch full width.
+   ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  .chat-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .chat-header-status {
+    display: none;
+  }
+
+  .chat-scroll > .card,
+  .chat-scroll > .interaction-card,
+  .chat-scroll > .card[data-kind="message"][data-role="user"],
+  .chat-scroll > .card[data-kind="message"][data-role="system"] {
+    width: 100%;
+    max-width: 100%;
+    align-self: stretch;
+  }
+}

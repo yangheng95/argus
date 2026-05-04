@@ -752,3 +752,33 @@ body[data-theme="light"] .executor-menu-model:hover {
   color: var(--text-muted);
   margin-left: calc(2px * var(--ui-scale));
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Empty-task chip (.chat-empty--task) — placeholder rendered when
+   the chat column has no current task. Stage tone routes through
+   --warn / --bad on left rail.
+   ───────────────────────────────────────────────────────────── */
+
+.chat-empty--task {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(14px * var(--ui-scale));
+  width: min(100%, calc(520px * var(--ui-scale)));
+  min-height: auto;
+  padding: calc(18px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-left: calc(3px * var(--ui-scale)) solid var(--accent);
+  border-radius: var(--panel-radius);
+  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
+  opacity: 1;
+}
+
+.chat-empty--task[data-status="queued"] {
+  border-left-color: var(--warn);
+}
+
+.chat-empty--task[data-status="failed"],
+.chat-empty--task[data-status="cancelled"] {
+  border-left-color: var(--bad);
+}

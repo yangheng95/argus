@@ -1,0 +1,72 @@
+/* ─────────────────────────────────────────────────────────────
+   Cross-class typography canonicals (extracted from styles.css
+   2026-05-04). The dialog / section / config head + subhead +
+   inline-pill set share exact font-size + font-weight + letter-
+   spacing tuples; collapsing them into multi-class rules is
+   a single-source pattern (no per-surface duplication).
+
+   Lives under styles/cascade/ — typography rules don't fit any
+   one surface (dialog.css, settings.css, inspector.css would each
+   need a copy), and the surfaces guard would force a literal-free
+   rewrite of `999px` etc. that already routes through tokens.
+   ───────────────────────────────────────────────────────────── */
+
+.dialog-title,
+.section-title,
+.config-section-head {
+  font-size: var(--title-size);
+  font-weight: var(--title-weight);
+  letter-spacing: var(--title-track);
+}
+
+.dialog-subtitle,
+.config-subsection-head,
+.extension-head .field-label {
+  font-size: var(--subhead-size);
+  font-weight: 600;
+  letter-spacing: var(--subhead-track);
+}
+
+.field-label,
+.change-subline,
+.knowledge-item-meta,
+.config-status-box {
+  font-size: var(--ui-font-control);
+}
+
+.change-subline,
+.field-label,
+.dialog-subtitle {
+  letter-spacing: 0.03em;
+}
+
+.section-badge,
+.knowledge-scope,
+.mini-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--ui-pill-min-height);
+  padding: var(--ui-pill-padding-y) var(--ui-pill-padding-x);
+  border-radius: var(--oc-radius-pill);
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.mini-badge {
+  display: inline-flex;
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+}
+
+.section-title,
+.config-section-head-text,
+.config-subsection-head {
+  font-weight: 650;
+  letter-spacing: 0;
+}

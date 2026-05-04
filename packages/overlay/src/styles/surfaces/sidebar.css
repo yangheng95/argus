@@ -853,3 +853,24 @@
   opacity: 0;
   pointer-events: none;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Sidebar / chat header equal-height button row (extracted 2026-
+   05-04): cross-surface canonical that pins button height across
+   sidebar header buttons + chat header status / workspace toggle /
+   copy-all so visual rhythm matches between the rail and chat.
+   ───────────────────────────────────────────────────────────── */
+
+.sidebar-header .sidebar-btn,
+.sidebar-header .sidebar-tool,
+.chat-header .chat-task-status,
+.chat-header .workspace-toggle,
+.chat-header-meta #btnChatCopyAll {
+  min-height: min(calc(22px * var(--ui-scale)), 24px);
+  height: min(calc(22px * var(--ui-scale)), 24px);
+  box-shadow: none;
+}
+
+.sidebar-header .sidebar-btn {
+  padding: 0 calc(12px * var(--ui-scale));
+}
