@@ -690,6 +690,46 @@ export namespace Session {
     return msg
   })
 
+  /**
+   * Persist one logical message atomically.
+   *
+   * The message row itself must exist before parts can reference it, but
+   * publishing `message.updated` before the parts are durable creates an
+   * observable split-brain: listeners can see a header-only message and miss
+   * the authored text if the process dies mid-write. We therefore:
+   *   1. save the message row silently as the foreign-key target,
+   *   2. queue the visible `message.updated` event in the same transaction,
+   *   3. write every part in that same transaction,
+   *   4. optionally touch the owning session before commit.
+   *
+   * Because the bus effects drain only after the transaction commits, any
+   * observer that sees `message.updated` or `message.part.updated` is guaranteed
+   * to read the fully durable message bundle from SQLite.
+   */
+  export const persistMessage = fn(
+    z.object({
+      info: Message.Info,
+      parts: z.array(Message.Part),
+      touchSessionID: Identifier.schema("session").optional(),
+    }),
+    async (input) => {
+      Database.transaction(() => {
+        saveMessage(input.info)
+        updateMessage(input.info)
+        for (const part of input.parts) {
+          updatePart(part)
+        }
+        if (input.touchSessionID) {
+          touch(input.touchSessionID)
+        }
+      })
+      return {
+        info: input.info,
+        parts: input.parts,
+      }
+    },
+  )
+
   export const removeMessage = fn(
     z.object({
       sessionID: Identifier.schema("session"),

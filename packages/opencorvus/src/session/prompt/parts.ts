@@ -423,14 +423,12 @@ export async function createUserMessage(input: PromptInput) {
     },
   )
 
-  // Save message row silently first (FK target for parts), then write all
-  // parts, then publish the message.updated event.  This guarantees the
-  // persistent loop sees the full message (with parts) when it wakes up.
-  await Session.saveMessage(info)
-  for (const part of parts) {
-    await Session.updatePart(part)
-  }
-  await Session.updateMessage(info)
+  // Persist the message atomically so no observer can ever see a header-only
+  // message if the process dies between the message row and its parts.
+  await Session.persistMessage({
+    info,
+    parts,
+  })
 
   return {
     info,
