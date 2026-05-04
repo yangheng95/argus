@@ -3121,6 +3121,97 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  // Regression for the 2026-05-04 cwd-dropdown bug: declaring
+  //   :root { --oc-control-bg: var(--surface-inset); }
+  // freezes `--oc-control-bg` to the dark default at parse time
+  // because `var()` resolves at the *declaration's* scope, and
+  // `body[data-theme="light"]` palette overrides only update tokens
+  // declared on `body`. Any indirection that points at a themed
+  // palette token therefore MUST live at body scope. This guard
+  // scans every `:root { ... }` block under src/styles/ and rejects
+  // declarations whose value references a known themed token.
+  test("no :root indirection points at themed palette tokens", () => {
+    const THEMED_PALETTE_TOKENS = new Set([
+      "--bg",
+      "--surface",
+      "--surface-hover",
+      "--surface-inset",
+      "--surface-strong",
+      "--rail-surface",
+      "--chat-canvas",
+      "--inspector-surface",
+      "--chrome",
+      "--border",
+      "--border-hover",
+      "--border-strong",
+      "--text",
+      "--text-strong",
+      "--text-soft",
+      "--text-muted",
+      "--accent",
+      "--accent-dim",
+      "--accent-hover",
+      "--accent-start",
+      "--accent-mid",
+      "--accent-end",
+      "--accent-gradient",
+      "--accent-gradient-hover",
+      "--accent-ring",
+      "--good",
+      "--good-dim",
+      "--warn",
+      "--warn-dim",
+      "--bad",
+      "--bad-dim",
+      "--info",
+      "--info-dim",
+      "--shadow",
+      "--shadow-md",
+      "--shadow-lg",
+      "--panel-fill",
+      "--panel-fill-hover",
+      "--card-fill",
+      "--card-fill-hover",
+      "--menu-panel-bg",
+      "--dialog-bg",
+      "--chrome",
+      "--divider-soft",
+    ])
+
+    const cssFiles: string[] = [
+      join(OVERLAY_ROOT, "src/styles.css"),
+      ...walkFiles(join(OVERLAY_ROOT, "src/styles/tokens"), (path) => path.endsWith(".css")),
+      ...walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) => path.endsWith(".css")),
+      ...walkFiles(join(OVERLAY_ROOT, "src/styles/components"), (path) => path.endsWith(".css")),
+    ]
+
+    const violations: string[] = []
+    for (const file of cssFiles) {
+      const css = withoutComments(readText(file))
+      // Match top-level `:root { ... }` blocks. The architecture
+      // guards forbid nested rules so a flat regex is sufficient.
+      for (const match of css.matchAll(/(^|\})\s*:root(?:\[[^\]]+\])?\s*\{([^{}]*)\}/g)) {
+        const body = match[2] ?? ""
+        for (const declaration of body.split(";")) {
+          const decl = declaration.trim()
+          if (!decl) continue
+          const colonIdx = decl.indexOf(":")
+          if (colonIdx < 0) continue
+          const prop = decl.slice(0, colonIdx).trim()
+          const value = decl.slice(colonIdx + 1).trim()
+          for (const varMatch of value.matchAll(/var\(\s*(--[a-zA-Z0-9-]+)/g)) {
+            const ref = varMatch[1]!
+            if (THEMED_PALETTE_TOKENS.has(ref)) {
+              violations.push(`${file.replace(OVERLAY_ROOT, "")}: :root { ${prop}: ...var(${ref})... }`)
+            }
+          }
+        }
+      }
+    }
+
+    expect(violations).toEqual([])
+  })
+
   test("icon button padding is canonical, not theme scoped", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const titlebarSurface = withoutComments(

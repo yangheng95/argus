@@ -21,14 +21,29 @@
   --card-pad-x: calc(13px * var(--ui-scale, 1));
   --card-pad-y: calc(10px * var(--ui-scale, 1));
   --card-indent: calc(12px * var(--ui-scale, 1));
-  /* Card surface aliases. Declared on `*` (block below) so the
-     var() substitution resolves at the consuming element where
-     theme overrides have already taken effect — see comment on
-     the * block below. */
-  --card-line: color-mix(in srgb, var(--accent) 44%, transparent);
   --card-title-size: var(--ui-font-body);
   --card-sub-size: var(--ui-font-control);
   --card-meta-size: var(--ui-font-meta);
+}
+
+/* Card surface + tone aliases — declared on `body` so the var()
+ * substitution for the underlying --surface-*/* / --accent / --good /
+ * --warn / --bad tokens happens at body scope, where the active
+ * `body[data-theme="..."]` palette overrides are in effect. Putting
+ * these on `:root` resolves them once against :root's dark surface +
+ * accent tokens and the resolved value then inherits unchanged into
+ * the light theme — that is exactly the bug that made every
+ * conversation card render with a dark surface on the white theme,
+ * and the same freezing pattern that broke the cwd dropdown
+ * (discovered 2026-05-04, see styles/tokens/design-language.css). */
+body {
+  --card-bg-0: var(--surface-inset);
+  --card-bg-1: var(--surface);
+  --card-bg-hover: var(--surface-hover);
+  --card-border: var(--border);
+  --card-border-strong: var(--border-strong);
+  --card-line: color-mix(in srgb, var(--accent) 44%, transparent);
+  --card-line-dim: var(--border);
 
   /* Semantic stage tones — 4 categories instead of the prior 14.
      Stages map: info (default — agent / orchestrator / spec /
@@ -47,23 +62,6 @@
   --card-system-rail: var(--warn);
   --card-system-bg: var(--warn-dim);
   --card-system-border: color-mix(in srgb, var(--warn) 28%, transparent);
-}
-
-/* Card surface aliases — declared on every element so the var()
- * substitution for the underlying --surface-* token happens at the
- * consuming element's context, where styles.css body[data-theme="light"]
- * / [vscode-dark] overrides have already taken effect. Putting these on
- * :root resolved them once against :root's dark surface tokens and the
- * resolved value then inherited unchanged into the light theme — that
- * is exactly the bug that made every conversation card render with a
- * dark surface on the white theme. */
-* {
-  --card-bg-0: var(--surface-inset);
-  --card-bg-1: var(--surface);
-  --card-bg-hover: var(--surface-hover);
-  --card-border: var(--border);
-  --card-border-strong: var(--border-strong);
-  --card-line-dim: var(--border);
 }
 
 /* ── Container ────────────────────────────────────────────── */
