@@ -300,20 +300,24 @@
   transform: rotate(90deg);
 }
 
-/* Section shell — flat card matching the calm/flat direction shipped
-   in iter4 / iter5 / iter14. The hover state lives on the head, not
-   the shell. The `:last-child` rule re-asserts the bottom border so a
-   stack of sections doesn't collapse the dividers. */
+/* Section shell — flat card.
+ *
+ * Flat-redesign Step 2 (2026-05-04): the self-border that wrapped every
+ * section card was retired (rule §2.2 A). The right-rail now carries one
+ * card per agent stage, stacked vertically — `--surface-inset` against
+ * the rail's `--bg` lightness step delivers the visible boundary, and
+ * the inter-card gap (`.sections-stack` parent's `gap`) does the rest.
+ * The `:last-child` border-bottom re-assertion that compensated for
+ * collapsing dividers also went away with the parent border. The
+ * left-edge accent stripe (rule §2.2 C) is rendered in
+ * `.section[data-phase-state="active"]` below. */
 .section {
-  border: var(--oc-border-width) solid var(--border);
+  position: relative;
+  border: 0;
   border-radius: var(--oc-radius-soft);
   background: var(--surface-inset);
   overflow: hidden;
   flex-shrink: 0;
-}
-
-.section:last-child {
-  border-bottom: var(--oc-border-width) solid var(--border);
 }
 
 /* Section head — clickable summary. The 3% white hover wash is
@@ -354,14 +358,16 @@
 }
 
 /* Section phase-state variants — the right-panel cards highlight
-   rules tied to the currently-active workflow step (`active`) and
-   sibling rules tied to it (`related`). Border-color, background
-   wash, head tint, accent caret, and badge tone all rotate around
-   `var(--accent)` via color-mix. The accent-glow shadow on the
-   active card also routes through `color-mix(black, X%)` so the
-   surface stays palette-clean. */
+ * the currently-active workflow step (`active`) and sibling steps
+ * tied to it (`related`).
+ *
+ * Flat-redesign Step 2 (2026-05-04): the per-state `border-color`
+ * flip + outer drop-shadow that announced "active" were retired
+ * (rule §2.2 C). Active state is now a 2px accent left-stripe
+ * rendered via `::after`, plus the existing background wash. The
+ * stripe pattern matches `.delivery-panel::before` in this same
+ * file, which is the established left-rail accent idiom. */
 .section[data-phase-state="related"] {
-  border-color: color-mix(in srgb, var(--accent) 12%, var(--border));
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 3%, transparent), transparent 72%),
     color-mix(in srgb, var(--surface) 91%, var(--surface-inset) 9%);
@@ -376,13 +382,20 @@
 }
 
 .section[data-phase-state="active"] {
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 74%),
     color-mix(in srgb, var(--surface) 92%, var(--surface-inset) 8%);
-  box-shadow:
-    inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 5%, transparent),
-    0 calc(10px * var(--ui-scale)) calc(22px * var(--ui-scale)) color-mix(in srgb, black 10%, transparent);
+}
+
+.section[data-phase-state="active"]::after {
+  content: "";
+  position: absolute;
+  inset-block: calc(6px * var(--ui-scale));
+  inset-inline-start: 0;
+  width: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--accent);
+  pointer-events: none;
 }
 
 .section[data-phase-state="active"] > .section-head {
@@ -405,7 +418,6 @@
 .section[data-phase-state="active"] .section-badge:not(:empty) {
   color: var(--accent);
   background: transparent;
-  border-color: transparent;
 }
 
 .section[data-phase-state="active"] .section-badge:not(:empty)::before {

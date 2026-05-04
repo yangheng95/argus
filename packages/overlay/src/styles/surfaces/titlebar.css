@@ -1,3 +1,10 @@
+/* Flat-redesign Step 2 (2026-05-04): titlebar carries one cross-context
+ * boundary border (border-bottom) per rule §2.2 B. The top border that
+ * normally would have appeared (the user-OS chrome already provides one
+ * above on tauri windows) and the decorative `::after` linear-gradient
+ * line that doubled the bottom edge were retired — three dividers
+ * stacked on the same horizontal edge was the "莫名其妙的边框" symptom
+ * in the 2026-05-04 user critique. */
 .titlebar {
   position: relative;
   z-index: 10000;
@@ -9,22 +16,10 @@
   padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
   min-height: var(--ui-titlebar-height);
   background: var(--chrome);
-  border: var(--oc-border-width) solid var(--border);
-  border-left: 0;
-  border-right: 0;
-  border-radius: 0;
+  border: 0;
+  border-bottom: var(--oc-border-width) solid var(--border);
   flex-shrink: 0;
   box-shadow: none;
-}
-
-.titlebar::after {
-  content: "";
-  position: absolute;
-  left: calc(14px * var(--ui-scale));
-  right: calc(14px * var(--ui-scale));
-  bottom: 0;
-  height: var(--oc-border-width);
-  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
 }
 
 .titlebar-left {
@@ -476,12 +471,13 @@
   white-space: nowrap;
 }
 
+/* Flat-redesign Step 2 (2026-05-04): hover/active no longer flips
+ * border-color (rule §2.2 C). Background tint carries the affordance. */
 .titlebar-menubar-trigger:hover,
 .titlebar-menubar-trigger:focus-visible,
 .titlebar-menubar-trigger[data-active="true"] {
   color: var(--text-strong);
   background: var(--subtle-3);
-  border-color: var(--border);
   outline: none;
 }
 
@@ -661,7 +657,7 @@
   align-items: center;
   gap: calc(5px * var(--ui-scale));
   padding: 0;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--oc-radius-soft);
   background: var(--subtle-3);
   color: var(--text-soft);
@@ -692,7 +688,6 @@
   padding: 0 calc(9px * var(--ui-scale));
   color: var(--accent);
   background: var(--accent-dim);
-  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
 }
 
 .titlebar-status-icon {
@@ -705,7 +700,6 @@
 .titlebar-setup-cta:hover,
 .titlebar-status-icon:hover {
   color: var(--text-strong);
-  border-color: var(--border-strong);
   background: var(--subtle-4);
 }
 
@@ -728,7 +722,6 @@
 }
 
 .titlebar-task-status:hover {
-  border-color: var(--border-hover);
   background: var(--surface-hover);
 }
 
@@ -736,18 +729,17 @@
   background: var(--subtle-4);
 }
 
+/* Flat-redesign Step 2 (2026-05-04): per-status border-color flip retired
+ * (rule §2.2 C). Background tint alone carries the status. */
 .titlebar-task-status[data-status="active"] {
-  border-color: color-mix(in srgb, var(--info) 24%, transparent);
   background: color-mix(in srgb, var(--info) 12%, transparent);
 }
 
 .titlebar-task-status[data-status="completed"] {
-  border-color: color-mix(in srgb, var(--good) 24%, transparent);
   background: color-mix(in srgb, var(--good) 10%, transparent);
 }
 
 .titlebar-task-status[data-status="failed"] {
-  border-color: color-mix(in srgb, var(--bad) 24%, transparent);
   background: color-mix(in srgb, var(--bad) 10%, transparent);
 }
 
