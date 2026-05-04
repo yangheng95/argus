@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "a9d3c73de2245c55"
+    "panel_revision": "c20a6ef1fb327138"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -626,6 +626,13 @@
   "task.action.retry_title": "沿用当前方案重新执行一轮。",
   "task.cancel_button_title": "取消此运行中的任务（点两次确认）。",
   "task.delete_button_title": "删除此任务及全部历史记录（点两次确认）。",
+  "task.export_button_title": "下载该任务及其项目文件的 zip 归档。",
+  "task.export_failed": "导出失败：{error}",
+  "task.import_button": "导入…",
+  "task.import_button_title": "向当前项目导入任务归档（.zip）。",
+  "task.import_done": "已恢复 {restored} 个文件到当前项目（跳过 {skipped} 个）。",
+  "task.import_failed": "导入失败：{error}",
+  "task.import_no_directory": "请先打开或选择一个项目目录。",
   "task.reorder_button_title": "拖动调整排队任务顺序。",
   "task.group.active": "进行中",
   "task.group.recent": "最近",
