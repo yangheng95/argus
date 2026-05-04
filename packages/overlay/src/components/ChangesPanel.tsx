@@ -7,6 +7,7 @@
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { boardStore } from "../store/board";
 import { Icon } from "./Icon";
+import { useDisclosure } from "../solid/disclosure";
 import {
   currentChangeGroups,
   resolveCurrentChangeGroups,
@@ -35,16 +36,16 @@ export function ChangesPanel(props: ChangesPanelProps) {
   // replaces the previous vertical changes-tabs list. Outside-
   // click + Escape close handled by document-level listeners
   // attached at component scope so HMR / unmount disposes them.
-  const [changesGoalMenuOpen, setChangesGoalMenuOpen] = createSignal(false)
+  const goalMenu = useDisclosure()
   if (typeof document !== "undefined") {
     const onDocClick = (event: MouseEvent) => {
-      if (!changesGoalMenuOpen()) return
+      if (!goalMenu.open()) return
       const target = event.target as Element | null
       if (target && target.closest && target.closest(".changes-goal-picker")) return
-      setChangesGoalMenuOpen(false)
+      goalMenu.close()
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && changesGoalMenuOpen()) setChangesGoalMenuOpen(false)
+      if (event.key === "Escape" && goalMenu.open()) goalMenu.close()
     }
     document.addEventListener("click", onDocClick, { capture: true })
     document.addEventListener("keydown", onKey)
@@ -187,22 +188,22 @@ export function ChangesPanel(props: ChangesPanelProps) {
         <Show when={hasGoalGrouping()}>
           <div
             class="changes-goal-picker"
-            data-open={changesGoalMenuOpen() ? "true" : "false"}
+            data-open={goalMenu.open() ? "true" : "false"}
           >
             <button
               type="button"
               class="changes-goal-picker-trigger"
               aria-haspopup="listbox"
-              aria-expanded={changesGoalMenuOpen() ? "true" : "false"}
+              aria-expanded={goalMenu.open() ? "true" : "false"}
               title={activeGroup() ? tabTitle(activeGroup()!) : ""}
               onClick={(e) => {
                 e.stopPropagation()
-                setChangesGoalMenuOpen((v) => !v)
+                goalMenu.toggle()
               }}
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
                   e.preventDefault()
-                  setChangesGoalMenuOpen(true)
+                  goalMenu.openIt()
                 }
               }}
             >
@@ -218,7 +219,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
                 <Icon name="caret-down" size={8} />
               </span>
             </button>
-            <Show when={changesGoalMenuOpen()}>
+            <Show when={goalMenu.open()}>
               <div
                 class="changes-goal-picker-menu"
                 role="listbox"
@@ -232,7 +233,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
                   else if (e.key === "ArrowUp") next = (currentIdx - 1 + list.length) % list.length
                   else if (e.key === "Home") next = 0
                   else if (e.key === "End") next = list.length - 1
-                  else if (e.key === "Escape") { setChangesGoalMenuOpen(false); return }
+                  else if (e.key === "Escape") { goalMenu.close(); return }
                   else return
                   e.preventDefault()
                   setSelectedGroupID(list[next]!.id)
@@ -251,7 +252,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
                         title={tabTitle(group)}
                         onClick={() => {
                           setSelectedGroupID(group.id)
-                          setChangesGoalMenuOpen(false)
+                          goalMenu.close()
                         }}
                       >
                         <span class="changes-goal-picker-row-label">{tabLabel(group)}</span>

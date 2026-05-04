@@ -7,11 +7,12 @@
 // more than `OFFLINE_GRACE_MS` so transient reconnects (the SSE retry loop
 // in services/sse.ts:79 pings every 2s) don't flash a banner on every blip.
 
-import { Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
+import { Show, createMemo, createEffect, onCleanup } from "solid-js";
 import { messageStore } from "../store/messages";
 import { appStore } from "../store/app";
 import { openConfigDialog } from "../services/dialog";
 import { t } from "../utils/i18n";
+import { useDisclosure } from "../solid/disclosure";
 
 const OFFLINE_GRACE_MS = 2500;
 
@@ -21,7 +22,7 @@ export function ConnectionBanner() {
     return appStore.connectionStatus !== "online";
   });
 
-  const [show, setShow] = createSignal(false);
+  const banner = useDisclosure();
   let timer: any = null;
 
   createEffect(() => {
@@ -31,10 +32,10 @@ export function ConnectionBanner() {
       timer = null;
     }
     if (!offline) {
-      setShow(false);
+      banner.close();
       return;
     }
-    timer = setTimeout(() => setShow(true), OFFLINE_GRACE_MS);
+    timer = setTimeout(() => banner.openIt(), OFFLINE_GRACE_MS);
   });
 
   onCleanup(() => {
@@ -52,7 +53,7 @@ export function ConnectionBanner() {
   };
 
   return (
-    <Show when={show()}>
+    <Show when={banner.open()}>
       <div
         class="conn-banner"
         role="status"

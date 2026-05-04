@@ -25,6 +25,7 @@ import { selectTask } from "../services/task";
 import { openConfigDialog, switchConfigTab } from "../services/dialog";
 import { setLocale } from "../utils/i18n";
 import { t } from "../utils/i18n";
+import { useDisclosure } from "../solid/disclosure";
 
 interface Command {
   id: string;
@@ -64,7 +65,7 @@ const LOCALES: Array<{ id: string; label: string }> = [
 ];
 
 export function CommandPalette() {
-  const [open, setOpen] = createSignal(false);
+  const palette = useDisclosure();
   const [query, setQuery] = createSignal("");
   const [activeIndex, setActiveIndex] = createSignal(0);
   let inputRef: HTMLInputElement | undefined;
@@ -193,7 +194,7 @@ export function CommandPalette() {
   });
 
   function close() {
-    setOpen(false);
+    palette.close();
     setQuery("");
     setActiveIndex(0);
     // Return focus to whatever the operator was on before the palette
@@ -268,12 +269,12 @@ export function CommandPalette() {
     if (openDialog) return;
     e.preventDefault();
     e.stopPropagation();
-    if (open()) {
+    if (palette.open()) {
       close();
       return;
     }
     priorFocus = (document.activeElement as HTMLElement | null) ?? null;
-    setOpen(true);
+    palette.openIt();
   }
 
   onMount(() => {
@@ -286,12 +287,12 @@ export function CommandPalette() {
   // Auto-focus the input once the modal mounts, and keep the active
   // option scrolled into view as the operator arrows through.
   createEffect(() => {
-    if (open() && inputRef) {
+    if (palette.open() &&inputRef) {
       queueMicrotask(() => inputRef?.focus());
     }
   });
   createEffect(() => {
-    if (!open() || !listRef) return;
+    if (!palette.open() || !listRef) return;
     void filtered();
     void activeIndex();
     queueMicrotask(() => {
@@ -301,7 +302,7 @@ export function CommandPalette() {
   });
 
   return (
-    <Show when={open()}>
+    <Show when={palette.open()}>
       <div class="cmdk-backdrop" role="presentation" onClick={close}>
         <div
           class="cmdk-panel"
