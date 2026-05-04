@@ -20,7 +20,7 @@
   --card-pad-x: calc(13px * var(--ui-scale, 1));
   --card-pad-y: calc(10px * var(--ui-scale, 1));
   --card-indent: calc(12px * var(--ui-scale, 1));
-  --card-title-size: var(--ui-font-body);
+  --card-title-size: var(--ui-font-title);
   --card-sub-size: var(--ui-font-control);
   --card-meta-size: var(--ui-font-meta);
 }

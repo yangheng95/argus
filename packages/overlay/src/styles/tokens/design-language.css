@@ -113,9 +113,16 @@
    * Consumers now reference `--ui-font-weight-strong` and `0`/literal
    * tracking directly. */
 
-  --ui-font-display: calc(12px * var(--ui-scale));
-  --ui-font-heading: calc(12px * var(--ui-scale));
-  --ui-font-title: calc(12px * var(--ui-scale));
+  /* Typography scale — 4-tier hierarchy: display > heading > title >= body.
+   * Restores visual structure after iter48 capped all four to 12px
+   * (2026-05-03 feedback superseded by 2026-05-04 reference design request).
+   * display: major empty-state headings, onboarding copy.
+   * heading: panel / section titles, dialog headers.
+   * title:   card titles, sidebar item titles, menu items.
+   * body:    body text, message content. */
+  --ui-font-display: calc(18px * var(--ui-scale));
+  --ui-font-heading: calc(14px * var(--ui-scale));
+  --ui-font-title: calc(13px * var(--ui-scale));
   --ui-font-body: calc(12px * var(--ui-scale));
   --ui-font-control: calc(11px * var(--ui-scale));
   --ui-font-meta: calc(11px * var(--ui-scale));
