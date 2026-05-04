@@ -30,7 +30,7 @@ export function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
-  if (h > 0) return t("time.duration.hour_minute", { hours: h, minutes: m % 60 });
+  if (h > 0) return t("time.duration.hour_minute_second", { hours: h, minutes: m % 60, seconds: s % 60 });
   if (m > 0) return t("time.duration.minute_second", { minutes: m, seconds: s % 60 });
   return t("time.duration.second", { seconds: s });
 }
