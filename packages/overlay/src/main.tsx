@@ -1480,7 +1480,13 @@ function renderRecentDirPanel(): void {
           `</span>`,
           isActive ? `<span class="recent-dir-state" aria-hidden="true">•</span>` : "",
           `</button>`,
-          `<button type="button" class="recent-dir-remove" data-recent-remove="${escapeHtml(dir)}" title="${escapeHtml(t("common.delete"))}" aria-label="${escapeHtml(t("common.delete"))}">×</button>`,
+          // Inline SVG matches the Icon primitive contract (viewBox 16,
+          // stroke=currentColor, stroke-width 1.4, line-cap/join round).
+          // Inline string here because the surrounding markup builder is
+          // an HTML-template-string flow; rewriting to JSX is bigger
+          // scope than Step 7 covers. The string itself is the single
+          // source — no `×` character anywhere in the codebase.
+          `<button type="button" class="recent-dir-remove" data-recent-remove="${escapeHtml(dir)}" title="${escapeHtml(t("common.delete"))}" aria-label="${escapeHtml(t("common.delete"))}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>`,
           `</div>`,
         ].join("");
       })
