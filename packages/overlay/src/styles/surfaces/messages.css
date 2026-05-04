@@ -724,3 +724,48 @@
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Message overflow guards (extracted 2026-05-04): the cross-class
+   min-width: 0 + max-height/overflow chain that prevents long
+   tool-output / reasoning blocks from ballooning their parent
+   card's intrinsic size.
+   ───────────────────────────────────────────────────────────── */
+
+.change-row,
+.goal-item,
+.criteria-group,
+.eval-error,
+.delivery-panel,
+.extension-row,
+.channel-doc-card,
+.detail-card,
+.plan-summary,
+.goal-desc,
+.goal-criteria,
+.change-path,
+.eval-summary,
+.eval-error-detail,
+.delivery-summary,
+.delivery-files-link,
+.msg-text,
+.msg-tool,
+.msg-tool-output,
+.msg-reasoning,
+.msg-patch {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.msg-tool-output {
+  max-height: none;
+  overflow-y: visible;
+  overscroll-behavior: auto;
+}
+
+.msg-reasoning,
+.msg-patch {
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: auto;
+}

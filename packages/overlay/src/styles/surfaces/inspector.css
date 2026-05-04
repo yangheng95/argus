@@ -2706,3 +2706,62 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-family: var(--font);
   font-variant-numeric: tabular-nums;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Inspector list-row variants (extracted 2026-05-04): goal/market/
+   knowledge/pref/criteria card chrome + their unified hover lift,
+   gwg list + priority badge, goalsSection scroll override.
+   ───────────────────────────────────────────────────────────── */
+
+.goal-item,
+.market-card,
+.knowledge-item,
+.pref-item,
+.criteria-check {
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--subtle-1);
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  transition:
+    border-color 120ms,
+    background 120ms,
+    box-shadow 120ms,
+    transform 120ms;
+}
+
+.goal-item:hover,
+.extension-row:hover,
+.channel-doc-card:hover,
+.market-card:hover,
+.knowledge-item:hover,
+.pref-item:hover,
+.criteria-check:hover,
+.criteria-group:hover {
+  background: var(--hover-accent-wash);
+  border-color: var(--hover-accent-border);
+  box-shadow:
+    var(--shadow),
+    var(--hover-accent-shadow);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+#goalsSection > .section-body {
+  max-height: none;
+  overflow-y: visible;
+  overscroll-behavior: auto;
+}
+
+.gwg-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+}
+
+.gwg-priority-badge {
+  flex-shrink: 0;
+  text-transform: uppercase;
+  font-size: var(--ui-font-tiny);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--warn);
+}

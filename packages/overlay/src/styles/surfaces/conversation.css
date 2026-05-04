@@ -1128,3 +1128,34 @@ body[data-theme="vscode-dark"] .task-bar {
   color: var(--text-muted);
   text-align: center;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Chat column shell + chat-scroll baseline (extracted 2026-05-04).
+   ───────────────────────────────────────────────────────────── */
+
+.chat {
+  flex: 999 1 var(--ui-chat-priority-width);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: min(100%, var(--ui-chat-min-width));
+  border: 0;
+  border-radius: 0;
+  background: var(--chat-canvas);
+  box-shadow: none;
+  backdrop-filter: none;
+  overflow: hidden;
+}
+
+.section-body > *,
+#evalBody > *,
+.goals-list > *,
+.criteria-list > *,
+.config-section-body > *,
+.config-subsection-body > *,
+.sidebar-body > *,
+.chat-scroll > * {
+  min-width: 0;
+  max-width: 100%;
+}
