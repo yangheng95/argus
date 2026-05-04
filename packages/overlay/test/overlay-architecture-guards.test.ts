@@ -83,8 +83,9 @@ function soloRuleBody(css: string, selector: string): string {
 
 const THEME_LAYOUT_PROPERTIES =
   /^(?:display|position|inset|top|right|bottom|left|z-index|overflow|box-sizing|grid(?:-.+)?|flex(?:-.+)?|align-.+|justify-.+|place-.+|gap|row-gap|column-gap|margin(?:-.+)?|padding(?:-.+)?|width|height|min-width|min-height|max-width|max-height|border(?:-.+)?|border-radius|box-shadow|transform|translate|scale)$/
-const THEME_CHROME_TOKEN =
-  /^--(?:oc-)?(?:radius|space|spacing|size|height|width|shadow|border|layout|motion|duration|easing|font|type|z|gap|inset|padding|margin)(?:-|$)/
+// THEME_CHROME_TOKEN was used by the retired "themes/ palette-only"
+// guard. The themes/ directory was deleted 2026-05-04 (flat-redesign
+// Step 0+) along with its guards.
 const LEGACY_BUTTON_CLASSES = [
   "btn",
   "btn-primary",
@@ -151,7 +152,6 @@ describe("overlay architecture guards", () => {
       "src/styles/tokens",
       "src/styles/primitives",
       "src/styles/surfaces",
-      "src/styles/themes",
       "src/components/ui",
       "src/components/surfaces",
     ]) {
@@ -3085,34 +3085,19 @@ describe("overlay architecture guards", () => {
     expect(progressBody).not.toContain("flex-shrink")
   })
 
-  test("new theme files only write root-scoped tokens", () => {
-    const files = walkFiles(join(OVERLAY_ROOT, "src/styles/themes"), (path) => path.endsWith(".css"))
-    for (const file of files) {
-      const css = readText(file).replace(/\/\*[\s\S]*?\*\//g, "")
-      const selectors = Array.from(css.matchAll(/([^{}@]+)\{/g)).map((match) => match[1]!.trim())
-      for (const selector of selectors) {
-        for (const item of selector
-          .split(",")
-          .map((part) => part.trim())
-          .filter(Boolean)) {
-          expect(item).toMatch(/^:root(?:\[[^\]]+\])?$/)
-        }
-      }
-    }
-  })
-
-  test("new theme files are palette-only and never define chrome tokens", () => {
-    const files = walkFiles(join(OVERLAY_ROOT, "src/styles/themes"), (path) => path.endsWith(".css"))
-    for (const file of files) {
-      const css = readText(file).replace(/\/\*[\s\S]*?\*\//g, "")
-      for (const declaration of css.split(/;|\n/)) {
-        const match = declaration.match(/^\s*(--[a-zA-Z0-9-]+)\s*:/)
-        if (!match) continue
-        const prop = match[1]!
-        expect(prop).toMatch(/^--oc-color-/)
-        expect(prop).not.toMatch(THEME_CHROME_TOKEN)
-      }
-    }
+  test("themes/ duplicate palette directory is retired", () => {
+    // The styles/themes/{dark,light,vscode-dark}.css files were
+    // retired 2026-05-04 (flat-redesign Step 0+). They duplicated the
+    // cascade/ palette under a parallel `--oc-color-*` namespace with
+    // different values (themes/dark.css used a vscode-style grey
+    // `#1e1f22` while cascade/dark.css used the cool navy `#111528`),
+    // producing the "vscode 黑色混到 dark theme" visual contradiction.
+    // The 2 callsites — `--oc-header-bg` / `--oc-titlebar-menu-text`
+    // in design-language.css — were repointed to the cascade/ legacy
+    // palette tokens (`--surface-strong` / `--text-strong`).
+    // rule 8 (no double source).
+    const themesDir = join(OVERLAY_ROOT, "src/styles/themes")
+    expect(existsSync(themesDir)).toBe(false)
   })
 
   test("new token files stay root-scoped and keep design-language contracts explicit", () => {
@@ -3336,14 +3321,19 @@ describe("overlay architecture guards", () => {
     }
   })
 
-  test("shared header background resolves from root palette tokens, not legacy body palette", () => {
+  test("shared header background resolves from the cascade palette", () => {
+    // Flat-redesign Step 0+ (2026-05-04): the indirection from
+    // --oc-header-bg → --oc-color-surface-strong (themes/ palette)
+    // was repointed to → --surface-strong (cascade/ palette) when
+    // the duplicate themes/ directory was retired. Same for
+    // --oc-titlebar-menu-text → --text-strong.
     const tokenText = readText(join(OVERLAY_ROOT, "src/styles/tokens/design-language.css"))
     const headerText = readText(join(OVERLAY_ROOT, "src/styles/surfaces/header.css"))
 
-    expect(tokenText).toMatch(/--oc-header-bg:\s*var\(--oc-color-surface-strong\)/)
-    expect(tokenText).toMatch(/--oc-titlebar-menu-text:\s*var\(--oc-color-text-strong\)/)
+    expect(tokenText).toMatch(/--oc-header-bg:\s*var\(--surface-strong\)/)
+    expect(tokenText).toMatch(/--oc-titlebar-menu-text:\s*var\(--text-strong\)/)
     expect(tokenText).not.toMatch(/--oc-titlebar-menu-text:\s*#[0-9a-fA-F]+/)
-    expect(tokenText).not.toMatch(/--oc-header-bg:\s*var\(--surface-strong\)/)
+    expect(tokenText).not.toMatch(/--oc-header-bg:\s*var\(--oc-color-/)
     expect(headerText).toMatch(/background:\s*var\(--oc-header-bg\)/)
   })
 

@@ -146,8 +146,8 @@ body {
   --oc-control-border: var(--border);
   --oc-control-border-hover: var(--border-hover);
   --oc-control-focus-ring: color-mix(in srgb, var(--accent) 18%, transparent);
-  --oc-header-bg: var(--oc-color-surface-strong);
-  --oc-titlebar-menu-text: var(--oc-color-text-strong);
+  --oc-header-bg: var(--surface-strong);
+  --oc-titlebar-menu-text: var(--text-strong);
 
   /* Diff palette derived from the active theme's accent/bad/good
    * + text-strong tokens. Previously declared at :root in styles.css,
