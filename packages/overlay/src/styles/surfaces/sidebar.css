@@ -929,22 +929,27 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Sidebar / chat header equal-height button row (extracted 2026-
-   05-04): cross-surface canonical that pins button height across
-   sidebar header buttons + chat header status / workspace toggle /
-   copy-all so visual rhythm matches between the rail and chat.
+   Sidebar header equal-height button row:
+   - .sidebar-tool (icon buttons inside .sidebar-toolset): 22px inner
+   - .sidebar-btn (.New Chat): 28px — matches toolset outer height
+     (22px inner + 2*2px padding + 2*1px border = 28px total)
+   Chat header controls share the same 28px cap.
    ───────────────────────────────────────────────────────────── */
 
-.sidebar-header .sidebar-btn,
 .sidebar-header .sidebar-tool,
 .chat-header .chat-task-status,
 .chat-header .workspace-toggle,
 .chat-header-meta #btnChatCopyAll {
-  min-height: min(calc(22px * var(--ui-scale)), 24px);
-  height: min(calc(22px * var(--ui-scale)), 24px);
+  height: calc(22px * var(--ui-scale));
+  min-height: calc(22px * var(--ui-scale));
+  max-height: calc(22px * var(--ui-scale));
   box-shadow: none;
 }
 
 .sidebar-header .sidebar-btn {
-  padding: 0 calc(12px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  min-height: calc(28px * var(--ui-scale));
+  max-height: calc(28px * var(--ui-scale));
+  padding: 0 calc(10px * var(--ui-scale));
+  box-shadow: none;
 }

@@ -388,7 +388,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                 <Show when={menu.id === "workspace"}>
                   <MenuGroup title={t("titlebar.menu.workspace")}>
                     <div class="titlebar-menubar-note" title={settingsStore.directory}>
-                      {settingsStore.directory || t("intro.directory_required_title")}
+                      {settingsStore.directory || t("workspace.no_directory")}
                     </div>
                     <MenuItem onClick={() => void browseDirectory().finally(closeMenu)}>{t("cwd.browse")}</MenuItem>
                     <MenuItem onClick={() => void createDirectory().finally(closeMenu)}>{t("cwd.create")}</MenuItem>
