@@ -796,3 +796,60 @@
   white-space: nowrap;
   min-width: 0;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Extracted from styles.css 2026-05-04: collapsed sidebar
+   variants + global task-current readout.
+   ───────────────────────────────────────────────────────────── */
+
+.global-task-current {
+  display: inline-block;
+  font-size: var(--ui-font-meta);
+  color: var(--accent);
+  opacity: 0.8;
+  margin-top: calc(2px * var(--ui-scale));
+}
+
+.sidebar[data-collapsed="true"] .sidebar-footer {
+  display: none;
+}
+
+.sidebar[data-collapsed="true"] .sidebar-title,
+.sidebar[data-collapsed="true"] .sidebar-body,
+.sidebar[data-collapsed="true"] .sidebar-btn-label {
+  display: none;
+}
+
+.sidebar[data-collapsed="true"] .sidebar-header {
+  flex-direction: column;
+  align-items: stretch;
+  padding: calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
+}
+
+.sidebar[data-collapsed="true"] .sidebar-header-actions {
+  width: 100%;
+  flex-direction: column;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.sidebar[data-collapsed="true"] .sidebar-toolset {
+  width: 100%;
+}
+
+.sidebar[data-collapsed="true"] .sidebar-tool {
+  flex: 1;
+  width: auto;
+}
+
+.sidebar[data-collapsed="true"] .sidebar-btn {
+  width: 100%;
+  justify-content: center;
+  padding-inline: calc(10px * var(--ui-scale));
+}
+
+.sidebar[data-collapsed="true"] + .pane-resizer-left {
+  flex-basis: 0;
+  min-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
