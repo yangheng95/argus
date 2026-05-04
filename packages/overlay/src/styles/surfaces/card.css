@@ -27,8 +27,8 @@
 }
 
 /* Card surface + tone aliases — declared on `body` so the var()
- * substitution for the underlying --surface-*/* / --accent / --good /
- * --warn / --bad tokens happens at body scope, where the active
+ * substitution for the underlying surface / accent / good / warn /
+ * bad tokens happens at body scope, where the active
  * `body[data-theme="..."]` palette overrides are in effect. Putting
  * these on `:root` resolves them once against :root's dark surface +
  * accent tokens and the resolved value then inherits unchanged into
