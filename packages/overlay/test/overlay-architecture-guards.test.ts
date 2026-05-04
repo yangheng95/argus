@@ -850,7 +850,10 @@ describe("overlay architecture guards", () => {
   })
 
   test("conn-banner cross-surface notification primitive routes through palette tokens", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    // Canonical extracted from styles.css into surfaces/conn-banner.css —
+    // the banner is mounted globally via fixed positioning by App.tsx /
+    // ConnectionBanner.tsx, so it owns its own surface file.
+    const styles = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conn-banner.css"))
 
     const block = styles.match(
       /\.conn-banner\s*\{[\s\S]*?\.conn-banner__action:focus-visible\s*\{[^}]*\}/,
