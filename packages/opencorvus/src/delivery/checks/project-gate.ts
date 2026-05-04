@@ -197,6 +197,24 @@ async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
   return checkResults
 }
 
+/**
+ * Blocking criteria — these failures require a plan rework, not a re-run of
+ * the same code:
+ *   - failedCoverageIds: blocking goals without acceptance specs.
+ *   - review:integrity: architect-level soundness (goal_fidelity /
+ *     technical_feasibility / hallucination / solution_quality). If the plan
+ *     does not address the user's request, no amount of build/test re-runs
+ *     will rescue it.
+ *
+ * Advisory criteria — the delivery agent (LLM) weighs these in context and
+ * decides whether they materially block acceptance:
+ *   - failedCheckIds: build / typecheck / lint / unit-test commands.
+ *   - failedRuntimeFlowIds: puppeteer / runtime / visual probes.
+ *   - review:workspace_export and specialist:*: artifact-shape and
+ *     domain-specialist findings; helpful but not gating on their own.
+ */
+const INTEGRITY_REVIEW_ID = "review:integrity"
+
 function assessFunctionalCompletion(input: {
   failedCheckIds: string[]
   failedCoverageIds: string[]
@@ -204,17 +222,21 @@ function assessFunctionalCompletion(input: {
   failedReviewIds: string[]
   specialistReviews: DeliverySpecialistReview[]
 }): DeliveryManifestFunctionalAssessment {
-  const primaryFailureIds = [
+  const failedIntegrityIds = input.failedReviewIds.filter((id) => id === INTEGRITY_REVIEW_ID)
+  const advisoryReviewIds = input.failedReviewIds.filter((id) => id !== INTEGRITY_REVIEW_ID)
+  const primaryFailureIds = [...input.failedCoverageIds, ...failedIntegrityIds]
+  const auxiliaryFailureIds = [
     ...input.failedCheckIds,
-    ...input.failedCoverageIds,
     ...input.failedRuntimeFlowIds,
-    ...input.failedReviewIds,
+    ...advisoryReviewIds,
   ]
-  const auxiliaryFailureIds: string[] = []
   const status = primaryFailureIds.length === 0 ? "complete" : "incomplete"
+  const advisoryNote = auxiliaryFailureIds.length > 0
+    ? ` ${auxiliaryFailureIds.length} advisory issue(s) recorded for the delivery agent to weigh.`
+    : ""
   const summary = status === "complete"
-    ? "Functional completion passed and project integrity gates passed."
-    : `Functional completion failed with ${primaryFailureIds.length} primary blocker(s).`
+    ? `Functional completion passed (acceptance-spec coverage satisfied; integrity review clean).${advisoryNote}`
+    : `Functional completion failed with ${primaryFailureIds.length} blocker(s) (coverage and/or integrity).${advisoryNote}`
   return {
     status,
     primaryFailureIds: [...new Set(primaryFailureIds)].sort(),

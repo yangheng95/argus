@@ -129,6 +129,12 @@ export const BashTool = Tool.define("bash", async () => {
         .describe(
           "Clear, concise description of what this command does in 5-10 words. Examples:\nInput: ls\nOutput: Lists files in current directory\n\nInput: git status\nOutput: Shows working tree status\n\nInput: npm install\nOutput: Installs package dependencies\n\nInput: mkdir foo\nOutput: Creates directory 'foo'",
         ),
+      background: z
+        .boolean()
+        .describe(
+          "When true, the command keeps running after this tool call returns. The tool returns immediately with the spawned PID once stdout/stderr are observed (or after a short readiness window). Use ONLY for long-lived servers (dev/preview/serve) that must outlive a single tool call so delivery checks can probe them. You are responsible for stopping it later (e.g. `kill <pid>` or `lsof -ti :<port> | xargs kill`).",
+        )
+        .optional(),
     }),
     async execute(params, ctx) {
       const cwd = params.workdir || Instance.directory
@@ -143,7 +149,7 @@ export const BashTool = Tool.define("bash", async () => {
         return {
           title: "Refused",
           output: `Refused: this command kills processes by name and would destroy the host process. Use process-specific alternatives (e.g. kill a PID you spawned, or stop a service you started).`,
-          metadata: { refused: true as boolean, command: params.command, output: "", exit: null as number | null, description: params.description },
+          metadata: { refused: true as boolean, command: params.command, output: "", exit: null as number | null, pid: null as number | null, background: false, description: params.description },
         }
       }
 
@@ -280,6 +286,43 @@ export const BashTool = Tool.define("bash", async () => {
         await kill()
       }
 
+      if (params.background) {
+        proc.once("exit", () => {
+          exited = true
+        })
+        proc.once("error", () => {
+          exited = true
+        })
+        proc.unref?.()
+        const readinessMs = Math.min(timeout, 1500)
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, readinessMs)
+          proc.once("exit", () => {
+            clearTimeout(timer)
+            resolve()
+          })
+        })
+        const resultMetadata: string[] = [
+          `bash tool returned while command continues running in background (pid=${proc.pid ?? "unknown"})`,
+          `stop it later with: kill ${proc.pid ?? "<pid>"} (or kill by port)`,
+        ]
+        if (exited) resultMetadata.push(`background process exited before readiness window (exit=${proc.exitCode})`)
+        output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
+        return {
+          title: params.description,
+          metadata: {
+            refused: false as boolean,
+            command: params.command,
+            output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
+            exit: exited ? proc.exitCode : null,
+            pid: proc.pid ?? null,
+            background: true,
+            description: params.description,
+          },
+          output,
+        }
+      }
+
       const abortHandler = () => {
         aborted = true
         void kill()
@@ -332,6 +375,8 @@ export const BashTool = Tool.define("bash", async () => {
           command: params.command,
           output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
           exit: proc.exitCode,
+          pid: null as number | null,
+          background: false,
           description: params.description,
         },
         output,

@@ -163,16 +163,31 @@ Read the DeliveryEvidenceManifest and metric trajectory after you understand the
 completion question. Identify missing goal coverage, requirement coverage gaps,
 runtime flow failures, specialist findings, and stale or open counterexamples.
 
-Accept/reject is decided strictly by functional completeness and e2e test
-results — required-check failures (build/typecheck/test/lint that the host
-configured) and goal-coverage gaps. Runtime probes (puppeteer renders,
-server-launch checks, visual SSIM diffs, specialist reviews) are advisory:
-they surface as `failedRuntimeFlowIds` / `failedReviewIds` / runtime evidence /
-visual metric in the manifest and as `Advisory host gates:` in the verdict
-summary, but they do NOT override your verdict. When the manifest reports
-only auxiliary advisory failures and the deliverable itself is functionally
-complete, you may accept and cite the warnings in `deferred_checks`. Reject
-only when functional completeness or a configured e2e/check command fails.
+Accept/reject is decided strictly by functional completeness. Two failure
+classes are blocking — they require plan rework, not a code re-run:
+
+1. Goal / acceptance-spec coverage gaps (`failedCoverageIds`): a blocking
+   goal has no acceptance specs, so its contract is unverifiable.
+2. `review:integrity` failure: the architect-level multi-dimension review
+   (goal_fidelity / technical_feasibility / hallucination /
+   solution_quality) judged the plan does NOT address the user's request.
+   No amount of build/test re-runs rescues a misaligned plan.
+
+Configured programmatic checks (build/typecheck/test/lint), runtime probes
+(puppeteer renders, server-launch checks, visual SSIM diffs), and the
+remaining reviews (`review:workspace_export`, `specialist:*`) are
+advisory: they surface as `failedCheckIds` / `failedRuntimeFlowIds` /
+`failedReviewIds` / runtime evidence / visual metric in the manifest. The
+host arbiter does NOT veto an LLM accept on advisory failures; cite them
+in `deferred_checks` and let the operator decide if a follow-up is
+warranted. Re-running the same code rarely fixes advisory failures
+(misclassified test runners, missing live preview, transient probe
+errors), so do not loop on them.
+
+Reject when coverage is incomplete OR when integrity review failed. The
+host gate will override an LLM accept that ignored either blocker; aligning
+your verdict with the gate keeps the rework signal clean for the
+orchestrator.
 
 ### Phase 4: Review Specialist Evidence
 
