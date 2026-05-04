@@ -17,6 +17,8 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("webpage_extract => mcp__opencorvus__webpage_extract")
     expect(composed.system).toContain("webpage_compile => mcp__opencorvus__webpage_compile")
     expect(composed.system).toContain("Do not create, copy, or handwrite")
+    expect(composed.system).toContain("those references are authoritative")
+    expect(composed.system).toContain("Match them 1:1 as closely as the stack allows")
     expect(composed.system).toContain("skill prompt")
   })
 

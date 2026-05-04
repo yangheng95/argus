@@ -45,4 +45,43 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("dom_too_thin")
     expect(prompt.indexOf("Raw verdict artifact JSON")).toBeLessThan(prompt.indexOf("# Goal: Calculator UI"))
   })
+
+  test("goal-path build restates 1:1 fidelity when visual contract exists", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "goal",
+        id: "gol_visual",
+        title: "Replica hero",
+        objective: "Rebuild the referenced hero section.",
+        acceptance_specs: ["hero matches reference"],
+        owned_paths: ["src/App.tsx"],
+        exports: [],
+        imports: [],
+        depends_on: [],
+      },
+      {
+        designSpecs: [{
+          severity: "high",
+          category: "layout",
+          title: "Hero layout",
+          requirement: "Two-column hero with exact spacing.",
+          applies_to: "hero",
+        }],
+      } as any,
+    )
+
+    expect(prompt).toContain("restore the relevant subset 1:1 as closely as the stack allows")
+    expect(prompt).toContain("**Reference Fidelity**")
+    expect(prompt).toContain("Do not approximate or redesign")
+  })
+
+  test("request-path build warns that visual references are authoritative", () => {
+    const prompt = buildUserPrompt({
+      kind: "request",
+      text: "Clone the attached webpage reference.",
+    })
+
+    expect(prompt).toContain("those references are authoritative")
+    expect(prompt).toContain("must restore them 1:1")
+  })
 })
