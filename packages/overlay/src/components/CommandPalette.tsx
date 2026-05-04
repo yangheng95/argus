@@ -17,7 +17,7 @@
 // command is highlighted via aria-selected for screen readers and via
 // the .cmdk-item--active class for the eye.
 
-import { For, Show, createMemo, createSignal, createEffect, onCleanup, onMount } from "solid-js";
+import { For, Show, createMemo, createSignal, createEffect } from "solid-js";
 import { boardStore } from "../store/board";
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
 import { applyTheme } from "../services/theme";
@@ -26,6 +26,7 @@ import { openConfigDialog, switchConfigTab } from "../services/dialog";
 import { setLocale } from "../utils/i18n";
 import { t } from "../utils/i18n";
 import { useDisclosure } from "../solid/disclosure";
+import { useHotkey } from "../solid/hotkey";
 
 interface Command {
   id: string;
@@ -259,29 +260,19 @@ export function CommandPalette() {
   // Global hotkey: Cmd+K (mac) / Ctrl+K (others). Captured in capture
   // phase so we trump an open <textarea> default behavior. Skip when an
   // HTML5 dialog has the user's focus — those modals own Esc/Enter.
-  function onGlobalKey(e: KeyboardEvent) {
-    if (e.key !== "k" && e.key !== "K") return;
-    if (!(e.metaKey || e.ctrlKey)) return;
-    // Skip when an HTML5 dialog has the operator's focus — those modals
-    // own keyboard navigation and stealing it leaves the dialog's
-    // focus-trap broken when the palette closes.
-    const openDialog = document.querySelector<HTMLDialogElement>("dialog[open]");
-    if (openDialog) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (palette.open()) {
-      close();
-      return;
-    }
-    priorFocus = (document.activeElement as HTMLElement | null) ?? null;
-    palette.openIt();
-  }
-
-  onMount(() => {
-    window.addEventListener("keydown", onGlobalKey, true);
-  });
-  onCleanup(() => {
-    window.removeEventListener("keydown", onGlobalKey, true);
+  useHotkey({
+    key: "k",
+    cmdOrCtrl: true,
+    target: "window",
+    capture: true,
+    when: () => !document.querySelector("dialog[open]"),
+    run: (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (palette.open()) { close(); return; }
+      priorFocus = (document.activeElement as HTMLElement | null) ?? null;
+      palette.openIt();
+    },
   });
 
   // Auto-focus the input once the modal mounts, and keep the active

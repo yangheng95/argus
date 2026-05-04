@@ -8,6 +8,7 @@ import { createEffect, createMemo, createResource, createSignal, For, onCleanup,
 import { boardStore } from "../store/board";
 import { Icon } from "./Icon";
 import { useDisclosure } from "../solid/disclosure";
+import { useHotkey } from "../solid/hotkey";
 import {
   currentChangeGroups,
   resolveCurrentChangeGroups,
@@ -44,16 +45,10 @@ export function ChangesPanel(props: ChangesPanelProps) {
       if (target && target.closest && target.closest(".changes-goal-picker")) return
       goalMenu.close()
     }
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && goalMenu.open()) goalMenu.close()
-    }
     document.addEventListener("click", onDocClick, { capture: true })
-    document.addEventListener("keydown", onKey)
-    onCleanup(() => {
-      document.removeEventListener("click", onDocClick, { capture: true })
-      document.removeEventListener("keydown", onKey)
-    })
+    onCleanup(() => document.removeEventListener("click", onDocClick, { capture: true }))
   }
+  useHotkey({ key: "Escape", when: () => goalMenu.open(), run: () => goalMenu.close() })
 
   const fallbackGroups = createMemo<ChangeGroup[]>(() => {
     if (props.changes === undefined) return currentChangeGroups();
