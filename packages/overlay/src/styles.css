@@ -326,68 +326,6 @@ a {
   overflow: hidden;
 }
 
-.msg-reasoning {
-  display: flex;
-  flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: calc(14px * var(--ui-scale));
-
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 16%, transparent),
-    color-mix(in srgb, var(--accent) 8%, transparent)
-  );
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 22%, transparent);
-  font-size: var(--ui-font-control);
-  line-height: 1.55;
-  color: var(--text-strong);
-  font-style: normal;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.reasoning-label {
-  margin: 0;
-  align-self: flex-start;
-  min-height: calc(20px * var(--ui-scale));
-  padding: calc(1px * var(--ui-scale)) calc(7px * var(--ui-scale));
-  border-radius: 999px;
-  background: rgba(91, 141, 239, 0.12);
-  color: var(--accent);
-  font-size: var(--ui-font-small);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  line-height: 1.5;
-  white-space: nowrap;
-  text-transform: uppercase;
-}
-
-.reasoning-text {
-  display: block;
-  color: var(--text-strong);
-  font-size: var(--ui-font-control);
-  white-space: pre-wrap;
-  min-width: 0;
-}
-
-@media (max-width: 520px) {
-  .msg-reasoning {
-    gap: calc(4px * var(--ui-scale));
-  }
-}
-
-.msg-patch {
-  display: flex;
-  align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale)) var(--ui-input-padding-x);
-  border-radius: 3px;
-  background: var(--good-dim);
-  font-size: var(--ui-font-control);
-  color: var(--good);
-  font-family: var(--mono);
-}
 
 
 
@@ -399,34 +337,6 @@ a {
 
 
 
-
-
-
-
-
-.path-box {
-  font-family: var(--mono);
-  font-size: var(--ui-font-control);
-  word-break: break-word;
-}
-.path-link {
-  width: 100%;
-  justify-content: flex-start;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 80ms,
-    background 80ms,
-    color 80ms;
-}
-.path-link:hover:not(:disabled) {
-  border-color: var(--border-hover);
-  background: var(--surface-hover);
-}
-.path-link:disabled {
-  cursor: default;
-  color: var(--text-muted);
-}
 
 
 
@@ -500,31 +410,6 @@ a {
 
 
 /* Agent-workflow rules migrated to styles/surfaces/agent-workflow.css. */
-
-.msg-tool-code {
-  margin: 4px 0 2px 0;
-}
-.msg-tool-code pre {
-
-}
-.msg-tool-expand {
-  display: block;
-  width: 100%;
-  padding: 4px 0;
-  text-align: center;
-  font-size: var(--ui-font-control);
-  color: var(--fg-muted, #8b949e);
-  cursor: pointer;
-  background: none;
-  border: 1px dashed var(--border);
-  border-radius: 0 0 4px 4px;
-  border-top: none;
-  margin-top: -2px;
-}
-.msg-tool-expand:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
 
 
 .criteria-result,

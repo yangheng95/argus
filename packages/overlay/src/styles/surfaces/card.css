@@ -45,16 +45,39 @@ body {
   --card-line: color-mix(in srgb, var(--accent) 44%, transparent);
   --card-line-dim: var(--border);
 
-  /* Semantic stage tones — 4 categories instead of the prior 14.
-     Stages map: info (default — agent / orchestrator / spec /
-     planner / build / executor / goal / step / tool), success
-     (delivery / evaluator), warn (requirements), danger (rejected
-     / failed states surfaced via [data-status]). Each rail picks
-     one of these four. */
+  /* Semantic stage tones — info / success / warn / danger.
+     Used by status-layer overrides (rejected / failed) and as the
+     unknown-stage fallback for the rail rule (`var(--card-stage,
+     var(--card-stage-info))`). */
   --card-stage-info: var(--accent);
   --card-stage-success: var(--good);
   --card-stage-warn: var(--warn);
   --card-stage-danger: var(--bad);
+
+  /* Per-stage rail tokens. Each agent / phase has its own hue so
+     the conversation reads as a multi-actor stream; restored after
+     iter51's 4-tone fold left non-(delivery|evaluator|requirements)
+     stages without a rail because `card-color.ts` keeps emitting
+     `var(--card-stage-<name>)` for these 14 known stages.
+
+     Theme-adaptive: every value is derived from --accent / --good /
+     --warn / --bad (themed per light / dark / vscode-dark) via
+     color-mix, so swapping themes recolors the rails consistently
+     instead of hardcoded hex landing wrong on light/vscode-dark. */
+  --card-stage-user:           var(--accent);
+  --card-stage-assistant:      color-mix(in oklch, var(--accent) 55%, var(--good) 45%);
+  --card-stage-orchestrator:   color-mix(in oklch, var(--accent) 78%, var(--bad) 22%);
+  --card-stage-spec:           color-mix(in oklch, var(--accent) 50%, var(--good) 50%);
+  --card-stage-requirements:   var(--warn);
+  --card-stage-design-analyst: color-mix(in oklch, var(--bad) 60%, var(--accent) 40%);
+  --card-stage-architect:      color-mix(in oklch, var(--accent) 85%, var(--good) 15%);
+  --card-stage-planner:        color-mix(in oklch, var(--accent) 60%, var(--good) 40%);
+  --card-stage-goal:           color-mix(in oklch, var(--accent) 70%, var(--bad) 30%);
+  --card-stage-executor:       color-mix(in oklch, var(--warn) 80%, var(--bad) 20%);
+  --card-stage-build:          color-mix(in oklch, var(--warn) 55%, var(--bad) 45%);
+  --card-stage-evaluator:      color-mix(in oklch, var(--good) 70%, var(--accent) 30%);
+  --card-stage-delivery:       var(--good);
+  --card-stage-tool:           color-mix(in srgb, var(--text-soft) 70%, transparent);
 
   /* System-message tint kept distinct (warn-toned) since system
      messages are operational notices, not part of the agent
@@ -147,7 +170,7 @@ body {
 .card[data-depth="0"][data-kind="phase"],
 .card[data-depth="0"][data-kind="step"],
 .card[data-depth="0"][data-kind="tool"] {
-  border-left: calc(3px * var(--ui-scale)) solid var(--card-stage);
+  border-left: calc(3px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info));
   background: var(--card-bg-0);
 }
 
@@ -622,9 +645,9 @@ body {
    (accent). The depth-0 left-rail thickness drops from 3px
    to 2px to match the calm/flat trajectory. */
 
-.card[data-depth="0"][data-kind="agent"][data-stage] { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage); }
-.card[data-depth="0"][data-kind="goal"]              { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage); }
-.card[data-depth="0"][data-kind="step"][data-stage]  { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage); }
+.card[data-depth="0"][data-kind="agent"][data-stage] { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info)); }
+.card[data-depth="0"][data-kind="goal"]              { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-goal)); }
+.card[data-depth="0"][data-kind="step"][data-stage]  { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info)); }
 
 /* iter51: stage colour title tinting dropped — the per-stage
    hue tints made the conversation a rainbow of agent identities.
