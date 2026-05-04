@@ -69,8 +69,8 @@ interface StatusBadgeProps {
 
 export function StatusBadge(props: StatusBadgeProps) {
   return (
-    <span class={`status-badge ${props.class || ""}`} data-status={props.status}>
-      <span class="status-dot">
+    <span class={`status-badge ${props.class || ""}`}>
+      <span class="status-icon" data-status={props.status}>
         <Icon name={statusIconName(props.status)} />
       </span>
       <span class="status-label">{statusLabel(props.status)}</span>

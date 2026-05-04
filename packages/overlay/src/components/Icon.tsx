@@ -176,7 +176,7 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
     ),
   },
   executor: {
-    body: <path d="M6 4.6L11.3 8 6 11.4Z" />,
+    body: <path d="M6 4.6L11.3 8 6 11.4Z" fill="currentColor" stroke="none" />,
   },
   criteria: {
     body: (

@@ -87,12 +87,12 @@ interface GoalWorkflowGroupProps {
 
 // ── Helpers ──
 
-function goalStatusIcon(status: string): string {
+function goalStatusIconName(status: string): "status-completed" | "status-failed" | "status-active" | "status-idle" {
   switch (status) {
-    case "passed": return "\u2713";
-    case "failed": return "\u2717";
-    case "running": return "\u25CB";
-    default: return "\u00B7";
+    case "passed": return "status-completed";
+    case "failed": return "status-failed";
+    case "running": return "status-active";
+    default: return "status-idle";
   }
 }
 
@@ -135,7 +135,9 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
         }}
       >
-        <span class="gwg-status-icon">{goalStatusIcon(props.goal.goalStatus)}</span>
+        <span class="gwg-status-icon" data-status={props.goal.goalStatus}>
+          <Icon name={goalStatusIconName(props.goal.goalStatus)} />
+        </span>
         <div class="gwg-title-row">
           <span class="gwg-title">{props.goal.goalTitle}</span>
         </div>
