@@ -20,18 +20,11 @@
   --oc-header-title-line-height: 1;
   --oc-header-title-letter-spacing: 0;
   --oc-header-title-transform: none;
-  --oc-header-bg: var(--oc-color-surface-strong);
   --oc-header-border: 0 solid transparent;
   --oc-header-shadow: none;
-  --oc-titlebar-menu-text: var(--oc-color-text-strong);
   --oc-titlebar-gap: calc(2px * var(--ui-scale, 1));
   --oc-titlebar-status-radius: calc(10px * var(--ui-scale, 1));
   --oc-titlebar-status-icon: calc(14px * var(--ui-scale, 1));
-  --oc-control-bg: var(--surface-inset);
-  --oc-control-bg-hover: var(--surface-hover);
-  --oc-control-border: var(--border);
-  --oc-control-border-hover: var(--border-hover);
-  --oc-control-focus-ring: color-mix(in srgb, var(--accent) 18%, transparent);
   --oc-control-shadow: none;
 
   /* Theme swatch previews: the titlebar theme-picker shows a 12x12 chip
@@ -74,4 +67,73 @@
   --oc-stage-executor: #e68c32;
   --oc-stage-evaluator: #c8b43c;
   --oc-stage-delivery: #50be64;
+}
+
+/* Theme-wired tokens MUST live at body scope, not :root. CSS custom
+ * properties resolve `var()` references at the scope where they are
+ * declared — declaring `--oc-control-bg: var(--surface-inset)` at
+ * `:root` freezes the value to whatever `--surface-inset` is on
+ * `:root` (the dark default), and `body[data-theme="light"]`
+ * overriding `--surface-inset` on `body` does NOT update the
+ * already-resolved `--oc-control-bg` that `:root` exported. Putting
+ * these declarations on `body` makes the indirection resolve at
+ * body scope, where the active `data-theme` palette is in effect.
+ *
+ * Bug fix history: discovered 2026-05-04 when the cwd dropdown's
+ * `--oc-control-bg` rendered as the dark navy `rgba(20, 24, 44,
+ * 0.92)` in light + vscode-dark themes despite `--surface-inset`
+ * being theme-correct on body. The `:root`-scoped indirection was
+ * the cause. */
+body {
+  --oc-control-bg: var(--surface-inset);
+  --oc-control-bg-hover: var(--surface-hover);
+  --oc-control-border: var(--border);
+  --oc-control-border-hover: var(--border-hover);
+  --oc-control-focus-ring: color-mix(in srgb, var(--accent) 18%, transparent);
+  --oc-header-bg: var(--oc-color-surface-strong);
+  --oc-titlebar-menu-text: var(--oc-color-text-strong);
+
+  /* Diff palette derived from the active theme's accent/bad/good
+   * + text-strong tokens. Previously declared at :root in styles.css,
+   * which froze them to the dark-default values; light + vscode-dark
+   * never picked up their own palette. Body scope re-resolves the
+   * var() chain per theme. */
+  --diff-add-fg: color-mix(in srgb, var(--accent) 58%, var(--text-strong) 42%);
+  --diff-add-bg: color-mix(in srgb, var(--accent) 12%, transparent);
+  --diff-add-border: color-mix(in srgb, var(--accent) 22%, transparent);
+  --diff-del-fg: color-mix(in srgb, var(--bad) 58%, var(--text-strong) 42%);
+  --diff-del-bg: color-mix(in srgb, var(--bad) 10%, transparent);
+  --diff-del-border: color-mix(in srgb, var(--bad) 22%, transparent);
+  --diff-add-row-bg: color-mix(in srgb, var(--good) 9%, transparent);
+  --diff-del-row-bg: color-mix(in srgb, var(--bad) 10%, transparent);
+
+  /* Status aliases — the legacy code used --ok/--warning/--danger/
+   * --text-dim alongside --good/--warn/--bad/--text-muted. Same
+   * lazy-resolve gotcha: declare at body so each theme picks its
+   * own --good/--warn/--bad/--text-muted. */
+  --ok: var(--good);
+  --warning: var(--warn);
+  --danger: var(--bad);
+  --text-dim: var(--text-muted);
+
+  /* Accent halo + glow. --accent-shadow was missing from light +
+   * vscode-dark theme blocks; --accent-glow was missing from
+   * vscode-dark. Body-scope wiring fixes both. */
+  --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
+  --accent-shadow: 0 calc(10px * var(--ui-scale)) calc(26px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
+
+  /* Guide-card chrome. The legacy :root version baked in #1e1f22
+   * (dark theme bg literal) inside the linear-gradient — that hex
+   * was the only piece that didn't switch with theme even when the
+   * accent layer did. Replace with var(--bg) so the gradient sits
+   * over each theme's body background. */
+  --guide-card-border: color-mix(in srgb, var(--accent) 22%, transparent);
+  --guide-card-bg:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 14%, transparent),
+      color-mix(in srgb, var(--accent) 0%, transparent) 44%
+    ),
+    var(--bg);
+  --guide-card-shadow: var(--shadow-lg);
 }

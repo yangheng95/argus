@@ -3081,7 +3081,21 @@ describe("overlay architecture guards", () => {
           .split(",")
           .map((part) => part.trim())
           .filter(Boolean)) {
-          expect(item).toBe(":root")
+          // Token files allow exactly two selector kinds:
+          //   1. `:root` for static tokens (radii, density, type
+          //      scale, hue metadata that doesn't switch with theme).
+          //   2. `body` for theme-wired indirection tokens
+          //      (`var(--surface-inset)`, `var(--accent)` chains)
+          //      that MUST live at body scope so the var() reference
+          //      resolves at the element's body — `body[data-theme=
+          //      "..."]` palette overrides only update body's palette
+          //      tokens, and a `:root`-scoped indirection freezes
+          //      the dark default before the theme block runs.
+          //      Discovered 2026-05-04 when `--oc-control-bg`
+          //      rendered as the dark navy `rgba(20, 24, 44, 0.92)`
+          //      across all three themes despite `--surface-inset`
+          //      being theme-correct.
+          expect([":root", "body"]).toContain(item)
         }
       }
       expect(css).not.toMatch(/data-theme|body\[|body:is\(/)
