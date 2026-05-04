@@ -19,7 +19,7 @@
   position: relative;
   padding: calc(var(--ui-input-padding-y) + calc(1px * var(--ui-scale))) var(--ui-input-padding-x) calc(var(--ui-input-padding-y) + calc(1px * var(--ui-scale)))
     calc(var(--ui-input-padding-x) + calc(12px * var(--ui-scale)));
-  border-radius: calc(14px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background:
     linear-gradient(180deg, color-mix(in srgb, white 2.8%, transparent), color-mix(in srgb, white 0%, transparent) 72%),
     color-mix(in srgb, var(--surface-inset) 82%, transparent);
@@ -173,7 +173,7 @@
 .msg-tool-output {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
-  border-radius: calc(14px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: var(--subtle-2);
   border: var(--oc-border-width) solid var(--subtle-4);
   font-size: var(--ui-font-control);
@@ -188,7 +188,7 @@
 .msg-tool-input {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
-  border-radius: calc(14px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: var(--subtle-2);
   border: var(--oc-border-width) solid var(--subtle-4);
   font-family: var(--mono);
@@ -201,7 +201,7 @@
 .msg-tool-error {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
-  border-radius: calc(14px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: var(--bad-dim);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 24%, transparent);
   font-size: var(--ui-font-control);
@@ -242,7 +242,7 @@
 
 .msg-tool-diff-card {
   border: var(--oc-border-width) solid var(--subtle-4);
-  border-radius: calc(16px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: color-mix(in srgb, var(--subtle-2) 82%, transparent);
   overflow: hidden;
 }
@@ -289,7 +289,7 @@
 }
 
 .msg-tool-diff-card__body .diff-lines {
-  border-radius: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   overflow: hidden;
 }
 
@@ -299,7 +299,7 @@
   gap: calc(10px * var(--ui-scale));
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-radius: calc(16px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: color-mix(in srgb, var(--subtle-2) 88%, transparent);
   border: var(--oc-border-width) solid var(--subtle-4);
 }
@@ -386,7 +386,7 @@
   list-style: none;
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
-  border-radius: calc(14px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: var(--subtle-2);
   border: var(--oc-border-width) solid var(--subtle-4);
   font-size: var(--ui-font-control);
@@ -411,7 +411,7 @@
 }
 .msg-todo-list--card .msg-todo-item {
   padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
   border: var(--oc-border-width) solid var(--subtle-4);
 }
@@ -455,7 +455,7 @@
   flex: 0 0 auto;
   align-self: center;
   padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-radius: calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   font-size: calc(var(--ui-font-control) * 0.82);
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -480,7 +480,7 @@
 .msg-read-meta {
   margin: calc(2px * var(--ui-scale)) 0 0 0;
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: var(--subtle-2);
   border: var(--oc-border-width) solid var(--subtle-4);
   font-family: var(--mono);
@@ -496,7 +496,7 @@
   gap: calc(6px * var(--ui-scale));
   margin-top: calc(8px * var(--ui-scale));
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-radius: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: color-mix(in srgb, var(--subtle-2) 88%, transparent);
   border: var(--oc-border-width) solid var(--subtle-4);
 }
@@ -536,7 +536,7 @@
   gap: calc(6px * var(--ui-scale));
   padding: var(--ui-gap-xs) var(--ui-gap-sm);
   margin: calc(3px * var(--ui-scale)) 0;
-  border-radius: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--border);
   background: var(--subtle-2);
   font-size: var(--ui-font-small);
@@ -581,7 +581,7 @@
   font-size: var(--ui-font-small);
   color: var(--bad);
   padding: var(--ui-gap-xs) var(--ui-gap-sm);
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: var(--bad-dim);
 }
 
@@ -622,7 +622,7 @@
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: calc(14px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--accent) 16%, transparent),
@@ -672,7 +672,7 @@
   align-items: center;
   gap: calc(5px * var(--ui-scale));
   padding: calc(3px * var(--ui-scale)) var(--ui-input-padding-x);
-  border-radius: var(--oc-radius-control);
+  border-radius: var(--oc-radius-soft);
   background: var(--good-dim);
   font-size: var(--ui-font-control);
   color: var(--good);
@@ -716,7 +716,7 @@
   cursor: pointer;
   background: none;
   border: var(--oc-border-width) dashed var(--border);
-  border-radius: 0 0 var(--oc-radius-control) var(--oc-radius-control);
+  border-radius: 0 0 var(--oc-radius-soft) var(--oc-radius-soft);
   border-top: none;
   margin-top: calc(-2px * var(--ui-scale));
 }

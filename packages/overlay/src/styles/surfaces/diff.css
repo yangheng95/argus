@@ -21,7 +21,7 @@
   justify-content: center;
   min-height: calc(16px * var(--ui-scale));
   padding: 0 calc(5px * var(--ui-scale));
-  border-radius: calc(5px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   border: 0;
   background: transparent;
   color: var(--text-soft);
@@ -41,7 +41,7 @@
 
 .diff-preview {
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: calc(18px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background:
     linear-gradient(180deg, color-mix(in srgb, white 3.4%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 95%, transparent);

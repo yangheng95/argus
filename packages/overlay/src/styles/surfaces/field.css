@@ -31,7 +31,7 @@
 
 .field-input {
   border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--oc-radius-soft);
   background: var(--surface-inset);
   color: var(--text-strong);
   padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
@@ -55,7 +55,7 @@ textarea.field-input {
   align-items: stretch;
   min-height: var(--ui-input-min-height);
   border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--oc-radius-soft);
   background: var(--surface-inset);
   overflow: hidden;
   box-shadow: none;
@@ -132,7 +132,7 @@ select.field-input {
 .custom-select {
   padding-left: calc(14px * var(--ui-scale));
   padding-right: calc(40px * var(--ui-scale));
-  border-radius: var(--radius);
+  border-radius: var(--oc-radius-soft);
   box-shadow: none;
 }
 select.field-input option {
@@ -147,8 +147,8 @@ select.field-input option {
 }
 
 /* Inspector ("sections" context) tightens the field family for the
- * right-rail's denser layout. The right rail uses smaller corner
- * radii (--section-corner) and tighter padding tokens so a field
+ * right-rail's denser layout. The right rail uses the global
+ * `--oc-radius-soft` corner + tighter padding tokens so a field
  * sitting inside <section.sections> matches the rail's density. */
 .sections .field {
   gap: var(--section-field-gap);
@@ -165,7 +165,7 @@ select.field-input option {
 .sections .field-input,
 .sections .config-status-box {
   padding: var(--section-input-padding-y) var(--section-input-padding-x);
-  border-radius: var(--section-corner);
+  border-radius: var(--oc-radius-soft);
 }
 
 .sections textarea.field-input {
@@ -174,7 +174,7 @@ select.field-input option {
 
 .sections .field-input-group {
   min-height: calc(32px * var(--ui-scale));
-  border-radius: var(--section-corner);
+  border-radius: var(--oc-radius-soft);
 }
 
 .sections .field-input-actions {

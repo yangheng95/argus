@@ -56,9 +56,6 @@ body[data-theme="light"] {
   --dialog-bg: #ffffff;
   --menu-panel-bg: rgba(255, 255, 255, 0.96);
   --divider-soft: rgba(92, 112, 163, 0.12);
-  --radius: calc(12px * var(--ui-scale));
-  --radius-lg: calc(18px * var(--ui-scale));
-  --panel-radius: calc(10px * var(--ui-scale));
   --ui-titlebar-height: calc(44px * var(--ui-scale));
   --ui-panel-header-height: calc(42px * var(--ui-scale));
   --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));

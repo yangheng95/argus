@@ -21,7 +21,7 @@
 
 .ndjson-event {
   padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: var(--oc-radius-control);
+  border-radius: var(--oc-radius-soft);
   background: var(--surface-inset);
   border-left: calc(2px * var(--ui-scale)) solid transparent;
   font-size: var(--ui-font-body);
@@ -63,7 +63,7 @@
   font-size: var(--ui-font-control);
   font-weight: 600;
   padding: 0 calc(4px * var(--ui-scale));
-  border-radius: var(--oc-radius-control);
+  border-radius: var(--oc-radius-soft);
   background: var(--subtle-2);
 }
 
@@ -109,7 +109,7 @@
   font-size: var(--ui-font-small);
   font-weight: 700;
   padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  border-radius: var(--oc-radius-control);
+  border-radius: var(--oc-radius-soft);
   text-transform: uppercase;
 }
 

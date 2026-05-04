@@ -451,7 +451,6 @@ describe("overlay architecture guards", () => {
     expect(titlebarSurface).toMatch(/\.titlebar-task-status\[data-status="active"\]/)
     expect(titlebarSurface).toMatch(/\.status-icon\s*\{/)
     expect(titlebarSurface).toMatch(/\.status-icon\[data-status="completed"\]/)
-    expect(titlebarSurface).toContain("var(--oc-titlebar-status-radius)")
     expect(titlebarSurface).toContain("var(--oc-titlebar-status-icon)")
   })
 
@@ -2262,7 +2261,7 @@ describe("overlay architecture guards", () => {
     expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("gap: calc(2px * var(--ui-scale))")
     expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("padding: calc(2px * var(--ui-scale))")
     expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
-    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("border-radius: var(--oc-radius-soft)")
     expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("background: var(--oc-control-bg)")
     expect(soloRuleBody(conversationSurface, ".task-dir-shell.task-cwd-dropdown")).toContain(
       "padding-inline: calc(2px * var(--ui-scale))",
@@ -2276,12 +2275,12 @@ describe("overlay architecture guards", () => {
     expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("gap: calc(2px * var(--ui-scale))")
     expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("padding: calc(2px * var(--ui-scale))")
     expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
-    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("border-radius: var(--oc-radius-soft)")
     expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("background: var(--oc-control-bg)")
-    expect(soloRuleBody(sidebarSurface, ".sidebar-tool")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(sidebarSurface, ".sidebar-tool")).toContain("border-radius: var(--oc-radius-soft)")
     expect(soloRuleBody(sidebarSurface, ".sidebar-tool")).toContain("border: var(--oc-border-width) solid transparent")
     const workspaceSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
-    expect(soloRuleBody(workspaceSurface, ".workspace-toggle")).toContain("border-radius: var(--oc-radius-control)")
+    expect(soloRuleBody(workspaceSurface, ".workspace-toggle")).toContain("border-radius: var(--oc-radius-soft)")
     expect(soloRuleBody(workspaceSurface, ".workspace-toggle")).toContain("border: var(--oc-border-width) solid transparent")
   })
 
@@ -2313,7 +2312,7 @@ describe("overlay architecture guards", () => {
       "gap: calc(4px * var(--ui-scale))",
       "padding: calc(6px * var(--ui-scale))",
       "border: 0",
-      "border-radius: var(--oc-radius-control)",
+      "border-radius: var(--oc-radius-soft)",
     ]) {
       expect(body).toContain(declaration)
     }
@@ -2529,7 +2528,7 @@ describe("overlay architecture guards", () => {
       // `--oc-border-width` token during the surface migration so the
       // border width tracks the rest of the chromed-control family.
       "border: var(--oc-border-width) solid color-mix(in srgb, var(--workflow-tone) 28%, var(--border))",
-      "border-radius: calc(10px * var(--ui-scale))",
+      "border-radius: var(--oc-radius-large)",
       "background: color-mix(in srgb, var(--surface) 88%, var(--workflow-tone) 4%)",
     ]) {
       expect(cardBody).toContain(declaration)
@@ -2615,7 +2614,7 @@ describe("overlay architecture guards", () => {
     const body = soloRuleBody(surface, ".agent-workflow-attempt")
     for (const declaration of [
       "border: var(--oc-border-width) solid color-mix(in srgb, var(--workflow-tone) 38%, transparent)",
-      "border-radius: calc(999px * var(--ui-scale))",
+      "border-radius: var(--oc-radius-pill)",
       "padding: 0 calc(6px * var(--ui-scale))",
       "background: color-mix(in srgb, var(--workflow-tone) 13%, transparent)",
       "color: color-mix(in srgb, var(--workflow-tone) 82%, var(--text-strong))",
@@ -2658,7 +2657,7 @@ describe("overlay architecture guards", () => {
     const reportBody = soloRuleBody(surface, ".agent-workflow-report")
     for (const declaration of [
       "border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 26%, var(--border))",
-      "border-radius: calc(14px * var(--ui-scale))",
+      "border-radius: var(--oc-radius-large)",
       "background: var(--dialog-bg)",
       // The literal black `rgba(0, 0, 0, 0.24)` drop shadow tracked
       // the dark theme; routed through `color-mix(... var(--bg) 65%,
@@ -2718,7 +2717,7 @@ describe("overlay architecture guards", () => {
     const body = soloRuleBody(surface, ".agent-workflow-refresh")
     for (const declaration of [
       "border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 32%, var(--border))",
-      "border-radius: calc(999px * var(--ui-scale))",
+      "border-radius: var(--oc-radius-pill)",
       "padding: 0 calc(10px * var(--ui-scale))",
       "background: color-mix(in srgb, var(--accent) 8%, var(--surface-strong))",
       "box-shadow: none",
@@ -2941,10 +2940,10 @@ describe("overlay architecture guards", () => {
     }
 
     expect(soloRuleBody(inspectorSurface, ".section")).toContain(
-      "border-radius: calc(5px * var(--ui-scale))",
+      "border-radius: var(--oc-radius-soft)",
     )
     expect(soloRuleBody(inspectorSurface, ".gwg")).toContain(
-      "border-radius: calc(5px * var(--ui-scale))",
+      "border-radius: var(--oc-radius-soft)",
     )
 
     expect(soloRuleBody(inspectorSurface, ".section-body")).toContain(
@@ -2989,12 +2988,12 @@ describe("overlay architecture guards", () => {
     expect(soloRuleBody(board, ".board-intro")).toContain("gap: calc(1px * var(--ui-scale))")
     expect(soloRuleBody(board, ".board-intro")).toContain("padding: calc(1px * var(--ui-scale))")
     expect(soloRuleBody(board, ".board-intro__title")).toContain("font-size: var(--ui-font-body)")
-    expect(soloRuleBody(board, ".board-intro__section")).toContain("border-radius: calc(4px * var(--ui-scale))")
+    expect(soloRuleBody(board, ".board-intro__section")).toContain("border-radius: var(--oc-radius-soft)")
     expect(soloRuleBody(board, ".board-intro__section")).toContain("border: 0")
     expect(soloRuleBody(board, ".board-intro__modes")).toContain(
       "grid-template-columns: repeat(auto-fit, minmax(calc(128px * var(--ui-scale)), 1fr))",
     )
-    expect(soloRuleBody(board, ".board-intro__cta")).toContain("border-radius: calc(3px * var(--ui-scale))")
+    expect(soloRuleBody(board, ".board-intro__cta")).toContain("border-radius: var(--oc-radius-soft)")
     expect(soloRuleBody(board, ".board-intro__mode-desc,\n.board-intro__agent-desc")).toContain(
       "-webkit-line-clamp: 2",
     )
@@ -3137,14 +3136,15 @@ describe("overlay architecture guards", () => {
       "--oc-header-gap",
       "--oc-header-title-line-height",
       "--oc-titlebar-menu-text",
-      "--oc-radius-panel",
-      "--oc-radius-card",
-      "--oc-radius-control",
+      "--oc-radius-none",
+      "--oc-radius-soft",
+      "--oc-radius-large",
       "--oc-radius-pill",
+      "--ui-font-weight-body",
+      "--ui-font-weight-strong",
       "--oc-density-control-height",
       "--oc-density-icon-button",
       "--oc-titlebar-gap",
-      "--oc-titlebar-status-radius",
       "--oc-titlebar-status-icon",
     ]) {
       expect(tokenText).toContain(token)

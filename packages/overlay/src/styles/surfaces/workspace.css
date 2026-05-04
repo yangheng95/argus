@@ -12,7 +12,7 @@
   justify-content: center;
   padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border: var(--oc-border-width) solid transparent;
-  border-radius: var(--oc-radius-control);
+  border-radius: var(--oc-radius-soft);
   background: transparent;
   color: var(--text-soft);
   transition:
@@ -90,7 +90,7 @@
   min-height: 0;
   height: 100%;
   border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--panel-radius);
+  border-radius: var(--oc-radius-large);
   background: var(--surface);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -170,7 +170,7 @@
   justify-content: center;
   background: transparent;
   border: var(--oc-border-width) solid transparent;
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   color: var(--text-muted);
   font-size: var(--ui-font-heading);
   line-height: 1;
@@ -486,7 +486,6 @@ body[data-resizing="true"] * {
   --section-row-gap: calc(6px * var(--ui-scale));
   --section-control-height: calc(34px * var(--ui-scale));
   --section-badge-height: calc(20px * var(--ui-scale));
-  --section-corner: var(--radius);
   --section-head-padding-y: calc(6px * var(--ui-scale));
   --section-head-padding-x: calc(12px * var(--ui-scale));
   --section-body-padding-x: calc(12px * var(--ui-scale));

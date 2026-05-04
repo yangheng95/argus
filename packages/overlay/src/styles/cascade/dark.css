@@ -56,9 +56,6 @@ body[data-theme="dark"] {
   --warn-dim: rgba(215, 161, 94, 0.13);
   --bad: #ef7f86;
   --bad-dim: rgba(239, 127, 134, 0.14);
-  --radius: calc(12px * var(--ui-scale));
-  --radius-lg: calc(18px * var(--ui-scale));
-  --panel-radius: calc(10px * var(--ui-scale));
   --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.045);
   --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.05);

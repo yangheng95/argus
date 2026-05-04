@@ -2,7 +2,6 @@
   --oc-button-height: var(--oc-density-control-height);
   --oc-button-padding-x: var(--oc-header-gap);
   --oc-button-gap: var(--oc-header-gap);
-  --oc-button-radius: var(--oc-radius-control);
   --oc-button-bg: transparent;
   --oc-button-border: var(--oc-border-width) solid transparent;
   --oc-button-color: var(--text-strong);
@@ -16,7 +15,7 @@
   padding: 0 var(--oc-button-padding-x);
   gap: var(--oc-button-gap);
   border: var(--oc-button-border);
-  border-radius: var(--oc-button-radius);
+  border-radius: var(--oc-radius-soft);
   background: var(--oc-button-bg);
   color: var(--oc-button-color);
   box-shadow: var(--oc-button-shadow);

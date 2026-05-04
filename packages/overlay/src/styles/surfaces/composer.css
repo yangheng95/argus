@@ -14,7 +14,7 @@
   gap: calc(6px * var(--ui-scale));
   background: color-mix(in srgb, var(--surface-inset) 78%, transparent);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--subtle-4) 92%, transparent);
-  border-radius: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
   font-size: var(--ui-font-small);
   color: var(--text-soft);
@@ -26,7 +26,7 @@
   width: calc(28px * var(--ui-scale));
   height: calc(28px * var(--ui-scale));
   object-fit: cover;
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   flex-shrink: 0;
 }
 
@@ -37,7 +37,7 @@
   width: calc(28px * var(--ui-scale));
   height: calc(28px * var(--ui-scale));
   background: var(--subtle-10);
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   font-size: var(--ui-font-small);
   font-weight: 600;
   color: var(--text-muted);
@@ -169,7 +169,7 @@
   min-height: calc(72px * var(--ui-scale) * var(--chat-compose-scale));
   padding: 0 calc(12px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 46%, transparent);
-  border-radius: var(--radius);
+  border-radius: var(--oc-radius-soft);
   background: var(--accent);
   color: white;
   cursor: pointer;
@@ -252,7 +252,7 @@
 .chat-input[data-dragover] .chat-compose-row {
   outline: calc(2px * var(--ui-scale)) dashed color-mix(in srgb, var(--accent) 50%, transparent);
   outline-offset: calc(-2px * var(--ui-scale));
-  border-radius: calc(20px * var(--ui-scale) * var(--chat-compose-scale));
+  border-radius: var(--oc-radius-large);
 }
 
 /* Compose meta: the bottom row beneath the textarea showing build /
@@ -468,7 +468,7 @@
   width: calc(var(--oc-density-icon-button) + calc(var(--oc-border-width) * 2));
   min-width: calc(var(--oc-density-icon-button) + calc(var(--oc-border-width) * 2));
   height: calc(var(--oc-density-icon-button) + calc(var(--oc-border-width) * 2));
-  border-radius: var(--oc-radius-control);
+  border-radius: var(--oc-radius-soft);
 }
 
 .chat-icon-col .oc-button[data-ui="chat-toolbar-button"][data-active] {
@@ -519,7 +519,7 @@
   overflow-y: auto;
   background: var(--menu-panel-bg);
   border: var(--oc-border-width) solid var(--border-strong);
-  border-radius: calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   padding: calc(4px * var(--ui-scale));
   box-shadow:
     0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) color-mix(in srgb, black 32%, transparent),
@@ -535,7 +535,7 @@
 
 .executor-menu::-webkit-scrollbar-thumb {
   background: var(--subtle-5);
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
 }
 
 .executor-menu-group {
@@ -553,7 +553,7 @@
   width: 100%;
   text-align: left;
   border: var(--oc-border-width) solid transparent;
-  border-radius: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: transparent;
   color: var(--text-soft);
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
@@ -604,7 +604,7 @@
   width: 100%;
   text-align: left;
   border: var(--oc-border-width) solid transparent;
-  border-radius: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: transparent;
   color: var(--text-soft);
   padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
@@ -769,7 +769,7 @@ body[data-theme="light"] .executor-menu-model:hover {
   padding: calc(18px * var(--ui-scale)) calc(20px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-left: calc(3px * var(--ui-scale)) solid var(--accent);
-  border-radius: var(--panel-radius);
+  border-radius: var(--oc-radius-large);
   background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
   opacity: 1;
 }

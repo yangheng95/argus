@@ -1,9 +1,22 @@
 :root {
+  /* Radius scale — 4 tokens, single source. Any value outside this set is
+   * rejected by `radius-token-coverage.test.ts`. The legacy
+   * `--oc-radius-panel`, `--oc-radius-card`, `--oc-radius-control`,
+   * `--radius`, `--radius-lg`, `--panel-radius`, `--card-radius`,
+   * `--section-corner`, `--oc-button-radius`, `--oc-titlebar-status-radius`
+   * were retired here on 2026-05-04 (flat-redesign Step 1) — see
+   * `specs/overlay-flat-redesign/plan.md` and the migration script
+   * `packages/overlay/script/migrate-flat-redesign-step1.ts`. */
   --oc-radius-none: 0;
-  --oc-radius-panel: var(--oc-radius-none);
-  --oc-radius-card: calc(8px * var(--ui-scale, 1));
-  --oc-radius-control: calc(4px * var(--ui-scale, 1));
+  --oc-radius-soft: calc(4px * var(--ui-scale, 1));
+  --oc-radius-large: calc(10px * var(--ui-scale, 1));
   --oc-radius-pill: 999px;
+
+  /* Font-weight scale — 2 tokens, single source. The 700 / 650 / bold and
+   * stray literal weights are rejected by
+   * `font-weight-token-coverage.test.ts`. */
+  --ui-font-weight-body: 400;
+  --ui-font-weight-strong: 600;
 
   --oc-density-control-height: calc(24px * var(--ui-scale, 1));
   --oc-density-icon-button: calc(24px * var(--ui-scale, 1));
@@ -23,7 +36,6 @@
   --oc-header-border: 0 solid transparent;
   --oc-header-shadow: none;
   --oc-titlebar-gap: calc(2px * var(--ui-scale, 1));
-  --oc-titlebar-status-radius: calc(10px * var(--ui-scale, 1));
   --oc-titlebar-status-icon: calc(14px * var(--ui-scale, 1));
   --oc-control-shadow: none;
 

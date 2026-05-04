@@ -283,7 +283,7 @@
   align-items: center;
   gap: calc(4px * var(--ui-scale));
   padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   font-size: var(--ui-font-control);
   line-height: 1.4;
   background: var(--card-fill);
@@ -365,7 +365,7 @@
   width: calc(38px * var(--ui-scale));
   height: calc(38px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--oc-radius-soft);
   color: var(--accent);
   background: var(--surface);
 }
@@ -506,7 +506,7 @@
   gap: var(--ui-gap-xs);
   padding: 0 var(--ui-gap-sm);
   height: calc(18px * var(--ui-scale));
-  border-radius: calc(var(--radius) * 0.6);
+  border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--border);
   background: var(--subtle-1);
   color: var(--text-soft);
@@ -562,14 +562,14 @@
   padding: calc(2px * var(--ui-scale));
   min-width: 0;
   border: var(--oc-border-width) solid var(--oc-control-border);
-  border-radius: var(--oc-radius-control);
+  border-radius: var(--oc-radius-soft);
   background: var(--oc-control-bg);
   box-shadow: var(--oc-control-shadow);
 }
 
 .task-cwd-dropdown {
   cursor: pointer;
-  border-radius: var(--oc-radius-control);
+  border-radius: var(--oc-radius-soft);
   padding: 0 calc(4px * var(--ui-scale));
   transition:
     background 100ms,
@@ -663,7 +663,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   color: var(--text-soft);
   transition:
     background 100ms,
@@ -701,7 +701,7 @@
 .task-dir-empty {
   min-height: calc(24px * var(--ui-scale));
   padding: 0 calc(6px * var(--ui-scale));
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   color: var(--text-strong);
   font-size: var(--ui-font-control);
   font-weight: 500;
@@ -727,7 +727,7 @@
 .task-dir-step {
   min-width: calc(18px * var(--ui-scale));
   height: calc(24px * var(--ui-scale));
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
   transition:
@@ -823,7 +823,7 @@ body[data-theme="vscode-dark"] .task-bar {
   gap: calc(6px * var(--ui-scale));
   flex-shrink: 0;
   padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: var(--radius);
+  border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--border);
   background: var(--surface-inset);
   box-shadow: none;
@@ -901,7 +901,7 @@ body[data-theme="vscode-dark"] .task-bar {
     ),
     color-mix(in srgb, var(--surface) 96%, var(--surface-inset) 4%);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border-strong) 88%, transparent);
-  border-radius: calc(16px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   padding: 0;
   box-shadow:
     0 calc(20px * var(--ui-scale)) calc(40px * var(--ui-scale)) color-mix(in srgb, black 24%, transparent),
@@ -917,7 +917,7 @@ body[data-theme="vscode-dark"] .task-bar {
 
 .recent-dir-panel::-webkit-scrollbar-thumb {
   background: var(--subtle-5);
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
 }
 
 .recent-dir-panel-shell {
@@ -970,7 +970,7 @@ body[data-theme="vscode-dark"] .task-bar {
   gap: calc(6px * var(--ui-scale));
   padding: calc(2px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background:
     linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 72%),
     color-mix(in srgb, var(--surface-inset) 74%, transparent);
@@ -1016,7 +1016,7 @@ body[data-theme="vscode-dark"] .task-bar {
   align-items: center;
   gap: calc(10px * var(--ui-scale));
   border: none;
-  border-radius: calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: transparent;
   color: var(--text-soft);
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
@@ -1083,7 +1083,7 @@ body[data-theme="vscode-dark"] .task-bar {
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: transparent;
   color: var(--text-muted);
   font-size: var(--ui-font-heading);
@@ -1115,7 +1115,7 @@ body[data-theme="vscode-dark"] .task-bar {
   min-height: calc(84px * var(--ui-scale));
   padding: calc(16px * var(--ui-scale)) calc(14px * var(--ui-scale));
   border: var(--oc-border-width) dashed color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background:
     linear-gradient(
       180deg,
