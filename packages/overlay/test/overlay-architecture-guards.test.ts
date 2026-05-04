@@ -2912,8 +2912,8 @@ describe("overlay architecture guards", () => {
       inspectorSurface.matchAll(/(^|\n)\.sections-stack\s*\{([^{}]*)\}/g),
     ).map((match) => match[2] ?? "")
     const sectionsBody = sectionsBodies.at(-1) ?? ""
-    expect(sectionsBody).toContain("gap: calc(4px * var(--ui-scale))")
-    expect(sectionsBody).toContain("padding: calc(4px * var(--ui-scale))")
+    expect(sectionsBody).toContain("gap: var(--ui-gap-sm)")
+    expect(sectionsBody).toContain("padding: var(--ui-gap-sm)")
   })
 
   test("right panel card radius and body padding are canonical, not theme scoped", () => {
@@ -2948,7 +2948,7 @@ describe("overlay architecture guards", () => {
     )
 
     expect(soloRuleBody(inspectorSurface, ".section-body")).toContain(
-      "padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))",
+      "padding: 0 var(--ui-gap-sm) var(--ui-gap-sm)",
     )
     expect(soloRuleBody(inspectorSurface, ".gwg-body")).toContain(
       "padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale))",
