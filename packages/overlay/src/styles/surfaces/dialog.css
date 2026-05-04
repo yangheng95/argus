@@ -191,3 +191,29 @@
   flex: 1 1 calc(160px * var(--ui-scale));
   min-width: calc(160px * var(--ui-scale));
 }
+
+/* ─────────────────────────────────────────────────────────────
+   App-dialog body + input shells (.app-dialog-body / -input)
+   The free-form prompt dialogs invoked via App.dialog() — used by
+   confirm prompts, single-input prompts, and error reports.
+   ───────────────────────────────────────────────────────────── */
+
+.app-dialog-body {
+  min-height: calc(72px * var(--ui-scale));
+  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: calc(16px * var(--ui-scale));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text-strong) 3%, transparent), color-mix(in srgb, var(--accent) 1%, transparent) 76%, transparent),
+    color-mix(in srgb, var(--surface-inset) 94%, transparent);
+  box-shadow: var(--shadow);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  color: var(--text);
+  font-size: var(--ui-font-control);
+}
+
+.app-dialog-input {
+  width: 100%;
+}

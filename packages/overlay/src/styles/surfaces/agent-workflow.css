@@ -432,3 +432,30 @@
   font-family: var(--mono);
   color: color-mix(in srgb, var(--workflow-tone) 72%, var(--text-muted));
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Plan summary / plan version readouts
+   Render inside the workflow panel above the goal stream.
+   ───────────────────────────────────────────────────────────── */
+
+.plan-summary {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  line-height: 1.5;
+  word-break: break-word;
+  margin-bottom: calc(6px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-left: calc(2px * var(--ui-scale)) solid var(--border-hover);
+  border-radius: 0 var(--oc-radius-control) var(--oc-radius-control) 0;
+  background: color-mix(in srgb, var(--text-strong) 1.5%, transparent);
+}
+.plan-summary:not(.md-content) {
+  white-space: pre-wrap;
+}
+
+.plan-version {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  margin-top: calc(4px * var(--ui-scale));
+  opacity: 0.7;
+}

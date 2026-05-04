@@ -2665,3 +2665,44 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   overflow: auto;
   overscroll-behavior: contain;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Inspector misc (extracted 2026-05-04): section-actions toolbar
+   inside section bodies, embedded session list panel, criteria
+   typography helpers.
+   ───────────────────────────────────────────────────────────── */
+
+.section-actions {
+  display: flex;
+  gap: var(--ui-gap-sm);
+  margin-top: var(--ui-gap-md);
+  flex-wrap: wrap;
+}
+
+.section-actions .btn {
+  padding: calc(4px * var(--ui-scale)) var(--ui-section-padding-x);
+  font-size: var(--ui-font-control);
+}
+
+.section-actions.compact {
+  margin-top: 0;
+}
+
+.session-list-panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  min-height: calc(180px * var(--ui-scale));
+  max-height: calc(320px * var(--ui-scale));
+  overflow-y: auto;
+  padding: calc(6px * var(--ui-scale));
+  border-radius: var(--radius);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface-inset);
+}
+
+.criteria-result,
+.pref-item-key {
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}

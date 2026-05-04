@@ -1,0 +1,75 @@
+/* ─────────────────────────────────────────────────────────────
+   Empty-state hint (.empty-hint / .empty-hint--card)
+   The "nothing here yet" placeholder used across sidebar lists,
+   inspector section bodies, change panels, diff preview, and file
+   view. Two display modes:
+   - inline `.empty-hint` (loose text, no chrome) — default in
+     compact contexts.
+   - card `.empty-hint--card` + container-prefixed empty-hints
+     (`.section-body > .empty-hint`, `#solidChangesPanel >
+     .empty-hint`, etc.) — boxed with a colored dot rail.
+   The container-prefixed variants share their visual contract via a
+   single multi-selector rule rather than per-container forks.
+   ───────────────────────────────────────────────────────────── */
+
+.empty-hint {
+  display: block;
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  line-height: 1.45;
+  padding: calc(2px * var(--ui-scale)) 0;
+}
+
+.sidebar-list-cluster > .empty-hint,
+.section-body > .empty-hint,
+#solidChangesPanel > .empty-hint,
+.diff-preview-empty .empty-hint,
+.file-view-empty .empty-hint,
+.empty-hint--card {
+  position: relative;
+  display: grid;
+  gap: calc(8px * var(--ui-scale));
+  width: min(100%, calc(340px * var(--ui-scale)));
+  margin: 0;
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-soft);
+}
+
+.sidebar-list-cluster > .empty-hint::before,
+.section-body > .empty-hint::before,
+#solidChangesPanel > .empty-hint::before,
+.diff-preview-empty .empty-hint::before,
+.file-view-empty .empty-hint::before,
+.empty-hint--card::before {
+  content: "";
+  width: calc(7px * var(--ui-scale));
+  height: calc(7px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--accent);
+}
+
+.section-body > .empty-hint,
+#solidChangesPanel > .empty-hint,
+.sidebar-list-cluster > .empty-hint,
+.empty-hint--card {
+  max-width: calc(420px * var(--ui-scale));
+}
+
+.section-body > .empty-hint,
+#solidChangesPanel > .empty-hint {
+  gap: calc(4px * var(--ui-scale));
+  width: 100%;
+  max-width: none;
+  padding: calc(6px * var(--ui-scale));
+  border: 0;
+  border-radius: var(--oc-radius-control);
+}
+
+.diff-preview-empty .empty-hint,
+.file-view-empty .empty-hint {
+  justify-items: center;
+  text-align: center;
+}

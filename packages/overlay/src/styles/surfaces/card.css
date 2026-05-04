@@ -382,7 +382,7 @@ body {
   white-space: pre-wrap;
   line-height: 1.45;
   word-break: break-word;
-  border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage) 35%, transparent);
+  border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--card-stage-info)) 35%, transparent);
   padding-left: calc(8px * var(--ui-scale));
 }
 
@@ -1153,7 +1153,7 @@ body {
   border-radius: var(--card-radius);
   background: var(--surface-inset);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 28%, var(--card-border));
-  border-left: 3px solid var(--card-stage);
+  border-left: calc(3px * var(--ui-scale, 1)) solid var(--card-stage, var(--card-stage-info));
   padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x);
   margin: var(--card-gap) 0;
   font-size: var(--card-title-size);
