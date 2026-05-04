@@ -6,12 +6,13 @@
 // (workflow / requirements / architect / criteria / deliveries). Closing the
 // overlay clears the hash and returns to Gateway.
 
-import { Show, createEffect, onCleanup, createSignal } from "solid-js";
+import { Show, createEffect, createSignal } from "solid-js";
 import { Board } from "./Board";
 import { Conversation } from "./Conversation";
 import { selectTask } from "../services/task";
 import { messageStore } from "../store/messages";
 import { t } from "../utils/i18n";
+import { useHotkey } from "../solid/hotkey";
 
 export interface TaskDetailOverlayProps {
   /** Task ID extracted from the route hash. Empty / undefined → hidden. */
@@ -49,11 +50,7 @@ export function TaskDetailOverlay(props: TaskDetailOverlayProps) {
     loadActiveTask(id);
   });
 
-  function onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") props.onClose();
-  }
-  window.addEventListener("keydown", onKey);
-  onCleanup(() => window.removeEventListener("keydown", onKey));
+  useHotkey({ key: "Escape", target: "window", run: () => props.onClose() });
 
   return (
     <div class="task-overlay" role="dialog" aria-modal="true">

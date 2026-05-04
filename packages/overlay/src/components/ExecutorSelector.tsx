@@ -14,6 +14,7 @@
 // with onCleanup so HMR / unmount disposes them cleanly.
 
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { useHotkey } from "../solid/hotkey";
 import { appStore } from "../store/app";
 import { settingsStore, setSettingsStore, saveSettings, sanitizeExecutor } from "../store/settings";
 import { Icon } from "./Icon";
@@ -95,17 +96,11 @@ export function ExecutorSelector() {
     if (rootRef && target && rootRef.contains(target)) return;
     menu.close();
   };
-  const onKey = (event: KeyboardEvent) => {
-    if (event.key === "Escape" && menu.open()) menu.close();
-  };
   if (typeof document !== "undefined") {
     document.addEventListener("click", onDocClick, { capture: true });
-    document.addEventListener("keydown", onKey);
-    onCleanup(() => {
-      document.removeEventListener("click", onDocClick, { capture: true });
-      document.removeEventListener("keydown", onKey);
-    });
+    onCleanup(() => document.removeEventListener("click", onDocClick, { capture: true }));
   }
+  useHotkey({ key: "Escape", when: () => menu.open(), run: () => menu.close() })
 
   function pickExecutor(id: string) {
     if (!executorSelectable(id)) return;
