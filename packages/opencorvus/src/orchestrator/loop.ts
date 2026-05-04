@@ -194,6 +194,20 @@ async function runTaskLoopInner(input: {
     return
   }
 
+  // Capture the git baseline before the orchestrator's first decision touches
+  // the worktree. EngineGit.prepare is idempotent (early-returns when baseline
+  // already exists), so wakes after the first one are no-ops. Without this
+  // call, task.metadata.git.baseline.commit stays unset for the task's whole
+  // lifetime; the publisher's workspace_export adapter then throws on every
+  // delivery attempt and the orchestrator loops on the rework signal.
+  {
+    const { EngineGit } = await import("@/engine/git")
+    const result = await EngineGit.prepare(task)
+    if (result.error) {
+      log.warn("EngineGit.prepare failed", { taskID, error: result.error })
+    }
+  }
+
   log.info("decision point", { taskID, note: event?.note })
 
   try {
