@@ -2176,20 +2176,25 @@ describe("overlay architecture guards", () => {
   })
 
   test("panel shell padding is canonical, not theme scoped", () => {
+    // Canonical extracted to surfaces/workspace.css 2026-05-04.
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    const workspace = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
+    )
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1] ?? ""
-      const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
-      if (!isThemeSelector || !/(?:^|[\s>+~,])\.panel(?:$|[\s:{.#\[,>+~])/.test(selector)) continue
-
-      expect(body).not.toMatch(/\bpadding(?:-[a-z]+)?\s*:/)
+    for (const source of [styles, workspace]) {
+      for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = match[1] ?? ""
+        const body = match[2] ?? ""
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
+          selector,
+        )
+        if (!isThemeSelector || !/(?:^|[\s>+~,])\.panel(?:$|[\s:{.#\[,>+~])/.test(selector)) continue
+        expect(body).not.toMatch(/\bpadding(?:-[a-z]+)?\s*:/)
+      }
     }
 
-    const body = soloRuleBody(styles, ".panel")
+    const body = soloRuleBody(workspace, ".panel")
     expect(body).toContain("padding: 0")
   })
 
@@ -2849,9 +2854,12 @@ describe("overlay architecture guards", () => {
     const inspectorSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")),
     )
+    const conversationSurface = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
+    )
     for (const [selector, source] of [
       [".sidebar", sidebarSurface],
-      [".chat", styles],
+      [".chat", conversationSurface],
       [".sections", inspectorSurface],
     ] as const) {
       const body = soloRuleBody(source, selector)
@@ -3040,11 +3048,10 @@ describe("overlay architecture guards", () => {
   })
 
   test("chat task-switch progress overlays the header instead of creating a hidden gap", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
     const conversationSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
     )
-    const chatBody = soloRuleBody(styles, ".chat")
+    const chatBody = soloRuleBody(conversationSurface, ".chat")
     const progressBody = soloRuleBody(conversationSurface, ".task-switch-progress")
 
     expect(chatBody).toContain("position: relative")

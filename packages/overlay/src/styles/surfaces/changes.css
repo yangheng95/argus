@@ -305,3 +305,16 @@
   background: var(--accent-dim);
   border-color: color-mix(in srgb, var(--accent) 14%, transparent);
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Changes list chunk visibility toggle (extracted 2026-05-04).
+   ───────────────────────────────────────────────────────────── */
+
+.changes-list-chunk[data-active="false"] {
+  display: none;
+}
+.changes-list-chunk[data-active="true"] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}

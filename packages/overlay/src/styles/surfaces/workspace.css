@@ -451,3 +451,51 @@ body[data-resizing="true"] * {
   outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--bad) 60%, transparent);
   outline-offset: calc(1px * var(--ui-scale));
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Workspace shell layout (.panel / .panel-body / .sections /
+   .config-dialog-layout / #solidFrontendPreviewMount)
+   The outer flex chain that fills the viewport between the
+   titlebar and the chat composer.
+   ───────────────────────────────────────────────────────────── */
+
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+}
+
+.panel-body {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+  padding: 0;
+}
+
+.sections,
+.config-dialog-layout {
+  --section-stack-gap: calc(6px * var(--ui-scale));
+  --section-field-gap: calc(4px * var(--ui-scale));
+  --section-row-gap: calc(6px * var(--ui-scale));
+  --section-control-height: calc(34px * var(--ui-scale));
+  --section-badge-height: calc(20px * var(--ui-scale));
+  --section-corner: var(--radius);
+  --section-head-padding-y: calc(6px * var(--ui-scale));
+  --section-head-padding-x: calc(12px * var(--ui-scale));
+  --section-body-padding-x: calc(12px * var(--ui-scale));
+  --section-body-padding-y: calc(10px * var(--ui-scale));
+  --section-input-padding-y: calc(7px * var(--ui-scale));
+  --section-input-padding-x: calc(11px * var(--ui-scale));
+}
+
+#solidFrontendPreviewMount {
+  height: 100%;
+  min-height: 0;
+}
