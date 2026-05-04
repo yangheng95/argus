@@ -1664,7 +1664,7 @@
   min-width: 0;
   color: var(--text-strong);
   font-size: var(--ui-font-title);
-  font-weight: 700;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

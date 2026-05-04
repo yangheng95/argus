@@ -29,17 +29,16 @@
 
 /* Section card stack: scrollable body that holds inspector cards. The
    scrollbar is hidden because the panel uses a reflow-based scroll
-   indicator instead of a visual gutter. The 4px gap + 4px padding
-   below fold the late override that lived at the styles.css tail
-   (canonical was 14/10-8-14 — late wins, surface declares the
-   rendered values). */
+   indicator instead of a visual gutter. Stack gap + outer padding
+   share `--ui-gap-sm` (6px) so the space above the first card matches
+   the gap between siblings — the right-rail's single spacing rhythm. */
 .sections-stack {
   display: flex;
   flex: 1 1 0;
   min-height: 0;
   flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale));
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-sm);
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -192,7 +191,7 @@
 .section-title {
   flex: 1;
   font-size: var(--ui-font-body);
-  font-weight: 650;
+  font-weight: 500;
   color: var(--text-strong);
   letter-spacing: 0.03em;
   text-transform: none;
@@ -286,7 +285,7 @@
 }
 
 .section-body {
-  padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  padding: 0 var(--ui-gap-sm) var(--ui-gap-sm);
 }
 
 .section-head::before {
@@ -323,8 +322,8 @@
 .section-head {
   display: flex;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-sm);
   border: none;
   border-radius: inherit;
   cursor: pointer;
@@ -765,7 +764,7 @@
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
   font-size: var(--ui-font-tiny);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
   padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
@@ -1653,7 +1652,7 @@
 .integrity__section-title {
   margin: 0;
   font-size: var(--ui-font-small);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-strong);
   letter-spacing: 0.02em;
 }
@@ -1836,7 +1835,7 @@
 
 /* Missing-coverage row sub-text. */
 .integrity__missing-title {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-strong);
 }
 
@@ -1936,7 +1935,7 @@
   min-width: 0;
   color: var(--text-strong);
   font-size: var(--ui-font-control);
-  font-weight: 700;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2320,7 +2319,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .goal-desc-inline {
   flex-shrink: 0;
   font-size: var(--ui-font-control);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-strong);
   letter-spacing: 0.02em;
 }
