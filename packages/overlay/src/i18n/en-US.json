@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "a9d3c73de2245c55"
+    "panel_revision": "c20a6ef1fb327138"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -626,6 +626,13 @@
   "task.action.retry_title": "Re-run with the existing plan.",
   "task.cancel_button_title": "Cancel this running task (click twice to confirm).",
   "task.delete_button_title": "Delete this task and its full history (click twice to confirm).",
+  "task.export_button_title": "Download a zip archive of this task and its project files.",
+  "task.export_failed": "Export failed: {error}",
+  "task.import_button": "Import…",
+  "task.import_button_title": "Import a task archive (.zip) into the current project.",
+  "task.import_done": "Imported {restored} file(s) into the current project (skipped {skipped}).",
+  "task.import_failed": "Import failed: {error}",
+  "task.import_no_directory": "Open or pick a project directory first.",
   "task.reorder_button_title": "Drag to reorder queued tasks.",
   "task.group.active": "Active",
   "task.group.recent": "Recent",
