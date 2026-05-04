@@ -83,27 +83,39 @@ describe("flat-redesign Icon primitive registry", () => {
 })
 
 describe("flat-redesign character-icon callsites are gone", () => {
-  // Excluded files: see jsdoc above. These are out-of-scope for Step 3
-  // and are tracked in plan §3 Step 6 (dead-code cleanup).
+  // Excluded files: in-text status indicators (✓ ✗ ⧉) that aren't
+  // icons in the structural sense — they're inline glyphs in copy.
   const EXCLUDED = new Set([
-    join(COMPONENTS_ROOT, "TracePanel.tsx"), // intentional inline ✓ ✗ ⧉
-    join(COMPONENTS_ROOT, "EvaluationCriteriaPanel.tsx"), // ditto
+    join(COMPONENTS_ROOT, "TracePanel.tsx"),
+    join(COMPONENTS_ROOT, "EvaluationCriteriaPanel.tsx"),
   ])
 
-  // Patterns we forbid in component .tsx files.
-  // Each entry is `[label, regex]`. Regex must match a JSX literal,
-  // not a comment or string in i18n message bodies (none of these
-  // characters appear in the active i18n catalog as labels).
+  // Patterns we forbid across .tsx components and main.tsx. Each
+  // entry is `[label, regex]`. Regex must match a JSX literal or an
+  // innerHTML template-string literal — both shapes counted as
+  // character-icon escapes.
   const FORBIDDEN: Array<[string, RegExp]> = [
     ["close-X JSX literal", />\s*×\s*<\/button>/],
+    ["close-X innerHTML literal", />×<\/button>/],
     ["folder emoji", /📁/],
     ["caret-down literal in JSX", />▾</],
     ["chevron literal in JSX", />▸</],
   ]
 
+  function gatherSources(): string[] {
+    return [
+      ...listTsx(COMPONENTS_ROOT, EXCLUDED),
+      // Step 7 (2026-05-04): main.tsx is now in scope — its innerHTML
+      // template-string for the recent-dirs panel close button was
+      // migrated from `>×</button>` to inline SVG matching the Icon
+      // primitive contract.
+      join(import.meta.dir, "..", "src", "main.tsx"),
+    ]
+  }
+
   for (const [label, re] of FORBIDDEN) {
-    test(`no ${label} in components/`, () => {
-      const files = listTsx(COMPONENTS_ROOT, EXCLUDED)
+    test(`no ${label} across components/ + main.tsx`, () => {
+      const files = gatherSources()
       const violations: string[] = []
       for (const file of files) {
         const text = readFileSync(file, "utf8")
@@ -114,7 +126,10 @@ describe("flat-redesign character-icon callsites are gone", () => {
       if (violations.length > 0) {
         throw new Error(
           `${label} regressed in:\n  ${violations.join("\n  ")}\n` +
-            `Use <Icon name="..." /> from components/Icon.tsx instead.`,
+            `Use <Icon name="..." /> from components/Icon.tsx, or — for ` +
+            `innerHTML template flows — an inline SVG matching the Icon ` +
+            `primitive contract (viewBox 16, stroke=currentColor, stroke-` +
+            `width 1.4, line-cap/join round).`,
         )
       }
     })
@@ -124,5 +139,39 @@ describe("flat-redesign character-icon callsites are gone", () => {
     const board = readFileSync(join(COMPONENTS_ROOT, "Board.tsx"), "utf8")
     expect(board).not.toMatch(/const SECTION_ICONS\s*[:=]/)
     expect(board).not.toMatch(/innerHTML=\{[^}]*SECTION_ICONS/)
+  })
+
+  test("retired body-scope alias tokens have no consumers", () => {
+    // Step 7 (2026-05-04): `--ok / --warning / --danger / --text-dim`
+    // aliases retired from design-language.css. Verified zero callsites
+    // before deletion; this guard keeps it that way.
+    const RETIRED = ["--ok", "--warning", "--danger", "--text-dim"]
+    const stylesRoot = join(import.meta.dir, "..", "src", "styles")
+    const allCss: string[] = []
+    function walk(dir: string) {
+      for (const name of readdirSync(dir)) {
+        const full = join(dir, name)
+        if (statSync(full).isDirectory()) walk(full)
+        else if (name.endsWith(".css")) allCss.push(full)
+      }
+    }
+    walk(stylesRoot)
+    const violations: string[] = []
+    for (const file of allCss) {
+      const text = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
+      for (const token of RETIRED) {
+        const consumerRe = new RegExp(`var\\(${token.replace(/-/g, "\\-")}\\)`)
+        if (consumerRe.test(text)) {
+          violations.push(`${file}: still references var(${token})`)
+        }
+        const declRe = new RegExp(`(?:^|[\\s;{])${token.replace(/-/g, "\\-")}\\s*:`)
+        if (declRe.test(text)) {
+          violations.push(`${file}: still declares ${token}`)
+        }
+      }
+    }
+    if (violations.length > 0) {
+      throw new Error(`retired body-scope aliases still in use:\n  ${violations.join("\n  ")}`)
+    }
   })
 })

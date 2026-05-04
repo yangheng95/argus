@@ -177,17 +177,13 @@ body {
   --diff-add-row-bg: color-mix(in srgb, var(--good) 9%, transparent);
   --diff-del-row-bg: color-mix(in srgb, var(--bad) 10%, transparent);
 
-  /* Status aliases — the legacy code used --ok/--warning/--danger/
-   * --text-dim alongside --good/--warn/--bad/--text-muted. Body-
-   * scope wiring lets each theme block declare only the canonical
-   * palette tokens (--good/--warn/--bad/--text-muted) once, with
-   * the aliases resolved per-theme through this indirection. */
-  --ok: var(--good);
-  --warning: var(--warn);
-  --danger: var(--bad);
-  --text-dim: var(--text-muted);
-
-  /* Theme-architecture Step 0 (2026-05-04): the body-scope patches
+  /* Step 7 (2026-05-04): the legacy `--ok / --warning / --danger /
+   * --text-dim` body-scope aliases were retired here — zero
+   * consumers across the codebase (verified by full grep). They were
+   * single-redirect aliases for `--good / --warn / --bad /
+   * --text-muted`; consumers reference the canonical tokens directly.
+   *
+   * Theme-architecture Step 0 (2026-05-04): the body-scope patches
    * for `--accent-shadow`, `--accent-glow`, `--guide-card-border`,
    * `--guide-card-bg`, `--guide-card-shadow` were retired (rule 8 —
    * no double source). Each theme file
