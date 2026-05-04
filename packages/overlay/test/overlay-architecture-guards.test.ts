@@ -2373,8 +2373,8 @@ describe("overlay architecture guards", () => {
       'content: ""',
       "position: absolute",
       "inset: 0",
-      "z-index: -1",
-      "opacity: 0.18",
+      "z-index: var(--ui-z-below)",
+      "opacity: var(--ui-opacity-faint)",
       "background-size: calc(26px * var(--ui-scale)) calc(26px * var(--ui-scale))",
       // The atmospheric mask uses `var(--text-strong)` instead of the
       // literal `#000` — palette token follows whichever theme's text

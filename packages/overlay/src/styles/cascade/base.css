@@ -23,7 +23,7 @@
 :root {
   color-scheme: dark;
   --ui-scale: 1;
-  --ui-window-opacity: 1;
+  --ui-window-opacity: var(--ui-opacity-full);
 
   --text-on-accent: #ffffff;
   --session-scrollbar-size: calc(12px * var(--ui-scale));
@@ -98,7 +98,7 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  transition: background 120ms ease;
+  transition: background var(--ui-duration-base) var(--ui-timing-standard);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -181,6 +181,6 @@ a {
     animation: none;
     transform: translateX(0);
     background: var(--accent);
-    opacity: 0.4;
+    opacity: var(--ui-opacity-faint);
   }
 }

@@ -35,7 +35,46 @@
   --oc-density-icon-button: calc(24px * var(--ui-scale, 1));
   --oc-density-chip-height: calc(20px * var(--ui-scale, 1));
   --oc-border-width: 1px;
-  --oc-disabled-opacity: 0.55;
+
+  /* Motion scale — 3 duration tokens, 1 timing token. Step 8a (2026-05-04).
+   * fast = hover/press feedback; base = default state transitions
+   * (color/background/border/opacity); slow = visible layout/transform
+   * shifts (width/translate). timing is always `ease` — no cubic-bezier
+   * noise. Any value outside this set is rejected by
+   * `flat-redesign-motion-coverage.test.ts`. */
+  --ui-duration-fast: 80ms;
+  --ui-duration-base: 120ms;
+  --ui-duration-slow: 200ms;
+  --ui-timing-standard: ease;
+
+  /* Elevation scale — 9 z-index tokens. Step 8a (2026-05-04).
+   * Named by stacking *role*, not numeric magnitude. Elements in the
+   * same role should not visually overlap; only cross-role layering
+   * uses z-index. Any literal z-index is rejected by
+   * `flat-redesign-elevation-coverage.test.ts`. */
+  --ui-z-below: -1;
+  --ui-z-base: 0;
+  --ui-z-decoration: 1;
+  --ui-z-raised: 2;
+  --ui-z-sticky: 10;
+  --ui-z-overlay: 100;
+  --ui-z-titlebar: 9000;
+  --ui-z-dialog: 10000;
+  --ui-z-toast: 12000;
+
+  /* Opacity scale — 6 semantic tokens. Step 8a (2026-05-04).
+   * Named by the element's *presence* relative to its parent, not
+   * numeric value. The legacy `--oc-disabled-opacity: 0.55` was
+   * renamed to `--ui-opacity-disabled` (rule 8 single source — no
+   * backward alias). Any literal opacity outside { 0, 1 } that isn't
+   * routed through these tokens is rejected by
+   * `flat-redesign-opacity-coverage.test.ts`. */
+  --ui-opacity-hidden: 0;
+  --ui-opacity-faint: 0.4;
+  --ui-opacity-disabled: 0.55;
+  --ui-opacity-dim: 0.7;
+  --ui-opacity-subtle: 0.85;
+  --ui-opacity-full: 1;
 
   --oc-header-height: calc(40px * var(--ui-scale, 1));
   --oc-header-padding-x: calc(7px * var(--ui-scale, 1));

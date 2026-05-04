@@ -112,7 +112,7 @@ body {
   box-shadow: none;
   overflow: hidden;
   transform: none;
-  transition: background-color 140ms ease, border-color 140ms ease;
+  transition: background-color var(--ui-duration-base) var(--ui-timing-standard), border-color var(--ui-duration-base) var(--ui-timing-standard);
   box-sizing: border-box;
   /* Chat / coding containers are flex-column; keep cards at their natural
      content height instead of being shrunk to fit. */
@@ -205,7 +205,7 @@ body {
   border-radius: 0;
   margin: calc(6px * var(--ui-scale, 1)) 0;
   background: transparent;
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 .card:not([data-depth="0"]):hover {
   background: transparent;
@@ -213,7 +213,7 @@ body {
 .card[data-depth="2"] { border-left-color: var(--card-line); }
 .card[data-depth="3"] { border-left-color: var(--card-line-dim); }
 .card[data-depth="4"],
-.card[data-depth="5"] { border-left-color: var(--card-line-dim); opacity: 0.9; }
+.card[data-depth="5"] { border-left-color: var(--card-line-dim); opacity: var(--ui-opacity-subtle); }
 
 /* ── Header ──────────────────────────────────────────────── */
 
@@ -307,7 +307,7 @@ body {
 
 .card__icon {
   font-size: calc(var(--card-title-size) + calc(1px * var(--ui-scale)));
-  opacity: 0.9;
+  opacity: var(--ui-opacity-subtle);
   flex: none;
   line-height: 1;
 }
@@ -389,7 +389,7 @@ body {
   flex: none;
   font-size: calc(10px * var(--ui-scale));
   color: var(--text-muted);
-  transition: transform 140ms ease;
+  transition: transform var(--ui-duration-base) var(--ui-timing-standard);
   padding-left: calc(2px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
 }
@@ -431,7 +431,7 @@ body {
     color-mix(in srgb, var(--text) 75%, transparent)
   );
   border-radius: inherit;
-  transition: width 200ms ease;
+  transition: width var(--ui-duration-slow) var(--ui-timing-standard);
 }
 
 .card__todo-count {
@@ -439,7 +439,7 @@ body {
   font-size: calc(var(--card-sub-size) - calc(1px * var(--ui-scale)));
   border-radius: var(--oc-radius-soft);
   letter-spacing: 0;
-  opacity: 0.85;
+  opacity: var(--ui-opacity-subtle);
 }
 
 .card__todo-current {
@@ -499,7 +499,7 @@ body {
 .card__stat-icon {
   font-size: calc(var(--card-sub-size) - calc(1px * var(--ui-scale)));
   line-height: 1;
-  opacity: 0.9;
+  opacity: var(--ui-opacity-subtle);
 }
 
 .card__stat-value {
@@ -521,12 +521,12 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--oc-radius-soft);
-  opacity: 0.52;
-  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+  opacity: var(--ui-opacity-disabled);
+  transition: opacity var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard);
 }
 .card__head:hover .card__copy,
 .card__copy:focus-visible {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 .card__copy:hover {
   color: var(--text-strong);
@@ -534,7 +534,7 @@ body {
 }
 .card__copy--done {
   color: var(--good);
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 .card__copy + .card__chevron {
   margin-left: 0;
@@ -553,21 +553,21 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--oc-radius-soft);
-  opacity: 0.52;
+  opacity: var(--ui-opacity-disabled);
   font-size: calc(14px * var(--ui-scale));
   line-height: 1;
-  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+  transition: opacity var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard);
 }
 .card__head:hover .card__rewind,
 .card__rewind:focus-visible {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 .card__rewind:hover {
   color: var(--warn);
   background: var(--surface-hover);
 }
 .card__rewind--pending {
-  opacity: 0.5;
+  opacity: var(--ui-opacity-disabled);
   pointer-events: none;
 }
 .card__rewind + .card__chevron {
@@ -779,7 +779,7 @@ body {
   line-height: 1.3;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: color 120ms ease;
+  transition: color var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .card__collapse-toggle::before,
@@ -817,7 +817,7 @@ body {
   color: color-mix(in srgb, var(--card-stage) 72%, var(--text-muted));
   background: color-mix(in srgb, var(--card-bg-1) 82%, transparent);
   box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-stage) 12%, var(--card-line-dim));
-  transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  transition: color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard), box-shadow var(--ui-duration-base) var(--ui-timing-standard), transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .card__collapse-toggle:hover .card__collapse-toggle-icon,
@@ -836,7 +836,7 @@ body {
   flex: none;
   color: var(--text-soft);
   font-weight: var(--ui-font-weight-medium);
-  transition: color 120ms ease;
+  transition: color var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .card__collapse-toggle:hover .card__collapse-toggle-label,
@@ -944,7 +944,7 @@ body {
 }
 .card-boundary-time {
   font-variant-numeric: tabular-nums;
-  opacity: 0.7;
+  opacity: var(--ui-opacity-dim);
 }
 
 /* ── Message bubble variant (kind=message, role=user/system) ── */
@@ -1043,13 +1043,13 @@ body {
   border-radius: var(--oc-radius-soft);
   letter-spacing: 0;
   color: var(--text-soft);
-  opacity: 0.42;
+  opacity: var(--ui-opacity-faint);
   white-space: nowrap;
   user-select: none;
   flex-shrink: 0;
 }
 .card__head:hover .card__token-hint {
-  opacity: 0.72;
+  opacity: var(--ui-opacity-dim);
 }
 
 /* card__usage-hint — sibling of card__token-hint that surfaces actual LLM
@@ -1067,17 +1067,17 @@ body {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   color: var(--text-soft);
-  opacity: 0.55;
+  opacity: var(--ui-opacity-disabled);
   white-space: nowrap;
   user-select: none;
   flex-shrink: 0;
 }
 .card__head:hover .card__usage-hint {
-  opacity: 0.85;
+  opacity: var(--ui-opacity-subtle);
 }
 .card__usage-cost {
   color: var(--accent);
-  opacity: 0.85;
+  opacity: var(--ui-opacity-subtle);
 }
 
 /* card__duration — running-or-finished elapsed time chip, rendered inline
@@ -1090,12 +1090,12 @@ body {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   color: var(--text-muted);
-  opacity: 0.65;
+  opacity: var(--ui-opacity-dim);
   white-space: nowrap;
   user-select: none;
 }
 .card__head:hover .card__duration {
-  opacity: 0.85;
+  opacity: var(--ui-opacity-subtle);
 }
 
 /* card__error-reason — clickable button-styled chip on cards that flipped
@@ -1120,7 +1120,7 @@ body {
   text-overflow: ellipsis;
   user-select: text;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background var(--ui-duration-base), color var(--ui-duration-base), border-color var(--ui-duration-base);
 }
 .card__error-reason:hover {
   background: color-mix(in srgb, var(--bad) 28%, transparent);
@@ -1292,8 +1292,8 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--oc-radius-soft);
-  opacity: 0.52;
-  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+  opacity: var(--ui-opacity-disabled);
+  transition: opacity var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard);
 }
 .card__head:hover .card__trace,
 .card__head:hover .card__agent-cancel,
@@ -1302,7 +1302,7 @@ body {
 .card__agent-cancel:focus-visible,
 .card__agent-reply-toggle:focus-visible,
 .card__trace--open {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 .card__trace:hover {
   color: var(--accent);
@@ -1314,12 +1314,12 @@ body {
 }
 .card__agent-cancel:disabled {
   cursor: default;
-  opacity: 0.5;
+  opacity: var(--ui-opacity-disabled);
 }
 .card__trace--open {
   color: var(--accent);
   background: var(--surface-hover);
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 .card__trace + .card__chevron,
 .card__agent-cancel + .card__chevron {
@@ -1375,7 +1375,7 @@ body {
 
 .card__agent-reply-send:disabled {
   cursor: default;
-  opacity: 0.58;
+  opacity: var(--ui-opacity-disabled);
 }
 
 /* Reply send-failure chip — sits above the action row so the operator's
@@ -1465,7 +1465,7 @@ body {
   background: var(--surface-hover);
 }
 .trace-panel-copy[disabled] {
-  opacity: 0.4;
+  opacity: var(--ui-opacity-faint);
   cursor: not-allowed;
 }
 .trace-panel-copy[data-state="ok"] {
@@ -1570,7 +1570,7 @@ body {
 .task-progress {
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: var(--ui-z-sticky);
   margin: 0 0 var(--card-gap) 0;
   padding: calc(8px * var(--ui-scale, 1)) calc(10px * var(--ui-scale, 1));
   background: color-mix(in srgb, var(--card-bg-1) 92%, var(--bg));
@@ -1618,7 +1618,7 @@ body {
     color-mix(in srgb, var(--good) 80%, transparent),
     color-mix(in srgb, var(--good) 100%, transparent)
   );
-  transition: width 200ms ease;
+  transition: width var(--ui-duration-slow) var(--ui-timing-standard);
 }
 .task-progress__bar-fail {
   position: absolute;
@@ -1648,7 +1648,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition: background-color var(--ui-duration-base) var(--ui-timing-standard), border-color var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard);
 }
 .task-progress__pill:hover {
   background: var(--card-bg-hover);
@@ -1693,7 +1693,7 @@ body {
   color: color-mix(in srgb, var(--warn) 75%, var(--text-strong));
 }
 .task-progress__pill[data-state="pending"] {
-  opacity: 0.7;
+  opacity: var(--ui-opacity-dim);
 }
 
 @keyframes task-progress-pulse {

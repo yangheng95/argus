@@ -152,5 +152,5 @@
 .oc-button:disabled,
 .oc-button[aria-disabled="true"] {
   cursor: default;
-  opacity: var(--oc-disabled-opacity);
+  opacity: var(--ui-opacity-disabled);
 }

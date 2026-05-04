@@ -153,7 +153,7 @@
   color: var(--text-muted);
   pointer-events: none;
   overflow: hidden;
-  opacity: 0.85;
+  opacity: var(--ui-opacity-subtle);
 }
 
 .chat-placeholder-text {
@@ -187,9 +187,9 @@
   text-transform: none;
   box-shadow: none;
   transition:
-    background 120ms,
-    opacity 120ms,
-    box-shadow 120ms;
+    background var(--ui-duration-base),
+    opacity var(--ui-duration-base),
+    box-shadow var(--ui-duration-base);
 }
 
 .chat-send:hover {
@@ -197,7 +197,7 @@
 }
 
 .chat-send:disabled {
-  opacity: 0.4;
+  opacity: var(--ui-opacity-faint);
   cursor: default;
 }
 
@@ -335,7 +335,7 @@
 }
 
 .chat-version-sep {
-  opacity: 0.45;
+  opacity: var(--ui-opacity-faint);
 }
 
 .chat-version-link {
@@ -344,15 +344,15 @@
   color: inherit;
   text-decoration: none;
   transition:
-    color 120ms ease,
-    opacity 120ms ease;
-  opacity: 0.82;
+    color var(--ui-duration-base) var(--ui-timing-standard),
+    opacity var(--ui-duration-base) var(--ui-timing-standard);
+  opacity: var(--ui-opacity-subtle);
   white-space: nowrap;
 }
 
 .chat-version-link:hover {
   color: var(--text-soft);
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 
 .chat-compose-tip {
@@ -434,7 +434,7 @@
   background: var(--accent);
   border-radius: 50%;
   transform: translateY(-0.05em);
-  opacity: 0.6;
+  opacity: var(--ui-opacity-disabled);
 }
 
 /* Composer icon column: the small attach / web-search / expand stack on
@@ -458,7 +458,7 @@
    otherwise the buttons look clickable but the operator thinks the
    composer is broken. data-disabled flips pointer-events + opacity. */
 .chat-icon-col[data-disabled="true"] {
-  opacity: 0.4;
+  opacity: var(--ui-opacity-faint);
   pointer-events: none;
 }
 
@@ -527,7 +527,7 @@
   box-shadow:
     0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) color-mix(in srgb, black 32%, transparent),
     0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, black 18%, transparent);
-  z-index: 9999;
+  z-index: var(--ui-z-titlebar);
   scrollbar-width: thin;
   scrollbar-color: var(--subtle-5) transparent;
 }
@@ -564,8 +564,8 @@
   font-weight: var(--ui-font-weight-strong);
   cursor: pointer;
   transition:
-    background 80ms,
-    color 80ms;
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
 }
 
 .executor-menu-row:hover:not(:disabled) {
@@ -575,7 +575,7 @@
 
 .executor-menu-row:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: var(--ui-opacity-faint);
 }
 
 .executor-menu-group[data-active="true"] > .executor-menu-row {
@@ -617,8 +617,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   transition:
-    background 80ms,
-    color 80ms;
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
 }
 
 .executor-menu-model:hover {
@@ -688,8 +688,8 @@ body[data-theme="light"] .executor-menu-model:hover {
   cursor: pointer;
   white-space: nowrap;
   transition:
-    background 100ms,
-    color 100ms;
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
 }
 
 .executor-chip:hover {
@@ -710,7 +710,7 @@ body[data-theme="light"] .executor-menu-model:hover {
 /* G = Global/orchestrator slot; E = Executor slot prefix */
 .executor-chip-sep {
   color: var(--text-muted);
-  opacity: 0.55;
+  opacity: var(--ui-opacity-disabled);
   font-size: calc(var(--ui-font-meta) * 0.85);
   font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0.05em;
@@ -719,7 +719,7 @@ body[data-theme="light"] .executor-menu-model:hover {
 
 .executor-chip-arrow {
   color: var(--text-muted);
-  opacity: 0.55;
+  opacity: var(--ui-opacity-disabled);
   font-size: calc(var(--ui-font-meta) * 0.9);
   padding: 0 calc(1px * var(--ui-scale));
 }
@@ -738,7 +738,7 @@ body[data-theme="light"] .executor-menu-model:hover {
 
 .executor-chip-model[data-empty="true"] {
   font-style: italic;
-  opacity: 0.62;
+  opacity: var(--ui-opacity-disabled);
   font-variant-numeric: normal;
 }
 
@@ -751,7 +751,7 @@ body[data-theme="light"] .executor-menu-model:hover {
   border-radius: var(--oc-radius-pill);
   background: var(--accent);
   vertical-align: middle;
-  opacity: 0.6;
+  opacity: var(--ui-opacity-disabled);
 }
 
 .executor-chip-caret {
@@ -778,7 +778,7 @@ body[data-theme="light"] .executor-menu-model:hover {
   border-left: calc(3px * var(--ui-scale)) solid var(--accent);
   border-radius: var(--oc-radius-large);
   background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 
 .chat-empty--task[data-status="queued"] {

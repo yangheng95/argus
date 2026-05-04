@@ -1,7 +1,7 @@
 .dialog {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--ui-z-overlay);
   border: none;
   background: transparent;
   padding: 0;
@@ -12,7 +12,7 @@
 }
 
 #appDialog {
-  z-index: 200;
+  z-index: var(--ui-z-overlay);
 }
 
 /* Single canonical for `.dialog::backdrop`: the legacy God CSS
