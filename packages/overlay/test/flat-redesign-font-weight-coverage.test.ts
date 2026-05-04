@@ -1,20 +1,25 @@
 /**
- * Coverage guard for flat-redesign Step 1 / Step 5 (specs/overlay-flat-redesign/plan.md).
+ * Coverage guard for flat-redesign Step 5 (specs/overlay-flat-redesign/plan.md §八 v3).
  *
  * Asserts that every `font-weight:` declaration under
- * `packages/overlay/src/styles/**\/*.css` references one of the two canonical
- * weight tokens (`--ui-font-weight-body` / `--ui-font-weight-strong`) or a
- * narrow whitelist of literals that the design-language token file owns.
+ * `packages/overlay/src/styles/**\/*.css` references one of the three canonical
+ * weight tokens (`--ui-font-weight-body` / `-medium` / `-strong`) or a narrow
+ * whitelist of CSS keyword values. Literal numbers (`600`, `700`, `bold`,
+ * `650`, etc.) are rejected — the migration on 2026-05-04 retired all 178
+ * such callsites by routing through the 3-token scale.
  *
- * The whole point of the 2-token scale is to stop the 700/650/600/500/bold
- * mix from regrowing. The guard scans CSS files only — TSX inline styles
- * use the same tokens via CSS custom properties.
+ * Mapping that drove the migration:
+ *   400         → --ui-font-weight-body
+ *   500         → --ui-font-weight-medium
+ *   600/620/650/680 → --ui-font-weight-strong
+ *   700/720/760/780 / "bold" → --ui-font-weight-strong (heaviest weights
+ *                                                     down-tiered to fix
+ *                                                     "通篇粗体" complaint)
  *
- * NOTE: Step 1 only adds the token + this guard. Step 5 will replace every
- * literal `font-weight: <number>` callsite with `var(--ui-font-weight-…)`.
- * Until Step 5 lands, this guard runs in REPORT-ONLY mode, returning a
- * count and the count is allowed to be > 0. Step 5 flips the assertion to
- * strict equality with 0.
+ * Also enforces zero consumers of the retired thin alias tokens
+ * (`--title-weight`, `--subhead-weight`, `--title-track`, `--subhead-track`,
+ * `--title-size`, `--subhead-size`) — they were single-redirect aliases that
+ * added no value and violated rule 8.
  */
 
 import { describe, expect, test } from "bun:test"
@@ -26,6 +31,7 @@ const TOKEN_FILE = join(STYLES_ROOT, "tokens", "design-language.css")
 
 const ALLOWED_VALUES = new Set([
   "var(--ui-font-weight-body)",
+  "var(--ui-font-weight-medium)",
   "var(--ui-font-weight-strong)",
   "inherit",
   "normal",
@@ -42,17 +48,17 @@ function listCss(dir: string): string[] {
 }
 
 describe("flat-redesign font-weight token coverage", () => {
-  test("design-language.css declares the 2 canonical font-weight tokens", () => {
+  test("design-language.css declares the 3 canonical font-weight tokens", () => {
     const text = readFileSync(TOKEN_FILE, "utf8")
     expect(text).toMatch(/^\s*--ui-font-weight-body\s*:/m)
+    expect(text).toMatch(/^\s*--ui-font-weight-medium\s*:/m)
     expect(text).toMatch(/^\s*--ui-font-weight-strong\s*:/m)
   })
 
-  test("[Step 5] no font-weight literal — flips strict after Step 5 lands", () => {
+  test("zero font-weight literals outside the token file (Step 5 strict)", () => {
     const files = listCss(STYLES_ROOT)
     const violations: string[] = []
     for (const file of files) {
-      // The token file itself is the one place literal numbers may appear.
       if (file === TOKEN_FILE) continue
       const content = readFileSync(file, "utf8")
       const stripped = content.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -66,11 +72,42 @@ describe("flat-redesign font-weight token coverage", () => {
       }
     }
 
-    // Step 1 records the baseline count so Step 5 has a target to drive to 0.
-    // The number is the audit count from `feedback_overlay_typography` work
-    // on 2026-05-04 (177 occurrences across 20 files). Keep this value in
-    // sync with the migration progress; final value MUST be 0.
-    const STEP_1_BASELINE = 177
-    expect(violations.length).toBeLessThanOrEqual(STEP_1_BASELINE)
+    if (violations.length > 0) {
+      throw new Error(
+        `font-weight callsites must use --ui-font-weight-{body,medium,strong} or inherit/normal:\n  ${violations.join("\n  ")}`,
+      )
+    }
+  })
+
+  test("retired thin-alias tokens have no consumers", () => {
+    const RETIRED = [
+      "--title-weight",
+      "--subhead-weight",
+      "--title-track",
+      "--subhead-track",
+      "--title-size",
+      "--subhead-size",
+    ]
+    const files = listCss(STYLES_ROOT)
+    const violations: string[] = []
+    for (const file of files) {
+      const content = readFileSync(file, "utf8")
+      const stripped = content.replace(/\/\*[\s\S]*?\*\//g, "")
+      for (const token of RETIRED) {
+        const consumerRe = new RegExp(
+          `var\\(${token.replace(/-/g, "\\-")}\\)`,
+        )
+        if (consumerRe.test(stripped)) {
+          violations.push(`${file}: still references ${token}`)
+        }
+        const declRe = new RegExp(`(?:^|\\s)${token.replace(/-/g, "\\-")}\\s*:`)
+        if (declRe.test(stripped)) {
+          violations.push(`${file}: still declares ${token}`)
+        }
+      }
+    }
+    if (violations.length > 0) {
+      throw new Error(`retired aliases still in use:\n  ${violations.join("\n  ")}`)
+    }
   })
 })

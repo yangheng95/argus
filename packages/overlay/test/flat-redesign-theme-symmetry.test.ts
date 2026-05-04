@@ -147,10 +147,6 @@ describe("theme-architecture Step 0 — structural tokens are not in theme block
     "--ui-chat-min-width",
     "--ui-capsule-height",
     "--ui-resizer-width",
-    "--title-weight",
-    "--title-track",
-    "--subhead-weight",
-    "--subhead-track",
   ]
 
   for (const token of STRUCTURAL_TOKENS) {

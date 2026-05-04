@@ -12,10 +12,23 @@
   --oc-radius-large: calc(10px * var(--ui-scale, 1));
   --oc-radius-pill: 999px;
 
-  /* Font-weight scale — 2 tokens, single source. The 700 / 650 / bold and
-   * stray literal weights are rejected by
-   * `font-weight-token-coverage.test.ts`. */
+  /* Font-weight scale — 3 tokens, single source.
+   *
+   * Step 5 v3 (2026-05-04): the 2-token plan (body / strong) was
+   * extended to 3 (body / medium / strong) when the migration audit
+   * found ~16 callsites that had a meaningful subtle-emphasis weight
+   * (5xx tier) — folding them into body would lose the visual
+   * hierarchy on meta labels and soft section headings, while folding
+   * them into strong would re-create the "通篇粗体" complaint the
+   * scale was meant to solve. Three tokens land the Pareto cut.
+   *
+   * Mapping: 400 → body, 500 → medium, 600/620/650/680 → strong,
+   * 700/720/760/780/bold → strong (down-tier the heaviest weights so
+   * the overlay reads calm, not shouty). Anything else (literal
+   * numbers, `bold` keyword) is rejected by
+   * `flat-redesign-font-weight-coverage.test.ts`. */
   --ui-font-weight-body: 400;
+  --ui-font-weight-medium: 500;
   --ui-font-weight-strong: 600;
 
   --oc-density-control-height: calc(24px * var(--ui-scale, 1));
@@ -54,10 +67,11 @@
   --font: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
   --mono: "Cascadia Code", "JetBrains Mono", ui-monospace, monospace;
 
-  --title-weight: var(--ui-font-weight-strong);
-  --title-track: 0;
-  --subhead-weight: var(--ui-font-weight-strong);
-  --subhead-track: 0;
+  /* `--title-weight / --title-track / --subhead-weight / --subhead-track`
+   * thin aliases were retired 2026-05-04 (Step 5 v3) — they redirected
+   * to canonical tokens with no extra value (rule 8 single source).
+   * Consumers now reference `--ui-font-weight-strong` and `0`/literal
+   * tracking directly. */
 
   --ui-font-display: calc(12px * var(--ui-scale));
   --ui-font-heading: calc(12px * var(--ui-scale));

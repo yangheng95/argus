@@ -22,7 +22,7 @@
   margin: 0;
   font-size: var(--ui-font-body);
   color: var(--text-strong);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0.01em;
   line-height: 1.2;
 }
@@ -47,7 +47,7 @@
 .board-intro__section-title {
   margin: 0;
   font-size: var(--ui-font-meta);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   color: var(--text-muted);
   line-height: 1.1;
   letter-spacing: 0;
@@ -87,7 +87,7 @@
 
 .board-intro__mode-label,
 .board-intro__agent-name {
-  font-weight: 500;
+  font-weight: var(--ui-font-weight-medium);
   color: var(--text-strong);
   font-size: var(--ui-font-control);
   line-height: 1.2;
@@ -157,7 +157,7 @@
 }
 
 .board-intro__cta-title {
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   font-size: var(--ui-font-control);
   color: var(--text-strong);
   line-height: 1.2;
@@ -177,7 +177,7 @@
   padding: 0 calc(10px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   font-size: var(--ui-font-control);
-  font-weight: 650;
+  font-weight: var(--ui-font-weight-strong);
   cursor: pointer;
 }
 

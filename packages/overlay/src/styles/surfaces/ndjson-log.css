@@ -61,7 +61,7 @@
 
 .ndjson-stage {
   font-size: var(--ui-font-control);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   padding: 0 calc(4px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   background: var(--subtle-2);
@@ -70,7 +70,7 @@
 .ndjson-tool {
   font-size: var(--ui-font-control);
   font-family: var(--mono);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
 }
 
 .ndjson-summary {
@@ -85,7 +85,7 @@
 
 .ndjson-status {
   font-size: var(--ui-font-meta);
-  font-weight: 700;
+  font-weight: var(--ui-font-weight-strong);
   padding: calc(1px * var(--ui-scale)) calc(5px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
 }
@@ -107,7 +107,7 @@
 
 .ndjson-badge {
   font-size: var(--ui-font-small);
-  font-weight: 700;
+  font-weight: var(--ui-font-weight-strong);
   padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   text-transform: uppercase;
@@ -139,7 +139,7 @@
   padding: calc(8px * var(--ui-scale)) calc(4px * var(--ui-scale)) calc(4px * var(--ui-scale));
   border-top: var(--oc-border-width) solid var(--border);
   margin-top: calc(8px * var(--ui-scale));
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }

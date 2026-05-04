@@ -198,7 +198,7 @@
   position: relative;
   color: var(--text-soft);
   font-size: var(--ui-font-control);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
 }
 
 .chat-header-meta #btnChatCopyAll::before {
@@ -346,7 +346,7 @@
   max-width: 28ch;
   color: var(--text-soft);
   font-size: var(--ui-font-body);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   text-align: center;
   line-height: 1.5;
 }
@@ -385,7 +385,7 @@
 .chat-empty-title {
   color: var(--text-strong);
   font-size: var(--ui-font-heading);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -540,7 +540,7 @@
 }
 
 .vcs-badge-branch {
-  font-weight: 500;
+  font-weight: var(--ui-font-weight-medium);
   max-width: calc(160px * var(--ui-scale));
   overflow: hidden;
   text-overflow: ellipsis;
@@ -677,7 +677,7 @@
 
 .task-dir-editor {
   font-size: calc(10px * var(--ui-scale));
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0;
 }
 
@@ -704,7 +704,7 @@
   border-radius: var(--oc-radius-soft);
   color: var(--text-strong);
   font-size: var(--ui-font-control);
-  font-weight: 500;
+  font-weight: var(--ui-font-weight-medium);
   white-space: nowrap;
   transition:
     background 100ms,
@@ -831,7 +831,7 @@ body[data-theme="vscode-dark"] .task-bar {
 
 .status-label {
   font-size: var(--ui-font-small);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -869,7 +869,7 @@ body[data-theme="vscode-dark"] .task-bar {
   background: color-mix(in srgb, var(--surface-inset) 80%, transparent);
   color: var(--text-soft);
   font-size: var(--ui-font-meta);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0.03em;
   cursor: pointer;
   user-select: none;
@@ -939,7 +939,7 @@ body[data-theme="vscode-dark"] .task-bar {
 .recent-dir-panel-title {
   min-width: 0;
   font-size: var(--ui-font-control);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
   letter-spacing: 0.02em;
 }
@@ -1036,7 +1036,7 @@ body[data-theme="vscode-dark"] .task-bar {
   min-width: 0;
   color: var(--text-strong);
   font-size: var(--ui-font-body);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;

@@ -59,7 +59,7 @@
 
 .dialog-title {
   font-size: clamp(calc(18px * var(--ui-scale)), calc(19px * var(--ui-scale)), calc(22px * var(--ui-scale)));
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
   letter-spacing: 0.01em;
   line-height: 1.2;
@@ -68,7 +68,7 @@
 
 .dialog-subtitle {
   font-size: var(--ui-font-meta);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
   margin-top: var(--ui-gap-xs);
 }
