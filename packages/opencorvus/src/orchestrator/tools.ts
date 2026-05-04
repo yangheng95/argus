@@ -62,8 +62,51 @@ import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan } from "./scheduler"
 import { OrchestratorEventNote } from "./agent"
 import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
+import {
+  architectFidelityIssues,
+  AssemblyOwnerEntrySchema,
+  filterGoalFidelityState,
+  ReferenceCoverageEntrySchema,
+  SourceCoverageEntrySchema,
+  type ArchitectFidelityState,
+} from "@/architect/fidelity"
 
 const log = Log.create({ service: "task-tools" })
+
+const PersistedArchitectFidelitySchema = z.object({
+  sourceCoverage: z.array(SourceCoverageEntrySchema).default([]),
+  referenceCoverage: z.array(ReferenceCoverageEntrySchema).default([]),
+  assemblyOwners: z.array(AssemblyOwnerEntrySchema).default([]),
+})
+
+function readPersistedArchitectFidelity(task: TaskRow): ArchitectFidelityState {
+  const metadata =
+    task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+      ? task.metadata as Record<string, unknown>
+      : {}
+  const raw = metadata.architect_fidelity
+  const parsed = PersistedArchitectFidelitySchema.safeParse(raw)
+  if (parsed.success) return parsed.data
+  return {
+    sourceCoverage: [],
+    referenceCoverage: [],
+    assemblyOwners: [],
+  }
+}
+
+export function validatePersistedArchitectFidelity(input: {
+  task: TaskRow
+  goals: Array<{ id: string; owned_paths?: string[] }>
+  workDir?: string
+}) {
+  return architectFidelityIssues({
+    goals: input.goals.map((goal) => ({ id: goal.id, owned_paths: goal.owned_paths ?? [] })),
+    fidelity: readPersistedArchitectFidelity(input.task),
+    designSpecs: Array.isArray(input.task.design_specs) ? input.task.design_specs as any : undefined,
+    workDir: input.workDir ?? Instance.directory,
+    requireReferenceCoverage: (Array.isArray(input.task.design_specs) ? input.task.design_specs.length : 0) > 0,
+  })
+}
 
 export async function composeLatestDeliveryFeedbackForBuild(input: {
   taskID: string
@@ -1359,6 +1402,16 @@ export function createOrchestratorTools(input: {
           const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
           const goalLines = result.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
           const traceLines = result.traceability.map((t) => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`)
+          const sourceCoverageLines = result.fidelity.sourceCoverage.map((row) =>
+            `- **${row.id}** [${row.action}] paths=${row.paths.join(", ")} goals=${row.goal_ids.join(", ")} — ${row.rationale}`,
+          )
+          const referenceCoverageLines = result.fidelity.referenceCoverage.map((row) => {
+            const specIDs = row.visual_spec_ids.length > 0 ? ` visual_specs=${row.visual_spec_ids.join(", ")}` : ""
+            return `- **${row.id}** surface=${row.surface} goals=${row.goal_ids.join(", ")}${specIDs} — ${row.expectation}`
+          })
+          const assemblyOwnerLines = result.fidelity.assemblyOwners.map((row) =>
+            `- surface=${row.surface} owner=${row.goal_id} — ${row.rationale}`,
+          )
           const contractLines = result.contracts.map((c) => `- **${c.category}** — ${c.title} (goals: ${c.goalIDs.join(", ") || "task-wide"})`)
           const specContent = [
             `# ${task.title}`,
@@ -1376,6 +1429,15 @@ export function createOrchestratorTools(input: {
             "",
             "## Traceability",
             ...(traceLines.length > 0 ? traceLines : ["_(none)_"]),
+            "",
+            "## Source Coverage",
+            ...(sourceCoverageLines.length > 0 ? sourceCoverageLines : ["_(none)_"]),
+            "",
+            "## Reference Coverage",
+            ...(referenceCoverageLines.length > 0 ? referenceCoverageLines : ["_(none)_"]),
+            "",
+            "## Assembly Ownership",
+            ...(assemblyOwnerLines.length > 0 ? assemblyOwnerLines : ["_(none)_"]),
             "",
             "## Architect Contracts",
             ...(contractLines.length > 0 ? contractLines : ["_(none)_"]),
@@ -1429,6 +1491,25 @@ export function createOrchestratorTools(input: {
             llmToDBID = out.llmToDBID
             deletedIDs = out.deletedIDs
 
+            const mappedArchitectFidelity = {
+              sourceCoverage: result.fidelity.sourceCoverage.map((row) => ({
+                ...row,
+                goal_ids: row.goal_ids.map((goalID) => llmToDBID.get(goalID) ?? goalID),
+              })),
+              referenceCoverage: result.fidelity.referenceCoverage.map((row) => ({
+                ...row,
+                goal_ids: row.goal_ids.map((goalID) => llmToDBID.get(goalID) ?? goalID),
+              })),
+              assemblyOwners: result.fidelity.assemblyOwners.map((row) => ({
+                ...row,
+                goal_id: llmToDBID.get(row.goal_id) ?? row.goal_id,
+              })),
+            }
+            const taskMetadata =
+              task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+                ? task.metadata as Record<string, unknown>
+                : {}
+
             persistArchitectMetrics({
               task_id: taskID,
               goal_id_map: llmToDBID,
@@ -1439,6 +1520,10 @@ export function createOrchestratorTools(input: {
             db.update(EngineTaskTable)
               .set({
                 architect_challenge_seeds: result.challengeSeeds as unknown as Record<string, unknown>[],
+                metadata: {
+                  ...taskMetadata,
+                  architect_fidelity: mappedArchitectFidelity,
+                },
                 time_updated: now,
               })
               .where(eq(EngineTaskTable.id, taskID))
@@ -4193,6 +4278,17 @@ export function createOrchestratorTools(input: {
                 workspaceBranch: info.branch,
               })
             }
+            const fidelityIssues = validatePersistedArchitectFidelity({
+              task,
+              goals: listGoals(taskID).map((row) => ({
+                id: row.id,
+                owned_paths: Array.isArray(row.owned_paths) ? row.owned_paths as string[] : [],
+              })),
+            })
+            if (fidelityIssues.length > 0) {
+              return `Build dispatch blocked: architect fidelity contract is incomplete.\n${fidelityIssues.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
+            }
+            const taskFidelity = readPersistedArchitectFidelity(task)
             const dependsOn = Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : []
             target = {
               kind: "goal",
@@ -4291,6 +4387,10 @@ export function createOrchestratorTools(input: {
               architectContracts: architectContracts.length > 0 ? architectContracts : undefined,
               dependencies: dependencies.length > 0 ? dependencies : undefined,
               designSpecs,
+              fidelity: filterGoalFidelityState({
+                goalID: goal.id,
+                fidelity: taskFidelity,
+              }),
               retryFeedback,
               deliveryFeedback,
               retryAttachments,

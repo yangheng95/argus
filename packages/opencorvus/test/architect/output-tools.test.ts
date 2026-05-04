@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { mkdirSync, writeFileSync } from "fs"
 import { mkdtempSync } from "fs"
 import { tmpdir } from "os"
 import path from "path"
@@ -110,6 +111,21 @@ async function fillMandatoryGlobalBlockingMetrics(
   }
 }
 
+async function registerAssemblyOwner(
+  tools: ReturnType<typeof createArchitectOutputTools>["tools"],
+  goalID: string = "goal_feature",
+  surface: string = "final-deliverable",
+) {
+  await tools.register_assembly_owner.execute!(
+    {
+      surface,
+      goal_id: goalID,
+      rationale: "One goal must own final stitching for the shared deliverable.",
+    } as any,
+    {} as any,
+  )
+}
+
 function readinessMatchesSubmitPrecondition(
   collector: ReturnType<ReturnType<typeof createArchitectOutputTools>["getCollector"]>,
 ) {
@@ -143,6 +159,7 @@ test("remove_goal cascades to goal metrics, traceability, contracts, challenge s
     } as any,
     {} as any,
   )
+  await registerAssemblyOwner(tools)
   await tools.register_contract.execute!(
     {
       category: "shared_type",
@@ -328,6 +345,7 @@ test("remove_goal followed by submit_architect finalizes — no orphan-metric de
     } as any,
     {} as any,
   )
+  await registerAssemblyOwner(tools)
 
   await tools.remove_goal.execute!(
     { id: "goal_old", reason: "Redundant placeholder; verification covered elsewhere." } as any,
@@ -341,6 +359,120 @@ test("remove_goal followed by submit_architect finalizes — no orphan-metric de
   expect(submit).toMatch(/^PASS: Architect output finalized\./)
   expect(kit.getCollector().finalized).toBe(true)
   expect(kit.getCollector().goal_metric_specs.every((m) => m.goal_id !== "goal_old")).toBe(true)
+})
+
+test("submit_architect rejects missing source coverage for existing owned paths", async () => {
+  const workDir = freshWorkDir()
+  mkdirSync(path.join(workDir, "src"), { recursive: true })
+  writeFileSync(path.join(workDir, "src", "index.ts"), "export const router = true\n")
+
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir })
+  const { tools } = kit
+
+  await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
+  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-1", goal_ids: ["goal_feature", "goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_contract.execute!(
+    {
+      category: "interface_contract",
+      title: "Router",
+      spec: "```ts\nexport type Router = unknown\n```",
+      goal_ids: ["goal_feature", "goal_verify"],
+    } as any,
+    {} as any,
+  )
+  await registerAssemblyOwner(tools)
+
+  const rejected = await tools.submit_architect.execute!(
+    { summary: "Existing source surfaces must be explicitly covered." } as any,
+    {} as any,
+  )
+  expect(rejected).toContain("Missing source coverage for existing owned paths: src/index.ts")
+
+  await tools.register_source_coverage.execute!(
+    {
+      id: "src-router",
+      paths: ["src/index.ts"],
+      goal_ids: ["goal_feature"],
+      action: "modify",
+      rationale: "Feature goal owns the existing router entrypoint change.",
+    } as any,
+    {} as any,
+  )
+
+  const accepted = await tools.submit_architect.execute!(
+    { summary: "Existing source surface is now covered." } as any,
+    {} as any,
+  )
+  expect(accepted).toMatch(/^PASS: Architect output finalized\./)
+})
+
+test("submit_architect rejects missing reference coverage for visual specs", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: freshWorkDir(),
+    designSpecs: [{
+      id: "vis-hero",
+      category: "layout",
+      title: "Hero layout",
+      requirement: "Restore the hero layout exactly.",
+      applies_to: "hero",
+      severity: "must",
+    }],
+    requireReferenceCoverage: true,
+  } as any)
+  const { tools } = kit
+
+  await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
+  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-1", goal_ids: ["goal_feature", "goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_contract.execute!(
+    {
+      category: "interface_contract",
+      title: "Router",
+      spec: "```ts\nexport type Router = unknown\n```",
+      goal_ids: ["goal_feature", "goal_verify"],
+    } as any,
+    {} as any,
+  )
+  await registerAssemblyOwner(tools)
+
+  const rejected = await tools.submit_architect.execute!(
+    { summary: "Reference coverage is mandatory when visual specs exist." } as any,
+    {} as any,
+  )
+  expect(rejected).toContain("Missing reference coverage for visual specs: vis-hero")
+
+  await tools.register_reference_coverage.execute!(
+    {
+      id: "ref-hero",
+      surface: "hero",
+      goal_ids: ["goal_feature"],
+      visual_spec_ids: ["vis-hero"],
+      expectation: "Feature goal must restore the hero section 1:1 from the authoritative reference.",
+    } as any,
+    {} as any,
+  )
+
+  const accepted = await tools.submit_architect.execute!(
+    { summary: "Reference coverage is now complete." } as any,
+    {} as any,
+  )
+  expect(accepted).toMatch(/^PASS: Architect output finalized\./)
 })
 
 test("architect readiness remains identical to submit_architect validation precondition", async () => {
@@ -370,6 +502,7 @@ test("architect readiness remains identical to submit_architect validation preco
     } as any,
     {} as any,
   )
+  await registerAssemblyOwner(tools)
 
   readinessMatchesSubmitPrecondition(complete.getCollector())
   expect(isArchitectReadyToFinalize(complete.getCollector())).toBe(false)
@@ -420,6 +553,7 @@ test("architect finalizes from goals traceability and contracts without metric r
     } as any,
     {} as any,
   )
+  await registerAssemblyOwner(tools)
 
   expect(architectValidationIssues(kit.getCollector())).toEqual([])
   const accepted = await tools.submit_architect.execute!(
@@ -476,6 +610,7 @@ test("architect readiness stays false until every prompt-level finalize invarian
     } as any,
     {} as any,
   )
+  await registerAssemblyOwner(tools)
   readinessMatchesSubmitPrecondition(kit.getCollector())
   expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(true)
 })

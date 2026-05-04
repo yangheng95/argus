@@ -110,7 +110,11 @@ export namespace ArchitectAgent {
       kind: (g.kind as RegisteredGoal["kind"]) ?? "feature",
       requirement_ids: g.requirement_ids,
     }))
-    const outputToolKit = createArchitectOutputTools({ existingGoals: seedGoals })
+    const outputToolKit = createArchitectOutputTools({
+      existingGoals: seedGoals,
+      designSpecs: input.designSpecs,
+      requireReferenceCoverage: (input.designSpecs?.length ?? 0) > 0,
+    })
     const contextTools = await filterAgentTools(createAgentContextTools(), "architect")
 
     log.info("architect agent starting", {
@@ -224,6 +228,9 @@ export namespace ArchitectAgent {
       globalMetrics: collector.global_metric_specs.length,
       challengeSeeds: collector.challenge_seeds.length,
       traceability: collector.traceability.length,
+      sourceCoverage: collector.source_coverage.length,
+      referenceCoverage: collector.reference_coverage.length,
+      assemblyOwners: collector.assembly_owners.length,
       contracts: contracts.length,
     })
 
@@ -234,6 +241,11 @@ export namespace ArchitectAgent {
       globalMetricSpecs: collector.global_metric_specs,
       challengeSeeds: collector.challenge_seeds,
       traceability: collector.traceability,
+      fidelity: {
+        sourceCoverage: collector.source_coverage,
+        referenceCoverage: collector.reference_coverage,
+        assemblyOwners: collector.assembly_owners,
+      },
       contracts,
       summary: collector.summary || "Architect decomposition",
       sessionID: out.session.id,
@@ -265,8 +277,8 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
     sections.push(renderVisualContractPromptSection({
       specs: input.designSpecs,
       instructions: [
-        "The following advisory visual constraints came from design_analysis.",
-        "Use them when decomposing frontend goals, owned paths, interaction work, and integrity coverage.",
+        "The following visual constraints came from design_analysis and are authoritative for the referenced surface.",
+        "Use them when decomposing frontend goals, source/reference coverage, owned paths, interaction work, and integrity coverage.",
       ],
     }))
   }

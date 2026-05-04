@@ -9,6 +9,11 @@
  */
 import type { GoalContractFields } from "@/pipeline/types"
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
+import type {
+  AssemblyOwnerEntry,
+  ReferenceCoverageEntry,
+  SourceCoverageEntry,
+} from "./fidelity"
 
 // ---------------------------------------------------------------------------
 // Architect Decision Log key categories
@@ -97,6 +102,12 @@ export interface TraceabilityEntry {
   goalIDs: string[]
 }
 
+export interface ArchitectFidelityCoverage {
+  sourceCoverage: SourceCoverageEntry[]
+  referenceCoverage: ReferenceCoverageEntry[]
+  assemblyOwners: AssemblyOwnerEntry[]
+}
+
 // ---------------------------------------------------------------------------
 // Re-run inputs — delivery/evaluation feedback that triggers refinement
 // ---------------------------------------------------------------------------
@@ -139,6 +150,7 @@ export interface ArchitectResult {
   globalMetricSpecs: ArchitectGlobalMetricSpec[]
   challengeSeeds: ArchitectChallengeSeed[]
   traceability: TraceabilityEntry[]
+  fidelity: ArchitectFidelityCoverage
   /** Cross-goal interface contracts written to the Decision Log. */
   contracts: ArchitectContract[]
   /** One-line summary of what was decomposed and coordinated. */
