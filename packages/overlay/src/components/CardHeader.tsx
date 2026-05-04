@@ -4,7 +4,6 @@ import {
   collectCardText,
   collectLatestActivityText,
   collectTodoSummary,
-  collectActivityCounts,
   type CardNode,
 } from "../utils/card-tree";
 import { statusBadge } from "../utils/status-badge";
@@ -150,11 +149,6 @@ export function CardHeader(props: {
     if (!s || s.total === 0) return 0;
     return Math.round((s.completed / s.total) * 100);
   };
-  const activityCounts = () => (collapsedActive() ? collectActivityCounts(props.node) : null);
-  const hasAnyActivity = () => {
-    const a = activityCounts();
-    return !!a && (a.messages + a.tools + a.agents + a.skills) > 0;
-  };
   // Drives `card__head--with-meta` (flex-start vs center). Only true when
   // we render a row BELOW the title row — subtitle is inline, so it does
   // not count toward "needs vertical alignment to top".
@@ -254,6 +248,22 @@ export function CardHeader(props: {
             <span class="card__round card__round--lead">{stepRevisionLabel()}</span>
           </Show>
           <span class="card__title">{t(props.node.title)}</span>
+          <Show when={(() => {
+            const start = props.node.time;
+            const end = props.node.timeCompleted;
+            if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+            return (end as number) > (start as number);
+          })()}>
+            <span
+              class="card__duration"
+              title={t("card.duration_tooltip", {
+                value: formatDuration((props.node.timeCompleted as number) - props.node.time),
+              })}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {formatDuration((props.node.timeCompleted as number) - props.node.time)}
+            </span>
+          </Show>
           <Show when={props.node.subtitle}>
             <span class="card__subtitle" title={props.node.subtitle}>{props.node.subtitle}</span>
           </Show>
@@ -278,42 +288,6 @@ export function CardHeader(props: {
             </button>
           </Show>
           <span class="card__title-spacer" aria-hidden="true" />
-          <Show when={hasAnyActivity()}>
-            {(_) => {
-              const c = () => activityCounts()!;
-              return (
-                <div
-                  class="card__activity-stats"
-                  title={`messages ${c().messages} · tools ${c().tools} · agents ${c().agents} · skills ${c().skills}`}
-                >
-                  <Show when={c().messages > 0}>
-                    <span class="card__stat" data-kind="messages" title={`${c().messages} messages`}>
-                      <span class="card__stat-icon" aria-hidden="true">{"💬"}</span>
-                      <span class="card__stat-value">{c().messages}</span>
-                    </span>
-                  </Show>
-                  <Show when={c().tools > 0}>
-                    <span class="card__stat" data-kind="tools" title={`${c().tools} tool calls`}>
-                      <span class="card__stat-icon" aria-hidden="true">{"🛠"}</span>
-                      <span class="card__stat-value">{c().tools}</span>
-                    </span>
-                  </Show>
-                  <Show when={c().agents > 0}>
-                    <span class="card__stat" data-kind="agents" title={`${c().agents} agent spawns`}>
-                      <span class="card__stat-icon" aria-hidden="true">{"🤖"}</span>
-                      <span class="card__stat-value">{c().agents}</span>
-                    </span>
-                  </Show>
-                  <Show when={c().skills > 0}>
-                    <span class="card__stat" data-kind="skills" title={`${c().skills} skill invocations`}>
-                      <span class="card__stat-icon" aria-hidden="true">{"🎯"}</span>
-                      <span class="card__stat-value">{c().skills}</span>
-                    </span>
-                  </Show>
-                </div>
-              );
-            }}
-          </Show>
         </div>
         <Show when={collapsedPreview()}>
           <div class="card__preview-row">
@@ -405,22 +379,6 @@ export function CardHeader(props: {
               </span>
             );
           }}
-        </Show>
-        <Show when={(() => {
-          const start = props.node.time;
-          const end = props.node.timeCompleted;
-          if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
-          return (end as number) > (start as number);
-        })()}>
-          <span
-            class="card__duration"
-            title={t("card.duration_tooltip", {
-              value: formatDuration((props.node.timeCompleted as number) - props.node.time),
-            })}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {formatDuration((props.node.timeCompleted as number) - props.node.time)}
-          </span>
         </Show>
         <Show when={canCopy()}>
           <button
