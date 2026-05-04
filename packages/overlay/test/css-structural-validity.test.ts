@@ -71,8 +71,11 @@ describe("CSS structural validity", () => {
   const cssRoot = join(OVERLAY_ROOT, "src")
   const files = walkCss(cssRoot)
 
-  test("walk found at least the legacy God CSS and one surface", () => {
-    expect(files.some((path) => path.endsWith("styles.css"))).toBe(true)
+  test("walk found cascade plumbing and at least one surface", () => {
+    // styles.css was deleted 2026-05-04. The cascade layer
+    // (src/styles/cascade/{base,typography,dark,vscode-dark,light}.css)
+    // is its successor; assert we picked up at least one cascade file.
+    expect(files.some((path) => path.includes("cascade"))).toBe(true)
     expect(files.some((path) => path.includes("surfaces"))).toBe(true)
   })
 
