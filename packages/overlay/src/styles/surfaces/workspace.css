@@ -334,3 +334,78 @@ code .file-link {
 code .file-link:hover {
   text-decoration: underline;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Extracted from styles.css 2026-05-04: workspace shell flex
+   layout, pane resizer, body row/col resize cursor pinning.
+   ───────────────────────────────────────────────────────────── */
+
+.workspace-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.pane-resizer {
+  position: relative;
+  flex: 0 0 var(--ui-resizer-width);
+  min-width: var(--ui-resizer-width);
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.pane-resizer::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  top: calc(8px * var(--ui-scale));
+  bottom: calc(8px * var(--ui-scale));
+  left: 50%;
+  width: var(--oc-border-width);
+  transform: translateX(-50%);
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--border) 42%, transparent);
+  transition:
+    background 80ms ease,
+    box-shadow 80ms ease,
+    width 80ms ease;
+}
+
+.pane-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-5px * var(--ui-scale));
+  right: calc(-5px * var(--ui-scale));
+  cursor: col-resize;
+}
+
+.pane-resizer:hover::before,
+.pane-resizer[data-active="true"]::before {
+  background: var(--accent);
+  width: calc(2px * var(--ui-scale));
+  box-shadow: none;
+}
+
+body[data-resizing="row"] {
+  cursor: row-resize;
+  user-select: none;
+}
+body[data-resizing="row"] * {
+  cursor: row-resize !important;
+}
+
+body[data-resizing="true"] {
+  cursor: col-resize;
+  user-select: none;
+}
+body[data-resizing="true"] * {
+  cursor: col-resize !important;
+}
