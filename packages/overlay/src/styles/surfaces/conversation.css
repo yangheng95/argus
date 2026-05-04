@@ -322,21 +322,21 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: calc(12px * var(--ui-scale));
+  gap: calc(16px * var(--ui-scale));
   align-items: center;
   justify-content: center;
-  width: min(100%, calc(360px * var(--ui-scale)));
-  min-height: calc(150px * var(--ui-scale));
+  width: min(100%, calc(420px * var(--ui-scale)));
+  min-height: calc(200px * var(--ui-scale));
   margin: auto;
-  padding: 0;
+  padding: calc(24px * var(--ui-scale)) calc(16px * var(--ui-scale));
   color: var(--text-soft);
   text-align: center;
   opacity: var(--ui-opacity-subtle);
 }
 
 .chat-empty-icon {
-  width: calc(34px * var(--ui-scale));
-  height: calc(34px * var(--ui-scale));
+  width: calc(44px * var(--ui-scale));
+  height: calc(44px * var(--ui-scale));
   flex-shrink: 0;
   color: var(--accent);
   opacity: var(--ui-opacity-subtle);
@@ -344,11 +344,11 @@
 
 .chat-empty-text {
   max-width: 28ch;
-  color: var(--text-soft);
-  font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  font-size: var(--ui-font-heading);
+  font-weight: var(--ui-font-weight-medium);
   text-align: center;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .chat-follow-label {

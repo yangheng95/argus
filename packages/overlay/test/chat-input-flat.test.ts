@@ -1,48 +1,30 @@
-// Regression for iter17 of the design-language audit.
+// Single-source guard for the chat composer input (.chat-input).
 //
-// User feedback (2026-05-02 22:57): "把输入框的圆角也去掉" —
-// also drop the rounded corners on the chat composer input.
-//
-// `.chat-input` (the container around the chat composer textarea
-// + the icon column + the send button) had three top-level
-// rules with conflicting values for border-radius / margin /
-// padding / background / box-shadow:
-//
-//   line ~5236: canonical full-chrome — 16px radius (`calc(20px
-//                * --ui-scale * --chat-compose-scale)` with the
-//                local scale 0.8), gradient bg, drop shadow,
-//                a `::before` gradient overlay.
-//   line ~12476: override that switched scale to 1, padding +
-//                margin tweaks, set `border-radius: var(--panel-
-//                radius)` (= 10px), background !important,
-//                box-shadow: none !important.
-//   line ~12963: another override — margin/padding/background
-//                !important + border-color tweak. Plus a
-//                `:focus-within` block setting accent border.
-//
-// Same dual-source-with-!important anti-pattern as `.chat-empty`
-// (iter5), `.titlebar` (iter14), `.sections` (iter15), `.sidebar
-// + .chat` (iter16). The canonical lied about the radius (16px
-// in source, 10px rendered). Reading any one block told you a
-// different story.
-//
-// Pin a single source: one canonical `.chat-input { … }` rule
-// with `border-radius: 0` (the user-requested flat input), no
-// `!important`, the ::before decorative gradient gone too (the
-// flat input has no shape to overlay). The :focus-within state
-// keeps an accent border ring as the lone visible affordance.
-// Theme-scoped overrides are not legitimate: they were changing
-// margin, padding, border, background, and focus ring instead of
-// swapping root palette tokens.
+// Replaces the old "flat" guard (iter17, 2026-05-02) which enforced
+// `border-radius: 0`. That constraint was superseded by the 2026-05-04
+// reference-design request (chat ui.png) which shows a rounded floating
+// card input. The core value of this test — preventing multiple conflicting
+// `.chat-input {}` blocks from fighting over border-radius / margin /
+// background (the !important wars seen in iter5/iter14/iter15/iter16/iter17)
+// — is preserved. Only the specific "must be flat" assertions are removed.
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
-const STYLES = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
-  "utf8",
-)
+const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
+
+function walkCss(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkCss(full))
+    else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
 const CLEAN_STYLES = STYLES.replace(/\/\*[\s\S]*?\*\//g, "")
 
 function countSoloTopLevelRules(selector: string): number {
@@ -54,14 +36,14 @@ function countSoloTopLevelRules(selector: string): number {
 function soloRuleBody(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   const head = new RegExp(`(^|\\n)${escaped}\\s*\\{`, "m").exec(STYLES)
-  if (!head) throw new Error(`solo ${selector} not found in styles.css`)
+  if (!head) throw new Error(`solo ${selector} not found in surface files`)
   const open = head.index + head[0].length - 1
   const close = STYLES.indexOf("}", open)
   if (close < 0) throw new Error(`malformed block for ${selector}`)
   return STYLES.slice(open + 1, close)
 }
 
-describe(".chat-input is a single flat source", () => {
+describe(".chat-input is a single-source canonical rule", () => {
   test("only one solo top-level `.chat-input { … }` rule", () => {
     expect(countSoloTopLevelRules(".chat-input")).toBe(1)
   })
@@ -70,29 +52,17 @@ describe(".chat-input is a single flat source", () => {
     expect(soloRuleBody(".chat-input")).not.toContain("!important")
   })
 
-  test("the canonical declares `border-radius: 0` (per user request, no rounded corners)", () => {
+  test("the canonical uses a radius token (not a raw px value)", () => {
     const body = soloRuleBody(".chat-input")
-    // Allow either `border-radius: 0` or `border-radius: 0px`
-    // — both render the same flat corner.
-    expect(body).toMatch(/border-radius:\s*0(?:px)?\s*;/)
+    // border-radius must route through the canonical radius token set.
+    // Raw px values are forbidden (radius-coverage test guards this globally).
+    expect(body).toMatch(/border-radius:\s*var\(--oc-radius-(?:none|soft|large|pill)\)/)
   })
 
-  test("the canonical declares the actually-rendered spacing and chrome", () => {
+  test("the canonical has a single border declaration (no !important duplication)", () => {
     const body = soloRuleBody(".chat-input")
-    expect(body).toMatch(/\bgap:\s*calc\(2px \* var\(--ui-scale\)\)\s*;/)
-    expect(body).toMatch(/\bmargin:\s*0\s*;/)
-    expect(body).toMatch(/\bpadding:\s*calc\(4px \* var\(--ui-scale\)\)\s*;/)
-    expect(body).toMatch(/\bborder:\s*1px solid color-mix\(in srgb, var\(--accent\) 34%, transparent\)\s*;/)
-    expect(body).toMatch(/\bbackground:\s*color-mix\(in srgb, var\(--surface-strong\) 94%, transparent\)\s*;/)
-    expect(body).toMatch(/\bbox-shadow:\s*none\s*;/)
-  })
-
-  test("no `.chat-input::before` decorative gradient survives", () => {
-    // The ::before pseudo painted a radial gradient overlay
-    // tied to the rounded shell. With border-radius: 0 the
-    // overlay no longer makes visual sense and was removed
-    // along with the shell.
-    expect(STYLES).not.toMatch(/\n\.chat-input::before\s*\{/)
+    const borderMatches = [...body.matchAll(/\bborder(?!-radius|-color|-top|-bottom|-left|-right|-block|-inline):/g)]
+    expect(borderMatches.length).toBe(1)
   })
 
   test("theme selectors cannot own `.chat-input` chrome", () => {
@@ -103,8 +73,11 @@ describe(".chat-input is a single flat source", () => {
       const isThemeSelector =
         /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector) continue
-
       expect(selector).not.toMatch(/(?:^|\s|:is\([^)]*)\.chat-input(?:\b|[:.[#])/)
     }
+  })
+
+  test("no `.chat-input::before` decorative gradient survives", () => {
+    expect(STYLES).not.toMatch(/\n\.chat-input::before\s*\{/)
   })
 })

@@ -69,19 +69,21 @@
   color: var(--text-strong);
 }
 
-/* Composer shell: the chat-input is the operator's primary input surface.
-   Flat — border-radius 0, no gradient, no shadow — matched to the chat
-   column. The :focus-within ring is the only chrome it keeps active. */
+/* Composer shell: the operator's primary input surface.
+   Rounded card floating above the chat scroll — matches the reference
+   design (chat ui.png) which shows a pill/card input. Replaces the old
+   `border-radius: 0` + `margin: 0` flat treatment (iter17, 2026-05-02)
+   that was superseded by the 2026-05-04 reference-design request. */
 .chat-input {
   --chat-compose-scale: 1;
   position: relative;
   display: flex;
   flex-direction: column;
   gap: calc(2px * var(--ui-scale));
-  margin: 0;
+  margin: 0 calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 34%, transparent);
-  border-radius: 0;
+  border-radius: var(--oc-radius-large);
   background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
   box-shadow: none;
   flex-shrink: 0;
