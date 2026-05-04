@@ -20,6 +20,7 @@
 
 import { Index, Show, createMemo, createResource, createSignal, onCleanup } from "solid-js";
 import { fetchSessionTrace, fetchTaskTrace, invalidateTraceCache, type TraceEvent, type TraceFetchResult } from "../services/trace";
+import { Panel } from "./primitives/Panel";
 import { Icon } from "./Icon";
 
 type TracePanelProps =
@@ -261,37 +262,41 @@ export function TracePanel(props: TracePanelProps) {
   });
 
   return (
-    <div class="trace-panel">
-      <div class="trace-panel-head">
-        <span class="trace-panel-title">{titleText()}</span>
-        <span class="trace-panel-actions">
-          <button
-            type="button"
-            class="trace-panel-copy"
-            onClick={copyTrace}
-            disabled={!hasTarget() || (events().length === 0 && !data())}
-            data-state={copyState()}
-            title={
-              copyState() === "ok"
-                ? "Copied"
-                : copyState() === "err"
-                ? "Copy failed (clipboard blocked)"
-                : "Copy trace as JSON"
-            }
-            aria-label="Copy trace as JSON"
-          >
-            {copyState() === "ok" ? "✓" : copyState() === "err" ? "✗" : "⧉"}
-          </button>
-          <button type="button" class="trace-panel-refresh" onClick={refresh} title="Refresh">
-            ↻
-          </button>
-          <Show when={props.onClose}>
-            <button type="button" class="trace-panel-close" onClick={() => props.onClose?.()} title="Close">
-              ✕
+    <Panel
+      class="trace-panel"
+      header={
+        <>
+          <span class="trace-panel-title">{titleText()}</span>
+          <span class="trace-panel-actions">
+            <button
+              type="button"
+              class="trace-panel-copy"
+              onClick={copyTrace}
+              disabled={!hasTarget() || (events().length === 0 && !data())}
+              data-state={copyState()}
+              title={
+                copyState() === "ok"
+                  ? "Copied"
+                  : copyState() === "err"
+                  ? "Copy failed (clipboard blocked)"
+                  : "Copy trace as JSON"
+              }
+              aria-label="Copy trace as JSON"
+            >
+              {copyState() === "ok" ? "✓" : copyState() === "err" ? "✗" : "⧉"}
             </button>
-          </Show>
-        </span>
-      </div>
+            <button type="button" class="trace-panel-refresh" onClick={refresh} title="Refresh">
+              ↻
+            </button>
+            <Show when={props.onClose}>
+              <button type="button" class="trace-panel-close" onClick={() => props.onClose?.()} title="Close">
+                ✕
+              </button>
+            </Show>
+          </span>
+        </>
+      }
+    >
       <Show when={!hasTarget()}>
         <div class="trace-panel-empty">
           Select a task on the left to stream its agent trace here.
@@ -335,6 +340,6 @@ export function TracePanel(props: TracePanelProps) {
           </Index>
         </div>
       </Show>
-    </div>
+    </Panel>
   );
 }

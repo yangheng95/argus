@@ -1421,15 +1421,13 @@ body {
   background: var(--surface-inset);
   font-size: calc(12px * var(--ui-scale));
   color: var(--text);
-  display: flex;
-  flex-direction: column;
+  /* display:flex flex-direction:column removed — oc-panel provides those */
   max-height: calc(480px * var(--ui-scale));
   overflow: hidden;
   box-shadow: none;
 }
-.trace-panel-head {
-  display: flex;
-  align-items: center;
+/* trace-panel-head replaced by oc-panel__header override */
+.trace-panel > .oc-panel__header {
   justify-content: space-between;
   gap: calc(8px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
@@ -1487,7 +1485,7 @@ body {
   border-radius: var(--oc-radius-soft);
 }
 .trace-panel-body {
-  overflow-y: auto;
+  /* overflow-y:auto removed — oc-panel__body handles that */
   padding: calc(4px * var(--ui-scale)) 0;
 }
 

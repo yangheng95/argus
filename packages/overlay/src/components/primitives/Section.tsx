@@ -23,8 +23,16 @@ export interface SectionProps {
   icon?: JSX.Element;
   /** Open on first render. Default: false. */
   defaultOpen?: boolean;
-  /** Trailing badge content (verdict pill, count chip, etc.). */
+  /** Trailing badge content (text or JSX rendered inside .oc-section__badge). */
   badge?: JSX.Element;
+  /** data-tone applied to .oc-section__badge (drives tone styling). */
+  badgeTone?: string;
+  /** id applied to .oc-section__badge (for DOM accessors). */
+  badgeId?: string;
+  /** data-variant applied to .oc-section__badge ("status" | "metric"). */
+  badgeVariant?: string;
+  /** id applied to .oc-section__body — used by DOM accessors like syncSectionPhases. */
+  bodyId?: string;
   /** id forwarded to the <details> root — used by DOM accessors. */
   id?: string;
   /** Ref forwarded to the <details> element. */
@@ -33,12 +41,16 @@ export interface SectionProps {
   class?: string;
   /** data-* attributes forwarded to root. */
   [key: `data-${string}`]: string | boolean | undefined;
+  /** attr:* attributes forwarded to root (e.g. attr:data-phase-state). */
+  [key: `attr:${string}`]: string | undefined;
   children: JSX.Element;
 }
 
 export function Section(rawProps: SectionProps) {
   const [local, rest] = splitProps(rawProps, [
-    "title", "icon", "defaultOpen", "badge", "id", "ref", "class", "children",
+    "title", "icon", "defaultOpen",
+    "badge", "badgeTone", "badgeId", "badgeVariant",
+    "bodyId", "id", "ref", "class", "children",
   ]);
 
   return (
@@ -54,11 +66,18 @@ export function Section(rawProps: SectionProps) {
           <span class="oc-section__icon" aria-hidden="true">{local.icon}</span>
         </Show>
         <span class="oc-section__title">{local.title}</span>
-        <Show when={local.badge}>
-          <span class="oc-section__badge">{local.badge}</span>
+        <Show when={local.badge !== undefined && local.badge !== null && local.badge !== ""}>
+          <span
+            class="oc-section__badge"
+            id={local.badgeId}
+            data-tone={local.badgeTone}
+            data-variant={local.badgeVariant}
+          >
+            {local.badge}
+          </span>
         </Show>
       </summary>
-      <div class="oc-section__body">{local.children}</div>
+      <div class="oc-section__body" id={local.bodyId}>{local.children}</div>
     </details>
   );
 }

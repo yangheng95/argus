@@ -181,6 +181,190 @@ describe("Section JSX primitive", () => {
   })
 })
 
+// ── Section.tsx extended props ───────────────────────────────────────
+
+describe("Section extended badge/body props", () => {
+  const tsx = readText(join(OVERLAY_ROOT, "src/components/primitives/Section.tsx"))
+
+  test("supports bodyId prop (id on .oc-section__body)", () => {
+    expect(tsx).toContain("bodyId")
+    expect(tsx).toContain("local.bodyId")
+  })
+
+  test("supports badgeTone prop (data-tone on .oc-section__badge)", () => {
+    expect(tsx).toContain("badgeTone")
+    expect(tsx).toContain("data-tone={local.badgeTone}")
+  })
+
+  test("supports badgeId prop (id on .oc-section__badge)", () => {
+    expect(tsx).toContain("badgeId")
+    expect(tsx).toContain("id={local.badgeId}")
+  })
+
+  test("supports badgeVariant prop (data-variant on .oc-section__badge)", () => {
+    expect(tsx).toContain("badgeVariant")
+    expect(tsx).toContain("data-variant={local.badgeVariant}")
+  })
+
+  test("accepts attr:* index signature for Solid attr: directives", () => {
+    expect(tsx).toMatch(/\[key: `attr:\$\{string\}`\]/)
+  })
+})
+
+// ── Step 9.E adoption guards ──────────────────────────────────────────
+
+describe("FilesSection.tsx — Section primitive adoption", () => {
+  const tsx = readText(join(OVERLAY_ROOT, "src/components/FilesSection.tsx"))
+
+  test("imports Section primitive", () => {
+    expect(tsx).toContain("from \"./primitives/Section\"")
+  })
+
+  test("uses <Section> element", () => {
+    expect(tsx).toMatch(/<Section\b/)
+  })
+
+  test("no bare <details class=\"section\"", () => {
+    expect(tsx).not.toMatch(/class="section"/)
+    expect(tsx).not.toMatch(/<details\b/)
+  })
+
+  test("no bare .section-head / .section-body class strings", () => {
+    expect(tsx).not.toContain("section-head")
+    expect(tsx).not.toContain("section-body")
+  })
+})
+
+describe("Board.tsx — Section primitive adoption", () => {
+  const tsx = readText(join(OVERLAY_ROOT, "src/components/Board.tsx"))
+
+  test("imports Section primitive", () => {
+    expect(tsx).toContain("from \"./primitives/Section\"")
+  })
+
+  test("uses <Section> in DeliveryPanel (deliverySection id)", () => {
+    expect(tsx).toMatch(/id="deliverySection"/)
+    // verify it's on Section, not bare details
+    const deliveryIdx = tsx.indexOf("deliverySection")
+    const before = tsx.slice(Math.max(0, deliveryIdx - 30), deliveryIdx)
+    expect(before).not.toContain("<details")
+  })
+
+  test("SectionFrame uses <Section> not bare <details class=\"section\"", () => {
+    // The bare <details class="section"> should be gone
+    expect(tsx).not.toMatch(/<details[^>]*class="section"/)
+  })
+
+  test("no raw section-head / section-body class strings in JSX", () => {
+    // Strip comments then check — find class= with these old names
+    expect(tsx).not.toMatch(/class="section-head"/)
+    expect(tsx).not.toMatch(/class="section-body"/)
+    expect(tsx).not.toMatch(/class="section-icon"/)
+    expect(tsx).not.toMatch(/class="section-title"/)
+    expect(tsx).not.toMatch(/class="section-badge"/)
+  })
+})
+
+describe("DiffPreviewPanel.tsx — Panel primitive adoption", () => {
+  const tsx = readText(join(OVERLAY_ROOT, "src/components/DiffPreviewPanel.tsx"))
+
+  test("imports Panel primitive", () => {
+    expect(tsx).toContain("from \"./primitives/Panel\"")
+  })
+
+  test("uses <Panel> element", () => {
+    expect(tsx).toMatch(/<Panel\b/)
+  })
+
+  test("no bare <div class=\"diff-preview-panel\"", () => {
+    expect(tsx).not.toMatch(/<div[^>]*class="diff-preview-panel"/)
+  })
+
+  test("no bare <header class=\"diff-preview-head\"", () => {
+    expect(tsx).not.toContain("class=\"diff-preview-head\"")
+  })
+})
+
+describe("FileViewPanel.tsx — Panel primitive adoption", () => {
+  const tsx = readText(join(OVERLAY_ROOT, "src/components/FileViewPanel.tsx"))
+
+  test("imports Panel primitive", () => {
+    expect(tsx).toContain("from \"./primitives/Panel\"")
+  })
+
+  test("uses <Panel> element", () => {
+    expect(tsx).toMatch(/<Panel\b/)
+  })
+
+  test("no bare <div class=\"file-view-panel\"", () => {
+    expect(tsx).not.toMatch(/<div[^>]*class="file-view-panel"/)
+  })
+
+  test("no bare <header class=\"file-view-head\"", () => {
+    expect(tsx).not.toContain("class=\"file-view-head\"")
+  })
+})
+
+describe("TracePanel.tsx — Panel primitive adoption", () => {
+  const tsx = readText(join(OVERLAY_ROOT, "src/components/TracePanel.tsx"))
+
+  test("imports Panel primitive", () => {
+    expect(tsx).toContain("from \"./primitives/Panel\"")
+  })
+
+  test("uses <Panel> element", () => {
+    expect(tsx).toMatch(/<Panel\b/)
+  })
+
+  test("no bare <div class=\"trace-panel\"", () => {
+    expect(tsx).not.toMatch(/<div[^>]*class="trace-panel"/)
+  })
+
+  test("no bare <div class=\"trace-panel-head\"", () => {
+    expect(tsx).not.toContain("class=\"trace-panel-head\"")
+  })
+})
+
+describe("CSS class rename guards — no stale .section-* selectors", () => {
+  const inspectorCss = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+  const typographyCss = readText(join(OVERLAY_ROOT, "src/styles/cascade/typography.css"))
+  const fieldCss = readText(join(OVERLAY_ROOT, "src/styles/surfaces/field.css"))
+  const workspaceCss = readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css"))
+
+  test("inspector.css uses .oc-section__head not .section-head for main rule", () => {
+    expect(inspectorCss).toContain(".oc-section__head {")
+    // allow section-head-action (surface-specific CTA class, not the primitive)
+    const badPattern = /\.section-head\s*[\{:]/
+    const occurrences = inspectorCss.match(/\.section-head(?!-action)/g) ?? []
+    expect(occurrences.length).toBe(0)
+  })
+
+  test("inspector.css uses .oc-section not .section for main rule", () => {
+    expect(inspectorCss).toContain(".oc-section {")
+    expect(inspectorCss).not.toMatch(/^\.section\s*\{/m)
+  })
+
+  test("inspector.css uses .oc-section__badge not .section-badge", () => {
+    expect(inspectorCss).toContain(".oc-section__badge")
+    expect(inspectorCss).not.toContain(".section-badge")
+  })
+
+  test("typography.css uses .oc-section__title not .section-title", () => {
+    expect(typographyCss).toContain(".oc-section__title,")
+    expect(typographyCss).not.toContain(".section-title")
+  })
+
+  test("field.css uses .oc-section not .section in baseline list", () => {
+    expect(fieldCss).toContain(".oc-section,")
+    expect(fieldCss).toContain(".oc-section__body,")
+  })
+
+  test("workspace.css uses .oc-section__head not .section-head", () => {
+    expect(workspaceCss).toContain(".oc-section[open] > .oc-section__head,")
+    expect(workspaceCss).not.toContain(".section-head,")
+  })
+})
+
 // ── index.html load order ─────────────────────────────────────────────
 
 describe("index.html primitive load order", () => {

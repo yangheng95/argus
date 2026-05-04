@@ -21,6 +21,7 @@ import { BoardIntro } from "./BoardIntro";
 import { taskScopeSectionVisibility } from "../utils/task-scope-sections";
 import { Button } from "./ui/Button";
 import { Icon, type IconName } from "./Icon";
+import { Section } from "./primitives/Section";
 
 // ── Status utilities ──
 
@@ -290,52 +291,24 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
     () => Number(props.delivery?.evidenceManifest?.iteration ?? 0),
   );
 
-  // iter24: wrap the panel body in `<details class="section">` so
-  // the delivery surface sits under a proper section header
-  // ("Delivery" + verdict-pill badge) and the operator can
-  // collapse it like every other right-panel section. Before
-  // iter24 the panel was a bare `<section>` — no title, no
-  // collapse — directly mounted by main.tsx into
-  // #solidDeliveryMount, which the user reported as
-  // "这个 tab 没有标题且无法折叠" (no title, can't collapse).
-  // iter31 fix: the `<details>` carries `id="deliverySection"`
-  // and the body `id="deliveryBody"` so `dom.ts` accessors
-  // `deliverySection` / `deliveryBody` resolve to the actual
-  // rendered nodes. Without this, `syncSectionPhases()` in
-  // utils/section.ts called `markSectionPhase("delivery",
-  // "active")` against a null node and silently no-op'd —
-  // the user never saw the delivery phase highlight when
-  // the orchestrator transitioned into delivery. The
-  // hardcoded `data-phase-state="active"` from iter24 was
-  // also dropped — that attribute is owned by
-  // `syncSectionPhases` (which derives it from the live
-  // conversation phase + board state); hardcoding it here
-  // pinned the section to "active" forever as long as
-  // delivery data existed, overriding the proper
-  // related/inactive states for other phases.
   return (
-    <details id="deliverySection" class="section" open>
-      <summary class="section-head">
-        <span class="section-icon" aria-hidden="true">
-          <Icon name="delivery" />
-        </span>
-        <span class="section-title">{t("section.delivery")}</span>
-        <span
-          class="section-badge"
-          data-tone={
-            props.delivery?.verdict === "accepted"
-              ? "good"
-              : props.delivery?.verdict === "rejected"
-                ? "bad"
-                : props.delivery
-                  ? "accent"
-                  : ""
-          }
-        >
-          {props.delivery ? verdictPillLabel(tone()) : ""}
-        </span>
-      </summary>
-    <div id="deliveryBody" class="section-body">
+    <Section
+      id="deliverySection"
+      bodyId="deliveryBody"
+      title={t("section.delivery")}
+      icon={<Icon name="delivery" />}
+      badge={props.delivery ? verdictPillLabel(tone()) : undefined}
+      badgeTone={
+        props.delivery?.verdict === "accepted"
+          ? "good"
+          : props.delivery?.verdict === "rejected"
+            ? "bad"
+            : props.delivery
+              ? "accent"
+              : undefined
+      }
+      defaultOpen
+    >
     <Show
       when={props.delivery}
       fallback={
@@ -405,8 +378,7 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
         </Show>
       </section>
     </Show>
-    </div>
-    </details>
+    </Section>
   );
 }
 
@@ -519,32 +491,21 @@ function SectionFrame(props: SectionFrameProps) {
     if (props.phaseState === "active") detailsEl.open = true;
   });
   return (
-    <details
-      ref={detailsEl}
-      class="section"
+    <Section
+      ref={(el: HTMLDetailsElement) => { detailsEl = el; }}
       id={props.id}
+      bodyId={props.bodyId}
+      title={props.title}
+      icon={props.icon ? <Icon name={props.icon} /> : undefined}
+      badge={props.badgeText || undefined}
+      badgeId={props.badgeId}
+      badgeTone={props.badgeTone}
+      badgeVariant={props.badgeVariant || "status"}
+      defaultOpen={false}
       attr:data-phase-state={props.phaseState || undefined}
     >
-      <summary class="section-head">
-        <Show when={props.icon}>
-          <span class="section-icon" aria-hidden="true">
-            <Icon name={props.icon!} />
-          </span>
-        </Show>
-        <span class="section-title">{props.title}</span>
-        <span
-          class="section-badge"
-          id={props.badgeId}
-          data-tone={props.badgeTone}
-          data-variant={props.badgeVariant || "status"}
-        >
-          {props.badgeText || ""}
-        </span>
-      </summary>
-      <div class="section-body" id={props.bodyId}>
-        {props.children}
-      </div>
-    </details>
+      {props.children}
+    </Section>
   );
 }
 
@@ -883,17 +844,6 @@ export function Board(props: BoardProps) {
                 : "";
         })()}
       >
-        {/*
-          iter24 baked the section frame INTO `<DeliveryPanel>`
-          itself (it now returns its own `<details class="section">`
-          with title + icon + badge tone). If this `Show when={false}`
-          block is ever re-enabled, REMOVE this outer `<SectionFrame>`
-          wrapping or the rendered DOM will nest two
-          `<details class="section">` and the operator will see two
-          stacked "Delivery" headers. Restoration must mount
-          `<DeliveryPanel delivery={…} />` directly — it carries
-          its own section chrome.
-        */}
         <DeliveryPanel delivery={delivery()} />
       </SectionFrame>
 

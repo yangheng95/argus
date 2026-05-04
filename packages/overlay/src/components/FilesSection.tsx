@@ -2,14 +2,13 @@
 // Collapsible "Files" section in the right column. Owns visibility:
 // hidden when a task is selected but has produced zero changes — same
 // rule the previous imperative `document.getElementById("changesSection").hidden`
-// effect inside ChangesPanel enforced. Lifting the `<details>` into a Solid
-// component lets the same reactive memo drive everything (root, badge, body)
-// without going around Solid's reactive graph.
+// effect inside ChangesPanel enforced.
 
 import { createMemo, Show } from "solid-js";
 import { ChangesPanel } from "./ChangesPanel";
 import { boardStore } from "../store/board";
 import { Icon } from "./Icon";
+import { Section } from "./primitives/Section";
 import { currentChangeGroups } from "../services/diff";
 import { t } from "../utils/i18n";
 
@@ -25,17 +24,14 @@ export function FilesSection() {
 
   return (
     <Show when={sectionVisible()}>
-      <details class="section" id="changesSection" open>
-        <summary class="section-head">
-          <span class="section-icon">
-            <Icon name="file-document" size={14} />
-          </span>
-          <span class="section-title">{t("section.files")}</span>
-        </summary>
-        <div class="section-body">
-          <ChangesPanel hasSelectedTask={hasSelectedTask()} />
-        </div>
-      </details>
+      <Section
+        id="changesSection"
+        title={t("section.files")}
+        icon={<Icon name="file-document" />}
+        defaultOpen
+      >
+        <ChangesPanel hasSelectedTask={hasSelectedTask()} />
+      </Section>
     </Show>
   );
 }

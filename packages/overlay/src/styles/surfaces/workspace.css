@@ -220,14 +220,18 @@
   min-height: 0;
 }
 
-.diff-preview-head {
-  display: flex;
+/* diff-preview-head replaced by oc-panel__header override below */
+.diff-preview-panel > .oc-panel__header {
   align-items: flex-start;
-  justify-content: space-between;
   gap: calc(8px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-bottom: var(--oc-border-width) solid var(--border);
   background: var(--subtle-1);
+}
+
+.diff-preview-panel > .oc-panel__body {
+  display: flex;
+  flex-direction: column;
 }
 
 .diff-preview-copy {
@@ -262,8 +266,7 @@
 }
 
 .diff-preview-body {
-  flex: 1;
-  overflow: auto;
+  /* flex:1 and overflow:auto removed — oc-panel__body handles those */
   padding: calc(6px * var(--ui-scale));
 }
 
@@ -288,13 +291,17 @@
   min-height: 0;
 }
 
-.file-view-head {
-  display: flex;
-  align-items: center;
+/* file-view-head replaced by oc-panel__header override below */
+.file-view-panel > .oc-panel__header {
   gap: calc(8px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-bottom: var(--oc-border-width) solid var(--border);
   background: var(--subtle-1);
+}
+
+.file-view-panel > .oc-panel__body {
+  display: flex;
+  flex-direction: column;
 }
 
 .file-view-path {
@@ -309,8 +316,7 @@
 }
 
 .file-view-body {
-  flex: 1;
-  overflow: auto;
+  /* flex:1 and overflow:auto removed — oc-panel__body handles those */
   padding: calc(6px * var(--ui-scale));
 }
 
@@ -530,7 +536,7 @@ body[data-resizing="true"] * {
   padding: 0;
 }
 
-.section[open] > .section-head,
+.oc-section[open] > .oc-section__head,
 .config-section[open] > .config-section-head,
 .config-subsection[open] > .config-subsection-head {
   border-bottom: 0;
