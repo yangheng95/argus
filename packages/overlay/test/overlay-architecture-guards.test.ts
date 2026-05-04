@@ -645,8 +645,13 @@ describe("overlay architecture guards", () => {
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${selector}\\s*\\{`))
     }
 
+    // Flat-redesign Step 2 (2026-05-04): the `.section:last-child` rule
+    // re-asserted bottom border on the last card in a stack. With the
+    // `.section { border: 0 }` change (rule §2.2 A), there is no
+    // shared border to re-assert — the rule was retired. Pin its
+    // absence on both layers so it doesn't crawl back.
     expect(styles).not.toMatch(/(^|\n)\.section:last-child\s*\{/)
-    expect(inspectorSurface).toMatch(/\.section:last-child\s*\{/)
+    expect(inspectorSurface).not.toMatch(/\.section:last-child\s*\{/)
     expect(inspectorSurface).toMatch(/\.section-head::-webkit-details-marker\s*\{/)
     expect(inspectorSurface).toMatch(/\.section-head:hover\s*\{/)
     expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
@@ -1609,7 +1614,13 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(
       /\.section\[data-phase-state="active"\] \.section-badge:not\(:empty\)::before\s*\{/,
     )
-    expect(inspectorSurface).toContain("color-mix(in srgb, black 10%, transparent)")
+    // Flat-redesign Step 2 (2026-05-04): the active phase-state stack
+    // dropped its outer drop-shadow (was `box-shadow: ... 0 10px 22px
+    // color-mix(... black 10%, transparent)`) per rule §2.2 C — the
+    // accent identifier is now a 2px left-stripe rendered via `::after`.
+    expect(inspectorSurface).toMatch(
+      /\.section\[data-phase-state="active"\]::after\s*\{/,
+    )
     expect(inspectorSurface).not.toMatch(/rgba\(91,\s*141,\s*239/)
     expect(inspectorSurface).not.toMatch(/rgba\(10,\s*16,\s*24/)
   })
@@ -1920,7 +1931,10 @@ describe("overlay architecture guards", () => {
       expect(titlebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(titlebarSurface).toMatch(/\.titlebar::after\s*\{/)
+    // .titlebar::after decorative gradient line was retired 2026-05-04
+    // (flat-redesign Step 2, rule §2.2 B: one cross-context border per
+    // edge). Pin its absence so it doesn't crawl back.
+    expect(titlebarSurface).not.toMatch(/\.titlebar::after\s*\{/)
   })
 
   test("migrated titlebar chrome is not controlled by legacy theme selectors", () => {
@@ -2217,18 +2231,22 @@ describe("overlay architecture guards", () => {
 
     expect(styles).not.toMatch(/(^|\n)\.titlebar\s*\{/)
     const body = soloRuleBody(titlebarSurface, ".titlebar")
+    // Flat-redesign Step 2 (2026-05-04): the titlebar shell switched from
+    // `border + border-left:0 + border-right:0 + border-radius:0` (4
+    // declarations to express "only the bottom edge") to `border: 0;
+    // border-bottom: ...` (single source for the bottom edge). rule §2.2 B.
     for (const declaration of [
       "gap: calc(2px * var(--ui-scale))",
       "margin: 0",
       "padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale))",
-      "border: var(--oc-border-width) solid var(--border)",
-      "border-left: 0",
-      "border-right: 0",
-      "border-radius: 0",
+      "border: 0",
+      "border-bottom: var(--oc-border-width) solid var(--border)",
       "box-shadow: none",
     ]) {
       expect(body).toContain(declaration)
     }
+    expect(body).not.toMatch(/border-left\s*:/)
+    expect(body).not.toMatch(/border-right\s*:/)
   })
 
   test("directory, sidebar, and workspace controls are canonical, not theme scoped", () => {

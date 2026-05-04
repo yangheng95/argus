@@ -8,12 +8,15 @@
   padding: calc(2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0;
 }
 
+/* Flat-redesign Step 2 (2026-05-04): attachment chip border retired
+ * (rule §2.2 A); the surface-inset background against the composer's
+ * own surface delivers the boundary. */
 .chat-attachment-item {
   display: flex;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
   background: color-mix(in srgb, var(--surface-inset) 78%, transparent);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--subtle-4) 92%, transparent);
+  border: 0;
   border-radius: var(--oc-radius-large);
   padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
   font-size: var(--ui-font-small);
@@ -665,11 +668,16 @@ body[data-theme="light"] .executor-menu-model:hover {
   flex-shrink: 0;
 }
 
+/* Flat-redesign Step 2 (2026-05-04): resting border retired (rule §2.2 A).
+ * The chip sits inside the composer's `--surface` against its own
+ * `--surface-strong` fill — the lightness step is the boundary. The
+ * `[data-open="true"]` open state used to flip border-color → accent;
+ * now it lifts the bg to `--accent-dim` per rule §2.2 C. */
 .executor-chip {
   display: inline-flex;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 92%, transparent);
+  border: 0;
   background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
   color: var(--text-soft);
   border-radius: var(--oc-radius-pill);
@@ -680,7 +688,6 @@ body[data-theme="light"] .executor-menu-model:hover {
   cursor: pointer;
   white-space: nowrap;
   transition:
-    border-color 100ms,
     background 100ms,
     color 100ms;
 }
@@ -691,7 +698,7 @@ body[data-theme="light"] .executor-menu-model:hover {
 }
 
 .executor-selector[data-open="true"] .executor-chip {
-  border-color: color-mix(in srgb, var(--accent) 56%, transparent);
+  background: var(--accent-dim);
   color: var(--text-strong);
 }
 

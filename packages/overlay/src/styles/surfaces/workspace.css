@@ -83,16 +83,19 @@
   box-shadow: none;
 }
 
-/* ── Workspace Panel ── */
+/* ── Workspace Panel ──
+ * Flat-redesign Step 2 (2026-05-04): the panel-self border + drop-shadow +
+ * border-radius were retired. Visual edge with the panel-body sibling is
+ * carried by the --surface ↔ --bg lightness step alone (rule §2.2 A:
+ * surface 层差替代 border). The header keeps no bottom-border either —
+ * `--surface-strong` on the header against `--surface` on the body
+ * delivers the divider. */
 .workspace {
   display: flex;
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
   background: var(--surface);
-  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
@@ -100,8 +103,7 @@
   display: flex;
   align-items: stretch;
   justify-content: space-between;
-  border-bottom: var(--oc-border-width) solid var(--border);
-  background: var(--surface);
+  background: var(--surface-strong);
   flex-shrink: 0;
   padding-right: calc(6px * var(--ui-scale));
 }
@@ -121,7 +123,12 @@
 
 /* Sub-tab strip inside the workspace body — subordinate to the parent
  * Tabs primitive (Workflow / Workspace / Preview). Smaller font, tighter
- * padding, thinner accent stripe so the parent nav reads as primary. */
+ * padding, accent underline-only on active tab.
+ *
+ * Flat-redesign Step 2 (2026-05-04): the right-side `border-right` between
+ * tabs was retired (rule §2.2 C: active state via accent stripe, not
+ * vertical separators). Tabs are now disambiguated by spacing + the
+ * `data-active` accent underline only. */
 .workspace-tab {
   display: inline-flex;
   align-items: center;
@@ -129,8 +136,7 @@
   padding: calc(3px * var(--ui-scale)) calc(10px * var(--ui-scale));
   background: transparent;
   border: none;
-  border-right: var(--oc-border-width) solid var(--border);
-  border-bottom: var(--oc-border-width) solid transparent;
+  border-bottom: calc(2px * var(--ui-scale)) solid transparent;
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
   cursor: pointer;
@@ -161,6 +167,8 @@
   font-size: var(--ui-font-small);
 }
 
+/* Flat-redesign Step 2 (2026-05-04): close-button border retired
+ * (rule §2.2 A). Hover affordance is a pure background tint. */
 .workspace-close {
   align-self: center;
   width: calc(22px * var(--ui-scale));
@@ -169,7 +177,7 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  border: var(--oc-border-width) solid transparent;
+  border: 0;
   border-radius: var(--oc-radius-soft);
   color: var(--text-muted);
   font-size: var(--ui-font-heading);
@@ -177,13 +185,11 @@
   cursor: pointer;
   transition:
     color 120ms,
-    background 120ms,
-    border-color 120ms;
+    background 120ms;
 }
 .workspace-close:hover {
   color: var(--bad);
   background: color-mix(in srgb, var(--bad) 12%, transparent);
-  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
 }
 
 .workspace-body {
