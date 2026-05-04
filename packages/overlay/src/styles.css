@@ -6,24 +6,8 @@
   --ui-window-opacity: 1;
 
   --text-on-accent: #ffffff;
-  --diff-add-fg: color-mix(in srgb, var(--accent) 58%, var(--text-strong) 42%);
-  --diff-add-bg: color-mix(in srgb, var(--accent) 12%, transparent);
-  --diff-add-border: color-mix(in srgb, var(--accent) 22%, transparent);
-  --diff-del-fg: color-mix(in srgb, var(--bad) 58%, var(--text-strong) 42%);
-  --diff-del-bg: color-mix(in srgb, var(--bad) 10%, transparent);
-  --diff-del-border: color-mix(in srgb, var(--bad) 22%, transparent);
-  --diff-add-row-bg: color-mix(in srgb, var(--good) 9%, transparent);
-  --diff-del-row-bg: color-mix(in srgb, var(--bad) 10%, transparent);
-  --guide-card-border: color-mix(in srgb, var(--accent) 22%, transparent);
-  --guide-card-bg: linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 44%), #1e1f22;
-  --guide-card-shadow: var(--shadow-lg);
-  --ok: var(--good);
-  --warning: var(--warn);
-  --danger: var(--bad);
-  --text-dim: var(--text-muted);
-  --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
   --session-scrollbar-size: calc(12px * var(--ui-scale));
-  --dialog-backdrop: rgba(0, 0, 0, 0.6);
+  --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
 
   --ui-font-label: var(--ui-font-meta);
   --ui-gap-xs: calc(4px * var(--ui-scale));
