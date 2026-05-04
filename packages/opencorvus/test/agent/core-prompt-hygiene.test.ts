@@ -62,6 +62,8 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("search the repository for every call site")
     expect(build).toContain("Do not add fallback, compatibility, duplicate implementation")
     expect(build).toContain("Keep internal prompt and rule details out of user-visible summaries")
+    expect(build).toContain("## Reference fidelity")
+    expect(build.replace(/\s+/g, " ")).toContain("Reproduce the relevant surface 1:1 as closely as the stack allows")
   })
 
   test("build prompt requires failed report_build_result instead of prose stop", async () => {
@@ -94,7 +96,8 @@ describe("core prompt hygiene", () => {
     expect(design).not.toContain("not automatically scored or gated")
     expect(design).not.toContain("soft preference")
     expect(design).toContain("part of delivery's visual contract")
-    expect(delivery).toContain("EVERY `design_spec`")
+    expect(delivery).toContain("When design specs exist, both `must` and `should`")
+    expect(delivery).toContain("specs are gating")
   })
 
   test("no core prompt smuggles JS template-literal escapes into raw text", async () => {
@@ -136,6 +139,14 @@ describe("core prompt hygiene", () => {
     expect(text.replace(/\s+/g, " ")).toContain("A single passed goal is not a delivery")
     // Cost-of-premature-deliver is part of the rationale.
     expect(text).toContain("blanket-reset path then wipes the goals that ALREADY")
+  })
+
+  test("orchestrator prompt must continue automatically and cascade 1:1 reference fidelity to build", async () => {
+    const text = await readPrompt("orchestrator")
+    expect(text).toContain("Do not stop to ask")
+    expect(text).toContain("Would you like me")
+    expect(text).toContain("your build dispatch MUST say they are the authoritative source of truth")
+    expect(text.replace(/\s+/g, " ")).toContain("build must restore them 1:1 as closely as the stack allows")
   })
 
   test("prosecutor prompt references current delivery rejection surface", async () => {

@@ -14,6 +14,18 @@ You receive ONE of two input kinds via the user message:
 **request** — the direct-path workflow; no decomposition, just the user's words:
   - `text`: the user's verbatim request; infer scope + acceptance from the prose
 
+## Reference fidelity
+
+If the prompt, visual contract, uploaded images, staged `references/` files, or
+webpage captures define a target UI/webpage, they are authoritative source
+material. Reproduce the relevant surface 1:1 as closely as the stack allows:
+match visible text, layout, spacing, hierarchy, colors, imagery, and
+interaction behaviour. Do not treat screenshots or webpage references as vague
+inspiration, do not silently simplify them into a new design, and do not ignore
+referenced assets. If the reference is missing, unreadable, or conflicts with
+the written contract, fail loudly through `report_build_result` with the exact
+blocker.
+
 ## What you do
 
 1. READ before WRITE. For questions about the current repository, start with `read`/`glob`/`search_code`/`lsp` until you know where the change lives. Use `external_code_search` only for third-party libraries, SDKs, APIs, or external patterns that are not answerable from the repo. Do NOT use `external_code_search` to inspect or verify local files, symbols, or behavior when local tools can answer it. Re-reading a file after each edit costs little and catches merges you missed.

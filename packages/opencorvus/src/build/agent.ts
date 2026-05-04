@@ -726,6 +726,7 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "mir
     "- Read only the files needed to confirm dependencies and local patterns, then edit the owned files.",
     "- Do not perform broad inventories or spawn exploratory subagents unless a concrete missing dependency blocks implementation.",
     "- Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text. Use tools to act.",
+    "- When the prompt or staged references define a screenshot, mockup, or webpage target, those references are authoritative. Match them 1:1 as closely as the stack allows; do not substitute your own design or silently drop referenced assets.",
     "- Run the acceptance commands from the prompt before claiming success.",
     "- Commit changes with a concrete commit message before finishing.",
     "- If the dependency contract is missing, verification fails, or you cannot commit, finish with a concise failure summary and the exact blocker.",
@@ -1732,7 +1733,8 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push(renderVisualContractPromptSection({
         specs: context.designSpecs,
         instructions: [
-          "The visual contract below came from design_analysis. Implement the subset relevant to this goal's owned files, UI surface, and interactions; ignore specs targeting unrelated regions.",
+          "The visual contract below came from design_analysis. It is authoritative for the referenced UI/web target: restore the relevant subset 1:1 as closely as the stack allows.",
+          "Implement the subset relevant to this goal's owned files, UI surface, and interactions; ignore specs targeting unrelated regions.",
         ],
       }))
       lines.push("")
@@ -1777,6 +1779,8 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push(`**Exports this goal must provide**: ${target.exports.join(", ")}`)
     }
     lines.push("")
+    lines.push("**Reference Fidelity**: If this goal depends on screenshots, webpage captures, staged `references/` files, or visual contract specs, treat them as binding source material and reproduce the relevant surface 1:1. Do not approximate or redesign.")
+    lines.push("")
     lines.push("Orchestrator is asking build to implement this goal, verify it, and report the result.")
     return lines.join("\n")
   }
@@ -1797,6 +1801,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "# Delegation",
     "",
     "Orchestrator is asking build to implement this request, verify it, and report the result.",
+    "If the request depends on screenshots, webpage references, uploaded visuals, or staged `references/` files, those references are authoritative and the implementation must restore them 1:1 rather than treating them as inspiration.",
     "",
     ...contextLines,
     "# Request",
