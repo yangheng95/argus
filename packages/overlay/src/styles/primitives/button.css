@@ -1,3 +1,15 @@
+/* Flat-redesign 2026-05-04: button typography is the single-source for
+ * every button family in the overlay (oc-button + legacy .btn + btn-
+ * primary). Font-size routes through `--ui-font-control` — the same
+ * value the .btn legacy already used; oc-button previously inherited
+ * `--oc-header-title-font` which carries a different scale, producing
+ * the "按钮字体大小不一样" the user flagged. Primitive now owns the
+ * typography contract; other button surfaces inherit from it.
+ *
+ * Resting border is transparent so neighbouring chrome doesn't fight
+ * with the button. Hover/focus changes background only — the hover
+ * border-color flip that used to outline ghost icons (the three 金刚
+ * window controls in particular) was retired per rule §2.2 C. */
 .oc-button {
   --oc-button-height: var(--oc-density-control-height);
   --oc-button-padding-x: var(--oc-header-gap);
@@ -19,9 +31,12 @@
   background: var(--oc-button-bg);
   color: var(--oc-button-color);
   box-shadow: var(--oc-button-shadow);
-  font: var(--oc-header-title-font);
-  letter-spacing: var(--oc-header-title-letter-spacing);
-  text-transform: var(--oc-header-title-transform);
+  font-family: var(--font);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -100,10 +115,13 @@
   flex: 0 0 auto;
 }
 
+/* Flat-redesign 2026-05-04 (rule §2.2 C): hover/focus does not flip
+ * border-color. Background tint alone carries the affordance — the
+ * three 金刚 window controls (ghost icon variants) used to render a
+ * visible hover outline that the user reported as 不必要的边框. */
 .oc-button:not([data-tone="danger"]):not([data-variant="solid"]):hover,
 .oc-button:not([data-tone="danger"]):not([data-variant="solid"]):focus-visible {
   --oc-button-bg: var(--surface-hover);
-  --oc-button-border: var(--oc-border-width) solid var(--border-hover);
   outline: none;
 }
 
