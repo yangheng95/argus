@@ -150,19 +150,30 @@ async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
     throw new Error(`Session ${sessionID} has kind "${kind}" and cannot receive direct agent replies`)
   }
   const session = await Session.get(sessionID)
+  const latest = await latestSessionModelIdentity(sessionID)
+  if (!latest) {
+    throw new Error(`Session ${sessionID} has no prior model identity to continue`)
+  }
+
+  return {
+    session,
+    agent: latest.agent,
+    model: latest.model,
+    variant: latest.variant,
+  }
+}
+
+async function latestSessionModelIdentity(sessionID: string) {
   const messages = await Session.messages({ sessionID })
   const latest = messages
     .map((message) => message.info)
     .filter((info) => info.role === "user" || info.role === "assistant")
     .sort((left, right) => (right.time?.created ?? 0) - (left.time?.created ?? 0))[0]
 
-  if (!latest) {
-    throw new Error(`Session ${sessionID} has no prior model identity to continue`)
-  }
+  if (!latest) return
 
   if (latest.role === "user") {
     return {
-      session,
       agent: latest.agent,
       model: latest.model,
       variant: latest.variant,
@@ -170,7 +181,6 @@ async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
   }
 
   return {
-    session,
     agent: latest.agent,
     model: {
       providerID: latest.providerID,
@@ -205,8 +215,7 @@ async function appendDirectAgentSessionReply(input: {
       targetSessionID: target.session.id,
     },
   }
-  await Session.updateMessage(message)
-  await Session.updatePart({
+  const parts: Message.Part[] = [{
     id: Identifier.ascending("part"),
     messageID,
     sessionID: target.session.id,
@@ -220,9 +229,9 @@ async function appendDirectAgentSessionReply(input: {
       taskID: input.taskID,
       targetSessionID: target.session.id,
     },
-  })
+  }]
   for (const attachment of input.attachments ?? []) {
-    await Session.updatePart({
+    parts.push({
       id: Identifier.ascending("part"),
       messageID,
       sessionID: target.session.id,
@@ -232,7 +241,11 @@ async function appendDirectAgentSessionReply(input: {
       ...(attachment.filename ? { filename: attachment.filename } : {}),
     })
   }
-  await Session.touch(target.session.id)
+  await Session.persistMessage({
+    info: message,
+    parts,
+    touchSessionID: target.session.id,
+  })
   void SessionPrompt.loop({ sessionID: target.session.id }).catch((error) => {
     log.error("direct agent session reply loop failed", {
       sessionID: target.session.id,
@@ -328,11 +341,27 @@ async function appendTaskSessionMessage(
   task: TaskRow,
   text: string,
   attachments: AttachmentStore.Reference[] = [],
-): Promise<{ info: Message.User; parts: Message.Part[] } | undefined> {
-  if (!task.session_id) return
+): Promise<{ info: Message.User; parts: Message.Part[] }> {
+  // Rule 7: no silent fallback. A task without a session_id or whose
+  // session has lost its agent/model context cannot accept a message —
+  // the previous `return undefined` branch let `injectMessage` think the
+  // append succeeded, dispatchTaskLoop fired, and the operator's text
+  // was never visible to the orchestrator (memory:
+  // feedback_task_terminal_state_revivable.md, second wedge variant).
+  // Throw so the caller surfaces the real failure instead of pretending
+  // the message landed.
+  if (!task.session_id) {
+    throw new Error(
+      `Task ${task.id} has no root session — cannot append operator message; recreate the task or repair task.session_id`,
+    )
+  }
   const ctx = await messageContext(task.session_id)
-  if (!ctx) return
-  const info = (await Session.updateMessage({
+  if (!ctx) {
+    throw new Error(
+      `Task ${task.id} session ${task.session_id} has no agent/model context — cannot append operator message`,
+    )
+  }
+  const info = {
     id: Identifier.ascending("message"),
     role: "user",
     sessionID: task.session_id,
@@ -341,7 +370,7 @@ async function appendTaskSessionMessage(
     },
     agent: ctx.agent,
     model: ctx.model,
-  } satisfies Message.User)) as Message.User
+  } satisfies Message.User
   const meta = overlayMeta(task.session_id, task.session_id, info)
   const enrichedInfo = {
     ...info,
@@ -356,9 +385,7 @@ async function appendTaskSessionMessage(
       type: "text",
       text,
       kind: "user_content",
-      ...meta,
     }
-    await Session.updatePart(textPart)
     parts.push(textPart)
   }
   for (const ref of attachments) {
@@ -370,16 +397,25 @@ async function appendTaskSessionMessage(
       mime: ref.mime,
       url: ref.url,
       filename: ref.filename,
-      ...meta,
     }
-    await Session.updatePart(filePart)
     parts.push(filePart)
   }
-  await Session.touch(task.session_id)
+  await Session.persistMessage({
+    info,
+    parts,
+    touchSessionID: task.session_id,
+  })
   return { info: enrichedInfo, parts }
 }
 
 async function messageContext(_sessionID: string) {
+  const latest = await latestSessionModelIdentity(_sessionID)
+  if (latest) {
+    return {
+      agent: latest.agent,
+      model: latest.model,
+    }
+  }
   const name = await Agent.defaultAgent().catch(() => undefined)
   const agent = name ? await Agent.get(name).catch(() => undefined) : undefined
   // Provider.defaultModel() is strict now (reads only cfg.model, throws if

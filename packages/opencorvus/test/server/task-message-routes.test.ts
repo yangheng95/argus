@@ -6,11 +6,38 @@ import { deriveTaskStatus } from "../../src/engine/task-status"
 import * as Queue from "../../src/engine/queue"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
+
+async function seedRootSession(sessionID: string, text = "initial request") {
+  const info = {
+    id: Identifier.ascending("message"),
+    sessionID,
+    role: "user" as const,
+    time: { created: Date.now() - 1_000 },
+    agent: "build",
+    model: {
+      providerID: "test-provider",
+      modelID: "test-model",
+    },
+  }
+  await Session.persistMessage({
+    info,
+    parts: [{
+      id: Identifier.ascending("part"),
+      messageID: info.id,
+      sessionID,
+      type: "text",
+      text,
+      kind: "user_content",
+    }],
+    touchSessionID: sessionID,
+  })
+}
 
 describe("task message routes", () => {
   afterEach(async () => {
@@ -28,11 +55,14 @@ describe("task message routes", () => {
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "retry through message" })
+        await seedRootSession(root.id)
 
         Database.use((db) =>
           db.insert(EngineTaskTable).values({
             id: taskID,
             project_id: Instance.project.id,
+            session_id: root.id,
             source: "panel",
             title: "retry through message",
             request: "retry through message",
@@ -56,11 +86,25 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { kind: string; message: string; should_resume: boolean }
+        const body = await response.json() as {
+          kind: string
+          message: string
+          should_resume: boolean
+          user_message?: {
+            info: { id: string; sessionID: string }
+            parts: Array<{ type: string; text?: string }>
+          }
+        }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
         expect(body.message).toBe("Operator note recorded. Scheduler notified.")
         expect(body.should_resume).toBe(true)
+        expect(body.user_message?.info.sessionID).toBe(root.id)
+        expect(body.user_message?.parts).toHaveLength(1)
+        expect(body.user_message?.parts[0]).toMatchObject({
+          type: "text",
+          text: "把当前任务停下来，重新评估策略后继续。",
+        })
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
         // V35: dispatchTaskLoop trigger schema changed from
         //   trigger: { kind, message, attachmentSummary }
@@ -88,6 +132,14 @@ describe("task message routes", () => {
           }).from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
         expect(row?.error).toBeNull()
+        const persisted = await Session.messages({ sessionID: root.id })
+        expect(persisted).toHaveLength(2)
+        const latest = persisted[persisted.length - 1]
+        expect(latest?.parts).toHaveLength(1)
+        expect(latest?.parts[0]).toMatchObject({
+          type: "text",
+          text: "把当前任务停下来，重新评估策略后继续。",
+        })
       },
     })
   })
@@ -103,11 +155,14 @@ describe("task message routes", () => {
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const completedAt = now + 1
+        const root = await Session.create({ kind: "root", title: "failed task" })
+        await seedRootSession(root.id)
 
         Database.use((db) =>
           db.insert(EngineTaskTable).values({
             id: taskID,
             project_id: Instance.project.id,
+            session_id: root.id,
             source: "panel",
             title: "failed task",
             request: "failed task",
@@ -162,11 +217,14 @@ describe("task message routes", () => {
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "resume envelope" })
+        await seedRootSession(root.id)
 
         Database.use((db) =>
           db.insert(EngineTaskTable).values({
             id: taskID,
             project_id: Instance.project.id,
+            session_id: root.id,
             source: "panel",
             title: "resume envelope",
             request: "resume envelope",
@@ -217,11 +275,14 @@ describe("task message routes", () => {
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "cancelled task" })
+        await seedRootSession(root.id)
 
         Database.use((db) =>
           db.insert(EngineTaskTable).values({
             id: taskID,
             project_id: Instance.project.id,
+            session_id: root.id,
             source: "panel",
             title: "cancelled task",
             request: "cancelled task",
@@ -273,11 +334,14 @@ describe("task message routes", () => {
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "completed task" })
+        await seedRootSession(root.id)
 
         Database.use((db) =>
           db.insert(EngineTaskTable).values({
             id: taskID,
             project_id: Instance.project.id,
+            session_id: root.id,
             source: "panel",
             title: "completed task",
             request: "completed task",
@@ -325,11 +389,14 @@ describe("task message routes", () => {
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "attachment message" })
+        await seedRootSession(root.id)
 
         Database.use((db) =>
           db.insert(EngineTaskTable).values({
             id: taskID,
             project_id: Instance.project.id,
+            session_id: root.id,
             source: "panel",
             title: "attachment message",
             request: "attachment message",
@@ -393,11 +460,14 @@ describe("task message routes", () => {
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "inject terminal" })
+        await seedRootSession(root.id)
 
         Database.use((db) =>
           db.insert(EngineTaskTable).values({
             id: taskID,
             project_id: Instance.project.id,
+            session_id: root.id,
             source: "panel",
             title: "inject terminal",
             request: "inject terminal",
