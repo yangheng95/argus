@@ -218,26 +218,16 @@ struct OverlaySettings {
     workspace_directory: Option<String>,
 }
 
-fn overlay_directory(directory: Option<String>) -> Option<PathBuf> {
-    directory.and_then(|item| {
-        let item = item.trim();
-        (!item.is_empty()).then(|| PathBuf::from(item))
-    })
-}
-
-fn overlay_settings_path(directory: Option<String>) -> Result<PathBuf, String> {
-    overlay_directory(directory)
-        .map(|dir| Ok(dir.join(".opencorvus").join("overlay.json")))
-        .unwrap_or_else(|| {
-            std::env::current_dir()
-                .map(|dir| dir.join(".opencorvus").join("overlay.json"))
-                .map_err(|err| err.to_string())
-        })
+fn overlay_settings_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|dir| dir.join("overlay.json"))
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
-fn overlay_settings_load(directory: Option<String>) -> Result<OverlaySettings, String> {
-    let path = overlay_settings_path(directory)?;
+fn overlay_settings_load<R: Runtime>(app: AppHandle<R>) -> Result<OverlaySettings, String> {
+    let path = overlay_settings_path(&app)?;
     if !path.exists() {
         return Ok(OverlaySettings::default());
     }
@@ -246,8 +236,8 @@ fn overlay_settings_load(directory: Option<String>) -> Result<OverlaySettings, S
 }
 
 #[tauri::command]
-fn overlay_settings_save(settings: OverlaySettings, directory: Option<String>) -> Result<bool, String> {
-    let path = overlay_settings_path(directory.or_else(|| settings.directory.clone()))?;
+fn overlay_settings_save<R: Runtime>(app: AppHandle<R>, settings: OverlaySettings) -> Result<bool, String> {
+    let path = overlay_settings_path(&app)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }

@@ -20,6 +20,7 @@ import { createSignal, createMemo, createResource, For, Show } from "solid-js";
 import { apiJsonWithTimeout } from "../../services/api";
 import { patchConfig } from "../../services/config";
 import { appStore } from "../../store/app";
+import { settingsStore } from "../../store/settings";
 import { t } from "../../utils/i18n";
 import {
   HEXIN_REFRESH_TIMEOUT_MILLISECONDS,
@@ -70,7 +71,14 @@ export default function AgentModelsPanel() {
   // subsequent re-render reading stale createResource data) snapped it back.
   const [refreshToken, setRefreshToken] = createSignal(0);
 
-  const [data] = createResource(refreshToken, () => loadAgentModelsData());
+  const [data] = createResource(
+    () => `${refreshToken()}:${settingsStore.directory.trim()}`,
+    () => loadAgentModelsData(),
+  );
+  const readyData = createMemo(() => {
+    if (data.loading || data.error) return undefined;
+    return data();
+  });
 
   // Single source of truth for the currently-persisted project default model.
   // Reads directly from appStore.config.model — the same value SSE
@@ -318,9 +326,8 @@ export default function AgentModelsPanel() {
           </div>
         </Show>
 
-        <Show when={data() && !data.loading}>
-          {(() => {
-            const payload = data()!;
+        <Show when={readyData()} keyed>
+          {(payload) => {
             const groups = providerGroups(payload.providers);
             const available = allModelValues(groups);
             const grouped = groupedAgents(payload.agents);
@@ -399,7 +406,7 @@ export default function AgentModelsPanel() {
                 </div>
               </>
             );
-          })()}
+          }}
         </Show>
       </div>
     </div>
