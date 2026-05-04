@@ -10,6 +10,7 @@ import { statusBadge } from "../utils/status-badge";
 import { t } from "../utils/i18n";
 import { goalRevisionLabel } from "../utils/goal-label";
 import { showAppDialog } from "../services/app-dialog";
+import { Icon } from "./Icon";
 
 function leadingGlyph(node: CardNode): string {
   if (node.kind === "tool") return displayToolIcon(node.stage || node.title);
@@ -395,18 +396,8 @@ export function CardHeader(props: {
               }
             }}
           >
-            <Show
-              when={copied()}
-              fallback={
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <rect x="5" y="3" width="8" height="10" rx="1.3" stroke="currentColor" stroke-width="1.3" />
-                  <path d="M3.5 5.5V12a1.5 1.5 0 0 0 1.5 1.5h5.5" stroke="currentColor" stroke-width="1.3" fill="none" />
-                </svg>
-              }
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M3.5 8.5l3 3 6-6.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
+            <Show when={copied()} fallback={<Icon name="copy" size={13} />}>
+              <Icon name="check" size={13} />
             </Show>
           </button>
         </Show>
@@ -430,10 +421,7 @@ export function CardHeader(props: {
               }
             }}
           >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="7" cy="7" r="4" stroke="currentColor" stroke-width="1.5" fill="none" />
-              <path d="M10 10l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-            </svg>
+            <Icon name="inspect" size={13} />
           </button>
         </Show>
         <Show when={canAgentCancel()}>
@@ -452,9 +440,7 @@ export function CardHeader(props: {
               }
             }}
           >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
-            </svg>
+            <Icon name="cancel" size={13} />
           </button>
         </Show>
         <Show when={canRewind()}>
@@ -473,27 +459,12 @@ export function CardHeader(props: {
               }
             }}
           >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M6.5 3.5L3 7l3.5 3.5"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M13 12.5c0-2.7-2.1-4.9-4.8-4.9H3.4"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <Icon name="rewind" size={13} />
           </button>
         </Show>
         <Show when={props.collapsible}>
           <span class="card__chevron" aria-hidden="true">
-            {"\u25BC"}
+            <Icon name="caret-down" />
           </span>
         </Show>
       </div>

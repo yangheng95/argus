@@ -1,6 +1,7 @@
 import { Show } from "solid-js";
 import type { FrontendPreviewResolution } from "../services/frontend-preview";
 import { t } from "../utils/i18n";
+import { Icon } from "./Icon";
 import { nativeOpen } from "../utils/native";
 
 export function FrontendPreviewPanel(props: {
@@ -43,10 +44,7 @@ export function FrontendPreviewPanel(props: {
           aria-label={t("frontend_preview.refresh")}
           onClick={props.onRefresh}
         >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M13 4.5V8h-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M12.6 8A5 5 0 103.8 10.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-          </svg>
+          <Icon name="refresh" size={13} />
         </button>
         <button
           type="button"
@@ -56,11 +54,7 @@ export function FrontendPreviewPanel(props: {
           disabled={!url()}
           onClick={() => void openExternal()}
         >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M6 4h6v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M12 4L5 11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-            <path d="M4 6v6h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+          <Icon name="external-link" size={13} />
         </button>
       </div>
       <Show

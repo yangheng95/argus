@@ -6,6 +6,7 @@ import { createMemo, createSelector, createSignal, onCleanup, For, Show } from "
 import { boardStore, visibleTasks, loadTasks } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue } from "../services/task-queue";
+import { exportTaskArchive, importTaskArchive } from "../services/task-archive";
 import { t } from "../utils/i18n";
 import { stamp, fullStampWithRelative } from "../utils/time";
 import { Icon } from "./Icon";
@@ -178,26 +179,48 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
       onBlur={disarm}
     >
       <span class="task-row-delete-icon" data-icon="delete" aria-hidden="true">
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-          <path
-            d="M4.5 4.5l7 7M11.5 4.5l-7 7"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-          />
-        </svg>
+        <Icon name="close" size={11} />
       </span>
       <span class="task-row-delete-icon" data-icon="confirm" aria-hidden="true">
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-          <path
-            d="M3.5 8.5l2.9 2.9 6.1-6.1"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+        <Icon name="check" size={11} />
       </span>
+    </button>
+  );
+}
+
+// ── ExportButton (single-click, no confirm) ──
+// Exporting is non-destructive — bytes flow OUT only — so unlike
+// cancel/delete we don't gate it behind a two-step confirm. The button is
+// visible on every task that has a directory; failures surface via
+// alert() for now (matches the rest of TaskList's error-surfacing style).
+
+function ExportButton(props: { id: string; directory?: string }) {
+  const [busy, setBusy] = createSignal(false);
+  return (
+    <button
+      type="button"
+      class="task-row-export"
+      data-task-export={props.id}
+      data-busy={busy() ? "true" : undefined}
+      disabled={busy()}
+      title={t("task.export_button_title")}
+      aria-label={t("task.export_button_title")}
+      onClick={async (e) => {
+        e.stopPropagation();
+        if (busy()) return;
+        setBusy(true);
+        try {
+          await exportTaskArchive({ taskID: props.id, directory: props.directory });
+        } catch (err) {
+          window.alert(
+            t("task.export_failed", { error: err instanceof Error ? err.message : String(err) }),
+          );
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Icon name="download" size={11} />
     </button>
   );
 }
@@ -241,20 +264,10 @@ function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
       onBlur={disarm}
     >
       <span class="task-row-cancel-icon" data-icon="cancel" aria-hidden="true">
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-          <rect x="4" y="4" width="8" height="8" rx="1.2" fill="currentColor" />
-        </svg>
+        <Icon name="stop" size={11} />
       </span>
       <span class="task-row-cancel-icon" data-icon="confirm" aria-hidden="true">
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-          <path
-            d="M3.5 8.5l2.9 2.9 6.1-6.1"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+        <Icon name="check" size={11} />
       </span>
     </button>
   );
@@ -293,7 +306,12 @@ function TaskRow(props: {
     !pending() && !!id() && !!props.onCancelTask && INTERRUPTABLE_TASK_STATUSES.has(status());
   const canDelete = () =>
     !pending() && !!id() && !!props.onDeleteTask;
-  const hasActions = () => canCancel() || canDelete();
+  // Export is offered for any persisted task — no status gate (you can
+  // archive a completed/failed/cancelled task, that's the typical case).
+  const canExport = () => !pending() && !!id();
+  const directory = () =>
+    typeof props.item?.task?.directory === "string" ? props.item.task.directory : undefined;
+  const hasActions = () => canCancel() || canDelete() || canExport();
   const canDrag = () => props.canDrag === true && status() === "queued" && !pending();
 
   return (
@@ -324,9 +342,7 @@ function TaskRow(props: {
     >
       <Show when={canDrag()}>
         <span class="task-row-drag-handle" title={t("task.reorder_button_title")} aria-hidden="true">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-            <path d="M6 3h.01M10 3h.01M6 8h.01M10 8h.01M6 13h.01M10 13h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
-          </svg>
+          <Icon name="drag-handle" size={12} />
         </span>
       </Show>
       <button
@@ -373,6 +389,9 @@ function TaskRow(props: {
         >{taskListMeta(props.item)}</small>
         <Show when={hasActions()}>
           <div class="task-row-actions">
+            <Show when={canExport()}>
+              <ExportButton id={id()} directory={directory()} />
+            </Show>
             <Show when={canCancel()}>
               <CancelButton id={id()} onCancel={props.onCancelTask!} />
             </Show>
@@ -575,14 +594,66 @@ export function TaskList(props: TaskListProps) {
     }
   }
 
+  let importInputEl: HTMLInputElement | undefined;
+  const [importing, setImporting] = createSignal(false);
+
+  async function handleImportFile(file: File) {
+    const directory = settingsStore.directory || "";
+    if (!directory) {
+      window.alert(t("task.import_no_directory"));
+      return;
+    }
+    setImporting(true);
+    try {
+      const result = await importTaskArchive({ file, directory, overwrite: true });
+      window.alert(
+        t("task.import_done", {
+          restored: String(result.restoredFiles),
+          skipped: String(result.skippedFiles.length),
+        }),
+      );
+      await loadTasks();
+    } catch (err) {
+      window.alert(
+        t("task.import_failed", { error: err instanceof Error ? err.message : String(err) }),
+      );
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div class="task-list-panel">
+      <div class="task-list-toolbar">
+        <button
+          type="button"
+          class="task-list-import-button"
+          data-task-import
+          disabled={importing()}
+          title={t("task.import_button_title")}
+          aria-label={t("task.import_button_title")}
+          onClick={() => importInputEl?.click()}
+        >
+          <Icon name="upload" size={11} />
+          <span class="task-list-import-button-text">{t("task.import_button")}</span>
+        </button>
+        <input
+          ref={(el) => (importInputEl = el)}
+          type="file"
+          accept=".zip,application/zip"
+          class="task-list-import-input"
+          data-testid="task-import-input"
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            // Reset value so picking the same file twice still fires onChange.
+            e.currentTarget.value = "";
+            if (file) void handleImportFile(file);
+          }}
+        />
+      </div>
       <Show when={allItems().length > 4 || searchQuery()}>
         <div class="task-list-search">
-          <svg class="task-list-search-icon" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/>
-            <path d="M10.5 10.5L13 13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
+          <Icon name="search" size={12} class="task-list-search-icon" />
           <input
             type="search"
             class="task-list-search-input"

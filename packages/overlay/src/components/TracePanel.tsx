@@ -20,6 +20,7 @@
 
 import { Index, Show, createMemo, createResource, createSignal, onCleanup } from "solid-js";
 import { fetchSessionTrace, fetchTaskTrace, invalidateTraceCache, type TraceEvent, type TraceFetchResult } from "../services/trace";
+import { Icon } from "./Icon";
 
 type TracePanelProps =
   | { sessionID: string; taskID?: never; onClose?: () => void }
@@ -143,7 +144,9 @@ function TraceEventRow(props: { event: TraceEvent; defaultOpen?: boolean }) {
             {String(props.event.sessionID).slice(-8)}
           </span>
         </Show>
-        <span class="trace-event-chevron" aria-hidden="true">{open() ? "▾" : "▸"}</span>
+        <span class="trace-event-chevron" aria-hidden="true">
+          <Icon name={open() ? "caret-down" : "chevron"} />
+        </span>
       </button>
       <Show when={open()}>
         <pre class="trace-event-body">{payloadJson(props.event)}</pre>

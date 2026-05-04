@@ -10,6 +10,7 @@ import { t } from "../utils/i18n";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
 import { StaticTextPart } from "./TextPart";
+import { Icon } from "./Icon";
 
 // ── Types ──
 
@@ -155,7 +156,9 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
             props remain on the component so callers don't break;
             they're just no-ops on this surface now. */}
         <div class="gwg-header-actions">
-          <span class="gwg-chevron" aria-hidden="true">{"\u25BC"}</span>
+          <span class="gwg-chevron" aria-hidden="true">
+            <Icon name="caret-down" />
+          </span>
         </div>
       </div>
       <Show when={expanded()}>

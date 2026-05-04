@@ -36,17 +36,27 @@ export function statusLabel(status: string): string {
   return map[status] || status;
 }
 
-export function statusIcon(status: string): string {
-  const activeIcon = `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`;
-  const map: Record<string, string> = {
-    idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
-    queued: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M8 5.4v2.8l2.1 1.3"/></svg>`,
-    active: activeIcon,
-    completed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.1 8.2l2 2 3.8-3.8"/></svg>`,
-    failed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.4 5.4l5.2 5.2"/><path data-stroke="true" d="M10.6 5.4l-5.2 5.2"/></svg>`,
-    cancelled: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.2 10.8l5.6-5.6"/></svg>`,
-  };
-  return map[status] || map.idle;
+/** Map a task status string to an Icon primitive name. The status
+ * family lives in `Icon.tsx` ICON_PATHS so the CSS .status-icon
+ * coloring (driven by `[data-status="..."]`) flows through
+ * `currentColor` to a single-source SVG path set. */
+export function statusIconName(status: string): IconName {
+  switch (status) {
+    case "idle":
+      return "status-idle";
+    case "queued":
+      return "status-queued";
+    case "active":
+      return "status-active";
+    case "completed":
+      return "status-completed";
+    case "failed":
+      return "status-failed";
+    case "cancelled":
+      return "status-cancelled";
+    default:
+      return "status-idle";
+  }
 }
 
 // ── StatusBadge ──
@@ -60,7 +70,9 @@ interface StatusBadgeProps {
 export function StatusBadge(props: StatusBadgeProps) {
   return (
     <span class={`status-badge ${props.class || ""}`} data-status={props.status}>
-      <span class="status-dot" innerHTML={statusIcon(props.status)} />
+      <span class="status-dot">
+        <Icon name={statusIconName(props.status)} />
+      </span>
       <span class="status-label">{statusLabel(props.status)}</span>
     </span>
   );

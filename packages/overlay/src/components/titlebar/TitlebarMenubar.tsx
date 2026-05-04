@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { appStore } from "../../store/app";
 import { boardStore } from "../../store/board";
+import { Icon } from "../Icon";
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings";
 import { patchConfig, reloadProjectScope } from "../../services/config";
 import { openConfigDialog } from "../../services/dialog";
@@ -178,9 +179,7 @@ export function TitlebarStatusCluster(props: { onOpenLog: () => void }) {
         onClick={props.onOpenLog}
         data-testid="titlebar-open-logs"
       >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
-        </svg>
+        <Icon name="log-lines" size={14} />
       </Button>
     </div>
   );

@@ -20,6 +20,8 @@ export type IconName =
   // Window / dismiss / control
   | "close"
   | "chevron"
+  | "chevron-up"
+  | "chevron-down"
   | "caret-down"
   | "plus"
   | "minimize"
@@ -36,7 +38,39 @@ export type IconName =
   | "executor"
   | "criteria"
   | "delivery"
-  | "files";
+  | "files"
+  // Composer toolbar (was ChatComposer inline svg)
+  | "attach"
+  | "web-search"
+  | "send"
+  | "stop"
+  // Card header actions (was CardHeader inline svg)
+  | "copy"
+  | "check"
+  | "inspect"
+  | "cancel"
+  | "rewind"
+  // Misc UI (was scattered inline svg)
+  | "caret-up"
+  | "search"
+  | "refresh"
+  | "external-link"
+  | "file-document"
+  | "log-lines"
+  | "drag-handle"
+  | "download"
+  | "upload"
+  // Status family (was Board.statusIcon innerHTML strings + status-icon
+  // CSS data-stroke/data-fill switch). The status-icon CSS rules
+  // (.status-icon[data-status="..."]) drive `color`, which currentColor
+  // picks up; per-path `fill="currentColor"` opts a path into the
+  // filled-glyph variant.
+  | "status-idle"
+  | "status-queued"
+  | "status-active"
+  | "status-completed"
+  | "status-failed"
+  | "status-cancelled";
 
 interface IconRecord {
   /** Inner SVG markup. Must be self-contained (no external defs). */
@@ -168,6 +202,197 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       <>
         <path d="M9 2H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5L9 2Z" />
         <polyline points="9,2 9,5 12,5" />
+      </>
+    ),
+  },
+  // Composer toolbar — migrated 2026-05-04 (Step 8b) from ChatComposer
+  // inline svg. Stroke-width was 1.2 there; unified to primitive 1.4.
+  "chevron-up": {
+    body: <path d="M4 10l4-4 4 4" />,
+  },
+  "chevron-down": {
+    body: <path d="M4 6l4 4 4-4" />,
+  },
+  attach: {
+    body: (
+      <path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5" />
+    ),
+  },
+  "web-search": {
+    body: (
+      <>
+        <circle cx="8" cy="8" r="6.5" />
+        <path d="M8 1.5C8 1.5 5.5 4.5 5.5 8S8 14.5 8 14.5M8 1.5C8 1.5 10.5 4.5 10.5 8S8 14.5 8 14.5" />
+        <path d="M1.5 8h13" />
+      </>
+    ),
+  },
+  send: {
+    body: <path d="M2 8l10-5-3 5 3 5z" fill="currentColor" stroke="none" />,
+  },
+  stop: {
+    body: (
+      <rect
+        x="4.25"
+        y="4.25"
+        width="7.5"
+        height="7.5"
+        rx="1.2"
+        fill="currentColor"
+        stroke="none"
+      />
+    ),
+  },
+  // Card header actions — migrated 2026-05-04 (Step 8b) from CardHeader
+  // inline svg.
+  copy: {
+    body: (
+      <>
+        <rect x="5" y="3" width="8" height="10" rx="1.3" />
+        <path d="M3.5 5.5V12a1.5 1.5 0 0 0 1.5 1.5h5.5" />
+      </>
+    ),
+  },
+  check: {
+    body: <path d="M3.5 8.5l3 3 6-6.5" />,
+    strokeWidth: 1.6,
+  },
+  inspect: {
+    body: (
+      <>
+        <circle cx="7" cy="7" r="4" />
+        <path d="M10 10l3 3" />
+      </>
+    ),
+  },
+  cancel: {
+    body: <path d="M5 5l6 6M11 5l-6 6" />,
+    strokeWidth: 1.7,
+  },
+  rewind: {
+    body: (
+      <>
+        <path d="M6.5 3.5L3 7l3.5 3.5" />
+        <path d="M13 12.5c0-2.7-2.1-4.9-4.8-4.9H3.4" />
+      </>
+    ),
+    strokeWidth: 1.6,
+  },
+  // Misc UI — migrated 2026-05-04 (Step 8b) from scattered inline svg
+  // across TaskList / ChangesPanel / ExecutorSelector / FilesSection /
+  // FrontendPreviewPanel / TitlebarMenubar / Card.
+  "caret-up": {
+    body: <polyline points="4,10 8,6 12,10" />,
+  },
+  search: {
+    body: (
+      <>
+        <circle cx="7" cy="7" r="4.5" />
+        <path d="M10.5 10.5L13 13" />
+      </>
+    ),
+  },
+  refresh: {
+    body: (
+      <>
+        <path d="M13 4.5V8h-3.5" />
+        <path d="M12.6 8A5 5 0 103.8 10.5" />
+      </>
+    ),
+  },
+  "external-link": {
+    body: (
+      <>
+        <path d="M6 4h6v6" />
+        <path d="M12 4L5 11" />
+        <path d="M4 6v6h6" />
+      </>
+    ),
+  },
+  "file-document": {
+    body: (
+      <>
+        <path d="M4 2.5h5l3 3V13.5H4z" />
+        <path d="M9 2.5v3h3" />
+        <path d="M6 8h4M6 10.5h4" />
+      </>
+    ),
+  },
+  "log-lines": {
+    body: <path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9" />,
+  },
+  "drag-handle": {
+    // Six dots in two columns. The path uses moveto + dot at each
+    // location (a tiny `h.01` segment renders as a stroke-width dot
+    // with stroke-linecap="round").
+    body: (
+      <path d="M6 3h.01M10 3h.01M6 8h.01M10 8h.01M6 13h.01M10 13h.01" />
+    ),
+    strokeWidth: 2.2,
+  },
+  download: {
+    body: (
+      <>
+        <line x1="8" y1="2.5" x2="8" y2="10" />
+        <polyline points="5,7 8,10 11,7" />
+        <line x1="3" y1="13" x2="13" y2="13" />
+      </>
+    ),
+  },
+  upload: {
+    body: (
+      <>
+        <line x1="8" y1="10" x2="8" y2="2.5" />
+        <polyline points="5,5.5 8,2.5 11,5.5" />
+        <line x1="3" y1="13" x2="13" y2="13" />
+      </>
+    ),
+  },
+  // Status family — migrated 2026-05-04 (Step 8b) from Board.statusIcon
+  // innerHTML strings. Per-path `fill="currentColor"` opts into the
+  // filled-glyph variant (replaces the legacy `data-fill="true"`
+  // attribute the .status-icon CSS used to switch on).
+  "status-idle": {
+    body: (
+      <>
+        <circle cx="8" cy="8" r="4.5" />
+        <circle cx="8" cy="8" r="1.25" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+  "status-queued": {
+    body: (
+      <>
+        <circle cx="8" cy="8" r="4.5" />
+        <path d="M8 5.4v2.8l2.1 1.3" />
+      </>
+    ),
+  },
+  "status-active": {
+    body: <path d="M6 4.6L11.3 8 6 11.4Z" fill="currentColor" stroke="none" />,
+  },
+  "status-completed": {
+    body: (
+      <>
+        <circle cx="8" cy="8" r="4.5" />
+        <path d="M5.1 8.2l2 2 3.8-3.8" />
+      </>
+    ),
+  },
+  "status-failed": {
+    body: (
+      <>
+        <circle cx="8" cy="8" r="4.5" />
+        <path d="M5.4 5.4l5.2 5.2" />
+        <path d="M10.6 5.4l-5.2 5.2" />
+      </>
+    ),
+  },
+  "status-cancelled": {
+    body: (
+      <>
+        <circle cx="8" cy="8" r="4.5" />
+        <path d="M5.2 10.8l5.6-5.6" />
       </>
     ),
   },

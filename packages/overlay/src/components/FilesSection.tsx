@@ -9,6 +9,7 @@
 import { createMemo, Show } from "solid-js";
 import { ChangesPanel } from "./ChangesPanel";
 import { boardStore } from "../store/board";
+import { Icon } from "./Icon";
 import { currentChangeGroups } from "../services/diff";
 import { t } from "../utils/i18n";
 
@@ -27,26 +28,7 @@ export function FilesSection() {
       <details class="section" id="changesSection" open>
         <summary class="section-head">
           <span class="section-icon">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path
-                d="M4 2.5h5l3 3V13.5H4z"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M9 2.5v3h3"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M6 8h4M6 10.5h4"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-              />
-            </svg>
+            <Icon name="file-document" size={14} />
           </span>
           <span class="section-title">{t("section.files")}</span>
         </summary>

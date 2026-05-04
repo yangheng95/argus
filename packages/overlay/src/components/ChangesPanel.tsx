@@ -6,6 +6,7 @@
 
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { boardStore } from "../store/board";
+import { Icon } from "./Icon";
 import {
   currentChangeGroups,
   resolveCurrentChangeGroups,
@@ -214,10 +215,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
                 </span>
               </Show>
               <span class="changes-goal-picker-caret" aria-hidden="true">
-                <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                  <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor"
-                    stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
+                <Icon name="caret-down" size={8} />
               </span>
             </button>
             <Show when={changesGoalMenuOpen()}>
