@@ -53,8 +53,8 @@
   cursor: pointer;
   user-select: none;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard);
   font-size: var(--ui-font-control);
   line-height: 1.5;
 }
@@ -107,7 +107,7 @@
   font-size: var(--ui-font-control);
   color: var(--text-soft);
   margin-left: auto;
-  transition: transform 0.2s ease;
+  transition: transform var(--ui-duration-slow) var(--ui-timing-standard);
 }
 
 .agent-card--expanded .agent-card-chevron {
@@ -140,16 +140,16 @@
 
 .executor-tool-entry {
   border-radius: var(--oc-radius-soft);
-  transition: opacity 0.15s ease;
+  transition: opacity var(--ui-duration-base) var(--ui-timing-standard);
 }
 .executor-tool-entry[data-status="completed"] {
-  opacity: 0.55;
+  opacity: var(--ui-opacity-disabled);
 }
 .executor-tool-entry[data-status="failed"] {
-  opacity: 0.85;
+  opacity: var(--ui-opacity-subtle);
 }
 .executor-tool-entry[data-live="true"] {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
   background: color-mix(in srgb, var(--executor-accent) 10%, transparent);
 }
 

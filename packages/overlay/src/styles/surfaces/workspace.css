@@ -16,9 +16,9 @@
   background: transparent;
   color: var(--text-soft);
   transition:
-    background 100ms,
-    border-color 100ms,
-    color 100ms;
+    background var(--ui-duration-fast),
+    border-color var(--ui-duration-fast),
+    color var(--ui-duration-fast);
 }
 .workspace-toggle:hover {
   background: var(--oc-control-bg-hover);
@@ -73,8 +73,8 @@
   background: color-mix(in srgb, var(--border) 42%, transparent);
   border-radius: var(--oc-radius-pill);
   transition:
-    background 80ms ease,
-    box-shadow 80ms ease;
+    background var(--ui-duration-fast) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-fast) var(--ui-timing-standard);
 }
 .pane-resizer.pane-resizer-workspace:hover::before,
 .pane-resizer.pane-resizer-workspace[data-active="true"]::before {
@@ -144,9 +144,9 @@
   min-width: 0;
   max-width: calc(280px * var(--ui-scale));
   transition:
-    color 120ms,
-    border-color 120ms,
-    background 120ms;
+    color var(--ui-duration-base),
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base);
 }
 .workspace-tab:hover {
   color: var(--text-strong);
@@ -184,8 +184,8 @@
   line-height: 1;
   cursor: pointer;
   transition:
-    color 120ms,
-    background 120ms;
+    color var(--ui-duration-base),
+    background var(--ui-duration-base);
 }
 .workspace-close:hover {
   color: var(--bad);
@@ -363,7 +363,7 @@ code .file-link:hover {
   touch-action: none;
   user-select: none;
   pointer-events: auto;
-  z-index: 10;
+  z-index: var(--ui-z-sticky);
 }
 
 .pane-resizer::before {
@@ -378,9 +378,9 @@ code .file-link:hover {
   border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--border) 42%, transparent);
   transition:
-    background 80ms ease,
-    box-shadow 80ms ease,
-    width 80ms ease;
+    background var(--ui-duration-fast) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-fast) var(--ui-timing-standard),
+    width var(--ui-duration-fast) var(--ui-timing-standard);
 }
 
 .pane-resizer::after {

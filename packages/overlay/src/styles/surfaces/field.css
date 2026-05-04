@@ -92,8 +92,8 @@ textarea.field-input {
   justify-content: center;
   cursor: pointer;
   transition:
-    background 80ms,
-    color 80ms;
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
 }
 
 .field-input-icon:hover:not(:disabled) {
@@ -102,7 +102,7 @@ textarea.field-input {
 }
 
 .field-input-icon:disabled {
-  opacity: 0.45;
+  opacity: var(--ui-opacity-faint);
   cursor: default;
 }
 

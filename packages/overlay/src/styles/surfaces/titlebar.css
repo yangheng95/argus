@@ -7,7 +7,7 @@
  * in the 2026-05-04 user critique. */
 .titlebar {
   position: relative;
-  z-index: 10000;
+  z-index: var(--ui-z-dialog);
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(calc(16px * var(--ui-scale)), 1fr) auto;
   align-items: center;
@@ -266,10 +266,10 @@
   background: transparent;
   box-shadow: none;
   transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
   -webkit-app-region: no-drag;
 }
 
@@ -300,15 +300,15 @@
   border-radius: var(--oc-radius-large);
   background: var(--guide-card-bg);
   box-shadow: var(--guide-card-shadow);
-  opacity: 0;
+  opacity: var(--ui-opacity-hidden);
   visibility: hidden;
   transform: translateY(calc(8px * var(--ui-scale)));
   pointer-events: none;
   transition:
-    opacity 120ms,
-    transform 120ms,
-    visibility 0ms linear 120ms;
-  z-index: 24;
+    opacity var(--ui-duration-base),
+    transform var(--ui-duration-base),
+    visibility var(--ui-duration-fast) linear var(--ui-duration-base);
+  z-index: var(--ui-z-sticky);
   user-select: text;
   -webkit-user-select: text;
   -webkit-app-region: no-drag;
@@ -339,11 +339,11 @@
 .brand-guide:hover .brand-guide-card,
 .brand-guide:focus-visible .brand-guide-card,
 .brand-guide:focus-within .brand-guide-card {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
   visibility: visible;
   transform: translateY(0);
   pointer-events: auto;
-  transition-delay: 0ms;
+  transition-delay: 0;
 }
 
 .brand-guide-kicker {
@@ -485,7 +485,7 @@
   position: absolute;
   top: calc(100% + calc(7px * var(--ui-scale)));
   left: 0;
-  z-index: 10050;
+  z-index: var(--ui-z-dialog);
   width: min(calc(340px * var(--ui-scale)), calc(100vw - calc(24px * var(--ui-scale))));
   box-sizing: border-box;
   max-height: min(calc(620px * var(--ui-scale)), calc(100vh - calc(88px * var(--ui-scale))));
@@ -561,7 +561,7 @@
 }
 
 .titlebar-menubar-item:disabled {
-  opacity: 0.58;
+  opacity: var(--ui-opacity-disabled);
 }
 
 .titlebar-menubar-item-title {
@@ -715,10 +715,10 @@
   background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
   cursor: help;
   transition:
-    border-color 100ms,
-    background 100ms,
-    color 100ms,
-    box-shadow 100ms;
+    border-color var(--ui-duration-fast),
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast),
+    box-shadow var(--ui-duration-fast);
 }
 
 .titlebar-task-status:hover {

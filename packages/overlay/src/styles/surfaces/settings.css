@@ -35,7 +35,7 @@
   padding: var(--ui-gap-md) var(--ui-gap-lg);
   border-radius: var(--oc-radius-soft);
   background: var(--subtle-1);
-  transition: background 0.15s;
+  transition: background var(--ui-duration-base);
 }
 
 .perm-row:hover {
@@ -81,9 +81,9 @@
   font-size: var(--ui-font-control);
   cursor: pointer;
   transition:
-    background 0.12s,
-    color 0.12s,
-    border-color 0.12s;
+    background var(--ui-duration-base),
+    color var(--ui-duration-base),
+    border-color var(--ui-duration-base);
   white-space: nowrap;
 }
 
@@ -134,10 +134,10 @@
   border-radius: var(--oc-radius-soft);
   background: var(--subtle-1);
   transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
 }
 
 .knowledge-toolbar:hover,
@@ -197,7 +197,7 @@
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-bottom: none;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background var(--ui-duration-fast);
 }
 
 .knowledge-item:hover {
@@ -338,10 +338,10 @@
   border-radius: var(--oc-radius-soft);
   background: var(--subtle-1);
   transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
 }
 
 .extension-head:hover,
@@ -450,10 +450,10 @@
   background: var(--surface-inset);
   box-shadow: none;
   transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
 }
 
 .channel-doc-copy {
@@ -726,8 +726,8 @@
   color: var(--text-muted);
   cursor: pointer;
   transition:
-    background 120ms,
-    color 120ms;
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
 }
 
 .config-close-btn:hover {
@@ -784,8 +784,8 @@
   text-align: left;
   cursor: pointer;
   transition:
-    background 120ms,
-    color 120ms;
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
   position: relative;
 }
 
@@ -820,11 +820,11 @@
   width: calc(18px * var(--ui-scale));
   height: calc(18px * var(--ui-scale));
   flex-shrink: 0;
-  opacity: 0.7;
+  opacity: var(--ui-opacity-dim);
 }
 
 .config-nav-item.active .config-nav-icon {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 
 /* Numeric badge that hangs off the right edge of nav rows. */
@@ -927,7 +927,7 @@
   transform: translateX(-50%);
   border-radius: var(--oc-radius-pill);
   background: var(--subtle-3);
-  transition: background 80ms;
+  transition: background var(--ui-duration-fast);
 }
 
 .config-resizer:hover::before,
@@ -954,10 +954,10 @@
   overflow: hidden;
   box-shadow: none;
   transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
 }
 
 .config-section[open] {
@@ -1019,11 +1019,11 @@
   box-shadow: none;
   position: relative;
   transition:
-    background 120ms,
-    border-color 120ms,
-    box-shadow 120ms,
-    color 120ms,
-    transform 120ms;
+    background var(--ui-duration-base),
+    border-color var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    color var(--ui-duration-base),
+    transform var(--ui-duration-base);
 }
 
 .config-section-head::-webkit-details-marker {
@@ -1046,8 +1046,8 @@
   border-bottom: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
   transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
   transition:
-    transform 120ms ease,
-    border-color 120ms ease;
+    transform var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .config-section[open] > .config-section-head::before {
@@ -1075,10 +1075,10 @@
   border-top: none;
   border-radius: 0 0 var(--oc-radius-soft) var(--oc-radius-soft);
   transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .config-section:hover > .config-section-body,
@@ -1104,10 +1104,10 @@
   background: var(--surface-inset);
   box-shadow: none;
   transition:
-    border-color 120ms,
-    background 120ms,
-    box-shadow 120ms,
-    transform 120ms;
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
 }
 
 .config-subsection[open] {
@@ -1159,11 +1159,11 @@
   background: var(--oc-header-bg);
   box-shadow: none;
   transition:
-    background 120ms,
-    border-color 120ms,
-    box-shadow 120ms,
-    color 120ms,
-    transform 120ms;
+    background var(--ui-duration-base),
+    border-color var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    color var(--ui-duration-base),
+    transform var(--ui-duration-base);
 }
 
 .config-subsection-head::-webkit-details-marker {
@@ -1183,8 +1183,8 @@
   border-bottom: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
   transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
   transition:
-    transform 120ms ease,
-    border-color 120ms ease;
+    transform var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .config-subsection[open] > .config-subsection-head::before {
@@ -1211,10 +1211,10 @@
   border-top: none;
   border-radius: 0 0 var(--oc-radius-soft) var(--oc-radius-soft);
   transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .config-subsection:hover > .config-subsection-body,
@@ -1311,7 +1311,7 @@
 
 .about-author-avatar {
   flex-shrink: 0;
-  opacity: 0.85;
+  opacity: var(--ui-opacity-subtle);
 }
 
 .about-author-info {
@@ -1375,9 +1375,9 @@
   font-size: var(--ui-font-small);
   text-decoration: none;
   transition:
-    background 120ms,
-    border-color 120ms,
-    color 120ms;
+    background var(--ui-duration-base),
+    border-color var(--ui-duration-base),
+    color var(--ui-duration-base);
 }
 
 .about-link:hover {
@@ -1484,8 +1484,8 @@
   align-items: center;
   gap: calc(6px * var(--ui-scale));
   transition:
-    background 120ms,
-    color 120ms;
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
 }
 
 .prompt-diff-summary::-webkit-details-marker {
@@ -1500,7 +1500,7 @@
   content: "▸";
   font-size: var(--ui-font-meta);
   color: var(--text-muted);
-  transition: transform 120ms;
+  transition: transform var(--ui-duration-base);
 }
 
 .prompt-diff-details[open] > .prompt-diff-summary::before {
@@ -1528,7 +1528,7 @@
 .prompt-preview-card--default {
   margin-top: 0;
   border-top: none;
-  opacity: 0.7;
+  opacity: var(--ui-opacity-dim);
 }
 
 .prompt-preview-card--attached {
@@ -1874,7 +1874,7 @@
   line-height: 1;
   font-size: 1.05em;
   transform-origin: center;
-  transition: transform 200ms ease;
+  transition: transform var(--ui-duration-slow) var(--ui-timing-standard);
 }
 .provider-refresh-btn[data-spinning="true"] .provider-refresh-icon {
   animation: provider-refresh-spin 1s linear infinite;
@@ -1932,8 +1932,8 @@
   border-radius: var(--oc-radius-large);
   background: var(--subtle-1);
   transition:
-    border-color 120ms,
-    background 120ms;
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base);
 }
 
 .config-panel-card:hover {
@@ -2135,7 +2135,7 @@
   gap: calc(12px * var(--ui-scale));
   padding: calc(8px * var(--ui-scale)) calc(4px * var(--ui-scale));
   border-bottom: var(--oc-border-width) solid var(--divider-soft);
-  transition: background 80ms;
+  transition: background var(--ui-duration-fast);
 }
 .config-toggle-list-item:hover {
   background: var(--subtle-2);
@@ -2333,7 +2333,7 @@
   position: absolute;
   top: calc(10px * var(--ui-scale));
   right: calc(10px * var(--ui-scale));
-  z-index: 2;
+  z-index: var(--ui-z-raised);
   max-width: min(calc(280px * var(--ui-scale)), calc(100% - calc(20px * var(--ui-scale))));
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: var(--oc-radius-large);
@@ -2343,16 +2343,16 @@
   font-size: var(--ui-font-body);
   line-height: 1.45;
   box-shadow: var(--shadow);
-  opacity: 0;
+  opacity: var(--ui-opacity-hidden);
   pointer-events: none;
   transform: translateY(calc(-6px * var(--ui-scale)));
   transition:
-    opacity 140ms ease,
-    transform 140ms ease;
+    opacity var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .config-inline-popup[data-open="true"] {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
   transform: translateY(0);
 }
 
@@ -2467,7 +2467,7 @@
   border-radius: var(--oc-radius-large);
   background: var(--subtle-1);
   min-height: calc(40px * var(--ui-scale));
-  transition: border-color 120ms;
+  transition: border-color var(--ui-duration-base);
 }
 .llm-summary-row:hover {
   border-color: var(--border-hover);

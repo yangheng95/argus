@@ -59,17 +59,17 @@
   position: absolute;
   inset-block-start: 0;
   inset-inline: 0;
-  z-index: 2;
+  z-index: var(--ui-z-raised);
   height: calc(2px * var(--ui-scale));
   overflow: hidden;
   background: transparent;
-  opacity: 0;
-  transition: opacity 120ms;
+  opacity: var(--ui-opacity-hidden);
+  transition: opacity var(--ui-duration-base);
   pointer-events: none;
 }
 
 .task-switch-progress[data-active="true"] {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 
 .task-switch-progress::before {
@@ -237,19 +237,19 @@
   background: transparent;
   box-shadow: none;
   color: var(--text-muted);
-  opacity: 0.76;
+  opacity: var(--ui-opacity-dim);
 }
 
 .chat-header-meta .workspace-toggle:hover {
   background: transparent;
   color: var(--accent);
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 
 .chat-header-meta .workspace-toggle[aria-pressed="true"] {
   background: transparent;
   color: var(--accent);
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 
 .chat-header-meta .workspace-toggle:focus-visible {
@@ -331,7 +331,7 @@
   padding: 0;
   color: var(--text-soft);
   text-align: center;
-  opacity: 0.9;
+  opacity: var(--ui-opacity-subtle);
 }
 
 .chat-empty-icon {
@@ -339,7 +339,7 @@
   height: calc(34px * var(--ui-scale));
   flex-shrink: 0;
   color: var(--accent);
-  opacity: 0.8;
+  opacity: var(--ui-opacity-subtle);
 }
 
 .chat-empty-text {
@@ -536,7 +536,7 @@
 
 .vcs-badge-icon {
   font-size: calc(var(--ui-font-meta) * 1.05);
-  opacity: 0.85;
+  opacity: var(--ui-opacity-subtle);
 }
 
 .vcs-badge-branch {
@@ -548,7 +548,7 @@
 
 .vcs-badge-counts,
 .vcs-badge-arrows {
-  opacity: 0.85;
+  opacity: var(--ui-opacity-subtle);
   font-variant-numeric: tabular-nums;
 }
 
@@ -572,9 +572,9 @@
   border-radius: var(--oc-radius-soft);
   padding: 0 calc(4px * var(--ui-scale));
   transition:
-    background 100ms,
-    border-color 100ms,
-    color 100ms;
+    background var(--ui-duration-fast),
+    border-color var(--ui-duration-fast),
+    color var(--ui-duration-fast);
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -609,8 +609,8 @@
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
   transition:
-    transform 140ms ease,
-    color 100ms;
+    transform var(--ui-duration-base) var(--ui-timing-standard),
+    color var(--ui-duration-fast);
 }
 
 .task-cwd-dropdown:hover .task-cwd-caret {
@@ -666,8 +666,8 @@
   border-radius: var(--oc-radius-soft);
   color: var(--text-soft);
   transition:
-    background 100ms,
-    color 100ms;
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
 }
 
 .task-dir-tool:hover {
@@ -707,8 +707,8 @@
   font-weight: var(--ui-font-weight-medium);
   white-space: nowrap;
   transition:
-    background 100ms,
-    color 100ms;
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
 }
 
 .task-dir-node {
@@ -731,8 +731,8 @@
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
   transition:
-    background 100ms,
-    color 100ms;
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
 }
 
 .task-dir-step:hover {
@@ -784,8 +784,8 @@
   flex-shrink: 0;
   box-shadow: none;
   transition:
-    border-color 120ms,
-    background 120ms;
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base);
 }
 
 .task-bar:hover,
@@ -906,7 +906,7 @@ body[data-theme="vscode-dark"] .task-bar {
   box-shadow:
     0 calc(20px * var(--ui-scale)) calc(40px * var(--ui-scale)) color-mix(in srgb, black 24%, transparent),
     0 calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, black 12%, transparent);
-  z-index: 9999;
+  z-index: var(--ui-z-titlebar);
   scrollbar-width: thin;
   scrollbar-color: var(--subtle-5) transparent;
 }
@@ -975,10 +975,10 @@ body[data-theme="vscode-dark"] .task-bar {
     linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 72%),
     color-mix(in srgb, var(--surface-inset) 74%, transparent);
   transition:
-    background 120ms,
-    border-color 120ms,
-    box-shadow 120ms,
-    transform 120ms;
+    background var(--ui-duration-base),
+    border-color var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
 }
 
 .recent-dir-row:hover {
@@ -1090,17 +1090,17 @@ body[data-theme="vscode-dark"] .task-bar {
   line-height: 1;
   cursor: pointer;
   margin: calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale)) 0 0;
-  opacity: 0;
+  opacity: var(--ui-opacity-hidden);
   transition:
-    background 80ms,
-    color 80ms,
-    opacity 120ms;
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast),
+    opacity var(--ui-duration-base);
 }
 
 .recent-dir-row:hover .recent-dir-remove,
 .recent-dir-row:focus-within .recent-dir-remove,
 .recent-dir-row[data-active="true"] .recent-dir-remove {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 
 .recent-dir-remove:hover {

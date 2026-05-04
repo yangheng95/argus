@@ -377,13 +377,13 @@
   display: inline-flex;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
-  opacity: 0;
-  transition: opacity 0.12s ease;
+  opacity: var(--ui-opacity-hidden);
+  transition: opacity var(--ui-duration-base) var(--ui-timing-standard);
   pointer-events: none;
 }
 .md-code:hover .md-code-toolbar,
 .md-code:focus-within .md-code-toolbar {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
   pointer-events: auto;
 }
 .md-code-lang {
@@ -406,9 +406,9 @@
   color: var(--text-soft);
   cursor: pointer;
   transition:
-    background 0.12s,
-    color 0.12s,
-    border-color 0.12s;
+    background var(--ui-duration-base),
+    color var(--ui-duration-base),
+    border-color var(--ui-duration-base);
 }
 .md-code-copy:hover {
   background: var(--subtle-3);
@@ -492,7 +492,7 @@
 .md-content del,
 .msg-text del {
   text-decoration: line-through;
-  opacity: 0.7;
+  opacity: var(--ui-opacity-dim);
 }
 
 .md-video {

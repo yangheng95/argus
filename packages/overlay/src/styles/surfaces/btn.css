@@ -22,7 +22,7 @@
   font-weight: var(--ui-font-weight-strong);
   cursor: pointer;
   border: var(--oc-border-width) solid var(--border);
-  transition: all 80ms;
+  transition: all var(--ui-duration-fast);
   box-shadow: var(--shadow);
   background: var(--card-fill);
   color: var(--text-strong);
@@ -88,6 +88,6 @@
 }
 
 .btn-primary:disabled {
-  opacity: var(--oc-disabled-opacity);
+  opacity: var(--ui-opacity-disabled);
   cursor: default;
 }

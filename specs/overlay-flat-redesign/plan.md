@@ -452,4 +452,129 @@ export function Icon(props: { name: IconName; size?: number; class?: string }): 
 
 **为什么 700 → strong（=600）而不是新增 heavier token**：用户的核心诉求是"通篇粗体太多"。把 700+ 收敛到 600 减一档强度，是符合用户意图的方向。需要更高强度的场合靠 `font-size` + `letter-spacing` 拉差距，不靠 weight 加重（kicker 风格，brand-guide-kicker 已在用）。
 
+### v3 → v4 修订（2026-05-04 抽象审计反馈）
+
+**触发**：Step 1-7 完成后做整体抽象审计（user / feedback / project 三轴覆盖 styles/components/state），发现 token 层 radius/font-weight/font-size/border/palette 已合格，但**动效 / 层叠 / 不透明度三类视觉常量整层欠抽象**，违反 rule 8（双源 — 同值散落多处）+ rule 10（禁止硬编码参数）+ rule 9（应抽未抽）。同时 SVG icon 在 Step 4 之后又因为新组件加入回潮 16 处，违反 Step 4 单源契约。
+
+**Step 8a — motion / elevation / opacity token 收敛**
+
+设计：在 `tokens/design-language.css` 追加三套语义 token，所有 surface 调用点机械替换。
+
+```css
+/* Motion — 3 duration tokens, 1 timing token. duration 不超过 3 档，
+ * 与 Material 3 / Apple HIG 的认知模型对齐：fast (即时反馈) /
+ * base (默认状态切换) / slow (明显位移)。timing 永远是 ease，
+ * 不引 cubic-bezier 噪点。 */
+--ui-duration-fast: 80ms;     /* hover 反馈、按压、focus ring 进入 */
+--ui-duration-base: 120ms;    /* 默认 — 颜色 / 背景 / 边框 / opacity 切换 */
+--ui-duration-slow: 200ms;    /* 明显的 width / transform / layout 位移 */
+--ui-timing-standard: ease;
+
+/* Elevation — z-index 7 档，命名按"语义堆叠层"而非数值大小。
+ * 同一档内所有元素在视觉上不应互相重叠，只用 layout 关系决定先后；
+ * 跨档才用 z-index 区分。 */
+--ui-z-below: -1;             /* 装饰背景层（::before glow / 渐变背板） */
+--ui-z-base: 0;               /* 内容默认层 */
+--ui-z-decoration: 1;         /* 内容内的装饰元素（accent stripe / dot） */
+--ui-z-raised: 2;             /* 容器内浮起卡片 / sticky head */
+--ui-z-sticky: 10;            /* 滚动容器内 sticky 控件 */
+--ui-z-overlay: 100;          /* local floater（dropdown / tooltip） */
+--ui-z-titlebar: 9000;        /* 顶层窗口 chrome（titlebar / banner） */
+--ui-z-dialog: 10000;         /* 模态对话框 / 全屏 overlay */
+--ui-z-toast: 12000;          /* toast / cmdk / 顶级悬浮 */
+
+/* Opacity — 6 档语义集。命名按"该元素相对其父的存在感"，而非数值。
+ * `--oc-disabled-opacity` 旧名保留为别名以避免一刀切迁移；新代码全部
+ * 用 `--ui-opacity-disabled`。 */
+--ui-opacity-hidden: 0;
+--ui-opacity-faint: 0.4;      /* 辅助文本 / placeholder / hint */
+--ui-opacity-disabled: 0.55;  /* disabled 控件 */
+--ui-opacity-dim: 0.7;        /* secondary 文本 / inactive icon */
+--ui-opacity-subtle: 0.85;    /* secondary surface / hover 前的 idle */
+--ui-opacity-full: 1;
+```
+
+**值映射规则**（迁移脚本一次性应用）：
+
+| transition duration | → token |
+|---|---|
+| 80ms / 0.08s / 100ms / 0.1s | `--ui-duration-fast` |
+| 120ms / 0.12s / 140ms / 150ms / 0.15s | `--ui-duration-base` |
+| 200ms / 0.2s / 250ms / 0.25s | `--ui-duration-slow` |
+| `ease`（无数字） | `--ui-timing-standard` |
+
+| z-index 字面量 | → token |
+|---|---|
+| -1 | `--ui-z-below` |
+| 0 | `--ui-z-base` |
+| 1 | `--ui-z-decoration` |
+| 2 | `--ui-z-raised` |
+| 5 / 10 / 12 / 18 / 24 | `--ui-z-sticky` |
+| 100 / 200 | `--ui-z-overlay` |
+| 9000 / 9999 | `--ui-z-titlebar` |
+| 10000 / 10050 | `--ui-z-dialog` |
+| 12000 | `--ui-z-toast` |
+
+| opacity 字面量 | → token |
+|---|---|
+| 0 | `--ui-opacity-hidden` |
+| 0.18 / 0.4 / 0.42 / 0.45 | `--ui-opacity-faint` |
+| 0.5 / 0.52 / 0.55 / 0.58 / 0.6 | `--ui-opacity-disabled` |
+| 0.62 / 0.65 / 0.7 / 0.72 / 0.74 / 0.76 | `--ui-opacity-dim` |
+| 0.8 / 0.82 / 0.85 / 0.88 / 0.9 | `--ui-opacity-subtle` |
+| 1 | `--ui-opacity-full` |
+
+**淘汰**：
+- `--oc-disabled-opacity` 在 design-language.css 行 38 → 改名 `--ui-opacity-disabled`，单 callsite 同步替换
+- `--ui-window-opacity` 保留（base.css:26，是 Tauri 窗口透明度，不在视觉系统内）
+
+**测试**（rule 36 — 所有改动需测试守护）：
+- `flat-redesign-motion-coverage.test.ts`：扫 surface 文件，禁止 `transition` 后跟裸毫秒数（`\d+ms`）或裸秒数（`0\.\d+s`）；必须走 `var(--ui-duration-*)` 或 `var(--ui-timing-*)`。
+- `flat-redesign-elevation-coverage.test.ts`：扫 surface 文件，禁止 `z-index: \d+`；必须走 `var(--ui-z-*)`。`z-index: -1` / `0` / `auto` 走 token。
+- `flat-redesign-opacity-coverage.test.ts`：扫 surface 文件，禁止 `opacity: 0.\d+`；必须走 `var(--ui-opacity-*)`。`opacity: 0` / `1` 走 token，`opacity: var(--ui-window-opacity)` 加白名单。
+
+**rule 8 原子化**：与 Step 1 同模式，token 加 + callsite 替换 + 测试 在**单 commit** 内完成，避免双源态。
+
+**Step 8b — 剩余 SVG icon 迁 Icon primitive**
+
+Step 4 落地后，`ChatComposer.tsx` / `Board.tsx statusIcon()` / `CardHeader.tsx` 三个组件因新功能加入又写了 16 处 inline SVG，违反 Step 4 的 single-source 契约（Board.tsx:476 已有"未迁移"自标 TODO）。
+
+调用点穷举（rule 35）：
+- `ChatComposer.tsx:485-572` — 6 个 svg：attach / web-search / send / expand-up / expand-down / 1 个未识别（待 grep）
+- `Board.tsx:40-48 statusIcon()` — 6 个 svg：active / idle / failed / queued / completed / unknown
+- `CardHeader.tsx:401-476` — 4 个 svg：retry / cancel / pin / pin-active
+
+**新增 IconName**：根据上述 16 个 callsite 的语义补 `attach / web-search / send / expand-up / expand-down / retry / cancel / pin / pin-active / status-active / status-idle / status-failed / status-queued / status-completed`，按需合并（多个 status-* 可能能合并到 1 个带 prop 的 family，但 Icon primitive 当前不带 prop——保持每个 status-* 独立 IconName）。
+
+**测试扩展**：
+- `flat-redesign-icon-coverage.test.ts` 的 `FORBIDDEN` 列表加 `inline SVG literal` 模式：`<svg[^>]*viewBox="0 0 16 16"`（components/ + main.tsx 内出现即违规）。
+- `Icon.tsx` 测试枚举所有新 IconName 都能渲。
+
+**rule 8 原子化**：同 commit 内 (a) Icon.tsx 加新 path entries (b) ChatComposer/Board/CardHeader 三处全部迁完 (c) 测试守护通过。
+
+**Step 8c — main.tsx 三拆 + dialog store 统一**（待用户审议）
+
+体量大、跨架构，不并入 8a/8b。设计骨架：
+
+- `bootstrap.ts` — 5-phase 启动：(1) load config (2) init SSE / IPC (3) hydrate stores (4) mount layout (5) post-mount（picker / hotkey wire）
+- `bridges.ts` — 全局函数注册（window.applyDirectory / selectTask / state proxy 等 20+ 项）+ document 事件委托（markdown 链接 / 代码复制）
+- `layout.ts` — render mount points（taskListPanel / solidBoardMount / connectionBanner / commandPalette / configDialog 等）
+- `services/dialog-store.ts` — `dialogStore.show({ kind: 'goal' | 'config' | 'confirm', props })` 单一入口，废 main.tsx:610-783 手写 goalForm
+- `services/api-client.ts` — `apiJson` / `apiRequest` 唯一出口，禁止 components/ + main.tsx 直调
+- 根组件加 Solid `ErrorBoundary`，bootstrap 失败显示 fallback UI
+
+**风险**：触动启动顺序、全局桥接 / 测试钩子、dialog 渲染时机。建议先与用户对齐"是否能容忍单 commit 完成"再启动；如不能，需要落更细的 sub-plan。
+
+**新 Step 编号**（v4 后）：
+1. radius+weight token + 全 callsite 替换 + 2 测试 ✅
+2. border 删表 + border-policy 测试 ✅
+3. Icon primitive + 调用点替换 + 2 测试 ✅
+4. 字重 callsite 替换 + density 测试 ✅
+5. 视觉对比 benchmark（pending）
+6. SECTION_ICONS / chevron pseudo / dead code 清理 ✅
+7. Step 0 theme 抽象修复 ✅
+8a. motion / elevation / opacity token 收敛（in progress）
+8b. 剩余 SVG icon 迁 Icon primitive（in progress）
+8c. main.tsx 三拆 + dialog store 统一（待审）
+
 **Step 1 已加的 2 个 weight token** 保留，新增 `--ui-font-weight-medium`。font-weight-coverage 测试白名单从 2 个扩到 3 个，baseline 从 177 收敛到 0。

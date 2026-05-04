@@ -133,8 +133,8 @@
   font-family: var(--mono);
   user-select: none;
   transition:
-    background 0.12s,
-    color 0.12s;
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
 }
 .msg-tool-output-details > summary::-webkit-details-marker {
   display: none;
@@ -144,7 +144,7 @@
   font-size: var(--ui-font-control);
   margin-right: calc(4px * var(--ui-scale));
   transform-origin: center;
-  transition: transform 0.12s ease;
+  transition: transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 .msg-tool-output-details[open] > summary::before {
   transform: rotate(90deg);
@@ -569,7 +569,7 @@
   border-radius: var(--oc-radius-pill);
   border: var(--oc-border-width) solid var(--accent-dim);
   background: var(--accent-dim);
-  transition: background 120ms ease;
+  transition: background var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .msg-file-download:hover {
@@ -690,9 +690,9 @@
   text-align: left;
   cursor: pointer;
   transition:
-    border-color 80ms,
-    background 80ms,
-    color 80ms;
+    border-color var(--ui-duration-fast),
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
 }
 .path-link:hover:not(:disabled) {
   border-color: var(--border-hover);

@@ -56,8 +56,8 @@
   text-align: left;
   font-size: var(--ui-font-meta);
   transition:
-    border-color 120ms ease,
-    background 120ms ease;
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    background var(--ui-duration-base) var(--ui-timing-standard);
 }
 .changes-goal-picker-trigger:hover,
 .changes-goal-picker-trigger:focus-visible {
@@ -85,14 +85,14 @@
   flex: 0 0 auto;
   display: inline-flex;
   color: var(--text-muted);
-  transition: transform 140ms ease;
+  transition: transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 .changes-goal-picker[data-open="true"] .changes-goal-picker-caret {
   transform: rotate(180deg);
 }
 .changes-goal-picker-menu {
   position: absolute;
-  z-index: 12;
+  z-index: var(--ui-z-sticky);
   top: calc(100% + calc(2px * var(--ui-scale)));
   left: 0;
   right: 0;
@@ -156,9 +156,9 @@
   cursor: pointer;
   text-align: left;
   transition:
-    color 120ms ease,
-    border-color 120ms ease,
-    background 120ms ease;
+    color var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    background var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .changes-tab:hover {
@@ -214,7 +214,7 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 80ms;
+  transition: background var(--ui-duration-fast);
   box-shadow: none;
 }
 
