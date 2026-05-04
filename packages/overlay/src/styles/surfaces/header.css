@@ -12,7 +12,7 @@
   gap: var(--oc-header-gap);
   background: var(--oc-header-bg);
   border-block-end: var(--oc-header-border);
-  border-radius: var(--oc-radius-panel);
+  border-radius: 0;
   box-shadow: var(--oc-header-shadow);
   overflow: hidden;
   flex-shrink: 0;

@@ -19,10 +19,21 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 
-const RAW = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
-  "utf8",
-)
+// styles.css was dissolved 2026-05-04 into styles/cascade/*.css and
+// styles/surfaces/*.css. The !important-reset guard that used to scan
+// styles.css now scans the cascade layer where any cross-cutting
+// `background: ... !important` rule would live.
+const STYLES_DIR = path.resolve(import.meta.dir, "..", "src", "styles")
+const CASCADE_FILES = [
+  "cascade/base.css",
+  "cascade/typography.css",
+  "cascade/dark.css",
+  "cascade/light.css",
+  "cascade/vscode-dark.css",
+]
+const RAW = CASCADE_FILES
+  .map((rel) => readFileSync(path.join(STYLES_DIR, rel), "utf8"))
+  .join("\n")
 const STYLES = RAW.replace(/\/\*[\s\S]*?\*\//g, "")
 const INSPECTOR_RAW = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "inspector.css"),
@@ -52,9 +63,10 @@ describe(".section canonical matches the actually-rendered flat chrome", () => {
     )
   })
 
-  test("canonical body uses var(--radius) (≈10px), not the dead 14px chrome value", () => {
+  test("canonical body uses var(--oc-radius-soft) (≈4px), not the dead 14px chrome value", () => {
     const body = soloRuleBody(INSPECTOR_SURFACE, ".section")
     expect(body).not.toMatch(/border-radius:\s*calc\(14px/)
+    expect(body).toMatch(/border-radius:\s*var\(--oc-radius-soft\)/)
   })
 
   test("canonical body does NOT declare the dead drop-shadow chrome", () => {

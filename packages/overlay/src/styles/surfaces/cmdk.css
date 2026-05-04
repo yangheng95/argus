@@ -36,7 +36,7 @@
   flex-direction: column;
   background: var(--dialog-bg);
   border: var(--oc-border-width) solid var(--border-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--oc-radius-large);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
@@ -133,7 +133,7 @@
   display: inline-block;
   padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border-strong);
-  border-radius: var(--oc-radius-control);
+  border-radius: var(--oc-radius-soft);
   background: var(--subtle-2);
   font-family: var(--mono);
   font-size: var(--ui-font-tiny);

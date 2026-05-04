@@ -8,16 +8,15 @@
 :root {
   /* iter51: message-card redesign per docs/overlay-message-card-
      redesign-2026-05-03.md spec direction A (ChatGPT-style flat).
-     Bumped --card-radius from 8px → 12px so corners read friendly /
-     modern, paired with deeper padding for breathing room. The
-     14-color --card-stage-* palette is collapsed to 4 semantic
-     tones (info / success / warn / danger) folded into accent /
-     good / warn / bad — every former stage rail is one of these
-     four. Stage-specific brand colors (architect violet / planner
-     teal / etc) are gone; agents are differentiated by header
-     icon + label, not by a hue. */
+     Card corner-rounding is now driven by the global radius scale
+     (`--oc-radius-soft`); the local `--card-radius` alias was retired
+     2026-05-04 (flat-redesign Step 1). The 14-color --card-stage-*
+     palette is collapsed to 4 semantic tones (info / success / warn
+     / danger) folded into accent / good / warn / bad — every former
+     stage rail is one of these four. Stage-specific brand colors
+     (architect violet / planner teal / etc) are gone; agents are
+     differentiated by header icon + label, not by a hue. */
   --card-gap: calc(8px * var(--ui-scale, 1));
-  --card-radius: calc(12px * var(--ui-scale, 1));
   --card-pad-x: calc(13px * var(--ui-scale, 1));
   --card-pad-y: calc(10px * var(--ui-scale, 1));
   --card-indent: calc(12px * var(--ui-scale, 1));
@@ -106,7 +105,7 @@ body {
   display: block;
   min-width: max(var(--card-min-inline-size), min(100%, var(--card-sticky-inline-size)));
   max-width: 100%;
-  border-radius: var(--card-radius);
+  border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--card-border);
   background: var(--card-bg-0);
   margin: var(--card-gap) 0;
@@ -325,7 +324,7 @@ body {
      body[data-theme="light"] override is gone — palette token differs by
      theme on its own. */
   background: var(--border);
-  border-radius: calc(5px * var(--ui-scale, 1));
+  border-radius: var(--oc-radius-soft);
 }
 /* Goal index badge — pushed to the LEFT of the title so #G1V1 reads
  * before the goal name. Slightly stronger contrast than the normal
@@ -391,8 +390,8 @@ body {
   font-size: calc(10px * var(--ui-scale));
   color: var(--text-muted);
   transition: transform 140ms ease;
-  padding-left: 2px;
-  border-radius: calc(5px * var(--ui-scale, 1));
+  padding-left: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
 }
 
 /* Collapsed-only todo summary — bottom row under the preview line.
@@ -417,7 +416,7 @@ body {
   max-width: calc(240px * var(--ui-scale));
   position: relative;
   height: calc(5px * var(--ui-scale));
-  border-radius: calc(999px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--text-muted) 20%, transparent);
   overflow: hidden;
 }
@@ -437,8 +436,8 @@ body {
 
 .card__todo-count {
   flex: 0 0 auto;
-  font-size: calc(var(--card-sub-size) - 1px);
-  border-radius: calc(5px * var(--ui-scale, 1));
+  font-size: calc(var(--card-sub-size) - calc(1px * var(--ui-scale)));
+  border-radius: var(--oc-radius-soft);
   letter-spacing: 0;
   opacity: 0.85;
 }
@@ -472,7 +471,7 @@ body {
   gap: calc(3px * var(--ui-scale));
   min-height: calc(18px * var(--ui-scale, 1));
   padding: 0 calc(5px * var(--ui-scale, 1));
-  border-radius: calc(5px * var(--ui-scale, 1));
+  border-radius: var(--oc-radius-soft);
   background: var(--subtle-2);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 18%, transparent);
   color: var(--text-muted);
@@ -521,7 +520,7 @@ body {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: calc(5px * var(--ui-scale, 1));
+  border-radius: var(--oc-radius-soft);
   opacity: 0.52;
   transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
 }
@@ -553,7 +552,7 @@ body {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: calc(5px * var(--ui-scale, 1));
+  border-radius: var(--oc-radius-soft);
   opacity: 0.52;
   font-size: calc(14px * var(--ui-scale));
   line-height: 1;
@@ -593,7 +592,7 @@ body {
   min-width: calc(18px * var(--ui-scale, 1));
   padding: 0;
   border: var(--oc-border-width) solid var(--card-border);
-  border-radius: calc(5px * var(--ui-scale, 1));
+  border-radius: var(--oc-radius-soft);
   font-size: calc(10px * var(--ui-scale, 1));
   font-weight: 700;
   line-height: 1;
@@ -814,7 +813,7 @@ body {
   justify-content: center;
   width: calc(22px * var(--ui-scale));
   height: calc(22px * var(--ui-scale));
-  border-radius: calc(999px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
   color: color-mix(in srgb, var(--card-stage) 72%, var(--text-muted));
   background: color-mix(in srgb, var(--card-bg-1) 82%, transparent);
   box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-stage) 12%, var(--card-line-dim));
@@ -854,7 +853,7 @@ body {
     linear-gradient(180deg, color-mix(in srgb, var(--card-stage) 10%, transparent), transparent 72%),
     color-mix(in srgb, var(--card-bg-1) 92%, transparent);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--card-stage) 16%, var(--card-border));
-  border-radius: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--subtle-1);
 }
 
@@ -863,7 +862,7 @@ body {
   align-items: center;
   margin-bottom: calc(7px * var(--ui-scale));
   padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: calc(999px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--card-stage) 16%, transparent);
   color: color-mix(in srgb, var(--card-stage) 78%, var(--text-muted));
   font-size: var(--ui-font-tiny);
@@ -897,7 +896,7 @@ body {
   position: relative;
   margin: calc(10px * var(--ui-scale)) 0 0;
   padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
-  border-radius: calc(14px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--card-stage) 8%, transparent), transparent 74%),
     color-mix(in srgb, var(--card-bg-1) 94%, transparent);
@@ -911,7 +910,7 @@ body {
   top: calc(14px * var(--ui-scale));
   bottom: calc(14px * var(--ui-scale));
   width: calc(2px * var(--ui-scale));
-  border-radius: calc(999px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--card-stage) 58%, transparent);
 }
 
@@ -1041,7 +1040,7 @@ body {
   padding: 0 calc(6px * var(--ui-scale));
   font-size: calc(10px * var(--ui-scale));
   font-variant-numeric: tabular-nums;
-  border-radius: calc(5px * var(--ui-scale, 1));
+  border-radius: var(--oc-radius-soft);
   letter-spacing: 0;
   color: var(--text-soft);
   opacity: 0.42;
@@ -1110,7 +1109,7 @@ body {
   max-width: clamp(calc(160px * var(--ui-scale)), 50%, calc(420px * var(--ui-scale)));
   padding: 0 calc(6px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 32%, transparent);
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: var(--bad-dim);
   color: var(--bad);
   font: inherit;
@@ -1150,7 +1149,7 @@ body {
   display: block;
   min-width: var(--card-min-inline-size);
   max-width: 100%;
-  border-radius: var(--card-radius);
+  border-radius: var(--oc-radius-soft);
   background: var(--surface-inset);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 28%, var(--card-border));
   border-left: calc(3px * var(--ui-scale, 1)) solid var(--card-stage, var(--card-stage-info));
@@ -1239,8 +1238,8 @@ body {
   width: 100%;
   font-family: inherit;
   font-size: var(--card-sub-size);
-  padding: 4px 6px;
-  border-radius: calc(6px * var(--ui-scale, 1));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--card-border);
   background: var(--surface-inset);
   color: var(--text);
@@ -1261,7 +1260,7 @@ body {
 .interaction-card__option:focus-within {
   outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 56%, transparent);
   outline-offset: calc(2px * var(--ui-scale));
-  border-radius: calc(var(--radius) * 0.6);
+  border-radius: var(--oc-radius-soft);
 }
 .interaction-card__actions .btn:focus-visible {
   outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 60%, transparent);
@@ -1292,7 +1291,7 @@ body {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: calc(5px * var(--ui-scale, 1));
+  border-radius: var(--oc-radius-soft);
   opacity: 0.52;
   transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
 }
@@ -1335,7 +1334,7 @@ body {
   gap: calc(7px * var(--ui-scale));
   margin-top: calc(8px * var(--ui-scale));
   padding: calc(8px * var(--ui-scale));
-  border-radius: calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
   border: var(--oc-border-width) solid var(--border);
   cursor: default;
@@ -1347,7 +1346,7 @@ body {
   resize: vertical;
   min-height: calc(64px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
-  border-radius: calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   color: var(--text);
   background: var(--surface);
@@ -1365,7 +1364,7 @@ body {
 
 .card__agent-reply-send {
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 70%, transparent);
-  border-radius: calc(999px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
   padding: calc(4px * var(--ui-scale)) calc(11px * var(--ui-scale));
   font-size: var(--card-sub-size);
   font-weight: 600;
@@ -1388,7 +1387,7 @@ body {
   gap: calc(6px * var(--ui-scale));
   margin-top: calc(6px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: var(--bad-dim);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 36%, transparent);
   color: var(--bad);
@@ -1409,7 +1408,7 @@ body {
   font-size: calc(14px * var(--ui-scale));
   line-height: 1;
   padding: 0 calc(4px * var(--ui-scale));
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
 }
 .card__agent-reply-error-dismiss:hover {
   background: color-mix(in srgb, var(--bad) 18%, transparent);
@@ -1418,7 +1417,7 @@ body {
 .trace-panel {
   margin: calc(8px * var(--ui-scale)) 0 calc(12px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
-  border-radius: calc(6px * var(--ui-scale, 1));
+  border-radius: var(--oc-radius-soft);
   background: var(--surface-inset);
   font-size: calc(12px * var(--ui-scale));
   color: var(--text);
@@ -1455,7 +1454,7 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-radius: calc(3px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   font-size: calc(12px * var(--ui-scale));
   line-height: 1;
 }
@@ -1485,7 +1484,7 @@ body {
   font-size: calc(11px * var(--ui-scale));
   background: var(--subtle-2);
   padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  border-radius: calc(3px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
 }
 .trace-panel-body {
   overflow-y: auto;
@@ -1576,7 +1575,7 @@ body {
   padding: calc(8px * var(--ui-scale, 1)) calc(10px * var(--ui-scale, 1));
   background: color-mix(in srgb, var(--card-bg-1) 92%, var(--bg));
   border: var(--oc-border-width) solid var(--card-border);
-  border-radius: var(--card-radius);
+  border-radius: var(--oc-radius-soft);
   display: flex;
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
@@ -1607,7 +1606,7 @@ body {
 .task-progress__bar {
   position: relative;
   height: calc(4px * var(--ui-scale));
-  border-radius: calc(999px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--text-muted) 18%, transparent);
   overflow: hidden;
 }
@@ -1638,7 +1637,7 @@ body {
   align-items: center;
   gap: calc(5px * var(--ui-scale));
   padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: calc(999px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
   border: var(--oc-border-width) solid var(--card-border);
   background: var(--card-bg-0);
   color: var(--text-soft);

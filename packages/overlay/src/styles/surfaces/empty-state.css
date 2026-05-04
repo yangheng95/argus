@@ -33,7 +33,7 @@
   margin: 0;
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: var(--radius);
+  border-radius: var(--oc-radius-soft);
   background: var(--surface);
   color: var(--text-soft);
 }
@@ -65,7 +65,7 @@
   max-width: none;
   padding: calc(6px * var(--ui-scale));
   border: 0;
-  border-radius: var(--oc-radius-control);
+  border-radius: var(--oc-radius-soft);
 }
 
 .diff-preview-empty .empty-hint,

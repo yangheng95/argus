@@ -36,7 +36,7 @@
   overflow-y: auto;
   background: var(--dialog-bg);
   border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--panel-radius);
+  border-radius: var(--oc-radius-large);
   box-shadow: none;
   padding: calc(18px * var(--ui-scale)) calc(20px * var(--ui-scale));
   display: flex;
@@ -143,7 +143,7 @@
   gap: calc(10px * var(--ui-scale));
   padding: calc(14px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: calc(18px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background:
     linear-gradient(180deg, color-mix(in srgb, white 3.8%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 94%, transparent);
@@ -171,7 +171,7 @@
 
 .section-dialog-body {
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: calc(18px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background:
     linear-gradient(180deg, color-mix(in srgb, white 3.4%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 95%, transparent);
@@ -202,7 +202,7 @@
   min-height: calc(72px * var(--ui-scale));
   padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: calc(16px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--text-strong) 3%, transparent), color-mix(in srgb, var(--accent) 1%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 94%, transparent);

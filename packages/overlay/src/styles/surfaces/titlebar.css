@@ -203,7 +203,7 @@
   padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
   background: transparent;
   border: var(--oc-border-width) solid var(--border);
-  border-radius: calc(5px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   color: var(--text-soft);
   font-size: var(--ui-font-small);
   cursor: pointer;
@@ -235,7 +235,7 @@
 .titlebar-theme-option-swatch {
   width: calc(12px * var(--ui-scale));
   height: calc(12px * var(--ui-scale));
-  border-radius: calc(3px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--border);
   flex-shrink: 0;
   display: inline-block;
@@ -265,15 +265,7 @@
   min-width: 0;
   padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border: 0 solid transparent;
-  /* Reads the shared `--radius` token (12px scaled) so brand-guide's
-   * resting radius matches the rest of the chromed-control family
-   * (.field-input, .field-input-group). The previous calc(10px * scale)
-   * literal disagreed with the multi-class
-   * `:is(.brand-guide, .field-input, …) { border-radius: var(--radius)
-   * !important }` reset that lived at the styles.css tail; the reset
-   * always won. Updating the canonical to read `var(--radius)`
-   * directly retires the dual source. */
-  border-radius: var(--radius);
+  border-radius: var(--oc-radius-soft);
   cursor: help;
   outline: none;
   background: transparent;
@@ -310,7 +302,7 @@
   gap: calc(12px * var(--ui-scale));
   padding: calc(14px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--guide-card-border);
-  border-radius: calc(14px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
   background: var(--guide-card-bg);
   box-shadow: var(--guide-card-shadow);
   opacity: 0;
@@ -475,7 +467,7 @@
   height: var(--ui-titlebar-btn-height);
   padding: 0 calc(9px * var(--ui-scale));
   border: var(--oc-border-width) solid transparent;
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: transparent;
   color: var(--text-soft);
   font-size: var(--ui-font-body);
@@ -506,7 +498,7 @@
   gap: calc(6px * var(--ui-scale));
   padding: calc(7px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
-  border-radius: calc(7px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: var(--menu-panel-bg);
   box-shadow: var(--shadow-lg);
   -webkit-app-region: no-drag;
@@ -552,7 +544,7 @@
   gap: calc(10px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border: var(--oc-border-width) solid transparent;
-  border-radius: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: transparent;
   color: var(--text-soft);
   text-align: left;
@@ -597,7 +589,7 @@
   min-width: 0;
   padding: calc(7px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
-  border-radius: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: var(--subtle-2);
   color: var(--text-soft);
   font-size: var(--ui-font-small);
@@ -670,7 +662,7 @@
   gap: calc(5px * var(--ui-scale));
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
   background: var(--subtle-3);
   color: var(--text-soft);
   font-size: var(--ui-font-small);
@@ -725,7 +717,7 @@
   justify-content: center;
   gap: 0;
   padding: 0;
-  border-radius: var(--oc-titlebar-status-radius);
+  border-radius: var(--oc-radius-soft);
   background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
   cursor: help;
   transition:
