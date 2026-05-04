@@ -2280,7 +2280,10 @@ describe("overlay architecture guards", () => {
   })
 
   test("right-panel empty hint density is canonical, not theme scoped", () => {
-    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
+    // Canonical extracted to surfaces/empty-state.css 2026-05-04.
+    const styles = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/empty-state.css")),
+    )
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2296,12 +2299,15 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\b(?:gap|padding(?:-[a-z]+)?|border(?:-[a-z]+)?|border-radius)\s*:/)
     }
 
-    const body = soloRuleBody(styles, ".section-body > .empty-hint,\n#solidChangesPanel > .empty-hint")
+    const body = soloRuleBody(
+      styles,
+      ".section-body > .empty-hint,\n#solidChangesPanel > .empty-hint",
+    )
     for (const declaration of [
       "gap: calc(4px * var(--ui-scale))",
       "padding: calc(6px * var(--ui-scale))",
       "border: 0",
-      "border-radius: calc(4px * var(--ui-scale))",
+      "border-radius: var(--oc-radius-control)",
     ]) {
       expect(body).toContain(declaration)
     }
