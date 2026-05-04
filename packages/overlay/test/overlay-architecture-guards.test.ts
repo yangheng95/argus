@@ -408,7 +408,14 @@ describe("overlay architecture guards", () => {
   })
 
   test("primary action canonical reads palette tokens, not literals", () => {
-    const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
+    // Canonical extracted from styles.css into surfaces/legacy-button.css
+    // (2026-05-04). Lives as a surface (not a primitive) because the
+    // class-chain pattern (.btn-ghost / .btn.mini / .btn.danger /
+    // .btn-primary) doesn't follow the data-attribute variant rule the
+    // primitives guard enforces. The shared cross-class rule is used by
+    // .btn-primary (generic), .sidebar-btn-primary (sidebar) and
+    // .board-intro__cta-action (board).
+    const styles = readText(join(OVERLAY_ROOT, "src/styles/surfaces/btn.css"))
     // The shared canonical at the multi-class selector for the three
     // primary siblings must consume `--accent-gradient` and
     // `--text-on-accent`. No raw `#fff`, no raw rgba(), no
