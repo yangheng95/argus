@@ -202,10 +202,10 @@
   margin-left: auto;
   position: relative;
   font-size: calc(var(--ui-font-meta) * 0.98);
-  font-weight: 620;
+  font-weight: 600;
   min-height: auto;
   padding: 0 0 0 calc(10px * var(--ui-scale));
-  border-radius: 0;
+  border-radius: calc(5px * var(--ui-scale));
   color: var(--text-soft);
   background: transparent;
   border: none;
@@ -214,7 +214,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 

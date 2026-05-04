@@ -384,18 +384,18 @@ describe("overlay architecture guards", () => {
 
   test("inline-pill family has no theme chrome override", () => {
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles.css")))
-    // task-row-badge / section-badge / extension-status / llm-status /
-    // gwg-priority-badge / change-status / diff-dialog-stat all converged on
-    // the iter15+ "dot-prefix" canonical (transparent base + variant tint
-    // via dim tokens + colored ::before). No theme selector is allowed to
-    // re-paint a panel-tint background or border-color over them — that
-    // pattern masks the variant differentiation and reintroduces themes
-    // owning component chrome.
+    // task-row-badge / section-badge / extension-status / gwg-priority-badge /
+    // change-status / diff-dialog-stat all converged on the iter15+
+    // "dot-prefix" canonical (transparent base + variant tint via dim tokens
+    // + colored ::before). No theme selector is allowed to re-paint a
+    // panel-tint background or border-color over them — that pattern masks
+    // the variant differentiation and reintroduces themes owning component
+    // chrome. (.llm-status / .llm-notice were retired 2026-05-04 — no
+    // remaining call sites in TS/TSX/HTML.)
     for (const cls of [
       "task-row-badge",
       "section-badge",
       "extension-status",
-      "llm-status",
       "gwg-priority-badge",
       "change-status",
       "diff-dialog-stat",
