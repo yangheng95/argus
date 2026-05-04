@@ -1,6 +1,13 @@
 /* ─────────────────────────────────────────────────────────────
-   VS Code dark theme legacy palette + chrome (extracted from
-   styles.css 2026-05-04). See cascade/dark.css for context.
+   VS Code dark theme palette.
+
+   Theme-architecture Step 0 (2026-05-04): aligned with dark/light
+   to declare the **same palette token set** (rule 8 — single
+   source). Previously this file was missing `--accent-shadow`,
+   `--dialog-backdrop` (fell through to dark's :root values — that
+   leak is now closed). The structural tokens that used to live
+   here moved to `tokens/design-language.css` :root because they
+   are theme-independent.
    ───────────────────────────────────────────────────────────── */
 
 body[data-theme="vscode-dark"] {
@@ -10,6 +17,13 @@ body[data-theme="vscode-dark"] {
   --surface-hover: rgba(45, 45, 48, 0.98);
   --surface-inset: rgba(30, 30, 30, 0.96);
   --surface-strong: rgba(51, 51, 51, 0.94);
+  --rail-surface: #252526;
+  --chat-canvas: #1e1e1e;
+  --inspector-surface: #252526;
+
+  --body-bg: var(--bg);
+  --panel-body-bg: #1e1e1e;
+  --panel-body-blur: none;
   --chrome: rgba(60, 60, 60, 0.84);
   --border: rgba(255, 255, 255, 0.1);
   --border-hover: rgba(0, 122, 204, 0.42);
@@ -24,20 +38,14 @@ body[data-theme="vscode-dark"] {
   --accent-start: #007acc;
   --accent-mid: #0e639c;
   --accent-end: #3794ff;
-
   --accent-gradient: var(--accent);
   --accent-gradient-hover: var(--accent-hover);
-
-  --rail-surface: #252526;
-  --chat-canvas: #1e1e1e;
-  --inspector-surface: #252526;
-
-  --body-bg: var(--bg);
-  --panel-body-bg: #1e1e1e;
-  --panel-body-blur: none;
+  --accent-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 28%, transparent);
   --accent-ring: rgba(0, 122, 204, 0.3);
+  --accent-glow: color-mix(in srgb, var(--accent) 28%, transparent);
   --hover-accent-border: rgba(0, 122, 204, 0.36);
   --hover-accent-wash: rgba(0, 122, 204, 0.1);
+  --hover-accent-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
   --info: #3794ff;
   --info-dim: rgba(55, 148, 255, 0.12);
   --good: #73c991;
@@ -46,6 +54,9 @@ body[data-theme="vscode-dark"] {
   --warn-dim: rgba(204, 167, 0, 0.15);
   --bad: #f48771;
   --bad-dim: rgba(244, 135, 113, 0.14);
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --scrollbar-thumb: rgba(121, 121, 121, 0.4);
   --scrollbar-thumb-hover: rgba(121, 121, 121, 0.6);
   --session-scrollbar-track: rgba(255, 255, 255, 0.035);
@@ -55,29 +66,16 @@ body[data-theme="vscode-dark"] {
   --subtle-4: rgba(255, 255, 255, 0.105);
   --subtle-5: rgba(255, 255, 255, 0.145);
   --dialog-bg: #1f2339;
+  --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
   --menu-panel-bg: rgba(31, 35, 57, 0.96);
   --divider-soft: rgba(178, 190, 235, 0.1);
   --panel-fill: var(--surface);
   --panel-fill-hover: var(--surface-hover);
   --card-fill: var(--surface-inset);
   --card-fill-hover: var(--surface-hover);
-  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.045);
-  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --ui-titlebar-height: calc(44px * var(--ui-scale));
-  --ui-panel-header-height: calc(42px * var(--ui-scale));
-  --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
-  --ui-sections-width: clamp(calc(310px * var(--ui-scale)), 25vw, calc(430px * var(--ui-scale)));
-
-  --hover-accent-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
   --guide-card-border: color-mix(in srgb, var(--accent) 25%, transparent);
   --guide-card-bg:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 14%, transparent),
-      color-mix(in srgb, var(--accent) 0%, transparent) 44%
-    ),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 44%),
     var(--bg);
   --guide-card-shadow: var(--shadow-lg);
-  --accent-glow: color-mix(in srgb, var(--accent) 28%, transparent);
 }

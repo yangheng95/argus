@@ -1,17 +1,27 @@
 /* ─────────────────────────────────────────────────────────────
-   Dark theme legacy palette + chrome (extracted from styles.css
-   2026-05-04). Lives under styles/cascade/ rather than styles/themes/
-   because the themes/ directory is guarded as palette-only / oc-color-
-   prefix-only — these legacy --bg / --surface / --accent / etc. tokens
-   are the pre-design-language chrome that consumers haven't migrated
-   off yet. The architecture decision to retire these in favor of the
-   --oc-color-* set is tracked as a separate path 1A/1B redesign.
+   Dark theme palette.
 
-   Doubles as the :root fallback (combined selector) — overlay
-   defaults to dark when no data-theme is set.
+   Theme-architecture Step 0 (2026-05-04): the legacy
+   `:root, body[data-theme="dark"]` selector that doubled as the
+   implicit fallback for any token light/vscode-dark forgot to
+   redeclare was retired (rule 7 — no fallback, rule 8 — no
+   double source). Three changes:
+
+   1. Selector is now `body:not([data-theme]), body[data-theme="dark"]`.
+      The `body:not([data-theme])` half handles the boot-time flicker
+      before the JS theme controller stamps `data-theme` on body —
+      same visual default as before, but no `:root` leak.
+   2. Structural tokens (font families, font sizes, layout
+      dimensions, title/subhead weight + tracking) moved to
+      `tokens/design-language.css` :root — they are theme-
+      independent physical constants.
+   3. Three theme files declare the **same palette token set**.
+      Symmetry is enforced by `test/flat-redesign-theme-symmetry.
+      test.ts`. Adding a token to one theme without the other two
+      breaks the test.
    ───────────────────────────────────────────────────────────── */
 
-:root,
+body:not([data-theme]),
 body[data-theme="dark"] {
   color-scheme: dark;
   --bg: #111528;
@@ -40,11 +50,11 @@ body[data-theme="dark"] {
   --accent-start: #4b8dff;
   --accent-mid: #7b83ff;
   --accent-end: #9b62ff;
-
   --accent-gradient: var(--accent);
   --accent-gradient-hover: var(--accent-hover);
   --accent-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 24%, transparent);
   --accent-ring: color-mix(in srgb, var(--accent) 26%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
   --hover-accent-border: color-mix(in srgb, var(--accent) 32%, transparent);
   --hover-accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
   --hover-accent-shadow: 0 12px 30px rgba(42, 52, 112, 0.2);
@@ -68,38 +78,16 @@ body[data-theme="dark"] {
   --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
   --dialog-bg: #1c213a;
+  --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
   --menu-panel-bg: rgba(28, 33, 58, 0.96);
   --divider-soft: rgba(170, 183, 236, 0.11);
   --panel-fill: var(--surface);
   --panel-fill-hover: var(--surface-hover);
   --card-fill: var(--surface-inset);
   --card-fill-hover: var(--surface-hover);
-  --font: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
-  --mono: "Cascadia Code", "JetBrains Mono", ui-monospace, monospace;
-  --title-weight: 700;
-  --title-track: 0;
-  --subhead-weight: 700;
-  --subhead-track: 0;
-
-  --ui-font-display: calc(12px * var(--ui-scale));
-  --ui-font-heading: calc(12px * var(--ui-scale));
-  --ui-font-title: calc(12px * var(--ui-scale));
-  --ui-font-body: calc(12px * var(--ui-scale));
-  --ui-font-control: calc(11px * var(--ui-scale));
-  --ui-font-meta: calc(11px * var(--ui-scale));
-  --ui-font-small: calc(10px * var(--ui-scale));
-  --ui-font-tiny: calc(10px * var(--ui-scale));
-  --ui-font-code: calc(11px * var(--ui-scale));
-  --ui-titlebar-height: calc(44px * var(--ui-scale));
-  --ui-panel-padding-x: calc(10px * var(--ui-scale));
-  --ui-panel-padding-y: calc(8px * var(--ui-scale));
-  --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
-  --ui-rail-min-width: calc(210px * var(--ui-scale));
-  --ui-sections-width: clamp(calc(310px * var(--ui-scale)), 25vw, calc(430px * var(--ui-scale)));
-  --ui-sidebar-width: var(--ui-rail-width);
-  --ui-chat-priority-width: calc(640px * var(--ui-scale));
-  --ui-chat-min-width: calc(500px * var(--ui-scale));
-  --ui-panel-header-height: calc(42px * var(--ui-scale));
-  --ui-capsule-height: calc(28px * var(--ui-scale));
-  --ui-resizer-width: 1px;
+  --guide-card-border: color-mix(in srgb, var(--accent) 22%, transparent);
+  --guide-card-bg:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 44%),
+    var(--bg);
+  --guide-card-shadow: var(--shadow-lg);
 }
