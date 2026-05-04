@@ -33,14 +33,14 @@
   color: var(--text-soft);
 }
 
+/* Flat-redesign 2026-05-04 (rule §2.2 C): hover affordance is bg
+ * tint + lift, not a border-color flip. */
 .btn:hover {
   background: var(--card-fill-hover);
-  border-color: var(--hover-accent-border);
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
 .btn-ghost:hover {
-  border-color: var(--hover-accent-border);
   background: var(--card-fill-hover);
   color: var(--text);
   box-shadow: var(--shadow);
