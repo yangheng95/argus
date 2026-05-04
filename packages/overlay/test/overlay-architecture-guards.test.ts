@@ -2082,7 +2082,7 @@ describe("overlay architecture guards", () => {
     expect(channelDocBody).toContain("background: var(--surface-inset)")
     expect(channelDocBody).toContain("border: 0")
 
-    const detailCardBody = styles.match(/\.detail-card\s*\{([^}]*)\}/)?.[1] ?? ""
+    const detailCardBody = settingsSurface.match(/\.detail-card\s*\{([^}]*)\}/)?.[1] ?? ""
     expect(detailCardBody).toContain("background: var(--surface-inset)")
     expect(detailCardBody).toContain("border: 0")
   })
