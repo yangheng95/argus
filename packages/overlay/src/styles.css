@@ -1732,7 +1732,13 @@ body[data-theme="dark"] {
   --surface-hover: rgba(39, 45, 77, 0.96);
   --surface-inset: rgba(20, 24, 44, 0.92);
   --surface-strong: rgba(34, 39, 68, 0.94);
-  --rail-surface: rgba(25, 30, 52, 0.88);
+  /* Rail (sidebar) and inspector (sections) panes share one tone so
+   * the layout reads as two columns of the same surface, not two
+   * subtly different surfaces. Chat-canvas stays slightly darker
+   * + more translucent to give the conversation column its own
+   * "canvas" identity (intentional design — matches the light +
+   * vscode-dark pattern). */
+  --rail-surface: rgba(25, 30, 52, 0.9);
   --chat-canvas: rgba(18, 22, 40, 0.82);
   --inspector-surface: rgba(25, 30, 52, 0.9);
 
@@ -1827,9 +1833,6 @@ body[data-theme="vscode-dark"] {
   --surface-hover: rgba(45, 45, 48, 0.98);
   --surface-inset: rgba(30, 30, 30, 0.96);
   --surface-strong: rgba(51, 51, 51, 0.94);
-  --rail-surface: rgba(32, 32, 32, 0.92);
-  --chat-canvas: rgba(30, 30, 30, 0.9);
-  --inspector-surface: rgba(37, 37, 38, 0.94);
   --chrome: rgba(60, 60, 60, 0.84);
   --border: rgba(255, 255, 255, 0.1);
   --border-hover: rgba(0, 122, 204, 0.42);
@@ -1912,7 +1915,11 @@ body[data-theme="light"] {
   --surface-hover: rgba(243, 247, 255, 0.96);
   --surface-inset: #f7f9ff;
   --surface-strong: rgba(255, 255, 255, 0.94);
-  --rail-surface: rgba(250, 252, 255, 0.86);
+  /* Light theme matches the dark + vscode-dark pattern: rail and
+   * inspector share one tone, chat-canvas gets its own slightly
+   * brighter canvas. The previous 0.86/0.9 alpha split between
+   * rail and inspector was pure drift — same RGB triplet. */
+  --rail-surface: rgba(250, 252, 255, 0.9);
   --chat-canvas: rgba(255, 255, 255, 0.78);
   --inspector-surface: rgba(250, 252, 255, 0.9);
 
