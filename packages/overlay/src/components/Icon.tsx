@@ -22,6 +22,9 @@ export type IconName =
   | "chevron"
   | "caret-down"
   | "plus"
+  | "minimize"
+  | "maximize"
+  | "restore"
   // Empty-state / cwd
   | "folder"
   | "folder-open"
@@ -62,6 +65,22 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       <>
         <line x1="8" y1="3" x2="8" y2="13" />
         <line x1="3" y1="8" x2="13" y2="8" />
+      </>
+    ),
+  },
+  // Window controls — single horizontal/box stroke; same viewBox 16
+  // as the rest so the three金刚 line up against the close button.
+  minimize: {
+    body: <line x1="3" y1="8" x2="13" y2="8" />,
+  },
+  maximize: {
+    body: <rect x="3" y="3" width="10" height="10" rx="0.5" />,
+  },
+  restore: {
+    body: (
+      <>
+        <rect x="5" y="2.5" width="8.5" height="8.5" rx="0.5" />
+        <path d="M2.5 5V13.5h8.5" />
       </>
     ),
   },

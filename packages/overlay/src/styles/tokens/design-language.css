@@ -39,6 +39,50 @@
   --oc-titlebar-status-icon: calc(14px * var(--ui-scale, 1));
   --oc-control-shadow: none;
 
+  /* Structural layout tokens — non-themed physical constants. Moved
+   * here 2026-05-04 (theme-architecture Step 0) from cascade/dark.css's
+   * `:root, body[data-theme="dark"]` block, which used to be the
+   * implicit dark fallback for any token light/vscode-dark forgot to
+   * redeclare. Lifting these to :root scope retires the leak —
+   * `cascade/*.css` now hold *only* palette tokens scoped to specific
+   * `body[data-theme="..."]` selectors.
+   *
+   * Font families, font sizes, title/subhead weight + tracking, and
+   * the panel/rail layout dimensions are theme-independent (zh-CN
+   * vs en-US copy might want different sizes, but that's a locale
+   * concern, not a theme concern). */
+  --font: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  --mono: "Cascadia Code", "JetBrains Mono", ui-monospace, monospace;
+
+  --title-weight: var(--ui-font-weight-strong);
+  --title-track: 0;
+  --subhead-weight: var(--ui-font-weight-strong);
+  --subhead-track: 0;
+
+  --ui-font-display: calc(12px * var(--ui-scale));
+  --ui-font-heading: calc(12px * var(--ui-scale));
+  --ui-font-title: calc(12px * var(--ui-scale));
+  --ui-font-body: calc(12px * var(--ui-scale));
+  --ui-font-control: calc(11px * var(--ui-scale));
+  --ui-font-meta: calc(11px * var(--ui-scale));
+  --ui-font-small: calc(10px * var(--ui-scale));
+  --ui-font-tiny: calc(10px * var(--ui-scale));
+  --ui-font-code: calc(11px * var(--ui-scale));
+
+  --ui-titlebar-height: calc(44px * var(--ui-scale));
+  --ui-panel-header-height: calc(42px * var(--ui-scale));
+  --ui-panel-padding-x: calc(10px * var(--ui-scale));
+  --ui-panel-padding-y: calc(8px * var(--ui-scale));
+  --ui-capsule-height: calc(28px * var(--ui-scale));
+  --ui-resizer-width: 1px;
+
+  --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
+  --ui-rail-min-width: calc(210px * var(--ui-scale));
+  --ui-sections-width: clamp(calc(310px * var(--ui-scale)), 25vw, calc(430px * var(--ui-scale)));
+  --ui-sidebar-width: var(--ui-rail-width);
+  --ui-chat-priority-width: calc(640px * var(--ui-scale));
+  --ui-chat-min-width: calc(500px * var(--ui-scale));
+
   /* Theme swatch previews: the titlebar theme-picker shows a 12x12 chip
      for each available theme. These previews are metadata about *other*
      themes, not the active one, so the gradients are deliberately fixed
@@ -120,32 +164,20 @@ body {
   --diff-del-row-bg: color-mix(in srgb, var(--bad) 10%, transparent);
 
   /* Status aliases — the legacy code used --ok/--warning/--danger/
-   * --text-dim alongside --good/--warn/--bad/--text-muted. Same
-   * lazy-resolve gotcha: declare at body so each theme picks its
-   * own --good/--warn/--bad/--text-muted. */
+   * --text-dim alongside --good/--warn/--bad/--text-muted. Body-
+   * scope wiring lets each theme block declare only the canonical
+   * palette tokens (--good/--warn/--bad/--text-muted) once, with
+   * the aliases resolved per-theme through this indirection. */
   --ok: var(--good);
   --warning: var(--warn);
   --danger: var(--bad);
   --text-dim: var(--text-muted);
 
-  /* Accent halo + glow. --accent-shadow was missing from light +
-   * vscode-dark theme blocks; --accent-glow was missing from
-   * vscode-dark. Body-scope wiring fixes both. */
-  --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
-  --accent-shadow: 0 calc(10px * var(--ui-scale)) calc(26px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
-
-  /* Guide-card chrome. The legacy :root version baked in #1e1f22
-   * (dark theme bg literal) inside the linear-gradient — that hex
-   * was the only piece that didn't switch with theme even when the
-   * accent layer did. Replace with var(--bg) so the gradient sits
-   * over each theme's body background. */
-  --guide-card-border: color-mix(in srgb, var(--accent) 22%, transparent);
-  --guide-card-bg:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 14%, transparent),
-      color-mix(in srgb, var(--accent) 0%, transparent) 44%
-    ),
-    var(--bg);
-  --guide-card-shadow: var(--shadow-lg);
+  /* Theme-architecture Step 0 (2026-05-04): the body-scope patches
+   * for `--accent-shadow`, `--accent-glow`, `--guide-card-border`,
+   * `--guide-card-bg`, `--guide-card-shadow` were retired (rule 8 —
+   * no double source). Each theme file
+   * (`cascade/{dark,light,vscode-dark}.css`) now declares the full
+   * palette set including these tokens, and `flat-redesign-theme-
+   * symmetry.test.ts` enforces the parity. */
 }

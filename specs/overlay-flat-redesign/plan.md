@@ -420,3 +420,36 @@ export function Icon(props: { name: IconName; size?: number; class?: string }): 
 4. 字重 callsite 替换 + density 测试（原 5）
 5. 视觉对比 benchmark（原 6）
 6. SECTION_ICONS / chevron pseudo / dead code 清理（原 7 残余）
+
+### v2 → v3 修订（2026-05-04 自审反馈，Step 4 启动时）
+
+**触发**：Step 4 (font-weight) 准备执行时复盘 §2.4，发现内部矛盾。原文写"全仓字重只能取 400 或 600"，但同节又指示"BoardIntro 的伪 H4 段改 weight 500"——500 不在允许集，无法同时满足。
+
+**实测分布**（grep 结果，~165 处）：
+- 400：3 处（body 默认）
+- 500：16 处（subtle meta / soft heading）
+- 600：~120 处（绝大多数 strong）
+- 620 / 650 / 680：8 处（手调过的 strong 变体）
+- 700 / 720 / 760 / 780：~25 处（重 strong / heading）
+- bold：1 处（markdown）
+
+**修订**：扩为 3 个 weight token（不是 2 个）：
+
+```css
+--ui-font-weight-body: 400;
+--ui-font-weight-medium: 500;
+--ui-font-weight-strong: 600;
+```
+
+**映射**：
+
+| 旧值 | 新 token |
+|---|---|
+| 400 | `--ui-font-weight-body` |
+| 500 | `--ui-font-weight-medium` |
+| 600 / 620 / 650 / 680 | `--ui-font-weight-strong` |
+| 700 / 720 / 760 / 780 / bold | `--ui-font-weight-strong` |
+
+**为什么 700 → strong（=600）而不是新增 heavier token**：用户的核心诉求是"通篇粗体太多"。把 700+ 收敛到 600 减一档强度，是符合用户意图的方向。需要更高强度的场合靠 `font-size` + `letter-spacing` 拉差距，不靠 weight 加重（kicker 风格，brand-guide-kicker 已在用）。
+
+**Step 1 已加的 2 个 weight token** 保留，新增 `--ui-font-weight-medium`。font-weight-coverage 测试白名单从 2 个扩到 3 个，baseline 从 177 收敛到 0。

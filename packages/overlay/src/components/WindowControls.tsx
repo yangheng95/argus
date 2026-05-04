@@ -1,12 +1,12 @@
 // ── WindowControls Component ──
 // Tauri window management buttons: minimize, maximize/restore, close (hide).
-// Ports setupTauri() plus maximizeLabel / maximizeIcon helpers and the
-// CLOSE_HINT_KEY logic.
+// Ports setupTauri() plus maximizeLabel + CLOSE_HINT_KEY logic.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { t } from "../utils/i18n";
 import { nativeMessage } from "../services/app-dialog";
 import { Button } from "./ui/Button";
+import { Icon } from "./Icon";
 
 // ── Constants ──
 
@@ -25,26 +25,10 @@ async function currentTauriWindow(): Promise<any | null> {
   return getTauriWindowHandle();
 }
 
-
-// ── Label helpers (
+// ── Label helpers ──
 
 function maximizeLabel(isMaximized: boolean): string {
   return isMaximized ? t("titlebar.restore") : t("titlebar.maximize");
-}
-
-function maximizeIcon(isMaximized: boolean): string {
- // SVG icons matching the existing inline SVGs
-  if (isMaximized) {
- // Restore icon
-    return `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="3" y="0.5" width="7" height="7" rx="0.5" stroke="currentColor"/>
-      <path d="M1 3.5V10H7.5" stroke="currentColor" stroke-linecap="round"/>
-    </svg>`;
-  }
- // Maximize icon
-  return `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="0.5" y="0.5" width="10" height="10" rx="0.5" stroke="currentColor"/>
-  </svg>`;
 }
 
 // ── Component ──
@@ -152,17 +136,7 @@ export function WindowControls() {
           aria-label={t("titlebar.minimize")}
           onClick={handleMinimize}
         >
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-            <line
-              x1="1"
-              y1="5.5"
-              x2="10"
-              y2="5.5"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linecap="round"
-            />
-          </svg>
+          <Icon name="minimize" />
         </Button>
       </Show>
 
@@ -178,10 +152,9 @@ export function WindowControls() {
           title={maxLabel()}
           aria-label={maxLabel()}
           onClick={() => void handleMaximize()}
- // innerHTML is safest here because the SVG path differs for maximize vs
- // restore and we want a single reactive expression.
-          innerHTML={maximizeIcon(isMaximized())}
-        />
+        >
+          <Icon name={isMaximized() ? "restore" : "maximize"} />
+        </Button>
       </Show>
 
       {/* Close / hide */}
@@ -196,26 +169,7 @@ export function WindowControls() {
           aria-label={t("titlebar.close")}
           onClick={() => void handleClose()}
         >
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-            <line
-              x1="1"
-              y1="1"
-              x2="10"
-              y2="10"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linecap="round"
-            />
-            <line
-              x1="10"
-              y1="1"
-              x2="1"
-              y2="10"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linecap="round"
-            />
-          </svg>
+          <Icon name="close" />
         </Button>
       </Show>
     </div>
