@@ -36,6 +36,7 @@ import { iife } from "@/util/iife"
 import { ConfigPaths } from "./paths"
 import { Filesystem } from "@/util/filesystem"
 import { buildChannelSchema } from "@/channel/catalog"
+import { withKeyedLock } from "@/util/lock"
 
 export namespace Config {
   const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
@@ -1557,25 +1558,32 @@ export namespace Config {
     return result
   }
 
-  async function writeConfigFile(filepath: string, config: Info) {
-    const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
-      if (err.code === "ENOENT") return "{}"
-      throw new JsonError({ path: filepath }, { cause: err })
-    })
+  // Serializes read-modify-write of each config file. Two concurrent
+  // PATCH /config requests (e.g. user picks build=A then delivery=B in the
+  // overlay panel before the first save returns) would otherwise both
+  // readText() against the same "before" snapshot and the second write would
+  // clobber the first agent's override. Keyed by absolute filepath so the
+  // project file and the global file get independent locks.
+  const writeConfigLocks = new Map<string, Promise<unknown>>()
 
-    return filepath.endsWith(".jsonc")
-      ? (async () => {
-          const updated = patchJsonc(before, config)
-          const merged = parseConfig(updated, filepath)
-          await Filesystem.write(filepath, updated)
-          return merged
-        })()
-      : (async () => {
-          const existing = parseConfig(before, filepath)
-          const merged = mergeWithNullDelete(existing, config)
-          await Filesystem.writeJson(filepath, merged)
-          return merged
-        })()
+  async function writeConfigFile(filepath: string, config: Info) {
+    return withKeyedLock(writeConfigLocks, filepath, async () => {
+      const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+
+      if (filepath.endsWith(".jsonc")) {
+        const updated = patchJsonc(before, config)
+        const merged = parseConfig(updated, filepath)
+        await Filesystem.write(filepath, updated)
+        return merged
+      }
+      const existing = parseConfig(before, filepath)
+      const merged = mergeWithNullDelete(existing, config)
+      await Filesystem.writeJson(filepath, merged)
+      return merged
+    })
   }
 
   export async function updateGlobal(config: Info) {
