@@ -32,7 +32,7 @@ import {
 import { persistEvidence } from "@/verification/persist"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
-import { findGoal, findGoalRun, findLatestTipGoalRun, findPlan, listGoalRunsByGoal, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { findGoal, findGoalLatestWorkspace, findGoalRun, findLatestTipGoalRun, findPlan, listGoalRunsByGoal, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
 import { syncGoalStatus } from "./goal-status"
 import { createDecisionLog } from "@/decision-log"
 
@@ -672,7 +672,6 @@ export function startNewAttempt(input: {
   })
   let resetWorkspace = false
   if (input.resetWorkspace) {
-    const { findGoalLatestWorkspace } = require("./store") as typeof import("./store")
     const latest = findGoalLatestWorkspace(input.goalID)
     if (latest.directory) {
       // Phase B + E (2026-05-05): both workspace pointer and retry_count
