@@ -20,6 +20,7 @@ auto_detect:
 priority: 55
 required_tools:
   - websearch
+  - webfetch
 ---
 
 # Research Report Skill

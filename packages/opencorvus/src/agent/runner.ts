@@ -258,6 +258,15 @@ export interface RunAgentSessionOutput<C> {
 }
 
 const BUILD_SKILL_GATED_TOOLS = [
+  "task",
+  "webfetch",
+  "websearch",
+  "external_code_search",
+  "skill",
+  "memory",
+  "schedule",
+  "planner",
+  "goal_report",
   "webpage_extract",
   "webpage_compile",
   "webpage_analyze",
