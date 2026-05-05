@@ -42,8 +42,6 @@ import {
   findDeliveryByRun,
   findEvaluationByRun,
   findLatestDeliveryVerdictArtifact,
-  findLatestIntegrityAttemptArtifact,
-  integrityAttemptVerdict,
   findPlan,
   getGoalRetryCount,
   listGoals,
@@ -69,7 +67,6 @@ import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
 import {
   architectFidelityIssues,
   AssemblyOwnerEntrySchema,
-  filterGoalFidelityState,
   ReferenceCoverageEntrySchema,
   SourceCoverageEntrySchema,
   type ArchitectFidelityState,
@@ -96,6 +93,18 @@ function readPersistedArchitectFidelity(task: TaskRow): ArchitectFidelityState {
     referenceCoverage: [],
     assemblyOwners: [],
   }
+}
+
+function acceptanceSpecsToPromptLines(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw.map((spec) => {
+    if (typeof spec === "string") return spec
+    try {
+      return renderSpecsAsText([spec as AcceptanceSpec])
+    } catch {
+      return JSON.stringify(spec)
+    }
+  })
 }
 
 export function validatePersistedArchitectFidelity(input: {
@@ -500,15 +509,6 @@ export function createOrchestratorTools(input: {
     if (!activeSpec) {
       return { error: "No active spec snapshot found. Run architect before creating an execution run." } as const
     }
-    const latestIntegrity = findLatestIntegrityAttemptArtifact({
-      taskID,
-      specSnapshotID: activeSpec.id,
-    })
-    if (!latestIntegrity) {
-      return { error: `No integrity attempt recorded for active spec ${activeSpec.id}. Run integrity before creating an execution run.` } as const
-    }
-    const integrityBlockReason = integrityAttemptExecutionBlockReason(latestIntegrity)
-    if (integrityBlockReason) return { error: integrityBlockReason } as const
 
     const now = Date.now()
     const executor = task.executor
@@ -666,37 +666,14 @@ export function createOrchestratorTools(input: {
     | {
         status: "reviewed"
         specSnapshotID: string
-        verdict: "pass" | "concerns"
+        verdict: "pass" | "concerns" | "needs_correction"
         summary: string
         sessionID: string
         goalCount: number
         perDimension: Array<string>
         correctionsCount: number
         missingCount: number
-      }
-    | {
-        status: "corrected"
-        specSnapshotID: string
-        verdict: "needs_correction"
-        summary: string
-        sessionID: string
-        perDimension: Array<string>
         issues: string[]
-        addedGoals: string[]
-        removedGoals: string[]
-      }
-    | {
-        status: "restarted"
-        specSnapshotID: string
-        verdict: "needs_correction"
-        summary: string
-        sessionID: string
-        perDimension: Array<string>
-        issues: string[]
-        restartSummary: string
-        restartStage: RestartStage
-        nextAction: string
-        restartReason: string
       }
 
   function renderIntegrityOutcome(outcome: IntegrityReviewOutcome) {
@@ -710,9 +687,11 @@ export function createOrchestratorTools(input: {
       const headline =
         outcome.verdict === "pass"
           ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. NEXT: dispatch \`build({ goalID })\` per goal.`
-          : `Integrity verdict: concerns — ${outcome.perDimension.join(", ")}. ${outcome.summary} ` +
-            `Goal set is executable because no correction actions or missing goals were recorded; surface the concerns above to the operator if relevant. ` +
-            `NEXT: dispatch \`build({ goalID })\` per goal, or use \`restart_from_stage('requirements')\` if hallucination findings prove the REQ source is ungrounded.`
+          : outcome.verdict === "concerns"
+            ? `Integrity verdict: concerns — ${outcome.perDimension.join(", ")}. ${outcome.summary} ` +
+              `Treat this as architecture-review feedback for the next build prompt; do not mutate the goal graph from the review alone.`
+            : `Integrity verdict: needs_correction — ${outcome.perDimension.join(", ")}. ${outcome.summary} ` +
+              `Treat this as architecture-review feedback for the next build prompt or an explicit architect decision; the review itself does not rewrite requirements, goals, or runs.`
       return SubAgentProtocol.yieldResult({
         headline,
         fields: [
@@ -722,113 +701,12 @@ export function createOrchestratorTools(input: {
           ["corrections_count", String(outcome.correctionsCount)],
           ["missing_count", String(outcome.missingCount)],
           ["summary", outcome.summary],
-        ],
-        pointer: `integrity session ${outcome.sessionID}`,
-      })
-    }
-    if (outcome.status === "restarted") {
-      return SubAgentProtocol.yieldResult({
-        headline:
-          `Integrity verdict: needs_correction (${outcome.perDimension.join(", ")}). ` +
-          `${outcome.summary} ${outcome.restartReason}; ` +
-          `${outcome.restartSummary}. NEXT: run ${outcome.nextAction} before build.`,
-        fields: [
           ["issues", outcome.issues],
-          ["spec_snapshot_id", outcome.specSnapshotID],
-          ["per_dimension", outcome.perDimension],
         ],
         pointer: `integrity session ${outcome.sessionID}`,
       })
     }
-    return SubAgentProtocol.yieldResult({
-      headline:
-        `Integrity verdict: needs_correction (${outcome.perDimension.join(", ")}). ` +
-        `${outcome.summary} ` +
-        `Goal set re-upserted against spec ${outcome.specSnapshotID}. ` +
-        `Build remains blocked until a subsequent integrity attempt returns pass or concerns. ` +
-        `NEXT: run integrity against the corrected goal graph before dispatching build; use restart_from_stage only for upstream scope defects.`,
-      fields: [
-        ["issues", outcome.issues],
-        ["added_goals", outcome.addedGoals],
-        ["removed_goals", outcome.removedGoals],
-        ["spec_snapshot_id", outcome.specSnapshotID],
-        ["per_dimension", outcome.perDimension],
-      ],
-      pointer: `integrity session ${outcome.sessionID}`,
-    })
-  }
-
-  function integrityAttemptExecutionBlockReason(row: ReturnType<typeof findLatestIntegrityAttemptArtifact>) {
-    const verdict = integrityAttemptVerdict(row)
-    if (!verdict) return undefined
-    const payload = row?.payload as Record<string, unknown> | null | undefined
-    const specSnapshotID = typeof payload?.spec_snapshot_id === "string" ? payload.spec_snapshot_id : "active spec"
-    const issuesCount = typeof payload?.issues_count === "number" ? payload.issues_count : 0
-    const correctionsCount = typeof payload?.corrections_count === "number" ? payload.corrections_count : 0
-    const missingCount = typeof payload?.missing_count === "number" ? payload.missing_count : 0
-    if (verdict !== "needs_correction" && correctionsCount === 0 && missingCount === 0) return undefined
-    const blocker =
-      verdict === "needs_correction"
-        ? "integrity verdict is needs_correction"
-        : `integrity verdict is ${verdict} but recorded correction work`
-    return (
-      `${blocker} for ${specSnapshotID}; execution is blocked until ` +
-      `integrity produces a pass/concerns attempt with zero corrections and zero missing goals, ` +
-      `or the task is explicitly restarted upstream. ` +
-      `issues=${issuesCount}, corrections=${correctionsCount}, missing=${missingCount}.`
-    )
-  }
-
-  async function countPriorGoalLayerIntegrityCorrections(specSnapshotID: string): Promise<number> {
-    const { EngineArtifactTable } = await import("@/engine/engine.sql")
-    const row = Database.use((db) =>
-      db.select({ count: sql<number>`count(*)` })
-        .from(EngineArtifactTable)
-        .where(and(
-          eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "integrity_attempt"),
-          sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${specSnapshotID}`,
-          sql`json_extract(${EngineArtifactTable.payload}, '$.verdict') = 'needs_correction'`,
-          sql`(
-            coalesce(json_extract(${EngineArtifactTable.payload}, '$.corrections_count'), 0) > 0
-            OR coalesce(json_extract(${EngineArtifactTable.payload}, '$.missing_count'), 0) > 0
-          )`,
-        ))
-        .get(),
-    )
-    return Number(row?.count ?? 0)
-  }
-
-  function stableJSON(value: unknown): string {
-    return JSON.stringify(value)
-  }
-
-  function goalContractFingerprint(goals: Array<{
-    id: string
-    title: string
-    objective: string
-    acceptance_specs: unknown
-    owned_paths: unknown
-    depends_on: unknown
-    exports: unknown
-    imports: unknown
-    kind?: string | null
-    priority: string
-    requirement_ids?: unknown
-  }>) {
-    return stableJSON(goals.map((goal) => ({
-      id: goal.id,
-      title: goal.title,
-      objective: goal.objective,
-      acceptance_specs: goal.acceptance_specs,
-      owned_paths: goal.owned_paths,
-      depends_on: goal.depends_on,
-      exports: goal.exports,
-      imports: goal.imports,
-      kind: goal.kind,
-      priority: goal.priority,
-      requirement_ids: goal.requirement_ids,
-    })))
+    throw new Error(`Unknown integrity outcome: ${(outcome as { status?: string }).status ?? "unknown"}`)
   }
 
   async function runIntegrityReview(): Promise<IntegrityReviewOutcome> {
@@ -884,7 +762,7 @@ export function createOrchestratorTools(input: {
       requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
     }))
 
-    const { reviewIntegrity, applyIntegrityCorrections } = await import("@/integrity")
+    const { reviewIntegrity } = await import("@/integrity")
     const verdict = await reviewIntegrity({
       userRequest: task.request,
       taskTitle: task.title,
@@ -903,232 +781,12 @@ export function createOrchestratorTools(input: {
     const perDimensionLabels = verdict.dimensions.map((d) => `${d.id}=${d.verdict}`)
     const { recordIntegrityAttempt } = await import("@/engine/persist")
 
-    if (verdict.verdict !== "needs_correction") {
-      try {
-        recordIntegrityAttempt({
-          taskID,
-          sessionID: verdict.sessionID,
-          specSnapshotID: activeSpec.id,
-          verdict: verdict.verdict,
-          perDimension: perDimensionRollup,
-          issuesCount: verdict.issues.length,
-          correctionsCount: verdict.corrections.length,
-          missingCount: verdict.missingGoals.length,
-          reason: verdict.summary,
-        })
-      } catch (err) {
-        log.error("integrity: recordIntegrityAttempt failed", {
-          taskID,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-      return {
-        status: "reviewed",
-        specSnapshotID: activeSpec.id,
-        verdict: verdict.verdict,
-        summary: verdict.summary,
-        sessionID: verdict.sessionID,
-        goalCount: goalsForReview.length,
-        correctionsCount: verdict.corrections.length,
-        missingCount: verdict.missingGoals.length,
-        perDimension: perDimensionLabels.map((label, index) => `${label}(${verdict.dimensions[index]?.issues.length ?? 0}issues)`),
-      }
-    }
-
-    const { INTEGRITY_DIMENSIONS } = await import("@/integrity/dimensions")
-    const dimensionsByID = new Map(INTEGRITY_DIMENSIONS.map((dimension) => [dimension.id, dimension]))
-    const upstreamOnlyDimensions = verdict.dimensions.filter((dimension) => {
-      if (dimension.verdict !== "needs_correction") return false
-      return dimensionsByID.get(dimension.id)?.canProposeCorrections === false
-    })
-    const goalLayerDimensions = verdict.dimensions.filter((dimension) => {
-      if (dimension.verdict !== "needs_correction") return false
-      return dimensionsByID.get(dimension.id)?.canProposeCorrections !== false
-    })
-    const priorGoalLayerCorrectionAttempts = await countPriorGoalLayerIntegrityCorrections(activeSpec.id)
-    if (priorGoalLayerCorrectionAttempts >= 2 && goalLayerDimensions.length > 0) {
-      try {
-        recordIntegrityAttempt({
-          taskID,
-          sessionID: verdict.sessionID,
-          specSnapshotID: activeSpec.id,
-          verdict: "needs_correction",
-          perDimension: perDimensionRollup,
-          issuesCount: verdict.issues.length,
-          correctionsCount: verdict.corrections.length,
-          missingCount: verdict.missingGoals.length,
-          reason:
-            `${verdict.summary} Goal-layer integrity corrections did not converge after ` +
-            `${priorGoalLayerCorrectionAttempts + 1} attempts for this spec; restarting plan.` +
-            (upstreamOnlyDimensions.length > 0
-              ? ` Diagnostic-only dimension(s) also failed (${upstreamOnlyDimensions.map((d) => d.id).join(", ")}), but the current review still contains goal-layer blockers.`
-              : ""),
-        })
-      } catch (err) {
-        log.error("integrity: recordIntegrityAttempt failed", {
-          taskID,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-      const restartSummary = await restartTaskFromStage(
-        "plan",
-        `goal-layer integrity corrections did not converge after ${priorGoalLayerCorrectionAttempts + 1} attempts for spec ${activeSpec.id}`,
-      )
-      return {
-        status: "restarted",
-        specSnapshotID: activeSpec.id,
-        verdict: "needs_correction",
-        summary: verdict.summary,
-        sessionID: verdict.sessionID,
-        perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
-        issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
-        restartSummary,
-        restartStage: "plan",
-        nextAction: "architect",
-        restartReason: "Goal-layer Integrity corrections did not converge on the active spec",
-      }
-    }
-    if (upstreamOnlyDimensions.length > 0) {
-      try {
-        recordIntegrityAttempt({
-          taskID,
-          sessionID: verdict.sessionID,
-          specSnapshotID: activeSpec.id,
-          verdict: "needs_correction",
-          perDimension: perDimensionRollup,
-          issuesCount: verdict.issues.length,
-          correctionsCount: verdict.corrections.length,
-          missingCount: verdict.missingGoals.length,
-          reason: `${verdict.summary} Diagnostic-only dimensions require upstream restart: ${upstreamOnlyDimensions.map((d) => d.id).join(", ")}.`,
-        })
-      } catch (err) {
-        log.error("integrity: recordIntegrityAttempt failed", {
-          taskID,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-      const restartSummary = await restartTaskFromStage(
-        "requirements",
-        `integrity diagnostic-only dimension(s) require upstream repair: ${upstreamOnlyDimensions.map((d) => d.id).join(", ")}`,
-      )
-      return {
-        status: "restarted",
-        specSnapshotID: activeSpec.id,
-        verdict: "needs_correction",
-        summary: verdict.summary,
-        sessionID: verdict.sessionID,
-        perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
-        issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
-        restartSummary,
-        restartStage: "requirements",
-        nextAction: "requirements",
-        restartReason: "Diagnostic-only findings require upstream repair",
-      }
-    }
-
-    const corrected = applyIntegrityCorrections(goalsForReview, verdict)
-    const correctionChangedGraph = goalContractFingerprint(corrected) !== goalContractFingerprint(goalsForReview)
-
-    if (!correctionChangedGraph) {
-      try {
-        recordIntegrityAttempt({
-          taskID,
-          sessionID: verdict.sessionID,
-          specSnapshotID: activeSpec.id,
-          verdict: "concerns",
-          perDimension: perDimensionRollup,
-          issuesCount: verdict.issues.length,
-          correctionsCount: 0,
-          missingCount: 0,
-          reason: `${verdict.summary} Proposed corrections produced no semantic goal-contract delta; treating as concerns so execution can expose concrete build evidence.`,
-        })
-      } catch (err) {
-        log.error("integrity: recordIntegrityAttempt failed", {
-          taskID,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-      return {
-        status: "reviewed",
-        specSnapshotID: activeSpec.id,
-        verdict: "concerns",
-        summary: `${verdict.summary} Proposed corrections produced no semantic goal-contract delta; execution may proceed with concerns.`,
-        sessionID: verdict.sessionID,
-        goalCount: goalsForReview.length,
-        correctionsCount: 0,
-        missingCount: 0,
-        perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
-      }
-    }
-
-    const beforeIDs = new Set(goalsForReview.map((g) => g.id))
-    const afterIDs = new Set(corrected.map((g) => g.id))
-    const removedByIntegrity = [...beforeIDs].filter((id) => !afterIDs.has(id))
-    const addedByIntegrity = [...afterIDs].filter((id) => !beforeIDs.has(id))
-
-    const { upsertGoalsFromArchitect } = await import("@/engine/persist")
-    const { persistArchitectMetrics } = await import("@/metrics/store")
-
-    let persisted: Array<{ id: string; title: string; llmID: string }> = []
-    let llmToDBID = new Map<string, string>()
-    let deletedIDs: string[] = []
-    try {
-      Database.transaction((db) => {
-        const out = upsertGoalsFromArchitect(db, {
-          taskID,
-          specSnapshotID: activeSpec.id,
-          architectGoals: corrected.map((g) => ({
-            llmID: g.id,
-            title: g.title,
-            objective: g.objective,
-            acceptance_specs: g.acceptance_specs,
-            owned_paths: g.owned_paths,
-            depends_on: g.depends_on,
-            exports: g.exports,
-            imports: g.imports,
-            kind: g.kind,
-            requirement_ids: g.requirement_ids,
-            priority: g.priority,
-            source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
-          })),
-          removedLLMIDs: removedByIntegrity,
-          now: Date.now(),
-        })
-        persisted = out.persisted
-        llmToDBID = out.llmToDBID
-        deletedIDs = out.deletedIDs
-
-        persistArchitectMetrics({
-          task_id: taskID,
-          goal_id_map: llmToDBID,
-          goal_metric_specs: [],
-          global_metric_specs: [],
-        })
-
-        Database.effect(() =>
-          EngineProtocol.emit(
-            EngineEvent.TaskUpdated,
-            { taskID, status: deriveTaskStatus(task), summary: `Integrity corrected goal set: -${deletedIDs.length} +${addedByIntegrity.length}` },
-            { source: "orchestrator.integrity" },
-          ),
-        )
-      })
-    } catch (dbErr) {
-      log.error("integrity: failed to persist corrections", {
-        taskID,
-        error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-      })
-      throw dbErr
-    }
-
-    for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
-
     try {
       recordIntegrityAttempt({
         taskID,
         sessionID: verdict.sessionID,
         specSnapshotID: activeSpec.id,
-        verdict: "needs_correction",
+        verdict: verdict.verdict,
         perDimension: perDimensionRollup,
         issuesCount: verdict.issues.length,
         correctionsCount: verdict.corrections.length,
@@ -1141,17 +799,17 @@ export function createOrchestratorTools(input: {
         error: err instanceof Error ? err.message : String(err),
       })
     }
-
     return {
-      status: "corrected",
+      status: "reviewed",
       specSnapshotID: activeSpec.id,
-      verdict: "needs_correction",
+      verdict: verdict.verdict,
       summary: verdict.summary,
       sessionID: verdict.sessionID,
-      perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
+      goalCount: goalsForReview.length,
+      correctionsCount: verdict.corrections.length,
+      missingCount: verdict.missingGoals.length,
+      perDimension: perDimensionLabels.map((label, index) => `${label}(${verdict.dimensions[index]?.issues.length ?? 0}issues)`),
       issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
-      addedGoals: addedByIntegrity,
-      removedGoals: removedByIntegrity,
     }
   }
 
@@ -2048,10 +1706,8 @@ export function createOrchestratorTools(input: {
           })
 
           // Single-pass persist. Architect's goal set is the authoritative
-          // result of this tool call. Integrity (multi-dimension review) is a
-          // SEPARATE orchestrator tool (`integrity`) that re-upserts the
-          // corrected set against the same spec snapshot. No dual-write, no
-          // readiness gate keyed on a second LLM call (rule 22 / 23).
+          // planning contract. Architecture review is feedback for the next
+          // build prompt, not a second writer that mutates this graph.
           const newSpecSnapshotID = Identifier.ascending("spec")
           const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
           const reqLines = requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`)
@@ -2211,7 +1867,7 @@ export function createOrchestratorTools(input: {
               `${result.globalMetricSpecs.length} global metrics, ${result.challengeSeeds.length} challenge seeds, ` +
               `${result.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-              ` NEXT: call \`integrity\` to verify goal_fidelity / technical_feasibility / hallucination / solution_quality, then proceed to per-goal \`build\`.`,
+              ` NEXT: dispatch eligible per-goal \`build\`; each Build result records post-build architecture_review feedback.`,
             summary: result.summary,
             fields: [
               ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
@@ -2257,33 +1913,36 @@ export function createOrchestratorTools(input: {
     }),
 
     // -----------------------------------------------------------------------
-    // Integrity — orchestrator-driven multi-dimension review of architect output.
+    // Integrity / Architecture review — advisory review of the current graph.
     //
     // Lifted out of architect/agent.ts (audit 2026-04-25): per the agent
     // boundary rule (agents do not call agents; only the orchestrator
     // routes messages between agents), the integrity reviewer must be a
     // sibling of architect at the orchestrator level, not a nested call
     // inside architect's run(). This tool reads the persisted goal set,
-    // invokes the integrity reviewer, and on `needs_correction` re-upserts
-    // the corrected goal set against the same active spec snapshot.
+    // invokes the reviewer, and records findings only. It never rewrites
+    // requirements, goals, or runs; Build consumes the feedback in the next
+    // prompt when architecture_review is not pass.
     // -----------------------------------------------------------------------
 
     integrity: tool({
       description:
-        "OPTIONAL audit agent. Multi-dimension review of architect output along four " +
+        "OPTIONAL architecture-review agent. Multi-dimension review of the active " +
+        "architect graph along four " +
         "axes: goal_fidelity (coverage of the original user request), " +
         "technical_feasibility (imports / exports / owned_paths / dep graph viability), " +
-        "hallucination (ungrounded REQs / specs / contracts — DIAGNOSTIC: findings " +
-        "trigger upstream rework, never goal mutations), solution_quality " +
+        "hallucination (ungrounded REQs / specs / contracts), solution_quality " +
         "(granularity, acceptance-spec strength, ownership, ordering). Returns a " +
         "per-dimension verdict (pass / concerns / needs_correction) plus an aggregate " +
-        "(worst-of). On aggregate `needs_correction` the orchestrator re-upserts the " +
-        "corrected goal set against the same spec snapshot. A `concerns` attempt is " +
-        "executable only when it records zero correction actions and zero missing goals.\n\n" +
+        "(worst-of). Findings are persisted as feedback only: this review never " +
+        "rewrites requirements, goals, or runs, and it does not block the first Build " +
+        "round. Each goal build automatically records post-build architecture_review " +
+        "input and runs this review after the Build report; non-pass findings should " +
+        "be passed as concrete feedback to the next Build or an explicit Architect decision.\n\n" +
         "USE WHEN: architect just produced a non-trivial goal graph (≥3 goals, OR " +
         "cross-goal contracts, OR foundational decisions architect derived rather " +
-        "than user-stated), OR delivery feedback hints the decomposition has drifted " +
-        "from user intent.\n" +
+        "than user-stated), OR a Build / Delivery result needs architecture feedback. " +
+        "Build already invokes the post-build review for goal builds.\n" +
         "SKIP WHEN: architect produced exactly one goal whose contract trivially " +
         "matches the user request, OR you already ran integrity for this spec " +
         "snapshot and have no new signal. Requires architect goals on the active " +
@@ -4556,40 +4215,6 @@ export function createOrchestratorTools(input: {
               `while active spec is ${activeSpec.id}. Re-read the active goal graph before dispatching build.`
             )
           }
-          const latestIntegrity = findLatestIntegrityAttemptArtifact({
-            taskID,
-            specSnapshotID: activeSpec.id,
-          })
-          if (!latestIntegrity) {
-            const integrityOutcome = await runIntegrityReview()
-            if (integrityOutcome.status === "blocked") {
-              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-              return `build: blocked before goal ${attachedGoalID} — ${integrityOutcome.headline}`
-            }
-            if (integrityOutcome.status === "corrected") {
-              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-              return (
-                `build: blocked before goal ${attachedGoalID} — integrity corrected the active goal graph for spec ` +
-                `${integrityOutcome.specSnapshotID}. Re-read the corrected goals and choose the next dispatch from the new graph.`
-              )
-            }
-            if (integrityOutcome.status === "restarted") {
-              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-              return (
-                `build: blocked before goal ${attachedGoalID} — integrity restarted upstream from spec ` +
-                `${integrityOutcome.specSnapshotID}. Run ${integrityOutcome.nextAction} before dispatching build.`
-              )
-            }
-          }
-          const reviewedIntegrity = findLatestIntegrityAttemptArtifact({
-            taskID,
-            specSnapshotID: activeSpec.id,
-          })
-          const integrityBlockReason = integrityAttemptExecutionBlockReason(reviewedIntegrity)
-          if (integrityBlockReason) {
-            if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-            return `build: blocked before goal ${attachedGoalID} — ${integrityBlockReason}`
-          }
         }
 
         let coordinatorRunID: string | undefined
@@ -4626,36 +4251,6 @@ export function createOrchestratorTools(input: {
                 `build: goal ${attachedGoalID} belongs to superseded spec ${goal.spec_snapshot_id ?? "null"} ` +
                 `while active spec is ${activeSpec.id}. Re-read the active goal graph before dispatching build.`
               )
-            }
-            const latestIntegrity = findLatestIntegrityAttemptArtifact({
-              taskID,
-              specSnapshotID: activeSpec.id,
-            })
-            if (!latestIntegrity) {
-              const integrityOutcome = await runIntegrityReview()
-              if (integrityOutcome.status === "blocked") {
-                if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-                return `build: blocked before goal ${attachedGoalID} — ${integrityOutcome.headline}`
-              }
-              if (integrityOutcome.status === "corrected") {
-                if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-                return (
-                  `build: blocked before goal ${attachedGoalID} — integrity corrected the active goal graph for spec ` +
-                  `${integrityOutcome.specSnapshotID}. Re-read the corrected goals and choose the next dispatch from the new graph.`
-                )
-              }
-              if (integrityOutcome.status === "restarted") {
-                if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-                return (
-                  `build: blocked before goal ${attachedGoalID} — integrity restarted upstream from spec ` +
-                  `${integrityOutcome.specSnapshotID}. Run ${integrityOutcome.nextAction} before dispatching build.`
-                )
-              }
-            }
-            const integrityBlockReason = integrityAttemptExecutionBlockReason(latestIntegrity)
-            if (integrityBlockReason) {
-              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-              return `build: blocked before goal ${attachedGoalID} — ${integrityBlockReason}`
             }
             // Fidelity gate runs BEFORE any worktree creation or workspace
             // pointer mutation. Phase A2 (2026-05-05): pre-fix order was
@@ -4757,11 +4352,7 @@ export function createOrchestratorTools(input: {
               id: goal.id,
               title: goal.title,
               objective: request.trim().length > 0 ? request : goal.objective,
-              acceptance_specs: Array.isArray(goal.acceptance_specs)
-                ? (goal.acceptance_specs as Array<string | { description?: string }>).map((spec) =>
-                    typeof spec === "string" ? spec : (spec.description ?? JSON.stringify(spec)),
-                  )
-                : [],
+              acceptance_specs: acceptanceSpecsToPromptLines(goal.acceptance_specs),
               owned_paths: Array.isArray(goal.owned_paths) ? (goal.owned_paths as string[]) : [],
               exports: Array.isArray(goal.exports) ? (goal.exports as string[]) : [],
               imports: Array.isArray(goal.imports) ? (goal.imports as string[]) : [],
@@ -4810,8 +4401,10 @@ export function createOrchestratorTools(input: {
             const collaborationGoals = siblingGoals.map((g) => ({
               id: g.id,
               title: g.title,
+              objective: g.objective,
               kind: g.kind,
               status: goalStatusByID(g.id),
+              acceptance_specs: acceptanceSpecsToPromptLines(g.acceptance_specs),
               owned_paths: Array.isArray(g.owned_paths) ? g.owned_paths as string[] : [],
               depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
               exports: Array.isArray(g.exports) ? g.exports as string[] : [],
@@ -4861,10 +4454,7 @@ export function createOrchestratorTools(input: {
               dependencies: dependencies.length > 0 ? dependencies : undefined,
               collaborationGoals,
               designSpecs,
-              fidelity: filterGoalFidelityState({
-                goalID: goal.id,
-                fidelity: taskFidelity,
-              }),
+              fidelity: taskFidelity,
               retryFeedback,
               deliveryFeedback,
               retryAttachments,
@@ -5094,6 +4684,55 @@ export function createOrchestratorTools(input: {
           // diffs is captured by the surrounding scope's destructure for the
           // ok-branch report rendering below; pull it back out for clarity.
           const diffs = buildOutcome.result.diffs
+          let architectureReviewLine = "- architecture_review: (not run for task-level build)"
+          if (attachedGoalID) {
+            const buildReportForReview = {
+              status: result.status,
+              summary: result.summary,
+              files_changed: result.files_changed,
+              tests: result.tests,
+              error: result.status === "failed" ? result.error : undefined,
+              commit_ref: result.commit_ref,
+            }
+            try {
+              const decisionLog = createDecisionLog(taskID)
+              decisionLog.append({
+                phase: "build",
+                goalID: attachedGoalID,
+                key: "build_report_for_architecture_review",
+                value: JSON.stringify(buildReportForReview),
+                reason: "post_build_architecture_review_input",
+              })
+              const architectureReview = await runIntegrityReview()
+              if (architectureReview.status === "blocked") {
+                architectureReviewLine = `- architecture_review: blocked (${architectureReview.headline})`
+              } else {
+                architectureReviewLine =
+                  `- architecture_review: ${architectureReview.verdict}; ` +
+                  `${architectureReview.summary}; corrections=${architectureReview.correctionsCount}; ` +
+                  `missing=${architectureReview.missingCount}`
+              }
+              if (architectureReview.status === "reviewed" && architectureReview.verdict !== "pass") {
+                decisionLog.append({
+                  phase: "retry",
+                  goalID: attachedGoalID,
+                  key: "post_build_architecture_review",
+                  value:
+                    `${architectureReview.verdict}: ${architectureReview.summary}. ` +
+                    `issues=${architectureReview.issues.join("; ") || "none"}`,
+                  reason: "architectural rule review after build",
+                })
+              }
+            } catch (reviewErr) {
+              const reviewMsg = reviewErr instanceof Error ? reviewErr.message : String(reviewErr)
+              log.warn("build: post-build architecture review failed", {
+                taskID,
+                goalID: attachedGoalID,
+                error: reviewMsg,
+              })
+              architectureReviewLine = `- architecture_review: failed (${reviewMsg})`
+            }
+          }
 
           if (isTaskLevelBuild) await trackStepComplete("build")
 
@@ -5121,14 +4760,14 @@ export function createOrchestratorTools(input: {
             `- summary: ${result.summary}\n` +
             `- files_changed:\n${fileLines}\n` +
             `${commitLine}${errorLine}${worktreeLine}${cleanupLine}\n` +
-            `- tests:\n${testLines}\n\n` +
+            `- tests:\n${testLines}\n` +
+            `${architectureReviewLine}\n\n` +
             `### Next step\n` +
-            `Call \`deliver\` to run the adversarial verification + Arbiter.\n` +
-            `If the Arbiter rejects, compare this report against the rejection_details — ` +
-            `did build actually address the cited issues? If yes but deliver still rejects, ` +
-            `the goal contract may need modify_goal. If no, call build again with more specific ` +
-            `instructions citing what was missed (re-invoking build with the same prompt is a ` +
-            `deadlock; iteration budget will terminate the task).`
+            (result.status === "passed"
+              ? `If architecture_review is pass/concerns, call \`deliver\` for integrated verification. ` +
+                `If it reports needs_correction, call build again with that concrete feedback in the prompt.`
+              : `Call build again with the concrete failed-build and architecture_review feedback above. ` +
+                `Do not re-run the same prompt.`)
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)

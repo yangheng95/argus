@@ -85,8 +85,9 @@ export namespace BuildAgent {
      *  honour the relevant subset. */
     designSpecs?: VisualSpec[]
     /** Cross-goal interface contracts the architect committed to the
-     *  decision log. Each entry is either targeted at this goal explicitly
-     *  or task-wide (goalIDs is empty / omitted). */
+     *  decision log. Build receives the complete set so every goal sees the
+     *  same architectural consensus, with this goal only highlighted in
+     *  rendering. */
     architectContracts?: Array<{
       category: string
       title: string
@@ -125,8 +126,10 @@ export namespace BuildAgent {
     collaborationGoals?: Array<{
       id: string
       title: string
+      objective: string
       kind: string
       status: string
+      acceptance_specs: string[]
       owned_paths: string[]
       depends_on: string[]
       exports: string[]
@@ -1821,9 +1824,16 @@ function buildSessionTitle(target: BuildTarget): string {
   return `Build: ${snippet}${target.text.length > 60 ? "…" : ""}`
 }
 
+function compactLine(value: string, max = 320): string {
+  const normalized = value.replace(/\s+/g, " ").trim()
+  if (normalized.length <= max) return normalized
+  return `${normalized.slice(0, max)}…`
+}
+
 export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext): string {
   if (target.kind === "goal") {
     const lines: string[] = []
+    const dependencyIDs = new Set(target.depends_on)
 
     // ── Upstream context (rule 23): the goal contract is a compressed view;
     //    the build agent benefits from the original Requirements list and
@@ -1843,21 +1853,29 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
-    const contracts = (context?.architectContracts ?? []).filter((c) => {
-      if (!c.goalIDs || c.goalIDs.length === 0) return true // task-wide
-      return c.goalIDs.includes(target.id)
-    })
+    const contracts = context?.architectContracts ?? []
     if (contracts.length > 0) {
       lines.push("## Architect Contracts (cross-goal consensus, must honour)")
       lines.push("")
       lines.push(
-        "The architect committed these interface contracts to the decision log. They are binding: violating them will fail the integration merge.",
+        "The architect committed these interface contracts to the decision log. This is a budgeted view of the complete architecture consensus: current-goal, dependency, and task-wide contracts are expanded; sibling-only contracts are included compactly so you can preserve them without flooding the prompt.",
       )
       lines.push("")
       for (const c of contracts) {
-        const scope = c.goalIDs && c.goalIDs.length === 1 ? "(this goal)" : "(task-wide)"
+        const goalIDs = c.goalIDs ?? []
+        const relevant =
+          goalIDs.length === 0 ||
+          goalIDs.includes(target.id) ||
+          goalIDs.some((goalID) => dependencyIDs.has(goalID))
+        const scope = goalIDs.length === 0
+          ? "(task-wide)"
+          : goalIDs.includes(target.id)
+            ? goalIDs.length === 1 ? "(this goal)" : `(includes this goal: ${goalIDs.join(", ")})`
+            : goalIDs.some((goalID) => dependencyIDs.has(goalID))
+              ? `(dependency contract: ${goalIDs.join(", ")})`
+            : `(sibling contract: ${goalIDs.join(", ")})`
         lines.push(`### ${c.title} — ${c.category} ${scope}`)
-        lines.push(c.spec)
+        lines.push(relevant ? c.spec : compactLine(c.spec))
         lines.push("")
       }
     }
@@ -1872,7 +1890,15 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
       for (const goal of collaborationGoals) {
         const marker = goal.id === target.id ? " (this goal)" : ""
+        const relevant = goal.id === target.id || dependencyIDs.has(goal.id)
         lines.push(`- **${goal.id}**${marker} [${goal.kind}, status=${goal.status}]: ${goal.title}`)
+        if (goal.objective) lines.push(`  - objective: ${goal.objective}`)
+        if (goal.acceptance_specs.length > 0 && relevant) {
+          lines.push("  - acceptance_specs:")
+          for (const spec of goal.acceptance_specs) lines.push(`    - ${spec}`)
+        } else if (goal.acceptance_specs.length > 0) {
+          lines.push(`  - acceptance_specs_summary: ${goal.acceptance_specs.map((spec) => compactLine(spec, 140)).join(" | ")}`)
+        }
         if (goal.owned_paths.length > 0) lines.push(`  - responsibility_paths: ${goal.owned_paths.join(", ")}`)
         if (goal.depends_on.length > 0) lines.push(`  - depends_on: ${goal.depends_on.join(", ")}`)
         if (goal.exports.length > 0) lines.push(`  - exports: ${goal.exports.join("; ")}`)
@@ -1913,7 +1939,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("## Source Coverage Contract")
       lines.push("")
       lines.push(
-        "These existing source surfaces are part of the architect's fidelity contract for this goal. Respect the declared action instead of silently bypassing or re-inventing the local implementation.",
+        "These existing source surfaces are part of the task-wide architect fidelity contract. Respect the declared action instead of silently bypassing or re-inventing the local implementation, even when a row primarily belongs to a sibling goal.",
       )
       lines.push("")
       for (const row of sourceCoverage) {
@@ -1927,7 +1953,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("## Reference Coverage Contract")
       lines.push("")
       lines.push(
-        "These reference surfaces are authoritative for this goal. Restore them 1:1 and cover the named visual specs; do not reinterpret or redesign them.",
+        "These reference surfaces are authoritative for the whole milestone. Restore them 1:1 and cover the named visual specs; do not reinterpret or redesign them. If a reference belongs to a sibling goal, preserve compatibility with that surface instead of drifting away from it.",
       )
       lines.push("")
       for (const row of referenceCoverage) {

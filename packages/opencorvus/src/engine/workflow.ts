@@ -170,13 +170,13 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(design_analysis 可选) → requirements → architect → integrity → per-goal[build] → deliver；
+ *  流程：(design_analysis 可选) → requirements → architect → per-goal[build + architecture_review] → deliver；
  *  rejection 触发返工。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
-  description: "analyze_intent → (design_analysis) → requirements → architect → integrity → per-goal[build] → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
+  description: "analyze_intent → (design_analysis) → requirements → architect → per-goal[build + architecture_review] → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "analyze_intent",
@@ -215,30 +215,29 @@ const PIPELINE: MiniWorkflow = {
       after: ["requirements"],
     },
     {
-      id: "integrity",
-      tool: "integrity",
-      label: "Integrity",
-      hint: "对当前 architect spec snapshot 做强制多维完整性审查（goal fidelity / 技术可行性 / hallucination / 方案质量）。pipeline build 之前必须先完成这一阶段。",
-      scope: "task",
-      skippable: true,
-      after: ["architect"],
-    },
-    {
       // Per-goal 实现：每个 goal 派发到 build agent（在 worktree 中）。
-      // 真实派发由 GoalPool 完成，工具入口是 `dispatch_goal`。phase-5/6 的
-      // GoalPool → parallel-tool-call 迁移后 planner 已被删除（commit
-      // a9c3cb5d3）；executor 直接读 acceptance specs + architect 契约执行，
-      // 不再有 plan 预 pass。所以本 step 只剩单个 build phase。
+      // Orchestrator calls the unified `build` tool with goalID; the build
+      // prompt carries a budgeted architecture-consensus view and the build
+      // result records architecture_review feedback.
       id: "build",
-      tool: "dispatch_goal",
+      tool: "build",
       label: "Executor",
-      hint: "执行器在隔离 worktree 中跑 build phase 完成一个 goal。GoalPool 自动派发；orchestrator 只管触发。",
+      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入，结束后自动记录 architecture_review 反馈。",
       scope: "goal",
       skippable: false,
-      after: ["integrity"],
+      after: ["architect"],
       phases: [
         { id: "build", label: "Build", sessionKind: "build" },
       ],
+    },
+    {
+      id: "integrity",
+      tool: "integrity",
+      label: "Review",
+      hint: "架构复核记录：goal build 完成后自动写入 architecture_review 反馈。该阶段是反馈记录，不是 build 前置门槛，也不自动改写 goal 图。",
+      scope: "task",
+      skippable: true,
+      after: ["build"],
     },
     {
       id: "deliver",

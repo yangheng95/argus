@@ -6,7 +6,7 @@ import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { WorkflowRegistry, projectTaskSteps } from "../../src/engine/workflow"
 import { resetDatabase } from "../fixture/db"
 
-describe("pipeline workflow integrity step", () => {
+describe("pipeline workflow architecture review step", () => {
   beforeEach(async () => {
     await resetDatabase()
   })
@@ -15,7 +15,7 @@ describe("pipeline workflow integrity step", () => {
     await resetDatabase()
   })
 
-  test("includes integrity between architect and build", () => {
+  test("projects architecture review after build instead of before execution", () => {
     const pipeline = WorkflowRegistry.resolveSync("pipeline")
     expect(pipeline).toBeDefined()
     const stepIDs = pipeline!.steps.map((step) => step.id)
@@ -24,10 +24,12 @@ describe("pipeline workflow integrity step", () => {
       "design_analysis",
       "requirements",
       "architect",
-      "integrity",
       "build",
+      "integrity",
       "deliver",
     ])
+    expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["architect"])
+    expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
   })
 
   test("projects integrity as completed when the active spec has an integrity attempt", () => {

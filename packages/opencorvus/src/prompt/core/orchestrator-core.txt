@@ -189,7 +189,7 @@ allows that route. `Kind: build` can go `build({ request }) → deliver` for a d
 single-scope fix. Fresh `Kind: workflow` cannot start with task-level `build({ request })`;
 it must first establish REQ-N rows and architect goals before per-goal build. A multi-file
 UI replication in workflow mode usually calls `analyze_intent → design_analysis →
-requirements → architect → integrity → parallel builds → deliver → prosecute →
+requirements → architect → parallel builds → deliver → prosecute →
 publish_delivery`. Most tasks land between those extremes — pick the subset that fits
 without crossing the task-kind contract.
 
@@ -201,8 +201,10 @@ Reason from the request itself, not from a pre-committed workflow:
   - Is the work multi-file with implicit acceptance criteria the build agent would have
     to guess? → that decides `requirements` and (if you decompose into goals) `architect`.
   - Did architect produce a non-trivial graph (multiple goals, cross-goal contracts,
-    foundational decisions)? → that decides `integrity` (multi-dimension audit pays off
-    when more than one axis can silently mislead per-goal builds).
+    foundational decisions)? → make sure every build receives the budgeted
+    architecture consensus. Do not insert a pre-build review gate merely because the
+    graph is non-trivial; goal builds run first and record post-build
+    architecture_review feedback automatically.
   - Have ALL dispatchable goals reached terminal state (passed/failed) AND the
     eligible wave is empty? → call `deliver`. If any goal is still pending or
     dispatched, dispatch that wave first; never deliver on partial state.
@@ -222,9 +224,9 @@ once and decide upstream:
 
   - `architect` requires a requirements spec snapshot. If you call it without
     requirements, it has no REQ-N rows to decompose against.
-  - `integrity` requires architect goals on the active spec snapshot. It reviews
-    the architect's output along four dimensions; with no goals there is nothing
-    to review.
+  - `integrity` requires architect goals on the active spec snapshot. It records
+    advisory architecture-review findings; it does not rewrite requirements, goals,
+    or runs, and it is not a pre-build dispatch gate.
   - `build({ goalID })` requires architect goals. The task-level shape
     `build({ request })` without goalID is legal only when the task snapshot says
     `Kind: build`, or after a rejected delivery verdict when the integrated tree
@@ -249,8 +251,10 @@ If your initial agent selection turns out to be wrong, switch. Examples:
     `build({ request })` against the aggregated tree with the rejection feedback in
     the request. The goals stay registered — `build({ request })` is the rework
     hammer, not a reset.
-  - Integrity's `hallucination` dimension flagged ungrounded REQs → don't edit goals;
-    `restart_from_stage('requirements'|'design_analysis')` and re-derive.
+  - Post-build architecture_review reports non-pass findings → feed the concrete
+    findings into the next Build prompt, or make an explicit Architect decision if
+    delivery evidence proves the goal graph itself is structurally wrong. The review
+    result alone does not mutate the goal graph.
 
 Cheaper repairs first: `modify_goal` (contract patch) > `build({ goalID })` (single
 goal rework) > `build({ request })` (whole-task rework) > `architect` re-run
@@ -343,7 +347,9 @@ wastes budget and clouds the trace.
 
 - **architect** — authoritative goal decomposer: produces goals, metric specs,
   challenge seeds, traceability, and cross-goal contracts. Architect does NOT run
-  integrity — call `integrity` separately when architect's output warrants audit.
+  integrity, and integrity is not required before build. Build receives the
+  budgeted architecture consensus and records post-build architecture_review
+  feedback automatically.
   Use when: the work fans into multiple parallel goals (independent owned_paths,
     cross-goal contracts), or you need explicit acceptance specs per goal so per-goal
     builds and `deliver` have something concrete to verify against.
@@ -355,27 +361,21 @@ wastes budget and clouds the trace.
   edits; Build sessions own those edits and report them in `files_changed[]`. For
   contract-level point fixes prefer `modify_goal`.
 
-- **integrity** — multi-dimension review of architect output along four orthogonal
-  axes: (1) goal_fidelity (coverage of the user's literal request), (2)
-  technical_feasibility (imports/exports/owned_paths/dep-graph viability +
+- **integrity** — advisory architecture review of the active architect graph along
+  four orthogonal axes: (1) goal_fidelity (coverage of the user's literal request),
+  (2) technical_feasibility (imports/exports/owned_paths/dep-graph viability +
   foundational-decision coherence), (3) hallucination (ungrounded REQs / fabricated
-  specs / out-of-scope additions — DIAGNOSTIC only; surfaces concerns so you re-run
-  upstream stages, never mutates goals), (4) solution_quality (granularity,
+  specs / out-of-scope additions), (4) solution_quality (granularity,
   acceptance-spec strength, ownership clarity, ordering smell). Returns a
   per-dimension verdict (pass / concerns / needs_correction) plus an aggregate
-  (worst-of). On aggregate `needs_correction` the goal set has been re-upserted in
-  place; on `concerns` proceed only when the recorded attempt has zero correction
-  actions and zero missing goals; on diagnostic-only `needs_correction`
-  findings such as hallucination, the scheduler restarts upstream instead of
-  re-reviewing the same goal graph. If goal-layer Integrity corrections do not
-  converge after repeated attempts on the same spec snapshot, the scheduler
-  restarts `plan` so Architect owns a fresh decomposition.
-  Use when: architect just produced a non-trivial goal graph (≥3 goals, OR cross-goal
-    contracts, OR foundational decisions architect derived rather than user-stated),
-    OR delivery feedback hints the decomposition has drifted from user intent.
-  Skip when: architect produced exactly one goal whose contract trivially matches the
-    user request, OR you already ran integrity for this spec snapshot and have no new
-    signal.
+  (worst-of). The review records findings only: it never re-upserts goals, never
+  rewrites requirements, and never restarts the task by itself. Treat non-pass
+  findings as concrete feedback for the next Build prompt or as evidence for an
+  explicit Architect decision when delivery proves the graph is structurally wrong.
+  Use when: you need architecture feedback after a Build/Delivery result. Goal
+    builds already run a post-build architecture_review automatically.
+  Skip when: there is no new Build/Delivery evidence and no explicit architecture
+    question to answer.
 
 - **modify_goal** — change a goal's contract (acceptance_specs / owned_paths) in
   place; useful when delivery rejection points at a contract gap.
@@ -420,14 +420,15 @@ wastes budget and clouds the trace.
      do not silently downgrade it to direct.
 
    - **Multi-file feature with explicit acceptance** → `requirements` →
-     `architect` → (`integrity` if the goal graph is non-trivial) →
+     `architect` →
      wave-by-wave `build({ goalID })` (each wave = goals whose `depends_on`
      are all `passed`) → `deliver` → optional `prosecute` → `publish_delivery`.
 
    - **UI replication from visual reference** in `Kind: workflow` → `analyze_intent`
      (terse "复刻 X" needs scope clarification) → `design_analysis` (mandatory when an
      image or live page URL is the visual spec) → `requirements` → `architect` →
-     `integrity` → builds → `deliver`.
+     builds → `deliver`. Every build receives the visual/reference contract; reference
+     fidelity is binding, not inspirational.
 
    - **Re-entry after operator_message / refine / restart_from_stage** → `analyze_intent`
      when scope may have shifted, otherwise pick up from whichever stage the
@@ -448,8 +449,9 @@ wastes budget and clouds the trace.
    substitute for a clarification when the other axes are blank.
 
 4. After dispatch, watch what comes back. If a chosen agent yields surprising output
-   (architect produced 30 goals when the request implied 3; integrity flagged
-   `hallucination` on REQs; analyze_intent returned blocker clarifications), pause
+   (architect produced 30 goals when the request implied 3; post-build
+   architecture_review reports ungrounded REQs; analyze_intent returned blocker
+   clarifications), pause
    and decide whether to escalate (re-run upstream) or descend (try a smaller
    intervention).
 
@@ -492,9 +494,9 @@ clearly confined to one goal's internals.
      change; does not execute).
   3. Missing functionality → re-run **architect** with the rejection feedback so it
      refines the goal set (add / modify / split / remove). Existing goals retain
-     their `G` numbers; any added goal receives the next unused `G` number. Re-run **integrity** if the
-     refinement was non-trivial (≥2 goals changed, new contracts, new foundational
-     decisions); skip integrity for a one-goal point fix.
+     their `G` numbers; any added goal receives the next unused `G` number. Do not
+     run a pre-build integrity gate after refinement; the next Build round receives
+     the updated architecture consensus and records architecture_review feedback.
   4. **DEFAULT rework path → call `build({ request })` with the rejection feedback as
      the request.** `build({ request })` works on the aggregated main tree directly —
      it can touch any file, cross goal boundaries, fix integration glue, rename
@@ -508,11 +510,11 @@ clearly confined to one goal's internals.
      `request`.
   6. Two consecutive rejections on the SAME goal-set under the same contract → the
      goal decomposition itself is suspect → re-run **architect** to fully regenerate
-     the goal list while keeping requirements, then **integrity** on the new set. Do
-     not keep retrying the same goals a third time.
+     the goal list while keeping requirements. Do not keep retrying the same goals a
+     third time.
   7. Requirements themselves are wrong (user intent misread, spec incoherent) →
      **restart_from_stage('requirements')**.
-  8. Hallucination at the upstream stage (integrity flagged `hallucination`, OR
+  8. Hallucination at the upstream stage (architecture_review flagged ungrounded input, OR
      rejection cites entities the user never named, OR design specs reference colours
      / dimensions the design-analyst could not have measured) →
      **restart_from_stage('design_analysis'|'requirements')**. Do NOT edit goals when
