@@ -17,6 +17,7 @@ import { dialogStore, type ConfigDialogTab } from "../store/dialog";
 import { getHostTransport } from "../services/host-transport";
 import { t } from "../utils/i18n";
 import { currentUIScale } from "../services/pane";
+import { Icon } from "./Icon";
 
 interface ConfigTabDef {
   id: ConfigDialogTab;
@@ -201,9 +202,7 @@ export function ConfigDialogHost() {
           aria-label={t("common.close")}
           onClick={closeConfigDialog}
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M11 3L3 11M3 3l8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
+          <Icon name="close" size={14} strokeWidth={1.5} />
         </button>
       }
     >
@@ -318,16 +317,11 @@ export function ConfigDialogHost() {
                 <h4 class="about-section-title">{t("about.links")}</h4>
                 <div class="about-links">
                   <a class="about-link" href="https://github.com/yangheng95" target="_blank" rel="noopener">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M8 1C4.1 1 1 4.1 1 8c0 3.1 2 5.7 4.8 6.6.4.1.5-.2.5-.4v-1.3C4.2 13.3 3.7 12 3.7 12c-.3-.8-.8-1-.8-1-.6-.4.1-.4.1-.4.7.1 1.1.7 1.1.7.6 1.1 1.7.8 2.1.6.1-.4.3-.8.4-.9-1.7-.2-3.5-.9-3.5-3.8 0-.8.3-1.5.7-2-.1-.2-.3-1 .1-2 0 0 .6-.2 2 .8.6-.2 1.2-.3 1.8-.3s1.2.1 1.8.3c1.4-1 2-.8 2-.8.4 1 .2 1.8.1 2 .5.5.7 1.2.7 2 0 2.9-1.8 3.6-3.5 3.8.3.2.5.7.5 1.4v2.1c0 .2.1.5.5.4C13 13.7 15 11.1 15 8c0-3.9-3.1-7-7-7z" fill="currentColor" />
-                    </svg>
+                    <Icon name="github" />
                     <span>GitHub</span>
                   </a>
                   <a class="about-link" href="https://github.com/yangheng95" target="_blank" rel="noopener">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3" />
-                      <path d="M8 5v3M8 10h.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-                    </svg>
+                    <Icon name="info-circle" />
                     <span>{t("about.issues")}</span>
                   </a>
                 </div>
