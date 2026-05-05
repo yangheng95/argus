@@ -670,10 +670,14 @@ export function startNewAttempt(input: {
     const { findGoalLatestWorkspace } = require("./store") as typeof import("./store")
     const latest = findGoalLatestWorkspace(input.goalID)
     if (latest.directory) {
-      // Phase B: workspace pointer lives on the latest attempt artifact.
-      // Clearing means appending a patch that nulls the workspace fields;
+      // Phase B + E (2026-05-05): both workspace pointer and retry_count
+      // live on the latest attempt artifact, not on engine_goal. Clearing
+      // the workspace appends a patch that nulls the workspace fields;
       // findGoalLatestWorkspace then returns null and the next dispatch
-      // falls into the create-new-worktree branch.
+      // falls into the create-new-worktree branch. The retry counter is
+      // already bumped on the new artifact `openGoalImplementationVersion`
+      // produced (or, for non-supersede cases, stays at the prior tip's
+      // value); no engine_goal write is required either way.
       const tip = findLatestTipGoalRun(input.goalID)
       if (tip) {
         updateGoalRun(tip.id, {
@@ -682,15 +686,6 @@ export function startNewAttempt(input: {
           workspace_base_ref: null,
         })
       }
-      Database.use((db) =>
-        db.update(EngineGoalTable)
-          .set({
-            retry_count: retryCount,
-            time_updated: now,
-          })
-          .where(eq(EngineGoalTable.id, input.goalID))
-          .run(),
-      )
       resetWorkspace = true
     }
   }
@@ -725,26 +720,21 @@ function openGoalImplementationVersion(input: {
   now: number
 }): { supersededTipID?: string; retryCount: number } {
   const tip = findLatestTipGoalRun(input.goal.id)
+  // Phase E (2026-05-05): retry_count is no longer a goal column; derive
+  // from the artifact tip. The new attempt's payload carries the bumped
+  // value (beginBuildAttempt / createGoalRun take the returned retryCount
+  // and write it into payload.retry_count). No engine_goal write needed.
+  const currentCount = tip?.retry_count ?? 0
   if (
     !tip ||
     (tip.status !== "failed" && tip.status !== "aborted" && tip.status !== "completed") ||
     tip.superseded_reason
   ) {
-    return { retryCount: input.goal.retry_count }
+    return { retryCount: currentCount }
   }
 
   supersedeGoalRun({ oldGoalRunID: tip.id, reason: input.reason, now: input.now })
-  const retryCount = input.goal.retry_count + 1
-  Database.use((db) =>
-    db.update(EngineGoalTable)
-      .set({
-        retry_count: retryCount,
-        time_updated: input.now,
-      })
-      .where(eq(EngineGoalTable.id, input.goal.id))
-      .run(),
-  )
-  return { supersededTipID: tip.id, retryCount }
+  return { supersededTipID: tip.id, retryCount: currentCount + 1 }
 }
 
 // Phase-6-d-0: `stampGoalRunProgress` deleted with goal-run-watchdog. The

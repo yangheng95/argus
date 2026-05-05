@@ -485,7 +485,12 @@ CREATE TABLE IF NOT EXISTS engine_goal (
   -- is derived live from the goal_run chain via goalStatusByID /
   -- describeGoal. Dep-failure propagation is an LLM decision, not a
   -- schema column.
-  retry_count      integer NOT NULL DEFAULT 0,
+  -- Phase E (2026-05-05): retry_count retired here too. Lived as a
+  -- denormalised cache of the latest goal_run_attempt artifact's
+  -- payload.retry_count; rule 8 (no dual source) forced the consolidation.
+  -- Read via engine/store.ts:getGoalRetryCount(goalID); writers in
+  -- openGoalImplementationVersion compute the bumped count from the
+  -- artifact tip and persist it on the new attempt's payload only.
   -- Phase B (2026-05-05): workspace_dir / workspace_branch / workspace_base_ref
   -- retired here. Persistent goal-scoped worktree pointer lives on
   -- engine_artifact[kind='goal_run_attempt'].payload.workspace_*; callers

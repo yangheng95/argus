@@ -14,6 +14,7 @@ import {
   findDeliveryByGoalRun,
   findLatestDeliveryVerdictArtifactForDelivery,
   findLatestEvaluationForGoalRun,
+  getGoalRetryCount,
   listGoalRunsByGoal,
   type DeliveryRow,
   type EvaluationRow,
@@ -892,7 +893,9 @@ function buildWorkflowFields(
       // source so both paths show the same value.
       workspaceDir: findGoalLatestWorkspace(goal.id).directory ?? undefined,
       workspaceBranch: findGoalLatestWorkspace(goal.id).branch ?? undefined,
-      retryCount: goal.retry_count,
+      // Phase E (2026-05-05): retry_count derived from artifact, not from a
+      // goal column. Same source as orchestrator/architect V labels.
+      retryCount: getGoalRetryCount(goal.id),
       acceptanceSpecs: goal.acceptance_specs,
       priority: (goal.priority ?? "blocking") as "blocking" | "advisory",
       steps: workflow.steps

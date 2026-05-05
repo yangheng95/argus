@@ -377,8 +377,14 @@ export const EngineGoalTable = sqliteTable(
     // or engine/describe.ts::describeGoal. Dep-failure propagation is the
     // LLM's decision (it reads depends_on + each dep's terminal flags in
     // the describe snapshot), not a schema column.
-    /** Per-goal implementation version counter. V label = retry_count + 1. */
-    retry_count: integer().notNull().default(0),
+    // Phase E (2026-05-05): retry_count retired here. The per-goal
+    // implementation version counter (V label) lived as a denormalised cache
+    // of the latest goal_run_attempt artifact's payload.retry_count — same
+    // value, two writers, no transactional coupling. Rule 8 (no dual
+    // source) forced the move: callers go through
+    // engine/store.ts:getGoalRetryCount(goalID) which reads the latest
+    // attempt artifact. New attempts compute the bumped count from the
+    // artifact tip in `openGoalImplementationVersion`.
     // Phase B (2026-05-05): workspace_dir / workspace_branch / workspace_base_ref
     // were retired here in favour of the per-attempt artifact payload as the
     // single source of truth. Persistent goal-scoped worktree state lives on

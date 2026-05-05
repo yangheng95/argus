@@ -535,6 +535,23 @@ export function findGoalLatestWorkspace(goalID: string): {
 }
 
 /**
+ * Phase E (2026-05-05): single source for the goal-level retry counter
+ * (V label, integrity tracing). Pre-fix engine_goal.retry_count duplicated
+ * the value already stored on every goal_run_attempt artifact's payload —
+ * two writers, two readers, kept in sync only by convention. Rule 8 forbids
+ * the duplicate; the column is gone now.
+ *
+ * Returns the retry_count of the newest goal_run_attempt artifact, which by
+ * construction equals the cumulative attempts-1 (zero-based). Goals with no
+ * attempts return 0 — same default the column carried.
+ */
+export function getGoalRetryCount(goalID: string): number {
+  const rows = listGoalRunsByGoal(goalID)
+  if (rows.length === 0) return 0
+  return rows[0].retry_count
+}
+
+/**
  * Latest goal_run for a goal that is itself a tip of the supersede chain —
  * i.e. no newer goal_run points at it via supersede_of. Callers planning a
  * retry should pass this row's id as the `supersedeOf` to createGoalRun.
@@ -1407,7 +1424,9 @@ export function viewGoal(row: GoalRow) {
     kind: row.kind,
     requirement_ids: row.requirement_ids,
     priority: row.priority,
-    retryCount: row.retry_count,
+    // Phase E (2026-05-05): retry_count is no longer a goal column; derive
+    // from the latest goal_run_attempt artifact via getGoalRetryCount.
+    retryCount: getGoalRetryCount(row.id),
     // Phase B: workspaceDir / workspaceBranch are no longer goal columns;
     // callers that need them call findGoalLatestWorkspace(row.id) directly.
     orderIndex: row.order_index,
