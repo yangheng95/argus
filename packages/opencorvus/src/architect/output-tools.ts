@@ -36,6 +36,7 @@ import type {
 import {
   architectFidelityIssues,
   AssemblyOwnerEntrySchema,
+  normalizeCoveragePath,
   ReferenceCoverageEntrySchema,
   SourceCoverageEntrySchema,
 } from "./fidelity"
@@ -189,6 +190,32 @@ export function architectValidationIssues(
       }
     }
 
+  }
+
+  // Cross-goal owned_paths overlap. The schema says owned_paths is the goal's
+  // EXCLUSIVE write surface (pipeline/goal-contract.schema.ts). Two goals
+  // claiming the same file is a contract violation that the build dispatch
+  // path can't detect anymore — the architect must reject the plan up front.
+  // Bench reproducer: gemini plan declared goal_bootstrap and goal_pages both
+  // owning src/App.tsx + src/main.tsx, then later dispatch attempts for the
+  // second goal collided with goal_bootstrap's already-merged scaffold.
+  const ownerByPath = new Map<string, string[]>()
+  for (const g of collector.goals) {
+    for (const raw of g.owned_paths) {
+      const norm = normalizeCoveragePath(raw)
+      if (!norm) continue
+      const owners = ownerByPath.get(norm) ?? []
+      owners.push(g.id)
+      ownerByPath.set(norm, owners)
+    }
+  }
+  for (const [path, owners] of ownerByPath) {
+    if (owners.length > 1) {
+      const unique = [...new Set(owners)].sort()
+      issues.push(
+        `Owned path "${path}" claimed by ${unique.length} goals (${unique.join(", ")}); owned_paths must be exclusive per goal contract`,
+      )
+    }
   }
 
   const verificationGoals = collector.goals.filter((g) => g.kind === "verification")

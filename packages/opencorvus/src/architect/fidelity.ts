@@ -50,6 +50,30 @@ export function emptyArchitectFidelityState(): ArchitectFidelityState {
   }
 }
 
+/**
+ * Single source for path equality across architect fidelity checks and the
+ * cross-goal owned_paths overlap check. Architect inputs may arrive with
+ * mixed separators (`src/foo` vs `src\foo`), trailing slashes, or `./`
+ * prefixes. Normalise once so prefix containment, set membership, and
+ * overlap detection all agree.
+ */
+export function normalizeCoveragePath(input: string): string {
+  const stripped = input.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/g, "")
+  return stripped === "." ? "" : stripped
+}
+
+/**
+ * Coverage row paths are container-level (e.g. `src`, `tests`); a goal's
+ * owned_paths are leaf files (e.g. `src/main.tsx`). A coverage root must
+ * match the leaf exactly OR be a directory ancestor. Empty root (".") is
+ * the project root and covers everything.
+ */
+export function coverageContains(root: string, leaf: string): boolean {
+  if (root === "") return true
+  if (leaf === root) return true
+  return leaf.startsWith(root + "/")
+}
+
 export function architectFidelityIssues(input: {
   goals: GoalCoverageShape[]
   fidelity: ArchitectFidelityState
@@ -109,9 +133,13 @@ export function architectFidelityIssues(input: {
         `Missing source coverage for existing owned paths: ${existingOwnedPaths.join(", ")}`,
       )
     } else {
-      const uncoveredPaths = existingOwnedPaths.filter((ownedPath) =>
-        !input.fidelity.sourceCoverage.some((row) => row.paths.includes(ownedPath)),
+      const coverageRoots = input.fidelity.sourceCoverage.flatMap((row) =>
+        row.paths.map(normalizeCoveragePath),
       )
+      const uncoveredPaths = existingOwnedPaths.filter((ownedPath) => {
+        const norm = normalizeCoveragePath(ownedPath)
+        return !coverageRoots.some((root) => coverageContains(root, norm))
+      })
       if (uncoveredPaths.length > 0) {
         issues.push(
           `Missing source coverage for existing owned paths: ${uncoveredPaths.join(", ")}`,
