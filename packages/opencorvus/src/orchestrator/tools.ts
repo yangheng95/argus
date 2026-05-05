@@ -42,6 +42,7 @@ import {
   findEvaluationByRun,
   findLatestDeliveryVerdictArtifact,
   findPlan,
+  getGoalRetryCount,
   listGoals,
   requireRun,
   requireTask,
@@ -1375,7 +1376,8 @@ export function createOrchestratorTools(input: {
               kind: g.kind,
               requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
               order_index: g.order_index,
-              retry_count: g.retry_count,
+              // Phase E (2026-05-05): retry_count derived from artifact tip.
+              retry_count: getGoalRetryCount(g.id),
             })),
             taskRequest: task.request,
             taskTitle: task.title,
@@ -2275,7 +2277,7 @@ export function createOrchestratorTools(input: {
         const ACCEPTANCE_SPEC_CAP = 300
         const DELIVERY_FILES_CAP = 10
         for (const goal of failed) {
-          const label = `#G${goal.order_index + 1}V${goal.retry_count + 1}`
+          const label = `#G${goal.order_index + 1}V${getGoalRetryCount(goal.id) + 1}`
           sections.push(`\n### ${label} ${goal.id}: ${goal.title}`)
           sections.push(`- acceptance_specs:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, ACCEPTANCE_SPEC_CAP)}`)
           if (goal.owned_paths?.length) sections.push(`- owned_paths: ${goal.owned_paths.join(", ")}`)
@@ -2328,7 +2330,7 @@ export function createOrchestratorTools(input: {
           const goals = listGoals(taskID)
           sections.push(`## Goals (${goals.length})`)
           for (const g of goals) {
-            const label = `#G${g.order_index + 1}V${g.retry_count + 1}`
+            const label = `#G${g.order_index + 1}V${getGoalRetryCount(g.id) + 1}`
             sections.push(`- [${goalStatusByID(g.id)}] ${label} ${g.id}: ${g.title} [${g.priority}]`)
             sections.push(`  objective: ${g.objective.slice(0, 200)}`)
             sections.push(`  acceptance_specs:\n${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 400)}`)
