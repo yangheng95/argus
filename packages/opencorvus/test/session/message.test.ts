@@ -369,6 +369,69 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
+  test("compaction projection strips media and truncates large tool outputs", async () => {
+    const userID = "m-user-compact"
+    const assistantID = "m-assistant-compact"
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [
+          {
+            ...basePart(userID, "u1"),
+            type: "text",
+            text: "summarize this",
+          },
+          {
+            ...basePart(userID, "u2"),
+            type: "file",
+            mime: "image/png",
+            filename: "large.png",
+            url: "data:image/png;base64,Zm9v",
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-compact",
+            tool: "read",
+            state: {
+              status: "completed",
+              input: { path: "huge.log" },
+              output: "0123456789".repeat(20),
+              title: "Read",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-compact"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "tool.png",
+                  url: "data:image/png;base64,YmFy",
+                },
+              ],
+            },
+            metadata: {},
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const result = await Message.toModelMessages(input, model, {
+      stripMedia: true,
+      toolOutputMaxChars: 40,
+    })
+    const wire = JSON.stringify(result)
+
+    expect(wire).toContain("[Attached image/png: large.png omitted from compaction context]")
+    expect(wire).toContain("Tool output truncated for compaction")
+    expect(wire).not.toContain("data:image/png;base64")
+  })
+
   test("screenshot-only tool output (no text) emits image-data without an empty text part", async () => {
     // Regression: AI SDK v6 ToolModelOutput.content rejects items where the
     // discriminator type matches but the required field is undefined. Pre-fix
@@ -1209,7 +1272,12 @@ describe("session.message.fromError", () => {
     const cases = [
       "prompt is too long: 213462 tokens > 200000 maximum",
       "Your input exceeds the context window of this model",
+      "This model's maximum context length is 128000 tokens. However, your messages resulted in 130000 tokens.",
+      "context length exceeded",
       "The input token count (1196265) exceeds the maximum number of tokens allowed (1048575)",
+      "input length exceeds model limit",
+      "request too large",
+      "too many tokens in prompt",
       "Please reduce the length of the messages or completion",
       "Provider alibaba-coding-plan-cn returned HTTP 400: InternalError.Algo.InvalidParameter: Range of input length should be [1, 258048]",
       "400 status code (no body)",

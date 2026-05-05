@@ -9,10 +9,16 @@ export namespace ProviderError {
     /prompt is too long/i, // Anthropic
     /input is too long for requested model/i, // Amazon Bedrock
     /exceeds the context window/i, // OpenAI (Completions + Responses API message text)
+    /maximum context length/i, // OpenAI-compatible gateways
+    /context length exceeded/i, // OpenAI-compatible gateways
     /input token count.*exceeds the maximum/i, // Google (Gemini)
+    /input length.*exceed/i, // Generic provider wording
     /maximum prompt length is \d+/i, // xAI (Grok)
+    /prompt.*exceed.*limit/i, // OpenAI-compatible gateways
     /reduce the length of the messages/i, // Groq
     /maximum context length is \d+ tokens/i, // OpenRouter, DeepSeek
+    /too many tokens/i, // Mistral and OpenAI-compatible gateways
+    /request too large/i, // 413 bodies with text
     /exceeds the available context size/i, // llama.cpp server
     /greater than the context length/i, // LM Studio
     /context window exceeds limit/i, // MiniMax
