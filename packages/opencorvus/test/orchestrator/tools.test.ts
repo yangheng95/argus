@@ -10,8 +10,8 @@ import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { EngineArtifactTable } from "../../src/engine/engine.sql"
 import { findGoal, findGoalLatestWorkspace, listGoalRunsByGoal } from "../../src/engine/store"
+import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { Filesystem } from "../../src/util/filesystem"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
@@ -84,43 +84,18 @@ function insertWorkflowTaskWithGoal(input: {
       time_updated: input.now,
     }).run()
   })
-  // Phase B + G (2026-05-05): workspace_* columns retired and the writer
-  // refuses no-tip seeding; this fixture writes the seed attempt artifact
-  // directly so tests start from a real attempt-tip state without going
-  // through beginBuildAttempt's status-bearing side effects.
+  // Phase H (2026-05-05): seed via the shared fixture helper instead of an
+  // ad-hoc Drizzle insert (rule 9 — single abstraction for the same shape
+  // also used in engine/writer.test.ts).
   if (input.workspaceDir !== undefined || input.workspaceBranch !== undefined) {
-    Database.use((db) =>
-      db.insert(EngineArtifactTable).values({
-        id: `grun_seed_${input.goalID}`,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: `grun_seed_${input.goalID}`,
-        kind: "goal_run_attempt",
-        label: "attempt-queued",
-        payload: {
-          goal_id: input.goalID,
-          plan_node_id: null,
-          session_id: null,
-          status: "queued",
-          retry_count: 0,
-          blocking_reason: null,
-          error: null,
-          workspace_dir: input.workspaceDir ?? null,
-          workspace_branch: input.workspaceBranch ?? null,
-          workspace_base_ref: null,
-          base_ref: null,
-          merge_ref: null,
-          supersede_of: null,
-          superseded_reason: null,
-          superseded_at: null,
-          metadata: null,
-          time_started: null,
-          time_completed: null,
-        },
-        time_created: input.now,
-        time_updated: input.now,
-      }).run(),
-    )
+    seedGoalRunAttemptWithWorkspace({
+      taskID: input.taskID,
+      goalID: input.goalID,
+      workspaceDir: input.workspaceDir ?? null,
+      workspaceBranch: input.workspaceBranch ?? null,
+      status: "queued",
+      now: input.now,
+    })
   }
 }
 
