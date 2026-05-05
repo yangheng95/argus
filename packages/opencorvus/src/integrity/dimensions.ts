@@ -2,8 +2,8 @@
  * Integrity Check — extensible dimension registry.
  *
  * `integrity` is the advisory architecture-review dimension registry. Goal
- * builds record post-build architecture_review feedback from these four
- * orthogonal properties of the architect's output:
+ * builds turn non-pass post-build architecture_review findings from these four
+ * orthogonal properties of the architect's output into same-goal rework feedback:
  *
  *   1. goal_fidelity         — coverage of the user's literal request
  *   2. technical_feasibility — viability of the proposed contracts

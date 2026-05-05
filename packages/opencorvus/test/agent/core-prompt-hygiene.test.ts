@@ -65,24 +65,24 @@ describe("core prompt hygiene", () => {
     expect(tools).not.toContain("modify_goal / re-run architect / fail_task")
     expect(tools).not.toContain("run integrity against the corrected goal graph before dispatching build")
     expect(tools).toContain("post_build_architecture_review_input")
-    expect(tools).toContain("architectural rule review after build")
+    expect(tools).toContain("architecture_review_rework")
   })
 
-  test("architecture review findings are feedback, not dispatch gates", async () => {
+  test("architecture review findings are actionable feedback, not dispatch gates", async () => {
     const integrity = await readPrompt("integrity")
     const orchestrator = await readPrompt("orchestrator")
     const tools = await readSource("orchestrator/tools.ts")
 
     expect(integrity).toContain("MUST NOT include `corrections` or")
     expect(integrity).toContain("If you need to emit any `corrections` or")
-    expect(integrity).toContain("does not apply them automatically")
+    expect(integrity).toContain("does not apply graph mutations automatically")
     expect(orchestrator).toContain("not a pre-build dispatch gate")
     expect(orchestrator).not.toContain("zero correction")
     expect(tools).not.toContain("integrityAttemptExecutionBlockReason")
     expect(tools).not.toContain("Diagnostic-only findings require upstream repair")
     expect(tools).not.toContain("Goal-layer Integrity corrections did not converge")
-    expect(tools).toContain("the review itself does not rewrite requirements, goals, or runs")
-    expect(tools).toContain("post_build_architecture_review")
+    expect(tools).toContain("the review itself does not rewrite requirements or goals")
+    expect(tools).toContain("architecture_review_rework")
   })
 
   test("architect prompt ships the chat-app worked example so feature-rich SPA briefs have a reference shape", async () => {

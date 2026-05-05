@@ -691,7 +691,7 @@ export function createOrchestratorTools(input: {
             ? `Integrity verdict: concerns — ${outcome.perDimension.join(", ")}. ${outcome.summary} ` +
               `Treat this as architecture-review feedback for the next build prompt; do not mutate the goal graph from the review alone.`
             : `Integrity verdict: needs_correction — ${outcome.perDimension.join(", ")}. ${outcome.summary} ` +
-              `Treat this as architecture-review feedback for the next build prompt or an explicit architect decision; the review itself does not rewrite requirements, goals, or runs.`
+              `Treat this as architecture-review feedback for the next build prompt or an explicit architect decision; the review itself does not rewrite requirements or goals.`
       return SubAgentProtocol.yieldResult({
         headline,
         fields: [
@@ -1867,7 +1867,7 @@ export function createOrchestratorTools(input: {
               `${result.globalMetricSpecs.length} global metrics, ${result.challengeSeeds.length} challenge seeds, ` +
               `${result.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-              ` NEXT: dispatch eligible per-goal \`build\`; each Build result records post-build architecture_review feedback.`,
+              ` NEXT: dispatch eligible per-goal \`build\`; each non-pass post-build architecture_review opens same-goal rework feedback.`,
             summary: result.summary,
             fields: [
               ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
@@ -1921,8 +1921,9 @@ export function createOrchestratorTools(input: {
     // sibling of architect at the orchestrator level, not a nested call
     // inside architect's run(). This tool reads the persisted goal set,
     // invokes the reviewer, and records findings only. It never rewrites
-    // requirements, goals, or runs; Build consumes the feedback in the next
-    // prompt when architecture_review is not pass.
+    // requirements or goals; a non-pass post-build review opens same-goal
+    // rework through startNewAttempt so Build consumes the feedback in the
+    // next prompt.
     // -----------------------------------------------------------------------
 
     integrity: tool({
@@ -1935,10 +1936,10 @@ export function createOrchestratorTools(input: {
         "(granularity, acceptance-spec strength, ownership, ordering). Returns a " +
         "per-dimension verdict (pass / concerns / needs_correction) plus an aggregate " +
         "(worst-of). Findings are persisted as feedback only: this review never " +
-        "rewrites requirements, goals, or runs, and it does not block the first Build " +
+        "rewrites requirements or goals, and it does not block the first Build " +
         "round. Each goal build automatically records post-build architecture_review " +
-        "input and runs this review after the Build report; non-pass findings should " +
-        "be passed as concrete feedback to the next Build or an explicit Architect decision.\n\n" +
+        "input and runs this review after the Build report; non-pass findings open " +
+        "same-goal rework feedback for the next Build or become evidence for an explicit Architect decision.\n\n" +
         "USE WHEN: architect just produced a non-trivial goal graph (≥3 goals, OR " +
         "cross-goal contracts, OR foundational decisions architect derived rather " +
         "than user-stated), OR a Build / Delivery result needs architecture feedback. " +
@@ -4685,6 +4686,9 @@ export function createOrchestratorTools(input: {
           // ok-branch report rendering below; pull it back out for clarity.
           const diffs = buildOutcome.result.diffs
           let architectureReviewLine = "- architecture_review: (not run for task-level build)"
+          let architectureReviewReworkLine = ""
+          let architectureReviewNeedsRework = false
+          let architectureReviewAllowsDeliver = !attachedGoalID
           if (attachedGoalID) {
             const buildReportForReview = {
               status: result.status,
@@ -4711,17 +4715,29 @@ export function createOrchestratorTools(input: {
                   `- architecture_review: ${architectureReview.verdict}; ` +
                   `${architectureReview.summary}; corrections=${architectureReview.correctionsCount}; ` +
                   `missing=${architectureReview.missingCount}`
+                architectureReviewAllowsDeliver = architectureReview.verdict === "pass"
               }
               if (architectureReview.status === "reviewed" && architectureReview.verdict !== "pass") {
-                decisionLog.append({
-                  phase: "retry",
+                architectureReviewNeedsRework = true
+                const { startNewAttempt } = await import("@/engine/persist")
+                const reviewFeedback =
+                  `${architectureReview.verdict}: ${architectureReview.summary}. ` +
+                  `issues=${architectureReview.issues.join("; ") || "none"}. ` +
+                  `corrections=${architectureReview.correctionsCount}; missing=${architectureReview.missingCount}. ` +
+                  `Action: re-run this same goal and resolve the architecture_review findings before delivery; ` +
+                  `do not rewrite requirements or the goal graph from the review alone.`
+                const rework = startNewAttempt({
                   goalID: attachedGoalID,
-                  key: "post_build_architecture_review",
-                  value:
-                    `${architectureReview.verdict}: ${architectureReview.summary}. ` +
-                    `issues=${architectureReview.issues.join("; ") || "none"}`,
-                  reason: "architectural rule review after build",
+                  reason: "architecture_review_rework",
+                  feedback: {
+                    value: reviewFeedback,
+                    reason: "post-build architecture_review non-pass",
+                  },
                 })
+                architectureReviewReworkLine =
+                  `\n- architecture_review_rework: opened same-goal retry` +
+                  `${rework.supersededTipID ? `; superseded_tip=${rework.supersededTipID}` : ""}; ` +
+                  `retry_count=${rework.retryCount}`
               }
             } catch (reviewErr) {
               const reviewMsg = reviewErr instanceof Error ? reviewErr.message : String(reviewErr)
@@ -4761,11 +4777,12 @@ export function createOrchestratorTools(input: {
             `- files_changed:\n${fileLines}\n` +
             `${commitLine}${errorLine}${worktreeLine}${cleanupLine}\n` +
             `- tests:\n${testLines}\n` +
-            `${architectureReviewLine}\n\n` +
+            `${architectureReviewLine}${architectureReviewReworkLine}\n\n` +
             `### Next step\n` +
-            (result.status === "passed"
-              ? `If architecture_review is pass/concerns, call \`deliver\` for integrated verification. ` +
-                `If it reports needs_correction, call build again with that concrete feedback in the prompt.`
+            (result.status === "passed" && architectureReviewAllowsDeliver
+              ? `If architecture_review is pass, call \`deliver\` for integrated verification.`
+              : result.status === "passed" && architectureReviewNeedsRework
+                ? `Call build again with the concrete architecture_review feedback above. Do not deliver until the review passes.`
               : `Call build again with the concrete failed-build and architecture_review feedback above. ` +
                 `Do not re-run the same prompt.`)
           )
