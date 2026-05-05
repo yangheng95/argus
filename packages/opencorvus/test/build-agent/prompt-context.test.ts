@@ -121,6 +121,44 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("surface=final-deliverable owner=gol_visual")
   })
 
+  test("goal-path build receives the complete architect consensus, including sibling contracts", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "goal",
+        id: "gol_feature",
+        title: "Feature surface",
+        objective: "Implement the feature and integrate it with the shared shell.",
+        acceptance_specs: ["feature works in shell"],
+        owned_paths: ["src/feature.ts"],
+        exports: ["renderFeature(): JSX.Element"],
+        imports: ["AppShell from gol_shell"],
+        depends_on: ["gol_shell"],
+      },
+      {
+        architectContracts: [
+          {
+            category: "shell_contract",
+            title: "Shell exports",
+            spec: "gol_shell owns AppShell and exports it for feature goals.",
+            goalIDs: ["gol_shell"],
+          },
+          {
+            category: "feature_contract",
+            title: "Feature mount",
+            spec: "gol_feature mounts inside AppShell without replacing the shell.",
+            goalIDs: ["gol_feature"],
+          },
+        ],
+      },
+    )
+
+    expect(prompt).toContain("complete architecture consensus")
+    expect(prompt).toContain("Shell exports")
+    expect(prompt).toContain("(dependency contract: gol_shell)")
+    expect(prompt).toContain("Feature mount")
+    expect(prompt).toContain("(this goal)")
+  })
+
   test("goal-path build receives sibling collaboration state without file sandbox framing", () => {
     const prompt = buildUserPrompt(
       {
@@ -139,8 +177,10 @@ describe("build agent prompt context", () => {
           {
             id: "gol_shell",
             title: "Application shell",
+            objective: "Provide the reusable application shell.",
             kind: "bootstrap",
             status: "passed",
+            acceptance_specs: ["shell renders"],
             owned_paths: ["src/App.tsx", "src/main.tsx"],
             depends_on: [],
             exports: ["AppShell"],
@@ -149,8 +189,10 @@ describe("build agent prompt context", () => {
           {
             id: "gol_feature",
             title: "Feature surface",
+            objective: "Implement the feature and integrate it with the shared shell.",
             kind: "feature",
             status: "pending",
+            acceptance_specs: ["feature works in shell"],
             owned_paths: ["src/feature.ts", "src/App.tsx"],
             depends_on: ["gol_shell"],
             exports: ["renderFeature(): JSX.Element"],
@@ -163,6 +205,8 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("## Collaboration State")
     expect(prompt).toContain("gol_shell")
     expect(prompt).toContain("status=passed")
+    expect(prompt).toContain("objective: Provide the reusable application shell.")
+    expect(prompt).toContain("shell renders")
     expect(prompt).toContain("responsibility_paths: src/App.tsx, src/main.tsx")
     expect(prompt).toContain("owned_paths` are responsibility paths, not a file sandbox")
     expect(prompt).toContain("explained in `files_changed[]`")

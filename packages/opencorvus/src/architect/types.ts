@@ -138,11 +138,9 @@ export interface ArchitectRetryContext {
 // ---------------------------------------------------------------------------
 
 export interface ArchitectResult {
-  /** Final goal set produced by the architect agent. Integrity (multi-dimension
-   *  review) is a separate orchestrator-level step (orchestrator/tools.ts:
-   *  integrity) — the goal set here is unconditioned by the integrity verdict
-   *  and may be re-upserted by the orchestrator after integrity corrections
-   *  land. */
+  /** Final goal set produced by the architect agent. Architecture review is
+   *  advisory feedback recorded after Build; it does not re-upsert or mutate
+   *  this goal set by itself. */
   goals: GoalContractFields[]
   /** Goal IDs the Architect chose to drop during a re-run. */
   removedGoalIDs: string[]

@@ -2,6 +2,13 @@
 
 ## Problem
 
+Direction correction after operator review: the earlier fix direction over-modeled
+collaboration as scheduler gates, Integrity blockers, lane classifications, and
+automatic restarts. That was the wrong abstraction. Build agents are strong enough to
+own implementation when their input is complete, unambiguous, and not misleading. The
+system should therefore improve the information contract, not constrain editable files
+or insert more pre-build gates.
+
 Overlay benchmark `20260505-151125` showed the orchestrator re-entering Architect after a goal had already passed. That is not a robust scheduling strategy. It means the initial goal graph was not treated as a durable collaboration contract after execution began.
 
 Overlay benchmark `20260505-154347` showed the next failure mode: after a Build failure, the orchestrator jumped to `restart_from_stage(plan)` with "architect contract incomplete" instead of first diagnosing the failed goal and retrying or point-correcting the same graph. That is the same root problem in another lane.
@@ -32,9 +39,7 @@ Overlay benchmark `20260505-195237` verified that diagnostic-only Integrity fail
 
 Overlay benchmark `20260505-200735` verified the repaired pre-execution chain: requirements and architect completed, correction-bearing Integrity attempts did not start execution, a later `concerns` verdict with zero corrections/missing goals allowed all three Build goals to pass, and Build reported per-file change lists. It then exposed the delivery-completion version of the same protocol drift: Delivery visually rendered the calculator, found runtime failures cleared, and listed all user requirements as satisfied, but still planned to reject because the host manifest had classified `review:integrity verdict=concerns` as a failed blocker. The root cause was an over-broad delivery gate predicate: `issues_count > 0` made correction-free concerns equivalent to an unresolved architectural defect.
 
-Overlay benchmark `20260505-212207` verified that pre-build Integrity is now blocking execution and can restart upstream, but exposed a lane-classification failure. The same spec received three correction-bearing `needs_correction` attempts; the third attempt had every dimension failing and issue count increased from 6 to 27. Because the code checked diagnostic-only dimensions before same-spec goal-layer non-convergence, the mixed failure restarted Requirements and inflated the requirements snapshot from 22 rows to 30. The invariant is narrower: repeated same-spec goal-layer non-convergence must restart `plan` while preserving the validated requirement snapshot; only pure diagnostic-only Integrity failure restarts `requirements`.
-
-The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
+Overlay benchmark `20260505-212207` verified the wrong direction: pre-build Integrity can block execution and restart upstream, but the resulting lane-classification problem inflated the requirements snapshot and still did not improve collaboration quality. The lesson is not to add a better classifier; the lesson is to remove the fragile gate and make Build input better.
 
 ## Root Cause
 
@@ -44,7 +49,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - which goals are now dispatchable by dependency evidence,
 - which failed goals remain inside the current graph and need diagnostic retry,
 - which goals are blocked by unfinished dependencies,
-- whether integrity corrections create an actual semantic goal-contract delta,
+- whether Build received enough architecture consensus to coordinate with sibling goals without prompt flooding,
 - whether a stage's terminal collector has already been satisfied,
 - which repair lane fits ordinary collaboration drift,
 - when Architect re-entry would be a structural re-plan instead of normal execution.
@@ -54,9 +59,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - whether Build guidance is shell-agnostic enough for agents to execute the milestone protocol without first hitting predictable command syntax failures.
 - whether verification changes preserve acceptance semantics or merely weaken failing tests until the current broken behavior appears green.
 - whether source, generated artifacts, tests, and runtime entry points still converge on one source of truth.
-- whether Integrity concerns are genuinely advisory or are hiding correction/missing-goal work that must block execution.
-- whether Integrity failures are repairable at the goal layer or must deterministically restart upstream because the failed dimension is diagnostic-only.
-- whether repeated same-spec goal-layer Integrity corrections are converging or should invalidate the current decomposition and restart Architect.
+- whether architecture_review feedback is being fed back to Build/Architect as evidence instead of mutating the graph automatically.
 - whether a downstream stage is being invoked after its upstream durable artifact has been cleared.
 - whether Delivery is judging final completion from current runtime/visual/task evidence or letting advisory Integrity concerns override completion.
 
@@ -64,16 +67,16 @@ Without that durable projection, the LLM treats uncertainty as permission to ask
 
 ## Fix Direction
 
-Add a derived, persisted-read projection to `describeTask` and render it into the orchestrator context:
+Simplify the collaboration protocol around Build input and post-Build review:
 
-- It is computed from existing durable sources: goal contracts, goal-run attempts, dependency edges, and derived goal status.
-- It does not disable any tool.
-- It does not limit editable files.
-- It makes the collaboration contract explicit every wake.
-- It routes ordinary shared-file edits to Build `files_changed[]` and point contract corrections to `modify_goal`.
-- It routes failed Build attempts to `query_failed_goals` and same-goal retry before any upstream restart.
-- It gives integrity the ability to repair the lightweight topology fields it audits: ownership, dependencies, imports, exports, kind, and priority.
-- It demotes no-op `needs_correction` results to concerns so review noise cannot block execution forever.
+- Build remains the primary implementation owner.
+- Build is not restricted to owned_paths; owned_paths are responsibility hints, not a file sandbox.
+- Every goal Build receives a budgeted architecture-consensus view: full current-goal/dependency/task-wide contracts, compact sibling contracts, full requirements, collaboration state, and reference fidelity warnings.
+- Reference/image/webpage contracts stay strict and cascade to Build as 1:1 restoration requirements.
+- Build must explain every changed file through `files_changed[]`.
+- Architecture review runs after each goal Build and records feedback only.
+- Review findings never rewrite requirements, goals, or runs by themselves.
+- Non-pass review findings become concrete feedback for the next Build prompt or evidence for an explicit Architect decision when delivery proves the goal graph is structurally wrong.
 - It makes terminal collector satisfaction stop the session loop immediately, so Architect/Integrity/Build cannot keep planning after their report/submit contract is complete.
 - It keeps source-coverage fidelity checks as pre-execution planning guards. After any goal attempt exists, existing-file source coverage is execution context, not a build blocker; Build owns necessary cross-file edits and reports them through `files_changed[]`.
 - It keeps reference coverage strict even during execution, because screenshots/webpages/mockups are authoritative 1:1 targets and must cascade into Build.
@@ -84,12 +87,8 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It makes Build treat failing verification as implementation evidence. Tests may be changed only when concrete requirement or repository evidence proves the test contract is wrong; otherwise product behavior is fixed.
 - It makes Delivery inspect changed tests when verification coverage is claimed, and reject weakened assertions, conditional skips, or current-behavior rewrites that replace the user request / acceptance spec / public contract.
 - It makes Build and Delivery reject hand-edited generated/compiled artifacts as a way to mask source/runtime divergence; generated artifacts must be regenerated from the source of truth or the runtime wiring must be fixed.
-- It treats any Integrity correction or missing-goal proposal as blocking protocol evidence: the reviewer normalizes that dimension to `needs_correction`, persisted attempts retain correction/missing counts for every verdict, workflow projection marks correction-bearing attempts failed, and build/create-run preflight blocks before run/worktree side effects.
-- It routes diagnostic-only Integrity `needs_correction` findings, currently hallucination, to `restart_from_stage('requirements')` instead of applying goal corrections and re-reviewing the same spec.
-- It routes repeated non-converging goal-layer Integrity corrections to `restart_from_stage('plan')` so Architect owns a fresh decomposition instead of letting the same spec review forever. This lane has priority over mixed diagnostic findings when the current review still contains goal-layer blockers; diagnostic-only restart is reserved for pure upstream grounding failures.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 - It makes Architect require an active requirements spec snapshot before any Architect session is created, so upstream restarts cannot accidentally continue into downstream planning against an empty REQ-N source.
-- It makes Delivery treat Integrity `concerns` with zero corrections and zero missing goals as advisory evidence. Delivery still blocks on missing Integrity review, `needs_correction`, `fail`, nonzero corrections, or nonzero missing goals.
 
 ## Acceptance
 
@@ -106,8 +105,7 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - Tests prove `BuildResultSchema` accepts complete `files_changed[]` reports without `patch_summary`, and no source/test prompt references the removed duplicate field.
 - Tests prove Build and Delivery prompts preserve verification semantics: failing acceptance tests are fixed through product behavior unless the test is proven wrong, and Delivery rejects test weakening as acceptance evidence.
 - Tests prove generated/compiled runtime artifacts cannot become a second hand-edited implementation path.
-- Tests prove correction-bearing Integrity concerns cannot start execution and are projected as failed review work.
-- Tests prove diagnostic-only Integrity failures restart upstream and do not call the goal-correction path.
-- Tests prove repeated same-spec goal-layer Integrity corrections restart plan and do not apply yet another correction, including mixed diagnostic-plus-goal-layer failures.
+- Tests prove prior architecture_review history does not block Build dispatch.
+- Tests prove Build receives the budgeted complete architecture consensus, including sibling contracts and fidelity rows, without expanding every sibling detail.
+- Tests prove post-Build architecture_review records feedback without rewriting goals or restarting requirements/plan.
 - Tests prove Architect does not create a child session when no active requirements spec snapshot exists.
-- Tests prove correction-free Integrity concerns do not fail the delivery manifest gate, while correction-bearing attempts still block delivery.

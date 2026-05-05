@@ -18,7 +18,6 @@ import { Filesystem } from "../../src/util/filesystem"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
-let applyIntegrityCorrectionsImpl: ((goals: any[], verdict: any) => any[]) | undefined
 
 mock.module("@/build/agent", () => ({
   BuildAgent: {
@@ -33,10 +32,6 @@ mock.module("@/integrity", () => ({
   reviewIntegrity: (input: any) => {
     if (!reviewIntegrityImpl) throw new Error("reviewIntegrity mock not configured")
     return reviewIntegrityImpl(input)
-  },
-  applyIntegrityCorrections: (goals: any[], verdict: any) => {
-    if (applyIntegrityCorrectionsImpl) return applyIntegrityCorrectionsImpl(goals, verdict)
-    return goals
   },
 }))
 
@@ -153,7 +148,6 @@ describe("orchestrator tools", () => {
   afterEach(async () => {
     buildAgentRunImpl = undefined
     reviewIntegrityImpl = undefined
-    applyIntegrityCorrectionsImpl = undefined
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
@@ -275,7 +269,7 @@ describe("orchestrator tools", () => {
     expect(source).not.toContain('await updateTask(task, { status: "failed", error: result.summary')
   })
 
-  test("goal build auto-runs integrity for the active spec before dispatch", async () => {
+  test("goal build runs first, then records architecture review feedback", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -284,7 +278,8 @@ describe("orchestrator tools", () => {
     const projectID = `project_goal_integrity_${stamp}`
     const taskID = `tsk_goal_integrity_${stamp}`
     const goalID = `goal_integrity_${stamp}`
-    let integrityCalls = 0
+    let architectureReviewCalls = 0
+    let buildCalls = 0
 
     await Instance.provide({
       directory: tmp.path,
@@ -298,15 +293,15 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Goal integrity build test",
           taskTitle: "Goal integrity build task",
-          request: "Build a scoped goal after integrity review",
-          goalTitle: "Require integrity before build",
-          goalSlug: "require-integrity-before-build",
-          objective: "Verify build auto-runs integrity on the active spec",
+          request: "Build a scoped goal with complete context",
+          goalTitle: "Build with architecture review",
+          goalSlug: "build-with-architecture-review",
+          objective: "Verify build runs before architecture review feedback is recorded",
           now,
         })
 
         reviewIntegrityImpl = async () => {
-          integrityCalls += 1
+          architectureReviewCalls += 1
           return {
             verdict: "pass",
             summary: "Integrity pass",
@@ -322,23 +317,26 @@ describe("orchestrator tools", () => {
             sessionID: "ses_integrity_auto",
           }
         }
-        buildAgentRunImpl = async (input: any) => ({
-          result: {
-            status: "passed",
-            summary: "Goal built successfully",
-            files_changed: [{
-              path: "src/index.ts",
-              summary: "Changed scoped implementation file.",
-              reason: "Required by the mocked goal build.",
-            }],
-            tests: [],
-            commit_ref: "abc1234",
-          },
-          sessionID: "ses_goal_integrity_build",
-          worktreeDir: input.managedWorktree.directory,
-          worktreeBranch: input.managedWorktree.branch,
-          worktreeBaseRef: input.managedWorktree.baseRef,
-        })
+        buildAgentRunImpl = async (input: any) => {
+          buildCalls += 1
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal built successfully",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Changed scoped implementation file.",
+                reason: "Required by the mocked goal build.",
+              }],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_integrity_build",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -353,14 +351,170 @@ describe("orchestrator tools", () => {
         }, {} as any)
 
         expect(result).toContain("status=passed")
-        expect(integrityCalls).toBe(1)
+        expect(result).toContain("architecture_review: pass")
+        expect(buildCalls).toBe(1)
+        expect(architectureReviewCalls).toBe(1)
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: `spec_${goalID}` })
         expect(artifact?.kind).toBe("integrity_attempt")
       },
     })
   })
 
-  test("goal build stops when integrity rewrites the active goal graph", async () => {
+  test("goal build receives the complete architecture protocol, not only its local slice", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_arch_context_${stamp}`
+    const taskID = `tsk_goal_arch_context_${stamp}`
+    const goalID = `goal_arch_context_${stamp}`
+    const siblingGoalID = `goal_arch_sibling_${stamp}`
+    let capturedContext: any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal architecture context test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Goal architecture context test",
+          taskTitle: "Goal architecture context task",
+          request: "Build a scoped goal with the full architecture protocol",
+          goalTitle: "Feature implementation",
+          goalSlug: "feature-implementation",
+          objective: "Implement the feature without breaking sibling architecture contracts",
+          now,
+        })
+
+        Database.use((db) => {
+          db.insert(EngineGoalTable).values({
+            id: siblingGoalID,
+            task_id: taskID,
+            spec_snapshot_id: `spec_${goalID}`,
+            title: "Shared shell",
+            slug: "shared-shell",
+            objective: "Provide the shared shell consumed by feature goals",
+            acceptance_specs: [{
+              id: `acc_shell_${stamp}`,
+              source_requirement_id: "REQ-1",
+              goal_id: siblingGoalID,
+              title: "shell exports AppShell",
+              scorers: [{
+                type: "llm_judge",
+                name: "shell contract",
+                criteria: "The shared shell renders and exports AppShell for feature goals.",
+              }],
+              severity: "essential",
+            }],
+            owned_paths: ["src/App.tsx", "src/main.tsx"],
+            depends_on: [],
+            exports: ["AppShell"],
+            imports: [],
+            kind: "bootstrap",
+            requirement_ids: [],
+            priority: "blocking",
+            source: "test",
+            status: "pending",
+            order_index: 1,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.update(EngineTaskTable)
+            .set({
+              metadata: {
+                architect_fidelity: {
+                  sourceCoverage: [{
+                    id: "sibling-source",
+                    paths: ["src/App.tsx"],
+                    goal_ids: [siblingGoalID],
+                    action: "modify",
+                    rationale: "The shell source must remain the shared integration surface.",
+                  }],
+                  referenceCoverage: [{
+                    id: "sibling-reference",
+                    surface: "shared shell",
+                    goal_ids: [siblingGoalID],
+                    visual_spec_ids: [],
+                    expectation: "The shell reference remains binding for every feature goal.",
+                  }],
+                  assemblyOwners: [{
+                    surface: "app",
+                    goal_id: siblingGoalID,
+                    rationale: "The shell owns final app assembly.",
+                  }],
+                },
+              },
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run()
+        })
+
+        const { createDecisionLog } = await import("../../src/decision-log")
+        const decisionLog = createDecisionLog(taskID)
+        decisionLog.append({
+          phase: "architect",
+          goalID: siblingGoalID,
+          key: "shell_contract",
+          value: "## Shell exports\nShared shell owns AppShell and feature goals must preserve that export.",
+          reason: "Architect sibling contract",
+        })
+
+        buildAgentRunImpl = async (input: any) => {
+          capturedContext = input.context
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal built with full architecture context",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Changed scoped implementation file.",
+                reason: "Required by the mocked goal build.",
+              }],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_arch_context_build",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Implement the goal",
+          reason: "Per-goal pipeline execution.",
+        }, {} as any)
+
+        expect(result).toContain("status=passed")
+        expect(capturedContext?.architectContracts?.map((c: any) => c.goalIDs?.[0])).toContain(siblingGoalID)
+        expect(capturedContext?.collaborationGoals?.find((g: any) => g.id === siblingGoalID)?.objective).toContain("shared shell")
+        expect(
+          capturedContext?.collaborationGoals
+            ?.find((g: any) => g.id === siblingGoalID)
+            ?.acceptance_specs
+            ?.some((spec: string) => spec.includes("shell exports AppShell")),
+        ).toBe(true)
+        expect(capturedContext?.fidelity?.sourceCoverage?.map((row: any) => row.id)).toContain("sibling-source")
+        expect(capturedContext?.fidelity?.referenceCoverage?.map((row: any) => row.id)).toContain("sibling-reference")
+        expect(capturedContext?.fidelity?.assemblyOwners?.map((row: any) => row.goal_id)).toContain(siblingGoalID)
+      },
+    })
+  })
+
+  test("post-build architecture review never rewrites the active goal graph", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -383,10 +537,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Goal integrity correction test",
           taskTitle: "Goal integrity correction task",
-          request: "Do not dispatch build against a stale goal graph",
-          goalTitle: "Require graph refresh after integrity",
-          goalSlug: "require-graph-refresh-after-integrity",
-          objective: "Verify build aborts when integrity corrects the current graph",
+          request: "Do not let architecture review mutate the goal graph",
+          goalTitle: "Review without graph mutation",
+          goalSlug: "review-without-graph-mutation",
+          objective: "Verify post-build review records feedback but does not rewrite goals",
           now,
         })
 
@@ -404,24 +558,25 @@ describe("orchestrator tools", () => {
           missingGoals: [],
           sessionID: "ses_integrity_corrected",
         })
-        applyIntegrityCorrectionsImpl = () => ([
-          {
-            id: `${goalID}_replacement`,
-            title: "Replacement goal",
-            objective: "Updated objective",
-            acceptance_specs: [],
-            owned_paths: ["src/index.ts"],
-            depends_on: [],
-            exports: [],
-            imports: [],
-            priority: "blocking",
-            kind: "feature",
-            requirement_ids: [],
-          },
-        ])
-        buildAgentRunImpl = async () => {
+        buildAgentRunImpl = async (input: any) => {
           buildCalls += 1
-          throw new Error("Build should not run after integrity correction")
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal built before architecture review feedback.",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Changed scoped implementation file.",
+                reason: "Required by the mocked goal build.",
+              }],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_review_after_build",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
         }
 
         const { tools } = createOrchestratorTools({
@@ -436,15 +591,16 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
-        expect(result).toContain("integrity corrected the active goal graph")
-        expect(buildCalls).toBe(0)
-        expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
-        expect(findGoal(goalID)).toBeUndefined()
+        expect(result).toContain("status=passed")
+        expect(result).toContain("architecture_review: needs_correction")
+        expect(buildCalls).toBe(1)
+        expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
+        expect(findGoal(goalID)).toBeTruthy()
       },
     })
   })
 
-  test("integrity no-op corrections become concerns instead of blocking execution", async () => {
+  test("architecture review records correction feedback without changing goals", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -489,7 +645,6 @@ describe("orchestrator tools", () => {
           missingGoals: [],
           sessionID: "ses_integrity_noop",
         })
-        applyIntegrityCorrectionsImpl = (goals) => goals
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -499,15 +654,15 @@ describe("orchestrator tools", () => {
 
         const result = await tools.integrity.execute({}, {} as any)
 
-        expect(result).toContain("Integrity verdict: concerns")
-        expect(result).toContain("Proposed corrections produced no semantic goal-contract delta")
+        expect(result).toContain("Integrity verdict: needs_correction")
+        expect(findGoal(goalID)).toBeTruthy()
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
-        expect(artifact?.label).toBe("verdict-concerns")
+        expect(artifact?.label).toBe("verdict-needs_correction")
       },
     })
   })
 
-  test("integrity diagnostic-only needs_correction restarts upstream instead of re-reviewing the same graph", async () => {
+  test("diagnostic architecture findings do not restart requirements by themselves", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -530,10 +685,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Integrity upstream restart test",
           taskTitle: "Integrity upstream restart task",
-          request: "Do not loop integrity when hallucination requires upstream repair",
-          goalTitle: "Route diagnostic integrity upstream",
-          goalSlug: "route-diagnostic-integrity-upstream",
-          objective: "Verify diagnostic-only integrity failures restart requirements",
+          request: "Record diagnostic architecture findings without rewriting requirements",
+          goalTitle: "Record diagnostic architecture feedback",
+          goalSlug: "record-diagnostic-architecture-feedback",
+          objective: "Verify diagnostic findings become feedback instead of task mutation",
           now,
           specID,
         })
@@ -556,10 +711,6 @@ describe("orchestrator tools", () => {
           missingGoals: [],
           sessionID: "ses_integrity_upstream",
         })
-        applyIntegrityCorrectionsImpl = () => {
-          throw new Error("Diagnostic-only integrity findings must not apply goal corrections")
-        }
-
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -568,16 +719,16 @@ describe("orchestrator tools", () => {
 
         const result = await tools.integrity.execute({}, {} as any)
 
-        expect(result).toContain("Diagnostic-only findings require upstream repair")
-        expect(result).toContain("NEXT: run requirements")
-        expect(findGoal(goalID)).toBeUndefined()
+        expect(result).toContain("Integrity verdict: needs_correction")
+        expect(result).toContain("does not rewrite requirements, goals, or runs")
+        expect(findGoal(goalID)).toBeTruthy()
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         expect(artifact?.label).toBe("verdict-needs_correction")
       },
     })
   })
 
-  test("integrity repeated goal-layer corrections restart plan instead of looping review", async () => {
+  test("repeated architecture corrections remain feedback instead of automatic plan restart", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -600,10 +751,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Integrity plan restart test",
           taskTitle: "Integrity plan restart task",
-          request: "Do not loop integrity forever on same-spec goal-layer corrections",
-          goalTitle: "Route non-converging integrity to plan",
-          goalSlug: "route-non-converging-integrity-to-plan",
-          objective: "Verify repeated correctable integrity failures restart Architect",
+          request: "Do not let repeated architecture review feedback mutate the plan automatically",
+          goalTitle: "Keep repeated review as feedback",
+          goalSlug: "keep-repeated-review-as-feedback",
+          objective: "Verify repeated review findings do not restart Architect automatically",
           now,
           specID,
         })
@@ -645,10 +796,6 @@ describe("orchestrator tools", () => {
           missingGoals: [],
           sessionID: "ses_integrity_plan_restart",
         })
-        applyIntegrityCorrectionsImpl = () => {
-          throw new Error("Repeated integrity corrections must restart plan before applying another correction")
-        }
-
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -657,16 +804,16 @@ describe("orchestrator tools", () => {
 
         const result = await tools.integrity.execute({}, {} as any)
 
-        expect(result).toContain("did not converge")
-        expect(result).toContain("NEXT: run architect before build")
-        expect(findGoal(goalID)).toBeUndefined()
+        expect(result).toContain("Integrity verdict: needs_correction")
+        expect(result).not.toContain("Task restarted from plan")
+        expect(findGoal(goalID)).toBeTruthy()
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         expect(artifact?.label).toBe("verdict-needs_correction")
       },
     })
   })
 
-  test("integrity non-convergence keeps plan restart priority over mixed diagnostic findings", async () => {
+  test("mixed architecture findings are recorded without requirements or plan restart", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -689,10 +836,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Integrity mixed restart test",
           taskTitle: "Integrity mixed restart task",
-          request: "Do not rewrite requirements when same-spec plan corrections are already non-converging",
-          goalTitle: "Route mixed non-converging integrity to plan",
-          goalSlug: "route-mixed-non-converging-integrity-to-plan",
-          objective: "Verify mixed diagnostic plus goal-layer failures preserve requirements and restart Architect",
+          request: "Record mixed architecture findings without automatic replanning",
+          goalTitle: "Record mixed architecture feedback",
+          goalSlug: "record-mixed-architecture-feedback",
+          objective: "Verify mixed diagnostic plus goal-layer failures stay as review feedback",
           now,
           specID,
         })
@@ -751,10 +898,6 @@ describe("orchestrator tools", () => {
           missingGoals: [{ title: "Missing integration goal", objective: "Close the integration gap" }],
           sessionID: "ses_integrity_mixed_restart",
         })
-        applyIntegrityCorrectionsImpl = () => {
-          throw new Error("Mixed non-converging integrity must restart plan before applying another correction")
-        }
-
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -763,11 +906,10 @@ describe("orchestrator tools", () => {
 
         const result = await tools.integrity.execute({}, {} as any)
 
-        expect(result).toContain("did not converge")
-        expect(result).toContain("Task restarted from plan")
-        expect(result).not.toContain("NEXT: run requirements")
+        expect(result).toContain("Integrity verdict: needs_correction")
+        expect(result).not.toContain("Task restarted from plan")
         expect(result).not.toContain("Task restarted from requirements")
-        expect(findGoal(goalID)).toBeUndefined()
+        expect(findGoal(goalID)).toBeTruthy()
         const spec = Database.use((db) =>
           db.select({ status: EngineSpecSnapshotTable.status })
             .from(EngineSpecSnapshotTable)
@@ -778,12 +920,12 @@ describe("orchestrator tools", () => {
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         const payload = artifact?.payload as Record<string, unknown> | undefined
         expect(artifact?.label).toBe("verdict-needs_correction")
-        expect(payload?.reason).toContain("Diagnostic-only dimension(s) also failed")
+        expect(payload?.reason).toBe("Integrity needs_correction")
       },
     })
   })
 
-  test("goal build blocks on a persisted needs_correction integrity verdict", async () => {
+  test("goal build is not blocked by stale architecture review feedback", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -807,10 +949,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Persisted integrity block test",
           taskTitle: "Persisted integrity block task",
-          request: "Do not dispatch build after a failed integrity attempt",
-          goalTitle: "Block persisted integrity failure",
-          goalSlug: "block-persisted-integrity-failure",
-          objective: "Verify build reads persisted integrity verdicts before dispatch",
+          request: "Let build act on complete context despite prior review feedback",
+          goalTitle: "Build after prior architecture feedback",
+          goalSlug: "build-after-prior-architecture-feedback",
+          objective: "Verify stale review artifacts do not block a capable build agent",
           now,
           specID,
         })
@@ -831,9 +973,25 @@ describe("orchestrator tools", () => {
           reason: "Reference requirements were not grounded.",
           now,
         })
-        buildAgentRunImpl = async () => {
+        buildAgentRunImpl = async (input: any) => {
           buildCalls += 1
-          throw new Error("Build should not run after persisted needs_correction")
+          return {
+            result: {
+              status: "passed",
+              summary: "Build handled the prior architecture feedback.",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Changed implementation after review feedback.",
+                reason: "Prior review feedback is context, not a dispatch gate.",
+              }],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_after_prior_review",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
         }
 
         const { tools } = createOrchestratorTools({
@@ -848,15 +1006,14 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
-        expect(result).toContain("integrity verdict is needs_correction")
-        expect(result).toContain("execution is blocked")
-        expect(buildCalls).toBe(0)
-        expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
+        expect(result).toContain("status=passed")
+        expect(buildCalls).toBe(1)
+        expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
       },
     })
   })
 
-  test("goal build blocks on persisted concerns with correction work", async () => {
+  test("goal build is not blocked by correction-bearing review history", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -880,10 +1037,10 @@ describe("orchestrator tools", () => {
           worktree: tmp.path,
           projectName: "Persisted integrity concern block test",
           taskTitle: "Persisted integrity concern block task",
-          request: "Do not dispatch build after integrity recorded correction work",
-          goalTitle: "Block persisted integrity correction work",
-          goalSlug: "block-persisted-integrity-correction-work",
-          objective: "Verify build consumes correction counts, not just the aggregate label",
+          request: "Let build consume correction-bearing review history as context",
+          goalTitle: "Build after correction feedback",
+          goalSlug: "build-after-correction-feedback",
+          objective: "Verify correction counts inform the prompt rather than block dispatch",
           now,
           specID,
         })
@@ -904,9 +1061,25 @@ describe("orchestrator tools", () => {
           reason: "A concern still carried a concrete correction action.",
           now,
         })
-        buildAgentRunImpl = async () => {
+        buildAgentRunImpl = async (input: any) => {
           buildCalls += 1
-          throw new Error("Build should not run after persisted correction work")
+          return {
+            result: {
+              status: "passed",
+              summary: "Build handled correction-bearing review history.",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Changed implementation after correction feedback.",
+                reason: "Review history is context, not a dispatch gate.",
+              }],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_after_correction_feedback",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
         }
 
         const { tools } = createOrchestratorTools({
@@ -921,10 +1094,9 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
-        expect(result).toContain("recorded correction work")
-        expect(result).toContain("execution is blocked")
-        expect(buildCalls).toBe(0)
-        expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
+        expect(result).toContain("status=passed")
+        expect(buildCalls).toBe(1)
+        expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
       },
     })
   })
