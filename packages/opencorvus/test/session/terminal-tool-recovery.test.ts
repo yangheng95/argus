@@ -25,6 +25,24 @@ describe("SessionLoop terminal tool recovery", () => {
     ).toBe(false)
   })
 
+  test("stops immediately once the terminal collector contract is satisfied", () => {
+    expect(
+      SessionLoop.shouldStopAfterTerminalTool({
+        terminalToolPresent: true,
+        satisfied: true,
+      }),
+    ).toBe(true)
+  })
+
+  test("does not stop non-terminal sessions through the terminal collector path", () => {
+    expect(
+      SessionLoop.shouldStopAfterTerminalTool({
+        terminalToolPresent: false,
+        satisfied: true,
+      }),
+    ).toBe(false)
+  })
+
   test("hard-pins a single terminal tool when collector facts are ready", () => {
     const contract = {
       toolName: "submit_architect",
