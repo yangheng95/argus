@@ -70,12 +70,13 @@ import { PermissionsPanel } from "./components/settings/PermissionsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { CommandPalette } from "./components/CommandPalette";
+import { AppDialogHost } from "./components/AppDialogHost";
+import { WorkspaceOnboardingDialog } from "./components/WorkspaceOnboardingDialog";
 import { Tab, Tabs } from "./components/ui/Tabs";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
 import { nativeOpen, nativePrompt } from "./utils/native";
-import { installAppDialogBridge } from "./services/app-dialog";
 import { eventClosest } from "./utils/dom-utils";
 import { shortPath } from "./utils/tool";
 import {
@@ -479,7 +480,6 @@ document.addEventListener("click", (ev) => {
 }, listenerOpts);
 
 function installGlobalBridges(): void {
-  installAppDialogBridge();
   (window as any).renderMarkdown = renderMarkdown;
   (window as any).persistOverlaySettings = async () => {
     saveSettings();
@@ -1621,13 +1621,14 @@ void (async () => {
     cmdkHost.id = "commandPaletteHost";
     document.body.appendChild(cmdkHost);
     render(() => <CommandPalette />, cmdkHost);
-    // First-run startup: if no working directory is set after init,
-    // pop the OS folder picker immediately so the operator does not
-    // start at a half-bricked composer (input is disabled until
-    // settingsStore.directory is non-empty).
-    if (!settingsStore.directory) {
-      void browseDirectory().catch((err) => console.warn("startup picker", err));
-    }
+    const appDialogHost = document.createElement("div");
+    appDialogHost.id = "appDialogHost";
+    document.body.appendChild(appDialogHost);
+    render(() => <AppDialogHost />, appDialogHost);
+    const onboardingHost = document.createElement("div");
+    onboardingHost.id = "workspaceOnboardingHost";
+    document.body.appendChild(onboardingHost);
+    render(() => <WorkspaceOnboardingDialog />, onboardingHost);
   } catch (error) {
     console.error(error);
   } finally {

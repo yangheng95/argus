@@ -456,9 +456,11 @@ test(
       await page.evaluateOnNewDocument((portValue) => {
         localStorage.setItem("oc_locale", "en-US")
         localStorage.removeItem("oc_directory")
+        ;(window as any).__startupInvokes = []
         window.__TAURI__ = {
           core: {
             invoke: async (command: string) => {
+              ;(window as any).__startupInvokes.push(command)
               if (command === "overlay_settings_load") {
                 return {
                   serverUrl: `http://127.0.0.1:${portValue}`,
@@ -487,22 +489,28 @@ test(
       }, server.port)
 
       await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
-      await page.waitForSelector('[data-testid="board-intro-open-folder"]', { visible: true })
+      await page.waitForSelector('[data-testid="workspace-onboarding-dialog"]', { visible: true })
       const intro = await page.evaluate(() => {
-        const startup = document.querySelector<HTMLElement>('[data-testid="startup-workspace-dialog"]')
-        const openFolder = document.querySelector<HTMLElement>('[data-testid="board-intro-open-folder"]')
-        const title = document.querySelector<HTMLElement>(".board-intro__title")
+        const dialog = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-dialog"]')
+        const openFolder = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-open-folder"]')
+        const createProject = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-create-project"]')
+        const title = document.querySelector<HTMLElement>(".workspace-onboarding-titleblock")
         const sections = document.querySelector<HTMLElement>(".sections-title")
+        const startupInvokes = ((window as any).__startupInvokes || []) as string[]
         return {
-          hasStartup: !!startup,
+          hasStartup: !!dialog,
           openFolderText: openFolder?.textContent || "",
+          createProjectText: createProject?.textContent || "",
           title: title?.textContent || "",
           sections: sections?.textContent || "",
+          pickDirInvokes: startupInvokes.filter((value) => value === "overlay_pick_dir").length,
         }
       })
-      expect(intro.hasStartup).toBe(false)
-      expect(intro.openFolderText).toBe("Open Folder")
-      expect(intro.title).toBe("OpenCorvus workspace")
+      expect(intro.hasStartup).toBe(true)
+      expect(intro.pickDirInvokes).toBe(0)
+      expect(intro.openFolderText).toContain("Open Local Directory")
+      expect(intro.createProjectText).toContain("Create New Project")
+      expect(intro.title).toContain("Open a project directory")
       expect(intro.sections).toBe("Workspace")
       await page.close()
     } finally {
