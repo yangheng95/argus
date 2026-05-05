@@ -4273,6 +4273,17 @@ export function createOrchestratorTools(input: {
               `while active spec is ${activeSpec.id}. Re-read the active goal graph before dispatching build.`
             )
           }
+          const dependencyBlockers = (Array.isArray(goal.depends_on) ? goal.depends_on as string[] : [])
+            .map((depID) => ({ depID, status: goalStatusByID(depID) }))
+            .filter((dep) => dep.status !== "passed")
+          if (dependencyBlockers.length > 0) {
+            if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+            return (
+              `build: goal ${attachedGoalID} is blocked by unfinished dependencies: ` +
+              dependencyBlockers.map((dep) => `${dep.depID}=${dep.status}`).join(", ") +
+              `. Re-read collaboration_closure and dispatch only goals whose dependencies are passed.`
+            )
+          }
         }
 
         let coordinatorRunID: string | undefined

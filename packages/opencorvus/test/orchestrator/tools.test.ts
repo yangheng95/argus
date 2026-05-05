@@ -11,7 +11,7 @@ import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { goalStatusByID } from "../../src/engine/describe"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
-import { recordIntegrityAttempt } from "../../src/engine/persist"
+import { recordIntegrityAttempt, startNewAttempt } from "../../src/engine/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { findGoal, findGoalLatestWorkspace, findLatestIntegrityAttemptArtifact, listGoalRunsByGoal } from "../../src/engine/store"
@@ -41,7 +41,7 @@ function insertWorkflowTaskWithGoal(input: {
   projectID: string
   taskID: string
   goalID: string
-  sessionID: string
+  sessionID: string | null
   worktree: string
   projectName: string
   taskTitle: string
@@ -208,6 +208,101 @@ describe("orchestrator tools", () => {
         expect(result).toContain("kind=workflow")
         expect(result).toContain("requirements, architect, and per-goal build")
         expect(workflowState.workflowID).toBe("pipeline")
+      },
+    })
+  })
+
+  test("goal build re-reads dependency status before dispatch", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_build_dep_guard_${stamp}`
+    const taskID = `tsk_build_dep_guard_${stamp}`
+    const parentGoalID = `gol_dep_parent_${stamp}`
+    const childGoalID = `gol_dep_child_${stamp}`
+    const specID = `spec_dep_guard_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID: parentGoalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Dependency guard project",
+      taskTitle: "Dependency guard task",
+      request: "Build dependent goals only after dependencies are still passed.",
+      goalTitle: "Shared contract",
+      goalSlug: "shared-contract",
+      objective: "Provide shared code for child goals.",
+      now,
+      specID,
+    })
+    Database.use((db) => {
+      db.insert(EngineGoalTable).values({
+        id: childGoalID,
+        task_id: taskID,
+        spec_snapshot_id: specID,
+        title: "Dependent feature",
+        slug: "dependent-feature",
+        objective: "Consume the shared contract.",
+        acceptance_specs: [],
+        owned_paths: ["src/feature.ts"],
+        depends_on: [parentGoalID],
+        exports: [],
+        imports: [],
+        kind: "feature",
+        requirement_ids: [],
+        priority: "blocking",
+        source: "test",
+        status: "pending",
+        order_index: 1,
+        time_created: now,
+        time_updated: now,
+      }).run()
+    })
+    seedGoalRunAttemptWithWorkspace({
+      taskID,
+      goalID: parentGoalID,
+      workspaceDir: null,
+      workspaceBranch: null,
+      status: "completed",
+      now,
+    })
+    startNewAttempt({
+      goalID: parentGoalID,
+      reason: "architecture_review_rework",
+      now: now + 1,
+      feedback: {
+        value: "architecture review requires the dependency to be reworked",
+        reason: "test dependency closure",
+      },
+    })
+    expect(goalStatusByID(parentGoalID)).toBe("pending")
+
+    let buildStarted = false
+    buildAgentRunImpl = async () => {
+      buildStarted = true
+      return { status: "passed", summary: "should not run", files_changed: [], tests: [] }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "dependency guard test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID: childGoalID,
+          reason: "stale orchestrator view",
+        }, {} as any)
+
+        expect(result).toContain("blocked by unfinished dependencies")
+        expect(result).toContain(`${parentGoalID}=pending`)
+        expect(buildStarted).toBe(false)
+        expect(listGoalRunsByGoal(childGoalID)).toHaveLength(0)
       },
     })
   })
