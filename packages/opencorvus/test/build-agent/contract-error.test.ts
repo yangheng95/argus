@@ -21,7 +21,7 @@ import { BuildAgentContractError, BuildResultSchema } from "../../src/build/type
  *     attempt's prompt via decision_log phase=retry,
  *   - converts in the orchestrator to a SCHEMA-VALID failed BuildResult
  *     (codex P2 #2: BuildFailedResultSchema is .strict() and requires
- *     {status, summary, patch_summary, tests, error}, no extra fields).
+ *     {status, summary, files_changed, tests, error}, no extra fields).
  *
  * This test asserts the converter shape only (the typed-throw integration
  * is exercised by the orchestrator-build path's existing tests via
@@ -70,7 +70,7 @@ describe("BuildAgentContractError", () => {
     const synthFailed = {
       status: "failed" as const,
       summary: `Build agent contract violation (${err.code}): ${err.message.slice(0, 200)}`,
-      patch_summary: "",
+      files_changed: [],
       tests: [],
       error: err.message,
     }
@@ -90,7 +90,7 @@ describe("BuildAgentContractError", () => {
     const broken = {
       status: "failed" as const,
       summary: "missing error",
-      patch_summary: "",
+      files_changed: [],
       tests: [],
       // error: missing → schema rejects.
     }
@@ -102,7 +102,7 @@ describe("BuildAgentContractError", () => {
     const stray = {
       status: "failed" as const,
       summary: "test",
-      patch_summary: "",
+      files_changed: [],
       tests: [],
       error: "test error",
       worktree: "/some/path", // strict() rejects unknown keys

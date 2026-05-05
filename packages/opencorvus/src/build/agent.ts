@@ -1500,7 +1500,6 @@ async function runWithExternalProviderImpl(args: {
         status: "failed" as const,
         commit_ref: "",
         summary: `external executor ${args.executor} stopped before host merge_back: ${singleLineText(errored)}`,
-        patch_summary: "",
         tests: [],
         error: errored,
       },
@@ -1523,7 +1522,6 @@ async function runWithExternalProviderImpl(args: {
           summary: "External executor completed without OpenCorvus report_build_result access.",
           reason: "Host synthesized this placeholder because the external executor protocol has no structured per-file report channel.",
         }],
-        patch_summary: "",
         tests: [],
       },
     }
@@ -1612,7 +1610,6 @@ async function runWithExternalProviderImpl(args: {
         summary:
           `merge_back hit conflicts on ${args.worktreeBranch} → ${outcome.primaryBranch} ` +
           `(${outcome.conflictPaths.length} conflict${outcome.conflictPaths.length === 1 ? "" : "s"}): ${pathList}`,
-        patch_summary: "",
         tests: [],
         error:
           `Merge left ${args.worktreeDir} in MERGING state against ${outcome.primaryBranch} ` +
@@ -1636,7 +1633,6 @@ async function runWithExternalProviderImpl(args: {
         status: "failed" as const,
         commit_ref: "",
         summary: `merge_back blocked for ${args.worktreeBranch}: ${outcome.reason}`,
-        patch_summary: "",
         tests: [],
         error:
           `${outcome.reason}. Worktree preserved at ${outcome.worktreeDir}; ` +
@@ -1657,7 +1653,6 @@ async function runWithExternalProviderImpl(args: {
         status: "failed" as const,
         commit_ref: "",
         summary: `merge_back returned status=infra_error for ${args.worktreeBranch}: ${outcome.reason}`,
-        patch_summary: "",
         tests: [],
         error: outcome.reason,
       },
@@ -1677,7 +1672,6 @@ async function runWithExternalProviderImpl(args: {
         summary: "External executor completed without OpenCorvus report_build_result access.",
         reason: "Host synthesized this placeholder because the external executor protocol has no structured per-file report channel.",
       }],
-      patch_summary: "",
       tests: [],
     },
     mergedHead,

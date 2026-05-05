@@ -18,7 +18,6 @@ describe("BuildResultSchema", () => {
           reason: "Acceptance evidence for the store contract.",
         },
       ],
-      patch_summary: "- Added src/note-store.ts\n- Added src/note-store.test.ts",
       commit_ref: "abc1234",
       tests: [
         { name: "bun test src/note-store.test.ts", passed: true, detail: "5 pass" },
@@ -39,7 +38,6 @@ describe("BuildResultSchema", () => {
           reason: "The failing acceptance spec required changing toggle behavior.",
         },
       ],
-      patch_summary: "- Partial src/note-store.ts (no tests yet)",
       error: "toggle returned old done value for first call; root cause not identified",
       tests: [
         { name: "bun test src/note-store.test.ts", passed: false, detail: "1 fail, 4 pass" },
@@ -54,7 +52,6 @@ describe("BuildResultSchema", () => {
       status: "passed",
       summary: "",
       files_changed: [{ path: "src/a.ts", summary: "Changed a", reason: "Required for test" }],
-      patch_summary: "",
     })
     expect(parsed.success).toBe(false)
   })
@@ -64,7 +61,6 @@ describe("BuildResultSchema", () => {
       status: "accepted",
       summary: "ok",
       files_changed: [{ path: "src/a.ts", summary: "Changed a", reason: "Required for test" }],
-      patch_summary: "",
     })
     expect(parsed.success).toBe(false)
   })
@@ -74,7 +70,6 @@ describe("BuildResultSchema", () => {
       status: "passed",
       summary: "no-op run",
       files_changed: [{ path: "src/a.ts", summary: "Changed a", reason: "Required for test" }],
-      patch_summary: "",
     })
     expect(parsed.success).toBe(true)
     if (parsed.success) expect(parsed.data.tests).toEqual([])
@@ -84,14 +79,12 @@ describe("BuildResultSchema", () => {
     const missing = BuildResultSchema.safeParse({
       status: "failed",
       summary: "verification failed",
-      patch_summary: "",
     })
     expect(missing.success).toBe(false)
 
     const empty = BuildResultSchema.safeParse({
       status: "failed",
       summary: "verification failed",
-      patch_summary: "",
       error: "   ",
     })
     expect(empty.success).toBe(false)
@@ -102,7 +95,6 @@ describe("BuildResultSchema", () => {
       status: "passed",
       summary: "implemented",
       files_changed: [{ path: "src/a.ts", summary: "Changed a", reason: "Required for test" }],
-      patch_summary: "",
       error: "should not exist on passed branch",
     })
     expect(parsed.success).toBe(false)
@@ -113,7 +105,6 @@ describe("BuildResultSchema", () => {
       status: "passed",
       summary: "claimed success without file-level explanation",
       files_changed: [],
-      patch_summary: "",
     })
     expect(parsed.success).toBe(false)
   })

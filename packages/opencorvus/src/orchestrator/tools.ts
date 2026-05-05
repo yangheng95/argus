@@ -4719,7 +4719,6 @@ export function createOrchestratorTools(input: {
               const synthFailed: Awaited<ReturnType<typeof BuildAgent.run>>["result"] = {
                 status: "failed",
                 summary: `Build agent contract violation (${runErr.code}): ${runErr.message.slice(0, 200)}`,
-                patch_summary: "",
                 tests: [],
                 files_changed: [],
                 error: runErr.message,
@@ -4882,7 +4881,6 @@ export function createOrchestratorTools(input: {
             `Build agent finished (status=${result.status}, session ${sessionID}).\n\n` +
             `### Build report\n` +
             `- summary: ${result.summary}\n` +
-            `- patch_summary: ${result.patch_summary || "(empty)"}\n` +
             `- files_changed:\n${fileLines}\n` +
             `${commitLine}${errorLine}${worktreeLine}${cleanupLine}\n` +
             `- tests:\n${testLines}\n\n` +
