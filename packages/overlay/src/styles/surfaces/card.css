@@ -807,6 +807,8 @@ body {
 }
 
 .card__collapse-toggle-icon {
+  --card-collapse-stage: var(--card-stage, var(--card-stage-info));
+
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -814,17 +816,17 @@ body {
   width: calc(22px * var(--ui-scale));
   height: calc(22px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
-  color: color-mix(in srgb, var(--card-stage) 78%, var(--text-soft));
-  background: color-mix(in srgb, var(--card-stage) 10%, var(--surface-hover));
-  box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-stage) 18%, var(--card-line));
+  color: color-mix(in srgb, var(--card-collapse-stage) 86%, var(--text-strong));
+  background: color-mix(in srgb, var(--card-collapse-stage) 14%, var(--surface-hover));
+  box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-collapse-stage) 32%, var(--card-line));
   transition: color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard), box-shadow var(--ui-duration-base) var(--ui-timing-standard), transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .card__collapse-toggle:hover .card__collapse-toggle-icon,
 .card__collapse-toggle:focus-visible .card__collapse-toggle-icon {
-  color: var(--card-stage);
-  background: color-mix(in srgb, var(--card-stage) 12%, transparent);
-  box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-stage) 28%, var(--card-line));
+  color: var(--card-collapse-stage);
+  background: color-mix(in srgb, var(--card-collapse-stage) 18%, transparent);
+  box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-collapse-stage) 42%, var(--card-line));
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
 

@@ -174,7 +174,7 @@
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 46%, transparent);
   border-radius: var(--oc-radius-soft);
   background: var(--accent);
-  color: white;
+  color: var(--text-on-accent);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -197,9 +197,9 @@
 }
 
 .chat-send:disabled {
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
-  background: color-mix(in srgb, var(--accent) 44%, var(--surface));
-  color: color-mix(in srgb, white 78%, var(--text-strong));
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-inset));
+  color: color-mix(in srgb, var(--accent) 72%, var(--text-strong));
   cursor: default;
 }
 
@@ -460,7 +460,7 @@
    otherwise the buttons look clickable but the operator thinks the
    composer is broken. data-disabled flips pointer-events + opacity. */
 .chat-icon-col[data-disabled="true"] {
-  opacity: var(--ui-opacity-faint);
+  opacity: var(--ui-opacity-subtle);
   pointer-events: none;
 }
 
