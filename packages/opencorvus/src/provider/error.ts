@@ -27,6 +27,16 @@ export namespace ProviderError {
     /context[_ ]length[_ ]exceeded/i, // Generic fallback
   ]
 
+  const OVERFLOW_CODES = new Set([
+    "context_length_exceeded",
+    "context_overflow",
+    "prompt_too_long",
+    "input_too_long",
+    "request_too_large",
+    "tokens_exceeded",
+    "max_tokens_exceeded",
+  ])
+
   function isOpenAiErrorRetryable(e: APICallError) {
     const status = e.statusCode
     if (!status) return e.isRetryable
@@ -43,6 +53,34 @@ export namespace ProviderError {
     // - Cerebras: often returns "400 (no body)" / "413 (no body)"
     // - Mistral: often returns "400 (no body)" / "413 (no body)"
     return /^4(00|13)\s*(status code)?\s*\(no body\)/i.test(message)
+  }
+
+  function stringValue(input: unknown) {
+    return typeof input === "string" ? input : undefined
+  }
+
+  function errorObject(input: unknown) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return undefined
+    return input as Record<string, unknown>
+  }
+
+  function overflowSignal(body: unknown) {
+    const root = errorObject(body)
+    if (!root) return undefined
+    const nested = errorObject(root.error)
+    const sources = nested ? [nested, root] : [root]
+    for (const source of sources) {
+      const code = stringValue(source.code)?.toLowerCase()
+      const type = stringValue(source.type)?.toLowerCase()
+      if ((code && OVERFLOW_CODES.has(code)) || (type && OVERFLOW_CODES.has(type))) {
+        return stringValue(source.message) ?? "Input exceeds context window of this model"
+      }
+    }
+    for (const source of sources) {
+      const message = stringValue(source.message) ?? stringValue(source.error)
+      if (message && isOverflow(message)) return message
+    }
+    return undefined
   }
 
   function message(e: APICallError) {
@@ -63,8 +101,9 @@ export namespace ProviderError {
 
       try {
         const body = JSON.parse(e.responseBody)
-        const errMsg = body.message || body.error || body.error?.message
-        if (errMsg && typeof errMsg === "string") {
+        const error = errorObject(body.error)
+        const errMsg = stringValue(body.message) ?? stringValue(error?.message) ?? stringValue(body.error)
+        if (errMsg) {
           return `${msg}: ${errMsg}`
         }
       } catch {}
@@ -109,13 +148,16 @@ export namespace ProviderError {
     const responseBody = JSON.stringify(body)
     if (body.type !== "error") return
 
+    const overflow = overflowSignal(body)
+    if (overflow) {
+      return {
+        type: "context_overflow",
+        message: overflow,
+        responseBody,
+      }
+    }
+
     switch (body?.error?.code) {
-      case "context_length_exceeded":
-        return {
-          type: "context_overflow",
-          message: "Input exceeds context window of this model",
-          responseBody,
-        }
       case "insufficient_quota":
         return {
           type: "api_error",
@@ -157,6 +199,16 @@ export namespace ProviderError {
       }
 
   export function parseAPICallError(input: { providerID: string; error: APICallError }): ParsedAPICallError {
+    const body = json(input.error.responseBody)
+    const overflow = overflowSignal(body)
+    if (overflow) {
+      return {
+        type: "context_overflow",
+        message: overflow,
+        responseBody: input.error.responseBody,
+      }
+    }
+
     const m = message(input.error)
     if (isOverflow(m)) {
       return {

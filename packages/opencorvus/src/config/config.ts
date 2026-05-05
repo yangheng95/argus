@@ -1205,6 +1205,18 @@ export namespace Config {
             .describe(
               "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.7 — start compacting at 70% so the agent has room to land its next reply without overflowing.",
             ),
+          tail_turns: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe("Number of most recent real user turns to preserve verbatim after compaction. Defaults to 2."),
+          preserve_recent_tokens: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe("Token budget for the verbatim recent-tail retained after compaction."),
         })
         .optional(),
       assistant: z

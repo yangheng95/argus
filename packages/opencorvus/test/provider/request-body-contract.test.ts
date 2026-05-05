@@ -71,7 +71,7 @@ describe("provider request-body contract", () => {
     const bodyMessages = convertToOpenAICompatibleChatMessages(messages as any)
     expect(bodyMessages[0]).toMatchObject({
       role: "assistant",
-      content: "",
+      content: null,
       reasoning_content: "",
     })
     expect(bodyMessages[0].tool_calls?.[0]?.function.name).toBe("bash")

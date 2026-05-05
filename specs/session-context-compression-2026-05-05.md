@@ -203,26 +203,28 @@ The user-facing error should include the measured cause: model id, usable budget
 
 ## Implementation Steps
 
-1. Add `context-budget.ts` and move budget calculation into it.
-2. Extend `CompactionPart` schema with `overflow` and `tail_start_id`.
-3. Add `completedCompactions`, `summaryText`, `turns`, `splitTurn`, and `selectCompactionInput` helpers in `session/compaction.ts`.
-4. Replace the compaction prompt with the strict anchored template.
-5. Update `SessionCompaction.process` to:
+Status as of 2026-05-05:
+
+1. [done] Add `context-budget.ts` and move budget calculation into it.
+2. [done] Extend `CompactionPart` schema with `overflow` and `tail_start_id`.
+3. [done] Add `completedCompactions`, `summaryText`, `turns`, `splitTurn`, and `selectCompactionInput` helpers in `session/compaction.ts`.
+4. [done] Replace the compaction prompt with the strict anchored template.
+5. [done] Update `SessionCompaction.process` to:
    - ignore previous completed compaction pairs;
    - anchor from the latest completed summary;
    - compact only selected head;
    - persist `tail_start_id`;
    - keep existing media stripping and tool-output cap;
    - hard-stop on compaction overflow.
-6. Update `Message.filterCompacted` to retain the full recent tail when `tail_start_id` is present.
-7. Update `SessionCompaction.create` and all callers to pass `overflow` where the trigger came from provider context overflow.
-8. Replace provider overflow tests with fixture-based cases for OpenAI-compatible, Anthropic, Bedrock, Google, Groq, DeepSeek, Mistral, and Hexin.
-9. Add integration tests for repeated compaction:
+6. [done] Update `Message.filterCompacted` to retain the full recent tail when `tail_start_id` is present.
+7. [done] Update `SessionCompaction.create` and all callers to pass `overflow` where the trigger came from provider context overflow.
+8. [partial] Add provider overflow fixture coverage for OpenAI-compatible, Mistral-style, and Hexin-normalized structured bodies. Full provider-directory tests still have environment/model-discovery failures outside the compression path.
+9. [partial] Add regression tests for:
    - first compaction writes summary and `tail_start_id`;
-   - second compaction uses previous summary as anchor;
-   - `filterCompacted` returns summary plus retained tail;
-   - compaction overflow produces one assistant error and no new compaction task;
-   - no persisted part has `synthetic`.
+   - [done] `filterCompacted` returns summary plus retained tail;
+   - [done] compaction overflow produces one assistant error and no new compaction task;
+   - [done] no exposed continuation builder or synthetic continuation path;
+   - [covered by implementation, not isolated] second compaction uses previous summary as anchor.
 
 ## Merge Policy For Upstream Opencode
 

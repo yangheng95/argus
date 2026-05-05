@@ -265,6 +265,8 @@ export namespace Message {
   export const CompactionPart = PartBase.extend({
     type: z.literal("compaction"),
     auto: z.boolean(),
+    overflow: z.boolean().optional(),
+    tail_start_id: z.string().optional(),
   }).meta({
     ref: "CompactionPart",
   })
@@ -992,15 +994,23 @@ export namespace Message {
   export async function filterCompacted(stream: AsyncIterable<Message.WithParts>) {
     const result = [] as Message.WithParts[]
     const completed = new Set<string>()
+    let retain: string | undefined
     for await (const msg of stream) {
       result.push(msg)
-      if (
-        msg.info.role === "user" &&
-        completed.has(msg.info.id) &&
-        msg.parts.some((part) => part.type === "compaction")
-      )
-        break
-      if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish) completed.add(msg.info.parentID)
+      if (retain) {
+        if (msg.info.id === retain) break
+        continue
+      }
+      if (msg.info.role === "user" && completed.has(msg.info.id)) {
+        const part = msg.parts.find((item): item is Message.CompactionPart => item.type === "compaction")
+        if (!part) continue
+        if (!part.tail_start_id) break
+        retain = part.tail_start_id
+        if (msg.info.id === retain) break
+        continue
+      }
+      if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish && !msg.info.error)
+        completed.add(msg.info.parentID)
     }
     result.reverse()
     return result

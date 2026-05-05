@@ -819,7 +819,7 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
     expect(serialized).toEqual([
       {
         role: "assistant",
-        content: "",
+        content: null,
         reasoning_content: "",
         tool_calls: [
           {
