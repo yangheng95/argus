@@ -1,6 +1,4 @@
-/* Sidebar surface — owns the rail column's shell + tool affordances.
-   The chunkier `.sidebar-btn` family stays in styles.css until its
-   gradient/rgba chrome is reworked through palette tokens. */
+/* Sidebar surface — owns the rail column's shell + header controls. */
 
 .sidebar {
   width: var(--ui-sidebar-width);
@@ -28,7 +26,7 @@
   flex-shrink: 0;
 }
 
-.sidebar[data-collapsed="true"] .sidebar-toggle svg {
+.sidebar[data-collapsed="true"] [data-ui="sidebar-toggle-button"] svg {
   transform: rotate(180deg);
 }
 
@@ -46,18 +44,20 @@
   box-shadow: var(--oc-control-shadow);
 }
 
-.sidebar-tool {
+.sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"],
+.sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"] {
+  --oc-button-height: calc(28px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-border: var(--oc-border-width) solid transparent;
+  --oc-button-bg: transparent;
+  --oc-button-color: var(--text-soft);
+
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0;
   width: calc(28px * var(--ui-scale));
   height: calc(28px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid transparent;
-  background: transparent;
-  color: var(--text-soft);
-  cursor: pointer;
   flex-shrink: 0;
   transition:
     border-color var(--ui-duration-fast),
@@ -67,15 +67,18 @@
   box-shadow: none;
 }
 
-.sidebar-tool:hover {
-  border-color: var(--oc-control-border-hover);
-  background: var(--oc-control-bg-hover);
-  color: var(--text-strong);
+.sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"]:hover,
+.sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"]:focus-visible,
+.sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"]:hover,
+.sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"]:focus-visible {
+  --oc-button-border: var(--oc-border-width) solid var(--oc-control-border-hover);
+  --oc-button-bg: var(--oc-control-bg-hover);
+  --oc-button-color: var(--text-strong);
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
-.sidebar-tool:focus-visible {
-  outline: none;
+.sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"]:focus-visible,
+.sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"]:focus-visible {
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--oc-control-focus-ring);
 }
 
@@ -776,33 +779,6 @@
   }
 }
 
-.sidebar-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--oc-control-focus-ring);
-}
-
-.sidebar-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  min-height: calc(34px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border: 0;
-  border-radius: var(--oc-radius-soft);
-  background: transparent;
-  font-size: var(--ui-font-meta);
-  font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: none;
-  margin: 0;
-  transition:
-    background var(--ui-duration-fast),
-    color var(--ui-duration-fast),
-    transform var(--ui-duration-fast);
-}
-
 .sidebar-btn-icon {
   display: inline-flex;
   align-items: center;
@@ -810,7 +786,15 @@
   flex-shrink: 0;
 }
 
-.sidebar-btn-primary .sidebar-btn-icon {
+.oc-button[data-ui="sidebar-new-task-button"] {
+  --oc-button-height: calc(28px * var(--ui-scale));
+  --oc-button-padding-x: calc(10px * var(--ui-scale));
+  --oc-button-gap: calc(2px * var(--ui-scale));
+  letter-spacing: 0;
+  box-shadow: none;
+}
+
+.oc-button[data-ui="sidebar-new-task-button"] .sidebar-btn-icon {
   width: calc(16px * var(--ui-scale));
   height: calc(16px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
@@ -818,10 +802,8 @@
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
-.sidebar-btn[data-active="true"] {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
+.oc-button[data-ui="sidebar-new-task-button"]:focus-visible {
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .project-group {
@@ -923,12 +905,13 @@
   width: 100%;
 }
 
-.sidebar[data-collapsed="true"] .sidebar-tool {
+.sidebar[data-collapsed="true"] .sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"],
+.sidebar[data-collapsed="true"] .sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"] {
   flex: 1;
   width: auto;
 }
 
-.sidebar[data-collapsed="true"] .sidebar-btn {
+.sidebar[data-collapsed="true"] .oc-button[data-ui="sidebar-new-task-button"] {
   width: 100%;
   justify-content: center;
   padding-inline: calc(10px * var(--ui-scale));
@@ -943,13 +926,14 @@
 
 /* ─────────────────────────────────────────────────────────────
    Sidebar header equal-height button row:
-   - .sidebar-tool (icon buttons inside .sidebar-toolset): 22px inner
-   - .sidebar-btn (.New Chat): 28px — matches toolset outer height
+   - sidebar refresh/toggle buttons inside .sidebar-toolset: 22px inner
+   - sidebar new-task button: 28px — matches toolset outer height
      (22px inner + 2*2px padding + 2*1px border = 28px total)
    Chat header controls share the same 28px cap.
    ───────────────────────────────────────────────────────────── */
 
-.sidebar-header .sidebar-tool,
+.sidebar-header .oc-button[data-ui="sidebar-refresh-button"],
+.sidebar-header .oc-button[data-ui="sidebar-toggle-button"],
 .chat-header .chat-task-status,
 .chat-header .workspace-toggle,
 .chat-header-meta #btnChatCopyAll {
@@ -959,10 +943,6 @@
   box-shadow: none;
 }
 
-.sidebar-header .sidebar-btn {
-  height: calc(28px * var(--ui-scale));
-  min-height: calc(28px * var(--ui-scale));
-  max-height: calc(28px * var(--ui-scale));
-  padding: 0 calc(10px * var(--ui-scale));
+.sidebar-header .oc-button[data-ui="sidebar-new-task-button"] {
   box-shadow: none;
 }
