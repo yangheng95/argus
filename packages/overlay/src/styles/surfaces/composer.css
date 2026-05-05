@@ -4,8 +4,8 @@
 .chat-attachments {
   display: flex;
   flex-wrap: wrap;
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0;
+  gap: calc(6px * var(--ui-scale));
+  padding: 0;
 }
 
 /* Flat-redesign Step 2 (2026-05-04): attachment chip border retired
@@ -14,11 +14,11 @@
 .chat-attachment-item {
   display: flex;
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(5px * var(--ui-scale));
   background: color-mix(in srgb, var(--surface-inset) 78%, transparent);
   border: 0;
-  border-radius: var(--oc-radius-large);
-  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
   font-size: var(--ui-font-small);
   color: var(--text-soft);
   max-width: calc(220px * var(--ui-scale));
@@ -77,9 +77,9 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
   margin: 0;
-  padding: calc(4px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 34%, transparent);
   border-radius: var(--oc-radius-large);
   background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
@@ -103,7 +103,7 @@
   min-width: 0;
   display: flex;
   align-self: stretch;
-  min-height: calc(62px * var(--ui-scale));
+  min-height: calc(56px * var(--ui-scale));
 }
 
 .chat-textarea-wrap > .chat-textarea {
@@ -113,7 +113,7 @@
 .chat-textarea {
   flex: 1;
   min-width: 0;
-  min-height: calc(62px * var(--ui-scale));
+  min-height: calc(56px * var(--ui-scale));
   resize: none;
   border: var(--oc-border-width) solid var(--border);
   border-radius: 0;
@@ -168,8 +168,8 @@
 .chat-send {
   align-self: stretch;
   height: 100%;
-  min-width: calc(78px * var(--ui-scale));
-  min-height: calc(72px * var(--ui-scale) * var(--chat-compose-scale));
+  min-width: calc(72px * var(--ui-scale));
+  min-height: calc(64px * var(--ui-scale) * var(--chat-compose-scale));
   padding: 0 calc(8px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 46%, transparent);
   border-radius: var(--oc-radius-soft);
@@ -179,7 +179,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: calc(7px * var(--ui-scale) * var(--chat-compose-scale));
+  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
   flex-shrink: 0;
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);

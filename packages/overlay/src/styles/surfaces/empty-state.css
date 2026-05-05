@@ -16,8 +16,8 @@
   display: block;
   font-size: var(--ui-font-control);
   color: var(--text-muted);
-  line-height: 1.45;
-  padding: calc(2px * var(--ui-scale)) 0;
+  line-height: 1.4;
+  padding: calc(1px * var(--ui-scale)) 0;
 }
 
 .sidebar-list-cluster > .empty-hint,
@@ -28,10 +28,10 @@
 .empty-hint--card {
   position: relative;
   display: grid;
-  gap: calc(8px * var(--ui-scale));
-  width: min(100%, calc(340px * var(--ui-scale)));
+  gap: calc(6px * var(--ui-scale));
+  width: min(100%, calc(320px * var(--ui-scale)));
   margin: 0;
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
   border-radius: var(--oc-radius-soft);
   background: var(--surface);
@@ -63,7 +63,7 @@
   gap: calc(4px * var(--ui-scale));
   width: 100%;
   max-width: none;
-  padding: calc(6px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border: 0;
   border-radius: var(--oc-radius-soft);
 }

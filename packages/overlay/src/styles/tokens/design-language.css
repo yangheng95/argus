@@ -9,7 +9,7 @@
    * `packages/overlay/script/migrate-flat-redesign-step1.ts`. */
   --oc-radius-none: 0;
   --oc-radius-soft: calc(4px * var(--ui-scale, 1));
-  --oc-radius-large: calc(10px * var(--ui-scale, 1));
+  --oc-radius-large: calc(8px * var(--ui-scale, 1));
   --oc-radius-pill: 999px;
 
   /* Font-weight scale — 3 tokens, single source.
@@ -31,9 +31,9 @@
   --ui-font-weight-medium: 500;
   --ui-font-weight-strong: 600;
 
-  --oc-density-control-height: calc(24px * var(--ui-scale, 1));
-  --oc-density-icon-button: calc(24px * var(--ui-scale, 1));
-  --oc-density-chip-height: calc(20px * var(--ui-scale, 1));
+  --oc-density-control-height: calc(26px * var(--ui-scale, 1));
+  --oc-density-icon-button: calc(26px * var(--ui-scale, 1));
+  --oc-density-chip-height: calc(22px * var(--ui-scale, 1));
   --oc-border-width: 1px;
 
   /* Motion scale — 3 duration tokens, 1 timing token. Step 8a (2026-05-04).
@@ -77,9 +77,9 @@
   --ui-opacity-full: 1;
 
   --oc-header-height: calc(40px * var(--ui-scale, 1));
-  --oc-header-padding-x: calc(7px * var(--ui-scale, 1));
+  --oc-header-padding-x: calc(8px * var(--ui-scale, 1));
   --oc-header-padding-y: 0;
-  --oc-header-gap: calc(7px * var(--ui-scale, 1));
+  --oc-header-gap: calc(8px * var(--ui-scale, 1));
   --oc-header-actions-padding: calc(var(--oc-border-width) * 2);
   --oc-header-title-font: 550 var(--ui-font-title, 12px) var(--font, sans-serif);
   --oc-header-title-line-height: 1;
@@ -124,14 +124,14 @@
   --ui-font-heading: calc(14px * var(--ui-scale));
   --ui-font-title: calc(13px * var(--ui-scale));
   --ui-font-body: calc(12px * var(--ui-scale));
-  --ui-font-control: calc(11px * var(--ui-scale));
-  --ui-font-meta: calc(11px * var(--ui-scale));
-  --ui-font-small: calc(10px * var(--ui-scale));
+  --ui-font-control: calc(12px * var(--ui-scale));
+  --ui-font-meta: calc(12px * var(--ui-scale));
+  --ui-font-small: calc(11px * var(--ui-scale));
   --ui-font-tiny: calc(10px * var(--ui-scale));
   --ui-font-code: calc(11px * var(--ui-scale));
 
-  --ui-titlebar-height: calc(44px * var(--ui-scale));
-  --ui-panel-header-height: calc(42px * var(--ui-scale));
+  --ui-titlebar-height: calc(42px * var(--ui-scale));
+  --ui-panel-header-height: calc(40px * var(--ui-scale));
   --ui-panel-padding-x: calc(10px * var(--ui-scale));
   --ui-panel-padding-y: calc(8px * var(--ui-scale));
   --ui-capsule-height: calc(28px * var(--ui-scale));
