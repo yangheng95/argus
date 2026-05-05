@@ -10,7 +10,8 @@ import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { findGoal, listGoalRunsByGoal } from "../../src/engine/store"
+import { EngineArtifactTable } from "../../src/engine/engine.sql"
+import { findGoal, findGoalLatestWorkspace, listGoalRunsByGoal } from "../../src/engine/store"
 import { Filesystem } from "../../src/util/filesystem"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
@@ -78,14 +79,49 @@ function insertWorkflowTaskWithGoal(input: {
       priority: "blocking",
       source: "test",
       status: "pending",
-      retry_count: 0,
-      workspace_dir: input.workspaceDir,
-      workspace_branch: input.workspaceBranch,
       order_index: 0,
       time_created: input.now,
       time_updated: input.now,
     }).run()
   })
+  // Phase B + G (2026-05-05): workspace_* columns retired and the writer
+  // refuses no-tip seeding; this fixture writes the seed attempt artifact
+  // directly so tests start from a real attempt-tip state without going
+  // through beginBuildAttempt's status-bearing side effects.
+  if (input.workspaceDir !== undefined || input.workspaceBranch !== undefined) {
+    Database.use((db) =>
+      db.insert(EngineArtifactTable).values({
+        id: `grun_seed_${input.goalID}`,
+        task_id: input.taskID,
+        run_id: null,
+        goal_run_id: `grun_seed_${input.goalID}`,
+        kind: "goal_run_attempt",
+        label: "attempt-queued",
+        payload: {
+          goal_id: input.goalID,
+          plan_node_id: null,
+          session_id: null,
+          status: "queued",
+          retry_count: 0,
+          blocking_reason: null,
+          error: null,
+          workspace_dir: input.workspaceDir ?? null,
+          workspace_branch: input.workspaceBranch ?? null,
+          workspace_base_ref: null,
+          base_ref: null,
+          merge_ref: null,
+          supersede_of: null,
+          superseded_reason: null,
+          superseded_at: null,
+          metadata: null,
+          time_started: null,
+          time_completed: null,
+        },
+        time_created: input.now,
+        time_updated: input.now,
+      }).run(),
+    )
+  }
 }
 
 describe("orchestrator tools", () => {
@@ -233,9 +269,10 @@ describe("orchestrator tools", () => {
         expect(result).toContain("goal worktree cleaned after successful merge")
         expect(buildWorktreeDir).not.toBe("")
         expect(await Filesystem.exists(buildWorktreeDir)).toBe(false)
-        expect(findGoal(goalID)?.workspace_dir).toBeNull()
-        expect(findGoal(goalID)?.workspace_branch).toBeNull()
-        expect(findGoal(goalID)?.workspace_base_ref).toBeNull()
+        const ws = findGoalLatestWorkspace(goalID)
+        expect(ws.directory).toBeNull()
+        expect(ws.branch).toBeNull()
+        expect(ws.baseRef).toBeNull()
         expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBeNull()
       },
     })
@@ -304,7 +341,7 @@ describe("orchestrator tools", () => {
         expect(result).toContain("status=failed")
         expect(result).not.toContain("goal worktree cleaned")
         expect(await Filesystem.exists(buildWorktreeDir)).toBe(true)
-        expect(findGoal(goalID)?.workspace_dir).toBe(buildWorktreeDir)
+        expect(findGoalLatestWorkspace(goalID).directory).toBe(buildWorktreeDir)
         expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBe(buildWorktreeDir)
       },
     })
@@ -370,7 +407,7 @@ describe("orchestrator tools", () => {
         expect(result).toContain("status=passed")
         expect(result).toContain("goal worktree cleanup failed")
         expect(await Filesystem.exists(tmp.path)).toBe(true)
-        expect(findGoal(goalID)?.workspace_dir).toBe(tmp.path)
+        expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
         expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBe(tmp.path)
       },
     })

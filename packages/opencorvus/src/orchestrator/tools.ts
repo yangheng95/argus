@@ -4273,11 +4273,13 @@ export function createOrchestratorTools(input: {
                   branch: recovered.branch,
                   baseRef: recordedWorkspaceBaseRef,
                 }
-                updateGoalWorkspace({
-                  goalID: goal.id,
-                  workspaceDir: recovered.directory,
-                  workspaceBranch: recovered.branch,
-                })
+                // Phase G (2026-05-05): the recovered pointer rides the new
+                // attempt artifact via beginBuildAttempt below — no extra
+                // updateGoalWorkspace write needed. The previous explicit
+                // call routed through the synthetic-runID createGoalRun
+                // branch when a tip happened to be missing; both branches
+                // are now redundant since beginBuildAttempt always carries
+                // the workspace triple.
                 log.warn("reattached invalid goal workspace before build", {
                   goalID: goal.id,
                   reason: valid.reason ?? "unknown reason",
@@ -4301,11 +4303,11 @@ export function createOrchestratorTools(input: {
                 branch: info.branch,
                 baseRef: null,
               }
-              updateGoalWorkspace({
-                goalID: goal.id,
-                workspaceDir: info.directory,
-                workspaceBranch: info.branch,
-              })
+              // Phase G (2026-05-05): see comment above. The freshly created
+              // worktree's pointer flows into the first goal_run_attempt
+              // artifact via beginBuildAttempt — the prior pre-attempt
+              // updateGoalWorkspace call hit the no-tip synthetic-runID
+              // branch and was a no-op once the artifact landed.
             }
             const taskFidelity = readPersistedArchitectFidelity(task)
             const dependsOn = Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : []
@@ -4445,6 +4447,13 @@ export function createOrchestratorTools(input: {
                 goalID: attachedGoalID,
                 runID: coordinatorRunID,
                 workspaceDir: managedWorktree?.directory,
+                // Phase G (2026-05-05): full workspace triple rides the
+                // attempt artifact. Pre-fix the orchestrator pre-wrote
+                // engine_goal columns then dropped to a synthetic-runID
+                // queued artifact when no tip existed; both paths are gone
+                // now — single source is the new attempt artifact.
+                workspaceBranch: managedWorktree?.branch ?? null,
+                workspaceBaseRef: managedWorktree?.baseRef ?? null,
               })
             } catch (beginErr) {
               // A failure here is structural — overlay won't get the

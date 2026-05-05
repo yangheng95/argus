@@ -93,7 +93,6 @@ function seedBaseline() {
       priority: "blocking",
       source: "test",
       status: "pending",
-      retry_count: 0,
       order_index: 0,
       time_created: now,
       time_updated: now,

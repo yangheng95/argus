@@ -4,10 +4,56 @@ import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Worktree } from "../../src/worktree"
 import { Filesystem } from "../../src/util/filesystem"
-import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { updateGoalWorkspace } from "../../src/engine/persist"
-import { findGoal } from "../../src/engine/store"
+import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { findGoalLatestWorkspace } from "../../src/engine/store"
 import { cleanupGoalWorkspaceForGoal } from "../../src/engine/writer"
+
+// Phase G (2026-05-05) — workspace pointers ride the per-attempt artifact
+// payload; updateGoalWorkspace refuses to be used as a no-tip backdoor.
+// Test fixtures seed the initial attempt artifact directly.
+function seedAttemptWithWorkspace(input: {
+  taskID: string
+  goalID: string
+  workspaceDir: string
+  workspaceBranch: string
+  status: "queued" | "running" | "completed" | "failed" | "aborted"
+  now: number
+}) {
+  const id = `grun_seed_${input.goalID}`
+  const terminal = input.status === "completed" || input.status === "failed" || input.status === "aborted"
+  Database.use((db) =>
+    db.insert(EngineArtifactTable).values({
+      id,
+      task_id: input.taskID,
+      run_id: null,
+      goal_run_id: id,
+      kind: "goal_run_attempt",
+      label: `attempt-${input.status}`,
+      payload: {
+        goal_id: input.goalID,
+        plan_node_id: null,
+        session_id: null,
+        status: input.status,
+        retry_count: 0,
+        blocking_reason: null,
+        error: null,
+        workspace_dir: input.workspaceDir,
+        workspace_branch: input.workspaceBranch,
+        workspace_base_ref: null,
+        base_ref: null,
+        merge_ref: null,
+        supersede_of: null,
+        superseded_reason: null,
+        superseded_at: null,
+        metadata: null,
+        time_started: terminal ? input.now : null,
+        time_completed: terminal ? input.now : null,
+      },
+      time_created: input.now,
+      time_updated: input.now,
+    }).run(),
+  )
+}
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -71,7 +117,6 @@ describe("engine writer goal workspace cleanup", () => {
             priority: "blocking",
             source: "test",
             status: "completed",
-            retry_count: 0,
             order_index: 0,
             time_created: now,
             time_updated: now,
@@ -79,21 +124,24 @@ describe("engine writer goal workspace cleanup", () => {
         })
 
         const worktree = await Worktree.create({ name: `writer-cleanup-${now.toString(36)}` })
-        updateGoalWorkspace({
+        seedAttemptWithWorkspace({
+          taskID,
           goalID,
           workspaceDir: worktree.directory,
           workspaceBranch: worktree.branch,
+          status: "completed",
+          now,
         })
 
-        expect(findGoal(goalID)?.workspace_dir).toBe(worktree.directory)
+        expect(findGoalLatestWorkspace(goalID).directory).toBe(worktree.directory)
         expect(await Filesystem.exists(worktree.directory)).toBe(true)
 
         const cleaned = await cleanupGoalWorkspaceForGoal(goalID)
 
         expect(cleaned).toBe(true)
         expect(await Filesystem.exists(worktree.directory)).toBe(false)
-        expect(findGoal(goalID)?.workspace_dir).toBeNull()
-        expect(findGoal(goalID)?.workspace_branch).toBeNull()
+        expect(findGoalLatestWorkspace(goalID).directory).toBeNull()
+        expect(findGoalLatestWorkspace(goalID).branch).toBeNull()
       },
     })
   })
@@ -145,22 +193,24 @@ describe("engine writer goal workspace cleanup", () => {
             priority: "blocking",
             source: "test",
             status: "failed",
-            retry_count: 0,
             order_index: 0,
             time_created: now,
             time_updated: now,
           }).run()
         })
 
-        updateGoalWorkspace({
+        seedAttemptWithWorkspace({
+          taskID,
           goalID,
           workspaceDir: tmp.path,
           workspaceBranch: "opencorvus/not-a-goal-worktree",
+          status: "failed",
+          now,
         })
 
         await expect(cleanupGoalWorkspaceForGoal(goalID)).rejects.toThrow("outside goal workspace roots")
-        expect(findGoal(goalID)?.workspace_dir).toBe(tmp.path)
-        expect(findGoal(goalID)?.workspace_branch).toBe("opencorvus/not-a-goal-worktree")
+        expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
+        expect(findGoalLatestWorkspace(goalID).branch).toBe("opencorvus/not-a-goal-worktree")
       },
     })
   })

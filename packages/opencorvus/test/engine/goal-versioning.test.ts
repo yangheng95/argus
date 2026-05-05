@@ -65,7 +65,6 @@ function seedGoal(id: string, orderIndex: number, now = Date.now()) {
       requirement_ids: [],
       priority: "blocking",
       source: "test",
-      retry_count: 0,
       order_index: orderIndex,
       time_created: now,
       time_updated: now,
