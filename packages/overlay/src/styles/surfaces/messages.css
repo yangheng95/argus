@@ -316,7 +316,7 @@
   min-width: 0;
 }
 .msg-todo-card__count {
-  font-size: calc(var(--ui-font-body) * 1.2);
+  font-size: var(--ui-font-heading);
   line-height: 1;
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
@@ -359,7 +359,7 @@
   border: var(--oc-border-width) solid var(--subtle-4);
   background: var(--subtle-3);
   color: var(--text-muted);
-  font-size: calc(var(--ui-font-control) * 0.92);
+  font-size: var(--ui-font-small);
   font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -456,7 +456,7 @@
   align-self: center;
   padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
-  font-size: calc(var(--ui-font-control) * 0.82);
+  font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0.04em;
   text-transform: uppercase;

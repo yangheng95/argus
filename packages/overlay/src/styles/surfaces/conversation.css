@@ -535,7 +535,7 @@
 }
 
 .vcs-badge-icon {
-  font-size: calc(var(--ui-font-meta) * 1.05);
+  font-size: var(--ui-font-meta);
   opacity: var(--ui-opacity-subtle);
 }
 
@@ -1063,7 +1063,7 @@ body[data-theme="vscode-dark"] .task-bar {
   border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
-  font-size: calc(var(--ui-font-meta) * 1.05);
+  font-size: var(--ui-font-meta);
   line-height: 1;
 }
 

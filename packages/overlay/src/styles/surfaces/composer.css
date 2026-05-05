@@ -711,7 +711,7 @@ body[data-theme="light"] .executor-menu-model:hover {
 .executor-chip-sep {
   color: var(--text-muted);
   opacity: var(--ui-opacity-disabled);
-  font-size: calc(var(--ui-font-meta) * 0.85);
+  font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0.05em;
   padding: 0 calc(2px * var(--ui-scale)) 0 calc(4px * var(--ui-scale));
@@ -720,7 +720,7 @@ body[data-theme="light"] .executor-menu-model:hover {
 .executor-chip-arrow {
   color: var(--text-muted);
   opacity: var(--ui-opacity-disabled);
-  font-size: calc(var(--ui-font-meta) * 0.9);
+  font-size: var(--ui-font-tiny);
   padding: 0 calc(1px * var(--ui-scale));
 }
 
