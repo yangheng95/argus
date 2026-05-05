@@ -19,6 +19,7 @@ import { goalStatusByID } from "./describe"
 import {
   findActiveSpecForTask,
   findLatestIntegrityAttemptArtifact,
+  integrityAttemptVerdict,
   findLatestDeliveryVerdictArtifact,
   findRuns,
   findTask,
@@ -367,12 +368,13 @@ function taskStepStatusByTool(
     case "integrity": {
       const activeSpec = findActiveSpecForTask(taskID)
       if (!activeSpec) return "pending"
-      return findLatestIntegrityAttemptArtifact({
+      const latest = findLatestIntegrityAttemptArtifact({
         taskID,
         specSnapshotID: activeSpec.id,
       })
-        ? "completed"
-        : "pending"
+      const verdict = integrityAttemptVerdict(latest)
+      if (verdict === "needs_correction") return "failed"
+      return verdict ? "completed" : "pending"
     }
     case "build":
       // direct workflow: any run (artifact kind="run") means a build occurred

@@ -719,6 +719,14 @@ export function findLatestIntegrityAttemptArtifact(input: {
   )
 }
 
+export function integrityAttemptVerdict(row: ArtifactRow | undefined | null) {
+  const payload = row?.payload as { verdict?: unknown } | null | undefined
+  const verdict = payload?.verdict
+  return verdict === "pass" || verdict === "concerns" || verdict === "needs_correction"
+    ? verdict
+    : undefined
+}
+
 /** Latest delivery-agent-verdict artifact bound to a specific delivery row.
  *  Used by the board view to render delivery.status from the agent verdict
  *  rather than from the candidate-delivery row's lifecycle status (which
