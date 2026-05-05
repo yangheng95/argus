@@ -54,17 +54,11 @@ interface IntentAnalysisConfig {
 }
 
 /**
- * BuildConfig — per-goal build agent stage. Skills here are injected into the
- * build session's system prompt every time, regardless of task signals. The
- * mirror toolchain (webpage-generate / image-generate / figma-generate) is the
- * canonical clone SOP, and forcing it into every build session makes the LLM
- * reach for `webpage_extract` → `compile` → `analyze` → `render` → `evaluate`
- * → `vision_judge` instead of writing HTML by hand from the visual contract.
- *
- * The skill files themselves remain auto_detect-aware (webpage-generate gates
- * on a URL signal in its body), so non-visual builds harmlessly ignore the
- * mirror SOP — but visual ones can never miss it because of a signal heuristic
- * misfire (rule 22: explicit > implicit when correctness depends on it).
+ * BuildConfig — per-goal build agent stage. `skills` is an operator override
+ * for skills that must be loaded into every build session. Normal skill routing
+ * is signal-driven by `skill.auto_detect`; this keeps ordinary code builds from
+ * receiving unrelated clone / research SOPs while still loading the full mirror
+ * protocol when a URL, image, or Figma reference is present.
  */
 interface BuildConfig {
   max_steps: number
@@ -196,17 +190,10 @@ const DEFAULTS: EngineConfigType = {
   },
   build: {
     max_steps: 1000,
-    // Mirror toolchain SOP is force-loaded into every build session so the
-    // LLM never hand-writes a clone from the visual contract alone (rule 22:
-    // single source of truth for cloning is the skill body, not the prompt).
-    // research-report is force-loaded for the same reason on the research
-    // path: a markdown-report task otherwise drifts onto external_code_search
-    // (which advertises "third-party libraries / SDKs / APIs") because
-    // nothing else tells the build LLM that multi-source synthesis lives on
-    // websearch. The skill body is the single source of truth for that
-    // workflow; the LLM activates it by description match, the prompt is
-    // never duplicated elsewhere.
-    skills: ["webpage-generate", "image-generate", "figma-generate", "research-report"],
+    // Default is empty by design. Built-in skills carry their own
+    // auto_detect metadata, so reference / research jobs receive the relevant
+    // SOP without context-spamming unrelated implementation goals.
+    skills: [],
   },
   activity: {
     // Reasoning models can stream reasoning deltas every few seconds;

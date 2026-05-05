@@ -2,6 +2,21 @@
 name: research-report
 description: Produce a multi-source research report — comparison matrix, capability survey, market analysis, recommendation document — backed by `websearch` (and `webfetch` only after `websearch` returns a concrete URL). Activate when the deliverable is a markdown report rather than running software, and the work is fundamentally synthesising prose from external sources rather than writing code. Signals — the brief asks for 报告 / 调研 / 对比 / 分析 / 综述 / 功能矩阵 / 评估 / 建议 / report / comparison / matrix / analysis / survey / recommendation; or compares named third-party products / platforms / vendors; or asks for a structured insight + recommendation document. Do NOT activate for code tasks, even when the code happens to consume third-party APIs.
 stage: build
+auto_detect:
+  task_signals:
+    request_text_any:
+      - 报告
+      - 调研
+      - 对比
+      - 综述
+      - 功能矩阵
+      - 评估
+      - 建议
+      - report
+      - comparison
+      - matrix
+      - survey
+      - recommendation
 priority: 55
 required_tools:
   - websearch

@@ -89,14 +89,12 @@ describe("resolveStageSkills", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        // webpage-generate.md declares `{ has_attachment_image: true,
-        // request_contains_url: true }`. Under AND-of-explicit signal
-        // semantics (the matcher honors every declared signal — `false`
-        // is a real "must not"), both must hold for the skill to fire.
+        // webpage-generate.md declares `{ request_contains_url: true }`.
+        // A URL reference is sufficient; screenshots are optional supporting
+        // evidence, not the activation gate.
         const result = await resolveStageSkills([], "build", {
           request_contains_url: true,
-          has_attachment_image: true,
-          request_text: "复刻 https://www.baidu.com/ — 附图为目标视觉",
+          request_text: "复刻 https://www.baidu.com/",
         })
         expect(result.requiredTools).toContain("webpage_extract")
         expect(result.requiredTools).toContain("webpage_compile")
@@ -107,6 +105,24 @@ describe("resolveStageSkills", () => {
         expect(result.requiredTools).not.toContain("webpage_compile_html")
         expect(result.prompt).toContain("Skill-system invariants")
         expect(result.prompt).toContain("Skill: webpage-generate")
+      },
+    })
+  })
+
+  test("plain code build receives only the build invariant and no forced skills", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await resolveStageSkills([], "build", {
+          request_text: "Build a TypeScript calculator with tokenizer tests",
+          has_attachment_image: false,
+          request_contains_url: false,
+          request_contains_figma_url: false,
+        })
+        expect(result.prompt).toContain("Skill-system invariants")
+        expect(result.skills).toEqual([])
+        expect(result.requiredTools).toEqual([])
       },
     })
   })
@@ -144,6 +160,23 @@ describe("resolveStageSkills", () => {
           has_attachment_image: true,
           request_contains_url: true,
           request_text: "复刻 https://example.com/ — 附图作为视觉参考",
+        })
+        const skillNames = result.skills.map((s) => s.name)
+        expect(skillNames).toContain("webpage-generate")
+        expect(skillNames).not.toContain("image-generate")
+      },
+    })
+  })
+
+  test("URL-only reference fires webpage-generate", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await resolveStageSkills([], "build", {
+          has_attachment_image: false,
+          request_contains_url: true,
+          request_text: "Clone https://example.com/",
         })
         const skillNames = result.skills.map((s) => s.name)
         expect(skillNames).toContain("webpage-generate")
@@ -197,6 +230,25 @@ describe("resolveStageSkills", () => {
         })
         expect(result.skills.map((skill) => skill.name)).not.toContain("webpage-generate")
         expect(result.requiredTools).toEqual([])
+      },
+    })
+  })
+
+  test("research-report auto-detects report-shaped work without loading on ordinary code tasks", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const report = await resolveStageSkills([], "build", {
+          request_text: "写一份多模型平台能力对比调研报告，包含建议和矩阵",
+        })
+        expect(report.skills.map((skill) => skill.name)).toContain("research-report")
+        expect(report.requiredTools).toContain("websearch")
+
+        const code = await resolveStageSkills([], "build", {
+          request_text: "Implement OAuth callback handling and unit tests",
+        })
+        expect(code.skills.map((skill) => skill.name)).not.toContain("research-report")
       },
     })
   })

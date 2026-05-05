@@ -50,6 +50,7 @@ export namespace Skill {
         request_contains_url: z.boolean().optional().describe("True when the task request text contains an http(s) URL — explicitly EXCLUDING figma.com URLs (those drive `request_contains_figma_url`)."),
         request_contains_figma_url: z.boolean().optional().describe("True when the task request text contains a figma.com URL (file / design / proto / board path). Mutually exclusive with `request_contains_url` by construction in deriveUrlSignals."),
         package_has_script: z.array(z.string()).optional().describe("Any of the listed npm/bun scripts exists in the project's package.json."),
+        request_text_any: z.array(z.string()).optional().describe("Any listed case-insensitive substring must appear in the task request text."),
       }).optional(),
     }).optional(),
     /** Priority for ordering when multiple skills match (higher = first). */
@@ -270,4 +271,3 @@ export namespace Skill {
     return state().then((x) => x.dirs)
   }
 }
-

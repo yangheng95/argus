@@ -194,6 +194,8 @@ function matchesProjectOrTask(
   //   - undefined field   → no constraint on that signal
   //   - true               → signal must be present (truthy)
   //   - false              → signal must be ABSENT (falsy / undefined)
+  //   - request_text_any   → at least one case-insensitive literal substring
+  //                          must appear in the task request text
   // All explicitly-declared signals must hold (AND across the block).
   // The prior implementation OR'd positives only and silently ignored `false`,
   // which made it impossible to express "image but not URL" — image-generate
@@ -216,6 +218,10 @@ function matchesProjectOrTask(
       const pkg = tryReadPackageJson(dir)
       const scripts = (pkg?.scripts ?? {}) as Record<string, string>
       checks.push(wanted.package_has_script.some((s) => typeof scripts[s] === "string"))
+    }
+    if (wanted.request_text_any && wanted.request_text_any.length > 0) {
+      const text = (taskSignals.request_text ?? "").toLocaleLowerCase()
+      checks.push(wanted.request_text_any.some((needle) => text.includes(needle.toLocaleLowerCase())))
     }
     if (checks.length > 0 && checks.every(Boolean)) return true
   }
