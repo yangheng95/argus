@@ -18,6 +18,8 @@ Overlay benchmark `20260505-172931` exposed the build-report schema version of t
 
 The same run repeatedly showed Build agents following a hard-coded `git add -A && git commit ...` prompt even though the available shell was PowerShell, where `&&` is invalid. The agent recovered, but the prompt was still teaching an environment-specific command chain. Collaboration protocol must describe durable steps, not shell syntax assumptions.
 
+The same run later exposed the verification-drift version of the closure problem: a Build session wrote broad integration/E2E tests, ran them, then responded to legitimate behavioral failures by editing tests toward current behavior and conditional runtime skips. If Delivery accepts that green result, the issue is not a single weak test; it is a collaboration contract failure where verification no longer preserves the user request and acceptance specs.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -36,6 +38,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - whether a Build file-change audit is measuring the current build session's own contribution or accidentally attributing sibling-goal merge context to it.
 - whether the Build terminal report has one authoritative file-level source (`files_changed[]`) instead of a legacy duplicate summary field that can disagree or be omitted.
 - whether Build guidance is shell-agnostic enough for agents to execute the milestone protocol without first hitting predictable command syntax failures.
+- whether verification changes preserve acceptance semantics or merely weaken failing tests until the current broken behavior appears green.
 
 Without that durable projection, the LLM treats uncertainty as permission to ask Architect to solve the graph again.
 
@@ -58,6 +61,8 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It rejects incomplete `files_changed[]` reports inside the still-alive Build session so the model can amend the terminal report instead of failing the goal after the session is gone.
 - It deletes the legacy `patch_summary` field from the Build result protocol. `files_changed[]` is the single source for file-level collaboration explanation, and the orchestrator renders that list directly.
 - It changes the Build prompt to commit with separate `git add -A` and `git commit` tool calls instead of shell-specific command chaining.
+- It makes Build treat failing verification as implementation evidence. Tests may be changed only when concrete requirement or repository evidence proves the test contract is wrong; otherwise product behavior is fixed.
+- It makes Delivery inspect changed tests when verification coverage is claimed, and reject weakened assertions, conditional skips, or current-behavior rewrites that replace the user request / acceptance spec / public contract.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 
 ## Acceptance
@@ -73,3 +78,4 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - Tests prove execution-stage build is not blocked solely by missing source coverage for existing files, while missing reference coverage still blocks.
 - Tests prove build file-change audit excludes sibling-goal files introduced through merge_back and only requires explanations for this goal's own contribution.
 - Tests prove `BuildResultSchema` accepts complete `files_changed[]` reports without `patch_summary`, and no source/test prompt references the removed duplicate field.
+- Tests prove Build and Delivery prompts preserve verification semantics: failing acceptance tests are fixed through product behavior unless the test is proven wrong, and Delivery rejects test weakening as acceptance evidence.
