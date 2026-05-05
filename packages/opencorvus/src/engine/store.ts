@@ -117,6 +117,16 @@ export type GoalRunRow = {
   blocking_reason: string | null
   error: string | null
   workspace_dir: string | null
+  /** Phase B (2026-05-05): branch checked out in workspace_dir. Was on
+   *  engine_goal as the per-goal cache; now lives only on the per-attempt
+   *  artifact, the single authoritative source. */
+  workspace_branch: string | null
+  /** Phase B (2026-05-05): goal-scoped Snapshot baseRef captured before the
+   *  first attempt's executor ran. Reused across retries to keep "zero file
+   *  changes" semantics anchored to the original scaffold rather than the
+   *  post-prior-attempt state. Lives on every attempt artifact for this goal
+   *  so cross-attempt readers don't need a separate column. */
+  workspace_base_ref: string | null
   base_ref: string | null
   merge_ref: string | null
   supersede_of: string | null
@@ -494,6 +504,34 @@ export function listGoalRunsByGoal(goalID: string): GoalRunRow[] {
       .all(),
   )
   return latestPerGoalRun(rows).map(artifactRowToGoalRunRow)
+}
+
+/**
+ * Phase B (2026-05-05): single source for "the persistent worktree this goal
+ * occupies right now". Replaces the engine_goal.workspace_dir / branch /
+ * base_ref columns. Reads the latest goal_run_attempt artifact (newest
+ * time_created, not filtered by supersede chain — even superseded attempts
+ * may have left a worktree on disk that the next dispatch wants to recover).
+ * Returns null when the goal has no attempts yet OR when the latest attempt
+ * recorded workspace_dir = null (terminal cleanup, resetWorkspace, etc.).
+ *
+ * The columns are gone (rule 8: no dual source), so every read in the build
+ * dispatch path, the cleanup path, and the board view comes through this
+ * helper. The latest attempt's payload IS the persistent state.
+ */
+export function findGoalLatestWorkspace(goalID: string): {
+  directory: string | null
+  branch: string | null
+  baseRef: string | null
+} {
+  const rows = listGoalRunsByGoal(goalID)
+  if (rows.length === 0) return { directory: null, branch: null, baseRef: null }
+  const latest = rows[0]
+  return {
+    directory: latest.workspace_dir,
+    branch: latest.workspace_branch,
+    baseRef: latest.workspace_base_ref,
+  }
 }
 
 /**
@@ -887,22 +925,46 @@ export function listLiveGoalRunsForProject(projectID: string): GoalRunRow[] {
     .filter((r) => (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status))
 }
 
-export function listGoalWorkspacesForProject(projectID: string) {
-  return Database.use((db) =>
+/**
+ * Phase B: list goals that currently hold a live worktree on disk for a
+ * project. Reads the goal_run_attempt artifact stream (latest row per goal),
+ * filters to those whose payload still names a workspace_dir. Replaces the
+ * direct EngineGoalTable read whose column source has been deleted.
+ *
+ * Returns the GoalRow for each match plus the workspace pointer. Cleanup
+ * paths consume both: the goal id keys the cleanup invocation, the directory
+ * is the path to delete on disk.
+ */
+export function listGoalWorkspacesForProject(
+  projectID: string,
+): Array<{ goal: GoalRow; workspaceDir: string }> {
+  const artifactRows = Database.use((db) =>
     db
-      .select({ goal: EngineGoalTable })
-      .from(EngineGoalTable)
-      .innerJoin(EngineTaskTable, eq(EngineGoalTable.task_id, EngineTaskTable.id))
+      .select({ artifact: EngineArtifactTable })
+      .from(EngineArtifactTable)
+      .innerJoin(EngineTaskTable, eq(EngineArtifactTable.task_id, EngineTaskTable.id))
       .where(
         and(
           eq(EngineTaskTable.project_id, projectID),
-          sql`${EngineGoalTable.workspace_dir} IS NOT NULL`,
+          eq(EngineArtifactTable.kind, "goal_run_attempt"),
         ),
       )
-      .orderBy(desc(EngineGoalTable.time_updated))
+      .orderBy(desc(EngineArtifactTable.time_created))
       .all()
-      .map((row) => row.goal),
+      .map((row) => row.artifact),
   )
+  const seen = new Set<string>()
+  const out: Array<{ goal: GoalRow; workspaceDir: string }> = []
+  for (const row of artifactRows) {
+    const goalRun = artifactRowToGoalRunRow(row)
+    if (seen.has(goalRun.goal_id)) continue
+    seen.add(goalRun.goal_id)
+    if (!goalRun.workspace_dir) continue
+    const goal = findGoal(goalRun.goal_id)
+    if (!goal) continue
+    out.push({ goal, workspaceDir: goalRun.workspace_dir })
+  }
+  return out
 }
 
 /**
@@ -1346,8 +1408,8 @@ export function viewGoal(row: GoalRow) {
     requirement_ids: row.requirement_ids,
     priority: row.priority,
     retryCount: row.retry_count,
-    workspaceDir: row.workspace_dir ?? undefined,
-    workspaceBranch: row.workspace_branch ?? undefined,
+    // Phase B: workspaceDir / workspaceBranch are no longer goal columns;
+    // callers that need them call findGoalLatestWorkspace(row.id) directly.
     orderIndex: row.order_index,
     time: {
       created: row.time_created,
@@ -1639,6 +1701,8 @@ function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): 
     blocking_reason?: string | null
     error?: string | null
     workspace_dir?: string | null
+    workspace_branch?: string | null
+    workspace_base_ref?: string | null
     base_ref?: string | null
     merge_ref?: string | null
     supersede_of?: string | null
@@ -1661,6 +1725,8 @@ function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): 
     blocking_reason: payload.blocking_reason ?? null,
     error: payload.error ?? null,
     workspace_dir: payload.workspace_dir ?? null,
+    workspace_branch: payload.workspace_branch ?? null,
+    workspace_base_ref: payload.workspace_base_ref ?? null,
     base_ref: payload.base_ref ?? null,
     merge_ref: payload.merge_ref ?? null,
     supersede_of: payload.supersede_of ?? null,

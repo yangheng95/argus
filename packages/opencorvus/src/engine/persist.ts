@@ -314,6 +314,14 @@ export function createGoalRun(input: {
   blockingReason?: string | null
   error?: string | null
   workspaceDir?: string
+  /** Phase B (2026-05-05): persistent worktree branch checked out in
+   *  workspaceDir. Was on engine_goal until the column-vs-payload duplicate
+   *  was retired; now lives only on the per-attempt artifact payload. */
+  workspaceBranch?: string
+  /** Phase B (2026-05-05): goal-scoped Snapshot baseRef captured before the
+   *  first attempt's executor ran. Reused across retries via
+   *  findGoalLatestWorkspace. */
+  workspaceBaseRef?: string
   baseRef?: string
   mergeRef?: string
   metadata?: Record<string, unknown>
@@ -359,6 +367,8 @@ export function createGoalRun(input: {
     blocking_reason: input.blockingReason ?? null,
     error: input.error ?? null,
     workspace_dir: input.workspaceDir ?? null,
+    workspace_branch: input.workspaceBranch ?? null,
+    workspace_base_ref: input.workspaceBaseRef ?? null,
     base_ref: input.baseRef ?? null,
     merge_ref: input.mergeRef ?? null,
     supersede_of: input.supersedeOf ?? null,
@@ -415,37 +425,65 @@ export function createGoalRun(input: {
 // layer flags and chooses build({ goalID }) / modify_goal / fail_task).
 // Verification-goal outcome is recorded on the goal's goal_run chain.
 
+/**
+ * Phase B (2026-05-05): rewrite to act on the per-attempt artifact payload
+ * exclusively. Pre-fix the function wrote engine_goal.workspace_dir / branch
+ * / base_ref as a sibling cache to the artifact payload; rejecting a
+ * dispatch left the column smeared while no attempt artifact existed —
+ * board view said "in flight", runtime said "pending forever". The columns
+ * are gone (rule 8: no dual source) so this writer now patches the latest
+ * goal_run_attempt artifact.
+ *
+ * Behaviour (no fallback, rule 7):
+ *   - When the goal has no attempts yet: record the workspace claim as a
+ *     `queued` attempt artifact. The next beginBuildAttempt finds it via
+ *     findLatestTipGoalRun and treats it as the parent tip.
+ *   - When the latest attempt is non-terminal (`queued` / `running` / etc.):
+ *     append a patch through updateGoalRun. The collapse step keeps
+ *     workspace_dir/branch/base_ref on the newest payload.
+ *   - When the latest attempt is terminal (`completed` / `failed` /
+ *     `aborted`): caller is recording a cleanup or recovery; append a
+ *     cleanup-labelled patch via updateGoalRun so findGoalLatestWorkspace
+ *     reflects the new pointer.
+ */
 export function updateGoalWorkspace(input: {
   goalID: string
   workspaceDir: string | null
   workspaceBranch: string | null
   /** Optional — only written when explicitly provided. Leave `undefined`
    *  to preserve the existing baseRef across retries; pass `null` to
-   *  clear it at terminal cleanup (see writer.ts cleanupGoalWorkspaceForGoal). */
+   *  clear it at terminal cleanup. */
   workspaceBaseRef?: string | null
   now?: number
 }) {
   const now = input.now ?? Date.now()
-  const goal = Database.use((db) =>
-    db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, input.goalID)).get(),
-  )
+  const goal = findGoal(input.goalID)
   if (!goal) {
     throw new Error(`updateGoalWorkspace: goal ${input.goalID} not found`)
   }
-  const patch: Record<string, unknown> = {
+  const tip = findLatestTipGoalRun(input.goalID)
+  if (!tip) {
+    // No attempt yet — synthesise a queued artifact carrying the workspace
+    // pointer so the next dispatch / cleanup / board view sees one source.
+    createGoalRun({
+      taskID: goal.task_id,
+      goalID: input.goalID,
+      coordinatorRunID: "synthetic",
+      workspaceDir: input.workspaceDir ?? undefined,
+      workspaceBranch: input.workspaceBranch ?? undefined,
+      workspaceBaseRef: input.workspaceBaseRef ?? undefined,
+      now,
+    })
+    return
+  }
+  const patch: Partial<import("./store").GoalRunRow> = {
     workspace_dir: input.workspaceDir,
     workspace_branch: input.workspaceBranch,
-    time_updated: now,
   }
   if (input.workspaceBaseRef !== undefined) {
     patch.workspace_base_ref = input.workspaceBaseRef
   }
-  Database.use((db) =>
-    db.update(EngineGoalTable)
-      .set(patch as any)
-      .where(eq(EngineGoalTable.id, input.goalID))
-      .run(),
-  )
+  updateGoalRun(tip.id, patch)
 }
 
 
@@ -547,6 +585,8 @@ function appendGoalRunArtifact(input: {
     blocking_reason: merged.blocking_reason,
     error: merged.error,
     workspace_dir: merged.workspace_dir,
+    workspace_branch: merged.workspace_branch,
+    workspace_base_ref: merged.workspace_base_ref,
     base_ref: merged.base_ref,
     merge_ref: merged.merge_ref,
     supersede_of: merged.supersede_of,
@@ -626,20 +666,33 @@ export function startNewAttempt(input: {
     now,
   })
   let resetWorkspace = false
-  if (input.resetWorkspace && goal.workspace_dir) {
-    Database.use((db) =>
-      db.update(EngineGoalTable)
-        .set({
+  if (input.resetWorkspace) {
+    const { findGoalLatestWorkspace } = require("./store") as typeof import("./store")
+    const latest = findGoalLatestWorkspace(input.goalID)
+    if (latest.directory) {
+      // Phase B: workspace pointer lives on the latest attempt artifact.
+      // Clearing means appending a patch that nulls the workspace fields;
+      // findGoalLatestWorkspace then returns null and the next dispatch
+      // falls into the create-new-worktree branch.
+      const tip = findLatestTipGoalRun(input.goalID)
+      if (tip) {
+        updateGoalRun(tip.id, {
           workspace_dir: null,
           workspace_branch: null,
           workspace_base_ref: null,
-          retry_count: retryCount,
-          time_updated: now,
         })
-        .where(eq(EngineGoalTable.id, input.goalID))
-        .run(),
-    )
-    resetWorkspace = true
+      }
+      Database.use((db) =>
+        db.update(EngineGoalTable)
+          .set({
+            retry_count: retryCount,
+            time_updated: now,
+          })
+          .where(eq(EngineGoalTable.id, input.goalID))
+          .run(),
+      )
+      resetWorkspace = true
+    }
   }
   // Single writer of retry feedback into decision_log. Every path that opens
   // a new attempt (delivery_rework / manual_retry / modify_contract) routes
@@ -1421,6 +1474,12 @@ export function beginBuildAttempt(input: {
    *  worktrees may know the path up-front; greenfield BuildAgent-managed
    *  worktrees do not — leave undefined and let the row stay null. */
   workspaceDir?: string
+  /** Phase B (2026-05-05): persistent worktree branch + baseRef. Pre-fix
+   *  these lived on engine_goal as a duplicate cache; now they ride along
+   *  on the per-attempt artifact payload so findGoalLatestWorkspace returns
+   *  the full triple from a single source. */
+  workspaceBranch?: string | null
+  workspaceBaseRef?: string | null
   now?: number
 }): string {
   const id = Identifier.ascending("goal_run")
@@ -1459,6 +1518,8 @@ export function beginBuildAttempt(input: {
     blocking_reason: null,
     error: null,
     workspace_dir: input.workspaceDir ?? null,
+    workspace_branch: input.workspaceBranch ?? null,
+    workspace_base_ref: input.workspaceBaseRef ?? null,
     base_ref: null,
     merge_ref: null,
     supersede_of: parentTipID ?? null,
@@ -1523,6 +1584,12 @@ export function finalizeBuildAttempt(input: {
   status: "completed" | "failed"
   commitRef?: string
   workspaceDir?: string
+  /** Phase B (2026-05-05): workspace branch + baseRef now ride along on the
+   *  goal_run_attempt artifact (single source, was duplicated on engine_goal).
+   *  The build tool path passes both back when BuildAgent.run produced a
+   *  managedWorktree result. */
+  workspaceBranch?: string
+  workspaceBaseRef?: string
   error?: string
   diffs?: Array<{ file: string; before: string; after: string; additions: number; deletions: number; status?: string }>
   summary?: string
@@ -1533,6 +1600,8 @@ export function finalizeBuildAttempt(input: {
     status: input.status,
     error: input.error ?? null,
     workspace_dir: input.workspaceDir ?? undefined,
+    workspace_branch: input.workspaceBranch ?? undefined,
+    workspace_base_ref: input.workspaceBaseRef ?? undefined,
     metadata: input.commitRef ? { commit_ref: input.commitRef } : null,
     time_completed: now,
   })
