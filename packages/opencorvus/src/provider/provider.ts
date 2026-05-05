@@ -608,7 +608,14 @@ export namespace Provider {
   /** Re-fetch the hexin /v1/models list bypassing cache, then reset provider state. */
   export async function refreshHexin(): Promise<string[]> {
     const { refreshHexinCache } = await import("./hexin-discovery")
-    const models = await refreshHexinCache()
+    const cfg = await Config.get()
+    const configKey = cfg.provider?.hexin?.options?.apiKey
+    const auth = await Auth.get("hexin")
+    const apiKey =
+      Env.get("HEXIN_API_KEY")?.trim() ||
+      (auth?.type === "api" ? auth.key.trim() : "") ||
+      (typeof configKey === "string" ? configKey.trim() : "")
+    const models = await refreshHexinCache(apiKey)
     reset()
     return Object.keys(models)
   }

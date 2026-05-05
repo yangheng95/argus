@@ -136,9 +136,44 @@ export async function patchConfig(diff: Record<string, any>): Promise<any> {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function mergePatchDiff(before: unknown, after: unknown): unknown {
+  if (!isRecord(before) || !isRecord(after)) {
+    return sameJsonValue(before, after) ? undefined : after;
+  }
+
+  const patch: Record<string, unknown> = {};
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  for (const key of keys) {
+    if (!Object.hasOwn(after, key)) {
+      patch[key] = null;
+      continue;
+    }
+    const nextValue = after[key];
+    if (nextValue === undefined) {
+      patch[key] = null;
+      continue;
+    }
+    if (!Object.hasOwn(before, key)) {
+      patch[key] = nextValue;
+      continue;
+    }
+    const child = mergePatchDiff(before[key], nextValue);
+    if (child !== undefined) patch[key] = child;
+  }
+  return Object.keys(patch).length > 0 ? patch : undefined;
+}
+
 /**
  * Fetch the current server config, apply `mutator` to a clone, then PATCH the
- * result back. Returns the saved config.
+ * resulting JSON Merge Patch back. Returns the saved config.
  * Use patchConfig() for simple field updates; use this for complex mutations
  * that need the current state (e.g., conditional delete of nested keys).
  */
@@ -146,10 +181,15 @@ export async function updateConfig(mutator: (config: Record<string, any>) => voi
   const current = await apiJson("config");
   const next = structuredClone(current || {});
   mutator(next);
+  const diff = mergePatchDiff(current || {}, next);
+  if (diff === undefined) {
+    setAppStore("config", current);
+    return current;
+  }
   const saved = await apiJson("config", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(next),
+    body: JSON.stringify(diff),
   });
   setAppStore("config", saved);
   return saved;

@@ -388,6 +388,19 @@ export default function ProvidersPanel() {
           },
         };
       });
+      if (providerId === "hexin") {
+        try {
+          const refresh = await apiJson("provider/hexin/refresh", { method: "POST" }) as {
+            ok: boolean;
+            error?: string;
+          };
+          if (!refresh.ok) {
+            setFormError(t("provider.refresh.failed", { reason: refresh.error || "unknown" }));
+          }
+        } catch (error) {
+          setFormError(t("provider.refresh.failed", { reason: describeFailure(error) }));
+        }
+      }
       const catalog = await apiJson("provider");
       setAppStore({
         providerCatalog: catalog ?? null,

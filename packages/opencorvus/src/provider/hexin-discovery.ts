@@ -113,6 +113,7 @@ function buildModel(id: string): Model {
 
 export interface DiscoveryOptions {
   force?: boolean
+  apiKey?: string
 }
 
 /**
@@ -137,9 +138,10 @@ export async function discoverHexinModels(
     return {}
   }
 
-  // Operator must supply HEXIN_API_KEY explicitly. The previously-embedded
-  // builtin key was removed (rule 10: no hardcoded credentials).
-  const apiKey = process.env.HEXIN_API_KEY?.trim()
+  // Operator must supply a Hexin key explicitly. The provider layer passes the
+  // canonical key resolved from env / auth / config; keep the env read here
+  // only for direct unit callers of this module.
+  const apiKey = opts.apiKey?.trim() || process.env.HEXIN_API_KEY?.trim()
   if (!apiKey) {
     if (cached) {
       log.info("HEXIN_API_KEY unset — using cached model list", {
@@ -179,6 +181,6 @@ function toModelMap(ids: string[]): Record<string, Model> {
 }
 
 /** Exposed so UI can trigger a refresh without restarting the process. */
-export async function refreshHexinCache(): Promise<Record<string, Model>> {
-  return discoverHexinModels({ force: true })
+export async function refreshHexinCache(apiKey?: string): Promise<Record<string, Model>> {
+  return discoverHexinModels({ force: true, apiKey })
 }
