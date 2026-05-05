@@ -168,6 +168,7 @@ export interface TaskDesc {
    *  shape. No tool gate enforces this; the orchestrator is responsible for
    *  the scheduling decision from the describe snapshot. */
   active_bootstrap_goal_id?: string
+  collaboration_closure?: CollaborationClosureDesc
   budget: {
     runs_used: number
     max_runs: number
@@ -184,6 +185,14 @@ export interface TaskDesc {
    *  since `task.time_started`. */
   recent_stream_failures?: StreamFailureDesc[]
   iterations_count: number
+}
+
+export interface CollaborationClosureDesc {
+  execution_started: boolean
+  attempts_count: number
+  passed_goal_ids: string[]
+  dispatchable_goal_ids: string[]
+  blocked_goals: Array<{ goal_id: string; blocked_by: Array<{ goal_id: string; status: string }> }>
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +284,42 @@ export function describeGoal(goal: GoalRow, rewindCursor?: number | null): GoalD
  */
 export function goalStatusByID(goalID: string): EngineGoalStatus {
   return deriveGoalStatus(goalID) ?? "pending"
+}
+
+function buildCollaborationClosure(goals: GoalDesc[]): CollaborationClosureDesc | undefined {
+  if (goals.length === 0) return undefined
+
+  const attemptsCount = goals.reduce((sum, goal) => sum + goal.attempt_count, 0)
+  const passed = new Set(goals.filter((goal) => goal.is_terminal_ok).map((goal) => goal.id))
+  const byID = new Map(goals.map((goal) => [goal.id, goal]))
+  const dispatchableGoalIDs: string[] = []
+  const blockedGoals: CollaborationClosureDesc["blocked_goals"] = []
+
+  for (const goal of goals) {
+    const mayDispatch = goal.never_dispatched || goal.needs_redispatch
+    if (!mayDispatch) continue
+
+    const blockers = goal.depends_on
+      .filter((depID) => !passed.has(depID))
+      .map((depID) => {
+        const dep = byID.get(depID)
+        return { goal_id: depID, status: dep ? describeDerivedState(dep) : "missing" }
+      })
+
+    if (blockers.length > 0) {
+      blockedGoals.push({ goal_id: goal.id, blocked_by: blockers })
+    } else {
+      dispatchableGoalIDs.push(goal.id)
+    }
+  }
+
+  return {
+    execution_started: attemptsCount > 0,
+    attempts_count: attemptsCount,
+    passed_goal_ids: [...passed],
+    dispatchable_goal_ids: dispatchableGoalIDs,
+    blocked_goals: blockedGoals,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -393,6 +438,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const activeBootstrap = goalRows.find(
     (g) => g.kind === "bootstrap" && goalStatusByID(g.id) !== "passed",
   )
+  const collaborationClosure = buildCollaborationClosure(goals)
 
   return {
     id: task.id,
@@ -410,6 +456,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     operator_notes: operatorNotesSection(task.id) || undefined,
     goals,
     active_bootstrap_goal_id: activeBootstrap?.id,
+    collaboration_closure: collaborationClosure,
     budget: {
       runs_used: totalRuns,
       max_runs: maxRuns,
@@ -478,6 +525,49 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max - 1) + "…"
 }
 
+export function renderCollaborationClosure(desc: CollaborationClosureDesc | undefined, goals: GoalDesc[]): string[] {
+  if (!desc) return []
+
+  const lines: string[] = []
+  const titleByID = new Map(goals.map((goal) => [goal.id, goal.title]))
+  lines.push("## Collaboration Closure")
+  lines.push(`Execution attempts recorded: ${desc.attempts_count}`)
+
+  if (desc.execution_started) {
+    lines.push(
+      "The active goal graph has entered execution. Treat it as the shared collaboration contract, not a scratchpad to re-plan for ordinary shared-file edits.",
+    )
+    lines.push(
+      "Ordinary collaboration drift belongs in Build `files_changed[]` reports and, when the written contract needs a point correction, `modify_goal`. Architect re-entry is structural re-planning and needs delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.",
+    )
+  } else {
+    lines.push("Execution has not started yet; this is still the planning window.")
+  }
+
+  if (desc.passed_goal_ids.length > 0) {
+    lines.push(`Passed goals: ${desc.passed_goal_ids.map((id) => `${id} (${titleByID.get(id) ?? "untitled"})`).join(", ")}`)
+  }
+
+  if (desc.dispatchable_goal_ids.length > 0) {
+    lines.push("Next dispatchable goals:")
+    for (const goalID of desc.dispatchable_goal_ids) {
+      lines.push(`- ${goalID}: ${titleByID.get(goalID) ?? "untitled"}`)
+    }
+  } else {
+    lines.push("Next dispatchable goals: none derived from current dependency evidence.")
+  }
+
+  if (desc.blocked_goals.length > 0) {
+    lines.push("Dependency-blocked goals:")
+    for (const blocked of desc.blocked_goals) {
+      const blockers = blocked.blocked_by.map((dep) => `${dep.goal_id} [${dep.status}]`).join(", ")
+      lines.push(`- ${blocked.goal_id}: blocked by ${blockers}`)
+    }
+  }
+
+  return lines
+}
+
 /**
  * Render a TaskDesc as markdown suitable for direct injection into the
  * orchestrator's system prompt. LLM reads this instead of querying piecemeal.
@@ -506,6 +596,12 @@ export function renderTaskDescription(desc: TaskDesc): string {
       `${desc.budget.fix_count}/${desc.budget.max_fix_runs} fixes, ` +
       `${desc.iterations_count} delivery iterations`,
   )
+
+  const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals)
+  if (closureLines.length > 0) {
+    lines.push("")
+    lines.push(...closureLines)
+  }
 
   if (desc.clarifications) {
     lines.push("")

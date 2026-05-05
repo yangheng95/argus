@@ -42,6 +42,7 @@ function seedTaskWithGoals(goals: Array<{
   id: string
   kind: "feature" | "bootstrap" | "system" | "verification"
   status: "pending" | "running" | "passed" | "failed"
+  depends_on?: string[]
 }>) {
   const now = Date.now()
   Database.transaction((db) => {
@@ -98,7 +99,7 @@ function seedTaskWithGoals(goals: Array<{
         objective: "obj",
         acceptance_specs: [],
         owned_paths: [],
-        depends_on: [],
+        depends_on: g.depends_on ?? [],
         exports: [],
         imports: [],
         kind: g.kind,
@@ -283,6 +284,78 @@ describe("P5 — renderTaskDescription emits the bootstrap-first paragraph", () 
         const desc = await describeTask(taskID)
         const md = renderTaskDescription(desc)
         expect(md).not.toContain("Bootstrap-first dispatch order")
+      },
+    })
+  })
+})
+
+describe("collaboration closure projection", () => {
+  test("execution-started task renders dispatchable goals from dependency evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bootstrap = `gol_boot_${stamp}`
+        const feature = `gol_feature_${stamp}`
+        seedTaskWithGoals([
+          { id: bootstrap, kind: "bootstrap", status: "passed" },
+          { id: feature, kind: "feature", status: "pending", depends_on: [bootstrap] },
+        ])
+
+        const desc = await describeTask(taskID)
+        expect(desc.collaboration_closure?.execution_started).toBe(true)
+        expect(desc.collaboration_closure?.passed_goal_ids).toContain(bootstrap)
+        expect(desc.collaboration_closure?.dispatchable_goal_ids).toContain(feature)
+
+        const md = renderTaskDescription(desc)
+        expect(md).toContain("## Collaboration Closure")
+        expect(md).toContain("The active goal graph has entered execution")
+        expect(md).toContain("Next dispatchable goals:")
+        expect(md).toContain(feature)
+        expect(md).toContain("Build `files_changed[]`")
+        expect(md).toContain("`modify_goal`")
+      },
+    })
+  })
+
+  test("dependency-blocked goals render their blockers instead of implying replanning", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const dependency = `gol_dep_${stamp}`
+        const blocked = `gol_blocked_${stamp}`
+        seedTaskWithGoals([
+          { id: dependency, kind: "feature", status: "running" },
+          { id: blocked, kind: "feature", status: "pending", depends_on: [dependency] },
+        ])
+
+        const desc = await describeTask(taskID)
+        expect(desc.collaboration_closure?.blocked_goals).toEqual([
+          { goal_id: blocked, blocked_by: [{ goal_id: dependency, status: "running" }] },
+        ])
+
+        const md = renderTaskDescription(desc)
+        expect(md).toContain("Dependency-blocked goals:")
+        expect(md).toContain(`${blocked}: blocked by ${dependency} [running]`)
+        expect(md).not.toContain("re-run Architect to unblock")
+      },
+    })
+  })
+
+  test("pre-execution goal graph is explicit planning window", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedTaskWithGoals([
+          { id: `gol_feature_${stamp}`, kind: "feature", status: "pending" },
+        ])
+
+        const desc = await describeTask(taskID)
+        expect(desc.collaboration_closure?.execution_started).toBe(false)
+        const md = renderTaskDescription(desc)
+        expect(md).toContain("Execution has not started yet; this is still the planning window.")
       },
     })
   })

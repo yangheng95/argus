@@ -34,10 +34,10 @@
  *   correctionScopes — what the dimension is allowed to PROPOSE corrections to.
  *                 goal_fidelity / solution_quality may rewrite goals; the other
  *                 two are diagnostic and surface concerns without editing goals
- *                 (the orchestrator decides whether to re-run architect / refine
- *                 the upstream stage). This stops "hallucination" from
+ *                 (the orchestrator decides whether to restart/refine the
+ *                 upstream stage). This stops "hallucination" from
  *                 silently mutating goal contracts when the real fix is to
- *                 re-run requirements.
+ *                 restart requirements.
  */
 
 export type IntegrityIssueType =
