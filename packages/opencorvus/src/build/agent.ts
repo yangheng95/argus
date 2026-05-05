@@ -690,7 +690,10 @@ export namespace BuildAgent {
               sessionID: out?.session?.id,
               parseError: parsed?.error?.message,
             },
-            `Build agent terminated without a valid report_build_result tool call: ${parsed?.error?.message ?? "(no parsed output)"}`,
+            `Build agent terminated without a valid report_build_result tool call: ${parsed?.error?.message ?? "(no parsed output)"}. ` +
+              `Retry this goal and require a final report_build_result call with files_changed[]. ` +
+              `The retained goal worktree is diagnostic evidence under .opencorvus/worktrees, not primary workspace pollution; ` +
+              `do not restart_from_stage solely because that diagnostic worktree contains partial files.`,
           )
         }
         // External executors (codex / claude-code) host-synthesise the

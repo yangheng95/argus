@@ -34,13 +34,15 @@ describe("BuildAgentContractError", () => {
     const err = new BuildAgentContractError(
       "missing_terminal_report",
       { sessionID: "ses_abc123", parseError: "expected status, got undefined" },
-      "Build agent terminated without a valid report_build_result tool call",
+      "Build agent terminated without a valid report_build_result tool call. Retry this goal with files_changed; not primary workspace pollution.",
     )
     expect(err).toBeInstanceOf(Error)
     expect(err.code).toBe("missing_terminal_report")
     expect(err.diagnostics.sessionID).toBe("ses_abc123")
     expect(err.diagnostics.parseError).toBe("expected status, got undefined")
     expect(err.message).toMatch(/report_build_result/)
+    expect(err.message).toMatch(/files_changed/)
+    expect(err.message).toMatch(/not primary workspace pollution/)
     expect(err.name).toBe("BuildAgentContractError")
   })
 

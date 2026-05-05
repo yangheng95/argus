@@ -2498,7 +2498,16 @@ export function createOrchestratorTools(input: {
             }
             sections.push(`- goal_run status: ${latestGr.status}`)
             sections.push(`- current implementation version: ${label}`)
-            if (latestGr.error) sections.push(`- goal_run error: ${latestGr.error}`)
+            if (latestGr.error) {
+              sections.push(`- goal_run error: ${latestGr.error}`)
+              if (latestGr.error.includes("report_build_result") || latestGr.error.includes("missing_terminal_report")) {
+                sections.push(
+                  `- recovery hint: retry this goal with explicit report_build_result(files_changed[]) instructions. ` +
+                    `Any retained files under .opencorvus/worktrees are diagnostic worktree evidence, not primary workspace pollution; ` +
+                    `do not restart_from_stage solely because those diagnostic files exist.`,
+                )
+              }
+            }
           } else {
             sections.push(`- no goal_run found`)
           }
