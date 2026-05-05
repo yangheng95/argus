@@ -516,8 +516,8 @@ test(
       expect(intro.createProjectText).toContain("Create New Project")
       expect(intro.title).toContain("Open a project directory")
       expect(intro.brandWordmark).toBe("OpenCorvus")
-      expect(intro.brandLabel.length).toBeGreaterThan(0)
-      expect(intro.sections).toBe("Workspace")
+      expect(intro.brandLabel).toBe("Project")
+      expect(intro.sections).toBe("Inspector")
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)

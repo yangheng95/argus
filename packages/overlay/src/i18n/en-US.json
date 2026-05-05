@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "128a36807d302154"
+    "panel_revision": "683ad218361c8318"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -40,7 +40,7 @@
   "brand.guide_usage_4": "Titlebar menus configure workspace, model, tools, view, delivery channels, and diagnostics.",
   "brand.guide_usage_title": "Fast Path",
   "brand.logo_alt": "OpenCorvus logo",
-  "brand.workspace_label": "Workspace",
+  "brand.workspace_label": "Project",
   "channel.configuration_title": "{{name}} Channel",
   "channel.edit_title": "Edit this channel's configuration.",
   "channel.none": "No channels available",
@@ -543,9 +543,9 @@
   "section.delivery": "Delivery",
   "section.criteria": "Evaluation Criteria",
   "section.files": "Files",
-  "right_panel.tabs": "Workspace and preview tabs",
+  "right_panel.tabs": "Inspector and preview tabs",
   "right_panel.workflow": "Workflow",
-  "right_panel.inspector": "Workspace",
+  "right_panel.inspector": "Inspector",
   "right_panel.preview": "Preview",
   "agent_workflow.title": "Agent Workflow",
   "agent_workflow.count": "{{count}} agents",
@@ -567,7 +567,7 @@
   "frontend_preview.open_external": "Open in browser",
   "frontend_preview.source.delivery": "Loaded from delivery runtime evidence.",
   "frontend_preview.source.port_probe": "Loaded from local frontend server on port {{port}}.",
-  "sections.title": "Workspace",
+  "sections.title": "Inspector",
   "settings.language": "Language",
   "settings.language.en_us": "English",
   "settings.language.zh_cn": "Chinese (Simplified)",
