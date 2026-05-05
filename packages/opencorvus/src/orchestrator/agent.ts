@@ -497,6 +497,9 @@ export const OrchestratorEventNote = {
       lines.push(
         "",
         "Read context (read_context) to see goal statuses and eval evidence.",
+        input.failed > 0
+          ? "Failed goal worktrees are diagnostic evidence under .opencorvus/worktrees, not primary workspace pollution. Do not restart_from_stage solely because a failed diagnostic worktree contains partial files; query_failed_goals, then retry or modify the failed goal."
+          : "No goals failed in this batch.",
         "Decide next action based on current state — no predetermined action.",
       )
     }
