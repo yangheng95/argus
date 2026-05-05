@@ -1279,7 +1279,7 @@ export namespace Config {
           build: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for build agent"),
-              skills: z.array(z.string()).optional().describe("Additional skill paths for build agent (mirror toolchain SOP defaults)"),
+              skills: z.array(z.string()).optional().describe("Operator-forced build skills. Leave empty for auto_detect-driven skill routing."),
             })
             .optional()
             .describe("Build agent configuration — per-goal build session. Model is configured via agent.\"build\".model."),

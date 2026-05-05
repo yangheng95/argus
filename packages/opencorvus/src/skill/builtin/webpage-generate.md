@@ -4,7 +4,6 @@ description: 'Generate a high-fidelity clone of a reference webpage. The mirror 
 stage: build
 auto_detect:
   task_signals:
-    has_attachment_image: true
     request_contains_url: true
 priority: 60
 required_tools:

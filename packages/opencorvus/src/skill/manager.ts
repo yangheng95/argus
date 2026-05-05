@@ -28,6 +28,13 @@ const SkillInfo = z.object({
   auto_detect: z.object({
     files: z.array(z.string()).optional(),
     deps: z.array(z.string()).optional(),
+    task_signals: z.object({
+      has_attachment_image: z.boolean().optional(),
+      request_contains_url: z.boolean().optional(),
+      request_contains_figma_url: z.boolean().optional(),
+      package_has_script: z.array(z.string()).optional(),
+      request_text_any: z.array(z.string()).optional(),
+    }).optional(),
   }).optional(),
   priority: z.number().optional().default(0),
 })
