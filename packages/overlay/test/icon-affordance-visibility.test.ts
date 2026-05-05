@@ -39,13 +39,27 @@ describe("icon affordances stay visible at rest", () => {
     const body = soloRuleBody(css, ".chat-send:disabled")
     expect(body).toContain("border-color:")
     expect(body).toContain("background:")
+    expect(body).toContain("color: color-mix(in srgb, var(--accent) 72%, var(--text-strong));")
     expect(body).not.toContain("opacity:")
+    expect(body).not.toContain("white 78%")
+    expect(body).not.toContain("var(--accent) 44%")
+  })
+
+  test("disabled composer icon column does not fade icon glyphs below readability", () => {
+    const css = read("src/styles/surfaces/composer.css")
+    const body = soloRuleBody(css, '.chat-icon-col[data-disabled="true"]')
+    expect(body).toContain("opacity: var(--ui-opacity-subtle);")
+    expect(body).not.toContain("opacity: var(--ui-opacity-faint);")
   })
 
   test("collapse row keeps a readable resting icon and label", () => {
     const css = read("src/styles/surfaces/card.css")
     expect(soloRuleBody(css, ".card__collapse-toggle")).toContain("color: var(--text-soft);")
-    expect(soloRuleBody(css, ".card__collapse-toggle-icon")).not.toContain("var(--text-muted)")
+    const iconBody = soloRuleBody(css, ".card__collapse-toggle-icon")
+    expect(iconBody).toContain("--card-collapse-stage: var(--card-stage, var(--card-stage-info));")
+    expect(iconBody).toContain("var(--card-collapse-stage) 86%")
+    expect(iconBody).toContain("var(--card-collapse-stage) 32%")
+    expect(iconBody).not.toContain("var(--text-muted)")
     expect(soloRuleBody(css, ".card__collapse-toggle-label")).toContain("color: var(--text-strong);")
   })
 
