@@ -1602,8 +1602,6 @@
   --oc-button-padding-x: 0;
   --oc-button-border: 0 solid transparent;
   --oc-button-bg: transparent;
-  --oc-button-color: var(--text-soft);
-  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--border-strong) 46%, transparent);
 
   position: absolute;
   right: calc(6px * var(--ui-scale));

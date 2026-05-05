@@ -56,6 +56,11 @@
   min-width: var(--oc-density-icon-button);
 }
 
+.oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"] {
+  --oc-button-color: var(--text-soft);
+  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--border-strong) 46%, transparent);
+}
+
 .oc-button[data-variant="solid"] {
   --oc-button-bg: var(--accent);
   --oc-button-border: var(--oc-border-width) solid var(--accent);
@@ -129,6 +134,12 @@
   --oc-button-bg: var(--surface-hover);
 }
 
+.oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"]:hover,
+.oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"]:focus-visible {
+  --oc-button-color: var(--text-strong);
+  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 .oc-button[data-variant="solid"][data-tone="neutral"]:hover,
 .oc-button[data-variant="solid"][data-tone="neutral"]:focus-visible {
   --oc-button-bg: color-mix(in srgb, var(--text-strong) 86%, var(--surface));
@@ -154,4 +165,9 @@
 .oc-button[aria-disabled="true"] {
   cursor: default;
   opacity: var(--ui-opacity-disabled);
+}
+
+.oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"]:disabled,
+.oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"][aria-disabled="true"] {
+  opacity: var(--ui-opacity-subtle);
 }

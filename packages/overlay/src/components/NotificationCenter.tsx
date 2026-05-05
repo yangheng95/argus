@@ -40,6 +40,7 @@ export function NotificationCenter() {
               variant="ghost"
               size="icon"
               tone="neutral"
+              data-chrome="icon-action"
               data-ui="app-notification-close"
               title={t("notify.dismiss")}
               aria-label={t("notify.dismiss")}
