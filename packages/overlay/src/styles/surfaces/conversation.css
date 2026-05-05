@@ -196,7 +196,7 @@
   background: transparent;
   box-shadow: none;
   position: relative;
-  color: var(--text-soft);
+  color: var(--text-strong);
   font-size: var(--ui-font-meta);
   font-weight: var(--ui-font-weight-strong);
 }
@@ -236,14 +236,13 @@
   border-radius: var(--oc-radius-pill);
   background: transparent;
   box-shadow: none;
-  color: var(--text-muted);
-  opacity: var(--ui-opacity-dim);
+  color: var(--text-soft);
+  opacity: var(--ui-opacity-full);
 }
 
 .chat-header-meta .workspace-toggle:hover {
   background: transparent;
-  color: var(--accent);
-  opacity: var(--ui-opacity-full);
+  color: var(--text-strong);
 }
 
 .chat-header-meta .workspace-toggle[aria-pressed="true"] {
