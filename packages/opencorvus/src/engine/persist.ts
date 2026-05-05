@@ -339,22 +339,17 @@ export function createGoalRun(input: {
   // (evidence.goal_run_id, metric.goal_run_id, protocol_event.goal_run_id)
   // resolve. Updates append new rows sharing the same logical goal_run_id.
   //
-  // Live-run dedup: re-use an existing LIVE tip for the same (coordinator,
-  // goal, plan_node) triple. A row that was already superseded is a leaked
-  // in-flight retry and must not block the new dispatch.
+  // Live-run dedup: re-use any existing LIVE row for the same (coordinator,
+  // goal, plan_node) triple. Superseding a live row is invalid because the
+  // executor behind it can still report and merge; ignoring it here creates
+  // multiple live build sessions for one goal.
   const liveTips = listGoalRunsByGoal(input.goalID).filter((r) =>
     r.coordinator_run_id === input.coordinatorRunID &&
     (input.planNodeID ? r.plan_node_id === input.planNodeID : r.plan_node_id === null) &&
     (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status),
   )
   if (liveTips.length > 0) {
-    const supersededIDs = new Set(
-      listGoalRunsByGoal(input.goalID)
-        .map((r) => r.supersede_of)
-        .filter((x): x is string => !!x),
-    )
-    const tip = liveTips.find((r) => !supersededIDs.has(r.id))
-    if (tip) return tip
+    return liveTips[0]!
   }
   const id = Identifier.ascending("goal_run")
   const now = input.now ?? Date.now()
@@ -1498,6 +1493,14 @@ export function beginBuildAttempt(input: {
   if (!goal) {
     throw new Error(`beginBuildAttempt: goal ${input.goalID} not found`)
   }
+  const priorTip = findLatestTipGoalRun(input.goalID)
+  if (priorTip && (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(priorTip.status)) {
+    throw new Error(
+      `beginBuildAttempt: goal ${input.goalID} already has live goal_run ${priorTip.id} ` +
+      `with status=${priorTip.status}; refusing to open a second live build attempt.`,
+    )
+  }
+
   const version = openGoalImplementationVersion({
     goal,
     reason: "build_retry",
@@ -1518,7 +1521,17 @@ export function beginBuildAttempt(input: {
   //      already-patched terminal); supersededIDs set is empty until WE
   //      insert with supersede_of pointing at it.
   //   3. First-ever attempt: no prior tip, parentTipID undefined → null.
-  const parentTipID = version.supersededTipID ?? findLatestTipGoalRun(input.goalID)?.id
+  //
+  // Never use a live tip as the fallback parent. `openGoalImplementationVersion`
+  // intentionally returns no supersededTipID for live rows; treating that as
+  // "link to whatever tip exists" was the bug that let a retry supersede a
+  // still-running executor and launch a duplicate build session.
+  const parentTipID = version.supersededTipID ?? (
+    priorTip?.superseded_reason &&
+    (priorTip.status === "failed" || priorTip.status === "aborted" || priorTip.status === "completed")
+      ? priorTip.id
+      : undefined
+  )
   const payload = {
     goal_id: input.goalID,
     plan_node_id: null,
