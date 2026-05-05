@@ -79,4 +79,58 @@ describe("orchestrator architect fidelity gate", () => {
 
     expect(issues).toEqual([])
   })
+
+  test("does not block execution-stage build on source coverage for files created by earlier goals", () => {
+    const workDir = process.cwd()
+    const issues = validatePersistedArchitectFidelity({
+      task: {
+        metadata: {
+          architect_fidelity: {
+            sourceCoverage: [],
+            referenceCoverage: [],
+            assemblyOwners: [],
+          },
+        },
+        design_specs: [],
+      } as any,
+      goals: [
+        { id: "goal_feature", owned_paths: ["packages/opencorvus/src/orchestrator/tools.ts"] },
+      ],
+      workDir,
+      executionStarted: true,
+    })
+
+    expect(issues).toEqual([])
+  })
+
+  test("still blocks execution-stage build when reference coverage is missing", () => {
+    const workDir = process.cwd()
+    const issues = validatePersistedArchitectFidelity({
+      task: {
+        metadata: {
+          architect_fidelity: {
+            sourceCoverage: [],
+            referenceCoverage: [],
+            assemblyOwners: [],
+          },
+        },
+        design_specs: [{
+          id: "vis-hero",
+          category: "layout",
+          title: "Hero layout",
+          requirement: "Restore the hero layout exactly.",
+          applies_to: "hero",
+          severity: "must",
+        }],
+      } as any,
+      goals: [
+        { id: "goal_feature", owned_paths: ["packages/opencorvus/src/orchestrator/tools.ts"] },
+      ],
+      workDir,
+      executionStarted: true,
+    })
+
+    expect(issues).not.toContain("Missing source coverage for existing owned paths: packages/opencorvus/src/orchestrator/tools.ts")
+    expect(issues).toContain("Missing reference coverage for visual specs: vis-hero")
+  })
 })
