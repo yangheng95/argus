@@ -16,6 +16,8 @@ Overlay benchmark `20260505-170235` exposed the build-report audit version of th
 
 Overlay benchmark `20260505-172931` exposed the build-report schema version of the same problem: the Build session committed and `merge_back` published goal 3, then `report_build_result` returned `PASS` with a complete `files_changed[]` report. The final BuildAgent parse still failed because the old duplicate `patch_summary` field was required by `BuildResultSchema`. The same report therefore passed the tool layer and failed the run-finalization layer. That is a double-source protocol, not a robust collaboration contract.
 
+The same run repeatedly showed Build agents following a hard-coded `git add -A && git commit ...` prompt even though the available shell was PowerShell, where `&&` is invalid. The agent recovered, but the prompt was still teaching an environment-specific command chain. Collaboration protocol must describe durable steps, not shell syntax assumptions.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -33,6 +35,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - whether a fidelity gate is still in the planning window or is wrongly revalidating source coverage after execution evidence exists.
 - whether a Build file-change audit is measuring the current build session's own contribution or accidentally attributing sibling-goal merge context to it.
 - whether the Build terminal report has one authoritative file-level source (`files_changed[]`) instead of a legacy duplicate summary field that can disagree or be omitted.
+- whether Build guidance is shell-agnostic enough for agents to execute the milestone protocol without first hitting predictable command syntax failures.
 
 Without that durable projection, the LLM treats uncertainty as permission to ask Architect to solve the graph again.
 
@@ -54,6 +57,7 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It audits Build `files_changed[]` against the build session's own contribution range. After merge_back creates a merge commit, that means `HEAD^2..HEAD`, not the original task base to final integrated HEAD.
 - It rejects incomplete `files_changed[]` reports inside the still-alive Build session so the model can amend the terminal report instead of failing the goal after the session is gone.
 - It deletes the legacy `patch_summary` field from the Build result protocol. `files_changed[]` is the single source for file-level collaboration explanation, and the orchestrator renders that list directly.
+- It changes the Build prompt to commit with separate `git add -A` and `git commit` tool calls instead of shell-specific command chaining.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 
 ## Acceptance
