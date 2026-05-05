@@ -302,24 +302,7 @@
   </main>
 
   <!-- Goal / Session / App / Config dialogs are mounted by Solid host components. -->
-
-  <!-- Diff Dialog -->
-  <dialog class="dialog dialog-wide" id="diffDialog">
-    <div class="dialog-form diff-dialog-form">
-      <div class="dialog-head">
-        <div class="diff-dialog-head">
-          <h3 class="dialog-title" id="diffDialogTitle" data-i18n="diff.title">File Diff</h3>
-          <div class="diff-dialog-meta" id="diffDialogMeta"></div>
-        </div>
-        <div class="dialog-actions compact">
-          <button type="button" class="btn btn-ghost" id="btnCloseDiff" data-i18n="common.close">Close</button>
-        </div>
-      </div>
-      <div class="diff-preview" id="diffDialogBody">
-        <p class="empty-hint" data-i18n="diff.empty">Select a file to inspect its diff.</p>
-      </div>
-    </div>
-  </dialog>
+  <!-- Diff preview lives in WorkspacePanel / DiffPreviewPanel. -->
 
   <!-- Skill/MCP/Goal/Channel dialogs removed — Phase 4.
        All functionality moved to Solid components:
