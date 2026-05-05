@@ -257,6 +257,39 @@ export interface RunAgentSessionOutput<C> {
   requiredTools: string[]
 }
 
+const BUILD_SKILL_GATED_TOOLS = [
+  "webpage_extract",
+  "webpage_compile",
+  "webpage_analyze",
+  "webpage_image_extract",
+  "webpage_image_compile",
+  "webpage_image_analyze",
+  "webpage_render",
+  "webpage_evaluate",
+  "webpage_text_diff",
+  "webpage_vision_judge",
+  "figma_extract",
+  "figma_compile",
+  "figma_analyze",
+] as const
+
+export function promptToolSwitchesForAgentRun(input: {
+  extraToolNames: string[]
+  skillsStage?: SkillStage
+  requiredTools: string[]
+}): Record<string, boolean> {
+  const switches: Record<string, boolean> = Object.fromEntries(
+    input.extraToolNames.map((name) => [name, true]),
+  )
+  if (input.skillsStage !== "build") return switches
+
+  const required = new Set(input.requiredTools)
+  for (const toolName of BUILD_SKILL_GATED_TOOLS) {
+    switches[toolName] = required.has(toolName)
+  }
+  return switches
+}
+
 // ---------------------------------------------------------------------------
 // Error types — every failure surfaces as AgentRunError so callers do not
 // need to know about kind-specific exception classes.
@@ -518,9 +551,11 @@ export async function runAgentSession<C>(
   input.signal?.addEventListener("abort", abortPrompt, { once: true })
 
   // ── 6. Invoke SessionPrompt with the agent's extra tools ─────────────
-  const enableMap: Record<string, boolean> = Object.fromEntries(
-    Object.keys(input.toolKit.tools).map((name) => [name, true]),
-  )
+  const enableMap = promptToolSwitchesForAgentRun({
+    extraToolNames: Object.keys(input.toolKit.tools),
+    skillsStage: input.skillsStage,
+    requiredTools,
+  })
   if (
     input.terminalTool &&
     !(input.terminalTool.toolName in input.toolKit.tools)
