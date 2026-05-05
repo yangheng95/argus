@@ -13,6 +13,7 @@ const promptFiles = {
   integrity: "integrity-core.txt",
   orchestrator: "orchestrator-core.txt",
   prosecutor: "prosecutor-core.txt",
+  requirements: "requirements-core.txt",
 }
 
 async function readPrompt(name: keyof typeof promptFiles) {
@@ -143,6 +144,18 @@ describe("core prompt hygiene", () => {
     expect(build).toContain('status="failed"')
     expect(build).toContain("Failure is also terminal")
     expect(build).toContain("do not stop with prose")
+  })
+
+  test("requirements prompt keeps REQ extraction at acceptance granularity", async () => {
+    const requirements = await readPrompt("requirements")
+
+    expect(requirements).toContain("acceptance-level requirements")
+    expect(requirements).toContain("Do NOT register implementation chores as standalone requirements")
+    expect(requirements).toContain("Do NOT split one product capability into one REQ per button")
+    expect(requirements).toContain("over-fragmenting details into dozens of REQs is also a failure")
+    expect(requirements).toContain("compact capability catalog")
+    expect(requirements).not.toContain("Every distinct user-facing need is one REQ-N")
+    expect(requirements).not.toContain("TypeScript types for the Stock entity")
   })
 
   test("delivery prompt matches DeliveryVerdict schema single-source fields", async () => {
