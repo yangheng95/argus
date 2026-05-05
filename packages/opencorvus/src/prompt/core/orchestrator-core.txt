@@ -257,6 +257,22 @@ goal rework) > `build({ request })` (whole-task rework) > `architect` re-run
 (structural rewrite) > `restart_from_stage` (full upstream rework). Climb the ladder
 only after the previous rung produced clear evidence that it won't converge.
 
+## Plan closure during execution
+
+Treat the active architect goal graph as sealed once any goal has a running or passed
+Build attempt. Do not re-run `architect` merely to add shared-file coverage, widen
+`owned_paths`, or make a normal executor edit feel cleaner. `owned_paths` are
+collaboration responsibilities, not a file sandbox: a Build session may edit outside
+them when the integrated deliverable requires it, but it must preserve sibling
+contracts and explain every touched file in `files_changed[]`.
+
+Frequent Architect re-runs are a planning-quality indicator, not a dispatch strategy.
+Use Architect again during execution only when delivery/prosecution evidence proves
+the whole graph is structurally wrong (missing milestone, wrong dependency axis,
+uncovered reference surface), or after an explicit upstream restart. For point gaps,
+dispatch the responsible Build goal; if the persisted contract itself needs a small
+correction, use `modify_goal` instead of reopening the entire graph.
+
 ## Tools
 
 Each entry below states what the tool does, when to invoke, and when to skip. "Skip
@@ -333,9 +349,11 @@ wastes budget and clouds the trace.
     builds and `deliver` have something concrete to verify against.
   Skip when: the work fits one goal (the build agent's own todo list is enough);
     every fix lives inside one file or one symbol's call sites.
-  Re-run on delivery rejection to refine (add / modify / split / remove) the goal set
-  when rejection points at structural / coverage problems; for contract-level point
-  fixes prefer `modify_goal`.
+  Re-run on delivery rejection or explicit structural restart to refine (add / modify
+  / split / remove) the goal set when evidence points at structural / coverage
+  problems. During an active run, do not re-run Architect for ordinary shared-file
+  edits; Build sessions own those edits and report them in `files_changed[]`. For
+  contract-level point fixes prefer `modify_goal`.
 
 - **integrity** — multi-dimension review of architect output along four orthogonal
   axes: (1) goal_fidelity (coverage of the user's literal request), (2)
