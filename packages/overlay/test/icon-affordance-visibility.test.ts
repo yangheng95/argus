@@ -49,4 +49,24 @@ describe("icon affordances stay visible at rest", () => {
     expect(body).toContain("opacity: var(--ui-opacity-full);")
     expect(body).not.toContain("opacity: var(--ui-opacity-dim);")
   })
+
+  test("task row icon actions keep a visible resting shell", () => {
+    const css = read("src/styles/surfaces/sidebar.css")
+    const body = soloRuleBody(
+      css,
+      '.task-row-actions .oc-button[data-ui="task-row-delete"],\n.task-row-actions .oc-button[data-ui="task-row-cancel"],\n.task-row-actions .oc-button[data-ui="task-row-export"]',
+    )
+    expect(body).toContain("--oc-button-color: var(--text-soft);")
+    expect(body).toContain("--oc-button-shadow:")
+    expect(body).toContain("opacity: var(--ui-opacity-subtle);")
+    expect(body).not.toContain("opacity: var(--ui-opacity-disabled);")
+  })
+
+  test("notification dismiss button does not default to muted text", () => {
+    const css = read("src/styles/surfaces/notifications.css")
+    const body = soloRuleBody(css, '.app-notification .oc-button[data-ui="app-notification-close"]')
+    expect(body).toContain("--oc-button-color: var(--text-soft);")
+    expect(body).toContain("--oc-button-shadow:")
+    expect(body).not.toContain("--oc-button-color: var(--text-muted);")
+  })
 })
