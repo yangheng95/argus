@@ -531,6 +531,16 @@ export const OrchestratorEventNote = {
     if (input.summary) lines.push("", `Detail: ${input.summary}`)
     return lines.join("\n")
   },
+
+  stageRestart(input: { stage: "requirements" | "plan" | "executor"; reason: string; detail?: string }): string {
+    const lines = [
+      `Task was automatically restarted from ${input.stage}.`,
+      `Reason: ${input.reason}.`,
+      "Read the refreshed task context and continue from the required upstream stage.",
+    ]
+    if (input.detail) lines.push("", input.detail)
+    return lines.join("\n")
+  },
 }
 
 export function orchestratorUserText(task: Pick<TaskRow, "request">, event?: Pick<OrchestratorEvent, "note">): string {

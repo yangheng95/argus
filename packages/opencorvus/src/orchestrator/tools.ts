@@ -15,6 +15,7 @@ import { Database, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { createDecisionLog } from "@/decision-log"
 import { EngineService } from "@/task-api"
 import { sessionGoalID } from "./task-event"
 import { Publisher } from "@/engine/publisher"
@@ -41,6 +42,7 @@ import {
   findDeliveryByRun,
   findEvaluationByRun,
   findLatestDeliveryVerdictArtifact,
+  findLatestIntegrityAttemptArtifact,
   findPlan,
   getGoalRetryCount,
   listGoals,
@@ -60,7 +62,7 @@ import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
 import { createWorkflowState, findStepByTool, WorkflowRegistry, type WorkflowState, type MiniWorkflow } from "@/engine/workflow"
 import { Question } from "@/question"
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
-import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan } from "./scheduler"
+import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan, type RestartStage } from "./scheduler"
 import { OrchestratorEventNote } from "./agent"
 import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
 import {
@@ -637,6 +639,397 @@ export function createOrchestratorTools(input: {
    *  those call sites will be removed as the architecture settles. */
   function ensureGoalInWorkflow(_goalID: string, _goalTitle: string): void {
     // intentional no-op: see workflow.ts::projectGoalSteps
+  }
+
+  type IntegrityReviewOutcome =
+    | {
+        status: "blocked"
+        headline: string
+        pointer: string
+      }
+    | {
+        status: "reviewed"
+        specSnapshotID: string
+        verdict: "pass" | "concerns"
+        summary: string
+        sessionID: string
+        goalCount: number
+        perDimension: Array<string>
+      }
+    | {
+        status: "corrected"
+        specSnapshotID: string
+        verdict: "needs_correction"
+        summary: string
+        sessionID: string
+        perDimension: Array<string>
+        issues: string[]
+        addedGoals: string[]
+        removedGoals: string[]
+      }
+
+  function renderIntegrityOutcome(outcome: IntegrityReviewOutcome) {
+    if (outcome.status === "blocked") {
+      return SubAgentProtocol.yieldResult({
+        headline: outcome.headline,
+        pointer: outcome.pointer,
+      })
+    }
+    if (outcome.status === "reviewed") {
+      const headline =
+        outcome.verdict === "pass"
+          ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. NEXT: dispatch \`build({ goalID })\` per goal.`
+          : `Integrity verdict: concerns — ${outcome.perDimension.join(", ")}. ${outcome.summary} ` +
+            `Goal set is executable; surface the concerns above to the operator if relevant. ` +
+            `NEXT: dispatch \`build({ goalID })\` per goal, OR re-run \`architect\` / upstream agents if a hallucination dimension flagged ungrounded REQs.`
+      return SubAgentProtocol.yieldResult({
+        headline,
+        fields: [
+          ["goal_count", String(outcome.goalCount)],
+          ["spec_snapshot_id", outcome.specSnapshotID],
+          ["per_dimension", outcome.perDimension],
+          ["summary", outcome.summary],
+        ],
+        pointer: `integrity session ${outcome.sessionID}`,
+      })
+    }
+    return SubAgentProtocol.yieldResult({
+      headline:
+        `Integrity verdict: needs_correction (${outcome.perDimension.join(", ")}). ` +
+        `${outcome.summary} ` +
+        `Goal set re-upserted against spec ${outcome.specSnapshotID}. ` +
+        `NEXT: re-read the corrected goals before dispatching build.`,
+      fields: [
+        ["issues", outcome.issues],
+        ["added_goals", outcome.addedGoals],
+        ["removed_goals", outcome.removedGoals],
+        ["spec_snapshot_id", outcome.specSnapshotID],
+        ["per_dimension", outcome.perDimension],
+      ],
+      pointer: `integrity session ${outcome.sessionID}`,
+    })
+  }
+
+  async function runIntegrityReview(): Promise<IntegrityReviewOutcome> {
+    const task = requireTask(taskID)
+    const activeSpec = findActiveSpecForTask(task.id)
+    if (!activeSpec) {
+      return {
+        status: "blocked",
+        headline: "integrity: no active spec snapshot — call `architect` first.",
+        pointer: `task ${taskID}`,
+      }
+    }
+    const dbGoals = listGoals(taskID).filter((g) => g.spec_snapshot_id === activeSpec.id)
+    if (dbGoals.length === 0) {
+      return {
+        status: "blocked",
+        headline: "integrity: no goals on the active spec snapshot — call `architect` first.",
+        pointer: `spec ${activeSpec.id}`,
+      }
+    }
+
+    const { findRequirements } = await import("@/engine/store")
+    const reqRows = findRequirements(activeSpec.id)
+    const requirements = reqRows.map((r) => {
+      const meta = (r.metadata ?? {}) as Record<string, unknown>
+      const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
+      return {
+        id: sourceID,
+        type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
+        description: r.description,
+      }
+    })
+    const decisionLog = createDecisionLog(taskID)
+    const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
+      key: d.key,
+      value: d.value,
+      reason: d.reason,
+    }))
+
+    const goalsForReview = dbGoals.map((g) => ({
+      id: g.id,
+      title: g.title,
+      objective: g.objective,
+      acceptance_specs: (typeof g.acceptance_specs === "string"
+        ? JSON.parse(g.acceptance_specs)
+        : g.acceptance_specs ?? []) as AcceptanceSpec[],
+      owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : g.owned_paths ?? [],
+      depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : g.depends_on ?? [],
+      exports: typeof g.exports === "string" ? JSON.parse(g.exports) : g.exports ?? [],
+      imports: typeof g.imports === "string" ? JSON.parse(g.imports) : g.imports ?? [],
+      priority: g.priority as "blocking" | "advisory",
+      kind: g.kind,
+      requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
+    }))
+
+    const { reviewIntegrity, applyIntegrityCorrections } = await import("@/integrity")
+    const verdict = await reviewIntegrity({
+      userRequest: task.request,
+      taskTitle: task.title,
+      goals: goalsForReview,
+      requirements,
+      requirementDecisions,
+      designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
+      decisionLog,
+      attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
+      signal: input.signal,
+      taskID,
+      parentSessionID: input.agentSessionID,
+    })
+
+    const perDimensionRollup = verdict.dimensions.map((d) => ({ id: d.id, verdict: d.verdict }))
+    const perDimensionLabels = verdict.dimensions.map((d) => `${d.id}=${d.verdict}`)
+    const { recordIntegrityAttempt } = await import("@/engine/persist")
+
+    if (verdict.verdict !== "needs_correction") {
+      try {
+        recordIntegrityAttempt({
+          taskID,
+          sessionID: verdict.sessionID,
+          specSnapshotID: activeSpec.id,
+          verdict: verdict.verdict,
+          perDimension: perDimensionRollup,
+          issuesCount: verdict.issues.length,
+          correctionsCount: 0,
+          missingCount: 0,
+          reason: verdict.summary,
+        })
+      } catch (err) {
+        log.error("integrity: recordIntegrityAttempt failed", {
+          taskID,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+      return {
+        status: "reviewed",
+        specSnapshotID: activeSpec.id,
+        verdict: verdict.verdict,
+        summary: verdict.summary,
+        sessionID: verdict.sessionID,
+        goalCount: goalsForReview.length,
+        perDimension: perDimensionLabels.map((label, index) => `${label}(${verdict.dimensions[index]?.issues.length ?? 0}issues)`),
+      }
+    }
+
+    const corrected = applyIntegrityCorrections(goalsForReview, verdict)
+    const beforeIDs = new Set(goalsForReview.map((g) => g.id))
+    const afterIDs = new Set(corrected.map((g) => g.id))
+    const removedByIntegrity = [...beforeIDs].filter((id) => !afterIDs.has(id))
+    const addedByIntegrity = [...afterIDs].filter((id) => !beforeIDs.has(id))
+
+    const { upsertGoalsFromArchitect } = await import("@/engine/persist")
+    const { persistArchitectMetrics } = await import("@/metrics/store")
+
+    let persisted: Array<{ id: string; title: string; llmID: string }> = []
+    let llmToDBID = new Map<string, string>()
+    let deletedIDs: string[] = []
+    try {
+      Database.transaction((db) => {
+        const out = upsertGoalsFromArchitect(db, {
+          taskID,
+          specSnapshotID: activeSpec.id,
+          architectGoals: corrected.map((g) => ({
+            llmID: g.id,
+            title: g.title,
+            objective: g.objective,
+            acceptance_specs: g.acceptance_specs,
+            owned_paths: g.owned_paths,
+            depends_on: g.depends_on,
+            exports: g.exports,
+            imports: g.imports,
+            kind: g.kind,
+            requirement_ids: g.requirement_ids,
+            priority: g.priority,
+            source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
+          })),
+          removedLLMIDs: removedByIntegrity,
+          now: Date.now(),
+        })
+        persisted = out.persisted
+        llmToDBID = out.llmToDBID
+        deletedIDs = out.deletedIDs
+
+        persistArchitectMetrics({
+          task_id: taskID,
+          goal_id_map: llmToDBID,
+          goal_metric_specs: [],
+          global_metric_specs: [],
+        })
+
+        Database.effect(() =>
+          EngineProtocol.emit(
+            EngineEvent.TaskUpdated,
+            { taskID, status: deriveTaskStatus(task), summary: `Integrity corrected goal set: -${deletedIDs.length} +${addedByIntegrity.length}` },
+            { source: "orchestrator.integrity" },
+          ),
+        )
+      })
+    } catch (dbErr) {
+      log.error("integrity: failed to persist corrections", {
+        taskID,
+        error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+      })
+      throw dbErr
+    }
+
+    for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
+
+    try {
+      recordIntegrityAttempt({
+        taskID,
+        sessionID: verdict.sessionID,
+        specSnapshotID: activeSpec.id,
+        verdict: "needs_correction",
+        perDimension: perDimensionRollup,
+        issuesCount: verdict.issues.length,
+        correctionsCount: verdict.corrections.length,
+        missingCount: verdict.missingGoals.length,
+        reason: verdict.summary,
+      })
+    } catch (err) {
+      log.error("integrity: recordIntegrityAttempt failed", {
+        taskID,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+
+    return {
+      status: "corrected",
+      specSnapshotID: activeSpec.id,
+      verdict: "needs_correction",
+      summary: verdict.summary,
+      sessionID: verdict.sessionID,
+      perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
+      issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
+      addedGoals: addedByIntegrity,
+      removedGoals: removedByIntegrity,
+    }
+  }
+
+  async function restartTaskFromStage(stage: RestartStage, reason: string) {
+    const task = requireTask(taskID)
+    const activePlanAtStart = findActivePlanForTask(task.id)
+    const activeSpecAtStart = findActiveSpecForTask(task.id)
+    const plan = restartStagePlan(stage, Boolean(activePlanAtStart))
+    const now = Date.now()
+    const runError = `restart_from_stage(${stage}): ${reason}`
+    const {
+      EngineGoalTable,
+      EnginePlanVersionTable,
+      EngineSpecSnapshotTable,
+    } = await import("@/engine/engine.sql")
+    const { abortLiveExecutionForTask, createRun } = await import("@/engine/writer")
+
+    const aborted = await abortLiveExecutionForTask({
+      taskID,
+      reason: runError,
+      includeGoalRuns: plan.retireGoalRuns,
+    })
+    const retiredGoalRuns = aborted.goalRuns
+    const retiredRuns = aborted.runs
+
+    let resetGoals = 0
+    let deletedGoals = 0
+    let freshRun: { id: string } | null = null
+
+    if (plan.resetGoalStatuses) {
+      const { resetTaskGoalsToPending } = await import("@/engine/persist")
+      const result = resetTaskGoalsToPending({
+        taskID,
+        reason: runError,
+        now,
+      })
+      resetGoals = result.total
+    }
+
+    Database.transaction((db) => {
+      if (plan.deleteGoals) {
+        const rows = db
+          .select({ id: EngineGoalTable.id })
+          .from(EngineGoalTable)
+          .where(eq(EngineGoalTable.task_id, taskID))
+          .all()
+        deletedGoals = rows.length
+        if (deletedGoals > 0) {
+          db.delete(EngineGoalTable)
+            .where(eq(EngineGoalTable.task_id, taskID))
+            .run()
+        }
+      }
+
+      if (plan.clearPlan && activePlanAtStart) {
+        db.update(EnginePlanVersionTable)
+          .set({ status: "superseded", time_updated: now })
+          .where(eq(EnginePlanVersionTable.id, activePlanAtStart.id))
+          .run()
+      }
+
+      if (plan.clearSpec && activeSpecAtStart) {
+        db.update(EngineSpecSnapshotTable)
+          .set({ status: "superseded", time_updated: now })
+          .where(eq(EngineSpecSnapshotTable.id, activeSpecAtStart.id))
+          .run()
+      }
+    })
+
+    if (plan.queueFreshRun && activePlanAtStart) {
+      const executor = task.executor
+      freshRun = createRun({
+        taskID,
+        planVersionID: activePlanAtStart.id,
+        sessionID: task.session_id ?? null,
+        executor,
+        status: "queued",
+        phase: "dispatch",
+        metadata: { restart_stage: stage },
+        summary: `restart_from_stage(${stage}): fresh run queued`,
+        now,
+      })
+    }
+
+    const currentTask = requireTask(taskID)
+    await updateTask(
+      currentTask,
+      {
+        status: "active",
+        error: null,
+      },
+      `restart_from_stage(${stage})`,
+    )
+    const freshRunID = freshRun?.id ?? null
+
+    const detail = [
+      deletedGoals > 0 ? `${deletedGoals} goal(s) deleted` : null,
+      resetGoals > 0 ? `${resetGoals} goal(s) reset to pending` : null,
+      retiredGoalRuns > 0 ? `${retiredGoalRuns} goal_run(s) aborted` : null,
+      retiredRuns > 0 ? `${retiredRuns} run(s) aborted` : null,
+      freshRunID ? `fresh queued run=${freshRunID}` : null,
+    ].filter(Boolean).join(", ")
+
+    return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} NEXT: ${plan.nextAction}${freshRunID ? `(${freshRunID})` : ""}.`
+  }
+
+  async function restartTaskFromStageAndWake(input: {
+    stage: RestartStage
+    reason: string
+    detail?: string
+    stopReason: string
+  }) {
+    const summary = await restartTaskFromStage(input.stage, input.reason)
+    requestStopAfterCurrentStep(input.stopReason)
+    const { dispatchTaskLoop } = await import("@/engine/queue")
+    void dispatchTaskLoop({
+      taskID,
+      event: {
+        note: OrchestratorEventNote.stageRestart({
+          stage: input.stage,
+          reason: input.reason,
+          detail: input.detail ?? summary,
+        }),
+      },
+    })
+    return summary
   }
 
   // Agents that need to ask the user a question do so directly via
@@ -1637,216 +2030,7 @@ export function createOrchestratorTools(input: {
         reason: z.string().optional().describe("Why you decided to run integrity review"),
       }),
       execute: async () => {
-        const task = requireTask(taskID)
-        const activeSpec = findActiveSpecForTask(task.id)
-        if (!activeSpec) {
-          return SubAgentProtocol.yieldResult({
-            headline: "integrity: no active spec snapshot — call `architect` first.",
-            pointer: `task ${taskID}`,
-          })
-        }
-        const dbGoals = listGoals(taskID).filter((g) => g.spec_snapshot_id === activeSpec.id)
-        if (dbGoals.length === 0) {
-          return SubAgentProtocol.yieldResult({
-            headline: "integrity: no goals on the active spec snapshot — call `architect` first.",
-            pointer: `spec ${activeSpec.id}`,
-          })
-        }
-
-        // Single session per sub-agent (rule 22). reviewIntegrity creates the
-        // runner session internally and returns its id on `verdict.sessionID`.
-
-        const { findRequirements } = await import("@/engine/store")
-        const reqRows = findRequirements(activeSpec.id)
-        const requirements = reqRows.map((r) => {
-          const meta = (r.metadata ?? {}) as Record<string, unknown>
-          const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
-          return {
-            id: sourceID,
-            type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
-            description: r.description,
-          }
-        })
-        const { createDecisionLog } = await import("@/decision-log")
-        const decisionLog = createDecisionLog(taskID)
-        const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
-          key: d.key,
-          value: d.value,
-          reason: d.reason,
-        }))
-
-        const goalsForReview = dbGoals.map((g) => ({
-          id: g.id,
-          title: g.title,
-          objective: g.objective,
-          acceptance_specs: (typeof g.acceptance_specs === "string"
-            ? JSON.parse(g.acceptance_specs)
-            : g.acceptance_specs ?? []) as AcceptanceSpec[],
-          owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : g.owned_paths ?? [],
-          depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : g.depends_on ?? [],
-          exports: typeof g.exports === "string" ? JSON.parse(g.exports) : g.exports ?? [],
-          imports: typeof g.imports === "string" ? JSON.parse(g.imports) : g.imports ?? [],
-          priority: g.priority as "blocking" | "advisory",
-          kind: g.kind,
-          requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
-        }))
-
-        const { reviewIntegrity, applyIntegrityCorrections } = await import("@/integrity")
-        const verdict = await reviewIntegrity({
-          userRequest: task.request,
-          taskTitle: task.title,
-          goals: goalsForReview,
-          requirements,
-          requirementDecisions,
-          designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
-          decisionLog,
-          attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
-          signal: input.signal,
-          taskID,
-          parentSessionID: input.agentSessionID,
-        })
-
-        const perDimensionLabels = verdict.dimensions.map((d) => `${d.id}=${d.verdict}`).join(", ")
-        const { recordIntegrityAttempt } = await import("@/engine/persist")
-        const perDimensionRollup = verdict.dimensions.map((d) => ({ id: d.id, verdict: d.verdict }))
-
-        if (verdict.verdict !== "needs_correction") {
-          try {
-            recordIntegrityAttempt({
-              taskID,
-              sessionID: verdict.sessionID,
-              specSnapshotID: activeSpec.id,
-              verdict: verdict.verdict,
-              perDimension: perDimensionRollup,
-              issuesCount: verdict.issues.length,
-              correctionsCount: 0,
-              missingCount: 0,
-              reason: verdict.summary,
-            })
-          } catch (err) {
-            log.error("integrity: recordIntegrityAttempt failed", {
-              taskID,
-              error: err instanceof Error ? err.message : String(err),
-            })
-          }
-          const headline =
-            verdict.verdict === "pass"
-              ? `Integrity verdict: pass — ${perDimensionLabels}. NEXT: dispatch \`build({ goalID })\` per goal.`
-              : `Integrity verdict: concerns — ${perDimensionLabels}. ${verdict.summary} ` +
-                `Goal set is executable; surface the concerns above to the operator if relevant. ` +
-                `NEXT: dispatch \`build({ goalID })\` per goal, OR re-run \`architect\` / upstream agents if a hallucination dimension flagged ungrounded REQs.`
-          return SubAgentProtocol.yieldResult({
-            headline,
-            fields: [
-              ["goal_count", String(goalsForReview.length)],
-              ["spec_snapshot_id", activeSpec.id],
-              ["per_dimension", verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`)],
-              ["summary", verdict.summary],
-            ],
-            pointer: `integrity session ${verdict.sessionID}`,
-          })
-        }
-
-        const corrected = applyIntegrityCorrections(goalsForReview, verdict)
-        const beforeIDs = new Set(goalsForReview.map((g) => g.id))
-        const afterIDs = new Set(corrected.map((g) => g.id))
-        const removedByIntegrity = [...beforeIDs].filter((id) => !afterIDs.has(id))
-        const addedByIntegrity = [...afterIDs].filter((id) => !beforeIDs.has(id))
-
-        const { upsertGoalsFromArchitect } = await import("@/engine/persist")
-        const { persistArchitectMetrics } = await import("@/metrics/store")
-
-        let persisted: Array<{ id: string; title: string; llmID: string }> = []
-        let llmToDBID = new Map<string, string>()
-        let deletedIDs: string[] = []
-        try { Database.transaction((db) => {
-          const out = upsertGoalsFromArchitect(db, {
-            taskID,
-            specSnapshotID: activeSpec.id,
-            architectGoals: corrected.map((g) => ({
-              llmID: g.id,
-              title: g.title,
-              objective: g.objective,
-              acceptance_specs: g.acceptance_specs,
-              owned_paths: g.owned_paths,
-              depends_on: g.depends_on,
-              exports: g.exports,
-              imports: g.imports,
-              kind: g.kind,
-              requirement_ids: g.requirement_ids,
-              priority: g.priority,
-              source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
-            })),
-            removedLLMIDs: removedByIntegrity,
-            now: Date.now(),
-          })
-          persisted = out.persisted
-          llmToDBID = out.llmToDBID
-          deletedIDs = out.deletedIDs
-
-          // Re-baseline goal metric specs against the corrected goal id map
-          // so newly-added integrity goals are picked up by the metric layer
-          // and removed goals stop accumulating metric_results. The global
-          // specs are unchanged (they are not goal-scoped).
-          persistArchitectMetrics({
-            task_id: taskID,
-            goal_id_map: llmToDBID,
-            goal_metric_specs: [],
-            global_metric_specs: [],
-          })
-
-          Database.effect(() =>
-            EngineProtocol.emit(
-              EngineEvent.TaskUpdated,
-              { taskID, status: deriveTaskStatus(task), summary: `Integrity corrected goal set: -${deletedIDs.length} +${addedByIntegrity.length}` },
-              { source: "orchestrator.integrity" },
-            ),
-          )
-        }) } catch (dbErr) {
-          log.error("integrity: failed to persist corrections", {
-            taskID,
-            error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-          })
-          throw dbErr
-        }
-
-        for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
-
-        try {
-          recordIntegrityAttempt({
-            taskID,
-            sessionID: verdict.sessionID,
-            specSnapshotID: activeSpec.id,
-            verdict: "needs_correction",
-            perDimension: perDimensionRollup,
-            issuesCount: verdict.issues.length,
-            correctionsCount: verdict.corrections.length,
-            missingCount: verdict.missingGoals.length,
-            reason: verdict.summary,
-          })
-        } catch (err) {
-          log.error("integrity: recordIntegrityAttempt failed", {
-            taskID,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-
-        return SubAgentProtocol.yieldResult({
-          headline:
-            `Integrity verdict: needs_correction (${perDimensionLabels}). ` +
-            `${verdict.summary} ` +
-            `Goal set re-upserted against spec ${activeSpec.id}: ` +
-            `${verdict.corrections.length} corrections, ${verdict.missingGoals.length} new goals, ${deletedIDs.length} removed. ` +
-            `NEXT: dispatch \`build({ goalID })\` on the corrected set.`,
-          fields: [
-            ["issues", verdict.issues.map((i) => `[${i.type}] ${i.description}`)],
-            ["added_goals", addedByIntegrity],
-            ["removed_goals", removedByIntegrity],
-            ["spec_snapshot_id", activeSpec.id],
-            ["per_dimension", verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`)],
-          ],
-          pointer: `integrity session ${verdict.sessionID}`,
-        })
+        return renderIntegrityOutcome(await runIntegrityReview())
       },
     }),
 
@@ -2590,115 +2774,7 @@ export function createOrchestratorTools(input: {
         ),
         reason: z.string().describe("Why restarting from this stage"),
       }),
-      execute: async ({ stage, reason }) => {
-        const task = requireTask(taskID)
-        const activePlanAtStart = findActivePlanForTask(task.id)
-        const activeSpecAtStart = findActiveSpecForTask(task.id)
-        const plan = restartStagePlan(stage, Boolean(activePlanAtStart))
-        const now = Date.now()
-        const runError = `restart_from_stage(${stage}): ${reason}`
-        const {
-          EngineGoalTable,
-          EnginePlanVersionTable,
-          EngineSpecSnapshotTable,
-        } = await import("@/engine/engine.sql")
-        const { abortLiveExecutionForTask, createRun } = await import("@/engine/writer")
-
-        // Abort live execution state (goal_runs + coordinator runs) through
-        // the shared writer primitive so restart and startup recovery share
-        // the same termination semantics (CAS + state-machine + events).
-        const aborted = await abortLiveExecutionForTask({
-          taskID,
-          reason: runError,
-          includeGoalRuns: plan.retireGoalRuns,
-        })
-        const retiredGoalRuns = aborted.goalRuns
-        const retiredRuns = aborted.runs
-
-        let resetGoals = 0
-        let deletedGoals = 0
-        let freshRun: { id: string } | null = null
-
-        if (plan.resetGoalStatuses) {
-          const { resetTaskGoalsToPending } = await import("@/engine/persist")
-          const result = resetTaskGoalsToPending({
-            taskID,
-            reason: runError,
-            now,
-          })
-          resetGoals = result.total
-        }
-
-        Database.transaction((db) => {
-
-          if (plan.deleteGoals) {
-            const rows = db
-              .select({ id: EngineGoalTable.id })
-              .from(EngineGoalTable)
-              .where(eq(EngineGoalTable.task_id, taskID))
-              .all()
-            deletedGoals = rows.length
-            if (deletedGoals > 0) {
-              db.delete(EngineGoalTable)
-                .where(eq(EngineGoalTable.task_id, taskID))
-                .run()
-            }
-          }
-
-          if (plan.clearPlan && activePlanAtStart) {
-            db.update(EnginePlanVersionTable)
-              .set({ status: "superseded", time_updated: now })
-              .where(eq(EnginePlanVersionTable.id, activePlanAtStart.id))
-              .run()
-          }
-
-          if (plan.clearSpec && activeSpecAtStart) {
-            db.update(EngineSpecSnapshotTable)
-              .set({ status: "superseded", time_updated: now })
-              .where(eq(EngineSpecSnapshotTable.id, activeSpecAtStart.id))
-              .run()
-          }
-        })
-
-        if (plan.queueFreshRun && activePlanAtStart) {
-          const executor = task.executor
-          freshRun = createRun({
-            taskID,
-            planVersionID: activePlanAtStart.id,
-            sessionID: task.session_id ?? null,
-            executor,
-            status: "queued",
-            phase: "dispatch",
-            metadata: { restart_stage: stage },
-            summary: `restart_from_stage(${stage}): fresh run queued`,
-            now,
-          })
-        }
-
-        // Route task status reset through updateTask so the restart emits
-        // TaskUpdated + records a progress snapshot — same invariants every
-        // other task status change goes through.
-        const currentTask = requireTask(taskID)
-        await updateTask(
-          currentTask,
-          {
-            status: "active",
-            error: null,
-          },
-          `restart_from_stage(${stage})`,
-        )
-        const freshRunID = freshRun?.id ?? null
-
-        const detail = [
-          deletedGoals > 0 ? `${deletedGoals} goal(s) deleted` : null,
-          resetGoals > 0 ? `${resetGoals} goal(s) reset to pending` : null,
-          retiredGoalRuns > 0 ? `${retiredGoalRuns} goal_run(s) aborted` : null,
-          retiredRuns > 0 ? `${retiredRuns} run(s) aborted` : null,
-          freshRunID ? `fresh queued run=${freshRunID}` : null,
-        ].filter(Boolean).join(", ")
-
-        return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} NEXT: ${plan.nextAction}${freshRunID ? `(${freshRunID})` : ""}.`
-      },
+      execute: async ({ stage, reason }) => restartTaskFromStage(stage, reason),
     }),
 
     deliver: tool({
@@ -3471,17 +3547,27 @@ export function createOrchestratorTools(input: {
               /* best effort */
             }
             await trackStepComplete("deliver", undefined, true)
+            const restartSummary = await restartTaskFromStageAndWake({
+              stage: "plan",
+              reason:
+                `Delivery fix-runs budget exhausted at iteration ${iteration} ` +
+                `(max_fix_runs=${fixBudget}). ${verdict.summary}`,
+              detail:
+                `Automatic plan restart triggered after delivery exhausted identical fix runs. ` +
+                `Manifest failures: ${manifestFailureDetails.join(" | ") || "(none recorded)"}`,
+              stopReason: "delivery_restart_plan_budget_exhausted",
+            })
             return SubAgentProtocol.yieldResult({
-              headline: `Delivery rejected and fix-runs budget exhausted (iteration=${iteration}, max_fix_runs=${fixBudget}). Task remains active; no more identical delivery_rework attempts. The orchestrator MUST change strategy now with restart_from_stage(plan|executor), modify_goal, or integrated build({ request }) before the next deliver.`,
+              headline: `Delivery rejected and fix-runs budget exhausted (iteration=${iteration}, max_fix_runs=${fixBudget}). Task was automatically restarted from plan before any further build dispatch.`,
               fields: [
                 ["issues_found", rejectionIssues],
                 ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
                 ["max_fix_runs", String(fixBudget)],
                 ["agent_summary", verdict.summary],
-                ["next", "change strategy from persisted delivery facts before another deliver"],
+                ["restart", restartSummary],
               ],
-              pointer: `verdict artifact ${verdictArtifactId}; budget exhaustion is strategy feedback and does not stop the task`,
+              pointer: `verdict artifact ${verdictArtifactId}; budget exhaustion forced plan restart`,
             })
           }
           const priorManifests = currentManifest?.taskId
@@ -3529,17 +3615,26 @@ export function createOrchestratorTools(input: {
               /* best effort */
             }
             await trackStepComplete("deliver", undefined, true)
+            const restartSummary = await restartTaskFromStageAndWake({
+              stage: "plan",
+              reason:
+                `Delivery repeated failure signatures at iteration ${iteration}. ${verdict.summary}`,
+              detail:
+                `Automatic plan restart triggered after repeated delivery evidence signatures: ` +
+                `${repeatedFailure.signatures.join(" | ")}`,
+              stopReason: "delivery_restart_plan_repeated_failures",
+            })
             return SubAgentProtocol.yieldResult({
-              headline: `Delivery rejected with repeated failure signatures (iteration=${iteration}). Task remains active; no identical delivery_rework attempt opened. The orchestrator MUST change strategy now with restart_from_stage(plan|executor), modify_goal, or integrated build({ request }) before the next deliver.`,
+              headline: `Delivery rejected with repeated failure signatures (iteration=${iteration}). Task was automatically restarted from plan before any identical rework could repeat.`,
               fields: [
                 ["failure_signatures", repeatedFailure.signatures],
                 ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
                 ["prior_repeated_signals", String(priorSignalCount)],
                 ["agent_summary", verdict.summary],
-                ["next", "change strategy from persisted manifest facts before another deliver"],
+                ["restart", restartSummary],
               ],
-              pointer: `verdict artifact ${verdictArtifactId}; repeated manifest failures require strategy change and do not terminal-fail the task`,
+              pointer: `verdict artifact ${verdictArtifactId}; repeated manifest failures forced plan restart`,
             })
           }
           if (toReset.length === 0) {
@@ -3564,19 +3659,29 @@ export function createOrchestratorTools(input: {
               affected_goal_ids: rejectionAffectedGoalIDs,
             })
             await trackStepComplete("deliver", undefined, true)
+            const restartSummary = await restartTaskFromStageAndWake({
+              stage: "plan",
+              reason:
+                `Delivery rejected at task scope on iteration ${iteration}; no actionable goal attribution. ${verdict.summary}`,
+              detail:
+                `Automatic plan restart triggered because delivery found an integrated failure ` +
+                `with no concrete goal_id attribution. Manifest failures: ${manifestFailureDetails.join(" | ") || "(none recorded)"}`,
+              stopReason: "delivery_restart_plan_task_scope",
+            })
             return SubAgentProtocol.yieldResult({
               headline:
                 `Delivery rejected at task scope — iteration ${iteration}; no goal attempts were reopened. ` +
-                `Assistant must fix the integrated deliverable with build({ request }) or change strategy before re-deliver.`,
+                `Task was automatically restarted from plan to rebuild the decomposition.`,
               fields: [
                 ["issues_found", rejectionIssues],
                 ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
                 ["agent_summary", verdict.summary],
+                ["restart", restartSummary],
               ],
               pointer: currentManifest
-                ? `verdict artifact ${verdictArtifactId}; manifest ${currentManifest.id}; task-scope failures require integrated rework before another deliver`
-                : `verdict artifact ${verdictArtifactId}; task-scope failures require integrated rework before another deliver`,
+                ? `verdict artifact ${verdictArtifactId}; manifest ${currentManifest.id}; task-scope rejection forced plan restart`
+                : `verdict artifact ${verdictArtifactId}; task-scope rejection forced plan restart`,
             })
           }
           // Per-goal rejection slice: the delivery agent already attributed
@@ -4217,6 +4322,36 @@ export function createOrchestratorTools(input: {
               if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
               return `build: goal ${attachedGoalID} not found; register via architect first.`
             }
+            const activeSpec = findActiveSpecForTask(taskID)
+            if (!activeSpec) {
+              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+              return `build: goal ${attachedGoalID} has no active spec snapshot. Re-run requirements/architect before dispatching build.`
+            }
+            if (goal.spec_snapshot_id !== activeSpec.id) {
+              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+              return (
+                `build: goal ${attachedGoalID} belongs to superseded spec ${goal.spec_snapshot_id ?? "null"} ` +
+                `while active spec is ${activeSpec.id}. Re-read the active goal graph before dispatching build.`
+              )
+            }
+            const latestIntegrity = findLatestIntegrityAttemptArtifact({
+              taskID,
+              specSnapshotID: activeSpec.id,
+            })
+            if (!latestIntegrity) {
+              const integrityOutcome = await runIntegrityReview()
+              if (integrityOutcome.status === "blocked") {
+                if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+                return `build: blocked before goal ${attachedGoalID} — ${integrityOutcome.headline}`
+              }
+              if (integrityOutcome.status === "corrected") {
+                if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+                return (
+                  `build: blocked before goal ${attachedGoalID} — integrity corrected the active goal graph for spec ` +
+                  `${integrityOutcome.specSnapshotID}. Re-read the corrected goals and choose the next dispatch from the new graph.`
+                )
+              }
+            }
             // Fidelity gate runs BEFORE any worktree creation or workspace
             // pointer mutation. Phase A2 (2026-05-05): pre-fix order was
             // create-worktree → write workspace_dir → validate; on failure
@@ -4333,8 +4468,8 @@ export function createOrchestratorTools(input: {
             //    a missing source (e.g. no active spec) gracefully degrades
             //    the corresponding section to undefined; the prompt renderer
             //    only emits the populated ones. ──────────────────────────
-            const activeSpec = findActiveSpecForTask(task.id)
-            const reqRows = activeSpec ? findRequirements(activeSpec.id) : []
+            const activeSpecForContext = findActiveSpecForTask(task.id)
+            const reqRows = activeSpecForContext ? findRequirements(activeSpecForContext.id) : []
             const requirements = reqRows.map((r) => {
               const meta = (r.metadata ?? {}) as Record<string, unknown>
               const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id

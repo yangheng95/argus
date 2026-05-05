@@ -701,6 +701,24 @@ export function findLatestDeliveryVerdictArtifact(taskID: string) {
   )
 }
 
+export function findLatestIntegrityAttemptArtifact(input: {
+  taskID: string
+  specSnapshotID?: string | null
+}) {
+  return Database.use((db) =>
+    db.select().from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.task_id, input.taskID),
+        eq(EngineArtifactTable.kind, "integrity_attempt"),
+        input.specSnapshotID
+          ? sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotID}`
+          : sql`1 = 1`,
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
+  )
+}
+
 /** Latest delivery-agent-verdict artifact bound to a specific delivery row.
  *  Used by the board view to render delivery.status from the agent verdict
  *  rather than from the candidate-delivery row's lifecycle status (which
