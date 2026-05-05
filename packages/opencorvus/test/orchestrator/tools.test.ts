@@ -392,6 +392,69 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("integrity no-op corrections become concerns instead of blocking execution", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_noop_${stamp}`
+    const taskID = `tsk_integrity_noop_${stamp}`
+    const goalID = `goal_integrity_noop_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity no-op test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity no-op correction test",
+          taskTitle: "Integrity no-op correction task",
+          request: "Do not block forever on no-op integrity corrections",
+          goalTitle: "Keep graph executable",
+          goalSlug: "keep-graph-executable",
+          objective: "Verify no-op corrections do not remain needs_correction",
+          now,
+          specID,
+        })
+
+        reviewIntegrityImpl = async () => ({
+          verdict: "needs_correction",
+          summary: "Correction has no semantic effect",
+          dimensions: [
+            { id: "goal_fidelity", verdict: "pass", issues: [] },
+            { id: "technical_feasibility", verdict: "needs_correction", issues: [{ description: "Dependency prose only", type: "missing_capability" }] },
+            { id: "hallucination", verdict: "pass", issues: [] },
+            { id: "solution_quality", verdict: "concerns", issues: [] },
+          ],
+          issues: [{ description: "Dependency prose only", type: "missing_capability" }],
+          corrections: [{ action: "modify", goalID, reason: "No actual updates", updates: {} }],
+          missingGoals: [],
+          sessionID: "ses_integrity_noop",
+        })
+        applyIntegrityCorrectionsImpl = (goals) => goals
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.integrity.execute({}, {} as any)
+
+        expect(result).toContain("Integrity verdict: concerns")
+        expect(result).toContain("Proposed corrections produced no semantic goal-contract delta")
+        const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
+        expect(artifact?.label).toBe("verdict-concerns")
+      },
+    })
+  })
+
   test("goal build blocks on a persisted needs_correction integrity verdict", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })

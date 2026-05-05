@@ -6,6 +6,8 @@ Overlay benchmark `20260505-151125` showed the orchestrator re-entering Architec
 
 Overlay benchmark `20260505-154347` showed the next failure mode: after a Build failure, the orchestrator jumped to `restart_from_stage(plan)` with "architect contract incomplete" instead of first diagnosing the failed goal and retrying or point-correcting the same graph. That is the same root problem in another lane.
 
+Overlay benchmark `20260505-161217` exposed the integrity-layer version of the same problem: integrity found real architecture defects and returned `needs_correction`, but its correction schema could not modify the topology fields it was auditing (`depends_on`, `imports`, `exports`). The result was repeated "corrected goal set: -0 +0" with no real closure improvement.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -16,6 +18,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - which goals are now dispatchable by dependency evidence,
 - which failed goals remain inside the current graph and need diagnostic retry,
 - which goals are blocked by unfinished dependencies,
+- whether integrity corrections create an actual semantic goal-contract delta,
 - which repair lane fits ordinary collaboration drift,
 - when Architect re-entry would be a structural re-plan instead of normal execution.
 
@@ -31,6 +34,8 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It makes the collaboration contract explicit every wake.
 - It routes ordinary shared-file edits to Build `files_changed[]` and point contract corrections to `modify_goal`.
 - It routes failed Build attempts to `query_failed_goals` and same-goal retry before any upstream restart.
+- It gives integrity the ability to repair the lightweight topology fields it audits: ownership, dependencies, imports, exports, kind, and priority.
+- It demotes no-op `needs_correction` results to concerns so review noise cannot block execution forever.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 
 ## Acceptance

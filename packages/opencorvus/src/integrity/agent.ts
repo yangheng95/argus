@@ -77,10 +77,13 @@ export interface GoalCorrection {
   action: "modify" | "split" | "remove"
   goalID: string
   reason: string
-  /** Corrections may rewrite goal title / objective / owned_paths only.
+  /** Corrections may rewrite goal topology fields that integrity itself audits.
    *  acceptance_specs are intentionally NOT mutable here — see the wire-schema
    *  comment near GoalCorrectionUpdates. */
-  updates?: Partial<Pick<GoalContractFields, "title" | "objective" | "owned_paths">>
+  updates?: Partial<Pick<
+    GoalContractFields,
+    "title" | "objective" | "owned_paths" | "depends_on" | "exports" | "imports" | "kind" | "priority"
+  >>
 }
 
 export interface MissingGoal {
@@ -136,16 +139,23 @@ const VerdictEnum = z.enum(["pass", "concerns", "needs_correction"])
 // here. The full AcceptanceSpec schema (with its discriminated-union Scorer
 // tree, Gherkin scenario, rubric levels, etc.) is so deep that JSON-Schema
 // inlines it for every dimension tool, pushing toolSchemaChars past 990k.
-// Corrections may rewrite goal title / objective / owned_paths only; specs
-// must be touched via architect re-run or `modify_goal`. Missing goals
-// arrive with PLAIN-TEXT spec hints (`acceptance_spec_hints`) which
-// applyIntegrityCorrections wraps into LlmJudge placeholders so the
-// downstream evaluator can still score them; architect retry / refine can
-// translate the hints into typed heuristic + rubric specs later.
+// Corrections may rewrite the same lightweight topology fields integrity audits:
+// goal identity text, ownership, dependencies, and import/export contracts.
+// AcceptanceSpec is intentionally excluded. The full AcceptanceSpec schema
+// (with its discriminated-union Scorer tree, Gherkin scenario, rubric levels,
+// etc.) is so deep that JSON-Schema inlines it for every dimension tool,
+// pushing toolSchemaChars past 990k. Missing goals arrive with PLAIN-TEXT spec
+// hints (`acceptance_spec_hints`) which applyIntegrityCorrections wraps into
+// LlmJudge placeholders so the downstream evaluator can still score them.
 const GoalCorrectionUpdates = z.object({
   title: z.string().optional(),
   objective: z.string().optional(),
   owned_paths: z.array(z.string()).optional(),
+  depends_on: z.array(z.string()).optional(),
+  exports: z.array(z.string()).optional(),
+  imports: z.array(z.string()).optional(),
+  kind: z.enum(["bootstrap", "feature", "verification", "integration", "system"]).optional(),
+  priority: z.enum(["blocking", "advisory"]).optional(),
 })
 
 const GoalCorrectionInput = z.object({
