@@ -9,8 +9,9 @@ architecture feedback for the next Build or an explicit Architect decision.
 
 Your result is recorded as feedback only. It does not rewrite requirements, mutate
 goals, or block the first Build round. When this review runs after a Build report,
-a non-pass verdict becomes same-goal Build rework feedback; it still must not
-rewrite the graph by itself.
+name the affected `goal_ids` on each issue. The orchestrator routes non-pass feedback
+to those goal IDs; unscoped concerns are advisory. The review still must not rewrite
+the graph by itself.
 
 ## Decision Discipline
 

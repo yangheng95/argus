@@ -674,6 +674,8 @@ export function createOrchestratorTools(input: {
         correctionsCount: number
         missingCount: number
         issues: string[]
+        issueGoalIDs: string[]
+        correctionGoalIDs: string[]
       }
 
   function renderIntegrityOutcome(outcome: IntegrityReviewOutcome) {
@@ -810,7 +812,29 @@ export function createOrchestratorTools(input: {
       missingCount: verdict.missingGoals.length,
       perDimension: perDimensionLabels.map((label, index) => `${label}(${verdict.dimensions[index]?.issues.length ?? 0}issues)`),
       issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
+      issueGoalIDs: Array.from(new Set(verdict.issues.flatMap((issue) => issue.goalIDs ?? []))),
+      correctionGoalIDs: Array.from(new Set(verdict.corrections.map((correction) => correction.goalID))),
     }
+  }
+
+  function postBuildReviewReworkGoalIDs(input: {
+    review: Extract<IntegrityReviewOutcome, { status: "reviewed" }>
+    fallbackGoalID: string
+  }) {
+    const targetIDs = new Set<string>()
+    for (const goalID of input.review.issueGoalIDs) if (goalID) targetIDs.add(goalID)
+    for (const goalID of input.review.correctionGoalIDs) if (goalID) targetIDs.add(goalID)
+    if (targetIDs.size > 0) return Array.from(targetIDs)
+
+    if (
+      input.review.verdict === "needs_correction"
+      || input.review.correctionsCount > 0
+      || input.review.missingCount > 0
+    ) {
+      return [input.fallbackGoalID]
+    }
+
+    return []
   }
 
   async function restartTaskFromStage(stage: RestartStage, reason: string) {
@@ -4718,26 +4742,46 @@ export function createOrchestratorTools(input: {
                 architectureReviewAllowsDeliver = architectureReview.verdict === "pass"
               }
               if (architectureReview.status === "reviewed" && architectureReview.verdict !== "pass") {
-                architectureReviewNeedsRework = true
                 const { startNewAttempt } = await import("@/engine/persist")
-                const reviewFeedback =
-                  `${architectureReview.verdict}: ${architectureReview.summary}. ` +
-                  `issues=${architectureReview.issues.join("; ") || "none"}. ` +
-                  `corrections=${architectureReview.correctionsCount}; missing=${architectureReview.missingCount}. ` +
-                  `Action: re-run this same goal and resolve the architecture_review findings before delivery; ` +
-                  `do not rewrite requirements or the goal graph from the review alone.`
-                const rework = startNewAttempt({
-                  goalID: attachedGoalID,
-                  reason: "architecture_review_rework",
-                  feedback: {
-                    value: reviewFeedback,
-                    reason: "post-build architecture_review non-pass",
-                  },
+                const reviewTargetGoalIDs = postBuildReviewReworkGoalIDs({
+                  review: architectureReview,
+                  fallbackGoalID: attachedGoalID,
                 })
-                architectureReviewReworkLine =
-                  `\n- architecture_review_rework: opened same-goal retry` +
-                  `${rework.supersededTipID ? `; superseded_tip=${rework.supersededTipID}` : ""}; ` +
-                  `retry_count=${rework.retryCount}`
+                if (reviewTargetGoalIDs.length > 0) {
+                  architectureReviewNeedsRework = true
+                  const reworkLines: string[] = []
+                  for (const reviewGoalID of reviewTargetGoalIDs) {
+                    const action =
+                      reviewGoalID === attachedGoalID
+                        ? "re-run this same goal"
+                        : `run goal ${reviewGoalID}`
+                    const reviewFeedback =
+                      `${architectureReview.verdict}: ${architectureReview.summary}. ` +
+                      `issues=${architectureReview.issues.join("; ") || "none"}. ` +
+                      `corrections=${architectureReview.correctionsCount}; missing=${architectureReview.missingCount}. ` +
+                      `Action: ${action} and resolve the architecture_review findings before delivery; ` +
+                      `do not rewrite requirements or the goal graph from the review alone.`
+                    const rework = startNewAttempt({
+                      goalID: reviewGoalID,
+                      reason: "architecture_review_rework",
+                      feedback: {
+                        value: reviewFeedback,
+                        reason: "post-build architecture_review non-pass",
+                      },
+                    })
+                    reworkLines.push(
+                      `goal=${reviewGoalID}` +
+                      `${rework.supersededTipID ? ` superseded_tip=${rework.supersededTipID}` : ""} ` +
+                      `retry_count=${rework.retryCount}`,
+                    )
+                  }
+                  architectureReviewReworkLine =
+                    `\n- architecture_review_rework: opened targeted retry: ${reworkLines.join("; ")}`
+                } else {
+                  architectureReviewAllowsDeliver = architectureReview.verdict === "concerns"
+                  architectureReviewReworkLine =
+                    `\n- architecture_review_rework: advisory concerns recorded; no goal-scoped retry target`
+                }
               }
             } catch (reviewErr) {
               const reviewMsg = reviewErr instanceof Error ? reviewErr.message : String(reviewErr)

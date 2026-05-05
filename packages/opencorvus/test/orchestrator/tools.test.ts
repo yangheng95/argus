@@ -595,7 +595,7 @@ describe("orchestrator tools", () => {
 
         expect(result).toContain("status=passed")
         expect(result).toContain("architecture_review: needs_correction")
-        expect(result).toContain("architecture_review_rework: opened same-goal retry")
+        expect(result).toContain("architecture_review_rework: opened targeted retry")
         expect(buildCalls).toBe(1)
         const runs = listGoalRunsByGoal(goalID)
         expect(runs).toHaveLength(1)
@@ -647,13 +647,13 @@ describe("orchestrator tools", () => {
             {
               id: "goal_fidelity",
               verdict: "concerns",
-              issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap" }],
+              issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap", goalIDs: [goalID] }],
             },
             { id: "technical_feasibility", verdict: "pass", issues: [] },
             { id: "hallucination", verdict: "pass", issues: [] },
             { id: "solution_quality", verdict: "pass", issues: [] },
           ],
-          issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap" }],
+          issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap", goalIDs: [goalID] }],
           corrections: [],
           missingGoals: [],
           sessionID: "ses_integrity_concern",
@@ -689,10 +689,160 @@ describe("orchestrator tools", () => {
         }, {} as any)
 
         expect(result).toContain("architecture_review: concerns")
-        expect(result).toContain("architecture_review_rework: opened same-goal retry")
+        expect(result).toContain("architecture_review_rework: opened targeted retry")
         expect(result).toContain("Call build again")
         expect(goalStatusByID(goalID)).toBe("pending")
         expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBe("architecture_review_rework")
+      },
+    })
+  })
+
+  test("post-build architecture review routes sibling goal findings to the named goal", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_review_sibling_${stamp}`
+    const taskID = `tsk_goal_review_sibling_${stamp}`
+    const goalID = `goal_review_source_${stamp}`
+    const siblingGoalID = `goal_review_target_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal review sibling route test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Goal review sibling route test",
+          taskTitle: "Goal review sibling route task",
+          request: "Architecture review must route findings to the affected goal",
+          goalTitle: "Bootstrap goal",
+          goalSlug: "bootstrap-goal",
+          objective: "Build the bootstrap goal",
+          now,
+          specID,
+        })
+        Database.use((db) =>
+          db.insert(EngineGoalTable).values({
+            id: siblingGoalID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            title: "Feature goal",
+            slug: "feature-goal",
+            objective: "Build the feature goal",
+            acceptance_specs: [],
+            owned_paths: ["src/feature.ts"],
+            depends_on: [],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+            source: "test",
+            status: "pending",
+            order_index: 1,
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({
+            metadata: {
+              architect_fidelity: {
+                sourceCoverage: [{
+                  id: "src-test",
+                  paths: ["package.json"],
+                  goal_ids: [goalID],
+                  action: "modify",
+                  rationale: "test fixture source coverage",
+                }],
+                referenceCoverage: [],
+                assemblyOwners: [{
+                  surface: "test-app",
+                  goal_id: siblingGoalID,
+                  rationale: "test fixture assembly owner",
+                }],
+              },
+            },
+          }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+
+        reviewIntegrityImpl = async () => ({
+          verdict: "concerns",
+          summary: "Feature acceptance is underspecified",
+          dimensions: [
+            {
+              id: "goal_fidelity",
+              verdict: "pass",
+              issues: [],
+            },
+            { id: "technical_feasibility", verdict: "pass", issues: [] },
+            { id: "hallucination", verdict: "pass", issues: [] },
+            {
+              id: "solution_quality",
+              verdict: "concerns",
+              issues: [{
+                description: "Feature goal acceptance depends on bootstrap details",
+                type: "weak_acceptance",
+                goalIDs: [siblingGoalID],
+              }],
+            },
+          ],
+          issues: [{
+            description: "Feature goal acceptance depends on bootstrap details",
+            type: "weak_acceptance",
+            goalIDs: [siblingGoalID],
+          }],
+          corrections: [],
+          missingGoals: [],
+          sessionID: "ses_integrity_sibling",
+        })
+        buildAgentRunImpl = async (input: any) => ({
+          result: {
+            status: "passed",
+            summary: "Bootstrap goal built successfully.",
+            files_changed: [{
+              path: "package.json",
+              summary: "Updated package scripts.",
+              reason: "Required by the bootstrap goal.",
+            }],
+            tests: [],
+            commit_ref: "abc5678",
+          },
+          sessionID: "ses_goal_review_sibling",
+          worktreeDir: input.managedWorktree.directory,
+          worktreeBranch: input.managedWorktree.branch,
+          worktreeBaseRef: input.managedWorktree.baseRef,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Implement the bootstrap goal",
+          reason: "Per-goal pipeline execution.",
+        }, {} as any)
+
+        expect(result).toContain("architecture_review: concerns")
+        expect(result).toContain(`goal=${siblingGoalID}`)
+        expect(result).not.toContain(`goal=${goalID} superseded_tip`)
+        expect(goalStatusByID(goalID)).toBe("passed")
+        expect(goalStatusByID(siblingGoalID)).toBe("pending")
+        expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBeFalsy()
+        const retryFeedback = createDecisionLog(taskID)
+          .readByPhaseAndGoal("retry", siblingGoalID)
+          .find((entry) => entry.key === `retry_analysis_${siblingGoalID}`)
+        expect(retryFeedback?.value).toContain(`Action: run goal ${siblingGoalID}`)
       },
     })
   })
