@@ -5,8 +5,10 @@ import { Database, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { createDecisionLog } from "../../src/decision-log"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { goalStatusByID } from "../../src/engine/describe"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
@@ -540,7 +542,7 @@ describe("orchestrator tools", () => {
           request: "Do not let architecture review mutate the goal graph",
           goalTitle: "Review without graph mutation",
           goalSlug: "review-without-graph-mutation",
-          objective: "Verify post-build review records feedback but does not rewrite goals",
+          objective: "Verify post-build review opens rework but does not rewrite goals",
           now,
         })
 
@@ -593,9 +595,104 @@ describe("orchestrator tools", () => {
 
         expect(result).toContain("status=passed")
         expect(result).toContain("architecture_review: needs_correction")
+        expect(result).toContain("architecture_review_rework: opened same-goal retry")
         expect(buildCalls).toBe(1)
-        expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
+        const runs = listGoalRunsByGoal(goalID)
+        expect(runs).toHaveLength(1)
+        expect(runs[0]?.superseded_reason).toBe("architecture_review_rework")
+        expect(goalStatusByID(goalID)).toBe("pending")
         expect(findGoal(goalID)).toBeTruthy()
+        const retryFeedback = createDecisionLog(taskID)
+          .readByPhaseAndGoal("retry", goalID)
+          .find((entry) => entry.key === `retry_analysis_${goalID}`)
+        expect(retryFeedback?.value).toContain("needs_correction: Goal graph must change")
+        expect(retryFeedback?.value).toContain("Action: re-run this same goal")
+      },
+    })
+  })
+
+  test("post-build architecture concerns open same-goal rework instead of passive delivery", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_review_concern_${stamp}`
+    const taskID = `tsk_goal_review_concern_${stamp}`
+    const goalID = `goal_review_concern_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal review concern test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Goal review concern test",
+          taskTitle: "Goal review concern task",
+          request: "Architecture concerns must drive rework before delivery",
+          goalTitle: "Review concerns are actionable",
+          goalSlug: "review-concerns-actionable",
+          objective: "Verify post-build concerns are not a no-op",
+          now,
+        })
+
+        reviewIntegrityImpl = async () => ({
+          verdict: "concerns",
+          summary: "Shared shell contract is underspecified",
+          dimensions: [
+            {
+              id: "goal_fidelity",
+              verdict: "concerns",
+              issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap" }],
+            },
+            { id: "technical_feasibility", verdict: "pass", issues: [] },
+            { id: "hallucination", verdict: "pass", issues: [] },
+            { id: "solution_quality", verdict: "pass", issues: [] },
+          ],
+          issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap" }],
+          corrections: [],
+          missingGoals: [],
+          sessionID: "ses_integrity_concern",
+        })
+        buildAgentRunImpl = async (input: any) => ({
+          result: {
+            status: "passed",
+            summary: "Goal built with an ambiguous handoff.",
+            files_changed: [{
+              path: "src/index.ts",
+              summary: "Changed scoped implementation file.",
+              reason: "Required by the mocked goal build.",
+            }],
+            tests: [],
+            commit_ref: "def5678",
+          },
+          sessionID: "ses_goal_review_concern",
+          worktreeDir: input.managedWorktree.directory,
+          worktreeBranch: input.managedWorktree.branch,
+          worktreeBaseRef: input.managedWorktree.baseRef,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Implement the goal",
+          reason: "Per-goal pipeline execution.",
+        }, {} as any)
+
+        expect(result).toContain("architecture_review: concerns")
+        expect(result).toContain("architecture_review_rework: opened same-goal retry")
+        expect(result).toContain("Call build again")
+        expect(goalStatusByID(goalID)).toBe("pending")
+        expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBe("architecture_review_rework")
       },
     })
   })
@@ -720,7 +817,7 @@ describe("orchestrator tools", () => {
         const result = await tools.integrity.execute({}, {} as any)
 
         expect(result).toContain("Integrity verdict: needs_correction")
-        expect(result).toContain("does not rewrite requirements, goals, or runs")
+        expect(result).toContain("does not rewrite requirements or goals")
         expect(findGoal(goalID)).toBeTruthy()
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         expect(artifact?.label).toBe("verdict-needs_correction")

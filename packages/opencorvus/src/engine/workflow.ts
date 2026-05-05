@@ -217,12 +217,12 @@ const PIPELINE: MiniWorkflow = {
     {
       // Per-goal 实现：每个 goal 派发到 build agent（在 worktree 中）。
       // Orchestrator calls the unified `build` tool with goalID; the build
-      // prompt carries a budgeted architecture-consensus view and the build
-      // result records architecture_review feedback.
+      // prompt carries a budgeted architecture-consensus view and non-pass
+      // architecture_review opens same-goal rework feedback.
       id: "build",
       tool: "build",
       label: "Executor",
-      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入，结束后自动记录 architecture_review 反馈。",
+      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入；非 pass architecture_review 会打开同一 goal 的返工反馈。",
       scope: "goal",
       skippable: false,
       after: ["architect"],
@@ -234,7 +234,7 @@ const PIPELINE: MiniWorkflow = {
       id: "integrity",
       tool: "integrity",
       label: "Review",
-      hint: "架构复核记录：goal build 完成后自动写入 architecture_review 反馈。该阶段是反馈记录，不是 build 前置门槛，也不自动改写 goal 图。",
+      hint: "架构复核记录：goal build 完成后自动写入 architecture_review 反馈。该阶段不是 build 前置门槛；非 pass 只打开同一 goal 返工，不自动改写 goal 图。",
       scope: "task",
       skippable: true,
       after: ["build"],

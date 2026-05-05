@@ -203,8 +203,8 @@ Reason from the request itself, not from a pre-committed workflow:
   - Did architect produce a non-trivial graph (multiple goals, cross-goal contracts,
     foundational decisions)? → make sure every build receives the budgeted
     architecture consensus. Do not insert a pre-build review gate merely because the
-    graph is non-trivial; goal builds run first and record post-build
-    architecture_review feedback automatically.
+    graph is non-trivial; goal builds run first and non-pass post-build
+    architecture_review opens same-goal rework feedback automatically.
   - Have ALL dispatchable goals reached terminal state (passed/failed) AND the
     eligible wave is empty? → call `deliver`. If any goal is still pending or
     dispatched, dispatch that wave first; never deliver on partial state.
@@ -225,8 +225,9 @@ once and decide upstream:
   - `architect` requires a requirements spec snapshot. If you call it without
     requirements, it has no REQ-N rows to decompose against.
   - `integrity` requires architect goals on the active spec snapshot. It records
-    advisory architecture-review findings; it does not rewrite requirements, goals,
-    or runs, and it is not a pre-build dispatch gate.
+    advisory architecture-review findings; it does not rewrite requirements or goals,
+    and it is not a pre-build dispatch gate. Post-build non-pass review findings open
+    same-goal Build rework through retry feedback.
   - `build({ goalID })` requires architect goals. The task-level shape
     `build({ request })` without goalID is legal only when the task snapshot says
     `Kind: build`, or after a rejected delivery verdict when the integrated tree
@@ -348,8 +349,8 @@ wastes budget and clouds the trace.
 - **architect** — authoritative goal decomposer: produces goals, metric specs,
   challenge seeds, traceability, and cross-goal contracts. Architect does NOT run
   integrity, and integrity is not required before build. Build receives the
-  budgeted architecture consensus and records post-build architecture_review
-  feedback automatically.
+  budgeted architecture consensus; non-pass post-build architecture_review opens
+  same-goal Build rework feedback automatically.
   Use when: the work fans into multiple parallel goals (independent owned_paths,
     cross-goal contracts), or you need explicit acceptance specs per goal so per-goal
     builds and `deliver` have something concrete to verify against.
@@ -368,10 +369,10 @@ wastes budget and clouds the trace.
   specs / out-of-scope additions), (4) solution_quality (granularity,
   acceptance-spec strength, ownership clarity, ordering smell). Returns a
   per-dimension verdict (pass / concerns / needs_correction) plus an aggregate
-  (worst-of). The review records findings only: it never re-upserts goals, never
-  rewrites requirements, and never restarts the task by itself. Treat non-pass
-  findings as concrete feedback for the next Build prompt or as evidence for an
-  explicit Architect decision when delivery proves the graph is structurally wrong.
+  (worst-of). The review records findings only: it never re-upserts goals and never
+  rewrites requirements. Post-build non-pass findings open same-goal Build rework
+  feedback; standalone integrity findings are evidence for the next Build prompt or
+  for an explicit Architect decision when delivery proves the graph is structurally wrong.
   Use when: you need architecture feedback after a Build/Delivery result. Goal
     builds already run a post-build architecture_review automatically.
   Skip when: there is no new Build/Delivery evidence and no explicit architecture
@@ -496,7 +497,8 @@ clearly confined to one goal's internals.
      refines the goal set (add / modify / split / remove). Existing goals retain
      their `G` numbers; any added goal receives the next unused `G` number. Do not
      run a pre-build integrity gate after refinement; the next Build round receives
-     the updated architecture consensus and records architecture_review feedback.
+     the updated architecture consensus and turns non-pass architecture_review into
+     same-goal rework feedback.
   4. **DEFAULT rework path → call `build({ request })` with the rejection feedback as
      the request.** `build({ request })` works on the aggregated main tree directly —
      it can touch any file, cross goal boundaries, fix integration glue, rename

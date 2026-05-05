@@ -139,8 +139,8 @@ export interface ArchitectRetryContext {
 
 export interface ArchitectResult {
   /** Final goal set produced by the architect agent. Architecture review is
-   *  advisory feedback recorded after Build; it does not re-upsert or mutate
-   *  this goal set by itself. */
+   *  advisory feedback recorded after Build; non-pass review opens same-goal
+   *  rework, but does not re-upsert or mutate this goal set by itself. */
   goals: GoalContractFields[]
   /** Goal IDs the Architect chose to drop during a re-run. */
   removedGoalIDs: string[]

@@ -74,9 +74,9 @@ Simplify the collaboration protocol around Build input and post-Build review:
 - Every goal Build receives a budgeted architecture-consensus view: full current-goal/dependency/task-wide contracts, compact sibling contracts, full requirements, collaboration state, and reference fidelity warnings.
 - Reference/image/webpage contracts stay strict and cascade to Build as 1:1 restoration requirements.
 - Build must explain every changed file through `files_changed[]`.
-- Architecture review runs after each goal Build and records feedback only.
-- Review findings never rewrite requirements, goals, or runs by themselves.
-- Non-pass review findings become concrete feedback for the next Build prompt or evidence for an explicit Architect decision when delivery proves the goal graph is structurally wrong.
+- Architecture review runs after each goal Build and records feedback through the same rework channel Build already consumes.
+- Review findings never rewrite requirements or the goal graph by themselves.
+- Non-pass post-Build review findings call `startNewAttempt(reason="architecture_review_rework")` for the same goal with concrete retry feedback; they become evidence for an explicit Architect decision only when delivery/build evidence proves the goal graph is structurally wrong.
 - It makes terminal collector satisfaction stop the session loop immediately, so Architect/Integrity/Build cannot keep planning after their report/submit contract is complete.
 - It keeps source-coverage fidelity checks as pre-execution planning guards. After any goal attempt exists, existing-file source coverage is execution context, not a build blocker; Build owns necessary cross-file edits and reports them through `files_changed[]`.
 - It keeps reference coverage strict even during execution, because screenshots/webpages/mockups are authoritative 1:1 targets and must cascade into Build.
@@ -107,5 +107,5 @@ Simplify the collaboration protocol around Build input and post-Build review:
 - Tests prove generated/compiled runtime artifacts cannot become a second hand-edited implementation path.
 - Tests prove prior architecture_review history does not block Build dispatch.
 - Tests prove Build receives the budgeted complete architecture consensus, including sibling contracts and fidelity rows, without expanding every sibling detail.
-- Tests prove post-Build architecture_review records feedback without rewriting goals or restarting requirements/plan.
+- Tests prove post-Build architecture_review non-pass opens same-goal rework feedback without rewriting goals or restarting requirements/plan.
 - Tests prove Architect does not create a child session when no active requirements spec snapshot exists.

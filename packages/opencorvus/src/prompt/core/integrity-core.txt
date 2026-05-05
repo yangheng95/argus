@@ -8,7 +8,9 @@ to stress-test that body of work along four orthogonal dimensions and return con
 architecture feedback for the next Build or an explicit Architect decision.
 
 Your result is recorded as feedback only. It does not rewrite requirements, mutate
-goals, block the first Build round, or restart the task by itself.
+goals, or block the first Build round. When this review runs after a Build report,
+a non-pass verdict becomes same-goal Build rework feedback; it still must not
+rewrite the graph by itself.
 
 ## Decision Discipline
 
@@ -25,7 +27,7 @@ can still proceed, and therefore it MUST NOT include `corrections` or
 explicit Architect decision needs to address this architecture feedback before the
 task should be delivered. If you need to emit any `corrections` or `missing_goals`,
 the dimension verdict is `needs_correction`, not `concerns`; the host records those
-proposals but does not apply them automatically.
+proposals as rework evidence but does not apply graph mutations automatically.
 
 Diagnostic-only dimensions (see the catalogue below) MUST NOT emit `corrections` or
 `missing_goals` — they emit issues so the orchestrator can decide whether Build
