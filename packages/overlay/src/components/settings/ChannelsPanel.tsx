@@ -15,6 +15,8 @@ import { t } from "../../utils/i18n";
 import { appStore } from "../../store/app";
 import { updateConfig } from "../../services/config";
 import { nativeOpen } from "../../utils/native";
+import { Dialog } from "../primitives/Dialog";
+import { useAsyncAction } from "../../solid/async-action";
 import { Button } from "../ui/Button";
 
 // ── Tutorial docs (matches pre-Solid OPENCLAW_DOCS constant) ──
@@ -75,7 +77,6 @@ function channelStatusLabel(status: string): string {
 export default function ChannelsPanel() {
   const [editingID, setEditingID] = createSignal<string | null>(null);
   const [fieldValues, setFieldValues] = createSignal<Record<string, any>>({});
-  const [saving, setSaving] = createSignal(false);
   const [notice, setNotice] = createSignal("");
   const [noticeTone, setNoticeTone] = createSignal("");
 
@@ -90,10 +91,13 @@ export default function ChannelsPanel() {
   });
 
   const [localPublicUrl, setLocalPublicUrl] = createSignal("");
+  const saveAction = useAsyncAction(async (commit: () => Promise<void>) => {
+    await commit();
+  });
   // Sync local input from store when it changes
   createEffect(() => {
     const storeUrl = publicUrl();
-    if (!saving()) setLocalPublicUrl(storeUrl);
+    if (!saveAction.pending()) setLocalPublicUrl(storeUrl);
   });
 
   const editingEntry = createMemo(
@@ -128,44 +132,42 @@ export default function ChannelsPanel() {
   async function handleSaveChannel() {
     const entry = editingEntry();
     if (!entry) return;
-    setSaving(true);
     try {
-      await updateConfig((config) => {
-        config.channel = config.channel || {};
-        const next: Record<string, any> = {};
-        for (const field of entry.fields) {
-          if (field.type === "boolean") {
-            next[field.key] = fieldValues()[field.key] !== false;
-          } else {
-            const value = String(fieldValues()[field.key] ?? "").trim();
-            if (value) next[field.key] = value;
+      await saveAction.run(async () => {
+        await updateConfig((config) => {
+          config.channel = config.channel || {};
+          const next: Record<string, any> = {};
+          for (const field of entry.fields) {
+            if (field.type === "boolean") {
+              next[field.key] = fieldValues()[field.key] !== false;
+            } else {
+              const value = String(fieldValues()[field.key] ?? "").trim();
+              if (value) next[field.key] = value;
+            }
           }
-        }
-        config.channel[entry.id] = next;
+          config.channel[entry.id] = next;
+        });
+        showNotice(t("common.saved"), "active");
+        closeEdit();
       });
-      showNotice(t("common.saved"), "active");
-      closeEdit();
     } catch (e) {
       showNotice(e instanceof Error ? e.message : String(e), "error");
-    } finally {
-      setSaving(false);
     }
   }
 
   async function handleSavePublicUrl() {
-    setSaving(true);
     try {
-      await updateConfig((current: any) => {
-        current.server = current.server || {};
-        current.server.publicUrl = localPublicUrl().trim() || undefined;
-        if (current.server.publicUrl === undefined) delete current.server.publicUrl;
-        if (Object.keys(current.server).length === 0) delete current.server;
+      await saveAction.run(async () => {
+        await updateConfig((current: any) => {
+          current.server = current.server || {};
+          current.server.publicUrl = localPublicUrl().trim() || undefined;
+          if (current.server.publicUrl === undefined) delete current.server.publicUrl;
+          if (Object.keys(current.server).length === 0) delete current.server;
+        });
+        showNotice(t("common.saved"), "active");
       });
-      showNotice(t("common.saved"), "active");
     } catch (e) {
       showNotice(e instanceof Error ? e.message : String(e), "error");
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -219,7 +221,7 @@ export default function ChannelsPanel() {
             size="sm"
             tone="neutral"
             onClick={handleSavePublicUrl}
-            disabled={saving()}
+            disabled={saveAction.pending()}
           >
             {t("common.save")}
           </Button>
@@ -282,94 +284,19 @@ export default function ChannelsPanel() {
         {(_) => {
           const entry = editingEntry()!;
           return (
-            <dialog
-              class="dialog"
-              ref={(el) => { if (el) queueMicrotask(() => el.showModal()); }}
+            <Dialog
+              open={true}
+              title={t("channel.configuration_title", { name: entry.name })}
               onClose={closeEdit}
-            >
-              <div class="dialog-form">
-                <div class="dialog-head">
-                  <h2 class="dialog-title">
-                    {t("channel.configuration_title", { name: entry.name })}
-                  </h2>
-                </div>
-
-                {/* Tutorial card — mirrors channelTutorialCard() from pre-Solid */}
-                <div class="channel-doc-card">
-                  <div class="channel-doc-copy">
-                    <span class="channel-doc-title">{t("channel.tutorial_hint")}</span>
-                    <small class="channel-doc-credit">
-                      {t("channel.tutorial_credit", { source: OPENCLAW_DOCS.credit })}
-                    </small>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="md"
-                    tone="neutral"
-                    title={t("channel.tutorial_hint")}
-                    aria-label={t("channel.tutorial_hint")}
-                    onClick={() => nativeOpen(channelTutorialUrl(entry.id))}
-                  >
-                    {t("channel.tutorial")}
-                  </Button>
-                </div>
-
-                <For each={entry.fields}>
-                  {(field) => {
-                    const name = `channel_${entry.id}_${field.key}`;
-                    const currentVal = () => fieldValues()[field.key];
-
-                    if (field.type === "boolean") {
-                      return (
-                        <label class="field field-inline">
-                          <span class="field-label">{field.label}</span>
-                          <input
-                            type="checkbox"
-                            name={name}
-                            checked={currentVal() !== false}
-                            onChange={(e) =>
-                              handleFieldChange(
-                                field.key,
-                                e.currentTarget.checked,
-                              )
-                            }
-                          />
-                        </label>
-                      );
-                    }
-
-                    const inputType =
-                      field.type === "secret" ? "password" : "text";
-                    return (
-                      <label class="field">
-                        <span class="field-label">{field.label}</span>
-                        <input
-                          class="field-input"
-                          type={inputType}
-                          name={name}
-                          value={String(currentVal() ?? "")}
-                          placeholder={field.placeholder || ""}
-                          onInput={(e) =>
-                            handleFieldChange(
-                              field.key,
-                              e.currentTarget.value,
-                            )
-                          }
-                        />
-                      </label>
-                    );
-                  }}
-                </For>
-
-                <div class="dialog-actions">
+              footer={
+                <>
                   <Button
                     type="button"
                     variant="ghost"
                     size="md"
                     tone="neutral"
                     onClick={closeEdit}
-                    disabled={saving()}
+                    disabled={saveAction.pending()}
                   >
                     {t("common.cancel")}
                   </Button>
@@ -379,13 +306,81 @@ export default function ChannelsPanel() {
                     size="md"
                     tone="accent"
                     onClick={handleSaveChannel}
-                    disabled={saving()}
+                    disabled={saveAction.pending()}
                   >
-                    {saving() ? t("common.saving") : t("common.save")}
+                    {saveAction.pending() ? t("common.saving") : t("common.save")}
                   </Button>
+                </>
+              }
+            >
+              {/* Tutorial card — mirrors channelTutorialCard() from pre-Solid */}
+              <div class="channel-doc-card">
+                <div class="channel-doc-copy">
+                  <span class="channel-doc-title">{t("channel.tutorial_hint")}</span>
+                  <small class="channel-doc-credit">
+                    {t("channel.tutorial_credit", { source: OPENCLAW_DOCS.credit })}
+                  </small>
                 </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="md"
+                  tone="neutral"
+                  title={t("channel.tutorial_hint")}
+                  aria-label={t("channel.tutorial_hint")}
+                  onClick={() => nativeOpen(channelTutorialUrl(entry.id))}
+                >
+                  {t("channel.tutorial")}
+                </Button>
               </div>
-            </dialog>
+
+              <For each={entry.fields}>
+                {(field) => {
+                  const name = `channel_${entry.id}_${field.key}`;
+                  const currentVal = () => fieldValues()[field.key];
+
+                  if (field.type === "boolean") {
+                    return (
+                      <label class="field field-inline">
+                        <span class="field-label">{field.label}</span>
+                        <input
+                          type="checkbox"
+                          name={name}
+                          checked={currentVal() !== false}
+                          onChange={(e) =>
+                            handleFieldChange(
+                              field.key,
+                              e.currentTarget.checked,
+                            )
+                          }
+                        />
+                      </label>
+                    );
+                  }
+
+                  const inputType =
+                    field.type === "secret" ? "password" : "text";
+                  return (
+                    <label class="field">
+                      <span class="field-label">{field.label}</span>
+                      <input
+                        class="field-input"
+                        type={inputType}
+                        name={name}
+                        value={String(currentVal() ?? "")}
+                        placeholder={field.placeholder || ""}
+                        onInput={(e) =>
+                          handleFieldChange(
+                            field.key,
+                            e.currentTarget.value,
+                          )
+                        }
+                      />
+                    </label>
+                  );
+                }}
+              </For>
+            </Dialog>
           );
         }}
       </Show>
