@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { Database } from "../../src/storage/db"
+import { Database, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { Session } from "../../src/session"
+import { SessionTable } from "../../src/session/session.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -211,6 +212,57 @@ describe("orchestrator tools", () => {
         expect(result).toContain("kind=workflow")
         expect(result).toContain("requirements, architect, and per-goal build")
         expect(workflowState.workflowID).toBe("pipeline")
+      },
+    })
+  })
+
+  test("architect does not start without an active requirements spec snapshot", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_architect_requires_spec_${stamp}`
+    const taskID = `tsk_architect_requires_spec_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable).values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "Architect requirements preflight test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      }).run()
+      db.insert(EngineTaskTable).values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Architect requirements preflight task",
+        request: "Verify architect cannot run after requirements spec is cleared",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      }).run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect preflight test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.architect.execute({}, {} as any)
+
+        expect(result).toContain("no active requirements spec snapshot")
+        expect(result).toContain("requirements")
+        const architectSessions = Database.use((db) =>
+          db.select().from(SessionTable).where(eq(SessionTable.kind, "architect")).all(),
+        )
+        expect(architectSessions).toHaveLength(0)
       },
     })
   })

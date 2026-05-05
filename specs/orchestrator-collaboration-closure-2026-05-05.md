@@ -28,6 +28,8 @@ Overlay benchmark `20260505-192014` verified that correction-bearing concerns no
 
 Overlay benchmark `20260505-193509` then showed the non-diagnostic version of the same loop: hallucination passed, but goal-layer Integrity corrections repeated on the same spec (`needs_correction` with corrections) and issue counts later increased. Correctable Integrity needs a convergence boundary: after repeated same-spec correction attempts, the initial decomposition is no longer scientifically stable and Architect must re-plan.
 
+Overlay benchmark `20260505-195237` verified that diagnostic-only Integrity failure now clears the invalid spec/goals, but exposed a downstream closure violation: after `restart_from_stage('requirements')` superseded the active spec, the orchestrator still launched an Architect session with no REQ-N source. The root cause was a dead "no precondition gate" path in the Architect tool that delegated stage validity to the LLM instead of enforcing the durable stage contract at the tool boundary.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -51,6 +53,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - whether Integrity concerns are genuinely advisory or are hiding correction/missing-goal work that must block execution.
 - whether Integrity failures are repairable at the goal layer or must deterministically restart upstream because the failed dimension is diagnostic-only.
 - whether repeated same-spec goal-layer Integrity corrections are converging or should invalidate the current decomposition and restart Architect.
+- whether a downstream stage is being invoked after its upstream durable artifact has been cleared.
 
 Without that durable projection, the LLM treats uncertainty as permission to ask Architect to solve the graph again.
 
@@ -80,6 +83,7 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It routes diagnostic-only Integrity `needs_correction` findings, currently hallucination, to `restart_from_stage('requirements')` instead of applying goal corrections and re-reviewing the same spec.
 - It routes repeated non-converging goal-layer Integrity corrections to `restart_from_stage('plan')` so Architect owns a fresh decomposition instead of letting the same spec review forever.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
+- It makes Architect require an active requirements spec snapshot before any Architect session is created, so upstream restarts cannot accidentally continue into downstream planning against an empty REQ-N source.
 
 ## Acceptance
 
@@ -99,3 +103,4 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - Tests prove correction-bearing Integrity concerns cannot start execution and are projected as failed review work.
 - Tests prove diagnostic-only Integrity failures restart upstream and do not call the goal-correction path.
 - Tests prove repeated same-spec goal-layer Integrity corrections restart plan and do not apply yet another correction.
+- Tests prove Architect does not create a child session when no active requirements spec snapshot exists.
