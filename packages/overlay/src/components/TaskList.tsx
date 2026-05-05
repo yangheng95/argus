@@ -157,6 +157,7 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
       variant="ghost"
       size="icon"
       tone="danger"
+      data-chrome="icon-action"
       data-ui="task-row-delete"
       data-task-delete={props.id}
       data-confirm={confirmDelete.armed() ? "true" : undefined}
@@ -194,6 +195,7 @@ function ExportButton(props: { id: string; directory?: string }) {
       variant="ghost"
       size="icon"
       tone="accent"
+      data-chrome="icon-action"
       data-ui="task-row-export"
       data-task-export={props.id}
       data-busy={exportAction.pending() ? "true" : undefined}
@@ -241,6 +243,7 @@ function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
       variant="ghost"
       size="icon"
       tone="neutral"
+      data-chrome="icon-action"
       data-ui="task-row-cancel"
       data-task-cancel={props.id}
       data-confirm={confirmCancel.armed() ? "true" : undefined}
@@ -687,6 +690,7 @@ export function TaskList(props: TaskListProps) {
               variant="ghost"
               size="icon"
               tone="neutral"
+              data-chrome="icon-action"
               data-ui="task-list-search-clear"
               onClick={() => setSearchQuery("")}
               title={t("common.clear")}

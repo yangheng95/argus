@@ -480,6 +480,7 @@ export function ChatComposer(props: ChatComposerProps) {
             variant="ghost"
             size="icon"
             tone="neutral"
+            data-chrome="icon-action"
             data-ui="chat-toolbar-button"
             title={t("chat.attach_title")}
             aria-label={t("chat.attach_title")}
@@ -493,6 +494,7 @@ export function ChatComposer(props: ChatComposerProps) {
             variant="ghost"
             size="icon"
             tone="neutral"
+            data-chrome="icon-action"
             data-ui="chat-toolbar-button"
             data-active={webSearch() ? "true" : undefined}
             title={t("chat.web_search_title")}
@@ -507,6 +509,7 @@ export function ChatComposer(props: ChatComposerProps) {
             variant="ghost"
             size="icon"
             tone="neutral"
+            data-chrome="icon-action"
             data-ui="chat-toolbar-button"
             data-active={expanded() ? "true" : undefined}
             title={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}

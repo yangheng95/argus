@@ -581,6 +581,7 @@ export default function ProvidersPanel() {
                 variant="ghost"
                 size="icon"
                 tone="neutral"
+                data-chrome="icon-action"
                 data-ui="provider-search-clear"
                 onClick={() => setProviderSearch("")}
                 title={t("common.clear")}

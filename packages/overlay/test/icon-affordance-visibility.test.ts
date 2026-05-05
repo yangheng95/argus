@@ -19,12 +19,19 @@ function soloRuleBody(source: string, selector: string): string {
 }
 
 describe("icon affordances stay visible at rest", () => {
+  test("primitive owns the shared icon-action shell", () => {
+    const css = read("src/styles/primitives/button.css")
+    expect(css).toContain('.oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"]')
+    expect(css).toContain("--oc-button-color: var(--text-soft);")
+    expect(css).toContain("--oc-button-shadow:")
+    expect(css).toContain("opacity: var(--ui-opacity-subtle);")
+  })
+
   test("composer toolbar icons do not default to muted text", () => {
     const css = read("src/styles/surfaces/composer.css")
     const body = soloRuleBody(css, '.chat-icon-col .oc-button[data-ui="chat-toolbar-button"]')
-    expect(body).toContain("--oc-button-color: var(--text-soft);")
-    expect(body).toContain("--oc-button-shadow:")
     expect(body).not.toContain("--oc-button-color: var(--text-muted);")
+    expect(body).not.toContain("--oc-button-shadow:")
   })
 
   test("disabled send button keeps an explicit visible shell instead of opacity fade", () => {
@@ -56,18 +63,16 @@ describe("icon affordances stay visible at rest", () => {
       css,
       '.task-row-actions .oc-button[data-ui="task-row-delete"],\n.task-row-actions .oc-button[data-ui="task-row-cancel"],\n.task-row-actions .oc-button[data-ui="task-row-export"]',
     )
-    expect(body).toContain("--oc-button-color: var(--text-soft);")
-    expect(body).toContain("--oc-button-shadow:")
     expect(body).toContain("opacity: var(--ui-opacity-subtle);")
     expect(body).not.toContain("opacity: var(--ui-opacity-disabled);")
+    expect(body).not.toContain("--oc-button-color: var(--text-muted);")
   })
 
   test("notification dismiss button does not default to muted text", () => {
     const css = read("src/styles/surfaces/notifications.css")
     const body = soloRuleBody(css, '.app-notification .oc-button[data-ui="app-notification-close"]')
-    expect(body).toContain("--oc-button-color: var(--text-soft);")
-    expect(body).toContain("--oc-button-shadow:")
     expect(body).not.toContain("--oc-button-color: var(--text-muted);")
+    expect(body).not.toContain("--oc-button-shadow:")
   })
 
   test("search clear buttons share the visible icon-action resting state", () => {
@@ -76,9 +81,8 @@ describe("icon affordances stay visible at rest", () => {
     const taskClear = soloRuleBody(sidebarCss, '.task-list-search .oc-button[data-ui="task-list-search-clear"]')
     const providerClear = soloRuleBody(providerCss, '.provider-search-field .oc-button[data-ui="provider-search-clear"]')
     for (const body of [taskClear, providerClear]) {
-      expect(body).toContain("--oc-button-color: var(--text-soft);")
-      expect(body).toContain("--oc-button-shadow:")
       expect(body).not.toContain("--oc-button-color: var(--text-muted);")
+      expect(body).not.toContain("--oc-button-shadow:")
     }
   })
 })

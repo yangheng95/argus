@@ -173,6 +173,7 @@ export function TitlebarStatusCluster(props: { onOpenLog: () => void }) {
         variant="ghost"
         size="icon"
         tone="neutral"
+        data-chrome="icon-action"
         data-ui="titlebar-status-icon"
         aria-label={t("titlebar.logs")}
         title={t("titlebar.logs")}
