@@ -101,6 +101,18 @@ function flag(name: string) {
   return undefined
 }
 
+function stripWrappingQuotes(value: string | undefined): string | undefined {
+  if (!value) return value
+  const trimmed = value.trim()
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1)
+  }
+  return value
+}
+
 // Authoritative list of every CLI flag the benchmark recognises. Anything
 // else on the command line is a typo or a dropped/quoted value (e.g.
 // `--reference-images "C:/path with space.png"` getting split). We refuse
@@ -160,7 +172,7 @@ validateFlags()
 
 const maxRuns = Number(flag("--max-runs")) || 20
 const maxFixRuns = Number(flag("--max-fix-runs")) || 8
-const report = flag("--report")
+const report = stripWrappingQuotes(flag("--report"))
 const keep = !process.argv.includes("--no-keep")
 // Resume mode: re-attach to an existing task rather than creating a new one.
 // --resume-task-id  : ID of the task to resume (e.g. tsk_xxx)
@@ -1084,24 +1096,52 @@ try {
     process.exit(1)
   }
 } catch (error) {
+  process.exitCode = 1
   if (!marks.completedAt) marks.completedAt = Date.now()
-  const out = await buildBenchmarkReport(error)
-  await flushed
-  await Bun.write(eventFile, JSON.stringify({
+  let out: unknown
+  try {
+    out = await buildBenchmarkReport(error)
+  } catch (reportErr) {
+    out = {
+      generated_at: new Date().toISOString(),
+      type: "benchmark_report_failed",
+      taskID,
+      error: String(error),
+      report_error: reportErr instanceof Error ? reportErr.message : String(reportErr),
+      elapsed_ms: Date.now() - marks.startedAt,
+      marks,
+      last_progress_signature: lastProgressSignature,
+      events_captured: events.length,
+      last_event_at: lastEventAt,
+      last_activity_at: lastActivityLogAt,
+    }
+  }
+  await flushed.catch(() => undefined)
+  const eventPayload = {
     generated_at: new Date().toISOString(),
     taskID,
     error: String(error),
     event_count: events.length,
     stage_summary: summarizeEvents(events, taskID),
     events,
-  }, null, 2))
-  await Bun.write(reportFile, JSON.stringify(out, null, 2))
-  _emergencyWritten = true
+  }
+  let wroteReport = false
+  try {
+    await Bun.write(eventFile, JSON.stringify(eventPayload, null, 2))
+  } catch (writeErr) {
+    errorLine(`[overlay-benchmark] failed to write events report ${eventFile}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`)
+  }
+  try {
+    await Bun.write(reportFile, JSON.stringify(out, null, 2))
+    wroteReport = true
+  } catch (writeErr) {
+    errorLine(`[overlay-benchmark] failed to write benchmark report ${reportFile}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`)
+  }
+  _emergencyWritten = wroteReport
   errorLine(JSON.stringify(out, null, 2))
   errorLine(`report: ${reportFile}`)
   errorLine(`events: ${eventFile}`)
   errorLine(`events_ndjson: ${eventLogFile}`)
-  process.exitCode = 1
 } finally {
   await cleanup("events.stop", () => eventStream.stop())
   await flushed.catch(() => undefined)
