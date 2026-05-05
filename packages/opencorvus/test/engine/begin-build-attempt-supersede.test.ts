@@ -6,9 +6,9 @@ import {
   EngineGoalTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
-import { beginBuildAttempt, startNewAttempt } from "../../src/engine/persist"
+import { beginBuildAttempt, createGoalRun, startNewAttempt } from "../../src/engine/persist"
 import { goalStatusByID } from "../../src/engine/describe"
-import { findLatestTipGoalRun, findGoalRun } from "../../src/engine/store"
+import { findLatestTipGoalRun, findGoalRun, listGoalRunsByGoal } from "../../src/engine/store"
 import { resetDatabase } from "../fixture/db"
 
 /**
@@ -100,8 +100,13 @@ function seedBaseline() {
   })
 }
 
-function insertTerminalGoalRun(input: { id: string; status: "failed" | "completed" | "aborted" }) {
+function insertGoalRun(input: {
+  id: string
+  status: "running" | "failed" | "completed" | "aborted"
+  supersedeOf?: string
+}) {
   const now = Date.now()
+  const terminal = input.status === "failed" || input.status === "completed" || input.status === "aborted"
   Database.use((db) =>
     db.insert(EngineArtifactTable).values({
       id: input.id,
@@ -121,17 +126,21 @@ function insertTerminalGoalRun(input: { id: string; status: "failed" | "complete
         workspace_dir: null,
         base_ref: null,
         merge_ref: null,
-        supersede_of: null,
+        supersede_of: input.supersedeOf ?? null,
         superseded_reason: null,
         superseded_at: null,
         metadata: null,
         time_started: null,
-        time_completed: now,
+        time_completed: terminal ? now : null,
       },
       time_created: now,
       time_updated: now,
     }).run(),
   )
+}
+
+function insertTerminalGoalRun(input: { id: string; status: "failed" | "completed" | "aborted" }) {
+  insertGoalRun(input)
 }
 
 beforeEach(async () => {
@@ -213,5 +222,40 @@ describe("beginBuildAttempt — supersede_of population", () => {
     expect(newRow?.supersede_of).toBeNull()
     expect(findLatestTipGoalRun(goalID)?.id).toBe(newRunID)
     expect(goalStatusByID(goalID)).toBe("running")
+  })
+
+  test("live tip → beginBuildAttempt refuses to supersede or duplicate the running executor", () => {
+    const liveRunID = `grun_live_${Date.now()}`
+    insertGoalRun({ id: liveRunID, status: "running" })
+
+    expect(() =>
+      beginBuildAttempt({
+        taskID,
+        goalID,
+        runID,
+      }),
+    ).toThrow(/already has live goal_run/)
+
+    const rows = listGoalRunsByGoal(goalID)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.id).toBe(liveRunID)
+    expect(findGoalRun(liveRunID)?.supersede_of).toBeNull()
+    expect(goalStatusByID(goalID)).toBe("running")
+  })
+
+  test("createGoalRun reuses a live row even if bad historical data already points supersede_of at it", () => {
+    const liveRunID = `grun_bad_live_parent_${Date.now()}`
+    const badChildID = `grun_bad_child_${Date.now()}`
+    insertGoalRun({ id: liveRunID, status: "running" })
+    insertGoalRun({ id: badChildID, status: "failed", supersedeOf: liveRunID })
+
+    const row = createGoalRun({
+      taskID,
+      goalID,
+      coordinatorRunID: runID,
+    })
+
+    expect(row.id).toBe(liveRunID)
+    expect(listGoalRunsByGoal(goalID).filter((r) => r.status === "running")).toHaveLength(1)
   })
 })
