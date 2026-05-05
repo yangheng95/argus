@@ -4,7 +4,7 @@
 
 | 依赖 | 版本 | 说明 |
 |---|---|---|
-| Bun | ≥ 1.3.10 | `package.json:7` 声明为 `packageManager` |
+| Bun | ≥ 1.3.13 | `package.json:7` 声明为 `packageManager` |
 | Node.js | ≥ 22 | `@tsconfig/node22` 目标 |
 | Git | 任意 | 用于 worktree 并行执行 |
 | Python | ≥ 3.9（可选） | 代码执行与部分 skill 使用 |
