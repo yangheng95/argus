@@ -4,17 +4,19 @@ import path from "node:path"
 import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { findGoal, findGoalLatestWorkspace, listGoalRunsByGoal } from "../../src/engine/store"
+import { findGoal, findGoalLatestWorkspace, findLatestIntegrityAttemptArtifact, listGoalRunsByGoal } from "../../src/engine/store"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { Filesystem } from "../../src/util/filesystem"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
+let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
+let applyIntegrityCorrectionsImpl: ((goals: any[], verdict: any) => any[]) | undefined
 
 mock.module("@/build/agent", () => ({
   BuildAgent: {
@@ -22,6 +24,17 @@ mock.module("@/build/agent", () => ({
       if (!buildAgentRunImpl) throw new Error("BuildAgent.run mock not configured")
       return buildAgentRunImpl(input)
     },
+  },
+}))
+
+mock.module("@/integrity", () => ({
+  reviewIntegrity: (input: any) => {
+    if (!reviewIntegrityImpl) throw new Error("reviewIntegrity mock not configured")
+    return reviewIntegrityImpl(input)
+  },
+  applyIntegrityCorrections: (goals: any[], verdict: any) => {
+    if (applyIntegrityCorrectionsImpl) return applyIntegrityCorrectionsImpl(goals, verdict)
+    return goals
   },
 }))
 
@@ -40,7 +53,9 @@ function insertWorkflowTaskWithGoal(input: {
   now: number
   workspaceDir?: string
   workspaceBranch?: string
+  specID?: string
 }) {
+  const specID = input.specID ?? `spec_${input.goalID}`
   Database.use((db) => {
     db.insert(ProjectTable).values({
       id: input.projectID,
@@ -63,9 +78,21 @@ function insertWorkflowTaskWithGoal(input: {
       time_updated: input.now,
       time_started: input.now,
     }).run()
+    db.insert(EngineSpecSnapshotTable).values({
+      id: specID,
+      task_id: input.taskID,
+      version: 1,
+      status: "ready",
+      summary: `${input.goalTitle} spec`,
+      content: input.request,
+      scope: input.objective,
+      time_created: input.now,
+      time_updated: input.now,
+    }).run()
     db.insert(EngineGoalTable).values({
       id: input.goalID,
       task_id: input.taskID,
+      spec_snapshot_id: specID,
       title: input.goalTitle,
       slug: input.goalSlug,
       objective: input.objective,
@@ -105,10 +132,26 @@ describe("orchestrator tools", () => {
   beforeEach(async () => {
     await resetDatabase()
     tmp = await tmpdir()
+    reviewIntegrityImpl = async () => ({
+      verdict: "pass",
+      summary: "Integrity pass",
+      dimensions: [
+        { id: "goal_fidelity", verdict: "pass", issues: [] },
+        { id: "technical_feasibility", verdict: "pass", issues: [] },
+        { id: "hallucination", verdict: "pass", issues: [] },
+        { id: "solution_quality", verdict: "pass", issues: [] },
+      ],
+      issues: [],
+      corrections: [],
+      missingGoals: [],
+      sessionID: "ses_integrity_default",
+    })
   })
 
   afterEach(async () => {
     buildAgentRunImpl = undefined
+    reviewIntegrityImpl = undefined
+    applyIntegrityCorrectionsImpl = undefined
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
@@ -177,6 +220,170 @@ describe("orchestrator tools", () => {
     expect(source).toContain("publishGateReworkResult")
     expect(source).not.toContain('await updateTask(currentTask, { status: "failed", error: publishResult.summary')
     expect(source).not.toContain('await updateTask(task, { status: "failed", error: result.summary')
+  })
+
+  test("goal build auto-runs integrity for the active spec before dispatch", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_integrity_${stamp}`
+    const taskID = `tsk_goal_integrity_${stamp}`
+    const goalID = `goal_integrity_${stamp}`
+    let integrityCalls = 0
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal integrity build test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Goal integrity build test",
+          taskTitle: "Goal integrity build task",
+          request: "Build a scoped goal after integrity review",
+          goalTitle: "Require integrity before build",
+          goalSlug: "require-integrity-before-build",
+          objective: "Verify build auto-runs integrity on the active spec",
+          now,
+        })
+
+        reviewIntegrityImpl = async () => {
+          integrityCalls += 1
+          return {
+            verdict: "pass",
+            summary: "Integrity pass",
+            dimensions: [
+              { id: "goal_fidelity", verdict: "pass", issues: [] },
+              { id: "technical_feasibility", verdict: "pass", issues: [] },
+              { id: "hallucination", verdict: "pass", issues: [] },
+              { id: "solution_quality", verdict: "pass", issues: [] },
+            ],
+            issues: [],
+            corrections: [],
+            missingGoals: [],
+            sessionID: "ses_integrity_auto",
+          }
+        }
+        buildAgentRunImpl = async (input: any) => ({
+          result: {
+            status: "passed",
+            summary: "Goal built successfully",
+            patch_summary: "Changed scoped files",
+            tests: [],
+            commit_ref: "abc1234",
+          },
+          sessionID: "ses_goal_integrity_build",
+          worktreeDir: input.managedWorktree.directory,
+          worktreeBranch: input.managedWorktree.branch,
+          worktreeBaseRef: input.managedWorktree.baseRef,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Implement the goal",
+          reason: "Per-goal pipeline execution.",
+        }, {} as any)
+
+        expect(result).toContain("status=passed")
+        expect(integrityCalls).toBe(1)
+        const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: `spec_${goalID}` })
+        expect(artifact?.kind).toBe("integrity_attempt")
+      },
+    })
+  })
+
+  test("goal build stops when integrity rewrites the active goal graph", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_integrity_block_${stamp}`
+    const taskID = `tsk_goal_integrity_block_${stamp}`
+    const goalID = `goal_integrity_block_${stamp}`
+    let buildCalls = 0
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal integrity correction test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Goal integrity correction test",
+          taskTitle: "Goal integrity correction task",
+          request: "Do not dispatch build against a stale goal graph",
+          goalTitle: "Require graph refresh after integrity",
+          goalSlug: "require-graph-refresh-after-integrity",
+          objective: "Verify build aborts when integrity corrects the current graph",
+          now,
+        })
+
+        reviewIntegrityImpl = async () => ({
+          verdict: "needs_correction",
+          summary: "Goal graph must change",
+          dimensions: [
+            { id: "goal_fidelity", verdict: "needs_correction", issues: [{ description: "Split the goal", type: "coverage_gap" }] },
+            { id: "technical_feasibility", verdict: "pass", issues: [] },
+            { id: "hallucination", verdict: "pass", issues: [] },
+            { id: "solution_quality", verdict: "needs_correction", issues: [{ description: "Current goal is too broad", type: "granularity" }] },
+          ],
+          issues: [{ description: "Split the goal", type: "coverage_gap" }],
+          corrections: [{ type: "split_goal" }],
+          missingGoals: [],
+          sessionID: "ses_integrity_corrected",
+        })
+        applyIntegrityCorrectionsImpl = () => ([
+          {
+            id: `${goalID}_replacement`,
+            title: "Replacement goal",
+            objective: "Updated objective",
+            acceptance_specs: [],
+            owned_paths: ["src/index.ts"],
+            depends_on: [],
+            exports: [],
+            imports: [],
+            priority: "blocking",
+            kind: "feature",
+            requirement_ids: [],
+          },
+        ])
+        buildAgentRunImpl = async () => {
+          buildCalls += 1
+          throw new Error("Build should not run after integrity correction")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Implement the goal",
+          reason: "Per-goal pipeline execution.",
+        }, {} as any)
+
+        expect(result).toContain("integrity corrected the active goal graph")
+        expect(buildCalls).toBe(0)
+        expect(findGoal(goalID)).toBeUndefined()
+      },
+    })
   })
 
   test("goal build success removes the completed worktree and clears goal workspace metadata", async () => {

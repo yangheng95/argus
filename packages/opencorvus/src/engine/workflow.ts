@@ -18,6 +18,7 @@ import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
 import {
   findActiveSpecForTask,
+  findLatestIntegrityAttemptArtifact,
   findLatestDeliveryVerdictArtifact,
   findRuns,
   findTask,
@@ -168,13 +169,13 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(design_analysis 可选) → requirements → architect → per-goal[build] → deliver；
+ *  流程：(design_analysis 可选) → requirements → architect → integrity → per-goal[build] → deliver；
  *  rejection 触发返工。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
-  description: "analyze_intent → (design_analysis) → requirements → architect → per-goal[build] → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
+  description: "analyze_intent → (design_analysis) → requirements → architect → integrity → per-goal[build] → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "analyze_intent",
@@ -207,10 +208,19 @@ const PIPELINE: MiniWorkflow = {
       id: "architect",
       tool: "architect",
       label: "Architect",
-      hint: "权威分解者：读 REQ-N + 决策，产出 goals / 度量 / 挑战种子 / 契约。多 goal / 跨模块时按需调用；trivial 单文件改动可跳过。delivery 拒绝后可 re-run 精修 goal 集合。后续 integrity 按需审查多维度（goal fidelity / 技术可行性 / hallucination / 方案质量）。",
+      hint: "权威分解者：读 REQ-N + 决策，产出 goals / 度量 / 挑战种子 / 契约。多 goal / 跨模块时按需调用；trivial 单文件改动可跳过。delivery 拒绝后可 re-run 精修 goal 集合。",
       scope: "task",
       skippable: true,
       after: ["requirements"],
+    },
+    {
+      id: "integrity",
+      tool: "integrity",
+      label: "Integrity",
+      hint: "对当前 architect spec snapshot 做强制多维完整性审查（goal fidelity / 技术可行性 / hallucination / 方案质量）。pipeline build 之前必须先完成这一阶段。",
+      scope: "task",
+      skippable: true,
+      after: ["architect"],
     },
     {
       // Per-goal 实现：每个 goal 派发到 build agent（在 worktree 中）。
@@ -224,7 +234,7 @@ const PIPELINE: MiniWorkflow = {
       hint: "执行器在隔离 worktree 中跑 build phase 完成一个 goal。GoalPool 自动派发；orchestrator 只管触发。",
       scope: "goal",
       skippable: false,
-      after: ["architect"],
+      after: ["integrity"],
       phases: [
         { id: "build", label: "Build", sessionKind: "build" },
       ],
@@ -354,6 +364,16 @@ function taskStepStatusByTool(
       return findActiveSpecForTask(taskID) ? "completed" : "pending"
     case "architect":
       return listGoals(taskID).length > 0 ? "completed" : "pending"
+    case "integrity": {
+      const activeSpec = findActiveSpecForTask(taskID)
+      if (!activeSpec) return "pending"
+      return findLatestIntegrityAttemptArtifact({
+        taskID,
+        specSnapshotID: activeSpec.id,
+      })
+        ? "completed"
+        : "pending"
+    }
     case "build":
       // direct workflow: any run (artifact kind="run") means a build occurred
       return findRuns(taskID).length > 0 ? "completed" : "pending"
