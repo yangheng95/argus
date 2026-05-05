@@ -4215,6 +4215,26 @@ export function createOrchestratorTools(input: {
               if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
               return `build: goal ${attachedGoalID} not found; register via architect first.`
             }
+            // Fidelity gate runs BEFORE any worktree creation or
+            // engine_goal.workspace_dir mutation. Phase A2 (2026-05-05): the
+            // pre-fix order was create-worktree → write workspace_dir →
+            // validate; on failure the early return left an orphan worktree
+            // on disk and a poisoned engine_goal contract row that read as
+            // "in-flight" but had no goal_run_attempt artifact. Bench gemini
+            // reproduced this on 4 dispatches in a row before the LLM gave
+            // up. Validating up front means the rejected dispatch never
+            // touches persistent state.
+            const fidelityIssues = validatePersistedArchitectFidelity({
+              task,
+              goals: listGoals(taskID).map((row) => ({
+                id: row.id,
+                owned_paths: Array.isArray(row.owned_paths) ? row.owned_paths as string[] : [],
+              })),
+            })
+            if (fidelityIssues.length > 0) {
+              return `Build dispatch blocked: architect fidelity contract is incomplete.\n${fidelityIssues.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
+            }
+
             const recordedWorkspaceDir = goal.workspace_dir?.trim()
             const recordedWorkspaceBranch = goal.workspace_branch?.trim()
             if (recordedWorkspaceDir || recordedWorkspaceBranch) {
@@ -4277,16 +4297,6 @@ export function createOrchestratorTools(input: {
                 workspaceDir: info.directory,
                 workspaceBranch: info.branch,
               })
-            }
-            const fidelityIssues = validatePersistedArchitectFidelity({
-              task,
-              goals: listGoals(taskID).map((row) => ({
-                id: row.id,
-                owned_paths: Array.isArray(row.owned_paths) ? row.owned_paths as string[] : [],
-              })),
-            })
-            if (fidelityIssues.length > 0) {
-              return `Build dispatch blocked: architect fidelity contract is incomplete.\n${fidelityIssues.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
             }
             const taskFidelity = readPersistedArchitectFidelity(task)
             const dependsOn = Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : []
