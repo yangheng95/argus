@@ -364,6 +364,13 @@ export namespace SessionLoop {
     return true
   }
 
+  export function shouldStopAfterTerminalTool(input: {
+    terminalToolPresent: boolean
+    satisfied: boolean
+  }): boolean {
+    return input.terminalToolPresent && input.satisfied
+  }
+
   /**
    * Compose a one-line context snippet describing what an assistant turn
    * actually emitted. Appended onto recovery error messages so callers see
@@ -1293,6 +1300,15 @@ export namespace SessionLoop {
       processor.message.structured = structured
       processor.message.finish = processor.message.finish ?? "stop"
       await Session.updateMessage(processor.message)
+      return "stop" as const
+    }
+
+    if (
+      shouldStopAfterTerminalTool({
+        terminalToolPresent: !!terminalToolContract,
+        satisfied: terminalToolContract?.isSatisfied() ?? false,
+      })
+    ) {
       return "stop" as const
     }
 

@@ -8,6 +8,8 @@ Overlay benchmark `20260505-154347` showed the next failure mode: after a Build 
 
 Overlay benchmark `20260505-161217` exposed the integrity-layer version of the same problem: integrity found real architecture defects and returned `needs_correction`, but its correction schema could not modify the topology fields it was auditing (`depends_on`, `imports`, `exports`). The result was repeated "corrected goal set: -0 +0" with no real closure improvement.
 
+Overlay benchmark `20260505-162810` exposed the session-loop version of the same closure problem: `submit_architect` returned `PASS`, but the Architect session did not stop immediately. Because the terminal collector was already satisfied, the next loop no longer scoped tools to `submit_architect`, reopened the full tool surface, and let the model continue with `todowrite` and summary chatter. Terminal collector satisfaction must be a loop exit condition, not just a recovery predicate.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -19,6 +21,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - which failed goals remain inside the current graph and need diagnostic retry,
 - which goals are blocked by unfinished dependencies,
 - whether integrity corrections create an actual semantic goal-contract delta,
+- whether a stage's terminal collector has already been satisfied,
 - which repair lane fits ordinary collaboration drift,
 - when Architect re-entry would be a structural re-plan instead of normal execution.
 
@@ -36,6 +39,7 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It routes failed Build attempts to `query_failed_goals` and same-goal retry before any upstream restart.
 - It gives integrity the ability to repair the lightweight topology fields it audits: ownership, dependencies, imports, exports, kind, and priority.
 - It demotes no-op `needs_correction` results to concerns so review noise cannot block execution forever.
+- It makes terminal collector satisfaction stop the session loop immediately, so Architect/Integrity/Build cannot keep planning after their report/submit contract is complete.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 
 ## Acceptance
@@ -46,4 +50,5 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - The section lists failed goals as same-graph diagnostic recovery work.
 - The section says ordinary shared-file collaboration belongs to Build reports and `modify_goal`, not Architect re-planning.
 - The section says Build failure alone is not a reason to restart upstream.
+- Session-loop tests prove a satisfied terminal collector is a direct stop condition.
 - Tests prove the projection appears after execution starts and remains absent or pre-execution-scoped before the first attempt.
