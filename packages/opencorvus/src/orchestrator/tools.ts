@@ -496,6 +496,19 @@ export function createOrchestratorTools(input: {
     const task = requireTask(taskID)
     const dbGoals = listGoals(taskID)
     if (dbGoals.length === 0) return { error: "No goals found. Run requirements first." } as const
+    const activeSpec = findActiveSpecForTask(taskID)
+    if (!activeSpec) {
+      return { error: "No active spec snapshot found. Run architect before creating an execution run." } as const
+    }
+    const latestIntegrity = findLatestIntegrityAttemptArtifact({
+      taskID,
+      specSnapshotID: activeSpec.id,
+    })
+    if (!latestIntegrity) {
+      return { error: `No integrity attempt recorded for active spec ${activeSpec.id}. Run integrity before creating an execution run.` } as const
+    }
+    const integrityBlockReason = integrityAttemptExecutionBlockReason(latestIntegrity)
+    if (integrityBlockReason) return { error: integrityBlockReason } as const
 
     const now = Date.now()
     const executor = task.executor
@@ -508,7 +521,7 @@ export function createOrchestratorTools(input: {
       db.insert(EnginePlanVersionTable).values({
         id: planID,
         task_id: taskID,
-        spec_snapshot_id: findActiveSpecForTask(taskID)?.id ?? null,
+        spec_snapshot_id: activeSpec.id,
         version: 1,
         status: "active",
         summary: `${dbGoals.length} goals`,
@@ -658,6 +671,8 @@ export function createOrchestratorTools(input: {
         sessionID: string
         goalCount: number
         perDimension: Array<string>
+        correctionsCount: number
+        missingCount: number
       }
     | {
         status: "corrected"
@@ -683,7 +698,7 @@ export function createOrchestratorTools(input: {
         outcome.verdict === "pass"
           ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. NEXT: dispatch \`build({ goalID })\` per goal.`
           : `Integrity verdict: concerns — ${outcome.perDimension.join(", ")}. ${outcome.summary} ` +
-            `Goal set is executable; surface the concerns above to the operator if relevant. ` +
+            `Goal set is executable because no correction actions or missing goals were recorded; surface the concerns above to the operator if relevant. ` +
             `NEXT: dispatch \`build({ goalID })\` per goal, or use \`restart_from_stage('requirements')\` if hallucination findings prove the REQ source is ungrounded.`
       return SubAgentProtocol.yieldResult({
         headline,
@@ -691,6 +706,8 @@ export function createOrchestratorTools(input: {
           ["goal_count", String(outcome.goalCount)],
           ["spec_snapshot_id", outcome.specSnapshotID],
           ["per_dimension", outcome.perDimension],
+          ["corrections_count", String(outcome.correctionsCount)],
+          ["missing_count", String(outcome.missingCount)],
           ["summary", outcome.summary],
         ],
         pointer: `integrity session ${outcome.sessionID}`,
@@ -714,16 +731,23 @@ export function createOrchestratorTools(input: {
     })
   }
 
-  function integrityAttemptBuildBlockReason(row: ReturnType<typeof findLatestIntegrityAttemptArtifact>) {
-    if (integrityAttemptVerdict(row) !== "needs_correction") return undefined
+  function integrityAttemptExecutionBlockReason(row: ReturnType<typeof findLatestIntegrityAttemptArtifact>) {
+    const verdict = integrityAttemptVerdict(row)
+    if (!verdict) return undefined
     const payload = row?.payload as Record<string, unknown> | null | undefined
     const specSnapshotID = typeof payload?.spec_snapshot_id === "string" ? payload.spec_snapshot_id : "active spec"
     const issuesCount = typeof payload?.issues_count === "number" ? payload.issues_count : 0
     const correctionsCount = typeof payload?.corrections_count === "number" ? payload.corrections_count : 0
     const missingCount = typeof payload?.missing_count === "number" ? payload.missing_count : 0
+    if (verdict !== "needs_correction" && correctionsCount === 0 && missingCount === 0) return undefined
+    const blocker =
+      verdict === "needs_correction"
+        ? "integrity verdict is needs_correction"
+        : `integrity verdict is ${verdict} but recorded correction work`
     return (
-      `integrity verdict is needs_correction for ${specSnapshotID}; build is blocked until ` +
-      `integrity produces a pass/concerns attempt or the task is explicitly restarted upstream. ` +
+      `${blocker} for ${specSnapshotID}; execution is blocked until ` +
+      `integrity produces a pass/concerns attempt with zero corrections and zero missing goals, ` +
+      `or the task is explicitly restarted upstream. ` +
       `issues=${issuesCount}, corrections=${correctionsCount}, missing=${missingCount}.`
     )
   }
@@ -841,8 +865,8 @@ export function createOrchestratorTools(input: {
           verdict: verdict.verdict,
           perDimension: perDimensionRollup,
           issuesCount: verdict.issues.length,
-          correctionsCount: 0,
-          missingCount: 0,
+          correctionsCount: verdict.corrections.length,
+          missingCount: verdict.missingGoals.length,
           reason: verdict.summary,
         })
       } catch (err) {
@@ -858,6 +882,8 @@ export function createOrchestratorTools(input: {
         summary: verdict.summary,
         sessionID: verdict.sessionID,
         goalCount: goalsForReview.length,
+        correctionsCount: verdict.corrections.length,
+        missingCount: verdict.missingGoals.length,
         perDimension: perDimensionLabels.map((label, index) => `${label}(${verdict.dimensions[index]?.issues.length ?? 0}issues)`),
       }
     }
@@ -891,6 +917,8 @@ export function createOrchestratorTools(input: {
         summary: `${verdict.summary} Proposed corrections produced no semantic goal-contract delta; execution may proceed with concerns.`,
         sessionID: verdict.sessionID,
         goalCount: goalsForReview.length,
+        correctionsCount: 0,
+        missingCount: 0,
         perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
       }
     }
@@ -2103,7 +2131,8 @@ export function createOrchestratorTools(input: {
         "(granularity, acceptance-spec strength, ownership, ordering). Returns a " +
         "per-dimension verdict (pass / concerns / needs_correction) plus an aggregate " +
         "(worst-of). On aggregate `needs_correction` the orchestrator re-upserts the " +
-        "corrected goal set against the same spec snapshot.\n\n" +
+        "corrected goal set against the same spec snapshot. A `concerns` attempt is " +
+        "executable only when it records zero correction actions and zero missing goals.\n\n" +
         "USE WHEN: architect just produced a non-trivial goal graph (≥3 goals, OR " +
         "cross-goal contracts, OR foundational decisions architect derived rather " +
         "than user-stated), OR delivery feedback hints the decomposition has drifted " +
@@ -4361,6 +4390,54 @@ export function createOrchestratorTools(input: {
         // anchor to it (rule 22 — single source: build is the dispatcher,
         // build owns the run). Task-level (request-only) builds skip this;
         // they have no goal to bind to and deliver isn't part of that path.
+        if (attachedGoalID) {
+          const { findGoal } = await import("@/engine/store")
+          const goal = findGoal(attachedGoalID)
+          if (!goal) {
+            if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+            return `build: goal ${attachedGoalID} not found; register via architect first.`
+          }
+          const activeSpec = findActiveSpecForTask(taskID)
+          if (!activeSpec) {
+            if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+            return `build: goal ${attachedGoalID} has no active spec snapshot. Re-run requirements/architect before dispatching build.`
+          }
+          if (goal.spec_snapshot_id !== activeSpec.id) {
+            if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+            return (
+              `build: goal ${attachedGoalID} belongs to superseded spec ${goal.spec_snapshot_id ?? "null"} ` +
+              `while active spec is ${activeSpec.id}. Re-read the active goal graph before dispatching build.`
+            )
+          }
+          const latestIntegrity = findLatestIntegrityAttemptArtifact({
+            taskID,
+            specSnapshotID: activeSpec.id,
+          })
+          if (!latestIntegrity) {
+            const integrityOutcome = await runIntegrityReview()
+            if (integrityOutcome.status === "blocked") {
+              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+              return `build: blocked before goal ${attachedGoalID} — ${integrityOutcome.headline}`
+            }
+            if (integrityOutcome.status === "corrected") {
+              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+              return (
+                `build: blocked before goal ${attachedGoalID} — integrity corrected the active goal graph for spec ` +
+                `${integrityOutcome.specSnapshotID}. Re-read the corrected goals and choose the next dispatch from the new graph.`
+              )
+            }
+          }
+          const reviewedIntegrity = findLatestIntegrityAttemptArtifact({
+            taskID,
+            specSnapshotID: activeSpec.id,
+          })
+          const integrityBlockReason = integrityAttemptExecutionBlockReason(reviewedIntegrity)
+          if (integrityBlockReason) {
+            if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+            return `build: blocked before goal ${attachedGoalID} — ${integrityBlockReason}`
+          }
+        }
+
         let coordinatorRunID: string | undefined
         if (attachedGoalID) {
           const ensured = await ensureDispatchableRunForSingleGoal()
@@ -4414,7 +4491,7 @@ export function createOrchestratorTools(input: {
                 )
               }
             }
-            const integrityBlockReason = integrityAttemptBuildBlockReason(latestIntegrity)
+            const integrityBlockReason = integrityAttemptExecutionBlockReason(latestIntegrity)
             if (integrityBlockReason) {
               if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
               return `build: blocked before goal ${attachedGoalID} — ${integrityBlockReason}`

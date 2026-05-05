@@ -353,12 +353,15 @@ export async function reviewIntegrity(input: {
           }))
         }
 
-        // Verdict reconciliation: if the LLM said `pass` but listed issues /
-        // corrections, escalate. If it said `needs_correction` with nothing
-        // concrete, demote to `pass`.
+        // Verdict reconciliation: corrections/missing goals are executable
+        // repair actions, not advisory notes. Any dimension that emits them
+        // must block execution so the orchestrator can apply or route the
+        // repair before build starts.
         let verdict = sub.verdict as IntegrityVerdict
-        if (verdict === "pass" && (issues.length > 0 || corrections.length > 0 || missingGoals.length > 0)) {
-          verdict = corrections.length > 0 || missingGoals.length > 0 ? "needs_correction" : "concerns"
+        if (corrections.length > 0 || missingGoals.length > 0) {
+          verdict = "needs_correction"
+        } else if (verdict === "pass" && issues.length > 0) {
+          verdict = "concerns"
         }
         if (verdict === "needs_correction" && issues.length === 0 && corrections.length === 0 && missingGoals.length === 0) {
           verdict = "pass"

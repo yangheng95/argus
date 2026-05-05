@@ -156,4 +156,67 @@ describe("pipeline workflow integrity step", () => {
     const taskSteps = projectTaskSteps(taskID, pipeline)
     expect(taskSteps.integrity?.status).toBe("failed")
   })
+
+  test("projects concerns with correction work as failed", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_integrity_concern_failed_${stamp}`
+    const taskID = `tsk_workflow_integrity_concern_failed_${stamp}`
+    const specID = `spec_workflow_integrity_concern_failed_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable).values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "Workflow integrity concern correction projection test",
+        sandboxes: [],
+        time_created: now,
+        time_updated: now,
+      }).run()
+      db.insert(EngineTaskTable).values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Workflow integrity correction status",
+        request: "Show integrity stage as failed when concerns contain correction work",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      }).run()
+      db.insert(EngineSpecSnapshotTable).values({
+        id: specID,
+        task_id: taskID,
+        version: 1,
+        status: "ready",
+        summary: "Active spec",
+        content: "spec",
+        scope: "scope",
+        time_created: now,
+        time_updated: now,
+      }).run()
+    })
+
+    recordIntegrityAttempt({
+      taskID,
+      sessionID: "ses_integrity_projection_concern_failed",
+      specSnapshotID: specID,
+      verdict: "concerns",
+      perDimension: [
+        { id: "goal_fidelity", verdict: "concerns" },
+        { id: "technical_feasibility", verdict: "pass" },
+        { id: "hallucination", verdict: "pass" },
+        { id: "solution_quality", verdict: "concerns" },
+      ],
+      issuesCount: 2,
+      correctionsCount: 1,
+      missingCount: 0,
+      now,
+    })
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.integrity?.status).toBe("failed")
+  })
 })

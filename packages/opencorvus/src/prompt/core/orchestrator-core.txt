@@ -364,7 +364,8 @@ wastes budget and clouds the trace.
   acceptance-spec strength, ownership clarity, ordering smell). Returns a
   per-dimension verdict (pass / concerns / needs_correction) plus an aggregate
   (worst-of). On aggregate `needs_correction` the goal set has been re-upserted in
-  place; on `concerns` proceed but address surfaced issues if material; on
+  place; on `concerns` proceed only when the recorded attempt has zero correction
+  actions and zero missing goals; on
   hallucination findings, prefer `restart_from_stage('requirements')` or
   `restart_from_stage('design_analysis')` over goal-layer edits.
   Use when: architect just produced a non-trivial goal graph (≥3 goals, OR cross-goal
