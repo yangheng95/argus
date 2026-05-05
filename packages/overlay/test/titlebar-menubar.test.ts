@@ -112,6 +112,22 @@ test(
           await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
           await page.waitForSelector('[data-menu-trigger="workspace"]')
           await page.waitForFunction((value) => document.documentElement.lang === value, {}, locale)
+          const expectedWorkspaceMenu = locale === "zh-CN" ? "项目" : "Project"
+          const workspaceMenu = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
+            const el = node as HTMLElement
+            return {
+              label: el.getAttribute("aria-label"),
+              title: el.getAttribute("title"),
+              compact: el.dataset.compact,
+              accessKey: el.dataset.accessKey,
+            }
+          })
+          expect(workspaceMenu).toEqual({
+            label: expectedWorkspaceMenu,
+            title: expectedWorkspaceMenu,
+            compact: "P",
+            accessKey: "p",
+          })
           await page.evaluate(() => {
             const app = window as typeof window & { state?: { serverPid?: number } }
             if (app.state) app.state.serverPid = 12345
@@ -389,8 +405,8 @@ test(
       })
       expect(lightTriggerState).toEqual({
         color: "rgb(16, 21, 39)",
-        accessKey: "w",
-        ariaKeyshortcuts: "Alt+W",
+        accessKey: "p",
+        ariaKeyshortcuts: "Alt+P",
       })
 
       await page.evaluate(() => {
@@ -516,7 +532,7 @@ test(
       expect(intro.createProjectText).toContain("Create New Project")
       expect(intro.title).toContain("Open a project directory")
       expect(intro.brandWordmark).toBe("OpenCorvus")
-      expect(intro.brandLabel).toBe("Project")
+      expect(intro.brandLabel).toBe("Workspace")
       expect(intro.sections).toBe("Inspector")
       await page.close()
     } finally {

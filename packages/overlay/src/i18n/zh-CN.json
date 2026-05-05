@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "683ad218361c8318"
+    "panel_revision": "fba7b1793f409ce2"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -40,7 +40,7 @@
   "brand.guide_usage_4": "标题栏菜单用于配置工作区、模型、工具、视图、投递通道和诊断。",
   "brand.guide_usage_title": "快速路径",
   "brand.logo_alt": "OpenCorvus 标识",
-  "brand.workspace_label": "项目",
+  "brand.workspace_label": "工作区",
   "channel.configuration_title": "{{name}} 通道配置",
   "channel.edit_title": "编辑此通道的配置。",
   "channel.none": "暂无可用通道",
@@ -134,7 +134,7 @@
   "workspace_onboarding.create_action": "创建新项目",
   "workspace_onboarding.recent_title": "最近工作区",
   "workspace_onboarding.recent_body": "直接恢复最近使用过的目录。",
-  "workspace_onboarding.footnote": "之后仍可从标题栏的工作区菜单切换目录。",
+  "workspace_onboarding.footnote": "之后仍可从标题栏的项目菜单切换目录。",
   "task.search_placeholder": "搜索对话…",
   "task.search_empty": "未找到匹配 \"{{query}}\" 的任务",
   "cmdk.placeholder": "输入命令 — 任务、设置、主题、语言…",
@@ -688,7 +688,7 @@
   "titlebar.menu.run": "运行",
   "titlebar.menu.tools": "工具",
   "titlebar.menu.view": "视图",
-  "titlebar.menu.workspace": "工作区",
+  "titlebar.menu.workspace": "项目",
   "titlebar.minimize": "最小化",
   "titlebar.restore": "还原窗口",
   "titlebar.reset_layout": "重置布局",

@@ -33,7 +33,7 @@ type TitlebarMenubarProps = {
 
 const MENU_IDS: MenuID[] = ["workspace", "model", "run", "tools", "view", "help"];
 const MENU_ACCESS_KEYS: Record<MenuID, string> = {
-  workspace: "w",
+  workspace: "p",
   model: "m",
   run: "r",
   tools: "t",
@@ -193,7 +193,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
   let altPressedOnly = false;
 
   const menus = createMemo<MenuDef[]>(() => [
-    { id: "workspace", label: t("titlebar.menu.workspace"), compact: "W", accessKey: MENU_ACCESS_KEYS.workspace },
+    { id: "workspace", label: t("titlebar.menu.workspace"), compact: "P", accessKey: MENU_ACCESS_KEYS.workspace },
     { id: "model", label: t("titlebar.menu.model"), compact: "M", accessKey: MENU_ACCESS_KEYS.model },
     { id: "run", label: t("titlebar.menu.run"), compact: "R", accessKey: MENU_ACCESS_KEYS.run },
     { id: "tools", label: t("titlebar.menu.tools"), compact: "T", accessKey: MENU_ACCESS_KEYS.tools },
