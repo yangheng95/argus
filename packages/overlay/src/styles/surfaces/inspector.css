@@ -2745,12 +2745,3 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   flex-direction: column;
   gap: 0;
 }
-
-.gwg-priority-badge {
-  flex-shrink: 0;
-  text-transform: uppercase;
-  font-size: var(--ui-font-tiny);
-  font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.04em;
-  color: var(--warn);
-}
