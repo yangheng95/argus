@@ -1,17 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { architectValidationIssues, type ArchitectCollector } from "@/architect/output-tools"
 
-// Phase A3 — owned_paths overlap detection.
-//
-// pipeline/goal-contract.schema.ts: owned_paths is described as "Files this
-// goal has EXCLUSIVE write access to." Pre-fix, architectValidationIssues
-// did not check this exclusivity across goals. Bench gemini reproducer:
-// goal_bootstrap and goal_pages both registered src/App.tsx + src/main.tsx.
-// The plan finalised, then dispatch hit a fidelity wall once goal_bootstrap
-// merged its scaffold to the project root.
-//
-// Post-fix: any path claimed by ≥2 goals becomes a finalize-blocking issue.
-
 const baseGoal = {
   acceptance_specs: [],
   depends_on: [] as string[],
@@ -47,52 +36,31 @@ function buildCollector(
   }
 }
 
-describe("architectValidationIssues — owned_paths overlap", () => {
-  test("two goals owning the same file is reported", () => {
+describe("architectValidationIssues — owned_paths are collaboration responsibilities", () => {
+  test("two goals may share a responsibility path when integration requires coordination", () => {
     const collector = buildCollector([
       { id: "goal_bootstrap", owned_paths: ["src/App.tsx", "src/main.tsx", "package.json"], kind: "bootstrap" },
-      { id: "goal_pages", owned_paths: ["src/App.tsx", "src/main.tsx", "src/pages/Home.tsx"] },
-    ])
-    const issues = architectValidationIssues(collector)
-    const overlapIssues = issues.filter((i) => i.startsWith("Owned path"))
-    expect(overlapIssues.length).toBeGreaterThanOrEqual(2)
-    expect(overlapIssues.some((i) => i.includes("src/App.tsx"))).toBe(true)
-    expect(overlapIssues.some((i) => i.includes("src/main.tsx"))).toBe(true)
-    expect(overlapIssues.some((i) => i.includes("goal_bootstrap"))).toBe(true)
-    expect(overlapIssues.some((i) => i.includes("goal_pages"))).toBe(true)
-  })
-
-  test("disjoint owned_paths produce no overlap issue", () => {
-    const collector = buildCollector([
-      { id: "goal_a", owned_paths: ["src/lib/a.ts"] },
-      { id: "goal_b", owned_paths: ["src/lib/b.ts"] },
+      { id: "goal_pages", owned_paths: ["src/App.tsx", "src/pages/Home.tsx"] },
     ])
     const issues = architectValidationIssues(collector)
     expect(issues.filter((i) => i.startsWith("Owned path"))).toEqual([])
   })
 
-  test("path normalisation: ./src/App.tsx and src\\App.tsx collide", () => {
+  test("path normalization no longer creates a hard overlap rejection", () => {
     const collector = buildCollector([
       { id: "goal_a", owned_paths: ["./src/App.tsx"] },
       { id: "goal_b", owned_paths: ["src\\App.tsx"] },
     ])
     const issues = architectValidationIssues(collector)
-    const overlap = issues.find((i) => i.startsWith("Owned path"))
-    expect(overlap).toBeDefined()
-    expect(overlap).toContain("src/App.tsx")
+    expect(issues.find((i) => i.startsWith("Owned path"))).toBeUndefined()
   })
 
-  test("three-way overlap lists all owners deduped and sorted", () => {
+  test("verification goals still keep their role-specific test-path boundary", () => {
     const collector = buildCollector([
-      { id: "goal_c", owned_paths: ["shared.ts"] },
-      { id: "goal_a", owned_paths: ["shared.ts"] },
-      { id: "goal_b", owned_paths: ["shared.ts"] },
+      { id: "goal_feature", owned_paths: ["src/App.tsx"], kind: "feature" },
+      { id: "goal_verify", owned_paths: ["src/App.tsx"], kind: "verification" },
     ])
     const issues = architectValidationIssues(collector)
-    const overlap = issues.find((i) => i.startsWith("Owned path"))
-    expect(overlap).toBeDefined()
-    expect(overlap).toContain("3 goals")
-    // Sorted asc.
-    expect(overlap).toContain("goal_a, goal_b, goal_c")
+    expect(issues.join("\n")).toContain("owned_paths must stay under tests/integration")
   })
 })

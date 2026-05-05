@@ -140,7 +140,7 @@ For every goal emit one `register_goal` call with the full GoalContract:
 - `title` — short human-readable name
 - `objective` — **execution directive for THIS goal only** (≥50 chars). Write ONLY: (a) what this goal implements, (b) constraints specific to it, (c) edge cases the executor must handle. Do NOT restate the user's request (the executor has it at `.opencorvus/intent/`), do NOT list interface signatures (put those in `exports`/`imports`), do NOT paraphrase other goals.
 - `acceptance_specs` — typed specs (AcceptanceSpec[]). At least one spec per goal; default one heuristic shell scorer; llm_judge only when no shell command can verify.
-- `owned_paths` — files this goal has EXCLUSIVE write access to. Must come from exploration, not guesses.
+- `owned_paths` — primary responsibility paths for this goal. They guide collaboration and review; they are not a file sandbox. Must come from exploration, not guesses.
 - `depends_on` — goal ids this depends on (must complete first)
 - `exports` — each entry is ONE actual signature / type definition, e.g. `"getStocks(): Promise<Stock[]>"`, `"type Stock = { id: string; name: string; price: number }"`. Every cross-goal contract MUST appear here.
 - `imports` — each entry names one signature consumed from a dependency's exports. No prose paraphrases.
@@ -177,7 +177,7 @@ After goal registration:
 }
 ```
 
-**Per-goal unit tests are MANDATORY in each feature goal's acceptance_specs.** Every feature goal that creates new functions / classes / modules MUST include a `heuristic` scorer that runs the project's test command scoped to the goal's owned files (e.g. `bun test src/api/`). Unit tests belong to the goal that owns the code under test — the executor writes them while implementing the goal and the acceptance scorer is what it must meet to report done. For existing codebases follow existing test patterns (framework, file locations, naming); for new projects use the `test_framework` decision the Requirements agent recorded.
+**Per-goal unit tests are MANDATORY in each feature goal's acceptance_specs.** Every feature goal that creates new functions / classes / modules MUST include a `heuristic` scorer that runs the project's test command scoped to the goal's responsibility paths (e.g. `bun test src/api/`). Unit tests belong to the goal responsible for the code under test — the executor writes them while implementing the goal and the acceptance scorer is what it must meet to report done. For existing codebases follow existing test patterns (framework, file locations, naming); for new projects use the `test_framework` decision the Requirements agent recorded.
 
 Per-goal unit tests give the executor fast in-session feedback. They do NOT replace the dedicated integration / regression test goal (Phase 4.6) — that goal runs the full suite against the merged worktree and is what delivery reads as the single acceptance signal. The two layers cover different surfaces: per-goal = unit tests for this goal's owned code; test goal = cross-goal integration, E2E, regression.
 

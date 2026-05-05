@@ -164,12 +164,9 @@ export interface TaskDesc {
   /** When the goal set contains a `kind=bootstrap` goal whose status is not
    *  yet `passed`, this is its id; otherwise null. Surfaced upfront so the
    *  orchestrator LLM can serialise dispatch (build the bootstrap goal first,
-   *  THEN fan-out non-bootstrap goals) instead of attempting parallel
-   *  dispatch and getting late-rejected by the bootstrap-first gate at
-   *  orchestrator/tools.ts:3826-3862. The gate stays as defense-in-depth;
-   *  this field is the primary signal so the LLM doesn't reach the gate in
-   *  the normal case (specs/scheduler-fix-plan-2026-04-30.md P5,
-   *  audit §11.4). */
+   *  THEN fan-out non-bootstrap goals) when that is the correct collaboration
+   *  shape. No tool gate enforces this; the orchestrator is responsible for
+   *  the scheduling decision from the describe snapshot. */
   active_bootstrap_goal_id?: string
   budget: {
     runs_used: number
@@ -391,10 +388,8 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     }
   })
 
-  // Bootstrap-first signal. Single source — derived from the same goal
-  // status the dispatch gate (orchestrator/tools.ts:3826-3862) reads.
-  // Surfaces upstream of the gate so the LLM can plan the dispatch order
-  // explicitly instead of being late-rejected per goal (P5).
+  // Bootstrap-first signal. Single source — derived from goal status and
+  // surfaced as collaboration context. This is not a dispatch gate.
   const activeBootstrap = goalRows.find(
     (g) => g.kind === "bootstrap" && goalStatusByID(g.id) !== "passed",
   )
@@ -446,7 +441,7 @@ function renderGoal(g: GoalDesc): string[] {
   const lines: string[] = []
   lines.push(`### Goal ${g.id}: ${g.title} [${g.priority}, ${g.kind}]`)
   lines.push(`Objective: ${g.objective}`)
-  if (g.owned_paths.length > 0) lines.push(`Owned paths: ${g.owned_paths.join(", ")}`)
+  if (g.owned_paths.length > 0) lines.push(`Responsibility paths: ${g.owned_paths.join(", ")}`)
   if (g.depends_on.length > 0) lines.push(`Depends on: ${g.depends_on.join(", ")}`)
   if (g.exports.length > 0) lines.push(`Exports: ${g.exports.join(", ")}`)
   if (g.imports.length > 0) lines.push(`Imports: ${g.imports.join(", ")}`)
@@ -519,13 +514,8 @@ export function renderTaskDescription(desc: TaskDesc): string {
   } else {
     lines.push(`## Goals (${desc.goals.length})`)
     if (desc.active_bootstrap_goal_id) {
-      // Physical-fact framing (P5): the constraint is a property of the
-      // worktree merge model, not a directive. Stating the cause lets the
-      // LLM serialise dispatch on its own. The dispatch tool's
-      // bootstrap-first gate (orchestrator/tools.ts:3826-3862) stays as
-      // defense-in-depth; the disclosure here keeps it from being a
-      // hidden state machine (rule 13 / rule 15: not synthetic / not
-      // hidden).
+      // Physical-fact framing: state the collaboration risk, then let the
+      // orchestrator decide. No hidden dispatch gate sits behind this text.
       lines.push("")
       lines.push(
         `**Bootstrap-first dispatch order**: goal \`${desc.active_bootstrap_goal_id}\` ` +
@@ -533,11 +523,10 @@ export function renderTaskDescription(desc: TaskDesc): string {
         `scaffold-level files (\`package.json\`, \`vite.config.ts\`/\`bunfig.toml\`, ` +
         `\`tsconfig.json\`, \`src/main.*\`, \`src/App.*\`); every other goal ` +
         `would inevitably touch those files on its worktree, producing ` +
-        `guaranteed merge conflicts at delivery time. The dispatch tool ` +
-        `will refuse non-bootstrap dispatches until this goal completes ` +
-        `(build → deliver → merged). Plan accordingly: dispatch the ` +
-        `bootstrap goal first, then fan-out non-bootstrap goals once it ` +
-        `is \`passed\`.`,
+        `coordination risk at merge and delivery time. Plan deliberately: ` +
+        `dispatch the bootstrap goal first when the scaffold is not yet real, ` +
+        `or dispatch another goal only when its prompt and files_changed[] ` +
+        `can explain how it cooperates with the shared scaffold milestone.`,
       )
     }
     for (const g of desc.goals) {

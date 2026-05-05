@@ -1602,6 +1602,7 @@ export function finalizeBuildAttempt(input: {
   workspaceBaseRef?: string
   error?: string
   diffs?: Array<{ file: string; before: string; after: string; additions: number; deletions: number; status?: string }>
+  fileChanges?: Array<{ path: string; summary: string; reason: string }>
   summary?: string
   now?: number
 }): void {
@@ -1649,6 +1650,7 @@ export function finalizeBuildAttempt(input: {
             summary,
             commit_ref: input.commitRef,
             changed_files: input.diffs!.map((d) => d.file),
+            file_changes: input.fileChanges ?? [],
             diffs: input.diffs,
             stats,
           },

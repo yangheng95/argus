@@ -717,7 +717,7 @@ function buildIntegrityPrompt(input: {
       `## ${goal.id}: ${goal.title}`,
       `Objective: ${goal.objective}`,
       `Acceptance Specs:\n${renderSpecsAsText(goal.acceptance_specs ?? [])}`,
-      `Owned Paths: ${goal.owned_paths.join(", ") || "(none)"}`,
+      `Responsibility Paths: ${goal.owned_paths.join(", ") || "(none)"}`,
       `Priority: ${goal.priority}`,
       `Kind: ${goal.kind}`,
       goal.exports?.length ? `Exports: ${goal.exports.join("; ")}` : "",

@@ -118,6 +118,20 @@ export namespace BuildAgent {
       referenceCoverage?: ReferenceCoverageEntry[]
       assemblyOwners?: AssemblyOwnerEntry[]
     }
+    /** Full sibling-goal collaboration snapshot composed by the orchestrator
+     *  from the describe layer. Build agents may edit shared files, but they
+     *  must understand the current milestone and explain how each file change
+     *  preserves the other goals' declared contracts. */
+    collaborationGoals?: Array<{
+      id: string
+      title: string
+      kind: string
+      status: string
+      owned_paths: string[]
+      depends_on: string[]
+      exports: string[]
+      imports: string[]
+    }>
     /** Pre-formatted multimodal file parts produced by upstream evidence —
      *  typically the previous attempt's rendered.png from delivery's visual
      *  hard gate so the build LLM can see what it actually produced versus
@@ -378,7 +392,8 @@ export namespace BuildAgent {
         report_build_result: tool({
           description:
             "Finalize the build with status='passed' after implementation, verification, commit, and merge_back have all succeeded, " +
-            "or status='failed' with a concrete blocker when the build cannot be completed.",
+            "or status='failed' with a concrete blocker when the build cannot be completed. " +
+            "You must fill files_changed with one entry per project file you changed; each entry must explain what changed and why that file belonged to this milestone or shared integration surface.",
           inputSchema: BuildResultSchema,
           execute: async (result) => {
             if (result.status === "passed" && ownsWorktree && worktreeBranch && !mergedHead) {
@@ -586,6 +601,23 @@ export namespace BuildAgent {
           })
         }
 
+        if (parsed.success && parsed.data.status === "passed" && Array.isArray(diffs)) {
+          const coverageError = fileChangeExplanationCoverageError({
+            reported: parsed.data.files_changed,
+            diffs,
+          })
+          if (coverageError) {
+            parsed = {
+              success: true as const,
+              data: {
+                ...parsed.data,
+                status: "failed" as const,
+                error: coverageError,
+              },
+            }
+          }
+        }
+
         // Decide before the finally cleanup whether the next attempt should
         // be allowed to pick up where this one left off. The continuable
         // cases are: the model reported passed without merge_back after the
@@ -734,7 +766,8 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "mir
     "",
     "Hard contract:",
     "- Treat the user prompt as a build contract, not as a chat request.",
-    "- Read only the files needed to confirm dependencies and local patterns, then edit the owned files.",
+    "- Read only the files needed to confirm dependencies and local patterns, then edit the files required by the milestone.",
+    "- Explain every changed file in the final report; shared-file edits are valid only when they preserve sibling-goal contracts and are explicitly justified.",
     "- Do not perform broad inventories or spawn exploratory subagents unless a concrete missing dependency blocks implementation.",
     "- Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text. Use tools to act.",
     "- When the prompt or staged references define a screenshot, mockup, or webpage target, those references are authoritative. Match them 1:1 as closely as the stack allows; do not substitute your own design or silently drop referenced assets.",
@@ -1433,6 +1466,11 @@ async function runWithExternalProviderImpl(args: {
         summary:
           doneOutput?.trim() ||
           `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
+        files_changed: [{
+          path: "__external_executor_missing_file_report__",
+          summary: "External executor completed without OpenCorvus report_build_result access.",
+          reason: "Host synthesized this placeholder because the external executor protocol has no structured per-file report channel.",
+        }],
         patch_summary: "",
         tests: [],
       },
@@ -1582,6 +1620,11 @@ async function runWithExternalProviderImpl(args: {
       summary:
         doneOutput?.trim() ||
         `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
+      files_changed: [{
+        path: "__external_executor_missing_file_report__",
+        summary: "External executor completed without OpenCorvus report_build_result access.",
+        reason: "Host synthesized this placeholder because the external executor protocol has no structured per-file report channel.",
+      }],
       patch_summary: "",
       tests: [],
     },
@@ -1664,6 +1707,26 @@ async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<F
   return result
 }
 
+export function fileChangeExplanationCoverageError(input: {
+  reported: Array<{ path: string }>
+  diffs: Array<{ file: string }>
+}): string | undefined {
+  const reported = new Set(input.reported.map((item) => normalizeBuildPath(item.path)).filter(Boolean))
+  const actual = new Set(input.diffs.map((item) => normalizeBuildPath(item.file)).filter(Boolean))
+  const missing = [...actual].filter((file) => !reported.has(file)).sort()
+  const extra = [...reported].filter((file) => !actual.has(file)).sort()
+  if (missing.length === 0 && extra.length === 0) return undefined
+  const parts: string[] = []
+  if (missing.length > 0) parts.push(`missing explanations for changed files: ${missing.join(", ")}`)
+  if (extra.length > 0) parts.push(`reported files not present in git diff: ${extra.join(", ")}`)
+  return `Build collaboration report does not match actual diff; ${parts.join("; ")}. ` +
+    `Every changed file must be explained in files_changed[].`
+}
+
+function normalizeBuildPath(input: string): string {
+  return input.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/g, "")
+}
+
 // ---------------------------------------------------------------------------
 // Prompt / label helpers
 // ---------------------------------------------------------------------------
@@ -1724,6 +1787,25 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       }
     }
 
+    const collaborationGoals = context?.collaborationGoals ?? []
+    if (collaborationGoals.length > 0) {
+      lines.push("## Collaboration State")
+      lines.push("")
+      lines.push(
+        "These are the sibling goals in the shared milestone. `owned_paths` are responsibility paths, not a file sandbox: shared-file edits are allowed when they are necessary for the integrated deliverable, preserve the other goals' declared contracts, and are explained in `files_changed[]`.",
+      )
+      lines.push("")
+      for (const goal of collaborationGoals) {
+        const marker = goal.id === target.id ? " (this goal)" : ""
+        lines.push(`- **${goal.id}**${marker} [${goal.kind}, status=${goal.status}]: ${goal.title}`)
+        if (goal.owned_paths.length > 0) lines.push(`  - responsibility_paths: ${goal.owned_paths.join(", ")}`)
+        if (goal.depends_on.length > 0) lines.push(`  - depends_on: ${goal.depends_on.join(", ")}`)
+        if (goal.exports.length > 0) lines.push(`  - exports: ${goal.exports.join("; ")}`)
+        if (goal.imports.length > 0) lines.push(`  - imports: ${goal.imports.join("; ")}`)
+      }
+      lines.push("")
+    }
+
     const deps = context?.dependencies ?? []
     if (deps.length > 0) {
       lines.push("## Dependencies (should be merged into your worktree base)")
@@ -1745,7 +1827,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
         specs: context.designSpecs,
         instructions: [
           "The visual contract below came from design_analysis. It is authoritative for the referenced UI/web target: restore the relevant subset 1:1 as closely as the stack allows.",
-          "Implement the subset relevant to this goal's owned files, UI surface, and interactions; ignore specs targeting unrelated regions.",
+          "Implement the subset relevant to this goal's responsibility paths, UI surface, and interactions; ignore specs targeting unrelated regions.",
         ],
       }))
       lines.push("")
@@ -1816,7 +1898,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     }
     if (target.owned_paths.length > 0) {
       lines.push("")
-      lines.push(`**Owned Paths** (exclusive write access): ${target.owned_paths.join(", ")}`)
+      lines.push(`**Responsibility Paths** (review focus, not a file sandbox): ${target.owned_paths.join(", ")}`)
     }
     if (target.depends_on.length > 0) {
       lines.push("")
@@ -1834,6 +1916,8 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     }
     lines.push("")
     lines.push("**Reference Fidelity**: If this goal depends on screenshots, webpage captures, staged `references/` files, or visual contract specs, treat them as binding source material and reproduce the relevant surface 1:1. Do not approximate or redesign.")
+    lines.push("")
+    lines.push("**File Change Report**: Before reporting success, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.")
     lines.push("")
     lines.push("Orchestrator is asking build to implement this goal, verify it, and report the result.")
     return lines.join("\n")
@@ -1861,5 +1945,9 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "# Request",
     "",
     target.text,
+    "",
+    "# File Change Report",
+    "",
+    "Before reporting success, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.",
   ].join("\n")
 }

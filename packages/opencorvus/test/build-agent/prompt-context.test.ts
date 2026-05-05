@@ -121,6 +121,54 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("surface=final-deliverable owner=gol_visual")
   })
 
+  test("goal-path build receives sibling collaboration state without file sandbox framing", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "goal",
+        id: "gol_feature",
+        title: "Feature surface",
+        objective: "Implement the feature and integrate it with the shared shell.",
+        acceptance_specs: ["feature works in shell"],
+        owned_paths: ["src/feature.ts", "src/App.tsx"],
+        exports: ["renderFeature(): JSX.Element"],
+        imports: ["AppShell from gol_shell"],
+        depends_on: ["gol_shell"],
+      },
+      {
+        collaborationGoals: [
+          {
+            id: "gol_shell",
+            title: "Application shell",
+            kind: "bootstrap",
+            status: "passed",
+            owned_paths: ["src/App.tsx", "src/main.tsx"],
+            depends_on: [],
+            exports: ["AppShell"],
+            imports: [],
+          },
+          {
+            id: "gol_feature",
+            title: "Feature surface",
+            kind: "feature",
+            status: "pending",
+            owned_paths: ["src/feature.ts", "src/App.tsx"],
+            depends_on: ["gol_shell"],
+            exports: ["renderFeature(): JSX.Element"],
+            imports: ["AppShell from gol_shell"],
+          },
+        ],
+      },
+    )
+
+    expect(prompt).toContain("## Collaboration State")
+    expect(prompt).toContain("gol_shell")
+    expect(prompt).toContain("status=passed")
+    expect(prompt).toContain("responsibility_paths: src/App.tsx, src/main.tsx")
+    expect(prompt).toContain("owned_paths` are responsibility paths, not a file sandbox")
+    expect(prompt).toContain("explained in `files_changed[]`")
+    expect(prompt).toContain("**Responsibility Paths** (review focus, not a file sandbox)")
+  })
+
   test("request-path build warns that visual references are authoritative", () => {
     const prompt = buildUserPrompt({
       kind: "request",

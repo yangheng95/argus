@@ -109,10 +109,10 @@ export function buildArchitectureContractCatalogSection(taskID: string): string 
   lines.push("")
   lines.push(
     `Authoritative per-goal interface contract pulled from \`engine_goal\`. ` +
-    `Each goal advertises owned files, exports, imports, and dep ordering — these ` +
+    `Each goal advertises responsibility paths, exports, imports, and dep ordering — these ` +
     `are CROSS-GOAL gates. A delivery where every \`acceptance_spec\` PASSES but ` +
-    `goal A imports a symbol goal B never exported, or two goals own overlapping ` +
-    `paths, is still a reject (category="contract_violation"). Verify by reading ` +
+    `goal A imports a symbol goal B never exported, or a shared file edit contradicts ` +
+    `another goal's declared responsibility, is still a reject (category="contract_violation"). Verify by reading ` +
     `the merged worktree, not by trusting goal-local self-reports. Cite the ` +
     `goal id in \`rejection_details[].goal_id\` and the violated field name ` +
     `(exports / imports / owned_paths / depends_on) in \`evidence\`.`,
@@ -140,7 +140,7 @@ export function buildArchitectureContractCatalogSection(taskID: string): string 
       lines.push(`**Imports**: ${g.imports.join(", ")}`)
     }
     if (g.owned_paths.length > 0) {
-      lines.push(`**Owned paths**: ${g.owned_paths.join(", ")}`)
+      lines.push(`**Responsibility paths**: ${g.owned_paths.join(", ")}`)
     }
   }
   return lines.join("\n")
