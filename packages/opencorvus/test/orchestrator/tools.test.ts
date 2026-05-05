@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { Database, eq } from "../../src/storage/db"
+import { Database, and, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { createDecisionLog } from "../../src/decision-log"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
@@ -364,6 +364,92 @@ describe("orchestrator tools", () => {
         expect(architectureReviewCalls).toBe(1)
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: `spec_${goalID}` })
         expect(artifact?.kind).toBe("integrity_attempt")
+      },
+    })
+  })
+
+  test("concurrent integrity calls share one review for the active spec", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_singleflight_${stamp}`
+    const taskID = `tsk_integrity_singleflight_${stamp}`
+    const goalID = `goal_integrity_singleflight_${stamp}`
+    let reviewCalls = 0
+    let releaseReview!: () => void
+    const reviewGate = new Promise<void>((resolve) => {
+      releaseReview = resolve
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity singleflight test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity singleflight test",
+          taskTitle: "Integrity singleflight task",
+          request: "Review a shared architecture graph once",
+          goalTitle: "Shared review goal",
+          goalSlug: "shared-review-goal",
+          objective: "Verify concurrent review callers share the same integrity result",
+          now,
+        })
+
+        reviewIntegrityImpl = async () => {
+          reviewCalls += 1
+          await reviewGate
+          return {
+            verdict: "pass",
+            summary: "Integrity pass",
+            dimensions: [
+              { id: "goal_fidelity", verdict: "pass", issues: [] },
+              { id: "technical_feasibility", verdict: "pass", issues: [] },
+              { id: "hallucination", verdict: "pass", issues: [] },
+              { id: "solution_quality", verdict: "pass", issues: [] },
+            ],
+            issues: [],
+            corrections: [],
+            missingGoals: [],
+            sessionID: "ses_integrity_singleflight",
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const combined = Promise.all([
+          tools.integrity.execute({ reason: "post-build review A" }, {} as any),
+          tools.integrity.execute({ reason: "post-build review B" }, {} as any),
+        ])
+        for (let i = 0; i < 20 && reviewCalls === 0; i += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 5))
+        }
+        expect(reviewCalls).toBe(1)
+
+        releaseReview()
+        const [firstResult, secondResult] = await combined
+        expect(firstResult).toContain("Integrity verdict: pass")
+        expect(secondResult).toContain("Integrity verdict: pass")
+        expect(reviewCalls).toBe(1)
+
+        const attempts = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(and(
+              eq(EngineArtifactTable.task_id, taskID),
+              eq(EngineArtifactTable.kind, "integrity_attempt"),
+            ))
+            .all(),
+        )
+        expect(attempts).toHaveLength(1)
       },
     })
   })
@@ -1598,8 +1684,6 @@ describe("orchestrator tools", () => {
           goalSlug: "refuse-unsafe-cleanup",
           objective: "Verify unsafe cleanup failures preserve diagnosis pointers",
           now,
-          workspaceDir: tmp.path,
-          workspaceBranch: "opencorvus/not-a-goal-worktree",
         })
 
         buildAgentRunImpl = async (input: any) => ({
@@ -1615,8 +1699,8 @@ describe("orchestrator tools", () => {
             commit_ref: "abc1234",
           },
           sessionID: "ses_goal_cleanup_refused",
-          worktreeDir: input.managedWorktree.directory,
-          worktreeBranch: input.managedWorktree.branch,
+          worktreeDir: tmp.path,
+          worktreeBranch: "opencorvus/not-a-goal-worktree",
           worktreeBaseRef: input.managedWorktree.baseRef,
         })
 
