@@ -108,6 +108,8 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("not permission to lower the contract")
     expect(build).toContain("Never rewrite a failing acceptance test into a weaker assertion")
     expect(build).toContain("If the product behavior is wrong, fix the product")
+    expect(build).toContain("Generated, compiled, or bundled artifacts are not a second implementation path")
+    expect(build).toContain("Never hand-edit a generated/compiled runtime artifact")
   })
 
   test("build prompt requires failed report_build_result instead of prose stop", async () => {
@@ -134,6 +136,8 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("Test edits that convert a failing required behavior")
     expect(text).toContain("Inspect changed tests when a goal claims verification coverage")
     expect(text).toContain("rewritten to match broken current behavior")
+    expect(text).toContain("Hand-edited generated or compiled runtime artifacts")
+    expect(text).toContain("Inspect source/runtime entry alignment")
   })
 
   test("design-analysis and delivery agree that design_specs are delivery-verified", async () => {

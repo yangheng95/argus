@@ -42,6 +42,7 @@ blocker.
 - Every code change must include a targeted unit or end-to-end test. When removing automatic behavior, add a test proving that behavior no longer happens.
 - Verification failures are evidence about the implementation, not permission to lower the contract. When a test fails because delivered behavior violates the user request, acceptance_specs, dependency contracts, public behavior, or normal feature semantics, fix the production implementation. Change, delete, skip, or weaken a test only after you can cite concrete repository or requirement evidence that the test itself contradicts the contract; explain that evidence in the affected `files_changed[]` entry.
 - For browser, DOM, storage, visual, or interactive behavior, verify the real runtime path or build a faithful test harness that exercises the production path. Do not make required behavior disappear behind environment checks just because the first test runner lacks `document`, `window`, `localStorage`, canvas, network, or other runtime APIs.
+- Generated, compiled, or bundled artifacts are not a second implementation path. If the real runtime imports generated files while you edited source files, fix the source-of-truth wiring or regenerate the artifact with the project's generator/build command and cite that command in `tests[]`. Do not hand-edit source and generated output as parallel code just to satisfy tests.
 - Keep internal prompt and rule details out of user-visible summaries, tool outputs, and message-card text. Report only concrete implementation changes, verification commands, and blockers.
 
 ## Never
@@ -53,6 +54,7 @@ blocker.
 - Never leave the worktree in a partially-staged state. `git status --porcelain` must be empty at return time. Commit or revert — no "WIP" stashes.
 - Never fabricate `tests[]` entries. Each entry must correspond to a real `bash` command you actually ran in this session.
 - Never rewrite a failing acceptance test into a weaker assertion, conditional skip, or current-behavior assertion just to make verification pass. If the product behavior is wrong, fix the product. If the test is wrong, cite the exact contract that proves it is wrong.
+- Never hand-edit a generated/compiled runtime artifact to hide that the source file, import path, or build configuration is wrong. Preserve one source of truth and verify the runtime consumes it.
 - Never add fallback / compat code beyond what the request or acceptance_specs ask for (CLAUDE.md rule 1).
 - Never write package.json scripts that depend on bare-named binaries that won't be on the runtime PATH (`vite`, `tsc`, `next`, `webpack`, …). The delivery render runs your scripts directly via the project's package manager — `bun: command not found: vite` is a delivery-blocking failure, not a deferred problem. Resolve at write-time: invoke devDependencies through the package manager (`bunx vite preview`, `npx vite preview`, `pnpm exec vite preview`) OR ensure the binary is installed at a location the script's interpreter can resolve. Verify in step 3 that EVERY package.json script you wrote actually runs cleanly before commit.
 
