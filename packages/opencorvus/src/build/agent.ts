@@ -388,6 +388,10 @@ export namespace BuildAgent {
         blockedBeforeMerge: boolean
       }
       const buildCollector: BuildCollector = { blockedBeforeMerge: false }
+      const currentBuildDiffs = async () => {
+        if (!worktreeDir || !baseRef) return undefined
+        return collectGoalContributionDiffs(worktreeDir, baseRef)
+      }
       const createBuildReportTools = (): ToolSet => ({
         report_build_result: tool({
           description:
@@ -402,6 +406,27 @@ export namespace BuildAgent {
                 "Error: cannot report status='passed' before merge_back succeeds. " +
                 "Commit the fix, call merge_back, resolve any conflicts, and call report_build_result with status='passed' only after merge_back returns status='merged'."
               )
+            }
+            if (result.status === "passed") {
+              const actualDiffs = await currentBuildDiffs().catch((err) => {
+                log.warn("build agent: file-change coverage diff failed inside report_build_result", {
+                  taskID: input.task.id,
+                  error: err instanceof Error ? err.message : String(err),
+                })
+                return undefined
+              })
+              if (actualDiffs) {
+                const coverageError = fileChangeExplanationCoverageError({
+                  reported: result.files_changed,
+                  diffs: actualDiffs,
+                })
+                if (coverageError) {
+                  return (
+                    `Error: ${coverageError} ` +
+                    "Submit a corrected report_build_result payload by adding/removing files_changed[] entries, then call report_build_result again."
+                  )
+                }
+              }
             }
             const commit_ref = mergedHead ? mergedHead.slice(0, 12) : result.commit_ref ?? ""
             buildCollector.result = result.status === "passed"
@@ -597,7 +622,7 @@ export namespace BuildAgent {
           parsed.success &&
           parsed.data.status === "passed"
         ) {
-          diffs = await collectGoalDiffs(worktreeDir, baseRef).catch((err) => {
+          diffs = await collectGoalContributionDiffs(worktreeDir, baseRef).catch((err) => {
             log.warn("build agent: collectGoalDiffs failed — overlay panel will show empty file list", {
               taskID: input.task.id,
               error: err instanceof Error ? err.message : String(err),
@@ -1669,7 +1694,36 @@ function resolveOption<T>(input: T | (() => T | undefined) | undefined): T | und
 // ---------------------------------------------------------------------------
 
 /**
- * Collect per-file diffs for the goal's worktree branch as `baseRef..HEAD`.
+ * Collect per-file diffs for the goal's own contribution.
+ *
+ * When merge_back reconciles a stale goal branch with an already-advanced
+ * primary branch, git produces a merge commit whose second parent is the
+ * primary tip that was merged in. Auditing `baseRef..HEAD` after that point
+ * falsely attributes sibling-goal files to this build session. The correct
+ * collaboration boundary is the contribution this goal adds on top of that
+ * merged primary tip: `HEAD^2..HEAD` for merge commits produced by
+ * Worktree.mergeSafely, and `baseRef..HEAD` when no integration merge was
+ * needed.
+ */
+async function collectGoalContributionDiffs(worktreeDir: string, baseRef: string): Promise<FileDiff[]> {
+  const contributionBase = await resolveGoalContributionBaseRef(worktreeDir, baseRef)
+  return collectGoalDiffs(worktreeDir, contributionBase)
+}
+
+export async function resolveGoalContributionBaseRef(worktreeDir: string, baseRef: string): Promise<string> {
+  const parentsRaw = (
+    await $`git show --no-patch --pretty=%P HEAD`
+      .quiet()
+      .nothrow()
+      .cwd(worktreeDir)
+      .text()
+  ).trim()
+  const parents = parentsRaw.split(/\s+/).filter(Boolean)
+  return parents.length >= 2 ? parents[1]! : baseRef
+}
+
+/**
+ * Collect per-file diffs for a ref range as `baseRef..HEAD`.
  * Returns FileDiff objects with full before/after blobs so the overlay's
  * goal-run delivery endpoint can serve diff previews without a separate
  * git read at click time. Mirrors the shape of `Snapshot.diffFull` so the

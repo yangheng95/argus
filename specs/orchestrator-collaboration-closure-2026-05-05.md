@@ -12,6 +12,8 @@ Overlay benchmark `20260505-162810` exposed the session-loop version of the same
 
 Overlay benchmark `20260505-163855` exposed a fidelity-gate version of the same problem: G1 passed after creating the Vite scaffold, then G2 was blocked before build with `Missing source coverage for existing owned paths: vite.config.ts, index.html, src/main.ts, src/style.css`. The orchestrator treated that as a goal-ownership defect, repeatedly called `modify_goal`, marked the passed G1 tip with `superseded_reason=modify_contract`, and eventually restarted from plan. This was the opposite of collaboration closure: files created by an earlier passed goal became evidence for invalidating that milestone instead of ordinary shared-code context for the next Build session.
 
+Overlay benchmark `20260505-170235` exposed the build-report audit version of the same problem: after parallel Build sessions merged sibling goal work into primary, the audit compared `baseRef..HEAD` for the final merge commit. That range included sibling files from the already-advanced primary branch, so the expression-engine goal was failed for not explaining Vite/UI/README files it did not author. The audit also ran after the session closed, which prevented the build agent from correcting an incomplete `files_changed[]` report in the same session.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -27,6 +29,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - which repair lane fits ordinary collaboration drift,
 - when Architect re-entry would be a structural re-plan instead of normal execution.
 - whether a fidelity gate is still in the planning window or is wrongly revalidating source coverage after execution evidence exists.
+- whether a Build file-change audit is measuring the current build session's own contribution or accidentally attributing sibling-goal merge context to it.
 
 Without that durable projection, the LLM treats uncertainty as permission to ask Architect to solve the graph again.
 
@@ -45,6 +48,8 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It makes terminal collector satisfaction stop the session loop immediately, so Architect/Integrity/Build cannot keep planning after their report/submit contract is complete.
 - It keeps source-coverage fidelity checks as pre-execution planning guards. After any goal attempt exists, existing-file source coverage is execution context, not a build blocker; Build owns necessary cross-file edits and reports them through `files_changed[]`.
 - It keeps reference coverage strict even during execution, because screenshots/webpages/mockups are authoritative 1:1 targets and must cascade into Build.
+- It audits Build `files_changed[]` against the build session's own contribution range. After merge_back creates a merge commit, that means `HEAD^2..HEAD`, not the original task base to final integrated HEAD.
+- It rejects incomplete `files_changed[]` reports inside the still-alive Build session so the model can amend the terminal report instead of failing the goal after the session is gone.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 
 ## Acceptance
@@ -58,3 +63,4 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - Session-loop tests prove a satisfied terminal collector is a direct stop condition.
 - Tests prove the projection appears after execution starts and remains absent or pre-execution-scoped before the first attempt.
 - Tests prove execution-stage build is not blocked solely by missing source coverage for existing files, while missing reference coverage still blocks.
+- Tests prove build file-change audit excludes sibling-goal files introduced through merge_back and only requires explanations for this goal's own contribution.
