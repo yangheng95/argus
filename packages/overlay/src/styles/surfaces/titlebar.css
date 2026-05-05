@@ -11,9 +11,9 @@
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(calc(16px * var(--ui-scale)), 1fr) auto;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
   margin: 0;
-  padding: calc(4px * var(--ui-scale)) calc(7px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
   min-height: var(--ui-titlebar-height);
   background: color-mix(in srgb, var(--chrome) 82%, var(--surface-strong));
   border: 0;

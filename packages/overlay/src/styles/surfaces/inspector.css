@@ -285,7 +285,7 @@
 }
 
 .oc-section__body {
-  padding: 0 calc(5px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  padding: 0 var(--ui-gap-sm) var(--ui-gap-sm);
 }
 
 .oc-section__head::before {
