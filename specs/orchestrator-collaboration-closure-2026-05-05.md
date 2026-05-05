@@ -24,6 +24,8 @@ The same run also exposed a source-of-truth drift: the Build session edited Type
 
 Overlay benchmark `20260505-190015` exposed the Integrity verdict-consumption version of the same problem: Integrity reported aggregate `concerns` while `solution_quality` emitted two correction actions (`totals=i6/c2/m0`). The persisted `integrity_attempt` then recorded `corrections_count=0`, and the build dispatcher created an execution run for the same spec. The root cause was not a missing prompt warning; the protocol allowed correction-bearing `concerns`, and the scheduler discarded non-`needs_correction` correction/missing counts.
 
+Overlay benchmark `20260505-192014` verified that correction-bearing concerns now become `needs_correction` and block run creation, then exposed the next closure gap: `hallucination=needs_correction` is diagnostic-only, so applying goal-layer corrections and re-running Integrity on the same spec cannot root-cause the ungrounded upstream requirements/design facts. Diagnostic-only `needs_correction` must route upstream instead of looping the same goal graph.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -45,6 +47,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - whether verification changes preserve acceptance semantics or merely weaken failing tests until the current broken behavior appears green.
 - whether source, generated artifacts, tests, and runtime entry points still converge on one source of truth.
 - whether Integrity concerns are genuinely advisory or are hiding correction/missing-goal work that must block execution.
+- whether Integrity failures are repairable at the goal layer or must deterministically restart upstream because the failed dimension is diagnostic-only.
 
 Without that durable projection, the LLM treats uncertainty as permission to ask Architect to solve the graph again.
 
@@ -71,6 +74,7 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It makes Delivery inspect changed tests when verification coverage is claimed, and reject weakened assertions, conditional skips, or current-behavior rewrites that replace the user request / acceptance spec / public contract.
 - It makes Build and Delivery reject hand-edited generated/compiled artifacts as a way to mask source/runtime divergence; generated artifacts must be regenerated from the source of truth or the runtime wiring must be fixed.
 - It treats any Integrity correction or missing-goal proposal as blocking protocol evidence: the reviewer normalizes that dimension to `needs_correction`, persisted attempts retain correction/missing counts for every verdict, workflow projection marks correction-bearing attempts failed, and build/create-run preflight blocks before run/worktree side effects.
+- It routes diagnostic-only Integrity `needs_correction` findings, currently hallucination, to `restart_from_stage('requirements')` instead of applying goal corrections and re-reviewing the same spec.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 
 ## Acceptance
@@ -89,3 +93,4 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - Tests prove Build and Delivery prompts preserve verification semantics: failing acceptance tests are fixed through product behavior unless the test is proven wrong, and Delivery rejects test weakening as acceptance evidence.
 - Tests prove generated/compiled runtime artifacts cannot become a second hand-edited implementation path.
 - Tests prove correction-bearing Integrity concerns cannot start execution and are projected as failed review work.
+- Tests prove diagnostic-only Integrity failures restart upstream and do not call the goal-correction path.

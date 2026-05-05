@@ -455,6 +455,76 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("integrity diagnostic-only needs_correction restarts upstream instead of re-reviewing the same graph", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_upstream_${stamp}`
+    const taskID = `tsk_integrity_upstream_${stamp}`
+    const goalID = `goal_integrity_upstream_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity upstream restart test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity upstream restart test",
+          taskTitle: "Integrity upstream restart task",
+          request: "Do not loop integrity when hallucination requires upstream repair",
+          goalTitle: "Route diagnostic integrity upstream",
+          goalSlug: "route-diagnostic-integrity-upstream",
+          objective: "Verify diagnostic-only integrity failures restart requirements",
+          now,
+          specID,
+        })
+
+        reviewIntegrityImpl = async () => ({
+          verdict: "needs_correction",
+          summary: "Integrity needs_correction",
+          dimensions: [
+            { id: "goal_fidelity", verdict: "pass", issues: [] },
+            { id: "technical_feasibility", verdict: "pass", issues: [] },
+            {
+              id: "hallucination",
+              verdict: "needs_correction",
+              issues: [{ description: "REQ-9 is not grounded in the user request.", type: "unsupported_claim" }],
+            },
+            { id: "solution_quality", verdict: "pass", issues: [] },
+          ],
+          issues: [{ description: "REQ-9 is not grounded in the user request.", type: "unsupported_claim" }],
+          corrections: [],
+          missingGoals: [],
+          sessionID: "ses_integrity_upstream",
+        })
+        applyIntegrityCorrectionsImpl = () => {
+          throw new Error("Diagnostic-only integrity findings must not apply goal corrections")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.integrity.execute({}, {} as any)
+
+        expect(result).toContain("Diagnostic-only findings require upstream repair")
+        expect(result).toContain("NEXT: run requirements")
+        expect(findGoal(goalID)).toBeUndefined()
+        const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
+        expect(artifact?.label).toBe("verdict-needs_correction")
+      },
+    })
+  })
+
   test("goal build blocks on a persisted needs_correction integrity verdict", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })

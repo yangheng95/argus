@@ -75,8 +75,10 @@ describe("core prompt hygiene", () => {
     expect(integrity).toContain("MUST NOT include `corrections` or")
     expect(integrity).toContain("If you need to emit any `corrections` or")
     expect(orchestrator).toContain("zero correction")
+    expect(orchestrator).toContain("scheduler restarts upstream")
     expect(tools).toContain("recorded correction work")
     expect(tools).toContain("integrityAttemptExecutionBlockReason")
+    expect(tools).toContain("Diagnostic-only findings require upstream repair")
   })
 
   test("architect prompt ships the chat-app worked example so feature-rich SPA briefs have a reference shape", async () => {
