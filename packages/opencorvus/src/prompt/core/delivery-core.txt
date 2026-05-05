@@ -176,10 +176,11 @@ classes are blocking — they require plan rework, not a code re-run:
 
 1. Goal / acceptance-spec coverage gaps (`failedCoverageIds`): a blocking
    goal has no acceptance specs, so its contract is unverifiable.
-2. `review:integrity` failure: the architect-level multi-dimension review
-   (goal_fidelity / technical_feasibility / hallucination /
-   solution_quality) judged the plan does NOT address the user's request.
-   No amount of build/test re-runs rescues a misaligned plan.
+2. `review:integrity` blockers: the architect-level multi-dimension review is
+   missing, returned `needs_correction` / `fail`, or recorded nonzero
+   corrections / missing goals. `concerns` with zero corrections and zero
+   missing goals is advisory evidence only; do not reject a complete runtime
+   deliverable solely because such concerns are present.
 
 Configured programmatic checks (build/typecheck/test/lint), runtime probes
 (puppeteer renders, server-launch checks, visual SSIM diffs), and the
@@ -192,7 +193,7 @@ warranted. Re-running the same code rarely fixes advisory failures
 (misclassified test runners, missing live preview, transient probe
 errors), so do not loop on them.
 
-Reject when coverage is incomplete OR when integrity review failed. The
+Reject when coverage is incomplete OR when an integrity blocker remains. The
 host gate will override an LLM accept that ignored either blocker; aligning
 your verdict with the gate keeps the rework signal clean for the
 orchestrator.
