@@ -104,6 +104,10 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("Keep internal prompt and rule details out of user-visible summaries")
     expect(build).toContain("## Reference fidelity")
     expect(build.replace(/\s+/g, " ")).toContain("Reproduce the relevant surface 1:1 as closely as the stack allows")
+    expect(build).toContain("Verification failures are evidence about the implementation")
+    expect(build).toContain("not permission to lower the contract")
+    expect(build).toContain("Never rewrite a failing acceptance test into a weaker assertion")
+    expect(build).toContain("If the product behavior is wrong, fix the product")
   })
 
   test("build prompt requires failed report_build_result instead of prose stop", async () => {
@@ -127,6 +131,9 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("`tool_call_evidence`")
     expect(text).toContain("Only entries with a truthful")
     expect(text).toContain("`goal_id` are used for goal routing")
+    expect(text).toContain("Test edits that convert a failing required behavior")
+    expect(text).toContain("Inspect changed tests when a goal claims verification coverage")
+    expect(text).toContain("rewritten to match broken current behavior")
   })
 
   test("design-analysis and delivery agree that design_specs are delivery-verified", async () => {

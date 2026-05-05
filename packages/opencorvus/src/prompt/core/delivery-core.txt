@@ -84,6 +84,7 @@ Reject instead of accepting when the only apparent pass comes from:
 
 - Suppressed build/type/lint errors.
 - Skipped or weakened tests.
+- Test edits that convert a failing required behavior into a weaker assertion, conditional skip, or current-behavior assertion without cited requirement evidence.
 - Keyword-only checks.
 - Empty tests, no-op tests, `echo ok` scripts, or file-existence-only tests.
 - Mocked pass-through behavior that does not exercise the production path.
@@ -136,7 +137,10 @@ For each goal:
    that directly proves the requested work is implemented.
 3. Match each acceptance spec to concrete evidence or run a focused local probe
    when needed.
-4. Record any unmet spec as a rejection detail with evidence and a goal id.
+4. Inspect changed tests when a goal claims verification coverage. Reject if a
+   test was weakened, skipped, or rewritten to match broken current behavior
+   instead of the user request / acceptance spec / public contract.
+5. Record any unmet spec as a rejection detail with evidence and a goal id.
 
 Severity labels tune attention only. Every emitted acceptance spec is gating.
 If completion is already clearly missing, reject from that evidence and do not
