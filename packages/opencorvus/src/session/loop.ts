@@ -1267,6 +1267,7 @@ export namespace SessionLoop {
           agent: input.lastUser.agent,
           model: input.lastUser.model,
           auto: true,
+          overflow: false,
         })
         return "continue" as const
       }
@@ -1341,6 +1342,7 @@ export namespace SessionLoop {
         agent: input.lastUser.agent,
         model: input.lastUser.model,
         auto: true,
+        overflow: true,
       })
     }
     return "continue" as const
@@ -1512,6 +1514,7 @@ export namespace SessionLoop {
               agent: lastUser.agent,
               model: lastUser.model,
               auto: true,
+              overflow: false,
             })
             continue
           }

@@ -1210,6 +1210,72 @@ describe("session.message.filterCompacted", () => {
       recentAssistant,
     ])
   })
+
+  test("retains exact recent tail when compaction stores tail_start_id", async () => {
+    const compactionUser = "m-compaction-user"
+    const compactionSummary = "m-compaction-summary"
+    const retainedUser = "m-retained-user"
+    const retainedAssistant = "m-retained-assistant"
+    const recentUser = "m-recent-user"
+    const recentAssistant = "m-recent-assistant"
+
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: assistantInfo(recentAssistant, recentUser),
+        parts: [{ ...basePart(recentAssistant, "p-recent-assistant"), type: "text", text: "recent answer" }],
+      },
+      {
+        info: userInfo(recentUser),
+        parts: [{ ...basePart(recentUser, "p-recent-user"), type: "text", text: "recent question" }],
+      },
+      {
+        info: {
+          ...assistantInfo(compactionSummary, compactionUser),
+          summary: true,
+          finish: "stop",
+        },
+        parts: [{ ...basePart(compactionSummary, "p-summary"), type: "text", text: "summary" }],
+      },
+      {
+        info: userInfo(compactionUser),
+        parts: [
+          {
+            ...basePart(compactionUser, "p-compaction"),
+            type: "compaction",
+            auto: true,
+            tail_start_id: retainedUser,
+          },
+        ],
+      },
+      {
+        info: assistantInfo(retainedAssistant, retainedUser),
+        parts: [{ ...basePart(retainedAssistant, "p-retained-assistant"), type: "text", text: "retained answer" }],
+      },
+      {
+        info: userInfo(retainedUser),
+        parts: [{ ...basePart(retainedUser, "p-retained-user"), type: "text", text: "retained question" }],
+      },
+      {
+        info: assistantInfo("m-old-assistant", "m-old-user"),
+        parts: [{ ...basePart("m-old-assistant", "p-old-assistant"), type: "text", text: "old answer" }],
+      },
+      {
+        info: userInfo("m-old-user"),
+        parts: [{ ...basePart("m-old-user", "p-old-user"), type: "text", text: "old question" }],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([
+      retainedUser,
+      retainedAssistant,
+      compactionUser,
+      compactionSummary,
+      recentUser,
+      recentAssistant,
+    ])
+  })
 })
 
 describe("session.message.fromError", () => {
@@ -1296,6 +1362,37 @@ describe("session.message.fromError", () => {
       const result = Message.fromError(error, { providerID: "test" })
       expect(Message.ContextOverflowError.isInstance(result)).toBe(true)
     })
+  })
+
+  test("detects provider overflow from structured APICallError bodies", () => {
+    const cases = [
+      {
+        providerID: "openai-compatible",
+        body: { error: { code: "context_length_exceeded", message: "maximum context length exceeded" } },
+      },
+      {
+        providerID: "hexin",
+        body: { error: { type: "context_overflow", message: "hexin normalized context overflow" } },
+      },
+      {
+        providerID: "mistral",
+        body: { code: "request_too_large", message: "request too large" },
+      },
+    ]
+
+    for (const item of cases) {
+      const error = new APICallError({
+        message: "400 Bad Request",
+        url: "https://example.com",
+        requestBodyValues: {},
+        statusCode: 400,
+        responseHeaders: { "content-type": "application/json" },
+        responseBody: JSON.stringify(item.body),
+        isRetryable: false,
+      })
+      const result = Message.fromError(error, { providerID: item.providerID })
+      expect(Message.ContextOverflowError.isInstance(result)).toBe(true)
+    }
   })
 
   test("does not classify 429 no body as context overflow", () => {
