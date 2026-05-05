@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "128a36807d302154"
+    "panel_revision": "683ad218361c8318"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -40,7 +40,7 @@
   "brand.guide_usage_4": "标题栏菜单用于配置工作区、模型、工具、视图、投递通道和诊断。",
   "brand.guide_usage_title": "快速路径",
   "brand.logo_alt": "OpenCorvus 标识",
-  "brand.workspace_label": "工作区",
+  "brand.workspace_label": "项目",
   "channel.configuration_title": "{{name}} 通道配置",
   "channel.edit_title": "编辑此通道的配置。",
   "channel.none": "暂无可用通道",
@@ -543,9 +543,9 @@
   "section.delivery": "交付",
   "section.criteria": "评估标准",
   "section.files": "文件变更",
-  "right_panel.tabs": "工作区和预览标签",
+  "right_panel.tabs": "Inspector 和预览标签",
   "right_panel.workflow": "工作流",
-  "right_panel.inspector": "工作区",
+  "right_panel.inspector": "Inspector",
   "right_panel.preview": "预览",
   "agent_workflow.title": "Agent 工作流",
   "agent_workflow.count": "{{count}} 个 Agent",
@@ -567,7 +567,7 @@
   "frontend_preview.open_external": "在浏览器中打开",
   "frontend_preview.source.delivery": "已从交付运行证据加载。",
   "frontend_preview.source.port_probe": "已从本地前端服务端口 {{port}} 加载。",
-  "sections.title": "工作区",
+  "sections.title": "Inspector",
   "settings.language": "语言",
   "settings.language.en_us": "English",
   "settings.language.zh_cn": "简体中文",
