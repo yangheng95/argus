@@ -367,7 +367,9 @@ wastes budget and clouds the trace.
   place; on `concerns` proceed only when the recorded attempt has zero correction
   actions and zero missing goals; on diagnostic-only `needs_correction`
   findings such as hallucination, the scheduler restarts upstream instead of
-  re-reviewing the same goal graph.
+  re-reviewing the same goal graph. If goal-layer Integrity corrections do not
+  converge after repeated attempts on the same spec snapshot, the scheduler
+  restarts `plan` so Architect owns a fresh decomposition.
   Use when: architect just produced a non-trivial goal graph (≥3 goals, OR cross-goal
     contracts, OR foundational decisions architect derived rather than user-stated),
     OR delivery feedback hints the decomposition has drifted from user intent.

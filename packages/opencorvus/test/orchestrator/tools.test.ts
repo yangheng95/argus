@@ -525,6 +525,95 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("integrity repeated goal-layer corrections restart plan instead of looping review", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_plan_restart_${stamp}`
+    const taskID = `tsk_integrity_plan_restart_${stamp}`
+    const goalID = `goal_integrity_plan_restart_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity plan restart test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity plan restart test",
+          taskTitle: "Integrity plan restart task",
+          request: "Do not loop integrity forever on same-spec goal-layer corrections",
+          goalTitle: "Route non-converging integrity to plan",
+          goalSlug: "route-non-converging-integrity-to-plan",
+          objective: "Verify repeated correctable integrity failures restart Architect",
+          now,
+          specID,
+        })
+        for (const offset of [1, 2]) {
+          recordIntegrityAttempt({
+            taskID,
+            sessionID: `ses_prior_integrity_${offset}`,
+            specSnapshotID: specID,
+            verdict: "needs_correction",
+            perDimension: [
+              { id: "goal_fidelity", verdict: "needs_correction" },
+              { id: "technical_feasibility", verdict: "pass" },
+              { id: "hallucination", verdict: "pass" },
+              { id: "solution_quality", verdict: "pass" },
+            ],
+            issuesCount: 1,
+            correctionsCount: 1,
+            missingCount: 0,
+            reason: "Prior goal-layer correction did not converge.",
+            now: now + offset,
+          })
+        }
+
+        reviewIntegrityImpl = async () => ({
+          verdict: "needs_correction",
+          summary: "Integrity needs_correction",
+          dimensions: [
+            {
+              id: "goal_fidelity",
+              verdict: "needs_correction",
+              issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
+            },
+            { id: "technical_feasibility", verdict: "pass", issues: [] },
+            { id: "hallucination", verdict: "pass", issues: [] },
+            { id: "solution_quality", verdict: "pass", issues: [] },
+          ],
+          issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
+          corrections: [{ action: "modify", goalID, reason: "Still missing REQ-1", updates: { objective: "cover REQ-1" } }],
+          missingGoals: [],
+          sessionID: "ses_integrity_plan_restart",
+        })
+        applyIntegrityCorrectionsImpl = () => {
+          throw new Error("Repeated integrity corrections must restart plan before applying another correction")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.integrity.execute({}, {} as any)
+
+        expect(result).toContain("did not converge")
+        expect(result).toContain("NEXT: run architect before build")
+        expect(findGoal(goalID)).toBeUndefined()
+        const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
+        expect(artifact?.label).toBe("verdict-needs_correction")
+      },
+    })
+  })
+
   test("goal build blocks on a persisted needs_correction integrity verdict", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
