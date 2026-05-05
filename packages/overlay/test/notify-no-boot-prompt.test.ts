@@ -11,15 +11,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:te
  * immediately without showing the OS prompt — pinning the user out of
  * notifications until they manually flip a System Settings toggle.
  *
- * The new contract:
+ * The current contract:
  *   1. Module-level boot does not call `Notification.requestPermission()`.
- *   2. `notifyTaskLifecycle` (called from non-gesture SSE handlers)
- *      reads `Notification.permission` only and returns silently if
- *      it isn't "granted".
- *   3. `requestNotificationPermission` (the public function) DOES call
- *      `Notification.requestPermission()` exactly once per invocation —
- *      it is wired only to the user-clickable toggle in
- *      `components/settings/GeneralPanel.tsx`.
+ *   2. Init explicitly calls `ensureDesktopNotificationPermission("startup")`
+ *      after locale/settings load, so the product requests OS notification
+ *      permission at startup.
+ *   3. `notifyTaskLifecycle` does not re-prompt from SSE handlers; it always
+ *      emits an in-app notification and only uses OS notifications when
+ *      permission is already granted.
  *   4. `primeNotificationPermission` is no longer exported (deleted).
  */
 
@@ -78,17 +77,21 @@ let mockState: MockedNotification;
 mockState = installNotificationMock("default");
 
 import {
+  clearNotifications,
+  ensureDesktopNotificationPermission,
+  notificationStore,
   notifyTaskLifecycle,
   requestNotificationPermission,
 } from "../src/services/notify";
 import * as notifyModule from "../src/services/notify";
 
-describe("notify: no boot-time permission prompt (W2-V34)", () => {
+describe("notify: startup permission request and in-app fallback", () => {
   beforeEach(() => {
     // Reset call counter and permission state between tests so each test
     // starts from a clean baseline.
     mockState.requestPermissionCalls = 0;
     mockState.permission = "default";
+    clearNotifications();
   });
 
   afterEach(() => {
@@ -114,6 +117,14 @@ describe("notify: no boot-time permission prompt (W2-V34)", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(mockState.requestPermissionCalls).toBe(0);
+    expect(notificationStore.items.some((item) => item.id === "task:tsk_test_001:completed")).toBe(true);
+  });
+
+  test("startup permission path requests permission once and surfaces blocked state in-app", async () => {
+    const result = await ensureDesktopNotificationPermission("startup");
+    expect(mockState.requestPermissionCalls).toBe(1);
+    expect(result).toBe("default");
+    expect(notificationStore.items.some((item) => item.id === "system:notification-permission")).toBe(true);
   });
 
   test("requestNotificationPermission (gesture path) DOES prompt once", async () => {

@@ -20,16 +20,106 @@ import { settingsStore } from "../store/settings";
 import { boardStore } from "../store/board";
 import { messageStore } from "../store/messages";
 import { t } from "../utils/i18n";
+import { createStore } from "solid-js/store";
 
 type NotificationKind = "completed" | "failed" | "cancelled" | "interaction";
+export type AppNotificationTone = "info" | "success" | "warning" | "error" | "progress";
+
+export interface AppNotificationInput {
+  id?: string;
+  tone: AppNotificationTone;
+  title: string;
+  message?: string;
+  timeoutMs?: number;
+}
+
+export interface AppNotificationItem extends Required<Omit<AppNotificationInput, "timeoutMs">> {
+  time: number;
+  timeoutMs: number;
+}
 
 type LookupTitle = (taskID: string) => string | undefined;
 
 let permissionState: NotificationPermission | "uninitialized" = "uninitialized";
 let permissionRequestPending = false;
+let notificationSeq = 0;
+const notificationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+export const [notificationStore, setNotificationStore] = createStore<{ items: AppNotificationItem[] }>({
+  items: [],
+});
 
 function notificationApiAvailable(): boolean {
   return typeof window !== "undefined" && "Notification" in window;
+}
+
+function nextNotificationID(): string {
+  notificationSeq += 1;
+  return `notice_${Date.now()}_${notificationSeq}`;
+}
+
+function defaultTimeout(tone: AppNotificationTone): number {
+  if (tone === "progress") return 0;
+  if (tone === "error" || tone === "warning") return 8000;
+  return 5000;
+}
+
+function armDismissTimer(id: string, timeoutMs: number): void {
+  const existing = notificationTimers.get(id);
+  if (existing) clearTimeout(existing);
+  notificationTimers.delete(id);
+  if (timeoutMs <= 0) return;
+  const timer = setTimeout(() => dismissNotification(id), timeoutMs);
+  notificationTimers.set(id, timer);
+}
+
+export function showNotification(input: AppNotificationInput): string {
+  const id = input.id || nextNotificationID();
+  const item: AppNotificationItem = {
+    id,
+    tone: input.tone,
+    title: input.title,
+    message: input.message || "",
+    timeoutMs: input.timeoutMs ?? defaultTimeout(input.tone),
+    time: Date.now(),
+  };
+  const existingIndex = notificationStore.items.findIndex((notice) => notice.id === id);
+  if (existingIndex >= 0) {
+    setNotificationStore("items", existingIndex, item);
+  } else {
+    setNotificationStore("items", (items) => [item, ...items].slice(0, 6));
+  }
+  armDismissTimer(id, item.timeoutMs);
+  return id;
+}
+
+export function dismissNotification(id: string): void {
+  const timer = notificationTimers.get(id);
+  if (timer) clearTimeout(timer);
+  notificationTimers.delete(id);
+  setNotificationStore("items", (items) => items.filter((item) => item.id !== id));
+}
+
+export function clearNotifications(): void {
+  for (const timer of notificationTimers.values()) clearTimeout(timer);
+  notificationTimers.clear();
+  setNotificationStore("items", []);
+}
+
+export function notifyProgress(input: Omit<AppNotificationInput, "tone">): string {
+  return showNotification({ ...input, tone: "progress", timeoutMs: input.timeoutMs ?? 0 });
+}
+
+export function notifySuccess(input: Omit<AppNotificationInput, "tone">): string {
+  return showNotification({ ...input, tone: "success" });
+}
+
+export function notifyWarning(input: Omit<AppNotificationInput, "tone">): string {
+  return showNotification({ ...input, tone: "warning" });
+}
+
+export function notifyError(input: Omit<AppNotificationInput, "tone">): string {
+  return showNotification({ ...input, tone: "error" });
 }
 
 async function ensurePermission(): Promise<NotificationPermission> {
@@ -43,14 +133,14 @@ async function ensurePermission(): Promise<NotificationPermission> {
   // settings.
   //
   // We now ONLY read Notification.permission and degrade quietly. The
-  // explicit prompt path lives in requestNotificationPermission(), which
-  // is wired to the toggle in components/settings/GeneralPanel.tsx — a
-  // real user click that satisfies WebKit's gesture requirement.
+  // Explicit prompt paths live in ensureDesktopNotificationPermission():
+  // startup requests permission once for the product entry, and the
+  // settings toggle can retry from a real user click.
   const current = Notification.permission;
   permissionState = current;
   if (current !== "granted") {
     console.warn(
-      `[notify] Notification permission is "${current}"; degrading to in-app feedback only. Toggle the setting in GeneralPanel.tsx to request permission inside a user gesture.`,
+      `[notify] Notification permission is "${current}"; degrading to in-app feedback only. Startup/settings permission requests use ensureDesktopNotificationPermission().`,
     );
   }
   return current;
@@ -87,6 +177,58 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   }
 }
 
+export async function ensureDesktopNotificationPermission(
+  source: "startup" | "settings" = "settings",
+): Promise<NotificationPermission | "unsupported"> {
+  if (!settingsStore.desktopNotifications) return "denied";
+  const state = notificationPermissionState();
+  if (state === "unsupported") {
+    notifyWarning({
+      id: "system:notification-permission",
+      title: t("notify.permission_unsupported_title"),
+      message: t("notify.permission_unsupported_body"),
+    });
+    return "unsupported";
+  }
+  if (state === "granted") return "granted";
+  if (state === "denied") {
+    notifyWarning({
+      id: "system:notification-permission",
+      title: t("notify.permission_blocked_title"),
+      message: t("notify.permission_blocked_body"),
+    });
+    return "denied";
+  }
+  try {
+    const result = await requestNotificationPermission();
+    if (result === "granted") {
+      notifySuccess({
+        id: "system:notification-permission",
+        title: t("notify.permission_granted_title"),
+        message: source === "startup"
+          ? t("notify.permission_granted_startup_body")
+          : t("notify.permission_granted_settings_body"),
+      });
+      return result;
+    }
+    notifyWarning({
+      id: "system:notification-permission",
+      title: t("notify.permission_blocked_title"),
+      message: t("notify.permission_blocked_body"),
+    });
+    return result;
+  } catch (err) {
+    notifyWarning({
+      id: "system:notification-permission",
+      title: t("notify.permission_blocked_title"),
+      message: t("notify.permission_request_failed_body", {
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    });
+    return notificationPermissionState() === "unsupported" ? "unsupported" : Notification.permission;
+  }
+}
+
 function lookupTaskTitle(taskID: string): string {
   if (!taskID) return "";
   const list = boardStore.tasks ?? [];
@@ -102,7 +244,7 @@ function lookupTaskTitle(taskID: string): string {
   return taskID;
 }
 
-function shouldSuppress(taskID: string): boolean {
+function shouldSuppressDesktop(taskID: string): boolean {
   if (!settingsStore.desktopNotifications) return true;
   // The operator is already looking at the task that just changed and the
   // window has focus — no need to vibrate the OS shell about it.
@@ -118,13 +260,23 @@ function shouldSuppress(taskID: string): boolean {
 
 async function dispatch(taskID: string, kind: NotificationKind, override?: { body?: string }): Promise<void> {
   if (!taskID) return;
-  if (shouldSuppress(taskID)) return;
+  const title = t(`notify.task.${kind}.title`);
+  const taskTitle = lookupTaskTitle(taskID);
+  const body = override?.body ?? t(`notify.task.${kind}.body`, { title: taskTitle });
+  const tone: AppNotificationTone =
+    kind === "completed" ? "success" :
+      kind === "failed" ? "error" :
+        kind === "cancelled" ? "warning" : "info";
+  showNotification({
+    id: `task:${taskID}:${kind}`,
+    tone,
+    title,
+    message: body,
+  });
+  if (shouldSuppressDesktop(taskID)) return;
   const permission = await ensurePermission();
   if (permission !== "granted") return;
   try {
-    const title = t(`notify.task.${kind}.title`);
-    const taskTitle = lookupTaskTitle(taskID);
-    const body = override?.body ?? t(`notify.task.${kind}.body`, { title: taskTitle });
     // tag = taskID coalesces successive notifications for the same task
     // into a single notification slot in the OS shell.
     new Notification(title, {
@@ -175,13 +327,11 @@ export function clearTaskNotificationState(taskID?: string): void {
   lastDispatched.delete(taskID);
 }
 
-// W2-V34: primeNotificationPermission() removed. Pre-fix, init.ts called
-// it during boot to "warm up" the permission cache, which on darwin
-// (WebKit) requested permission outside any user gesture and locked the
-// state to "denied" for the session. Permission is now requested only via
-// the explicit toggle in GeneralPanel.tsx (a click handler — a real user
-// gesture). Any other path that needs to know the current state should
-// call notificationPermissionState() (read-only).
+// W2-V34: primeNotificationPermission() removed. Permission prompting now
+// goes through ensureDesktopNotificationPermission(), which is shared by
+// startup and the settings toggle and always surfaces blockers through the
+// in-app notification center. Lifecycle event handlers keep using the
+// read-only permission path so task events do not repeatedly prompt.
 
 // Touch a store reference so eslint / tree-shake knows we depend on it
 // (the import is here for createEffect-driven future enhancements).

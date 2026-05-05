@@ -115,6 +115,11 @@
   flex: 0 0 auto;
 }
 
+.oc-button:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
+}
+
 /* Flat-redesign 2026-05-04 (rule §2.2 C): hover/focus does not flip
  * border-color. Background tint alone carries the affordance — the
  * three 金刚 window controls (ghost icon variants) used to render a
@@ -122,7 +127,6 @@
 .oc-button:not([data-tone="danger"]):not([data-variant="solid"]):hover,
 .oc-button:not([data-tone="danger"]):not([data-variant="solid"]):focus-visible {
   --oc-button-bg: var(--surface-hover);
-  outline: none;
 }
 
 .oc-button[data-variant="solid"][data-tone="neutral"]:hover,
@@ -130,7 +134,6 @@
   --oc-button-bg: color-mix(in srgb, var(--text-strong) 86%, var(--surface));
   --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--text-strong) 86%, var(--surface));
   --oc-button-color: var(--surface);
-  outline: none;
 }
 
 .oc-button[data-variant="solid"][data-tone="accent"]:hover,
@@ -138,7 +141,6 @@
   --oc-button-bg: var(--accent-hover);
   --oc-button-border: var(--oc-border-width) solid var(--accent-hover);
   --oc-button-color: var(--surface);
-  outline: none;
 }
 
 .oc-button[data-variant="solid"][data-tone="danger"]:hover,
@@ -146,7 +148,6 @@
   --oc-button-bg: color-mix(in srgb, var(--bad) 86%, var(--surface));
   --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 86%, var(--surface));
   --oc-button-color: var(--surface);
-  outline: none;
 }
 
 .oc-button:disabled,

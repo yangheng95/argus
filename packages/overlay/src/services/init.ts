@@ -36,6 +36,7 @@ import { ensureWorkspaceDirectory } from "./workspace";
 import { ensureDefaultDirectory } from "./workspace";
 import { workspaceRestoreDirectory } from "../store/settings";
 import { selectTask } from "./task";
+import { ensureDesktopNotificationPermission } from "./notify";
 
 // ── Types ──
 
@@ -130,20 +131,6 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
  // 1. Load settings into the Solid store
   await loadSettings();
 
- // Note (W2-V34): a previous version called primeNotificationPermission()
- // at this point to "warm up" the desktop-notification permission. WebKit
- // (darwin / Tauri WKWebView) requires Notification.requestPermission() to
- // be called from inside a user gesture; calling it during init triggered
- // "Notification prompting can only be done from a user gesture" and
- // turned the permission state to "denied" with no prompt shown — which
- // could only be reverted by the user diving into System Settings.
- // Permission is now requested only on a real user gesture: the toggle
- // in components/settings/GeneralPanel.tsx invokes
- // requestNotificationPermission() inside the click handler. The lifecycle
- // event path in services/notify.ts no longer prompts; it reads the
- // current Notification.permission and degrades quietly if "default" or
- // "denied".
-
  // 2. Push settings into the API client (server URL + auth)
   syncApiConfig();
 
@@ -152,6 +139,12 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
 
  // 4. Apply locale from settings
   await setLocale(settingsStore.locale);
+
+ // 4a. Request desktop notification permission on startup. The in-app
+ // notification center is always available; this only enables the OS shell
+ // channel and surfaces any denial/blocker through that same notification
+ // center instead of hiding it in console output.
+  void ensureDesktopNotificationPermission("startup");
 
  // 5. Check connection
   const connected = await checkServerConnection();

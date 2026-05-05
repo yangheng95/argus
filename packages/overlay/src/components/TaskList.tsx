@@ -7,11 +7,13 @@ import { boardStore, visibleTasks, loadTasks } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue } from "../services/task-queue";
 import { exportTaskArchive, importTaskArchive } from "../services/task-archive";
+import { notifyError, notifyProgress, notifySuccess, notifyWarning } from "../services/notify";
 import { useArmedConfirm } from "../solid/armed-confirm";
 import { useAsyncAction } from "../solid/async-action";
 import { t } from "../utils/i18n";
 import { stamp, fullStampWithRelative } from "../utils/time";
 import { Icon } from "./Icon";
+import { Button } from "./ui/Button";
 
 // ── Task status constants ──
 
@@ -150,9 +152,12 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
   const confirmDelete = useArmedConfirm(CONFIRM_WINDOW_MS);
 
   return (
-    <button
+    <Button
       type="button"
-      class="task-row-delete"
+      variant="ghost"
+      size="icon"
+      tone="danger"
+      data-ui="task-row-delete"
       data-task-delete={props.id}
       data-confirm={confirmDelete.armed() ? "true" : undefined}
       title={t("task.delete_button_title")}
@@ -169,24 +174,27 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
       <span class="task-row-delete-icon" data-icon="confirm" aria-hidden="true">
         <Icon name="check" size={11} />
       </span>
-    </button>
+    </Button>
   );
 }
 
 // ── ExportButton (single-click, no confirm) ──
 // Exporting is non-destructive — bytes flow OUT only — so unlike
 // cancel/delete we don't gate it behind a two-step confirm. The button is
-// visible on every task that has a directory; failures surface via
-// alert() for now (matches the rest of TaskList's error-surfacing style).
+// visible on every persisted task.
 
 function ExportButton(props: { id: string; directory?: string }) {
   const exportAction = useAsyncAction(async () => {
-    await exportTaskArchive({ taskID: props.id, directory: props.directory });
+    return await exportTaskArchive({ taskID: props.id, directory: props.directory });
   });
+  const noticeID = () => `task-archive:export:${props.id}`;
   return (
-    <button
+    <Button
       type="button"
-      class="task-row-export"
+      variant="ghost"
+      size="icon"
+      tone="accent"
+      data-ui="task-row-export"
       data-task-export={props.id}
       data-busy={exportAction.pending() ? "true" : undefined}
       disabled={exportAction.pending()}
@@ -195,16 +203,28 @@ function ExportButton(props: { id: string; directory?: string }) {
       onClick={async (e) => {
         e.stopPropagation();
         try {
-          await exportAction.run();
+          notifyProgress({
+            id: noticeID(),
+            title: t("task.export_started"),
+            message: props.id,
+          });
+          const result = await exportAction.run();
+          notifySuccess({
+            id: noticeID(),
+            title: t("task.export_done_title"),
+            message: t("task.export_done", { filename: result.filename }),
+          });
         } catch (err) {
-          window.alert(
-            t("task.export_failed", { error: err instanceof Error ? err.message : String(err) }),
-          );
+          notifyError({
+            id: noticeID(),
+            title: t("task.export_failed_title"),
+            message: t("task.export_failed", { error: err instanceof Error ? err.message : String(err) }),
+          });
         }
       }}
     >
       <Icon name="download" size={11} />
-    </button>
+    </Button>
   );
 }
 
@@ -216,9 +236,12 @@ function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
   const confirmCancel = useArmedConfirm(CONFIRM_WINDOW_MS);
 
   return (
-    <button
+    <Button
       type="button"
-      class="task-row-cancel"
+      variant="ghost"
+      size="icon"
+      tone="neutral"
+      data-ui="task-row-cancel"
       data-task-cancel={props.id}
       data-confirm={confirmCancel.armed() ? "true" : undefined}
       title={t("task.cancel_button_title")}
@@ -235,7 +258,7 @@ function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
       <span class="task-row-cancel-icon" data-icon="confirm" aria-hidden="true">
         <Icon name="check" size={11} />
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -562,27 +585,41 @@ export function TaskList(props: TaskListProps) {
 
   let importInputEl: HTMLInputElement | undefined;
   const [importing, setImporting] = createSignal(false);
+  const [importOverwrite, setImportOverwrite] = createSignal(false);
 
   async function handleImportFile(file: File) {
     const directory = settingsStore.directory || "";
     if (!directory) {
-      window.alert(t("task.import_no_directory"));
+      notifyWarning({
+        id: "task-archive:import",
+        title: t("task.import_no_directory_title"),
+        message: t("task.import_no_directory"),
+      });
       return;
     }
     setImporting(true);
+    notifyProgress({
+      id: "task-archive:import",
+      title: t("task.import_started"),
+      message: file.name,
+    });
     try {
-      const result = await importTaskArchive({ file, directory, overwrite: true });
-      window.alert(
-        t("task.import_done", {
+      const result = await importTaskArchive({ file, directory, overwrite: importOverwrite() });
+      notifySuccess({
+        id: "task-archive:import",
+        title: t("task.import_done_title"),
+        message: t("task.import_done", {
           restored: String(result.restoredFiles),
           skipped: String(result.skippedFiles.length),
         }),
-      );
+      });
       await loadTasks();
     } catch (err) {
-      window.alert(
-        t("task.import_failed", { error: err instanceof Error ? err.message : String(err) }),
-      );
+      notifyError({
+        id: "task-archive:import",
+        title: t("task.import_failed_title"),
+        message: t("task.import_failed", { error: err instanceof Error ? err.message : String(err) }),
+      });
     } finally {
       setImporting(false);
     }
@@ -591,9 +628,25 @@ export function TaskList(props: TaskListProps) {
   return (
     <div class="task-list-panel">
       <div class="task-list-toolbar">
-        <button
+        <label
+          class="task-list-import-overwrite"
+          title={t("task.import_overwrite_title")}
+        >
+          <input
+            type="checkbox"
+            checked={importOverwrite()}
+            disabled={importing()}
+            onChange={(e) => setImportOverwrite(e.currentTarget.checked)}
+            data-task-import-overwrite
+          />
+          <span>{t("task.import_overwrite_label")}</span>
+        </label>
+        <Button
           type="button"
-          class="task-list-import-button"
+          variant="outline"
+          size="sm"
+          tone="neutral"
+          data-ui="task-list-import-button"
           data-task-import
           disabled={importing()}
           title={t("task.import_button_title")}
@@ -602,7 +655,7 @@ export function TaskList(props: TaskListProps) {
         >
           <Icon name="upload" size={11} />
           <span class="task-list-import-button-text">{t("task.import_button")}</span>
-        </button>
+        </Button>
         <input
           ref={(el) => (importInputEl = el)}
           type="file"
@@ -629,15 +682,18 @@ export function TaskList(props: TaskListProps) {
             aria-label={t("task.search_placeholder")}
           />
           <Show when={searchQuery()}>
-            <button
+            <Button
               type="button"
-              class="task-list-search-clear"
+              variant="ghost"
+              size="icon"
+              tone="neutral"
+              data-ui="task-list-search-clear"
               onClick={() => setSearchQuery("")}
               title={t("common.clear")}
               aria-label={t("common.clear")}
             >
               <Icon name="close" />
-            </button>
+            </Button>
           </Show>
         </div>
       </Show>
@@ -646,14 +702,17 @@ export function TaskList(props: TaskListProps) {
           <div class="task-list-error-msg">
             {t("task.load_failed") || "Failed to load tasks"}: {boardStore.tasksError}
           </div>
-          <button
+          <Button
             type="button"
-            class="task-list-error-retry"
+            variant="outline"
+            size="md"
+            tone="danger"
+            data-ui="task-list-error-retry"
             disabled={retrying()}
             onClick={handleRetry}
           >
             {retrying() ? (t("common.loading") || "…") : (t("common.retry") || "Retry")}
-          </button>
+          </Button>
         </div>
       </Show>
       <Show
