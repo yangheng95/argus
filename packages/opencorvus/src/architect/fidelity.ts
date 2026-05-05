@@ -78,6 +78,7 @@ export function architectFidelityIssues(input: {
   fidelity: ArchitectFidelityState
   designSpecs?: VisualSpec[]
   workDir?: string
+  requireSourceCoverage?: boolean
   requireReferenceCoverage?: boolean
 }): string[] {
   const issues: string[] = []
@@ -115,7 +116,8 @@ export function architectFidelityIssues(input: {
     assemblySurfaceOwners.set(row.surface, row.goal_id)
   }
 
-  const existingOwnedPaths = input.goals.flatMap((goal) =>
+  const shouldRequireSourceCoverage = input.requireSourceCoverage !== false
+  const existingOwnedPaths = shouldRequireSourceCoverage ? input.goals.flatMap((goal) =>
     goal.owned_paths.filter((ownedPath) => {
       if (!input.workDir) return false
       try {
@@ -124,7 +126,7 @@ export function architectFidelityIssues(input: {
         return false
       }
     }),
-  )
+  ) : []
 
   if (existingOwnedPaths.length > 0) {
     if (input.fidelity.sourceCoverage.length === 0) {

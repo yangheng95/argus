@@ -102,12 +102,14 @@ export function validatePersistedArchitectFidelity(input: {
   task: TaskRow
   goals: Array<{ id: string; owned_paths?: string[] }>
   workDir?: string
+  executionStarted?: boolean
 }) {
   return architectFidelityIssues({
     goals: input.goals.map((goal) => ({ id: goal.id, owned_paths: goal.owned_paths ?? [] })),
     fidelity: readPersistedArchitectFidelity(input.task),
     designSpecs: Array.isArray(input.task.design_specs) ? input.task.design_specs as any : undefined,
     workDir: input.workDir ?? Instance.directory,
+    requireSourceCoverage: input.executionStarted !== true,
     requireReferenceCoverage: (Array.isArray(input.task.design_specs) ? input.task.design_specs.length : 0) > 0,
   })
 }
@@ -4432,6 +4434,7 @@ export function createOrchestratorTools(input: {
                 id: row.id,
                 owned_paths: Array.isArray(row.owned_paths) ? row.owned_paths as string[] : [],
               })),
+              executionStarted: Boolean((await describeTask(taskID)).collaboration_closure?.execution_started),
             })
             if (fidelityIssues.length > 0) {
               return `Build dispatch blocked: architect fidelity contract is incomplete.\n${fidelityIssues.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`

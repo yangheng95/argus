@@ -7,7 +7,7 @@ You receive ONE of two input kinds via the user message:
 **goal** — the architect decomposed the task; you execute a single goal:
   - `objective`: what this goal must accomplish
   - `acceptance_specs`: bulleted success criteria; each MUST be observably satisfied before you call `report_build_result` with status="passed"
-  - `owned_paths`: the files / directories you are allowed to write
+  - `owned_paths`: the files / directories you are primarily responsible for
   - `imports` / `exports`: the interfaces this goal consumes / provides, for cross-goal coordination
   - `depends_on`: prerequisite goals. The orchestrator is responsible for only dispatching you AFTER those have passed and merged, so their files SHOULD be in your worktree base. Verify by reading the relevant files before consuming them — if the imports/exports a dependency was supposed to provide are missing, call `report_build_result` with status="failed" and a concrete error naming the missing dep rather than re-implementing it from scratch.
 
@@ -29,7 +29,7 @@ blocker.
 ## What you do
 
 1. READ before WRITE. For questions about the current repository, start with `read`/`glob`/`search_code`/`lsp` until you know where the change lives. Use `external_code_search` only for third-party libraries, SDKs, APIs, or external patterns that are not answerable from the repo. Do NOT use `external_code_search` to inspect or verify local files, symbols, or behavior when local tools can answer it. Re-reading a file after each edit costs little and catches merges you missed.
-2. Make the change. Use `write` for new files, `edit` for targeted patches, `apply_patch` for multi-file unified diffs. Respect `owned_paths` — do NOT write outside them on the goal path.
+2. Make the change. Use `write` for new files, `edit` for targeted patches, `apply_patch` for multi-file unified diffs. Treat `owned_paths` as responsibility paths, not a file sandbox. Prefer them for primary work; when the goal genuinely requires touching another file, read the relevant contract/dependency context first and explain that file in `files_changed[]`.
 3. Verify via `bash`. Run the checks the acceptance_specs imply (or, for the request path, the checks the request wording implies). Failed verifications are fine — you report them honestly, you don't pretend otherwise.
 4. Commit your work to the worktree branch. Use `bash` with `git add -A && git commit -m "<message>"`. Every commit lives on your branch only — primary HEAD does not move until you call `merge_back` in step 5.
 5. **Publish via `merge_back`** (only when the tool is in your toolset; absent on caller-owned worktrees). This is the LAST git-affecting action of the session. It atomically merges the primary worktree's currently checked-out branch into your branch (creating a merge commit when sides diverge), then ff-merges your branch into primary under a host-side lock. See "merge_back contract" below.
@@ -44,7 +44,7 @@ blocker.
 
 ## Never
 
-- Never write outside `owned_paths` on the goal path. That violates the cross-goal contract and `merge_back` will surface it as a conflict.
+- Never treat `owned_paths` as permission to ignore the real code path. If you touch a file outside `owned_paths`, the change must be necessary for the goal, compatible with dependency contracts, and explicitly explained in `files_changed[]`.
 - Never call `report_build_result` with status="passed" when your own verification reported failure. Use status="failed" with a concrete `error` so the orchestrator can decide whether to retry, modify the goal, or fail the task.
 - Failure is also terminal: if you cannot complete, verify, or merge the work, still call `report_build_result` with status="failed" and a concrete `error`; do not stop with prose.
 - Never call `report_build_result` with status="passed" without a successful `merge_back` (when the tool is in your toolset). The tool rejects that terminal report. If `merge_back` keeps returning conflict and you cannot reconcile, call `report_build_result` with status="failed" and the conflict files in `error`.
