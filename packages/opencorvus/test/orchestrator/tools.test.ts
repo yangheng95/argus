@@ -282,6 +282,7 @@ describe("orchestrator tools", () => {
     const goalID = `goal_integrity_${stamp}`
     let architectureReviewCalls = 0
     let buildCalls = 0
+    let buildTarget: any
 
     await Instance.provide({
       directory: tmp.path,
@@ -321,6 +322,7 @@ describe("orchestrator tools", () => {
         }
         buildAgentRunImpl = async (input: any) => {
           buildCalls += 1
+          buildTarget = input.target
           return {
             result: {
               status: "passed",
@@ -348,13 +350,17 @@ describe("orchestrator tools", () => {
 
         const result = await tools.build.execute({
           goalID,
-          request: "Implement the goal",
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
         expect(result).toContain("status=passed")
         expect(result).toContain("architecture_review: pass")
         expect(buildCalls).toBe(1)
+        expect(buildTarget).toMatchObject({
+          kind: "goal",
+          id: goalID,
+          objective: "Verify build runs before architecture review feedback is recorded",
+        })
         expect(architectureReviewCalls).toBe(1)
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: `spec_${goalID}` })
         expect(artifact?.kind).toBe("integrity_attempt")
@@ -606,12 +612,12 @@ describe("orchestrator tools", () => {
           .readByPhaseAndGoal("retry", goalID)
           .find((entry) => entry.key === `retry_analysis_${goalID}`)
         expect(retryFeedback?.value).toContain("needs_correction: Goal graph must change")
-        expect(retryFeedback?.value).toContain("Action: re-run this same goal")
+        expect(retryFeedback?.value).toContain(`Action: run goal ${goalID}`)
       },
     })
   })
 
-  test("post-build architecture concerns open same-goal rework instead of passive delivery", async () => {
+  test("post-build architecture concerns open targeted rework instead of passive delivery", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 

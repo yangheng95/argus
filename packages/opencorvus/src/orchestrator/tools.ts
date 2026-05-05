@@ -1891,7 +1891,7 @@ export function createOrchestratorTools(input: {
               `${result.globalMetricSpecs.length} global metrics, ${result.challengeSeeds.length} challenge seeds, ` +
               `${result.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-              ` NEXT: dispatch eligible per-goal \`build\`; each non-pass post-build architecture_review opens same-goal rework feedback.`,
+              ` NEXT: dispatch eligible per-goal \`build({ goalID })\`; each non-pass post-build architecture_review routes rework feedback to the affected goal IDs it names.`,
             summary: result.summary,
             fields: [
               ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
@@ -1945,9 +1945,9 @@ export function createOrchestratorTools(input: {
     // sibling of architect at the orchestrator level, not a nested call
     // inside architect's run(). This tool reads the persisted goal set,
     // invokes the reviewer, and records findings only. It never rewrites
-    // requirements or goals; a non-pass post-build review opens same-goal
-    // rework through startNewAttempt so Build consumes the feedback in the
-    // next prompt.
+    // requirements or goals; a non-pass post-build review routes rework to
+    // the affected goal IDs named by review issues/corrections so Build
+    // consumes the feedback in the next prompt.
     // -----------------------------------------------------------------------
 
     integrity: tool({
@@ -1962,8 +1962,8 @@ export function createOrchestratorTools(input: {
         "(worst-of). Findings are persisted as feedback only: this review never " +
         "rewrites requirements or goals, and it does not block the first Build " +
         "round. Each goal build automatically records post-build architecture_review " +
-        "input and runs this review after the Build report; non-pass findings open " +
-        "same-goal rework feedback for the next Build or become evidence for an explicit Architect decision.\n\n" +
+        "input and runs this review after the Build report; non-pass findings route " +
+        "rework feedback to the affected goal IDs named by review issues/corrections or become evidence for an explicit Architect decision.\n\n" +
         "USE WHEN: architect just produced a non-trivial goal graph (≥3 goals, OR " +
         "cross-goal contracts, OR foundational decisions architect derived rather " +
         "than user-stated), OR a Build / Delivery result needs architecture feedback. " +
@@ -4144,8 +4144,8 @@ export function createOrchestratorTools(input: {
     build: tool({
       description:
         "Implementation dispatcher. Runs the build agent (read / write / edit / bash) in-process to apply " +
-        "one scoped change. Two valid shapes exist. `build({ goalID, request })` is the normal workflow " +
-        "shape after architect has registered goals. `build({ request })` without goalID is valid only " +
+        "one scoped change. Two valid shapes exist. `build({ goalID })` is the normal workflow " +
+        "shape after architect has registered goals; include `request` only for concrete retry/rework guidance that supplements the goal contract. `build({ request })` without goalID is valid only " +
         "when the task itself is explicit `kind=build`, or after a rejected delivery verdict when the " +
         "whole integrated tree needs rework. Fresh `kind=workflow` tasks MUST go through requirements / " +
         "architect before build, even if the request looks simple. " +
@@ -4159,8 +4159,9 @@ export function createOrchestratorTools(input: {
       inputSchema: z.object({
         request: z
           .string()
+          .optional()
           .describe(
-            "The prompt to feed the build agent. For kind=build tasks this can be the user's original request. For workflow rework calls, include the user's request PLUS a concise summary of the rejected delivery details the build agent must address.",
+            "Optional for per-goal pipeline builds because the persisted goal supplies the work contract. Required for task-level direct builds or whole-task rework; include the user's request plus concise rejected delivery details the build agent must address.",
           ),
         reason: z
           .string()
@@ -4174,8 +4175,9 @@ export function createOrchestratorTools(input: {
             "Optional goal id this build is scoped to. Set when build is invoked as a per-goal worker inside the pipeline workflow. Omit for task-level direct builds.",
           ),
       }),
-      execute: async ({ request, reason, goalID }) => {
+      execute: async ({ request = "", reason, goalID }) => {
         const task = requireTask(taskID)
+        const requestText = request.trim()
         log.info("build tool invoked", { taskID, reason, requestLen: request.length, goalID: goalID || "" })
 
         // Inherit goalID from the parent agent session if one isn't explicitly
@@ -4194,6 +4196,9 @@ export function createOrchestratorTools(input: {
               reason: eligibility.reason,
             })
             return `build: rejected task-level build. ${eligibility.reason}`
+          }
+          if (requestText.length === 0) {
+            return `build: rejected task-level build. request is required when build is not scoped to a goal. Use build({ goalID }) for workflow goals or build({ request }) for direct/post-delivery whole-task rework.`
           }
           await switchExplicitBuildTaskToDirectWorkflow(attachedGoalID)
           await trackStepStart("build")
@@ -4376,7 +4381,7 @@ export function createOrchestratorTools(input: {
               kind: "goal",
               id: goal.id,
               title: goal.title,
-              objective: request.trim().length > 0 ? request : goal.objective,
+              objective: requestText.length > 0 ? requestText : goal.objective,
               acceptance_specs: acceptanceSpecsToPromptLines(goal.acceptance_specs),
               owned_paths: Array.isArray(goal.owned_paths) ? (goal.owned_paths as string[]) : [],
               exports: Array.isArray(goal.exports) ? (goal.exports as string[]) : [],
@@ -4485,7 +4490,7 @@ export function createOrchestratorTools(input: {
               retryAttachments,
             }
           } else {
-            target = { kind: "request", text: request }
+            target = { kind: "request", text: requestText }
             const deliveryFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID })
             const retryAttachments = await loadLatestRenderedRetryAttachment({
               taskID,
@@ -4751,10 +4756,7 @@ export function createOrchestratorTools(input: {
                   architectureReviewNeedsRework = true
                   const reworkLines: string[] = []
                   for (const reviewGoalID of reviewTargetGoalIDs) {
-                    const action =
-                      reviewGoalID === attachedGoalID
-                        ? "re-run this same goal"
-                        : `run goal ${reviewGoalID}`
+                    const action = `run goal ${reviewGoalID}`
                     const reviewFeedback =
                       `${architectureReview.verdict}: ${architectureReview.summary}. ` +
                       `issues=${architectureReview.issues.join("; ") || "none"}. ` +
