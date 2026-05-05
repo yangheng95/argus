@@ -69,4 +69,16 @@ describe("icon affordances stay visible at rest", () => {
     expect(body).toContain("--oc-button-shadow:")
     expect(body).not.toContain("--oc-button-color: var(--text-muted);")
   })
+
+  test("search clear buttons share the visible icon-action resting state", () => {
+    const sidebarCss = read("src/styles/surfaces/sidebar.css")
+    const providerCss = read("src/styles/surfaces/settings.css")
+    const taskClear = soloRuleBody(sidebarCss, '.task-list-search .oc-button[data-ui="task-list-search-clear"]')
+    const providerClear = soloRuleBody(providerCss, '.provider-search-field .oc-button[data-ui="provider-search-clear"]')
+    for (const body of [taskClear, providerClear]) {
+      expect(body).toContain("--oc-button-color: var(--text-soft);")
+      expect(body).toContain("--oc-button-shadow:")
+      expect(body).not.toContain("--oc-button-color: var(--text-muted);")
+    }
+  })
 })

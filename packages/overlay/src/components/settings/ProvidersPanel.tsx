@@ -576,16 +576,19 @@ export default function ProvidersPanel() {
               data-testid="provider-search-input"
             />
             <Show when={hasProviderSearch()}>
-              <button
+              <Button
                 type="button"
-                class="provider-search-clear"
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-ui="provider-search-clear"
                 onClick={() => setProviderSearch("")}
                 title={t("common.clear")}
                 aria-label={t("common.clear")}
                 data-testid="provider-search-clear"
               >
-                <Icon name="close" />
-              </button>
+                <Icon name="close" size={11} />
+              </Button>
             </Show>
           </label>
         </div>
