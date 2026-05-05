@@ -3,6 +3,7 @@ import { Dialog } from "./primitives/Dialog";
 import { Button } from "./ui/Button";
 import { Icon } from "./Icon";
 import { settingsStore } from "../store/settings";
+import { useAsyncAction } from "../solid/async-action";
 import {
   browseDirectory,
   createDirectory,
@@ -17,22 +18,25 @@ function leafName(value: string): string {
 }
 
 export function WorkspaceOnboardingDialog() {
-  const [busyAction, setBusyAction] = createSignal<string>("");
+  const [activeAction, setActiveAction] = createSignal<string>("");
   const open = createMemo(() => !settingsStore.directory);
   const recentDirectories = createMemo(() => {
     settingsStore.directoryEpoch;
     settingsStore.savedDirectory;
     return loadRecentDirectories();
   });
-
-  async function runAction(key: string, fn: () => Promise<void>) {
-    if (busyAction()) return;
-    setBusyAction(key);
+  const actionRunner = useAsyncAction(async (key: string, fn: () => Promise<void>) => {
+    setActiveAction(key);
     try {
       await fn();
     } finally {
-      setBusyAction("");
+      setActiveAction("");
     }
+  });
+
+  async function runAction(key: string, fn: () => Promise<void>) {
+    if (actionRunner.pending()) return;
+    await actionRunner.run(key, fn);
   }
 
   return (
@@ -42,6 +46,7 @@ export function WorkspaceOnboardingDialog() {
       wide
       class="workspace-onboarding-dialog"
       formClass="workspace-onboarding-form"
+      headerClass="workspace-onboarding-header"
       title={
         <div class="workspace-onboarding-titleblock">
           <span class="workspace-onboarding-kicker">{t("workspace_onboarding.kicker")}</span>
@@ -62,7 +67,11 @@ export function WorkspaceOnboardingDialog() {
         </section>
 
         <section class="workspace-onboarding-actions" aria-label={t("workspace_onboarding.actions_label")}>
-          <article class="workspace-onboarding-action" data-kind="open">
+          <article
+            class="workspace-onboarding-action"
+            data-kind="open"
+            data-busy={activeAction() === "browse" ? "true" : "false"}
+          >
             <div class="workspace-onboarding-action-head">
               <span class="workspace-onboarding-action-icon" aria-hidden="true">
                 <Icon name="folder-open" />
@@ -78,7 +87,8 @@ export function WorkspaceOnboardingDialog() {
               size="md"
               tone="accent"
               data-testid="workspace-onboarding-open-folder"
-              disabled={!!busyAction()}
+              disabled={actionRunner.pending()}
+              aria-busy={activeAction() === "browse" ? "true" : "false"}
               onClick={() => void runAction("browse", () => browseDirectory())}
             >
               <Icon name="folder-open" />
@@ -86,7 +96,11 @@ export function WorkspaceOnboardingDialog() {
             </Button>
           </article>
 
-          <article class="workspace-onboarding-action" data-kind="create">
+          <article
+            class="workspace-onboarding-action"
+            data-kind="create"
+            data-busy={activeAction() === "create" ? "true" : "false"}
+          >
             <div class="workspace-onboarding-action-head">
               <span class="workspace-onboarding-action-icon" aria-hidden="true">
                 <Icon name="plus" />
@@ -98,11 +112,12 @@ export function WorkspaceOnboardingDialog() {
             </div>
             <Button
               type="button"
-              variant="outline"
+              variant="solid"
               size="md"
               tone="neutral"
               data-testid="workspace-onboarding-create-project"
-              disabled={!!busyAction()}
+              disabled={actionRunner.pending()}
+              aria-busy={activeAction() === "create" ? "true" : "false"}
               onClick={() => void runAction("create", () => createDirectory())}
             >
               <Icon name="plus" />
@@ -124,7 +139,9 @@ export function WorkspaceOnboardingDialog() {
                     type="button"
                     class="workspace-onboarding-recent-item"
                     data-testid={`workspace-onboarding-recent-${index()}`}
-                    disabled={!!busyAction()}
+                    data-busy={activeAction() === `recent:${dir}` ? "true" : "false"}
+                    disabled={actionRunner.pending()}
+                    aria-busy={activeAction() === `recent:${dir}` ? "true" : "false"}
                     onClick={() => void runAction(`recent:${dir}`, () => setDirectory(dir))}
                   >
                     <span class="workspace-onboarding-recent-icon" aria-hidden="true">

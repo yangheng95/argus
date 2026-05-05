@@ -11,11 +11,11 @@
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(calc(16px * var(--ui-scale)), 1fr) auto;
   align-items: center;
-  gap: calc(2px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
   margin: 0;
-  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(7px * var(--ui-scale));
   min-height: var(--ui-titlebar-height);
-  background: var(--chrome);
+  background: color-mix(in srgb, var(--chrome) 82%, var(--surface-strong));
   border: 0;
   border-bottom: var(--oc-border-width) solid var(--border);
   flex-shrink: 0;
@@ -37,7 +37,7 @@
   align-items: center;
   gap: var(--oc-titlebar-gap);
   flex: none;
-  min-width: calc(36px * var(--ui-scale));
+  min-width: calc(64px * var(--ui-scale));
   justify-self: auto;
   -webkit-app-region: drag;
 }
@@ -50,10 +50,9 @@
 }
 
 .brand-logo {
-  width: calc(16px * var(--ui-scale));
-  height: calc(16px * var(--ui-scale));
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
   color: var(--accent);
-  filter: drop-shadow(0 0 calc(8px * var(--ui-scale)) var(--accent-glow));
   flex-shrink: 0;
 }
 
@@ -117,18 +116,23 @@
 /* Connection badge: a small dot-indicator that lives in the titlebar
    utility area. Kept within this surface because no other column owns it. */
 .conn-badge {
+  --conn-badge-dot: var(--text-muted);
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
-  font-size: var(--ui-font-tiny);
+  font-size: var(--ui-font-meta);
   font-weight: var(--ui-font-weight-medium);
-  padding: var(--ui-badge-padding-y) 0;
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
   letter-spacing: 0.02em;
-  color: var(--text-muted);
+  color: var(--text);
   cursor: pointer;
   user-select: none;
-  background: transparent;
+  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+  transition:
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
 }
 
 .conn-badge::before {
@@ -137,24 +141,30 @@
   width: calc(6px * var(--ui-scale));
   height: calc(6px * var(--ui-scale));
   border-radius: 50%;
-  background: currentColor;
+  background: var(--conn-badge-dot);
   flex-shrink: 0;
 }
 
+.conn-badge:hover,
+.conn-badge:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+
 .conn-badge[data-status="online"] {
-  color: var(--good);
+  --conn-badge-dot: var(--good);
 }
 
 .conn-badge[data-status="offline"] {
-  color: var(--bad);
+  --conn-badge-dot: var(--bad);
 }
 
 .conn-badge[data-status="connecting"] {
-  color: var(--warn);
+  --conn-badge-dot: var(--warn);
 }
 
 .conn-badge__label {
-  color: var(--text-muted);
+  color: var(--text);
   text-transform: none;
 }
 
@@ -181,6 +191,16 @@
   .brand-guide-card {
     left: calc(-8px * var(--ui-scale));
     width: min(calc(320px * var(--ui-scale)), calc(100vw - calc(20px * var(--ui-scale))));
+  }
+
+  .brand-guide-label {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .brand-guide-copyblock {
+    display: none;
   }
 }
 
@@ -256,7 +276,7 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--oc-titlebar-gap);
+  gap: calc(7px * var(--ui-scale));
   min-width: 0;
   padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border: 0 solid transparent;
@@ -268,8 +288,7 @@
   transition:
     border-color var(--ui-duration-base),
     background var(--ui-duration-base),
-    box-shadow var(--ui-duration-base),
-    transform var(--ui-duration-base);
+    box-shadow var(--ui-duration-base);
   -webkit-app-region: no-drag;
 }
 
@@ -279,13 +298,34 @@
   border-color: var(--hover-accent-border);
   background: var(--hover-accent-wash);
   box-shadow: var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
 .brand-guide:focus-visible {
   box-shadow:
     0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 18%, transparent),
     var(--hover-accent-shadow);
+}
+
+.brand-guide-copyblock {
+  display: inline-flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+  min-width: 0;
+}
+
+.brand-guide-wordmark {
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.brand-guide-label {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-medium);
+  line-height: 1;
 }
 
 .brand-guide-card {
@@ -424,17 +464,39 @@
 .titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"] {
   --oc-button-bg: var(--subtle-3);
   --oc-button-border: 0 solid transparent;
-  --oc-button-color: var(--oc-titlebar-menu-text);
+  --oc-button-color: var(--text-strong);
 }
 
 .titlebar-status-cluster .oc-button[data-ui="titlebar-status-icon"] {
   --oc-button-height: var(--ui-titlebar-btn-height);
   --oc-button-padding-x: 0;
   --oc-button-border: 0 solid transparent;
+  --oc-button-bg: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  --oc-button-color: var(--text);
 
   height: var(--ui-titlebar-btn-height);
   width: var(--ui-titlebar-btn-width);
   min-width: var(--ui-titlebar-btn-width);
+}
+
+/* Window control buttons (minimize / maximize / close).
+   Sized to match the titlebar button family. The close button keeps
+   tone="danger" which makes the × red at rest; a faint bad-dim bg
+   ensures it stays readable on the semi-transparent chrome even at
+   rest — invisible icons on the close affordance is a usability gap. */
+.titlebar-window-controls .oc-button {
+  --oc-button-height: var(--ui-titlebar-btn-height);
+  --oc-button-padding-x: 0;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-bg: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+
+  height: var(--ui-titlebar-btn-height);
+  width: var(--ui-titlebar-btn-width);
+  min-width: var(--ui-titlebar-btn-width);
+}
+
+.titlebar-window-controls .oc-button[data-tone="danger"] {
+  --oc-button-bg: color-mix(in srgb, var(--bad) 18%, var(--surface-strong));
 }
 
 .titlebar-menu-trigger-compact {
@@ -463,9 +525,9 @@
   border: var(--oc-border-width) solid transparent;
   border-radius: var(--oc-radius-soft);
   background: transparent;
-  color: var(--text-soft);
+  color: var(--oc-titlebar-menu-text);
   font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-strong);
+  font-weight: var(--ui-font-weight-medium);
   cursor: pointer;
   white-space: nowrap;
 }

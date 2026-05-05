@@ -71,7 +71,7 @@
 .btn-primary,
 .sidebar-btn-primary {
   gap: calc(2px * var(--ui-scale));
-  padding-inline: calc(6px * var(--ui-scale));
+  padding-inline: calc(4px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0;
