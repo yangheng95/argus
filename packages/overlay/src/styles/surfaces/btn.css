@@ -7,11 +7,10 @@
    `.btn-primary`) doesn't follow the data-attribute variant rule
    the new-primitive guard enforces.
 
-   Includes the cross-class primary action canonical
-   (.btn-primary / .sidebar-btn-primary)
-   guarded by "primary action canonical reads palette tokens, not
-   literals" — the shared rule routes through --accent-gradient and
-   --text-on-accent with no literals.
+   Includes the legacy `.btn-primary` canonical guarded by "primary
+   action canonical reads palette tokens, not literals" — the rule
+   routes through --accent-gradient and --text-on-accent with no
+   literals.
    ───────────────────────────────────────────────────────────── */
 
 .btn {
@@ -59,8 +58,7 @@
   color: var(--bad);
 }
 
-.btn-primary,
-.sidebar-btn-primary {
+.btn-primary {
   margin: 0;
   border: 0;
   background: var(--accent-gradient);
@@ -68,8 +66,7 @@
   box-shadow: none;
 }
 
-.btn-primary,
-.sidebar-btn-primary {
+.btn-primary {
   gap: calc(2px * var(--ui-scale));
   padding-inline: calc(4px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
@@ -77,8 +74,7 @@
   letter-spacing: 0;
 }
 
-.btn-primary:hover,
-.sidebar-btn-primary:hover {
+.btn-primary:hover {
   background: var(--accent-gradient-hover);
   border-color: transparent;
   box-shadow: none;
