@@ -8,6 +8,7 @@ import { EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../..
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { Session } from "../../src/session"
+import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { findGoal, findGoalLatestWorkspace, findLatestIntegrityAttemptArtifact, listGoalRunsByGoal } from "../../src/engine/store"
@@ -382,6 +383,79 @@ describe("orchestrator tools", () => {
         expect(result).toContain("integrity corrected the active goal graph")
         expect(buildCalls).toBe(0)
         expect(findGoal(goalID)).toBeUndefined()
+      },
+    })
+  })
+
+  test("goal build blocks on a persisted needs_correction integrity verdict", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_integrity_persisted_block_${stamp}`
+    const taskID = `tsk_goal_integrity_persisted_block_${stamp}`
+    const goalID = `goal_integrity_persisted_block_${stamp}`
+    const specID = `spec_${goalID}`
+    let buildCalls = 0
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "persisted integrity block test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Persisted integrity block test",
+          taskTitle: "Persisted integrity block task",
+          request: "Do not dispatch build after a failed integrity attempt",
+          goalTitle: "Block persisted integrity failure",
+          goalSlug: "block-persisted-integrity-failure",
+          objective: "Verify build reads persisted integrity verdicts before dispatch",
+          now,
+          specID,
+        })
+        recordIntegrityAttempt({
+          taskID,
+          sessionID: "ses_integrity_persisted_block",
+          specSnapshotID: specID,
+          verdict: "needs_correction",
+          perDimension: [
+            { id: "goal_fidelity", verdict: "pass" },
+            { id: "technical_feasibility", verdict: "pass" },
+            { id: "hallucination", verdict: "needs_correction" },
+            { id: "solution_quality", verdict: "concerns" },
+          ],
+          issuesCount: 2,
+          correctionsCount: 0,
+          missingCount: 0,
+          reason: "Reference requirements were not grounded.",
+          now,
+        })
+        buildAgentRunImpl = async () => {
+          buildCalls += 1
+          throw new Error("Build should not run after persisted needs_correction")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Implement the goal",
+          reason: "Per-goal pipeline execution.",
+        }, {} as any)
+
+        expect(result).toContain("integrity verdict is needs_correction")
+        expect(result).toContain("build is blocked")
+        expect(buildCalls).toBe(0)
+        expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
       },
     })
   })

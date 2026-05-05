@@ -43,6 +43,7 @@ import {
   findEvaluationByRun,
   findLatestDeliveryVerdictArtifact,
   findLatestIntegrityAttemptArtifact,
+  integrityAttemptVerdict,
   findPlan,
   getGoalRetryCount,
   listGoals,
@@ -698,7 +699,8 @@ export function createOrchestratorTools(input: {
         `Integrity verdict: needs_correction (${outcome.perDimension.join(", ")}). ` +
         `${outcome.summary} ` +
         `Goal set re-upserted against spec ${outcome.specSnapshotID}. ` +
-        `NEXT: re-read the corrected goals before dispatching build.`,
+        `Build remains blocked until a subsequent integrity attempt returns pass or concerns. ` +
+        `NEXT: re-run architect or integrity against the corrected goal graph before dispatching build.`,
       fields: [
         ["issues", outcome.issues],
         ["added_goals", outcome.addedGoals],
@@ -708,6 +710,20 @@ export function createOrchestratorTools(input: {
       ],
       pointer: `integrity session ${outcome.sessionID}`,
     })
+  }
+
+  function integrityAttemptBuildBlockReason(row: ReturnType<typeof findLatestIntegrityAttemptArtifact>) {
+    if (integrityAttemptVerdict(row) !== "needs_correction") return undefined
+    const payload = row?.payload as Record<string, unknown> | null | undefined
+    const specSnapshotID = typeof payload?.spec_snapshot_id === "string" ? payload.spec_snapshot_id : "active spec"
+    const issuesCount = typeof payload?.issues_count === "number" ? payload.issues_count : 0
+    const correctionsCount = typeof payload?.corrections_count === "number" ? payload.corrections_count : 0
+    const missingCount = typeof payload?.missing_count === "number" ? payload.missing_count : 0
+    return (
+      `integrity verdict is needs_correction for ${specSnapshotID}; build is blocked until ` +
+      `architect or integrity produces a pass/concerns attempt. ` +
+      `issues=${issuesCount}, corrections=${correctionsCount}, missing=${missingCount}.`
+    )
   }
 
   async function runIntegrityReview(): Promise<IntegrityReviewOutcome> {
@@ -4351,6 +4367,11 @@ export function createOrchestratorTools(input: {
                   `${integrityOutcome.specSnapshotID}. Re-read the corrected goals and choose the next dispatch from the new graph.`
                 )
               }
+            }
+            const integrityBlockReason = integrityAttemptBuildBlockReason(latestIntegrity)
+            if (integrityBlockReason) {
+              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+              return `build: blocked before goal ${attachedGoalID} — ${integrityBlockReason}`
             }
             // Fidelity gate runs BEFORE any worktree creation or workspace
             // pointer mutation. Phase A2 (2026-05-05): pre-fix order was
