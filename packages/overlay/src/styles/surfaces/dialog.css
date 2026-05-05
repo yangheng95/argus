@@ -81,7 +81,7 @@
 }
 
 .dialog-form > .dialog-head:not(.config-dialog-head),
-.dialog-form > .dialog-header {
+.dialog-form > .dialog-header:not(.config-dialog-head) {
   margin: calc(-18px * var(--ui-scale)) calc(-20px * var(--ui-scale)) 0;
   padding: calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));
   border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
@@ -127,6 +127,12 @@
 
 .dialog-actions.compact {
   margin-top: 0;
+}
+
+.goal-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-lg);
 }
 
 /* Session viewer dialog body — services/dialog.ts opens this when

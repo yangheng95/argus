@@ -10,6 +10,8 @@ export interface DialogProps {
   headerActions?: JSX.Element;
   /** Optional footer action row rendered in .dialog-actions. */
   footer?: JSX.Element;
+  /** Optional class names applied to the header wrapper. */
+  headerClass?: string;
   /** Wider width variant for dense surfaces such as the log viewer. */
   wide?: boolean;
   /** Render title as `h2` by default, override only when semantics require it. */
@@ -38,6 +40,7 @@ export function Dialog(rawProps: DialogProps) {
     "title",
     "headerActions",
     "footer",
+    "headerClass",
     "wide",
     "titleAs",
     "backdropClose",
@@ -78,7 +81,7 @@ export function Dialog(rawProps: DialogProps) {
       }}
     >
       <div class={["dialog-form", local.formClass].filter(Boolean).join(" ")}>
-        <div class="dialog-header">
+        <div class={["dialog-header", local.headerClass].filter(Boolean).join(" ")}>
           <Dynamic component={local.titleAs} class="dialog-title">
             {local.title}
           </Dynamic>

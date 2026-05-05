@@ -1,6 +1,17 @@
 import { createStore } from "solid-js/store";
 import type { AppDialogOptions } from "../services/app-dialog";
 
+export type ConfigDialogTab =
+  | "general"
+  | "permissions"
+  | "prompt"
+  | "channel"
+  | "tools"
+  | "memory"
+  | "providers"
+  | "agent-models"
+  | "about";
+
 export interface AppDialogState extends AppDialogOptions {
   open: boolean;
   epoch: number;
@@ -12,9 +23,25 @@ export interface SessionDialogState {
   bodyHtml: string;
 }
 
+export interface GoalDialogState {
+  open: boolean;
+  goalID: string;
+  title: string;
+  acceptance: string;
+  saving: boolean;
+}
+
+export interface ConfigDialogState {
+  open: boolean;
+  activeTab: ConfigDialogTab;
+  sidebarWidth: number | null;
+}
+
 export interface DialogState {
   app: AppDialogState;
   session: SessionDialogState;
+  goal: GoalDialogState;
+  config: ConfigDialogState;
 }
 
 const DEFAULT_DIALOG_STATE: DialogState = {
@@ -40,6 +67,18 @@ const DEFAULT_DIALOG_STATE: DialogState = {
     open: false,
     title: "",
     bodyHtml: "",
+  },
+  goal: {
+    open: false,
+    goalID: "",
+    title: "",
+    acceptance: "",
+    saving: false,
+  },
+  config: {
+    open: false,
+    activeTab: "general",
+    sidebarWidth: null,
   },
 };
 

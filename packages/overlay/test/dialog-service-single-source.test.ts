@@ -15,6 +15,8 @@ describe("app/session dialog single source", () => {
   const indexHtml = readText("src/index.html");
   const appHost = readText("src/components/AppDialogHost.tsx");
   const sessionHost = readText("src/components/SessionDialogHost.tsx");
+  const goalHost = readText("src/components/GoalDialogHost.tsx");
+  const configHost = readText("src/components/ConfigDialogHost.tsx");
 
   test("app dialog service is store-backed, not bridge-backed DOM mutation", () => {
     expect(appDialogService).not.toContain("installAppDialogBridge");
@@ -38,23 +40,36 @@ describe("app/session dialog single source", () => {
   test("main mounts host components instead of binding close buttons", () => {
     expect(main).toContain('render(() => <AppDialogHost />, appDialogHost)');
     expect(main).toContain('render(() => <SessionDialogHost />, sessionDialogHost)');
+    expect(main).toContain('render(() => <GoalDialogHost />, goalDialogHost)');
+    expect(main).toContain('render(() => <ConfigDialogHost />, configDialogHost)');
     expect(main).not.toContain("btnCloseSession");
     expect(main).not.toContain("installAppDialogBridge");
+    expect(main).not.toContain("installGoalFormHandlers");
+    expect(main).not.toContain('document.getElementById("configSidebar")?.addEventListener("click"');
   });
 
-  test("index html no longer contains static app/session dialog shells", () => {
+  test("index html no longer contains static app/session/goal/config dialog shells", () => {
     expect(indexHtml).not.toContain('id="appDialog"');
     expect(indexHtml).not.toContain('id="btnAppDialogOk"');
     expect(indexHtml).not.toContain('id="sessionDialog"');
     expect(indexHtml).not.toContain('id="btnCloseSession"');
+    expect(indexHtml).not.toContain('id="goalDialog"');
+    expect(indexHtml).not.toContain('id="configDialog"');
+    expect(indexHtml).not.toContain('id="btnCloseConfigDialog"');
   });
 
-  test("host components own the canonical app/session dialog ids", () => {
+  test("host components own the canonical app/session/goal/config dialog ids", () => {
     expect(appHost).toContain('id="appDialog"');
     expect(appHost).toContain('id="btnAppDialogOk"');
     expect(appHost).toContain('id="appDialogBody"');
     expect(sessionHost).toContain('id="sessionDialog"');
     expect(sessionHost).toContain('id="btnCloseSession"');
     expect(sessionHost).toContain('id="sessionDialogBody"');
+    expect(goalHost).toContain('id="goalDialog"');
+    expect(goalHost).toContain('id="goalForm"');
+    expect(goalHost).toContain('id="goalDescription"');
+    expect(configHost).toContain('id="configDialog"');
+    expect(configHost).toContain('id="configSidebar"');
+    expect(configHost).toContain('id="btnCloseConfigDialog"');
   });
 });

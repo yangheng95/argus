@@ -3,7 +3,7 @@
 // Call `showAppDialog(options)` / `nativeMessage(message, opts)` from anywhere.
 
 import { t } from "../utils/i18n";
-import { openConfigDialog } from "./dialog";
+import { closeConfigDialog, openConfigDialog } from "./dialog";
 import { dialogStore, setDialogStore } from "../store/dialog";
 
 export type AppDialogOptions = {
@@ -28,6 +28,7 @@ export type AppDialogResult = { confirmed: boolean; value: string | null };
 let resolver: ((value: AppDialogResult) => void) | null = null;
 let restoreConfigSection = "";
 let appDialogSeq = 0;
+let ignoreNextDismiss = false;
 
 export function showAppDialog(options: AppDialogOptions = {}): Promise<AppDialogResult> {
   if (resolver) {
@@ -36,13 +37,9 @@ export function showAppDialog(options: AppDialogOptions = {}): Promise<AppDialog
     resolve({ confirmed: false, value: null });
   }
 
-  const configDialog = document.getElementById("configDialog") as HTMLDialogElement | null;
-  const activeConfigTab = document
-    .querySelector<HTMLElement>("#configSidebar .config-nav-item.active")
-    ?.dataset.configTab;
-  restoreConfigSection = configDialog?.open === true ? activeConfigTab || "general" : "";
+  restoreConfigSection = dialogStore.config.open === true ? dialogStore.config.activeTab || "general" : "";
   if (restoreConfigSection) {
-    configDialog?.close();
+    closeConfigDialog();
   }
 
   setDialogStore("app", {
@@ -98,6 +95,7 @@ export function settleAppDialog(confirmed: boolean, epoch?: number): void {
       : null;
   const resolve = resolver;
   resolver = null;
+  ignoreNextDismiss = true;
   setDialogStore("app", "open", false);
   resolve?.({ confirmed, value });
   if (restoreConfigSection) {
@@ -108,6 +106,10 @@ export function settleAppDialog(confirmed: boolean, epoch?: number): void {
 }
 
 export function dismissAppDialog(dialog?: HTMLDialogElement): void {
+  if (ignoreNextDismiss) {
+    ignoreNextDismiss = false;
+    return;
+  }
   const epoch = Number(dialog?.dataset.dialogEpoch || dialogStore.app.epoch);
   if (epoch !== dialogStore.app.epoch) return;
   const resolve = resolver;
