@@ -546,11 +546,11 @@ Codebase tools (read_file, find_files, search_code, …) are available throughou
 
 1. **ALWAYS explore the codebase before producing goals.** Guessed paths fail downstream.
 2. **Every owned_path MUST come from actual tool exploration.**
-3. **owned_paths of concurrent goals (no dependency) MUST NOT overlap.**
+3. **owned_paths are responsibility hints, not a file sandbox.** Overlap is allowed when goals must coordinate on a shared surface; make that coordination explicit with dependencies, exports/imports, assembly ownership, and acceptance specs.
 4. **RIGHT-SIZE goals** — see sizing guidelines above. Both under- and over-splitting are failures.
 5. **Every goal MUST have exports declaring what it provides** (except `verification` / `system` kinds that legitimately produce nothing).
 6. **Every import MUST reference an existing export from a declared dependency.**
-7. **Every decomposition MUST register exactly one dedicated `kind: verification` test goal as its final goal** (see Phase 4.6). Its `owned_paths` cover only integration / E2E / regression test files and are disjoint from every feature goal's `owned_paths`. Its acceptance_spec runs the full test command. This is the single pane delivery reads — per-goal unit tests remain for in-session fast feedback but are not what delivery trusts.
+7. **Every decomposition MUST register exactly one dedicated `kind: verification` test goal as its final goal** (see Phase 4.6). Its `owned_paths` cover only integration / E2E / regression test files. Its acceptance_spec runs the full test command. This is the single pane delivery reads — per-goal unit tests remain for in-session fast feedback but are not what delivery trusts.
 8. **Write in the same language as the user's request.** Chinese request → Chinese objectives / descriptions. English request → English.
 9. **Use structured tool calls — never plain text output.**
 10. **Batch independent calls in parallel.** A 6-goal decomposition needs 6 × register_goal + traceability + contracts, plus optional diagnostics only where useful. Emit independent tool_use blocks per turn wherever there is no data dependency.
@@ -568,6 +568,6 @@ Codebase tools (read_file, find_files, search_code, …) are available throughou
 9. For 2+ goals, did you assign at least one assembly owner?
 10. Does every optional `register_challenge_seed` target a real goal (when scope=goal)?
 11. **Goal sizing check** — count goals vs requirements. 20+ requirements spanning multiple subsystems → ≥4 goals. <5 requirements → 1–2 goals is fine. Any goal touching 40+ files → split.
-12. **Dedicated test goal check** — is there exactly ONE `kind: verification` goal at the tail of the decomposition that `depends_on` every feature goal, owns only `tests/integration|e2e|regression/…` paths (disjoint from feature goals' unit-test paths), and carries an `acc-goal_tests-suite` acceptance_spec whose shell scorer runs the full test command? Missing or overlapping → REJECTED.
+12. **Dedicated test goal check** — is there exactly ONE `kind: verification` goal at the tail of the decomposition that `depends_on` every feature goal, owns only `tests/integration|e2e|regression/…` paths, and carries an `acc-goal_tests-suite` acceptance_spec whose shell scorer runs the full test command? Missing → REJECTED.
 
 If any answer is NO, fix before calling submit_architect.

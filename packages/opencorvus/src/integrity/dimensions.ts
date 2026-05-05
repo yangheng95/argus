@@ -119,8 +119,11 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
         "but test_framework=vitest), or the chosen framework cannot deliver a goal's " +
         "stated objective (e.g. backend goal targeting a framework with no DB integration " +
         "but the goal needs persistence), that's `infeasible_stack`.",
-      "Compare every pair of goals' `owned_paths[]`. Two goals owning the same path = " +
-        "`contract_collision` — a hard build-time conflict.",
+      "Do not treat `owned_paths[]` overlap as a technical-feasibility failure. " +
+        "`owned_paths` are responsibility hints, not a file sandbox. A true " +
+        "`contract_collision` is an incompatible dependency/export/runtime contract " +
+        "(for example two goals declare conflicting public APIs for the same module, " +
+        "or a consumer imports a capability whose producer contract explicitly forbids it).",
       "Merged-tree completeness. The union of all goals' `owned_paths` must materialise " +
         "every prerequisite the user's deliverable needs to be exercised end-to-end. " +
         "For visual / browser deliverables that includes the runnable entrypoint (root " +
@@ -183,10 +186,12 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
         "or fails based on state outside this plan's control. Either widen the goal's " +
         "`owned_paths` (or its dependency's) to cover the prerequisite, or scope the " +
         "command to files the goal actually owns (e.g. `bun test src/<goal-dir>/`).",
-      "Ownership overlap. Goals can share imports/exports, but two goals editing the same " +
-        "file (even if one is a directory and the other is a glob) = `ownership_overlap`. " +
-        "Distinct from technical_feasibility's `contract_collision` — collision is a hard " +
-        "edit conflict; overlap is fuzzy mutual rewriting that turns merge into roulette.",
+      "Shared responsibility clarity. `owned_paths` overlap is allowed when goals need to " +
+        "coordinate on a shared surface. Flag `ownership_overlap` only when that shared " +
+        "surface has no dependency, import/export, assembly-owner, or `files_changed[]` " +
+        "explanation tying the edits together. The correction should add coordination " +
+        "context or clarify responsibility; it must not turn `owned_paths` into a hard " +
+        "editable-file lock.",
       "Ordering smell. A `verification` goal scheduled before its target `feature` goal, " +
         "or a `bootstrap` goal that depends on `feature` outputs, is `ordering_smell`. " +
         "If the only needed repair is dependency ordering, propose a `modify` correction " +
