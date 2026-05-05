@@ -2,11 +2,13 @@
 // Solid.js port of renderTaskList / taskSection / taskRow / visibleTasks
 // Displays active and recently-completed tasks from boardStore.
 
-import { createMemo, createSelector, createSignal, onCleanup, For, Show } from "solid-js";
+import { createMemo, createSelector, createSignal, For, Show } from "solid-js";
 import { boardStore, visibleTasks, loadTasks } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue } from "../services/task-queue";
 import { exportTaskArchive, importTaskArchive } from "../services/task-archive";
+import { useArmedConfirm } from "../solid/armed-confirm";
+import { useAsyncAction } from "../solid/async-action";
 import { t } from "../utils/i18n";
 import { stamp, fullStampWithRelative } from "../utils/time";
 import { Icon } from "./Icon";
@@ -138,45 +140,28 @@ function projectLabel(directory: string): { name: string; parent: string } {
 
 // ── DeleteButton (two-step inline confirm) ──
 // First click arms the button (data-confirm="true") and shows the confirm
-// icon; a second click within CONFIRM_WINDOW_MS fires the delete. The state
+// icon; a second click within the confirm window fires the delete. The state
 // auto-resets after the window or when the user clicks elsewhere, so there's
 // no modal round-trip.
 
-const CONFIRM_WINDOW_MS = 3000;
+const CONFIRM_WINDOW_MS = 3000; // confirm window length in milliseconds.
 
 function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
-  const [armed, setArmed] = createSignal(false);
-  let resetTimer: ReturnType<typeof setTimeout> | undefined;
-
-  function disarm() {
-    if (resetTimer) {
-      clearTimeout(resetTimer);
-      resetTimer = undefined;
-    }
-    setArmed(false);
-  }
-
-  onCleanup(disarm);
+  const confirmDelete = useArmedConfirm(CONFIRM_WINDOW_MS);
 
   return (
     <button
       type="button"
       class="task-row-delete"
       data-task-delete={props.id}
-      data-confirm={armed() ? "true" : undefined}
+      data-confirm={confirmDelete.armed() ? "true" : undefined}
       title={t("task.delete_button_title")}
       aria-label={t("task.delete_button_title")}
       onClick={(e) => {
         e.stopPropagation();
-        if (armed()) {
-          disarm();
-          props.onDelete(props.id);
-          return;
-        }
-        setArmed(true);
-        resetTimer = setTimeout(disarm, CONFIRM_WINDOW_MS);
+        confirmDelete.confirm(() => props.onDelete(props.id));
       }}
-      onBlur={disarm}
+      onBlur={confirmDelete.disarm}
     >
       <span class="task-row-delete-icon" data-icon="delete" aria-hidden="true">
         <Icon name="close" size={11} />
@@ -195,28 +180,26 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
 // alert() for now (matches the rest of TaskList's error-surfacing style).
 
 function ExportButton(props: { id: string; directory?: string }) {
-  const [busy, setBusy] = createSignal(false);
+  const exportAction = useAsyncAction(async () => {
+    await exportTaskArchive({ taskID: props.id, directory: props.directory });
+  });
   return (
     <button
       type="button"
       class="task-row-export"
       data-task-export={props.id}
-      data-busy={busy() ? "true" : undefined}
-      disabled={busy()}
+      data-busy={exportAction.pending() ? "true" : undefined}
+      disabled={exportAction.pending()}
       title={t("task.export_button_title")}
       aria-label={t("task.export_button_title")}
       onClick={async (e) => {
         e.stopPropagation();
-        if (busy()) return;
-        setBusy(true);
         try {
-          await exportTaskArchive({ taskID: props.id, directory: props.directory });
+          await exportAction.run();
         } catch (err) {
           window.alert(
             t("task.export_failed", { error: err instanceof Error ? err.message : String(err) }),
           );
-        } finally {
-          setBusy(false);
         }
       }}
     >
@@ -230,38 +213,21 @@ function ExportButton(props: { id: string; directory?: string }) {
 // coherent pair. Shown only for interruptable tasks (queued / active).
 
 function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
-  const [armed, setArmed] = createSignal(false);
-  let resetTimer: ReturnType<typeof setTimeout> | undefined;
-
-  function disarm() {
-    if (resetTimer) {
-      clearTimeout(resetTimer);
-      resetTimer = undefined;
-    }
-    setArmed(false);
-  }
-
-  onCleanup(disarm);
+  const confirmCancel = useArmedConfirm(CONFIRM_WINDOW_MS);
 
   return (
     <button
       type="button"
       class="task-row-cancel"
       data-task-cancel={props.id}
-      data-confirm={armed() ? "true" : undefined}
+      data-confirm={confirmCancel.armed() ? "true" : undefined}
       title={t("task.cancel_button_title")}
       aria-label={t("task.cancel_button_title")}
       onClick={(e) => {
         e.stopPropagation();
-        if (armed()) {
-          disarm();
-          props.onCancel(props.id);
-          return;
-        }
-        setArmed(true);
-        resetTimer = setTimeout(disarm, CONFIRM_WINDOW_MS);
+        confirmCancel.confirm(() => props.onCancel(props.id));
       }}
-      onBlur={disarm}
+      onBlur={confirmCancel.disarm}
     >
       <span class="task-row-cancel-icon" data-icon="cancel" aria-hidden="true">
         <Icon name="stop" size={11} />

@@ -15,6 +15,8 @@ import {
 import { t } from "../utils/i18n";
 import { apiJson } from "../services/api";
 import { nativeMessage } from "../services/app-dialog";
+import { Dialog } from "./primitives/Dialog";
+import { useAsyncAction } from "../solid/async-action";
 import { Button } from "./ui/Button";
 
 // ── Types ──
@@ -67,12 +69,9 @@ interface MemoryDetailDialogProps {
 }
 
 function MemoryDetailDialog(props: MemoryDetailDialogProps) {
-  let dialogRef: HTMLDialogElement | undefined;
-
   const [detail, setDetail] = createSignal<MemoryDetail | null>(null);
   const [errorMsg, setErrorMsg] = createSignal("");
   const [loading, setLoading] = createSignal(true);
-  const [deleting, setDeleting] = createSignal(false);
 
   const load = async () => {
     setLoading(true);
@@ -98,15 +97,12 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
     }
   };
 
-  const handleDelete = async () => {
-    if (deleting()) return;
-    setDeleting(true);
+  const deleteAction = useAsyncAction(async () => {
     try {
       await apiJson(
         `panel/knowledge/memory/${encodeURIComponent(props.fileId)}`,
         { method: "DELETE" },
       );
-      dialogRef?.close();
       props.onDeleted();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -114,102 +110,91 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
       void nativeMessage(t("memory.delete_failed", { error: msg }), {
         title: t("memory.delete_failed_title"),
       });
-    } finally {
-      setDeleting(false);
     }
-  };
+  });
 
- // Load on mount
-  load();
+ // Load on mount and when the selected memory file changes.
+  createEffect(() => {
+    props.fileId;
+    void load();
+  });
 
   return (
-    <dialog
-      class="dialog"
-      ref={(el) => {
-        dialogRef = el;
-        if (el) queueMicrotask(() => el.showModal());
-      }}
+    <Dialog
+      open={true}
+      title={
+        loading()
+          ? t("common.loading")
+          : errorMsg()
+            ? t("common.error")
+            : (detail()?.title ?? "")
+      }
       onClose={props.onClose}
-    >
-      <div class="dialog-form">
-        <div class="dialog-head">
-          <span class="dialog-title">
-            {loading()
-              ? t("common.loading")
-              : errorMsg()
-                ? t("common.error")
-                : (detail()?.title ?? "")}
-          </span>
-        </div>
-
-        <Show when={!loading() && !errorMsg() && detail() !== null}>
-          {(_) => {
-            const d = detail()!;
-            return (
-              <>
-                <div class="memory-detail-meta">
-                  <span
-                    class="knowledge-scope"
-                    data-scope={d.scope}
-                  >
-                    {knowledgeScopeLabel(d.scope)}
-                  </span>
-                  <span>{t("memory.source", { value: d.source })}</span>
-                  <span>
-                    {t("memory.created", {
-                      value: formatDateTime(d.timeCreated),
-                    })}
-                  </span>
-                  <span>
-                    {t("memory.updated", {
-                      value: formatDateTime(d.timeUpdated),
-                    })}
-                  </span>
-                </div>
-                <pre class="memory-detail-content">
-                  {d.content || t("memory.empty_value")}
-                </pre>
-              </>
-            );
-          }}
-        </Show>
-
-        <Show when={!loading() && !!errorMsg()}>
-          <div class="config-status-box" data-status="error">{errorMsg()}</div>
-        </Show>
-
-        <Show when={loading()}>
-          <div class="loading-hint">{t("common.loading")}</div>
-        </Show>
-
-        <div class="dialog-actions">
+      footer={
+        <>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             tone="danger"
-            onClick={() => void handleDelete()}
-            disabled={loading() || deleting() || !!errorMsg()}
+            onClick={() => void deleteAction.run()}
+            disabled={loading() || deleteAction.pending() || !!errorMsg()}
           >
-            {deleting() ? t("common.loading") : t("common.delete")}
+            {deleteAction.pending() ? t("common.loading") : t("common.delete")}
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="md"
             tone="neutral"
-            disabled={deleting()}
-            onClick={() => {
-              if (deleting()) return;
-              dialogRef?.close();
-              props.onClose();
-            }}
+            disabled={deleteAction.pending()}
+            onClick={props.onClose}
           >
             {t("common.close")}
           </Button>
-        </div>
-      </div>
-    </dialog>
+        </>
+      }
+    >
+      <Show when={!loading() && !errorMsg() && detail() !== null}>
+        {(_) => {
+          const d = detail()!;
+          return (
+            <>
+              <div class="memory-detail-meta">
+                <span
+                  class="knowledge-scope"
+                  data-scope={d.scope}
+                >
+                  {knowledgeScopeLabel(d.scope)}
+                </span>
+                <span>{t("memory.source", { value: d.source })}</span>
+                <span>
+                  {t("memory.created", {
+                    value: formatDateTime(d.timeCreated),
+                  })}
+                </span>
+                <span>
+                  {t("memory.updated", {
+                    value: formatDateTime(d.timeUpdated),
+                  })}
+                </span>
+              </div>
+              <pre class="memory-detail-content">
+                {d.content || t("memory.empty_value")}
+              </pre>
+            </>
+          );
+        }}
+      </Show>
+
+      <Show when={!loading() && !!errorMsg()}>
+        <div class="config-status-box" data-status="error">{errorMsg()}</div>
+      </Show>
+
+      <Show when={loading()}>
+        <div class="loading-hint">{t("common.loading")}</div>
+      </Show>
+    </Dialog>
   );
 }
 

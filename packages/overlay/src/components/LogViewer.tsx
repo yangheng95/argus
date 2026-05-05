@@ -1,6 +1,6 @@
 // ── LogViewer Component ──
 // Full-featured log viewer dialog that merges overlay client logs, server logs,
-// and pipeline NDJSON events. Ports renderLogViewer / renderNdjsonLogPanel /
+// and pipeline newline-delimited JSON (NDJSON) events. Ports renderLogViewer / renderNdjsonLogPanel /
 // renderLogEntryDetail / logViewerEntries ( lines 10947–11155) and all
 // supporting helpers (parseServerLogLine, stringifyLogValue, etc., lines
 // 10795–10926).
@@ -19,6 +19,8 @@ import { appStore, setAppStore, filteredLogEntries } from "../store/app";
 import type { LogEntry, LogLevel, LogSource } from "../store/app";
 import { t } from "../utils/i18n";
 import { apiJson } from "../services/api";
+import { useAsyncAction } from "../solid/async-action";
+import { Dialog } from "./primitives/Dialog";
 import { Button } from "./ui/Button";
 
 // ── Re-export types so callers can use them without importing store/app ──
@@ -413,9 +415,6 @@ export interface LogViewerProps {
 // ── LogViewer ──
 
 export function LogViewer(props: LogViewerProps) {
-  let dialogRef: HTMLDialogElement | undefined;
-
-  const [loading, setLoading] = createSignal(false);
   const [serverLogsSeq, setServerLogsSeq] = createSignal(0);
 
  // Merged & filtered log entries
@@ -428,15 +427,10 @@ export function LogViewer(props: LogViewerProps) {
     );
   });
 
-  const refresh = async () => {
-    setLoading(true);
-    try {
-      await loadServerLogs();
-      setServerLogsSeq((value) => value + 1);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const refreshAction = useAsyncAction(async () => {
+    await loadServerLogs();
+    setServerLogsSeq((value) => value + 1);
+  });
 
   const handleCopy = async () => {
     const text = formatLogText(entries());
@@ -457,134 +451,123 @@ export function LogViewer(props: LogViewerProps) {
   };
 
   createEffect(() => {
-    const dialog = dialogRef;
-    if (!dialog) return;
     if (props.open) {
-      void refresh().finally(() => {
-        if (!dialog.open) dialog.showModal();
-      });
-      return;
+      void refreshAction.run();
     }
-    if (dialog.open) dialog.close();
   });
 
 
   return (
-    <dialog
+    <Dialog
       id="logDialog"
-      class="dialog dialog-wide"
-      ref={(el) => (dialogRef = el)}
-    >
-      <div class="dialog-form">
-        <div class="dialog-header">
-          <span class="dialog-title">{t("log.title")}</span>
-          <div class="dialog-header-actions">
-            <select
-              id="logLevelFilter"
-              class="select select-sm"
-              value={appStore.logFilterLevel}
-              onChange={handleLevelChange}
-              aria-label={t("log.filter_level")}
-            >
-              <option value="debug">DEBUG</option>
-              <option value="info">INFO</option>
-              <option value="warn">WARN</option>
-              <option value="error">ERROR</option>
-            </select>
-            <Button
-              type="button"
-              id="btnLogServerLogs"
-              variant="ghost"
-              size="sm"
-              tone="neutral"
-              onClick={() => void refresh()}
-              disabled={loading()}
-            >
-              {t("log.load_server")}
-            </Button>
-            <Button
-              type="button"
-              id="btnLogRefresh"
-              variant="ghost"
-              size="sm"
-              tone="neutral"
-              onClick={() => void refresh()}
-              disabled={loading()}
-            >
-              {t("common.refresh")}
-            </Button>
-            <Button
-              type="button"
-              id="btnLogCopy"
-              variant="ghost"
-              size="sm"
-              tone="neutral"
-              onClick={() => void handleCopy()}
-              disabled={loading() || entries().length === 0}
-            >
-              {t("common.copy")}
-            </Button>
-            <Button
-              type="button"
-              id="btnLogClear"
-              variant="ghost"
-              size="sm"
-              tone="danger"
-              onClick={handleClear}
-            >
-              {t("common.clear")}
-            </Button>
-            <Button
-              type="button"
-              id="btnCloseLog"
-              variant="ghost"
-              size="sm"
-              tone="neutral"
-              onClick={() => {
-                dialogRef?.close();
-                props.onClose?.();
-              }}
-            >
-              {t("common.close")}
-            </Button>
-          </div>
-        </div>
-
-        <div
-          id="logViewerBody"
-          class="log-viewer"
-          ref={(el) => {
-            // setupAutoScroll requires an AutoScrollOptions object. The prior
-            // `setupAutoScroll(el)` call (missing opts) threw at first scroll:
-            // `Cannot read properties of undefined (reading 'isTracking')`
-            // which aborted the entire component tree render, leaving the
-            // overlay blank and the benchmark's puppeteer assertion
-            // (`Overlay did not render streamed task output within 120s`)
-            // failing. Log panels want always-follow behaviour; provide a
-            // constant tracker + no-op onUserScrollUp.
-            const ctrl = setupAutoScroll(el, {
-              isTracking: () => true,
-              onUserScrollUp: () => {},
-            });
-            onCleanup(() => ctrl.cleanup());
-          }}
-        >
-          <Show
-            when={entries().length > 0}
-            fallback={
-              <div class="empty-hint">{t("log.empty")}</div>
-            }
+      open={props.open === true}
+      wide={true}
+      title={t("log.title")}
+      onClose={() => props.onClose?.()}
+      headerActions={
+        <>
+          <select
+            id="logLevelFilter"
+            class="select select-sm"
+            value={appStore.logFilterLevel}
+            onChange={handleLevelChange}
+            aria-label={t("log.filter_level")}
           >
-            {/* Index over For: log entries are append-only after filter
-                regenerates the array; rows never reorder mid-list. Index
-                reuses DOM by position so growing the log doesn't re-key
-                every prior line. */}
-            <Index each={entries()} fallback={null}>
-              {(entry) => <LogLine entry={entry()} />}
-            </Index>
-          </Show>
-        </div>
+            <option value="debug">DEBUG</option>
+            <option value="info">INFO</option>
+            <option value="warn">WARN</option>
+            <option value="error">ERROR</option>
+          </select>
+          <Button
+            type="button"
+            id="btnLogServerLogs"
+            variant="ghost"
+            size="sm"
+            tone="neutral"
+            onClick={() => void refreshAction.run()}
+            disabled={refreshAction.pending()}
+          >
+            {t("log.load_server")}
+          </Button>
+          <Button
+            type="button"
+            id="btnLogRefresh"
+            variant="ghost"
+            size="sm"
+            tone="neutral"
+            onClick={() => void refreshAction.run()}
+            disabled={refreshAction.pending()}
+          >
+            {t("common.refresh")}
+          </Button>
+          <Button
+            type="button"
+            id="btnLogCopy"
+            variant="ghost"
+            size="sm"
+            tone="neutral"
+            onClick={() => void handleCopy()}
+            disabled={refreshAction.pending() || entries().length === 0}
+          >
+            {t("common.copy")}
+          </Button>
+          <Button
+            type="button"
+            id="btnLogClear"
+            variant="ghost"
+            size="sm"
+            tone="danger"
+            onClick={handleClear}
+          >
+            {t("common.clear")}
+          </Button>
+          <Button
+            type="button"
+            id="btnCloseLog"
+            variant="ghost"
+            size="sm"
+            tone="neutral"
+            onClick={() => props.onClose?.()}
+          >
+            {t("common.close")}
+          </Button>
+        </>
+      }
+    >
+      <div
+        id="logViewerBody"
+        class="log-viewer"
+        ref={(el) => {
+          // setupAutoScroll requires an AutoScrollOptions object. The prior
+          // `setupAutoScroll(el)` call (missing opts) threw at first scroll:
+          // `Cannot read properties of undefined (reading 'isTracking')`
+          // which aborted the entire component tree render, leaving the
+          // overlay blank and the benchmark's puppeteer assertion
+          // (`Overlay did not render streamed task output within 120s`)
+          // failing. Log panels want always-follow behaviour; provide a
+          // constant tracker + no-op onUserScrollUp.
+          const ctrl = setupAutoScroll(el, {
+            isTracking: () => true,
+            onUserScrollUp: () => {},
+          });
+          onCleanup(() => ctrl.cleanup());
+        }}
+      >
+        <Show
+          when={entries().length > 0}
+          fallback={
+            <div class="empty-hint">{t("log.empty")}</div>
+          }
+        >
+          {/* Index over For: log entries are append-only after filter
+              regenerates the array; rows never reorder mid-list. Index
+              reuses DOM by position so growing the log doesn't re-key
+              every prior line. */}
+          <Index each={entries()} fallback={null}>
+            {(entry) => <LogLine entry={entry()} />}
+          </Index>
+        </Show>
       </div>
-    </dialog>
+    </Dialog>
   );
 }
