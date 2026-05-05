@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "a933948bfb4f7805"
+    "panel_revision": "5be4585758bc5669"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -45,8 +45,6 @@
   "channel.none": "暂无可用通道",
   "channel.public_url": "公网基地址",
   "channel.public_url_hint": "通过 Google Chat、Microsoft Teams、LINE 和钉钉投递截图时，需要配置此公网地址。",
-  "channel.public_url_placeholder": "https://opencorvus.example.com",
-  "channel.public_url_save_title": "保存供 Webhook 和外部资源访问使用的公网基地址。",
   "channel.status.configured": "已配置",
   "channel.status.disabled": "已禁用",
   "channel.status.missing": "可用",
@@ -468,12 +466,10 @@
   "memory.no_results": "无匹配结果",
   "memory.none": "暂无上下文",
   "memory.none_unselected": "选择任务后查看上下文",
-  "memory.refresh_title": "从服务端重新拉取上下文列表。",
   "memory.scope.cwd": "当前目录",
   "memory.scope.global": "全局",
   "memory.scope.session": "任务上下文",
   "memory.score": "相关度 {{value}}",
-  "memory.search_button_title": "搜索已保存的任务上下文。",
   "memory.search_placeholder": "搜索上下文…",
   "memory.search_source": "搜索结果",
   "memory.source": "来源：{{value}}",
@@ -526,7 +522,6 @@
   "prompt.help.default_system": "当前使用内置系统提示词。保存后会写入 config.prompt。",
   "prompt.help.inherits_core": "当前 Agent 没有独立提示词，直接继承上方核心提示词。",
   "prompt.help.optional_agent": "此 Agent 默认没有独立提示词，可在此添加专属覆盖。",
-  "prompt.loading": "正在加载提示词…",
   "prompt.none": "暂无可配置提示词",
   "prompt.preview": "Markdown 预览",
   "prompt.preview_empty": "当前提示词为空。",

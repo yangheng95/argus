@@ -146,6 +146,13 @@ function scriptKeys(file: string, text: string) {
   const names = wrapperNames(source)
   const keys = new Set<string>()
   const visit = (node: ts.Node) => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "labelKey"
+    ) {
+      for (const key of callKey(node.initializer)) keys.add(key)
+    }
     if (ts.isCallExpression(node)) {
       const name = callName(node.expression)
       if (names.has(name)) {
