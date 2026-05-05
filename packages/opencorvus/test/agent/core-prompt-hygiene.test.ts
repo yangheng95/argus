@@ -3,6 +3,7 @@ import path from "node:path"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const coreDir = path.join(repoRoot, "packages/opencorvus/src/prompt/core")
+const sourceDir = path.join(repoRoot, "packages/opencorvus/src")
 
 const promptFiles = {
   architect: "architect-core.txt",
@@ -15,6 +16,10 @@ const promptFiles = {
 
 async function readPrompt(name: keyof typeof promptFiles) {
   return await Bun.file(path.join(coreDir, promptFiles[name])).text()
+}
+
+async function readSource(relativePath: string) {
+  return await Bun.file(path.join(sourceDir, relativePath)).text()
 }
 
 describe("core prompt hygiene", () => {
@@ -41,6 +46,21 @@ describe("core prompt hygiene", () => {
     expect(orchestrator.replace(/\s+/g, " ")).toContain("`owned_paths` are collaboration responsibilities, not a file sandbox")
     expect(orchestrator).toContain("Frequent Architect re-runs are a planning-quality indicator")
     expect(orchestrator).toContain("use `modify_goal` instead of reopening the entire graph")
+  })
+
+  test("orchestrator source routes collaboration drift through durable closure lanes", async () => {
+    const tools = await readSource("orchestrator/tools.ts")
+    const describe = await readSource("engine/describe.ts")
+
+    expect(describe).toContain("Collaboration Closure")
+    expect(describe).toContain("shared collaboration contract")
+    expect(describe).toContain("Build `files_changed[]` reports")
+
+    expect(tools).not.toContain("NEXT: re-run architect or integrity")
+    expect(tools).not.toContain("architect or integrity produces a pass/concerns attempt")
+    expect(tools).not.toContain("modify_goal / re-run architect / fail_task")
+    expect(tools).toContain("run integrity against the corrected goal graph before dispatching build")
+    expect(tools).toContain("restart_from_stage only for upstream scope defects")
   })
 
   test("architect prompt ships the chat-app worked example so feature-rich SPA briefs have a reference shape", async () => {

@@ -52,7 +52,7 @@ import {
   type TaskRow,
 } from "@/engine/store"
 import { effectiveMaxFixRuns } from "@/engine/helpers"
-import { goalStatusByID } from "@/engine/describe"
+import { describeTask, goalStatusByID, renderCollaborationClosure } from "@/engine/describe"
 import {
   GoalContractUpdateSchema,
 } from "@/pipeline/goal-contract.schema"
@@ -682,7 +682,7 @@ export function createOrchestratorTools(input: {
           ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. NEXT: dispatch \`build({ goalID })\` per goal.`
           : `Integrity verdict: concerns — ${outcome.perDimension.join(", ")}. ${outcome.summary} ` +
             `Goal set is executable; surface the concerns above to the operator if relevant. ` +
-            `NEXT: dispatch \`build({ goalID })\` per goal, OR re-run \`architect\` / upstream agents if a hallucination dimension flagged ungrounded REQs.`
+            `NEXT: dispatch \`build({ goalID })\` per goal, or use \`restart_from_stage('requirements')\` if hallucination findings prove the REQ source is ungrounded.`
       return SubAgentProtocol.yieldResult({
         headline,
         fields: [
@@ -700,7 +700,7 @@ export function createOrchestratorTools(input: {
         `${outcome.summary} ` +
         `Goal set re-upserted against spec ${outcome.specSnapshotID}. ` +
         `Build remains blocked until a subsequent integrity attempt returns pass or concerns. ` +
-        `NEXT: re-run architect or integrity against the corrected goal graph before dispatching build.`,
+        `NEXT: run integrity against the corrected goal graph before dispatching build; use restart_from_stage only for upstream scope defects.`,
       fields: [
         ["issues", outcome.issues],
         ["added_goals", outcome.addedGoals],
@@ -721,7 +721,7 @@ export function createOrchestratorTools(input: {
     const missingCount = typeof payload?.missing_count === "number" ? payload.missing_count : 0
     return (
       `integrity verdict is needs_correction for ${specSnapshotID}; build is blocked until ` +
-      `architect or integrity produces a pass/concerns attempt. ` +
+      `integrity produces a pass/concerns attempt or the task is explicitly restarted upstream. ` +
       `issues=${issuesCount}, corrections=${correctionsCount}, missing=${missingCount}.`
     )
   }
@@ -2540,6 +2540,11 @@ export function createOrchestratorTools(input: {
         const EVAL_CHECK_EVIDENCE_CAP = 200
 
         if (scope === "goals" || scope === "all") {
+          const desc = await describeTask(taskID)
+          const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals)
+          if (closureLines.length > 0) {
+            sections.push(closureLines.join("\n"))
+          }
           const goals = listGoals(taskID)
           sections.push(`## Goals (${goals.length})`)
           for (const g of goals) {
@@ -3497,7 +3502,7 @@ export function createOrchestratorTools(input: {
           // Agent verdict is "rejected" — open a fresh attempt only for goals
           // the delivery brain explicitly attributed the rejection to. The orchestrator's
           // next turn reads engine_iteration + the verdict artifact and
-          // chooses strategy (modify_goal / re-run architect / fail_task);
+          // chooses strategy (modify_goal / build retry / restart_from_stage / fail_task);
           // the old deterministic "stalled/abort" branches were an FSM over
           // metric counts (CLAUDE.md rule 23) and are gone — give-up decisions
           // belong to the orchestrator LLM.
