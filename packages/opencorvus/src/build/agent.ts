@@ -169,6 +169,11 @@ export namespace BuildAgent {
      *  Orchestrator uses this to bind the already-open goal_run attempt to the
      *  real build session while the build is still in flight. */
     onSessionCreated?: (sessionID: string) => void | Promise<void>
+    /** Fires after this invocation has acquired the per-task build semaphore,
+     *  before worktree setup and before the child build session exists.
+     *  Orchestrator creates the live goal_run here so semaphore waiters do
+     *  not appear as running goals. */
+    onSlotAcquired?: () => void | Promise<void>
     /** Optional pre-allocated worktree dir. When provided, the build agent
      *  uses it as-is and does NOT manage its lifecycle (caller owns cleanup).
      *  When absent the agent creates a managed worktree under
@@ -231,6 +236,7 @@ export namespace BuildAgent {
    */
   export async function run(input: RunInput): Promise<RunOutput> {
     return BuildSemaphore.withSlot(input.task, async () => {
+      await input.onSlotAcquired?.()
       // ── Worktree acquisition ─────────────────────────────────────────────
       // Happens OUTSIDE runAgentSession because the worktree is the
       // session's working directory — the runner needs it resolved before
