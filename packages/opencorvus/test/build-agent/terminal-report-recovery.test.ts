@@ -41,7 +41,7 @@ test("BuildAgent keeps the build session alive for missing report_build_result r
         input.toolKit.getCollector().result = {
           status: "failed",
           summary: "reported after same-session recovery",
-          patch_summary: "",
+          files_changed: [],
           tests: [],
           error: "test harness stops before implementation",
         }

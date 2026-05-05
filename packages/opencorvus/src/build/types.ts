@@ -91,11 +91,6 @@ const BuildResultBase = {
       "Every project file changed by this build, with the build agent's own explanation. " +
         "Passed builds must explain each changed file; failed builds may be empty only when no file was changed.",
     ),
-  patch_summary: z
-    .string()
-    .describe(
-      "Short bullet list of the file-level changes the build made. Empty string when no files changed.",
-    ),
   commit_ref: z
     .string()
     .optional()

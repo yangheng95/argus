@@ -74,7 +74,7 @@ Call this tool exactly once at the end:
 `report_build_result`
 - `status`: `"passed"` or `"failed"`
 - `summary`: one-line plain-prose description of what changed (or why you failed)
-- `patch_summary`: short bullet list of file-level changes ("- Added src/x.ts\n- Updated package.json: +dep y")
+- `files_changed`: every project file changed by this build, each with `path`, `summary`, and `reason`
 - `error`: concrete failure reason when status="failed"
 - `tests`: array of { name, passed, detail? } - one entry per verification command you actually ran
 

@@ -14,6 +14,8 @@ Overlay benchmark `20260505-163855` exposed a fidelity-gate version of the same 
 
 Overlay benchmark `20260505-170235` exposed the build-report audit version of the same problem: after parallel Build sessions merged sibling goal work into primary, the audit compared `baseRef..HEAD` for the final merge commit. That range included sibling files from the already-advanced primary branch, so the expression-engine goal was failed for not explaining Vite/UI/README files it did not author. The audit also ran after the session closed, which prevented the build agent from correcting an incomplete `files_changed[]` report in the same session.
 
+Overlay benchmark `20260505-172931` exposed the build-report schema version of the same problem: the Build session committed and `merge_back` published goal 3, then `report_build_result` returned `PASS` with a complete `files_changed[]` report. The final BuildAgent parse still failed because the old duplicate `patch_summary` field was required by `BuildResultSchema`. The same report therefore passed the tool layer and failed the run-finalization layer. That is a double-source protocol, not a robust collaboration contract.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -30,6 +32,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - when Architect re-entry would be a structural re-plan instead of normal execution.
 - whether a fidelity gate is still in the planning window or is wrongly revalidating source coverage after execution evidence exists.
 - whether a Build file-change audit is measuring the current build session's own contribution or accidentally attributing sibling-goal merge context to it.
+- whether the Build terminal report has one authoritative file-level source (`files_changed[]`) instead of a legacy duplicate summary field that can disagree or be omitted.
 
 Without that durable projection, the LLM treats uncertainty as permission to ask Architect to solve the graph again.
 
@@ -50,6 +53,7 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It keeps reference coverage strict even during execution, because screenshots/webpages/mockups are authoritative 1:1 targets and must cascade into Build.
 - It audits Build `files_changed[]` against the build session's own contribution range. After merge_back creates a merge commit, that means `HEAD^2..HEAD`, not the original task base to final integrated HEAD.
 - It rejects incomplete `files_changed[]` reports inside the still-alive Build session so the model can amend the terminal report instead of failing the goal after the session is gone.
+- It deletes the legacy `patch_summary` field from the Build result protocol. `files_changed[]` is the single source for file-level collaboration explanation, and the orchestrator renders that list directly.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 
 ## Acceptance
@@ -64,3 +68,4 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - Tests prove the projection appears after execution starts and remains absent or pre-execution-scoped before the first attempt.
 - Tests prove execution-stage build is not blocked solely by missing source coverage for existing files, while missing reference coverage still blocks.
 - Tests prove build file-change audit excludes sibling-goal files introduced through merge_back and only requires explanations for this goal's own contribution.
+- Tests prove `BuildResultSchema` accepts complete `files_changed[]` reports without `patch_summary`, and no source/test prompt references the removed duplicate field.
