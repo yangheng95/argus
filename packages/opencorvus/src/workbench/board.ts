@@ -6,6 +6,7 @@ import {
   findActivePlanForTask,
   findActiveRunForTask,
   findActiveSpecForTask,
+  findGoalLatestWorkspace,
   findLatestTipGoalRun,
   findLatestDeliveredGoalRun,
   findDeliveriesForTask,
@@ -884,8 +885,13 @@ function buildWorkflowFields(
       goalObjective: goal.objective?.trim() ? goal.objective.trim() : undefined,
       goalStatus: goalStatusByID(goal.id),
       orderIndex: goal.order_index,
-      workspaceDir: goal.workspace_dir ?? undefined,
-      workspaceBranch: goal.workspace_branch ?? undefined,
+      // Phase B (2026-05-05): persistent worktree pointer comes from the
+      // latest goal_run_attempt artifact, not engine_goal columns. The
+      // per-attempt resolution downstream (lines ~1148+) already reads from
+      // the artifact stream; this top-level slot now mirrors the same
+      // source so both paths show the same value.
+      workspaceDir: findGoalLatestWorkspace(goal.id).directory ?? undefined,
+      workspaceBranch: findGoalLatestWorkspace(goal.id).branch ?? undefined,
       retryCount: goal.retry_count,
       acceptanceSpecs: goal.acceptance_specs,
       priority: (goal.priority ?? "blocking") as "blocking" | "advisory",

@@ -145,11 +145,16 @@ export interface AbortOptions {
 }
 
 export async function cleanupGoalWorkspaceForGoal(goalID: string): Promise<boolean> {
-  const goal = findGoal(goalID)
-  if (!goal?.workspace_dir) return false
+  // Phase B (2026-05-05): persistent worktree pointer lives on the latest
+  // goal_run_attempt artifact, not on engine_goal. Read via
+  // findGoalLatestWorkspace(goalID); cleanup nulls the pointer through the
+  // updateGoalWorkspace writer (which appends a patch to the latest tip).
+  const { findGoalLatestWorkspace } = await import("@/engine/store")
+  const live = findGoalLatestWorkspace(goalID)
+  if (!live.directory) return false
 
   const { cleanupGoalWorkspace } = await import("@/goal/runner")
-  await cleanupGoalWorkspace(goal.workspace_dir)
+  await cleanupGoalWorkspace(live.directory)
   updateGoalWorkspace({
     goalID,
     workspaceDir: null,
@@ -304,7 +309,7 @@ export async function abortLiveExecutionForProject(input: {
   const executorSessions = abortExecutorSessions(sessionRows)
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
   const cleanupGoals = input.cleanupGoalWorkspaces === true
-    ? listGoalWorkspacesForProject(input.projectID).map((goal) => goal.id)
+    ? listGoalWorkspacesForProject(input.projectID).map((entry) => entry.goal.id)
     : []
   await cleanupGoalWorkspaces(cleanupGoals)
   return { goalRuns, runs: 0, executorSessions }

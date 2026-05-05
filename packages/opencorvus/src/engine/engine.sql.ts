@@ -379,20 +379,15 @@ export const EngineGoalTable = sqliteTable(
     // the describe snapshot), not a schema column.
     /** Per-goal implementation version counter. V label = retry_count + 1. */
     retry_count: integer().notNull().default(0),
-    /** Goal-scoped live workspace directory reused across retries until terminal cleanup. */
-    workspace_dir: text(),
-    /** Branch currently checked out in workspace_dir. */
-    workspace_branch: text(),
-    /** Goal-scoped Snapshot baseRef (tree-hash) captured BEFORE the first
-     *  attempt's executor ran. Reused across all retries so that "zero file
-     *  changes" semantics stay anchored to the original scaffold state rather
-     *  than the post-prior-attempt state. Without this, retry #2 of a goal
-     *  that kept its files would capture a new baseRef after the prior
-     *  attempt's diff, then a no-op executor would produce zero diffs against
-     *  that contaminated baseline and the snapshot subsystem would report
-     *  "zero file changes" — forcing a false failure even though the branch
-     *  HEAD already contains the goal's work. */
-    workspace_base_ref: text(),
+    // Phase B (2026-05-05): workspace_dir / workspace_branch / workspace_base_ref
+    // were retired here in favour of the per-attempt artifact payload as the
+    // single source of truth. Persistent goal-scoped worktree state lives on
+    // engine_artifact[kind="goal_run_attempt"].payload.workspace_*; readers go
+    // through engine/store.ts:findGoalLatestWorkspace(goalID). Pre-fix the
+    // duplication (engine_goal column + artifact payload) let the build tool
+    // poison the engine_goal row when fidelity rejected a dispatch — no
+    // attempt was ever opened, but the column was already written, leaving
+    // the orchestrator wedged on a phantom worktree it could never finish.
     order_index: integer().notNull().default(0),
     /** Remaining metadata (check_selector, visual hints, etc.) */
     metadata: text({ mode: "json" }).$type<EngineMetadata>(),

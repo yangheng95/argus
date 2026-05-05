@@ -4209,21 +4209,21 @@ export function createOrchestratorTools(input: {
           let context: import("@/build/agent").BuildAgent.BuildContext | undefined
           let managedWorktree: import("@/build/agent").BuildAgent.RunInput["managedWorktree"] | undefined
           if (attachedGoalID) {
-            const { findGoal, findRequirements, listGoals } = await import("@/engine/store")
+            const { findGoal, findRequirements, listGoals, findGoalLatestWorkspace } = await import("@/engine/store")
             const goal = findGoal(attachedGoalID)
             if (!goal) {
               if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
               return `build: goal ${attachedGoalID} not found; register via architect first.`
             }
-            // Fidelity gate runs BEFORE any worktree creation or
-            // engine_goal.workspace_dir mutation. Phase A2 (2026-05-05): the
-            // pre-fix order was create-worktree → write workspace_dir →
-            // validate; on failure the early return left an orphan worktree
-            // on disk and a poisoned engine_goal contract row that read as
-            // "in-flight" but had no goal_run_attempt artifact. Bench gemini
-            // reproduced this on 4 dispatches in a row before the LLM gave
-            // up. Validating up front means the rejected dispatch never
-            // touches persistent state.
+            // Fidelity gate runs BEFORE any worktree creation or workspace
+            // pointer mutation. Phase A2 (2026-05-05): pre-fix order was
+            // create-worktree → write workspace_dir → validate; on failure
+            // the early return left an orphan worktree on disk and a
+            // poisoned engine_goal column that read as "in-flight" but had
+            // no goal_run_attempt artifact. Bench gemini reproduced this on
+            // 4 dispatches in a row before the LLM gave up. Validating up
+            // front means the rejected dispatch never touches persistent
+            // state.
             const fidelityIssues = validatePersistedArchitectFidelity({
               task,
               goals: listGoals(taskID).map((row) => ({
@@ -4235,8 +4235,15 @@ export function createOrchestratorTools(input: {
               return `Build dispatch blocked: architect fidelity contract is incomplete.\n${fidelityIssues.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
             }
 
-            const recordedWorkspaceDir = goal.workspace_dir?.trim()
-            const recordedWorkspaceBranch = goal.workspace_branch?.trim()
+            // Phase B (2026-05-05): persistent worktree pointer comes from
+            // the latest goal_run_attempt artifact, not engine_goal columns.
+            // findGoalLatestWorkspace returns the triple from the newest
+            // payload — null when no attempt has run yet OR when terminal
+            // cleanup nulled the pointer.
+            const recorded = findGoalLatestWorkspace(attachedGoalID)
+            const recordedWorkspaceDir = recorded.directory?.trim() ?? ""
+            const recordedWorkspaceBranch = recorded.branch?.trim() ?? ""
+            const recordedWorkspaceBaseRef = recorded.baseRef ?? null
             if (recordedWorkspaceDir || recordedWorkspaceBranch) {
               if (!recordedWorkspaceDir || !recordedWorkspaceBranch) {
                 return (
@@ -4262,7 +4269,7 @@ export function createOrchestratorTools(input: {
                 managedWorktree = {
                   directory: recovered.directory,
                   branch: recovered.branch,
-                  baseRef: goal.workspace_base_ref,
+                  baseRef: recordedWorkspaceBaseRef,
                 }
                 updateGoalWorkspace({
                   goalID: goal.id,
@@ -4280,7 +4287,7 @@ export function createOrchestratorTools(input: {
                 managedWorktree = {
                   directory: recordedWorkspaceDir,
                   branch: recordedWorkspaceBranch,
-                  baseRef: goal.workspace_base_ref,
+                  baseRef: recordedWorkspaceBaseRef,
                 }
               }
             } else {
@@ -4552,7 +4559,7 @@ export function createOrchestratorTools(input: {
             try {
               const { finalizeBuildAttempt } = await import("@/engine/persist")
               if (buildOutcome.kind === "ok") {
-                const { result, sessionID, worktreeDir, diffs } = buildOutcome.result
+                const { result, sessionID, worktreeDir, worktreeBranch, worktreeBaseRef, diffs } = buildOutcome.result
                 finalizeBuildAttempt({
                   goalRunID,
                   taskID,
@@ -4561,6 +4568,12 @@ export function createOrchestratorTools(input: {
                   status: result.status === "passed" ? "completed" : "failed",
                   commitRef: result.commit_ref,
                   workspaceDir: worktreeDir,
+                  // Phase B (2026-05-05): the build outcome carries branch +
+                  // baseRef alongside the directory. Persist them on the
+                  // attempt artifact so the next dispatch / cleanup / board
+                  // view reads the full triple from one source.
+                  workspaceBranch: worktreeBranch,
+                  workspaceBaseRef: worktreeBaseRef ?? undefined,
                   error: result.status === "failed" ? result.error : undefined,
                   diffs,
                   summary: result.summary,

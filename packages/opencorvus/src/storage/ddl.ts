@@ -486,9 +486,12 @@ CREATE TABLE IF NOT EXISTS engine_goal (
   -- describeGoal. Dep-failure propagation is an LLM decision, not a
   -- schema column.
   retry_count      integer NOT NULL DEFAULT 0,
-  workspace_dir    text,
-  workspace_branch text,
-  workspace_base_ref text,
+  -- Phase B (2026-05-05): workspace_dir / workspace_branch / workspace_base_ref
+  -- retired here. Persistent goal-scoped worktree pointer lives on
+  -- engine_artifact[kind='goal_run_attempt'].payload.workspace_*; callers
+  -- read via engine/store.ts:findGoalLatestWorkspace(goalID). Single
+  -- source eliminates the rejected-dispatch poisoning that left phantom
+  -- "in-flight" rows (bench gemini 2026-05-04 reproducer).
   order_index      integer NOT NULL DEFAULT 0,
   metadata         text,
   time_created     integer NOT NULL,
