@@ -2502,7 +2502,7 @@ export function createOrchestratorTools(input: {
               sections.push(`- goal_run error: ${latestGr.error}`)
               if (latestGr.error.includes("report_build_result") || latestGr.error.includes("missing_terminal_report")) {
                 sections.push(
-                  `- recovery hint: retry this goal with explicit report_build_result(files_changed[]) instructions. ` +
+                  `- recovery hint: the build session should first stay alive and add report_build_result(files_changed[]) in-place. If same-session recovery already exhausted, retry this goal with explicit report_build_result(files_changed[]) instructions. ` +
                     `Any retained files under .opencorvus/worktrees are diagnostic worktree evidence, not primary workspace pollution; ` +
                     `do not restart_from_stage solely because those diagnostic files exist.`,
                 )
