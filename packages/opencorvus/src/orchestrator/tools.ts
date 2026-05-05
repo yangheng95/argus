@@ -1721,8 +1721,12 @@ export function createOrchestratorTools(input: {
         "`requirements` first.\n" +
         "SKIP WHEN: the work fits one goal (the build agent's own todo list is " +
         "enough); every fix lives inside one file or one symbol's call sites.\n" +
-        "Re-run on delivery rejection when the rejection points at structural / " +
-        "coverage problems; for contract-level point fixes prefer `modify_goal`.",
+        "Re-run on delivery rejection or explicit structural restart when evidence " +
+        "points at structural / coverage problems. During an active run, do not " +
+        "re-run architect merely to widen owned_paths or bless ordinary shared-file " +
+        "edits; build sessions may edit outside responsibility paths when needed " +
+        "and must explain every touched file in files_changed[]. For contract-level " +
+        "point fixes prefer `modify_goal`.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run architect"),
       }),

@@ -23,7 +23,24 @@ describe("core prompt hygiene", () => {
     expect(text).not.toContain("The orchestrator calls you at the start of every task")
     expect(text).not.toContain("After finalize passes, the host runs a **multi-dimension integrity review**")
     expect(text).not.toContain("triggers the integrity review")
+    expect(text).not.toContain("The build dispatcher will REFUSE")
+    expect(text).not.toContain("depends_on_goal_ids")
     expect(text).toContain("Integrity is a separate orchestrator tool call")
+  })
+
+  test("architect and orchestrator prompts seal the plan instead of re-planning ordinary shared edits", async () => {
+    const architect = await readPrompt("architect")
+    const orchestrator = await readPrompt("orchestrator")
+
+    expect(architect).toContain("Plan closure before execution")
+    expect(architect).toContain("ordinary shared-file edits are handled by Build sessions")
+    expect(architect).toContain("Do not rely on a later Architect re-run to add shared-file coverage")
+
+    expect(orchestrator).toContain("Plan closure during execution")
+    expect(orchestrator).toContain("Treat the active architect goal graph as sealed")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("`owned_paths` are collaboration responsibilities, not a file sandbox")
+    expect(orchestrator).toContain("Frequent Architect re-runs are a planning-quality indicator")
+    expect(orchestrator).toContain("use `modify_goal` instead of reopening the entire graph")
   })
 
   test("architect prompt ships the chat-app worked example so feature-rich SPA briefs have a reference shape", async () => {
