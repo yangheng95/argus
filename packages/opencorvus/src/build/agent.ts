@@ -165,6 +165,10 @@ export namespace BuildAgent {
     /** Explicit model override (provider / model). Skips `resolveAgentModel`. */
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
+    /** Fires as soon as the child build session exists, before model work starts.
+     *  Orchestrator uses this to bind the already-open goal_run attempt to the
+     *  real build session while the build is still in flight. */
+    onSessionCreated?: (sessionID: string) => void | Promise<void>
     /** Optional pre-allocated worktree dir. When provided, the build agent
      *  uses it as-is and does NOT manage its lifecycle (caller owns cleanup).
      *  When absent the agent creates a managed worktree under
@@ -576,6 +580,10 @@ export namespace BuildAgent {
             buildUserParts: buildUserPartsFn,
             skillsStage: "build",
             skillTaskSignals: taskSignals,
+            onSessionCreated: async (session) => {
+              await input.onSessionCreated?.(session.id)
+              return { dispose() {} }
+            },
             terminalTool: {
               toolName: "report_build_result",
               isSatisfied: (collector) => Boolean(collector.result),
@@ -608,6 +616,7 @@ export namespace BuildAgent {
             buildPromptText,
             taskSignals,
             signal: input.signal,
+            onSessionCreated: input.onSessionCreated,
           })
           out = { session: { id: externalOut.sessionID }, structured: externalOut.structured }
           parsed = BuildResultSchema.safeParse(externalOut.structured)
@@ -1137,6 +1146,7 @@ async function runWithExternalProvider(args: {
   buildPromptText: () => string
   taskSignals?: import("@/engine/skill-inject").TaskSignals
   signal?: AbortSignal
+  onSessionCreated?: (sessionID: string) => void | Promise<void>
 }): Promise<{ sessionID: string; structured: unknown; mergedHead?: string }> {
   // External-build dispatch boundary: surface terminal to the overlay when
   // the inner function returns (every return below structures failure as a
@@ -1176,6 +1186,7 @@ async function runWithExternalProviderImpl(args: {
   buildPromptText: () => string
   taskSignals?: import("@/engine/skill-inject").TaskSignals
   signal?: AbortSignal
+  onSessionCreated?: (sessionID: string) => void | Promise<void>
 }): Promise<{ sessionID: string; structured: unknown; mergedHead?: string }> {
   const { provider, options } = ExecutorRegistry.requireCoding(args.executor)
 
@@ -1186,6 +1197,7 @@ async function runWithExternalProviderImpl(args: {
     title: buildSessionTitle(args.target),
     directory: args.worktreeDir,
   })
+  await args.onSessionCreated?.(session.id)
 
   log.info("build agent (external) starting", {
     executor: args.executor,
