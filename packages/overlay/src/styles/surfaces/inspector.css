@@ -979,7 +979,7 @@
 }
 
 .gwg-step-status {
-  font-size: calc(0.5px * var(--ui-scale) + var(--ui-font-tiny));
+  font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
   letter-spacing: 0.08em;

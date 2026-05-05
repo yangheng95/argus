@@ -103,7 +103,7 @@
   min-width: 0;
   display: flex;
   align-self: stretch;
-  min-height: calc(56px * var(--ui-scale));
+  min-height: calc(62px * var(--ui-scale));
 }
 
 .chat-textarea-wrap > .chat-textarea {
@@ -113,7 +113,7 @@
 .chat-textarea {
   flex: 1;
   min-width: 0;
-  min-height: calc(56px * var(--ui-scale));
+  min-height: calc(62px * var(--ui-scale));
   resize: none;
   border: var(--oc-border-width) solid var(--border);
   border-radius: 0;
