@@ -19,6 +19,8 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("Do not create, copy, or handwrite")
     expect(composed.system).toContain("those references are authoritative")
     expect(composed.system).toContain("Match them 1:1 as closely as the stack allows")
+    expect(composed.system).toContain("Write shell commands for the actual platform and shell")
+    expect(composed.system).toContain("PowerShell-native commands")
     expect(composed.system).toContain("skill prompt")
   })
 
