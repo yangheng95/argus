@@ -37,7 +37,13 @@ describe("Dialog primitive", () => {
     expect(source).toContain("title: JSX.Element");
     expect(source).toContain("headerActions?: JSX.Element");
     expect(source).toContain("footer?: JSX.Element");
-    expect(source).toContain('titleAs?: "h1" | "h2" | "span"');
+    expect(source).toContain('titleAs?: "div" | "h1" | "h2" | "span"');
+    expect(source).toContain("backdropClose?: boolean");
+  });
+
+  test("supports built-in backdrop close handling", () => {
+    expect(source).toContain("event.target === event.currentTarget");
+    expect(source).toContain("dialogRef?.close()");
   });
 });
 

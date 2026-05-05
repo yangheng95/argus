@@ -71,6 +71,7 @@ import { MemoryPanel } from "./components/MemoryPanel";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { CommandPalette } from "./components/CommandPalette";
 import { AppDialogHost } from "./components/AppDialogHost";
+import { SessionDialogHost } from "./components/SessionDialogHost";
 import { WorkspaceOnboardingDialog } from "./components/WorkspaceOnboardingDialog";
 import { Tab, Tabs } from "./components/ui/Tabs";
 import { waitForLogDrain, AppLog } from "./utils/log";
@@ -1140,12 +1141,6 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("configDialog") as HTMLDialogElement | null
       )?.close();
     });
-  document
-    .getElementById("btnCloseSession")
-    ?.addEventListener("click", () => {
-      (document.getElementById("sessionDialog") as HTMLDialogElement | null)?.close();
-    });
-
  // ── Config tab navigation ──
   document.getElementById("configSidebar")?.addEventListener("click", (event) => {
     const btn = (event.target as HTMLElement).closest<HTMLElement>(".config-nav-item");
@@ -1621,6 +1616,10 @@ void (async () => {
     cmdkHost.id = "commandPaletteHost";
     document.body.appendChild(cmdkHost);
     render(() => <CommandPalette />, cmdkHost);
+    const sessionDialogHost = document.createElement("div");
+    sessionDialogHost.id = "sessionDialogHost";
+    document.body.appendChild(sessionDialogHost);
+    render(() => <SessionDialogHost />, sessionDialogHost);
     const appDialogHost = document.createElement("div");
     appDialogHost.id = "appDialogHost";
     document.body.appendChild(appDialogHost);

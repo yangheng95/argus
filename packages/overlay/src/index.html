@@ -321,22 +321,7 @@
     </form>
   </dialog>
 
-  <!-- Session Viewer Dialog -->
-  <dialog class="dialog dialog-wide" id="sessionDialog">
-    <div class="dialog-form diff-dialog-form">
-      <div class="dialog-head">
-        <div class="diff-dialog-head">
-          <h3 class="dialog-title" id="sessionDialogTitle">Executor Session</h3>
-        </div>
-        <div class="dialog-actions compact">
-          <button type="button" class="btn btn-ghost" id="btnCloseSession">Close</button>
-        </div>
-      </div>
-      <div class="session-dialog-body" id="sessionDialogBody">
-        <p class="empty-hint">Loading...</p>
-      </div>
-    </div>
-  </dialog>
+  <!-- Session Viewer Dialog is mounted by SessionDialogHost.tsx. -->
 
   <!-- Diff Dialog -->
   <dialog class="dialog dialog-wide" id="diffDialog">
@@ -356,27 +341,7 @@
     </div>
   </dialog>
 
-  <!-- App Dialog -->
-  <dialog class="dialog" id="appDialog">
-    <div class="dialog-form">
-      <div class="dialog-head">
-        <h3 class="dialog-title" id="appDialogTitle" data-i18n="dialog.notice">Notice</h3>
-      </div>
-      <div class="app-dialog-body" id="appDialogBody"></div>
-      <label class="field hidden" id="appDialogInputField">
-        <span class="field-label" id="appDialogInputLabel" data-i18n="dialog.input">Input</span>
-        <input class="field-input app-dialog-input" id="appDialogInput" type="text">
-      </label>
-      <label class="field hidden" id="appDialogSelectField">
-        <span class="field-label" id="appDialogSelectLabel" data-i18n="dialog.input">Input</span>
-        <select class="field-input app-dialog-input custom-select" id="appDialogSelect"></select>
-      </label>
-      <div class="dialog-actions">
-        <button type="button" class="btn btn-ghost" id="btnAppDialogCancel" data-i18n="common.cancel">Cancel</button>
-        <button type="button" class="btn btn-primary" id="btnAppDialogOk" data-i18n="common.ok">OK</button>
-      </div>
-    </div>
-  </dialog>
+  <!-- App Dialog is mounted by AppDialogHost.tsx. -->
 
   <!-- Skill/MCP/Goal/Channel dialogs removed — Phase 4.
        All functionality moved to Solid components:
