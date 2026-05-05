@@ -37,6 +37,10 @@ mock.module("@/integrity", () => ({
   },
 }))
 
+async function markBuildSlotAcquired(input: any) {
+  await input.onSlotAcquired?.()
+}
+
 function insertWorkflowTaskWithGoal(input: {
   projectID: string
   taskID: string
@@ -416,6 +420,7 @@ describe("orchestrator tools", () => {
           }
         }
         buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
           buildCalls += 1
           buildTarget = input.target
           return {
@@ -655,6 +660,7 @@ describe("orchestrator tools", () => {
         })
 
         buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
           capturedContext = input.context
           return {
             result: {
@@ -748,6 +754,7 @@ describe("orchestrator tools", () => {
           sessionID: "ses_integrity_corrected",
         })
         buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
           buildCalls += 1
           return {
             result: {
@@ -845,23 +852,26 @@ describe("orchestrator tools", () => {
           missingGoals: [],
           sessionID: "ses_integrity_concern",
         })
-        buildAgentRunImpl = async (input: any) => ({
-          result: {
-            status: "passed",
-            summary: "Goal built with an ambiguous handoff.",
-            files_changed: [{
-              path: "src/index.ts",
-              summary: "Changed scoped implementation file.",
-              reason: "Required by the mocked goal build.",
-            }],
-            tests: [],
-            commit_ref: "def5678",
-          },
-          sessionID: "ses_goal_review_concern",
-          worktreeDir: input.managedWorktree.directory,
-          worktreeBranch: input.managedWorktree.branch,
-          worktreeBaseRef: input.managedWorktree.baseRef,
-        })
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal built with an ambiguous handoff.",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Changed scoped implementation file.",
+                reason: "Required by the mocked goal build.",
+              }],
+              tests: [],
+              commit_ref: "def5678",
+            },
+            sessionID: "ses_goal_review_concern",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -990,23 +1000,26 @@ describe("orchestrator tools", () => {
           missingGoals: [],
           sessionID: "ses_integrity_sibling",
         })
-        buildAgentRunImpl = async (input: any) => ({
-          result: {
-            status: "passed",
-            summary: "Bootstrap goal built successfully.",
-            files_changed: [{
-              path: "package.json",
-              summary: "Updated package scripts.",
-              reason: "Required by the bootstrap goal.",
-            }],
-            tests: [],
-            commit_ref: "abc5678",
-          },
-          sessionID: "ses_goal_review_sibling",
-          worktreeDir: input.managedWorktree.directory,
-          worktreeBranch: input.managedWorktree.branch,
-          worktreeBaseRef: input.managedWorktree.baseRef,
-        })
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
+          return {
+            result: {
+              status: "passed",
+              summary: "Bootstrap goal built successfully.",
+              files_changed: [{
+                path: "package.json",
+                summary: "Updated package scripts.",
+                reason: "Required by the bootstrap goal.",
+              }],
+              tests: [],
+              commit_ref: "abc5678",
+            },
+            sessionID: "ses_goal_review_sibling",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -1142,23 +1155,26 @@ describe("orchestrator tools", () => {
           missingGoals: [],
           sessionID: "ses_integrity_cascade",
         })
-        buildAgentRunImpl = async (input: any) => ({
-          result: {
-            status: "passed",
-            summary: "Foundation goal built successfully.",
-            files_changed: [{
-              path: "src/index.ts",
-              summary: "Implemented the foundation contract.",
-              reason: "Required by the foundation goal.",
-            }],
-            tests: [],
-            commit_ref: "cascade123",
-          },
-          sessionID: "ses_goal_review_cascade",
-          worktreeDir: input.managedWorktree.directory,
-          worktreeBranch: input.managedWorktree.branch,
-          worktreeBaseRef: input.managedWorktree.baseRef,
-        })
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
+          return {
+            result: {
+              status: "passed",
+              summary: "Foundation goal built successfully.",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Implemented the foundation contract.",
+                reason: "Required by the foundation goal.",
+              }],
+              tests: [],
+              commit_ref: "cascade123",
+            },
+            sessionID: "ses_goal_review_cascade",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
 
         const { tools } = createOrchestratorTools({
           taskID,
@@ -1218,6 +1234,7 @@ describe("orchestrator tools", () => {
           now,
         })
         buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
           const liveRun = listGoalRunsByGoal(goalID)[0]
           updateGoalRun(liveRun.id, {
             status: "aborted",
@@ -1637,6 +1654,7 @@ describe("orchestrator tools", () => {
           now,
         })
         buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
           buildCalls += 1
           return {
             result: {
@@ -1706,6 +1724,9 @@ describe("orchestrator tools", () => {
           now,
         })
         buildAgentRunImpl = async (input: any) => {
+          expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
+          await markBuildSlotAcquired(input)
+          expect(goalStatusByID(goalID)).toBe("running")
           await input.onSessionCreated?.("ses_build_session_bind")
           observedSessionID = listGoalRunsByGoal(goalID)[0]?.session_id
           return {
@@ -1795,6 +1816,7 @@ describe("orchestrator tools", () => {
           now,
         })
         buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
           buildCalls += 1
           return {
             result: {
@@ -1865,6 +1887,7 @@ describe("orchestrator tools", () => {
         })
 
         buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
           buildWorktreeDir = input.managedWorktree.directory
           expect(input.target.id).toBe(goalID)
           expect(await Filesystem.exists(buildWorktreeDir)).toBe(true)
@@ -1943,6 +1966,7 @@ describe("orchestrator tools", () => {
         })
 
         buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
           buildWorktreeDir = input.managedWorktree.directory
           expect(await Filesystem.exists(buildWorktreeDir)).toBe(true)
           return {
@@ -2010,23 +2034,26 @@ describe("orchestrator tools", () => {
           now,
         })
 
-        buildAgentRunImpl = async (input: any) => ({
-          result: {
-            status: "passed",
-            summary: "Goal built successfully",
-            files_changed: [{
-              path: "src/index.ts",
-              summary: "Changed scoped implementation file.",
-              reason: "Required by the mocked goal build.",
-            }],
-            tests: [],
-            commit_ref: "abc1234",
-          },
-          sessionID: "ses_goal_cleanup_refused",
-          worktreeDir: tmp.path,
-          worktreeBranch: "opencorvus/not-a-goal-worktree",
-          worktreeBaseRef: input.managedWorktree.baseRef,
-        })
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal built successfully",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Changed scoped implementation file.",
+                reason: "Required by the mocked goal build.",
+              }],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_cleanup_refused",
+            worktreeDir: tmp.path,
+            worktreeBranch: "opencorvus/not-a-goal-worktree",
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
 
         const { tools } = createOrchestratorTools({
           taskID,

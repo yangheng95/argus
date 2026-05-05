@@ -4632,15 +4632,15 @@ export function createOrchestratorTools(input: {
               : undefined
           }
 
-          // Open the goal_run BEFORE handing off to BuildAgent.run so the
-          // overlay's goal step card materializes at dispatch time (lazy
-          // gate: `goalWorkflows[i].steps[build].startedAt > 0`). Without
-          // this, the row only existed post-completion (single insert with
-          // time_started == time_completed), so the card spawned already-
-          // finished. Goal-path only — direct/request builds have no goal
-          // row to attach an attempt to.
+          // Open the goal_run only after BuildAgent.run has acquired the
+          // per-task build semaphore. Opening it earlier makes queued
+          // semaphore waiters look like running goals even though no build
+          // session exists yet, breaking the collaboration closure signal.
+          // Goal-path only — direct/request builds have no goal row to attach
+          // an attempt to.
           let goalRunID: string | undefined
-          if (attachedGoalID) {
+          const openGoalRunAfterBuildSlot = async () => {
+            if (!attachedGoalID || goalRunID) return
             try {
               const { beginBuildAttempt } = await import("@/engine/persist")
               goalRunID = beginBuildAttempt({
@@ -4691,6 +4691,7 @@ export function createOrchestratorTools(input: {
               parentSessionID: input.agentSessionID,
               signal: input.signal,
               managedWorktree,
+              onSlotAcquired: openGoalRunAfterBuildSlot,
               onSessionCreated: async (sessionID) => {
                 if (!goalRunID) return
                 const { updateGoalRun } = await import("@/engine/persist")
