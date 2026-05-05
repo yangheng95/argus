@@ -10,7 +10,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  min-height: var(--oc-density-control-height);
+  padding: 0 calc(8px * var(--ui-scale));
   border: var(--oc-border-width) solid transparent;
   border-radius: var(--oc-radius-soft);
   background: transparent;
@@ -105,7 +106,7 @@
   justify-content: space-between;
   background: var(--surface-strong);
   flex-shrink: 0;
-  padding-right: calc(6px * var(--ui-scale));
+  padding-right: calc(8px * var(--ui-scale));
 }
 
 .workspace-tabs {
@@ -132,13 +133,14 @@
 .workspace-tab {
   display: inline-flex;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  gap: calc(6px * var(--ui-scale));
+  min-height: var(--ui-panel-header-height);
+  padding: 0 calc(12px * var(--ui-scale));
   background: transparent;
   border: none;
   border-bottom: calc(2px * var(--ui-scale)) solid transparent;
   color: var(--text-muted);
-  font-size: var(--ui-font-meta);
+  font-size: var(--ui-font-title);
   cursor: pointer;
   white-space: nowrap;
   min-width: 0;
@@ -171,8 +173,8 @@
  * (rule §2.2 A). Hover affordance is a pure background tint. */
 .workspace-close {
   align-self: center;
-  width: calc(22px * var(--ui-scale));
-  height: calc(22px * var(--ui-scale));
+  width: var(--oc-density-icon-button);
+  height: var(--oc-density-icon-button);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -223,8 +225,8 @@
 /* diff-preview-head replaced by oc-panel__header override below */
 .diff-preview-panel > .oc-panel__header {
   align-items: flex-start;
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
   border-bottom: var(--oc-border-width) solid var(--border);
   background: var(--subtle-1);
 }

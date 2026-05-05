@@ -13,10 +13,10 @@
   flex: 1;
   overflow-y: auto;
   overflow-anchor: none;
-  padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  padding: calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale)) calc(18px * var(--ui-scale));
   display: flex;
   flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
+  gap: calc(8px * var(--ui-scale));
   user-select: text;
   -webkit-user-select: text;
   cursor: text;
@@ -189,15 +189,15 @@
    button shell). Scoped to `.chat-header-meta` so the dot pseudo and
    no-border treatment only applies inside the conversation header. */
 .chat-header-meta #btnChatCopyAll {
-  min-height: auto;
-  padding: 0 0 0 var(--ui-btn-mini-padding-x);
+  min-height: var(--oc-density-control-height);
+  padding: 0 calc(6px * var(--ui-scale)) 0 var(--ui-btn-mini-padding-x);
   border: 0 solid transparent;
-  border-radius: 0;
+  border-radius: var(--oc-radius-soft);
   background: transparent;
   box-shadow: none;
   position: relative;
   color: var(--text-soft);
-  font-size: var(--ui-font-control);
+  font-size: var(--ui-font-meta);
   font-weight: var(--ui-font-weight-strong);
 }
 
@@ -227,10 +227,10 @@
 /* Workspace toggle scoped to the chat header: a circular icon-only
    button that flips accent when pressed. */
 .chat-header-meta .workspace-toggle {
-  min-width: calc(26px * var(--ui-scale));
-  width: calc(26px * var(--ui-scale));
-  height: calc(26px * var(--ui-scale));
-  min-height: calc(26px * var(--ui-scale));
+  min-width: calc(28px * var(--ui-scale));
+  width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  min-height: calc(28px * var(--ui-scale));
   padding: 0;
   border: 0 solid transparent;
   border-radius: var(--oc-radius-pill);
