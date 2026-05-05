@@ -503,7 +503,7 @@ export async function applyDirectory(
   clearProjectScopeData();
 
   if (options.persist !== false) {
- // Persist via to keep localStorage + Tauri store in sync.
+ // Persist through the active host settings source.
     const persistFn = (window as any).persistOverlaySettings;
     if (typeof persistFn === "function") await persistFn();
   }

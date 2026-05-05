@@ -205,8 +205,10 @@ struct OverlaySettings {
     username: Option<String>,
     executor: Option<String>,
     init_git: Option<bool>,
+    sidebar_collapsed: Option<bool>,
     sidebar_width: Option<u32>,
     sections_width: Option<u32>,
+    workspace_panel_height: Option<u32>,
     opacity: Option<f64>,
     zoom: Option<f64>,
     theme: Option<String>,
@@ -216,6 +218,7 @@ struct OverlaySettings {
     workspace_task_id: Option<String>,
     workspace_session_id: Option<String>,
     workspace_directory: Option<String>,
+    desktop_notifications: Option<bool>,
 }
 
 fn overlay_settings_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {

@@ -2,7 +2,7 @@
 // Solid reactive store for overlay settings.
 
 import { createStore } from "solid-js/store";
-import { DEFAULT_SERVER } from "../services/api";
+import { DEFAULT_SERVER } from "../services/default-server";
 import { getHostTransport } from "../services/host-transport";
 import { sanitizeLocale } from "../utils/i18n";
 
@@ -212,6 +212,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
       typeof input?.workspaceDirectory === "string"
         ? input.workspaceDirectory.trim()
         : DEFAULT_SETTINGS.workspaceDirectory,
+    desktopNotifications: input?.desktopNotifications !== false,
   });
 }
 
@@ -219,51 +220,6 @@ export function applySettings(input: Partial<OverlaySettings>): void {
 
 export function saveSettings(): void {
   const s = settingsStore;
-  localStorage.setItem("oc_server_url", s.serverUrl);
-  localStorage.setItem("oc_auto_server", String(s.autoServer));
-  localStorage.setItem("oc_password", s.password);
-  localStorage.setItem("oc_username", s.username);
-  localStorage.setItem("oc_executor", sanitizeExecutor(s.executor));
-  localStorage.setItem("oc_sidebar_collapsed", String(s.sidebarCollapsed));
-  if (s.sidebarWidth != null) {
-    localStorage.setItem("oc_sidebar_width", String(s.sidebarWidth));
-  } else {
-    localStorage.removeItem("oc_sidebar_width");
-  }
-  if (s.sectionsWidth != null) {
-    localStorage.setItem("oc_sections_width", String(s.sectionsWidth));
-  } else {
-    localStorage.removeItem("oc_sections_width");
-  }
-  if (s.workspacePanelHeight != null) {
-    localStorage.setItem("oc_workspace_height", String(s.workspacePanelHeight));
-  } else {
-    localStorage.removeItem("oc_workspace_height");
-  }
-  localStorage.setItem("oc_opacity", String(s.opacity));
-  localStorage.setItem("oc_zoom", String(s.zoom));
-  localStorage.setItem("oc_theme", s.theme || DEFAULT_SETTINGS.theme);
-  localStorage.setItem("oc_locale", s.locale || DEFAULT_SETTINGS.locale);
-  localStorage.setItem("oc_desktop_notifications", String(s.desktopNotifications));
-  if (s.workspaceTaskID) {
-    localStorage.setItem("oc_workspace_task", s.workspaceTaskID);
-  } else {
-    localStorage.removeItem("oc_workspace_task");
-  }
-  if (s.workspaceDirectory) {
-    localStorage.setItem("oc_workspace_directory", s.workspaceDirectory);
-  } else {
-    localStorage.removeItem("oc_workspace_directory");
-  }
-  if (s.directory) {
-    localStorage.setItem("oc_directory", s.directory);
-  } else {
-    localStorage.removeItem("oc_directory");
-  }
-
-  // Persist via the host (Tauri stores them on disk). VS Code transport
-  // throws UnsupportedNativeCommandError; we ignore that — localStorage
-  // above is the source of truth for settings.
   void getHostTransport()
     .native({ kind: "settings.save", payload: bootstrapOverlaySettings(s) })
     .catch(() => undefined);
@@ -271,58 +227,20 @@ export function saveSettings(): void {
 
 // ── loadSettings ──
 
-export function loadSettings(): void {
-  const serverUrl =
-    localStorage.getItem("oc_server_url") || DEFAULT_SETTINGS.serverUrl;
-  const autoServerRaw = localStorage.getItem("oc_auto_server");
-  const autoServer =
-    autoServerRaw === null
-      ? defaultAutoServer(serverUrl)
-      : autoServerRaw !== "false";
-  const directory = (() => {
-    const raw = localStorage.getItem("oc_directory") || "";
-    return raw.trim();
-  })();
-
-  setSettingsStore({
-    serverUrl,
-    autoServer,
-    password:
-      localStorage.getItem("oc_password") || DEFAULT_SETTINGS.password,
-    username:
-      localStorage.getItem("oc_username") || DEFAULT_SETTINGS.username,
-    executor:
-      sanitizeExecutor(localStorage.getItem("oc_executor")),
-    initGit: true,
-    sidebarCollapsed:
-      localStorage.getItem("oc_sidebar_collapsed") === "true",
-    sidebarWidth: sanitizePaneWidth(
-      localStorage.getItem("oc_sidebar_width"),
-    ),
-    sectionsWidth: sanitizePaneWidth(
-      localStorage.getItem("oc_sections_width"),
-    ),
-    workspacePanelHeight: sanitizePaneWidth(
-      localStorage.getItem("oc_workspace_height"),
-    ),
-    opacity: sanitizeOpacity(localStorage.getItem("oc_opacity")),
-    zoom: sanitizeZoom(localStorage.getItem("oc_zoom")),
-    theme: sanitizeTheme(localStorage.getItem("oc_theme")),
-    locale: sanitizeLocale(
-      localStorage.getItem("oc_locale") || DEFAULT_SETTINGS.locale,
-    ),
-    directory,
-    workspaceTaskID:
-      localStorage.getItem("oc_workspace_task") ||
-      DEFAULT_SETTINGS.workspaceTaskID,
-    workspaceDirectory:
-      localStorage.getItem("oc_workspace_directory") ||
-      DEFAULT_SETTINGS.workspaceDirectory,
-    savedDirectory: directory,
-    workspaceEpoch: DEFAULT_SETTINGS.workspaceEpoch,
-    directoryEpoch: DEFAULT_SETTINGS.directoryEpoch,
-    desktopNotifications: localStorage.getItem("oc_desktop_notifications") !== "false",
-  });
+export async function loadSettings(): Promise<void> {
+  let persisted: unknown;
+  try {
+    persisted = await getHostTransport().native({ kind: "settings.load" });
+  } catch {
+    persisted = undefined;
+  }
+  if (persisted && typeof persisted === "object" && !Array.isArray(persisted)) {
+    applySettings(persisted as Partial<OverlaySettings>);
+    setSavedDirectory(savedDirectoryValue((persisted as Partial<OverlaySettings>).directory));
+    return;
+  }
+  applySettings({ ...DEFAULT_SETTINGS });
+  setSavedDirectory(DEFAULT_SETTINGS.savedDirectory);
 }
 
 // ── Runtime setters ──
@@ -354,7 +272,7 @@ export function settingsDirectory(settings: Partial<OverlaySettings> | null | un
 
 export function bootstrapOverlaySettings(
   input: Partial<OverlaySettings> = settingsStore,
-): Omit<OverlaySettings, "savedDirectory" | "workspaceEpoch" | "directoryEpoch" | "workspacePanelHeight"> & {
+): Omit<OverlaySettings, "savedDirectory" | "workspaceEpoch" | "directoryEpoch" | "toolPermissions"> & {
   directory?: string;
   sidebarWidth?: number;
   sectionsWidth?: number;
@@ -384,7 +302,6 @@ export function bootstrapOverlaySettings(
     workspaceTaskID,
     workspaceTaskId: workspaceTaskID,
     workspaceDirectory: input.workspaceDirectory || undefined,
-    toolPermissions: input.toolPermissions ?? DEFAULT_SETTINGS.toolPermissions,
   };
 }
 

@@ -3,13 +3,15 @@
  * overlay UI needs to talk to: HTTP requests, server-sent events, and
  * native (host-specific) commands.
  *
- * Two real implementations:
+ * Runtime implementations:
  *   - tauri-transport.ts: forwards to direct fetch / EventSource / Tauri
  *     invoke. Default for the desktop overlay window.
  *   - vscode-transport.ts: serializes everything to postMessage so the
  *     VS Code Extension Host can transparently inject Basic Auth into
  *     requests and bridge SSE through the extension boundary
  *     (plan-vscode-extension.md §5.2). Lands in M4.
+ *   - browser mode: reuses tauri-transport HTTP/SSE and stores overlay
+ *     settings in browser storage for standalone Vite development.
  *
  * Selection happens exactly once, at app boot, in `createHostTransport()`.
  * Business code MUST NOT reach for `window.__TAURI__` or
@@ -18,7 +20,7 @@
  * from diverging into two-source business logic (CLAUDE.md §二-7).
  */
 
-export type HostKind = "tauri" | "vscode"
+export type HostKind = "tauri" | "vscode" | "browser"
 
 export const DEFAULT_REQUEST_TIMEOUT_MILLISECONDS = 15_000
 
@@ -244,9 +246,9 @@ export function createHostTransport(): HostTransport {
     }
   }
   // Browser-only dev mode (running overlay against `bun run dev`):
-  // fall back to the tauri-transport which still uses plain fetch /
-  // EventSource. Hits a real opencorvus serve over CORS-enabled HTTP.
-  _instance = createTauriTransport()
+  // reuse the Tauri HTTP/SSE implementation, but expose browser-local
+  // native settings so persistence still has one host-owned source.
+  _instance = createTauriTransport("browser")
   return _instance
 }
 

@@ -1,6 +1,6 @@
 // ── Init Service ──
 // Application startup sequence:
-// - Load overlay settings from localStorage (+ Tauri native store)
+// - Load overlay settings from the active host persistence source
 // - Load i18n locale data
 // - Configure the API client
 // - Check server connection
@@ -9,7 +9,6 @@
 // - Set up a periodic reconnect loop
 
 import { configure as configureApi, apiJsonWithTimeout } from "./api";
-import { getHostTransport } from "./host-transport";
 import { installComposerAttachSubscription } from "./composer-attach";
 import {
   checkConnection as checkServerConnection,
@@ -25,9 +24,6 @@ import {
   saveSettings,
   bumpDirectoryEpoch,
   bumpWorkspaceEpoch,
-  applySettings,
-  setSavedDirectory,
-  savedDirectoryValue,
   DEFAULT_SETTINGS,
   type ToolPermissions,
 } from "../store/settings";
@@ -110,7 +106,7 @@ async function loadInitialData(): Promise<boolean> {
 /**
  * Initialise the Solid overlay layer.
  * Call order:
- * 1. Load settings from localStorage
+ * 1. Load settings from the active host persistence source
  * 2. Apply settings to API client
  * 3. Load i18n (all supported locales)
  * 4. Apply locale from settings
@@ -131,8 +127,8 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
  //    saw the panel — still land on the chat composer (plan §19.2.6).
   installComposerAttachSubscription();
 
- // 1. Load settings from localStorage into the Solid store
-  loadSettings();
+ // 1. Load settings into the Solid store
+  await loadSettings();
 
  // Note (W2-V34): a previous version called primeNotificationPermission()
  // at this point to "warm up" the desktop-notification permission. WebKit
@@ -147,21 +143,6 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
  // event path in services/notify.ts no longer prompts; it reads the
  // current Notification.permission and degrades quietly if "default" or
  // "denied".
-
-  // Try to load host-persisted settings (Tauri stores them on disk;
-  // VS Code transport will throw UnsupportedNativeCommandError, in
-  // which case we just keep the localStorage-loaded values from
-  // step 1).
-  try {
-    const nativeSettings = await getHostTransport().native({ kind: "settings.load" });
-    if (nativeSettings && typeof nativeSettings === "object" && !Array.isArray(nativeSettings)) {
-      applySettings(nativeSettings as any);
-      setSavedDirectory(savedDirectoryValue((nativeSettings as any).directory));
-    }
-  } catch {
-    // Host doesn't support disk-backed settings — settings.load is a
-    // best-effort enhancement. localStorage is the source of truth.
-  }
 
  // 2. Push settings into the API client (server URL + auth)
   syncApiConfig();
@@ -204,7 +185,7 @@ export function teardownApp(): void {
 }
 
 /**
- * Persist current settings to localStorage and re-apply to the API client.
+ * Persist current settings through the active host and re-apply the API client.
  * Thin wrapper so callers don't need to import from multiple modules.
  */
 export function persistAndSyncSettings(): void {

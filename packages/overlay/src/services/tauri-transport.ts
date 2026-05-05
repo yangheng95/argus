@@ -27,6 +27,8 @@ import type {
   TransportResponse,
 } from "./host-transport"
 import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, nativeUnsupported } from "./host-transport"
+import type { HostKind } from "./host-transport"
+import { loadBrowserOverlaySettings, saveBrowserOverlaySettings } from "./overlay-settings-storage"
 
 /**
  * Tauri window-handle accessor — the ONE place in the overlay that
@@ -293,10 +295,10 @@ function ensureAuthChangeSubscribed(): void {
   })
 }
 
-export function createTauriTransport(): HostTransport {
+export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"> = "tauri"): HostTransport {
   ensureAuthChangeSubscribed()
   return {
-    kind: "tauri",
+    kind,
     async request<T = unknown>(input: TransportRequest): Promise<TransportResponse<T>> {
       const url = buildUrl(input.path, input.query)
       const signal = input.signal ?? AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MILLISECONDS)
@@ -406,6 +408,16 @@ export function createTauriTransport(): HostTransport {
       return { unsubscribe: () => {} }
     },
     async native(command: NativeCommand): Promise<unknown> {
+      if (kind === "browser") {
+        switch (command.kind) {
+          case "settings.load":
+            return loadBrowserOverlaySettings()
+          case "settings.save":
+            return saveBrowserOverlaySettings(command.payload as Record<string, unknown>)
+          default:
+            return nativeUnsupported("browser", command)
+        }
+      }
       switch (command.kind) {
         case "open-url":
           return invokeTauri("overlay_open_url", { url: command.url })

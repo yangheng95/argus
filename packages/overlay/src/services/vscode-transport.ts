@@ -37,6 +37,7 @@ import type {
   TransportResponse,
 } from "./host-transport"
 import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, nativeUnsupported } from "./host-transport"
+import { loadBrowserOverlaySettings, saveBrowserOverlaySettings } from "./overlay-settings-storage"
 
 // ── VS Code API singleton ──
 
@@ -478,9 +479,16 @@ export function createVsCodeTransport(): HostTransport {
       return { close: () => close("client-close") }
     },
     async native(command: NativeCommand): Promise<unknown> {
-      // Plan §5.2: reject every command until M5 wires the safe subset
-      // (open-url, pickDir, pickFiles) through the extension host.
-      return nativeUnsupported("vscode", command)
+      switch (command.kind) {
+        case "settings.load":
+          return loadBrowserOverlaySettings()
+        case "settings.save":
+          return saveBrowserOverlaySettings(command.payload as Record<string, unknown>)
+        default:
+          // Plan §5.2: reject every command until M5 wires the safe subset
+          // (open-url, pickDir, pickFiles) through the extension host.
+          return nativeUnsupported("vscode", command)
+      }
     },
     subscribeUiCommand(kind, handler) {
       let bucket = uiCommandHandlers.get(kind)
