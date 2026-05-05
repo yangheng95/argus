@@ -77,11 +77,11 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
   margin: 0;
-  padding: calc(3px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 34%, transparent);
-  border-radius: var(--oc-radius-large);
+  border-radius: 0;
   background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
   box-shadow: none;
   flex-shrink: 0;
@@ -255,7 +255,7 @@
 .chat-input[data-dragover] .chat-compose-row {
   outline: calc(2px * var(--ui-scale)) dashed color-mix(in srgb, var(--accent) 50%, transparent);
   outline-offset: calc(-2px * var(--ui-scale));
-  border-radius: var(--oc-radius-large);
+  border-radius: 0;
 }
 
 /* Compose meta: the bottom row beneath the textarea showing build /

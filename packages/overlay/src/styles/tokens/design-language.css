@@ -77,9 +77,9 @@
   --ui-opacity-full: 1;
 
   --oc-header-height: calc(40px * var(--ui-scale, 1));
-  --oc-header-padding-x: calc(8px * var(--ui-scale, 1));
+  --oc-header-padding-x: calc(6px * var(--ui-scale, 1));
   --oc-header-padding-y: 0;
-  --oc-header-gap: calc(8px * var(--ui-scale, 1));
+  --oc-header-gap: calc(6px * var(--ui-scale, 1));
   --oc-header-actions-padding: calc(var(--oc-border-width) * 2);
   --oc-header-title-font: 550 var(--ui-font-title, 12px) var(--font, sans-serif);
   --oc-header-title-line-height: 1;

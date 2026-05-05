@@ -786,10 +786,13 @@
   flex-shrink: 0;
 }
 
-.oc-button[data-ui="sidebar-new-task-button"] {
+.oc-button[data-ui="sidebar-new-task-button"][data-variant="solid"] {
   --oc-button-height: calc(28px * var(--ui-scale));
   --oc-button-padding-x: calc(10px * var(--ui-scale));
   --oc-button-gap: calc(2px * var(--ui-scale));
+  --oc-button-bg: var(--accent);
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--surface);
   letter-spacing: 0;
   box-shadow: none;
 }
@@ -800,6 +803,13 @@
   border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.oc-button[data-ui="sidebar-new-task-button"]:hover,
+.oc-button[data-ui="sidebar-new-task-button"]:focus-visible {
+  --oc-button-bg: var(--accent-hover);
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--surface);
 }
 
 .oc-button[data-ui="sidebar-new-task-button"]:focus-visible {
