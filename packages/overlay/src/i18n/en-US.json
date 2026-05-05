@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "683ad218361c8318"
+    "panel_revision": "fba7b1793f409ce2"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -40,7 +40,7 @@
   "brand.guide_usage_4": "Titlebar menus configure workspace, model, tools, view, delivery channels, and diagnostics.",
   "brand.guide_usage_title": "Fast Path",
   "brand.logo_alt": "OpenCorvus logo",
-  "brand.workspace_label": "Project",
+  "brand.workspace_label": "Workspace",
   "channel.configuration_title": "{{name}} Channel",
   "channel.edit_title": "Edit this channel's configuration.",
   "channel.none": "No channels available",
@@ -134,7 +134,7 @@
   "workspace_onboarding.create_action": "Create New Project",
   "workspace_onboarding.recent_title": "Recent workspaces",
   "workspace_onboarding.recent_body": "Reopen a directory you used recently.",
-  "workspace_onboarding.footnote": "You can switch the workspace later from the Workspace menu in the title bar.",
+  "workspace_onboarding.footnote": "You can switch the workspace later from the Project menu in the title bar.",
   "task.search_placeholder": "Search chats…",
   "task.search_empty": "No tasks match \"{{query}}\"",
   "cmdk.placeholder": "Type a command — task, settings, theme, locale…",
@@ -688,7 +688,7 @@
   "titlebar.menu.run": "Run",
   "titlebar.menu.tools": "Tools",
   "titlebar.menu.view": "View",
-  "titlebar.menu.workspace": "Workspace",
+  "titlebar.menu.workspace": "Project",
   "titlebar.minimize": "Minimize",
   "titlebar.restore": "Restore window",
   "titlebar.reset_layout": "Reset layout",
