@@ -191,7 +191,7 @@
 
 .changes-tab-count {
   flex: 0 0 auto;
-  font-size: calc(var(--ui-font-meta) * 0.94);
+  font-size: var(--ui-font-small);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
@@ -285,7 +285,7 @@
   text-transform: none;
   letter-spacing: 0;
   font-weight: var(--ui-font-weight-strong);
-  font-size: calc(var(--ui-font-meta) * 0.94);
+  font-size: var(--ui-font-small);
 }
 
 .change-status[data-status="added"] {

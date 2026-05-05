@@ -28,7 +28,7 @@
   font-weight: var(--ui-font-weight-strong);
   flex-shrink: 0;
   padding-left: calc(10px * var(--ui-scale));
-  font-size: calc(var(--ui-font-meta) * 0.96);
+  font-size: var(--ui-font-small);
   text-transform: none;
   color: var(--text-soft);
 }
