@@ -113,6 +113,7 @@ export const BashTool = Tool.define("bash", async () => {
 
   return {
     description: DESCRIPTION.replaceAll("${directory}", Instance.directory)
+      .replaceAll("${shell}", shell)
       .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
       .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES)),
     parameters: z.object({

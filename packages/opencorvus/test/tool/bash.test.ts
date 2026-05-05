@@ -53,6 +53,19 @@ describe("tool.bash", () => {
       },
     })
   })
+
+  test("description names the actual shell and avoids POSIX-only chaining guidance", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const bash = await BashTool.init()
+        expect(bash.description).toContain("The current shell is")
+        expect(bash.description).not.toContain("use a single Bash call with '&&'")
+        expect(bash.description).toContain("prefer separate terminal tool calls")
+        expect(bash.description).toContain("run the command directly or use the test runner's own concise reporter")
+      },
+    })
+  })
 })
 
 describe("tool.bash permissions", () => {
