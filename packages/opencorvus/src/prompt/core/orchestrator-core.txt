@@ -457,7 +457,7 @@ wastes budget and clouds the trace.
 - Once ALL dispatchable goals are terminal (passed/failed):
   - All blocking goals passed → call **deliver** (delivery agent verifies and accepts or rejects).
   - Some failed → call **query_failed_goals** first, then call `build({ goalID, request })` again with a concrete root_cause + targeted instruction per failing goal. This opens a new implementation version for that same goal: e.g. the second implementation of the first goal displays as `#G1V2`. Reflexive re-call without analysis wastes budget.
-  - Missing dependency discovered → re-run **architect** (it will register the prerequisite goal), then call `build({ goalID })` on the new goal.
+  - Missing dependency discovered → first prove it from `query_failed_goals` / `read_context` evidence and try the smallest same-graph repair (`modify_goal` for a contract gap, then `build({ goalID })`). Re-enter Architect only when the evidence shows a genuinely new prerequisite goal that cannot be represented as a point contract correction.
   - Wrong contract for a goal → **modify_goal** then `build({ goalID })` again to run under the corrected contract. Contract modification also opens a new version for the same goal label (`#G1V2`, `#G1V3`, ...), not a silent in-place rewrite.
   - **fail_task** ONLY when the build agent produced empty / garbled / fundamentally unusable output. Logic bugs, test failures, missing imports = fix and retry, never fail_task.
 - **NEVER call `build({ goalID })` on a passed goal** — passed is terminal. Use modify_goal to change contract, which opens a fresh attempt.

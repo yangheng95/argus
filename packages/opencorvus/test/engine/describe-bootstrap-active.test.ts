@@ -343,6 +343,29 @@ describe("collaboration closure projection", () => {
     })
   })
 
+  test("failed goals stay inside same-graph diagnostic recovery", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const failed = `gol_failed_${stamp}`
+        seedTaskWithGoals([
+          { id: failed, kind: "feature", status: "failed" },
+        ])
+
+        const desc = await describeTask(taskID)
+        expect(desc.collaboration_closure?.execution_started).toBe(true)
+        expect(desc.collaboration_closure?.failed_goal_ids).toContain(failed)
+
+        const md = renderTaskDescription(desc)
+        expect(md).toContain("Failed goals requiring same-graph diagnosis:")
+        expect(md).toContain("Failed goals stay inside the current collaboration closure")
+        expect(md).toContain("`query_failed_goals`")
+        expect(md).toContain("Do not restart upstream merely because a Build attempt failed")
+      },
+    })
+  })
+
   test("pre-execution goal graph is explicit planning window", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

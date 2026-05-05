@@ -191,6 +191,7 @@ export interface CollaborationClosureDesc {
   execution_started: boolean
   attempts_count: number
   passed_goal_ids: string[]
+  failed_goal_ids: string[]
   dispatchable_goal_ids: string[]
   blocked_goals: Array<{ goal_id: string; blocked_by: Array<{ goal_id: string; status: string }> }>
 }
@@ -291,6 +292,7 @@ function buildCollaborationClosure(goals: GoalDesc[]): CollaborationClosureDesc 
 
   const attemptsCount = goals.reduce((sum, goal) => sum + goal.attempt_count, 0)
   const passed = new Set(goals.filter((goal) => goal.is_terminal_ok).map((goal) => goal.id))
+  const failedGoalIDs = goals.filter((goal) => goal.is_terminal_fail).map((goal) => goal.id)
   const byID = new Map(goals.map((goal) => [goal.id, goal]))
   const dispatchableGoalIDs: string[] = []
   const blockedGoals: CollaborationClosureDesc["blocked_goals"] = []
@@ -317,6 +319,7 @@ function buildCollaborationClosure(goals: GoalDesc[]): CollaborationClosureDesc 
     execution_started: attemptsCount > 0,
     attempts_count: attemptsCount,
     passed_goal_ids: [...passed],
+    failed_goal_ids: failedGoalIDs,
     dispatchable_goal_ids: dispatchableGoalIDs,
     blocked_goals: blockedGoals,
   }
@@ -546,6 +549,16 @@ export function renderCollaborationClosure(desc: CollaborationClosureDesc | unde
 
   if (desc.passed_goal_ids.length > 0) {
     lines.push(`Passed goals: ${desc.passed_goal_ids.map((id) => `${id} (${titleByID.get(id) ?? "untitled"})`).join(", ")}`)
+  }
+
+  if (desc.failed_goal_ids.length > 0) {
+    lines.push("Failed goals requiring same-graph diagnosis:")
+    for (const goalID of desc.failed_goal_ids) {
+      lines.push(`- ${goalID}: ${titleByID.get(goalID) ?? "untitled"}`)
+    }
+    lines.push(
+      "Failed goals stay inside the current collaboration closure. Read `query_failed_goals`, then retry `build({ goalID })` or apply `modify_goal` when the contract itself needs a point correction. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
+    )
   }
 
   if (desc.dispatchable_goal_ids.length > 0) {
