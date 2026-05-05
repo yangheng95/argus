@@ -650,3 +650,55 @@ test("architect validator rejects every fixable registration inconsistency befor
   expect(issues).toContain("Contract \"Missing goal contract\": references unknown goals goal_missing")
   expect(isArchitectReadyToFinalize(collector)).toBe(false)
 })
+
+test("architect validator rejects a bootstrap goal that is not in every downstream depends_on", () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
+  const collector = kit.getCollector()
+  const bootstrapGoal = {
+    ...FEATURE_GOAL,
+    id: "goal_bootstrap",
+    title: "Bootstrap",
+    acceptance_specs: [acceptance("goal_bootstrap", "REQ-1")],
+    owned_paths: ["package.json", "src/main.tsx", "src/App.tsx"],
+    exports: ["Runnable Vite React shell"],
+    kind: "bootstrap" as const,
+  }
+  collector.goals.push(bootstrapGoal)
+  collector.goals.push({
+    ...FEATURE_GOAL,
+    id: "goal_theme",
+    title: "Theme",
+    acceptance_specs: [acceptance("goal_theme", "REQ-2")],
+    owned_paths: ["src/theme.ts"],
+    exports: ["ThemeProvider"],
+    requirement_ids: ["REQ-2"],
+  })
+  collector.goals.push({
+    ...VERIFY_GOAL,
+    depends_on: ["goal_theme"],
+    imports: ["ThemeProvider from goal_theme"],
+  })
+
+  const rejected = architectValidationIssues(collector).join("\n")
+  expect(rejected).toContain(
+    "Bootstrap goal goal_bootstrap: every non-bootstrap goal must list it in depends_on; missing goal_theme, goal_verify",
+  )
+
+  collector.goals[1] = {
+    ...collector.goals[1],
+    depends_on: ["goal_bootstrap"],
+    imports: ["Runnable Vite React shell from goal_bootstrap"],
+  }
+  collector.goals[2] = {
+    ...collector.goals[2],
+    depends_on: ["goal_bootstrap", "goal_theme"],
+    imports: [
+      "Runnable Vite React shell from goal_bootstrap",
+      "ThemeProvider from goal_theme",
+    ],
+  }
+
+  const acceptedBootstrapIssues = architectValidationIssues(collector)
+    .filter((issue) => issue.startsWith("Bootstrap goal "))
+  expect(acceptedBootstrapIssues).toEqual([])
+})

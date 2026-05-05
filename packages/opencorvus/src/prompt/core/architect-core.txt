@@ -497,8 +497,8 @@ After finalize passes, your output is persisted as the active architect goal set
 
 Goals execute in parallel, each in an isolated git worktree that is later merged into the main tree. Maximize parallelism at decomposition time — the runtime does NOT re-derive structure from scratch.
 
-- **Parallel-first**: default is NO `depends_on`. Add a dependency ONLY for a genuine data / bootstrap dependency (Goal B reads output Goal A produced; Goal C needs `goal_db`'s schema; …). Do not add dependencies just because one goal "feels earlier".
-- **File ownership is disjoint**: two concurrent goals (no dependency between them) MUST NOT list the same file under `owned_paths`. A shared-ownership merge is a 3-way conflict that LLM merge resolvers rarely repair cleanly — prevent it at decomposition time, not at merge time.
+- **Parallel-first after real foundations**: default is NO `depends_on` only after scaffold/bootstrap and data producers are real. Add a dependency for every genuine producer/consumer relationship: scaffold files, shared types, schemas, APIs, layout shells, reference surfaces, or any exported contract a later goal must preserve. Do not add dependencies just because one goal "feels earlier".
+- **File responsibility is coordinated, not sandboxed**: `owned_paths` are responsibility hints. Prefer disjoint ownership, but when goals must touch the same surface, make the coordination explicit with `depends_on`, exports/imports, assembly ownership, contracts, and acceptance specs. Do not rely on file locks or editable-file restrictions to create collaboration.
 - **Shared code lives in bootstrap**: types / interfaces / schemas needed by multiple goals go in a `bootstrap` goal that every consumer `depends_on`.
 - **Dependencies encode data flow**: B depends on A iff B imports something A exports. Period. No "soft" dependencies like "A should be done first for conceptual clarity".
 - **Anti-pattern: serial chain**. If your goals form A → B → C → D → E (each depends on the previous one), your decomposition failed — you've encoded a sequence of steps, not a decomposition. Re-split so that ≥50% of feature goals run in parallel.

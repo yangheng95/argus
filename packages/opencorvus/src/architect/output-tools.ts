@@ -147,6 +147,24 @@ export function architectValidationIssues(
   }
   const knownGoalIDs = new Set(collector.goals.map((g) => g.id))
   const requiredTraceability = new Map<string, Set<string>>()
+  const bootstrapGoals = collector.goals.filter((g) => g.kind === "bootstrap")
+  if (bootstrapGoals.length > 1) {
+    issues.push(
+      `Exactly one bootstrap goal is allowed in an active goal graph; found ${bootstrapGoals.length}`,
+    )
+  } else if (bootstrapGoals.length === 1) {
+    const bootstrapGoal = bootstrapGoals[0]
+    const missingBootstrapDeps = collector.goals
+      .filter((g) => g.id !== bootstrapGoal.id)
+      .filter((g) => !g.depends_on.includes(bootstrapGoal.id))
+      .map((g) => g.id)
+    if (missingBootstrapDeps.length > 0) {
+      issues.push(
+        `Bootstrap goal ${bootstrapGoal.id}: every non-bootstrap goal must list it in depends_on; missing ${missingBootstrapDeps.join(", ")}`,
+      )
+    }
+  }
+
   for (const g of collector.goals) {
     if (
       g.kind !== "verification" &&
