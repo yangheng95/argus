@@ -1266,6 +1266,76 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("goal build binds the live goal_run to the build session before completion", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_build_session_bind_${stamp}`
+    const taskID = `tsk_goal_build_session_bind_${stamp}`
+    const goalID = `goal_build_session_bind_${stamp}`
+    let observedSessionID: string | null | undefined
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "build session bind test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Build session bind test",
+          taskTitle: "Build session bind task",
+          request: "Bind build session to goal_run while it is still running",
+          goalTitle: "Bind build session",
+          goalSlug: "bind-build-session",
+          objective: "Verify live goal_run attempts have a session_id before the build result returns",
+          now,
+        })
+        buildAgentRunImpl = async (input: any) => {
+          await input.onSessionCreated?.("ses_build_session_bind")
+          observedSessionID = listGoalRunsByGoal(goalID)[0]?.session_id
+          return {
+            result: {
+              status: "passed",
+              summary: "Build completed after early session binding.",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Confirmed session binding contract.",
+                reason: "The build milestone must be traceable while it is running.",
+              }],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_build_session_bind",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Implement the goal",
+          reason: "Per-goal pipeline execution.",
+        }, {} as any)
+
+        expect(result).toContain("status=passed")
+        expect(observedSessionID).toBe("ses_build_session_bind")
+        expect(listGoalRunsByGoal(goalID)[0]?.session_id).toBe("ses_build_session_bind")
+      },
+    })
+  })
+
   test("goal build is not blocked by correction-bearing review history", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })

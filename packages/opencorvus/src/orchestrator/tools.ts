@@ -4563,6 +4563,11 @@ export function createOrchestratorTools(input: {
               parentSessionID: input.agentSessionID,
               signal: input.signal,
               managedWorktree,
+              onSessionCreated: async (sessionID) => {
+                if (!goalRunID) return
+                const { updateGoalRun } = await import("@/engine/persist")
+                updateGoalRun(goalRunID, { session_id: sessionID })
+              },
             })
             buildOutcome = { kind: "ok", result: ok }
           } catch (runErr) {
