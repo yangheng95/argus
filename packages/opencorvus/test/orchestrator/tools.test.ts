@@ -386,6 +386,7 @@ describe("orchestrator tools", () => {
 
         expect(result).toContain("integrity corrected the active goal graph")
         expect(buildCalls).toBe(0)
+        expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
         expect(findGoal(goalID)).toBeUndefined()
       },
     })
@@ -520,7 +521,80 @@ describe("orchestrator tools", () => {
         }, {} as any)
 
         expect(result).toContain("integrity verdict is needs_correction")
-        expect(result).toContain("build is blocked")
+        expect(result).toContain("execution is blocked")
+        expect(buildCalls).toBe(0)
+        expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("goal build blocks on persisted concerns with correction work", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_integrity_concern_block_${stamp}`
+    const taskID = `tsk_goal_integrity_concern_block_${stamp}`
+    const goalID = `goal_integrity_concern_block_${stamp}`
+    const specID = `spec_${goalID}`
+    let buildCalls = 0
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "persisted integrity concern block test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Persisted integrity concern block test",
+          taskTitle: "Persisted integrity concern block task",
+          request: "Do not dispatch build after integrity recorded correction work",
+          goalTitle: "Block persisted integrity correction work",
+          goalSlug: "block-persisted-integrity-correction-work",
+          objective: "Verify build consumes correction counts, not just the aggregate label",
+          now,
+          specID,
+        })
+        recordIntegrityAttempt({
+          taskID,
+          sessionID: "ses_integrity_concern_block",
+          specSnapshotID: specID,
+          verdict: "concerns",
+          perDimension: [
+            { id: "goal_fidelity", verdict: "concerns" },
+            { id: "technical_feasibility", verdict: "pass" },
+            { id: "hallucination", verdict: "pass" },
+            { id: "solution_quality", verdict: "concerns" },
+          ],
+          issuesCount: 3,
+          correctionsCount: 1,
+          missingCount: 0,
+          reason: "A concern still carried a concrete correction action.",
+          now,
+        })
+        buildAgentRunImpl = async () => {
+          buildCalls += 1
+          throw new Error("Build should not run after persisted correction work")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Implement the goal",
+          reason: "Per-goal pipeline execution.",
+        }, {} as any)
+
+        expect(result).toContain("recorded correction work")
+        expect(result).toContain("execution is blocked")
         expect(buildCalls).toBe(0)
         expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
       },

@@ -10,6 +10,7 @@ const promptFiles = {
   build: "build-core.txt",
   delivery: "delivery-core.txt",
   designAnalyst: "design-analyst-core.txt",
+  integrity: "integrity-core.txt",
   orchestrator: "orchestrator-core.txt",
   prosecutor: "prosecutor-core.txt",
 }
@@ -64,6 +65,18 @@ describe("core prompt hygiene", () => {
     expect(tools).not.toContain("modify_goal / re-run architect / fail_task")
     expect(tools).toContain("run integrity against the corrected goal graph before dispatching build")
     expect(tools).toContain("restart_from_stage only for upstream scope defects")
+  })
+
+  test("integrity corrections are blocking protocol evidence", async () => {
+    const integrity = await readPrompt("integrity")
+    const orchestrator = await readPrompt("orchestrator")
+    const tools = await readSource("orchestrator/tools.ts")
+
+    expect(integrity).toContain("MUST NOT include `corrections` or")
+    expect(integrity).toContain("If you need to emit any `corrections` or")
+    expect(orchestrator).toContain("zero correction")
+    expect(tools).toContain("recorded correction work")
+    expect(tools).toContain("integrityAttemptExecutionBlockReason")
   })
 
   test("architect prompt ships the chat-app worked example so feature-rich SPA briefs have a reference shape", async () => {

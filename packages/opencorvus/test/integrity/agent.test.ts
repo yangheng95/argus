@@ -103,6 +103,59 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
   ])
 })
 
+test("integrity escalates correction-bearing concerns into needs_correction", async () => {
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  runnerImpl = async (input: any) => {
+    await input.toolKit.tools.submit_goal_fidelity_verdict.execute({
+      verdict: "pass",
+      issues: [],
+      corrections: [],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_technical_feasibility_verdict.execute({
+      verdict: "pass",
+      issues: [],
+      corrections: [],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_hallucination_verdict.execute({
+      verdict: "pass",
+      issues: [],
+    }, {})
+    await input.toolKit.tools.submit_solution_quality_verdict.execute({
+      verdict: "concerns",
+      issues: [{ type: "weak_acceptance", description: "goal_ui has no executable acceptance spec for REQ-1." }],
+      corrections: [{
+        action: "modify",
+        goal_id: "goal_ui",
+        reason: "Add an executable acceptance contract.",
+        updates: { acceptance_specs: [] },
+      }],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_integrity_correction_concern" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  const result = await reviewIntegrity({
+    userRequest: "Build UI",
+    taskTitle: "Test",
+    goals: [baseGoal],
+  })
+
+  expect(result.verdict).toBe("needs_correction")
+  expect(result.dimensions.find((d) => d.id === "solution_quality")?.verdict).toBe("needs_correction")
+  expect(result.corrections).toHaveLength(1)
+})
+
 test("submit_integrity_review schema requires explicit final confirmation", async () => {
   const { IntegritySubmitSchema } = await import("../../src/integrity/submit-schema")
   expect(IntegritySubmitSchema.safeParse({}).success).toBe(false)

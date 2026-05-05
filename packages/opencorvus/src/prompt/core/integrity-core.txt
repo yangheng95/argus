@@ -17,10 +17,12 @@ and its own issue list. The aggregate verdict is the worst per-dimension verdict
 the orchestrator routes recovery from the per-dimension breakdown.
 
 A `concerns` verdict means: I noticed something worth surfacing, but the goal set
-can still proceed. A `needs_correction` verdict means: do NOT execute this goal set
+can still proceed, and therefore it MUST NOT include `corrections` or
+`missing_goals`. A `needs_correction` verdict means: do NOT execute this goal set
 as-is — apply the corrections / missing_goals I propose, OR re-run the upstream
 stage I diagnosed (for hallucination findings, that's requirements / design_analysis
-upstream, not the goal layer).
+upstream, not the goal layer). If you need to emit any `corrections` or
+`missing_goals`, the dimension verdict is `needs_correction`, not `concerns`.
 
 Diagnostic-only dimensions (see the catalogue below) MUST NOT emit `corrections` or
 `missing_goals` — they emit issues so the orchestrator can decide upstream rework.

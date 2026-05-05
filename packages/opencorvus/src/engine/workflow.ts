@@ -374,6 +374,10 @@ function taskStepStatusByTool(
       })
       const verdict = integrityAttemptVerdict(latest)
       if (verdict === "needs_correction") return "failed"
+      const payload = latest?.payload as Record<string, unknown> | null | undefined
+      const correctionsCount = typeof payload?.corrections_count === "number" ? payload.corrections_count : 0
+      const missingCount = typeof payload?.missing_count === "number" ? payload.missing_count : 0
+      if (correctionsCount > 0 || missingCount > 0) return "failed"
       return verdict ? "completed" : "pending"
     }
     case "build":
