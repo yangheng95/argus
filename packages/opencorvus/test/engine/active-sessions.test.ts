@@ -1,11 +1,14 @@
-import { beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
+import { Instance } from "../../src/project/instance"
 import { SessionTable } from "../../src/session/session.sql"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { listActiveSessionsForTask } from "../../src/engine/store"
+import { SessionStatus } from "../../src/session/status"
 import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
 
 type IDs = {
   projectID: string
@@ -84,36 +87,76 @@ function insertStatus(ids: IDs, input: { seq: number; emittedAt: number; status:
   })
 }
 
+function setProcessStatus(sessionID: string, status: "streaming" | "retry" | "idle" | "terminal") {
+  if (status === "retry") {
+    SessionStatus.set(sessionID, { type: "retry", attempt: 1, message: "retrying", next: Date.now() + 1000 })
+    return
+  }
+  if (status === "terminal") {
+    SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" })
+    return
+  }
+  SessionStatus.set(sessionID, { type: status })
+}
+
 describe("listActiveSessionsForTask", () => {
   beforeEach(() => {
     resetDatabase()
   })
 
-  test("keeps old streaming sessions active until the latest status is idle or terminal", () => {
+  afterEach(async () => {
+    await Instance.disposeAll()
+  })
+
+  test("keeps old streaming sessions active while the current process still owns them", async () => {
+    await using tmp = await tmpdir({ git: true })
     const ids = { projectID: "proj_active_sessions_1", taskID: "tsk_active_sessions_1", sessionID: "ses_active_build_1" }
     const now = Date.now()
     seedBase(ids, now)
     insertStatus(ids, { seq: 1, emittedAt: now - 10 * 60_000, status: "streaming" })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        setProcessStatus(ids.sessionID, "streaming")
 
-    expect(listActiveSessionsForTask(ids.taskID)).toEqual([
-      {
-        sessionID: ids.sessionID,
-        kind: "build",
-        goalID: "gol_active",
-        lastActivityMs: now - 10 * 60_000,
+        expect(listActiveSessionsForTask(ids.taskID)).toEqual([
+          {
+            sessionID: ids.sessionID,
+            kind: "build",
+            goalID: "gol_active",
+            lastActivityMs: now - 10 * 60_000,
+          },
+        ])
+
+        insertStatus(ids, { seq: 2, emittedAt: now, status: "idle" })
+        setProcessStatus(ids.sessionID, "idle")
+        expect(listActiveSessionsForTask(ids.taskID)).toEqual([])
       },
-    ])
-
-    insertStatus(ids, { seq: 2, emittedAt: now, status: "idle" })
-    expect(listActiveSessionsForTask(ids.taskID)).toEqual([])
+    })
   })
 
-  test("uses the newest status event when timestamps tie", () => {
+  test("uses the newest status event when timestamps tie", async () => {
+    await using tmp = await tmpdir({ git: true })
     const ids = { projectID: "proj_active_sessions_2", taskID: "tsk_active_sessions_2", sessionID: "ses_active_build_2" }
     const now = Date.now()
     seedBase(ids, now)
     insertStatus(ids, { seq: 1, emittedAt: now, status: "streaming" })
     insertStatus(ids, { seq: 2, emittedAt: now, status: "terminal" })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        setProcessStatus(ids.sessionID, "terminal")
+
+        expect(listActiveSessionsForTask(ids.taskID)).toEqual([])
+      },
+    })
+  })
+
+  test("hides durable streaming rows that no current process owns after restart", () => {
+    const ids = { projectID: "proj_active_sessions_3", taskID: "tsk_active_sessions_3", sessionID: "ses_active_build_3" }
+    const now = Date.now()
+    seedBase(ids, now)
+    insertStatus(ids, { seq: 1, emittedAt: now - 5 * 60_000, status: "streaming" })
 
     expect(listActiveSessionsForTask(ids.taskID)).toEqual([])
   })
