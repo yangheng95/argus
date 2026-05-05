@@ -941,6 +941,53 @@ export function createOrchestratorTools(input: {
       if (dimension.verdict !== "needs_correction") return false
       return dimensionsByID.get(dimension.id)?.canProposeCorrections === false
     })
+    const goalLayerDimensions = verdict.dimensions.filter((dimension) => {
+      if (dimension.verdict !== "needs_correction") return false
+      return dimensionsByID.get(dimension.id)?.canProposeCorrections !== false
+    })
+    const priorGoalLayerCorrectionAttempts = await countPriorGoalLayerIntegrityCorrections(activeSpec.id)
+    if (priorGoalLayerCorrectionAttempts >= 2 && goalLayerDimensions.length > 0) {
+      try {
+        recordIntegrityAttempt({
+          taskID,
+          sessionID: verdict.sessionID,
+          specSnapshotID: activeSpec.id,
+          verdict: "needs_correction",
+          perDimension: perDimensionRollup,
+          issuesCount: verdict.issues.length,
+          correctionsCount: verdict.corrections.length,
+          missingCount: verdict.missingGoals.length,
+          reason:
+            `${verdict.summary} Goal-layer integrity corrections did not converge after ` +
+            `${priorGoalLayerCorrectionAttempts + 1} attempts for this spec; restarting plan.` +
+            (upstreamOnlyDimensions.length > 0
+              ? ` Diagnostic-only dimension(s) also failed (${upstreamOnlyDimensions.map((d) => d.id).join(", ")}), but the current review still contains goal-layer blockers.`
+              : ""),
+        })
+      } catch (err) {
+        log.error("integrity: recordIntegrityAttempt failed", {
+          taskID,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+      const restartSummary = await restartTaskFromStage(
+        "plan",
+        `goal-layer integrity corrections did not converge after ${priorGoalLayerCorrectionAttempts + 1} attempts for spec ${activeSpec.id}`,
+      )
+      return {
+        status: "restarted",
+        specSnapshotID: activeSpec.id,
+        verdict: "needs_correction",
+        summary: verdict.summary,
+        sessionID: verdict.sessionID,
+        perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
+        issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
+        restartSummary,
+        restartStage: "plan",
+        nextAction: "architect",
+        restartReason: "Goal-layer Integrity corrections did not converge on the active spec",
+      }
+    }
     if (upstreamOnlyDimensions.length > 0) {
       try {
         recordIntegrityAttempt({
@@ -976,47 +1023,6 @@ export function createOrchestratorTools(input: {
         restartStage: "requirements",
         nextAction: "requirements",
         restartReason: "Diagnostic-only findings require upstream repair",
-      }
-    }
-
-    const priorGoalLayerCorrectionAttempts = await countPriorGoalLayerIntegrityCorrections(activeSpec.id)
-    if (priorGoalLayerCorrectionAttempts >= 2) {
-      try {
-        recordIntegrityAttempt({
-          taskID,
-          sessionID: verdict.sessionID,
-          specSnapshotID: activeSpec.id,
-          verdict: "needs_correction",
-          perDimension: perDimensionRollup,
-          issuesCount: verdict.issues.length,
-          correctionsCount: verdict.corrections.length,
-          missingCount: verdict.missingGoals.length,
-          reason:
-            `${verdict.summary} Goal-layer integrity corrections did not converge after ` +
-            `${priorGoalLayerCorrectionAttempts + 1} attempts for this spec; restarting plan.`,
-        })
-      } catch (err) {
-        log.error("integrity: recordIntegrityAttempt failed", {
-          taskID,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-      const restartSummary = await restartTaskFromStage(
-        "plan",
-        `goal-layer integrity corrections did not converge after ${priorGoalLayerCorrectionAttempts + 1} attempts for spec ${activeSpec.id}`,
-      )
-      return {
-        status: "restarted",
-        specSnapshotID: activeSpec.id,
-        verdict: "needs_correction",
-        summary: verdict.summary,
-        sessionID: verdict.sessionID,
-        perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
-        issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
-        restartSummary,
-        restartStage: "plan",
-        nextAction: "architect",
-        restartReason: "Goal-layer Integrity corrections did not converge on the active spec",
       }
     }
 

@@ -666,6 +666,123 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("integrity non-convergence keeps plan restart priority over mixed diagnostic findings", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_integrity_mixed_restart_${stamp}`
+    const taskID = `tsk_integrity_mixed_restart_${stamp}`
+    const goalID = `goal_integrity_mixed_restart_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity mixed restart test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity mixed restart test",
+          taskTitle: "Integrity mixed restart task",
+          request: "Do not rewrite requirements when same-spec plan corrections are already non-converging",
+          goalTitle: "Route mixed non-converging integrity to plan",
+          goalSlug: "route-mixed-non-converging-integrity-to-plan",
+          objective: "Verify mixed diagnostic plus goal-layer failures preserve requirements and restart Architect",
+          now,
+          specID,
+        })
+        for (const offset of [1, 2]) {
+          recordIntegrityAttempt({
+            taskID,
+            sessionID: `ses_prior_mixed_integrity_${offset}`,
+            specSnapshotID: specID,
+            verdict: "needs_correction",
+            perDimension: [
+              { id: "goal_fidelity", verdict: "needs_correction" },
+              { id: "technical_feasibility", verdict: "pass" },
+              { id: "hallucination", verdict: "pass" },
+              { id: "solution_quality", verdict: "pass" },
+            ],
+            issuesCount: 1,
+            correctionsCount: 1,
+            missingCount: 0,
+            reason: "Prior goal-layer correction did not converge.",
+            now: now + offset,
+          })
+        }
+
+        reviewIntegrityImpl = async () => ({
+          verdict: "needs_correction",
+          summary: "Integrity needs_correction",
+          dimensions: [
+            {
+              id: "goal_fidelity",
+              verdict: "needs_correction",
+              issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
+            },
+            {
+              id: "technical_feasibility",
+              verdict: "needs_correction",
+              issues: [{ description: "Import/export contract is still inconsistent.", type: "missing_capability" }],
+            },
+            {
+              id: "hallucination",
+              verdict: "needs_correction",
+              issues: [{ description: "A goal references an invented artifact.", type: "invented_artifact" }],
+            },
+            {
+              id: "solution_quality",
+              verdict: "needs_correction",
+              issues: [{ description: "Goal granularity remains unstable.", type: "granularity_off" }],
+            },
+          ],
+          issues: [
+            { description: "Goal still misses REQ-1.", type: "uncovered" },
+            { description: "Import/export contract is still inconsistent.", type: "missing_capability" },
+            { description: "A goal references an invented artifact.", type: "invented_artifact" },
+            { description: "Goal granularity remains unstable.", type: "granularity_off" },
+          ],
+          corrections: [{ action: "modify", goalID, reason: "Still missing REQ-1", updates: { objective: "cover REQ-1" } }],
+          missingGoals: [{ title: "Missing integration goal", objective: "Close the integration gap" }],
+          sessionID: "ses_integrity_mixed_restart",
+        })
+        applyIntegrityCorrectionsImpl = () => {
+          throw new Error("Mixed non-converging integrity must restart plan before applying another correction")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.integrity.execute({}, {} as any)
+
+        expect(result).toContain("did not converge")
+        expect(result).toContain("Task restarted from plan")
+        expect(result).not.toContain("NEXT: run requirements")
+        expect(result).not.toContain("Task restarted from requirements")
+        expect(findGoal(goalID)).toBeUndefined()
+        const spec = Database.use((db) =>
+          db.select({ status: EngineSpecSnapshotTable.status })
+            .from(EngineSpecSnapshotTable)
+            .where(eq(EngineSpecSnapshotTable.id, specID))
+            .get(),
+        )
+        expect(spec?.status).toBe("ready")
+        const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
+        const payload = artifact?.payload as Record<string, unknown> | undefined
+        expect(artifact?.label).toBe("verdict-needs_correction")
+        expect(payload?.reason).toContain("Diagnostic-only dimension(s) also failed")
+      },
+    })
+  })
+
   test("goal build blocks on a persisted needs_correction integrity verdict", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
