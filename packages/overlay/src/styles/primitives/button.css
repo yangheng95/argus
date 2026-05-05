@@ -68,9 +68,8 @@
 }
 
 .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="window-control"][data-tone="danger"] {
-  --oc-button-color: color-mix(in srgb, var(--bad) 92%, var(--text-strong));
-  --oc-button-bg: color-mix(in srgb, var(--bad) 22%, var(--surface-strong));
-  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--bad) 28%, var(--border-strong));
+  --oc-button-color: color-mix(in srgb, var(--bad) 74%, var(--text-strong));
+  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--bad) 14%, var(--border-strong));
 }
 
 .oc-button[data-variant="solid"] {
@@ -161,9 +160,9 @@
 
 .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="window-control"][data-tone="danger"]:hover,
 .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="window-control"][data-tone="danger"]:focus-visible {
-  --oc-button-color: color-mix(in srgb, var(--bad) 96%, var(--text-strong));
-  --oc-button-bg: color-mix(in srgb, var(--bad) 32%, var(--surface-strong));
-  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--bad) 34%, var(--border-strong));
+  --oc-button-color: var(--surface);
+  --oc-button-bg: color-mix(in srgb, var(--bad) 88%, var(--surface));
+  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--bad) 42%, var(--border-strong));
 }
 
 .oc-button[data-variant="solid"][data-tone="neutral"]:hover,

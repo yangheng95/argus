@@ -24,7 +24,9 @@ describe("window controls keep a visible resting shell", () => {
     expect(css).toContain('[data-chrome="window-control"]');
     expect(css).toContain("--oc-button-color: var(--text-strong);");
     expect(css).toContain('data-chrome="window-control"][data-tone="danger"]');
-    expect(css).toContain("color-mix(in srgb, var(--bad) 92%, var(--text-strong))");
+    expect(css).toContain("color-mix(in srgb, var(--bad) 74%, var(--text-strong))");
+    expect(css).not.toContain('--oc-button-bg: color-mix(in srgb, var(--bad) 22%, var(--surface-strong));');
+    expect(css).toContain('--oc-button-color: var(--surface);');
   });
 
   test("titlebar surface no longer owns close button contrast directly", () => {

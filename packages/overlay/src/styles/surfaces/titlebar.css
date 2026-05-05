@@ -480,10 +480,10 @@
 }
 
 /* Window control buttons (minimize / maximize / close).
-   Sized to match the titlebar button family. The close button keeps
-   tone="danger" which makes the × red at rest; a faint bad-dim bg
-   ensures it stays readable on the semi-transparent chrome even at
-   rest — invisible icons on the close affordance is a usability gap. */
+   Sized to match the titlebar button family. Resting state stays
+   neutral and readable; the close button only escalates to the bad
+   palette on hover/focus, matching desktop window-control affordance
+   instead of painting a permanent red slab in the corner. */
 .titlebar-window-controls .oc-button {
   --oc-button-height: var(--ui-titlebar-btn-height);
   --oc-button-padding-x: 0;
