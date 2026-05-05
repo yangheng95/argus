@@ -1958,9 +1958,19 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        // Rule 23: no precondition gate. Architect runs even without a spec
-        // snapshot — findRequirements() returns [] and the LLM decides
-        // whether it has enough context or needs to bail out.
+        const activeSpec = findActiveSpecForTask(task.id)
+        if (!activeSpec) {
+          return SubAgentProtocol.yieldResult({
+            headline: "architect: no active requirements spec snapshot — call `requirements` first.",
+            summary:
+              "Architect decomposition requires the durable REQ-N requirements snapshot. " +
+              "No architect session was started because the prior spec has been cleared or has not been created.",
+            fields: [
+              ["next_action", "requirements"],
+            ],
+            pointer: "read_context scope=decisions",
+          })
+        }
         const existingGoals = listGoals(taskID)
 
         await trackStepStart("architect")
@@ -1977,8 +1987,7 @@ export function createOrchestratorTools(input: {
           // the decision log phase=requirements section the Requirements
           // agent already seeded.
           const { findRequirements } = await import("@/engine/store")
-          const activeSpec = findActiveSpecForTask(task.id)
-          const reqRows = activeSpec ? findRequirements(activeSpec.id) : []
+          const reqRows = findRequirements(activeSpec.id)
           const requirements = reqRows.map((r) => {
             const meta = (r.metadata ?? {}) as Record<string, unknown>
             const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
