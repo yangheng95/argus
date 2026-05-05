@@ -14,9 +14,9 @@ export type DeliveryArbiterDecision = {
 
 /**
  * Delivery gate semantics:
- *   - Blocking: acceptance-spec coverage AND `review:integrity` (the
- *     architect-level multi-dimension soundness check). These are
- *     plan-rework signals — re-running the same code cannot fix them.
+ *   - Blocking: acceptance-spec coverage and integrity blockers (missing
+ *     review, needs_correction/fail, or correction/missing-goal counts).
+ *     Plain integrity concerns with zero corrective work are advisory notes.
  *   - Advisory: required checks (build/typecheck/test/lint), runtime probes,
  *     and the rest of the reviewer set (workspace_export, specialist:*).
  *     The delivery agent (LLM) weighs them in context.

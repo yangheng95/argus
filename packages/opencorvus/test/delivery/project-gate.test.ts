@@ -468,6 +468,77 @@ console.log("lint scope ok", cwd())
     expect(manifest.functionalAssessment?.auxiliaryFailureIds).not.toContain("review:integrity")
   })
 
+  test("treats correction-free integrity concerns as advisory completion evidence", async () => {
+    const dir = await packageFixture({})
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => {
+        recordIntegrity("tsk_integrity_concerns", "spec_integrity_concerns", {
+          verdict: "concerns",
+          issuesCount: 4,
+          correctionsCount: 0,
+          missingCount: 0,
+        })
+        return buildDeliveryEvidenceManifest({
+          taskID: "tsk_integrity_concerns",
+          runID: "run_integrity_concerns",
+          deliveryID: "dlv_integrity_concerns",
+          specSnapshotID: "spec_integrity_concerns",
+          changedFiles: ["src/app.ts"],
+          goals: [
+            goalInput("gol_one"),
+            goalInput("gol_two"),
+            goalInput("gol_three"),
+          ],
+        })
+      },
+    })
+
+    const integrity = manifest.reviewEvidence.find((item) => item.id === "review:integrity")
+    expect(integrity).toMatchObject({
+      status: "passed",
+      verdict: "concerns",
+    })
+    expect(integrity?.evidence).toContain("concerns_without_corrections_are_advisory")
+    expect(manifest.finalGate.failedReviewIds).not.toContain("review:integrity")
+    expect(manifest.functionalAssessment?.primaryFailureIds).not.toContain("review:integrity")
+    expect(manifest.finalGate.status).toBe("passed")
+  })
+
+  test("keeps correction-bearing integrity attempts as delivery blockers", async () => {
+    const dir = await packageFixture({})
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => {
+        recordIntegrity("tsk_integrity_corrections", "spec_integrity_corrections", {
+          verdict: "concerns",
+          issuesCount: 4,
+          correctionsCount: 1,
+          missingCount: 0,
+        })
+        return buildDeliveryEvidenceManifest({
+          taskID: "tsk_integrity_corrections",
+          runID: "run_integrity_corrections",
+          deliveryID: "dlv_integrity_corrections",
+          specSnapshotID: "spec_integrity_corrections",
+          changedFiles: ["src/app.ts"],
+          goals: [
+            goalInput("gol_one"),
+            goalInput("gol_two"),
+            goalInput("gol_three"),
+          ],
+        })
+      },
+    })
+
+    expect(manifest.reviewEvidence.find((item) => item.id === "review:integrity")?.status).toBe("failed")
+    expect(manifest.finalGate.failedReviewIds).toContain("review:integrity")
+    expect(manifest.functionalAssessment?.primaryFailureIds).toContain("review:integrity")
+    expect(manifest.finalGate.status).toBe("failed")
+  })
+
   test("fails delivery when declared changed files are absent from workspace export diff", async () => {
     const dir = await packageFixture({})
     await $`git init`.cwd(dir).quiet()
@@ -649,6 +720,24 @@ function goalInput(id: string) {
 }
 
 function recordPassingIntegrity(taskID: string, specSnapshotID: string) {
+  recordIntegrity(taskID, specSnapshotID, {
+    verdict: "pass",
+    issuesCount: 0,
+    correctionsCount: 0,
+    missingCount: 0,
+  })
+}
+
+function recordIntegrity(
+  taskID: string,
+  specSnapshotID: string,
+  input: {
+    verdict: "pass" | "concerns" | "needs_correction" | "fail"
+    issuesCount: number
+    correctionsCount: number
+    missingCount: number
+  },
+) {
   const now = Date.now()
   Database.use((db) => {
     db.insert(ProjectTable).values({
@@ -681,15 +770,15 @@ function recordPassingIntegrity(taskID: string, specSnapshotID: string) {
     taskID,
     sessionID: `ses_${specSnapshotID}`,
     specSnapshotID,
-    verdict: "pass",
+    verdict: input.verdict,
     perDimension: [
-      { id: "goal_fidelity", verdict: "pass" },
+      { id: "goal_fidelity", verdict: input.verdict },
       { id: "technical_feasibility", verdict: "pass" },
       { id: "hallucination", verdict: "pass" },
       { id: "solution_quality", verdict: "pass" },
     ],
-    issuesCount: 0,
-    correctionsCount: 0,
-    missingCount: 0,
+    issuesCount: input.issuesCount,
+    correctionsCount: input.correctionsCount,
+    missingCount: input.missingCount,
   })
 }

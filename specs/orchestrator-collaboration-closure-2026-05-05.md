@@ -30,6 +30,8 @@ Overlay benchmark `20260505-193509` then showed the non-diagnostic version of th
 
 Overlay benchmark `20260505-195237` verified that diagnostic-only Integrity failure now clears the invalid spec/goals, but exposed a downstream closure violation: after `restart_from_stage('requirements')` superseded the active spec, the orchestrator still launched an Architect session with no REQ-N source. The root cause was a dead "no precondition gate" path in the Architect tool that delegated stage validity to the LLM instead of enforcing the durable stage contract at the tool boundary.
 
+Overlay benchmark `20260505-200735` verified the repaired pre-execution chain: requirements and architect completed, correction-bearing Integrity attempts did not start execution, a later `concerns` verdict with zero corrections/missing goals allowed all three Build goals to pass, and Build reported per-file change lists. It then exposed the delivery-completion version of the same protocol drift: Delivery visually rendered the calculator, found runtime failures cleared, and listed all user requirements as satisfied, but still planned to reject because the host manifest had classified `review:integrity verdict=concerns` as a failed blocker. The root cause was an over-broad delivery gate predicate: `issues_count > 0` made correction-free concerns equivalent to an unresolved architectural defect.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -54,6 +56,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 - whether Integrity failures are repairable at the goal layer or must deterministically restart upstream because the failed dimension is diagnostic-only.
 - whether repeated same-spec goal-layer Integrity corrections are converging or should invalidate the current decomposition and restart Architect.
 - whether a downstream stage is being invoked after its upstream durable artifact has been cleared.
+- whether Delivery is judging final completion from current runtime/visual/task evidence or letting advisory Integrity concerns override completion.
 
 Without that durable projection, the LLM treats uncertainty as permission to ask Architect to solve the graph again.
 
@@ -84,6 +87,7 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It routes repeated non-converging goal-layer Integrity corrections to `restart_from_stage('plan')` so Architect owns a fresh decomposition instead of letting the same spec review forever.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 - It makes Architect require an active requirements spec snapshot before any Architect session is created, so upstream restarts cannot accidentally continue into downstream planning against an empty REQ-N source.
+- It makes Delivery treat Integrity `concerns` with zero corrections and zero missing goals as advisory evidence. Delivery still blocks on missing Integrity review, `needs_correction`, `fail`, nonzero corrections, or nonzero missing goals.
 
 ## Acceptance
 
@@ -104,3 +108,4 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - Tests prove diagnostic-only Integrity failures restart upstream and do not call the goal-correction path.
 - Tests prove repeated same-spec goal-layer Integrity corrections restart plan and do not apply yet another correction.
 - Tests prove Architect does not create a child session when no active requirements spec snapshot exists.
+- Tests prove correction-free Integrity concerns do not fail the delivery manifest gate, while correction-bearing attempts still block delivery.

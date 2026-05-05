@@ -201,10 +201,10 @@ async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
  * Blocking criteria — these failures require a plan rework, not a re-run of
  * the same code:
  *   - failedCoverageIds: blocking goals without acceptance specs.
- *   - review:integrity: architect-level soundness (goal_fidelity /
- *     technical_feasibility / hallucination / solution_quality). If the plan
- *     does not address the user's request, no amount of build/test re-runs
- *     will rescue it.
+ *   - review:integrity only when the review is absent, reports
+ *     needs_correction/fail, or carries corrections/missing goals. Plain
+ *     concerns with zero corrective work are advisory completion notes, not
+ *     proof that the integrated deliverable is incomplete.
  *
  * Advisory criteria — the delivery agent (LLM) weighs these in context and
  * decides whether they materially block acceptance:
@@ -235,8 +235,8 @@ function assessFunctionalCompletion(input: {
     ? ` ${auxiliaryFailureIds.length} advisory issue(s) recorded for the delivery agent to weigh.`
     : ""
   const summary = status === "complete"
-    ? `Functional completion passed (acceptance-spec coverage satisfied; integrity review clean).${advisoryNote}`
-    : `Functional completion failed with ${primaryFailureIds.length} blocker(s) (coverage and/or integrity).${advisoryNote}`
+    ? `Functional completion passed (acceptance-spec coverage satisfied; no integrity blockers).${advisoryNote}`
+    : `Functional completion failed with ${primaryFailureIds.length} blocker(s) (coverage and/or integrity blockers).${advisoryNote}`
   return {
     status,
     primaryFailureIds: [...new Set(primaryFailureIds)].sort(),
@@ -347,23 +347,30 @@ function buildReviewEvidence(input: {
     missing_count?: number
     reason?: string | null
   }
-  const unresolved = payload.verdict !== "pass"
-    || (payload.issues_count ?? 0) > 0
-    || (payload.corrections_count ?? 0) > 0
-    || (payload.missing_count ?? 0) > 0
+  const verdict = payload.verdict ?? "unknown"
+  const correctionsCount = payload.corrections_count ?? 0
+  const missingCount = payload.missing_count ?? 0
+  const unresolved = verdict === "needs_correction"
+    || verdict === "fail"
+    || correctionsCount > 0
+    || missingCount > 0
+    || (verdict !== "pass" && verdict !== "concerns")
   return [{
     id,
     name: "Integrity Review",
     status: unresolved ? "failed" : "passed",
     artifactId: row.id,
     specSnapshotId: input.specSnapshotID,
-    verdict: payload.verdict,
+    verdict,
     evidence: [
-      `verdict=${payload.verdict ?? "unknown"}`,
+      `verdict=${verdict}`,
       `issues_count=${payload.issues_count ?? 0}`,
-      `corrections_count=${payload.corrections_count ?? 0}`,
-      `missing_count=${payload.missing_count ?? 0}`,
+      `corrections_count=${correctionsCount}`,
+      `missing_count=${missingCount}`,
       payload.reason ? `reason=${payload.reason}` : undefined,
+      !unresolved && verdict === "concerns"
+        ? "concerns_without_corrections_are_advisory"
+        : undefined,
     ].filter((item): item is string => Boolean(item)),
   }]
 }
