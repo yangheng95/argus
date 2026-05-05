@@ -59,3 +59,20 @@ test("unused module-scope `headless` const is gone (puppeteer launch keeps the l
 test("stale TASK_GOALS mention is gone", () => {
   expect(src).not.toMatch(/TASK_GOALS/)
 })
+
+test("benchmark errors cannot be swallowed as successful no-report exits", () => {
+  const catchIndex = src.indexOf("} catch (error) {")
+  const exitCodeIndex = src.indexOf("process.exitCode = 1", catchIndex)
+  const reportIndex = src.indexOf("buildBenchmarkReport(error)", catchIndex)
+
+  expect(catchIndex).toBeGreaterThan(0)
+  expect(exitCodeIndex).toBeGreaterThan(catchIndex)
+  expect(reportIndex).toBeGreaterThan(exitCodeIndex)
+  expect(src).toContain("failed to write benchmark report")
+  expect(src).toContain("type: \"benchmark_report_failed\"")
+})
+
+test("benchmark path flags tolerate shell-preserved wrapping quotes", () => {
+  expect(src).toContain("function stripWrappingQuotes")
+  expect(src).toContain("const report = stripWrappingQuotes(flag(\"--report\"))")
+})
