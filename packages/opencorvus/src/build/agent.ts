@@ -817,6 +817,7 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "mir
     "- Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text. Use tools to act.",
     "- When the prompt or staged references define a screenshot, mockup, or webpage target, those references are authoritative. Match them 1:1 as closely as the stack allows; do not substitute your own design or silently drop referenced assets.",
     "- Run the acceptance commands from the prompt before claiming success.",
+    "- Write shell commands for the actual platform and shell; on Windows/PowerShell use PowerShell-native commands instead of unverified Unix-only helpers such as head, sed, or grep.",
     "- Commit changes with a concrete commit message before finishing.",
     "- If the dependency contract is missing, verification fails, or you cannot commit, finish with a concise failure summary and the exact blocker.",
     "- Do not call OpenCorvus-only tools such as report_build_result or merge_back; the host will publish and synthesize the terminal BuildResult after your process exits.",

@@ -132,6 +132,9 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("If the product behavior is wrong, fix the product")
     expect(build).toContain("Generated, compiled, or bundled artifacts are not a second implementation path")
     expect(build).toContain("Never hand-edit a generated/compiled runtime artifact")
+    expect(build).toContain("Write commands for the actual shell and platform")
+    expect(build).toContain("PowerShell-native commands")
+    expect(build).toContain("unverified Unix-only helpers")
   })
 
   test("build prompt requires failed report_build_result instead of prose stop", async () => {
