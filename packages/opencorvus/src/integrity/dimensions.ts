@@ -32,13 +32,10 @@
  *                 The per-dimension `submit_<id>_verdict` schema scopes its
  *                 issue-type enum to this list, so the LLM cannot stuff issues
  *                 from one dimension into another (structural enforcement).
- *   correctionScopes — what the dimension is allowed to PROPOSE corrections to.
- *                 goal_fidelity / solution_quality may rewrite goals; the other
- *                 two are diagnostic and surface concerns without editing goals
- *                 (the orchestrator decides whether to restart/refine the
- *                 upstream stage). This stops "hallucination" from
- *                 silently mutating goal contracts when the real fix is to
- *                 restart requirements.
+ *   canProposeCorrections — whether the dimension can PROPOSE goal-layer
+ *                 corrections. Integrity never mutates goals by itself; it
+ *                 emits executable repair proposals for the orchestrator to
+ *                 route or apply.
  */
 
 export type IntegrityIssueType =
@@ -73,9 +70,7 @@ export interface IntegrityDimension {
   checklist: readonly string[]
   /** Issue types this dimension may flag. */
   issueTypes: readonly IntegrityIssueType[]
-  /** Whether this dimension is allowed to propose goal-mutating corrections.
-   *  Diagnostic-only dimensions surface concerns; goal mutations belong to
-   *  dimensions whose findings can be RESOLVED at the goal-set layer. */
+  /** Whether this dimension is allowed to propose goal-layer corrections. */
   canProposeCorrections: boolean
 }
 
@@ -160,10 +155,7 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
         "ask, out_of_scope adds a non-user ask.",
     ],
     issueTypes: ["invented_artifact", "out_of_scope", "unsupported_claim"],
-    // Diagnostic-only: hallucinations usually demand re-running upstream
-    // (requirements / design_analysis), not editing the goal set. Surface
-    // concerns; let the orchestrator decide.
-    canProposeCorrections: false,
+    canProposeCorrections: true,
   },
   {
     id: "solution_quality",
@@ -213,14 +205,13 @@ export function renderDimensionCatalogue(): string {
   sections.push(
     "Every check below produces a per-dimension verdict (`pass` / `concerns` / " +
     "`needs_correction`). The aggregate verdict is the worst per-dimension verdict; " +
-    "the orchestrator routes recovery based on which dimensions failed (corrections " +
-    "land at the goal layer, hallucinations re-run upstream, etc.).",
+    "the orchestrator routes recovery based on which dimensions failed and which " +
+    "executable corrections were proposed.",
   )
   for (const d of INTEGRITY_DIMENSIONS) {
     const correctionsNote = d.canProposeCorrections
       ? "Goal-mutating corrections + missing_goals allowed under this dimension."
-      : "Diagnostic only — surface concerns, do NOT propose goal mutations under " +
-        "this dimension. The orchestrator re-runs upstream when it sees these issues."
+      : "Diagnostic only — surface concerns; no goal-layer corrections are accepted."
     sections.push("")
     sections.push(`### ${d.id} — ${d.title}`)
     sections.push("")

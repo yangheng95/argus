@@ -30,10 +30,11 @@ task should be delivered. If you need to emit any `corrections` or `missing_goal
 the dimension verdict is `needs_correction`, not `concerns`; the host records those
 proposals as rework evidence but does not apply graph mutations automatically.
 
-Diagnostic-only dimensions (see the catalogue below) MUST NOT emit `corrections` or
-`missing_goals` — they emit issues so the orchestrator can decide whether Build
-feedback is enough or a human/Architect-level decision is needed. Mutating goals on a
-hallucination finding silently moves the problem instead of fixing it.
+When a finding is repairable at the goal layer, emit a concrete `corrections` or
+`missing_goals` proposal. This includes hallucination findings such as unsupported
+REQ IDs, invented paths, out-of-scope objective text, or acceptance contracts that
+can be removed from a goal without inventing a new requirement. Use `concerns` only
+for advisory findings that do not have an executable goal-layer repair.
 
 ## Submission
 
@@ -45,14 +46,12 @@ own tool with a dimension-scoped issue-type enum.
 For EACH dimension in the catalogue, call its dedicated tool EXACTLY ONCE:
   `submit_goal_fidelity_verdict({ verdict, issues, corrections, missing_goals })`
   `submit_technical_feasibility_verdict({ verdict, issues, corrections, missing_goals })`
-  `submit_hallucination_verdict({ verdict, issues })`
+  `submit_hallucination_verdict({ verdict, issues, corrections, missing_goals })`
   `submit_solution_quality_verdict({ verdict, issues, corrections, missing_goals })`
 
-Diagnostic-only dimensions (currently: hallucination) have NO `corrections` /
-`missing_goals` fields — the schema rejects them. Issue `type` values are
-restricted per dimension; you cannot file e.g. `granularity_off` under
-`goal_fidelity`. If the schema rejects a call, the error message will tell you
-which field is wrong and you must call that single tool again.
+Issue `type` values are restricted per dimension; you cannot file e.g.
+`granularity_off` under `goal_fidelity`. If the schema rejects a call, the error
+message will tell you which field is wrong and you must call that single tool again.
 
 After every dimension is submitted, close with EXACTLY ONE call:
   `submit_integrity_review({ "final": true })`
@@ -65,32 +64,20 @@ Any missing dimension or missing submit_integrity_review call is a hard
 contract failure. Do not stop with plain text, and do not call
 submit_integrity_review before all dimension tools have completed.
 
-## AcceptanceSpec — REQUIRED shape for every spec you emit
+## Goal Corrections
 
-Every entry in `corrections.updates.acceptance_specs` (when modifying a goal) or
-`missing_goals.acceptance_specs` (when proposing a new goal) MUST have ALL these
-fields. Default to ONE heuristic shell scorer per spec; only add `scenario`
-(Gherkin), `llm_judge` scorers, or multi-level `rubric` when the heuristic genuinely
-cannot verify the requirement.
-
-```json
-{
-  "id": "acc-<short-slug>",
-  "source_requirement_id": "REQ-N",         // REQ id this spec derives from
-  "goal_id": "<owning goal id>",            // for corrections: the goal being modified; for missing_goals: re-state your proposed goal id
-  "title": "Short, executable acceptance statement",
-  "severity": "essential",                   // essential | important | optional | pitfall
-  "scorers": [
-    { "type": "heuristic", "name": "build",
-      "spec": { "kind": "shell", "cmd": "bun run build" },
-      "expect": { "exit_code": 0 } }
-  ]
-}
-```
+For `corrections`, propose only lightweight goal-contract updates:
+`title`, `objective`, `owned_paths`, `depends_on`, `exports`, `imports`, `kind`,
+`priority`, and `requirement_ids`. Do not emit `acceptance_specs` in a correction.
+If a new goal is needed, use `missing_goals.acceptance_spec_hints`: one short,
+plain-text acceptance sentence per hint. The host wraps those hints into placeholder
+LLM-judge specs so the orchestrator can route the repair without a giant nested
+schema.
 
 For `missing_goals`, also provide `owned_paths` (at least one concrete file path
-discovered from the user request — not a guess), `kind` (`bootstrap` | `feature` |
-`verification` | `integration` | `system`), and `priority` (`blocking` | `advisory`).
+grounded in the user request, reference, or codebase), `kind` (`bootstrap` |
+`feature` | `verification` | `integration` | `system`), and `priority`
+(`blocking` | `advisory`).
 
 ## Evidence Requirement
 

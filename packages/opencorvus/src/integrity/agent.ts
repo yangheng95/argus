@@ -23,9 +23,6 @@
  *     Issue-type enums are scoped per dimension so the LLM cannot smuggle
  *     issues from one dimension into another (structural, not runtime,
  *     enforcement).
- *   • Diagnostic-only dimensions (see registry: hallucination) get a slimmer
- *     schema with no corrections / missing_goals fields — the schema itself
- *     prevents diagnostic dimensions from mutating goals.
  *   • The LLM closes with `submit_integrity_review({ final: true })`. The runtime accepts
  *     the run only when every dimension has been submitted and the terminal
  *     review tool has validated the collector. Aggregate
@@ -83,6 +80,7 @@ export interface GoalCorrection {
   updates?: Partial<Pick<
     GoalContractFields,
     "title" | "objective" | "owned_paths" | "depends_on" | "exports" | "imports" | "kind" | "priority"
+    | "requirement_ids"
   >>
 }
 
@@ -117,9 +115,7 @@ export interface IntegrityResult {
   /** Cross-dimension union of issues — kept for callers that want a flat list
    *  (overlay verdict-card, prosecutor seed, dispatch eligibility check). */
   issues: IntegrityIssue[]
-  /** Cross-dimension union of goal-mutating corrections (only from dimensions
-   *  whose `canProposeCorrections=true`). Diagnostic-only dimensions never
-   *  contribute here. */
+  /** Cross-dimension union of goal-layer corrections. */
   corrections: GoalCorrection[]
   /** Cross-dimension union of proposed missing goals. */
   missingGoals: MissingGoal[]
@@ -129,8 +125,8 @@ export interface IntegrityResult {
 // Tool input schemas (snake_case at the wire to match AcceptanceSpec naming;
 // camelCase IntegrityResult on receive). Per-dimension tools each carry a
 // dimension-scoped issue enum so issue-type smuggling is structurally
-// impossible; diagnostic-only dimensions get a slimmer schema with no
-// corrections / missing_goals fields.
+// impossible. Dimensions that can propose goal-layer corrections get the
+// correction / missing-goal fields; advisory dimensions get the slimmer schema.
 // ---------------------------------------------------------------------------
 
 const VerdictEnum = z.enum(["pass", "concerns", "needs_correction"])
@@ -156,6 +152,7 @@ const GoalCorrectionUpdates = z.object({
   imports: z.array(z.string()).optional(),
   kind: z.enum(["bootstrap", "feature", "verification", "integration", "system"]).optional(),
   priority: z.enum(["blocking", "advisory"]).optional(),
+  requirement_ids: z.array(z.string()).optional(),
 })
 
 const GoalCorrectionInput = z.object({
@@ -308,7 +305,7 @@ export async function reviewIntegrity(input: {
   function buildDimensionTool(collector: IntegrityCollector, d: IntegrityDimension) {
     const correctionsClause = d.canProposeCorrections
       ? ` Mutating corrections + missing_goals are allowed under this dimension; reference only goal_ids that appear in the goal list.`
-      : ` Diagnostic-only dimension — schema has no corrections / missing_goals fields.`
+      : ` Advisory-only dimension — schema has no corrections / missing_goals fields.`
     return tool({
       description:
         `Submit the ${d.title} (${d.id}) dimension verdict. Call EXACTLY ONCE for ` +
@@ -612,8 +609,7 @@ function emitIntegrityLifecycle(
 /**
  * Apply integrity-result corrections to the goal list. Returns a new array.
  * Only acts when aggregate verdict is `needs_correction` AND the contributing
- * dimensions actually proposed goal-mutating corrections (diagnostic-only
- * dimensions do not, by construction).
+ * dimensions actually proposed goal-layer corrections.
  */
 export function applyIntegrityCorrections(
   goals: GoalContractFields[],

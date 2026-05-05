@@ -7,7 +7,7 @@
  *    REQ-N + foundational decisions only; it never writes goals.
  * ② DB mapping is lossless: each field gets its own column, no compression.
  * ③ acceptance_specs must be deterministic shell + rubric.
- * ④ owned_paths is the hard write boundary for Executor.
+ * ④ owned_paths records collaboration responsibility, not a write sandbox.
  * ⑤ Contract is frozen after Architect finalize. The Architect may edit it by
  *    being re-invoked (add / modify / split / remove goals), and the
  *    orchestrator may point-fix a field via `modify_goal`; otherwise the
@@ -28,7 +28,7 @@ export interface GoalContractFields {
    * commands and rubric checks — no free-form text interpretation.
    */
   acceptance_specs: AcceptanceSpec[]
-  /** Files this goal owns exclusively. Executor hard write boundary. */
+  /** Files this goal is responsible for coordinating; not an edit sandbox. */
   owned_paths: string[]
   /** Goal IDs this depends on (must complete before this goal starts). */
   depends_on: string[]
