@@ -521,6 +521,32 @@ test("updates config and writes to file", async () => {
   })
 })
 
+// Regression: AgentModelsPanel sends one PATCH per row; if the user changes
+// two rows in fast succession the requests run in parallel and writeConfigFile's
+// read-modify-write would race without a per-file lock. Both overrides must
+// survive regardless of dispatch order.
+test("concurrent Config.update calls preserve all overrides", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Config.update({ model: "openai/gpt-4o-mini" } as any)
+
+      await Promise.all([
+        Config.update({ agent: { build: { model: "anthropic/claude-sonnet-4-6" } } } as any),
+        Config.update({ agent: { delivery: { model: "openai/gpt-4.1" } } } as any),
+        Config.update({ agent: { general: { model: "anthropic/claude-haiku-4-5" } } } as any),
+      ])
+
+      const written = await Filesystem.readJson(path.join(tmp.path, ".opencorvus", "opencorvus.jsonc"))
+      expect(written.model).toBe("openai/gpt-4o-mini")
+      expect(written.agent?.build?.model).toBe("anthropic/claude-sonnet-4-6")
+      expect(written.agent?.delivery?.model).toBe("openai/gpt-4.1")
+      expect(written.agent?.general?.model).toBe("anthropic/claude-haiku-4-5")
+    },
+  })
+})
+
 test("gets config directories", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
