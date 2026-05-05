@@ -13,7 +13,9 @@ export interface DialogProps {
   /** Wider width variant for dense surfaces such as the log viewer. */
   wide?: boolean;
   /** Render title as `h2` by default, override only when semantics require it. */
-  titleAs?: "h1" | "h2" | "span";
+  titleAs?: "div" | "h1" | "h2" | "span";
+  /** Whether clicking the native backdrop closes the dialog. */
+  backdropClose?: boolean;
   /** Extra class names applied to the native dialog element. */
   class?: string;
   /** Extra class names applied to .dialog-form. */
@@ -21,7 +23,7 @@ export interface DialogProps {
   /** Forwarded ref for imperative focus or metrics. */
   ref?: ((el: HTMLDialogElement) => void) | HTMLDialogElement;
   /** Close callback fired after the native dialog closes. */
-  onClose?: () => void;
+  onClose?: (dialog: HTMLDialogElement) => void;
   /** Dialog body content. */
   children: JSX.Element;
   /** Optional DOM id for the dialog root. */
@@ -30,7 +32,7 @@ export interface DialogProps {
 }
 
 export function Dialog(rawProps: DialogProps) {
-  const merged = mergeProps({ wide: false, titleAs: "h2" as const }, rawProps);
+  const merged = mergeProps({ wide: false, titleAs: "h2" as const, backdropClose: true }, rawProps);
   const [local, rest] = splitProps(merged, [
     "open",
     "title",
@@ -38,6 +40,7 @@ export function Dialog(rawProps: DialogProps) {
     "footer",
     "wide",
     "titleAs",
+    "backdropClose",
     "class",
     "formClass",
     "ref",
@@ -65,7 +68,14 @@ export function Dialog(rawProps: DialogProps) {
         dialogRef = el;
         if (typeof local.ref === "function") local.ref(el);
       }}
-      onClose={() => local.onClose?.()}
+      onClick={(event) => {
+        if (local.backdropClose !== false && event.target === event.currentTarget) {
+          dialogRef?.close();
+        }
+      }}
+      onClose={() => {
+        if (dialogRef) local.onClose?.(dialogRef);
+      }}
     >
       <div class={["dialog-form", local.formClass].filter(Boolean).join(" ")}>
         <div class="dialog-header">

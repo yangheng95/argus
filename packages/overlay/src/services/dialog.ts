@@ -13,6 +13,9 @@ import { selectedTaskDirectory } from "../store/board";
 import { t } from "../utils/i18n";
 import { renderMarkdown, escapeHtml } from "../utils/markdown";
 import { describeToolPart } from "../utils/tool";
+import { setDialogStore } from "../store/dialog";
+
+let sessionDialogSeq = 0;
 
 function renderSessionToolChip(part: any): string {
   const display = describeToolPart(part, selectedTaskDirectory());
@@ -163,17 +166,18 @@ export async function openBuildSessionDialog(
   sessionID: string,
   title: string,
 ): Promise<void> {
-  const dialog = document.getElementById("sessionDialog") as HTMLDialogElement | null;
-  const titleEl = document.getElementById("sessionDialogTitle");
-  const bodyEl = document.getElementById("sessionDialogBody");
-  if (!dialog || !titleEl || !bodyEl) return;
-  titleEl.textContent = title || "Build Session";
-  bodyEl.innerHTML = '<p class="empty-hint">Loading…</p>';
-  dialog.showModal();
+  const openToken = ++sessionDialogSeq;
+  setDialogStore("session", {
+    open: true,
+    title: title || "Build Session",
+    bodyHtml: '<p class="empty-hint">Loading…</p>',
+  });
   try {
     const messages: any[] = await apiJson(`session/${sessionID}/message`);
     if (!messages || messages.length === 0) {
-      bodyEl.innerHTML = '<p class="empty-hint">No messages yet.</p>';
+      if (sessionDialogSeq === openToken) {
+        setDialogStore("session", "bodyHtml", '<p class="empty-hint">No messages yet.</p>');
+      }
       return;
     }
     const html = messages
@@ -197,10 +201,19 @@ export async function openBuildSessionDialog(
       })
       .filter(Boolean)
       .join("");
-    bodyEl.innerHTML = html || '<p class="empty-hint">No displayable messages.</p>';
+    if (sessionDialogSeq === openToken) {
+      setDialogStore("session", "bodyHtml", html || '<p class="empty-hint">No displayable messages.</p>');
+    }
   } catch (e) {
-    bodyEl.innerHTML = `<p class="empty-hint">Failed to load session: ${escapeHtml(String(e))}</p>`;
+    if (sessionDialogSeq === openToken) {
+      setDialogStore("session", "bodyHtml", `<p class="empty-hint">Failed to load session: ${escapeHtml(String(e))}</p>`);
+    }
   }
+}
+
+export function closeBuildSessionDialog(): void {
+  sessionDialogSeq += 1;
+  setDialogStore("session", "open", false);
 }
 
 export function setupDialogBackdropClose(): void {
