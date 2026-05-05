@@ -31,6 +31,7 @@ export namespace SessionCompaction {
 
   const COMPACTION_BUFFER = 20_000
   const COMPACTION_THRESHOLD_DEFAULT = 0.7
+  const COMPACTION_TOOL_OUTPUT_MAX_CHARS = 2_000
 
   export async function isOverflow(input: { tokens: Message.Assistant["tokens"]; model: Provider.Model }) {
     const config = await Config.get()
@@ -193,7 +194,10 @@ When constructing the summary, try to stick to this template:
       tools: {},
       system: [],
       messages: [
-        ...(await Message.toModelMessages(input.messages, model)),
+        ...(await Message.toModelMessages(input.messages, model, {
+          stripMedia: true,
+          toolOutputMaxChars: COMPACTION_TOOL_OUTPUT_MAX_CHARS,
+        })),
         {
           role: "user",
           content: [
@@ -207,6 +211,15 @@ When constructing the summary, try to stick to this template:
       model,
     })
 
+    if (result === "compact") {
+      processor.message.error = new Message.ContextOverflowError({
+        message:
+          "Session too large to compact: the compaction request exceeded the model context limit even after removing media attachments and truncating tool outputs.",
+      }).toObject()
+      processor.message.finish = "error"
+      await Session.updateMessage(processor.message)
+      return "stop"
+    }
     if (processor.message.error) return "stop"
     Bus.publish(Event.Compacted, { sessionID: input.sessionID })
 

@@ -571,7 +571,27 @@ export namespace Message {
    */
   export const STATEFUL_SNAPSHOT_TOOLS: ReadonlySet<string> = new Set(STATEFUL_SNAPSHOT_TOOL_NAMES)
 
-  export async function toModelMessages(input: WithParts[], model: Provider.Model): Promise<ModelMessage[]> {
+  export interface ToModelMessagesOptions {
+    stripMedia?: boolean
+    toolOutputMaxChars?: number
+  }
+
+  function compactToolOutput(text: string, maxChars: number | undefined): string {
+    if (!maxChars || maxChars <= 0 || text.length <= maxChars) return text
+    const head = Math.max(0, Math.floor(maxChars * 0.7))
+    const tail = Math.max(0, maxChars - head)
+    return [
+      text.slice(0, head).trimEnd(),
+      `[Tool output truncated for compaction: ${text.length} chars total, ${text.length - maxChars} chars omitted]`,
+      text.slice(text.length - tail).trimStart(),
+    ].join("\n")
+  }
+
+  export async function toModelMessages(
+    input: WithParts[],
+    model: Provider.Model,
+    options: ToModelMessagesOptions = {},
+  ): Promise<ModelMessage[]> {
     const result: UIMessage[] = []
     const toolNames = new Set<string>()
 
@@ -690,6 +710,13 @@ export namespace Message {
           // the capability to handle them — otherwise the AI SDK / provider
           // conversion layer throws UnsupportedFunctionalityError at runtime.
           if (part.type === "file" && !isDecodableText(part.mime, part.filename) && part.mime !== "application/x-directory") {
+            if (options.stripMedia) {
+              userMessage.parts.push({
+                type: "text",
+                text: `[Attached ${part.mime}: ${part.filename ?? "file"} omitted from compaction context]`,
+              })
+              continue
+            }
             const isImage = part.mime.startsWith("image/")
             const isPdf = part.mime === "application/pdf"
             const capable =
@@ -760,10 +787,10 @@ export namespace Message {
               } else if (isSupersededStatefulSnapshot) {
                 outputText = `[${part.tool} snapshot superseded by a later call in this session]`
               } else {
-                outputText = part.state.output
+                outputText = compactToolOutput(part.state.output, options.toolOutputMaxChars)
               }
               const attachments =
-                part.state.time.compacted || isSupersededStatefulSnapshot
+                part.state.time.compacted || isSupersededStatefulSnapshot || options.stripMedia
                   ? []
                   : (part.state.attachments ?? [])
 
