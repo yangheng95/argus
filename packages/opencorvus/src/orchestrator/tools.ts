@@ -33,6 +33,7 @@ import {
   finalizeDeliveryResult,
   updateGoalWorkspace,
   updateGoalRun,
+  updateGoalRunExecutorSessionStatus,
   updateEvaluationFromDeliveryVerdict,
 } from "@/engine/persist"
 import {
@@ -41,7 +42,9 @@ import {
   findActiveSpecForTask,
   findDeliveryByRun,
   findEvaluationByRun,
+  findGoalRun,
   findLatestDeliveryVerdictArtifact,
+  findLatestTipGoalRun,
   findPlan,
   getGoalRetryCount,
   listGoals,
@@ -51,6 +54,7 @@ import {
 } from "@/engine/store"
 import { effectiveMaxFixRuns } from "@/engine/helpers"
 import { describeTask, goalStatusByID, renderCollaborationClosure } from "@/engine/describe"
+import { isLiveGoalRunStatus } from "@/engine/catalog"
 import {
   GoalContractUpdateSchema,
 } from "@/pipeline/goal-contract.schema"
@@ -863,6 +867,91 @@ export function createOrchestratorTools(input: {
     }
 
     return []
+  }
+
+  function dependentGoalClosure(rootGoalIDs: string[]) {
+    const goals = listGoals(taskID)
+    const roots = new Set(rootGoalIDs)
+    const dependentsByGoalID = new Map<string, string[]>()
+    for (const goal of goals) {
+      for (const depID of goal.depends_on ?? []) {
+        const dependents = dependentsByGoalID.get(depID) ?? []
+        dependents.push(goal.id)
+        dependentsByGoalID.set(depID, dependents)
+      }
+    }
+
+    const ordered: string[] = []
+    const seen = new Set<string>()
+    const queue = [...rootGoalIDs]
+    while (queue.length > 0) {
+      const goalID = queue.shift()!
+      if (seen.has(goalID)) continue
+      seen.add(goalID)
+      ordered.push(goalID)
+      for (const childID of dependentsByGoalID.get(goalID) ?? []) {
+        queue.push(childID)
+      }
+    }
+
+    return ordered.map((goalID) => ({
+      goalID,
+      direct: roots.has(goalID),
+    }))
+  }
+
+  async function openArchitectureReviewRework(input: {
+    review: Extract<IntegrityReviewOutcome, { status: "reviewed" }>
+    targetGoalIDs: string[]
+  }) {
+    const { startNewAttempt } = await import("@/engine/persist")
+    const reworkLines: string[] = []
+    const reopenedRoots = input.targetGoalIDs.join(", ")
+    for (const item of dependentGoalClosure(input.targetGoalIDs)) {
+      const reason = item.direct ? "architecture_review_rework" : "architecture_review_dependency_rework"
+      const action = `run goal ${item.goalID}`
+      const reviewFeedback = item.direct
+        ? `${input.review.verdict}: ${input.review.summary}. ` +
+          `issues=${input.review.issues.join("; ") || "none"}. ` +
+          `corrections=${input.review.correctionsCount}; missing=${input.review.missingCount}. ` +
+          `Action: ${action} and resolve the architecture_review findings before delivery; ` +
+          `do not rewrite requirements or the goal graph from the review alone.`
+        : `Dependency rework: upstream architecture_review reopened goals: ${reopenedRoots}. ` +
+          `${input.review.verdict}: ${input.review.summary}. ` +
+          `Action: ${action} after the reopened dependency goals pass again; ` +
+          `re-check the merged dependency contracts before changing files.`
+
+      const liveTip = findLatestTipGoalRun(item.goalID)
+      let abortedTipID: string | undefined
+      if (liveTip && isLiveGoalRunStatus(liveTip.status)) {
+        if (liveTip.session_id) SessionPrompt.cancel(liveTip.session_id)
+        updateGoalRunExecutorSessionStatus(liveTip.id, "aborted")
+        updateGoalRun(liveTip.id, {
+          status: "aborted",
+          error: `${reason}: upstream architecture review invalidated this attempt`,
+          blocking_reason: null,
+        })
+        abortedTipID = liveTip.id
+      }
+
+      const rework = startNewAttempt({
+        goalID: item.goalID,
+        reason,
+        feedback: {
+          value: reviewFeedback,
+          reason: item.direct
+            ? "post-build architecture_review non-pass"
+            : "post-build architecture_review dependency invalidation",
+        },
+      })
+      reworkLines.push(
+        `goal=${item.goalID}` +
+        `${abortedTipID ? ` aborted_tip=${abortedTipID}` : ""}` +
+        `${rework.supersededTipID ? ` superseded_tip=${rework.supersededTipID}` : ""} ` +
+        `reason=${reason} retry_count=${rework.retryCount}`,
+      )
+    }
+    return reworkLines
   }
 
   async function restartTaskFromStage(stage: RestartStage, reason: string) {
@@ -4664,7 +4753,13 @@ export function createOrchestratorTools(input: {
 
           if (buildOutcome.kind === "ok") {
             const { worktreeDir, worktreeBranch, worktreeBaseRef } = buildOutcome.result
-            if (attachedGoalID && worktreeDir && worktreeBranch) {
+            const currentGoalRun = goalRunID ? findGoalRun(goalRunID) : undefined
+            if (
+              attachedGoalID &&
+              worktreeDir &&
+              worktreeBranch &&
+              (!currentGoalRun || isLiveGoalRunStatus(currentGoalRun.status))
+            ) {
               updateGoalWorkspace({
                 goalID: attachedGoalID,
                 workspaceDir: worktreeDir,
@@ -4683,10 +4778,24 @@ export function createOrchestratorTools(input: {
           // the underlying error message — diffs/commit/summary are absent
           // by definition, but the goal_run row reaches a clean terminal
           // state instead of orphaning at attempt-running.
+          let goalRunInvalidatedLine = ""
+          let goalRunInvalidated = false
           if (attachedGoalID && goalRunID) {
             try {
               const { finalizeBuildAttempt } = await import("@/engine/persist")
-              if (buildOutcome.kind === "ok") {
+              const currentGoalRun = findGoalRun(goalRunID)
+              if (currentGoalRun && !isLiveGoalRunStatus(currentGoalRun.status)) {
+                goalRunInvalidated = true
+                goalRunInvalidatedLine =
+                  `\n- build_result_ignored: goal_run ${goalRunID} is already ${currentGoalRun.status}; ` +
+                  `the attempt was invalidated before this build report returned.`
+                log.warn("build: ignoring stale build result for invalidated goal_run", {
+                  taskID,
+                  goalID: attachedGoalID,
+                  goalRunID,
+                  status: currentGoalRun.status,
+                })
+              } else if (buildOutcome.kind === "ok") {
                 const { result, sessionID, worktreeDir, worktreeBranch, worktreeBaseRef, diffs } = buildOutcome.result
                 finalizeBuildAttempt({
                   goalRunID,
@@ -4762,7 +4871,7 @@ export function createOrchestratorTools(input: {
           let architectureReviewReworkLine = ""
           let architectureReviewNeedsRework = false
           let architectureReviewAllowsDeliver = !attachedGoalID
-          if (attachedGoalID) {
+          if (attachedGoalID && !goalRunInvalidated) {
             const buildReportForReview = {
               status: result.status,
               summary: result.summary,
@@ -4791,38 +4900,18 @@ export function createOrchestratorTools(input: {
                 architectureReviewAllowsDeliver = architectureReview.verdict === "pass"
               }
               if (architectureReview.status === "reviewed" && architectureReview.verdict !== "pass") {
-                const { startNewAttempt } = await import("@/engine/persist")
                 const reviewTargetGoalIDs = postBuildReviewReworkGoalIDs({
                   review: architectureReview,
                   fallbackGoalID: attachedGoalID,
                 })
                 if (reviewTargetGoalIDs.length > 0) {
                   architectureReviewNeedsRework = true
-                  const reworkLines: string[] = []
-                  for (const reviewGoalID of reviewTargetGoalIDs) {
-                    const action = `run goal ${reviewGoalID}`
-                    const reviewFeedback =
-                      `${architectureReview.verdict}: ${architectureReview.summary}. ` +
-                      `issues=${architectureReview.issues.join("; ") || "none"}. ` +
-                      `corrections=${architectureReview.correctionsCount}; missing=${architectureReview.missingCount}. ` +
-                      `Action: ${action} and resolve the architecture_review findings before delivery; ` +
-                      `do not rewrite requirements or the goal graph from the review alone.`
-                    const rework = startNewAttempt({
-                      goalID: reviewGoalID,
-                      reason: "architecture_review_rework",
-                      feedback: {
-                        value: reviewFeedback,
-                        reason: "post-build architecture_review non-pass",
-                      },
-                    })
-                    reworkLines.push(
-                      `goal=${reviewGoalID}` +
-                      `${rework.supersededTipID ? ` superseded_tip=${rework.supersededTipID}` : ""} ` +
-                      `retry_count=${rework.retryCount}`,
-                    )
-                  }
+                  const reworkLines = await openArchitectureReviewRework({
+                    review: architectureReview,
+                    targetGoalIDs: reviewTargetGoalIDs,
+                  })
                   architectureReviewReworkLine =
-                    `\n- architecture_review_rework: opened targeted retry: ${reworkLines.join("; ")}`
+                    `\n- architecture_review_rework: opened targeted retry (dependency-closed): ${reworkLines.join("; ")}`
                 } else {
                   architectureReviewAllowsDeliver = architectureReview.verdict === "concerns"
                   architectureReviewReworkLine =
@@ -4865,11 +4954,13 @@ export function createOrchestratorTools(input: {
             `### Build report\n` +
             `- summary: ${result.summary}\n` +
             `- files_changed:\n${fileLines}\n` +
-            `${commitLine}${errorLine}${worktreeLine}${cleanupLine}\n` +
+            `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}\n` +
             `- tests:\n${testLines}\n` +
             `${architectureReviewLine}${architectureReviewReworkLine}\n\n` +
             `### Next step\n` +
-            (result.status === "passed" && architectureReviewAllowsDeliver
+            (goalRunInvalidated
+              ? `Call build again after the dependency rework that invalidated this attempt is resolved.`
+              : result.status === "passed" && architectureReviewAllowsDeliver
               ? `If architecture_review is pass, call \`deliver\` for integrated verification.`
               : result.status === "passed" && architectureReviewNeedsRework
                 ? `Call build again with the concrete architecture_review feedback above. Do not deliver until the review passes.`
