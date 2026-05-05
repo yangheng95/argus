@@ -1,6 +1,7 @@
 import { Instance } from "@/project/instance"
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
+import { SessionStatus } from "@/session/status"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { Database, NotFoundError, and, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, sql } from "@/storage/db"
 import type { SQL } from "@/storage/db"
@@ -1020,18 +1021,20 @@ export function listGoalWorkspacesForProject(
 }
 
 /**
- * Sessions whose latest durable `session.status` event is still active.
+ * Sessions whose latest durable `session.status` event is still active and
+ * whose current process-owned SessionStatus latch is still active.
  * This is the describe-layer view of "what agents are currently working" —
  * it covers pre-plan sessions (requirements / architect / integrity /
  * design-analyst) which `goals` and `run` miss entirely because they're
  * gated on `active_plan_version_id`.
  *
- * Source: `session.status` is the append-only truth for session lifecycle.
- * A recent-activity window is the wrong source here: a legitimate LLM turn
- * can be silent until the activity idle gate fires, and hiding it from
- * activeSessions makes the scheduler/overlay describe a live build as gone.
- * The session remains active until its newest status becomes `idle` or
- * `terminal`.
+ * Source: durable `session.status` supplies task/goal attribution and the
+ * latest published lifecycle status. The process-owned SessionStatus latch
+ * supplies live ownership. A recent-activity window is the wrong source: a
+ * legitimate LLM turn can be silent until the activity idle gate fires. But
+ * durable history alone is also wrong after process restart: a killed process
+ * cannot finish its last `streaming` session, so the restarted sidecar must
+ * not render that old row as currently active.
  */
 export function listActiveSessionsForTask(taskID: string) {
   return Database.use((db) =>
@@ -1067,7 +1070,7 @@ export function listActiveSessionsForTask(taskID: string) {
       .orderBy(desc(ProtocolEventTable.emitted_at))
       .all()
       .flatMap((row) =>
-        row.sessionID
+        row.sessionID && isSessionActiveInCurrentProcess(row.sessionID)
           ? [{
               sessionID: row.sessionID,
               kind: row.kind as string,
@@ -1077,6 +1080,11 @@ export function listActiveSessionsForTask(taskID: string) {
           : [],
       ),
   )
+}
+
+function isSessionActiveInCurrentProcess(sessionID: string) {
+  const status = SessionStatus.get(sessionID)
+  return status.type === "streaming" || status.type === "retry"
 }
 
 export function listLiveExecutorSessionsForProject(projectID: string) {
