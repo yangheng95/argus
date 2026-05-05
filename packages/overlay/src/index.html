@@ -41,17 +41,12 @@
 </head>
 <body data-page="overlay" data-theme="light">
   <script>
-    // Pre-render theme init: keeps `data-theme` synced with saved / OS preference
-    // before the main bundle parses. The root attribute feeds the new
-    // palette-only theme layer; the body attribute keeps legacy God CSS active
-    // until it is fully retired from the runtime path.
+    // Pre-render theme init: apply the default theme before host settings load.
+    // The main bundle applies the persisted host-owned theme during init.
     (function () {
       try {
-        var saved = localStorage.getItem("oc_theme");
-        var preferLight = window.matchMedia("(prefers-color-scheme: light)").matches;
-        var effective = !saved ? "light" : (saved === "system" ? (preferLight ? "light" : "dark") : saved);
-        document.documentElement.dataset.theme = effective;
-        document.body.dataset.theme = effective;
+        document.documentElement.dataset.theme = "light";
+        document.body.dataset.theme = "light";
       } catch {
         document.documentElement.dataset.theme = "light";
         document.body.dataset.theme = "light";

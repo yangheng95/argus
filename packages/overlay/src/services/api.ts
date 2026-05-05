@@ -8,22 +8,11 @@
 // signatures (apiUrl, apiHeaders, apiJson, fetchResourceAsObjectUrl) are
 // unchanged so existing callers keep working without edits.
 
-import serverDefaults from "../../../opencorvus/server-defaults.json";
+import { DEFAULT_SERVER } from "./default-server";
 import { getHostTransport } from "./host-transport";
 import type { ResponseKind, TransportResponse } from "./host-transport";
 
-const DEFAULT_LOCAL_SERVER_URL = `http://${serverDefaults.host}:${serverDefaults.port}`;
-
-export const DEFAULT_SERVER = (() => {
-  if (
-    typeof window !== "undefined" &&
-    window.location.protocol.startsWith("http") &&
-    window.location.pathname.startsWith("/ui")
-  ) {
-    return window.location.origin;
-  }
-  return DEFAULT_LOCAL_SERVER_URL;
-})();
+export { DEFAULT_SERVER };
 
 let serverUrl = DEFAULT_SERVER;
 let authCredentials = { username: "opencorvus", password: "" };

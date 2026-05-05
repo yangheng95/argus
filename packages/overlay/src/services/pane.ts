@@ -31,7 +31,7 @@ export interface PaneCallbacks {
   /**
  * Called whenever the user finishes a drag or widths are applied
  * programmatically. Persist the new widths here (e.g. save to store /
- * localStorage).
+ * the active host settings source).
  */
   onWidthsChanged: (
     sidebarWidth: number | null,
