@@ -178,7 +178,7 @@
 .sidebar-list-heading {
   display: block;
   padding: calc(2px * var(--ui-scale)) 0 calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  font-size: calc(var(--ui-font-meta) * 0.88);
+  font-size: var(--ui-font-small);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-muted);
 }
@@ -283,7 +283,7 @@
   display: block;
   margin-left: auto;
   flex-shrink: 0;
-  font-size: calc(var(--ui-font-meta) * 0.95);
+  font-size: var(--ui-font-small);
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
@@ -572,7 +572,7 @@
   gap: calc(4px * var(--ui-scale));
   min-width: 0;
   color: var(--text-muted);
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-meta);
   line-height: 1;
   cursor: pointer;
   user-select: none;
@@ -853,7 +853,7 @@
   flex-wrap: wrap;
   gap: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
   padding: 0 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  font-size: calc(var(--ui-font-meta) * 1.02);
+  font-size: var(--ui-font-meta);
   color: var(--text-muted);
 }
 
@@ -867,7 +867,7 @@
 .project-group-parent {
   flex: 1 0 100%;
   padding-left: 0;
-  font-size: calc(var(--ui-font-meta) * 0.92);
+  font-size: var(--ui-font-small);
   color: color-mix(in srgb, var(--text-muted) 92%, var(--text-soft));
   opacity: var(--ui-opacity-subtle);
   overflow: hidden;
