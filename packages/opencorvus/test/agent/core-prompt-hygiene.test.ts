@@ -72,9 +72,12 @@ describe("core prompt hygiene", () => {
     const integrity = await readPrompt("integrity")
     const orchestrator = await readPrompt("orchestrator")
     const tools = await readSource("orchestrator/tools.ts")
+    const integrityFlat = integrity.replace(/\s+/g, " ")
 
     expect(integrity).toContain("MUST NOT include `corrections` or")
     expect(integrity).toContain("If you need to emit any `corrections` or")
+    expect(integrityFlat).toContain("unsupported REQ IDs")
+    expect(integrityFlat).toContain("requirement_ids")
     expect(integrity).toContain("does not apply graph mutations automatically")
     expect(orchestrator).toContain("not a pre-build dispatch gate")
     expect(orchestrator).not.toContain("zero correction")

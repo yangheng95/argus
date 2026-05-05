@@ -34,6 +34,7 @@ describe("integrity reviewer tool payload — provider-normalised budget", () =>
     imports: z.array(z.string()).optional(),
     kind: z.enum(["bootstrap", "feature", "verification", "integration", "system"]).optional(),
     priority: z.enum(["blocking", "advisory"]).optional(),
+    requirement_ids: z.array(z.string()).optional(),
   })
   const GoalCorrectionInput = z.object({
     action: z.enum(["modify", "split", "remove"]),

@@ -68,9 +68,7 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
   runnerImpl = async (input: any) => {
     for (const [name, tool] of Object.entries(input.toolKit.tools)) {
       if (name === "submit_integrity_review") continue
-      const payload = name === "submit_hallucination_verdict"
-        ? { verdict: "pass", issues: [] }
-        : { verdict: "pass", issues: [], corrections: [], missing_goals: [] }
+      const payload = { verdict: "pass", issues: [], corrections: [], missing_goals: [] }
       await (tool as any).execute(payload, {})
     }
     expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(true)
@@ -121,6 +119,8 @@ test("integrity escalates correction-bearing concerns into needs_correction", as
     await input.toolKit.tools.submit_hallucination_verdict.execute({
       verdict: "pass",
       issues: [],
+      corrections: [],
+      missing_goals: [],
     }, {})
     await input.toolKit.tools.submit_solution_quality_verdict.execute({
       verdict: "concerns",
@@ -154,6 +154,69 @@ test("integrity escalates correction-bearing concerns into needs_correction", as
   expect(result.verdict).toBe("needs_correction")
   expect(result.dimensions.find((d) => d.id === "solution_quality")?.verdict).toBe("needs_correction")
   expect(result.corrections).toHaveLength(1)
+})
+
+test("hallucination findings can propose executable requirement-id repairs", async () => {
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  runnerImpl = async (input: any) => {
+    await input.toolKit.tools.submit_goal_fidelity_verdict.execute({
+      verdict: "pass",
+      issues: [],
+      corrections: [],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_technical_feasibility_verdict.execute({
+      verdict: "pass",
+      issues: [],
+      corrections: [],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_hallucination_verdict.execute({
+      verdict: "needs_correction",
+      issues: [{
+        type: "unsupported_claim",
+        description: "goal_ui references REQ-18, but the forwarded requirement list only contains REQ-1.",
+        goal_ids: ["goal_ui"],
+        evidence: "Requirement IDs: REQ-1; goal_ui Requirement IDs include REQ-18.",
+      }],
+      corrections: [{
+        action: "modify",
+        goal_id: "goal_ui",
+        reason: "Remove the unsupported REQ reference from the executable goal contract.",
+        updates: {
+          objective: "Build the requested interface grounded only in REQ-1.",
+          requirement_ids: ["REQ-1"],
+        },
+      }],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_solution_quality_verdict.execute({
+      verdict: "pass",
+      issues: [],
+      corrections: [],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_integrity_hallucination_repair" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  const result = await reviewIntegrity({
+    userRequest: "Build UI from REQ-1",
+    taskTitle: "Test",
+    goals: [{ ...baseGoal, requirement_ids: ["REQ-1", "REQ-18"] }],
+  })
+
+  expect(result.verdict).toBe("needs_correction")
+  expect(result.dimensions.find((d) => d.id === "hallucination")?.corrections).toHaveLength(1)
+  expect(result.corrections[0]?.updates?.requirement_ids).toEqual(["REQ-1"])
 })
 
 test("submit_integrity_review schema requires explicit final confirmation", async () => {

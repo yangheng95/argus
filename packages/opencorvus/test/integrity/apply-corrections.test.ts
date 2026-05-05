@@ -34,6 +34,7 @@ describe("integrity correction application", () => {
           owned_paths: ["tests/integration/app.test.ts", "tests/regression/app.test.ts"],
           kind: "verification",
           priority: "blocking",
+          requirement_ids: ["REQ-1"],
         },
       }],
       missingGoals: [],
@@ -45,5 +46,6 @@ describe("integrity correction application", () => {
     expect(corrected.imports).toEqual(["test runtime"])
     expect(corrected.exports).toEqual(["verification report"])
     expect(corrected.owned_paths).toEqual(["tests/integration/app.test.ts", "tests/regression/app.test.ts"])
+    expect(corrected.requirement_ids).toEqual(["REQ-1"])
   })
 })
