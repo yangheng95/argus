@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { renderTaskDescription, type TaskDesc } from "../../src/engine/describe"
 
 describe("describe build terminal report recovery", () => {
-  test("tells orchestrator to retry missing report_build_result instead of restarting plan for diagnostic worktree files", () => {
+  test("tells orchestrator same-session report recovery is exhausted before retrying", () => {
     const desc: TaskDesc = {
       id: "tsk_report_hint",
       title: "Report hint",
@@ -48,9 +48,10 @@ describe("describe build terminal report recovery", () => {
     }
 
     const md = renderTaskDescription(desc)
-    expect(md).toContain("Build ended without structured report_build_result")
+    expect(md).toContain("Build exhausted same-session report_build_result recovery")
     expect(md).toContain(".opencorvus/worktrees")
     expect(md).toContain("not primary workspace pollution")
+    expect(md).toContain("only after same-session recovery has failed")
     expect(md).toContain("do not restart_from_stage solely because diagnostic worktree files exist")
   })
 })

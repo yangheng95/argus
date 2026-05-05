@@ -557,6 +557,11 @@ export namespace BuildAgent {
               // work context, so failed reports stay available under "required"
               // until a future collector-level fatal blocker exists.
               shouldExposeOnlyTerminalTool: () => Boolean(mergedHead),
+              recovery: {
+                maxTurns: 3,
+                buildUserPrompt: ({ attempt, toolName }) =>
+                  buildTerminalReportRecoveryPrompt({ attempt, toolName, mergedHead }),
+              },
             },
           })
           const report = buildToolKit.getCollector()
@@ -691,7 +696,7 @@ export namespace BuildAgent {
               parseError: parsed?.error?.message,
             },
             `Build agent terminated without a valid report_build_result tool call: ${parsed?.error?.message ?? "(no parsed output)"}. ` +
-              `Retry this goal and require a final report_build_result call with files_changed[]. ` +
+              `The same build session already attempted terminal-report recovery; retry this goal only if recovery exhausted without a final report_build_result(files_changed[]) call. ` +
               `The retained goal worktree is diagnostic evidence under .opencorvus/worktrees, not primary workspace pollution; ` +
               `do not restart_from_stage solely because that diagnostic worktree contains partial files.`,
           )
@@ -778,6 +783,25 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "mir
     "- Commit changes with a concrete commit message before finishing.",
     "- If the dependency contract is missing, verification fails, or you cannot commit, finish with a concise failure summary and the exact blocker.",
     "- Do not call OpenCorvus-only tools such as report_build_result or merge_back; the host will publish and synthesize the terminal BuildResult after your process exits.",
+  ].join("\n")
+}
+
+function buildTerminalReportRecoveryPrompt(input: {
+  attempt: number
+  toolName: string
+  mergedHead: string | undefined
+}): string {
+  return [
+    `Protocol continuation: your previous build turn ended without calling ${input.toolName}.`,
+    "",
+    "Stay in this same build session. Do not restart the goal, do not ask the orchestrator to restart planning, and do not treat retained files under .opencorvus/worktrees as primary workspace pollution.",
+    "",
+    input.mergedHead
+      ? `merge_back already published this goal at ${input.mergedHead.slice(0, 12)}. Inspect the actual changed files if needed, then call ${input.toolName} now.`
+      : "If implementation or verification is incomplete, finish it in this worktree first. If the work cannot pass, report status='failed' with the concrete blocker.",
+    "",
+    `You must finish by calling ${input.toolName} exactly once. The payload must include files_changed[] with every changed file and a concise per-file explanation of why that change belongs to this goal and how it preserves sibling-goal contracts.`,
+    `Same-session report recovery attempt: ${input.attempt}.`,
   ].join("\n")
 }
 

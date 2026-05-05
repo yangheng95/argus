@@ -206,6 +206,15 @@ export interface RunAgentSessionInput<C> {
     toolName: string
     isSatisfied: (collector: C) => boolean
     shouldExposeOnlyTerminalTool: (collector: C) => boolean
+    recovery?: {
+      maxTurns: number
+      buildUserPrompt: (input: {
+        collector: C
+        toolName: string
+        attempt: number
+        finalMessage: Message.WithParts
+      }) => string
+    }
   }
   /** Pass-through skill stage. When omitted, no skill injection runs.
    *  See `SkillStage` JSDoc. */
@@ -311,6 +320,30 @@ export function buildHardErrorFromFinalMessage(input: {
     `LLM error during ${agentName}: ${errName}: ${errMessage}`,
     { nonRetryable: isRetryable === false },
   )
+}
+
+export function terminalToolMissingErrorFor(input: {
+  finalMessage: { info: { role: string; error?: unknown } }
+  toolName: string
+}): { message: string } | null {
+  if (input.finalMessage.info.role !== "assistant") return null
+  const err = input.finalMessage.info.error
+  if (!Message.TerminalToolMissingError.isInstance(err as Error)) return null
+  const data = (err as { data?: { toolName?: string; message?: string } }).data
+  if (data?.toolName !== input.toolName) return null
+  return { message: data.message ?? `missing terminal tool ${input.toolName}` }
+}
+
+export function shouldContinueForMissingTerminalTool(input: {
+  finalMessage: { info: { role: string; error?: unknown } }
+  toolName: string
+  satisfied: boolean
+  attempt: number
+  maxTurns: number
+}): boolean {
+  if (input.satisfied) return false
+  if (input.attempt >= input.maxTurns) return false
+  return terminalToolMissingErrorFor(input) !== null
 }
 
 // ---------------------------------------------------------------------------
@@ -514,14 +547,16 @@ export async function runAgentSession<C>(
   let finalMessage: Message.WithParts | undefined
   try {
     try {
-      const promptOnce = async () => {
+      const promptOnce = async (
+        promptParts: typeof parts = parts,
+      ) => {
         const promptArgs: Parameters<typeof SessionPrompt.prompt>[0] = {
           sessionID: session.id,
           model: { providerID: model!.providerID, modelID: model!.api.id },
           agent: agentName,
           system: systemPrompt,
           tools: enableMap,
-          parts: parts as Parameters<typeof SessionPrompt.prompt>[0]["parts"],
+          parts: promptParts as Parameters<typeof SessionPrompt.prompt>[0]["parts"],
         }
         if (input.format) {
           promptArgs.format = {
@@ -543,7 +578,37 @@ export async function runAgentSession<C>(
             isSatisfied: () => input.terminalTool!.isSatisfied(input.toolKit.getCollector()),
             shouldExposeOnlyTerminalTool: () =>
               input.terminalTool!.shouldExposeOnlyTerminalTool(input.toolKit.getCollector()),
-          }, promptOnce)
+          }, async () => {
+            let terminalRecoveryAttempt = 0
+            let nextParts: typeof parts = parts
+            while (true) {
+              await promptOnce(nextParts)
+              if (!finalMessage) return
+              const collector = input.toolKit.getCollector()
+              if (input.terminalTool!.isSatisfied(collector)) return
+              const recovery = input.terminalTool!.recovery
+              if (
+                !recovery ||
+                !shouldContinueForMissingTerminalTool({
+                  finalMessage,
+                  toolName: input.terminalTool!.toolName,
+                  satisfied: false,
+                  attempt: terminalRecoveryAttempt,
+                  maxTurns: recovery.maxTurns,
+                })
+              ) {
+                return
+              }
+              terminalRecoveryAttempt++
+              const text = recovery.buildUserPrompt({
+                collector,
+                toolName: input.terminalTool!.toolName,
+                attempt: terminalRecoveryAttempt,
+                finalMessage,
+              })
+              nextParts = [{ type: "text", text, id: Identifier.ascending("part") }]
+            }
+          })
         }
         if (input.format?.validate) {
           await SessionPrompt.withStructuredOutputGuard(session.id, input.format.validate, runWithTerminalContract)

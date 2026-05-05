@@ -470,7 +470,7 @@ function renderGoal(g: GoalDesc): string[] {
 function buildAttemptRecoveryHint(error?: string): string | undefined {
   if (!error) return undefined
   if (!error.includes("report_build_result") && !error.includes("missing_terminal_report")) return undefined
-  return "Build ended without structured report_build_result. The retained goal worktree is diagnostic under .opencorvus/worktrees, not primary workspace pollution. Retry this goal with explicit report_build_result(files_changed[]) instructions; do not restart_from_stage solely because diagnostic worktree files exist."
+  return "Build exhausted same-session report_build_result recovery without a structured terminal report. The retained goal worktree is diagnostic under .opencorvus/worktrees, not primary workspace pollution. Retry this goal with explicit report_build_result(files_changed[]) instructions only after same-session recovery has failed; do not restart_from_stage solely because diagnostic worktree files exist."
 }
 
 function truncate(text: string, max: number): string {
