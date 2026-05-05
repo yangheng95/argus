@@ -108,7 +108,9 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
     checklist: [
       "Walk every goal's `imports[]`. Every entry must appear in some ancestor (`depends_on`) " +
         "goal's `exports[]`. A dangling import = `missing_capability` (the importer needs " +
-        "something nobody is producing).",
+        "something nobody is producing). If the fix is an import/export/dependency mismatch, " +
+        "propose a `modify` correction that rewrites the relevant `imports`, `exports`, or " +
+        "`depends_on` arrays directly.",
       "Walk the `depends_on` graph. A cycle = `dependency_cycle`. Surface the cycle's " +
         "shortest path in `evidence` so the orchestrator can pick which edge to break.",
       "Look at the foundational `Decisions` block (runtime, framework, package_manager, " +
@@ -185,7 +187,9 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
         "Distinct from technical_feasibility's `contract_collision` — collision is a hard " +
         "edit conflict; overlap is fuzzy mutual rewriting that turns merge into roulette.",
       "Ordering smell. A `verification` goal scheduled before its target `feature` goal, " +
-        "or a `bootstrap` goal that depends on `feature` outputs, is `ordering_smell`.",
+        "or a `bootstrap` goal that depends on `feature` outputs, is `ordering_smell`. " +
+        "If the only needed repair is dependency ordering, propose a `modify` correction " +
+        "that rewrites `depends_on`; do not describe the desired ordering only in prose.",
     ],
     issueTypes: ["granularity_off", "weak_acceptance", "ownership_overlap", "ordering_smell"],
     canProposeCorrections: true,

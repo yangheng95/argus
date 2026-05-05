@@ -726,6 +726,38 @@ export function createOrchestratorTools(input: {
     )
   }
 
+  function stableJSON(value: unknown): string {
+    return JSON.stringify(value)
+  }
+
+  function goalContractFingerprint(goals: Array<{
+    id: string
+    title: string
+    objective: string
+    acceptance_specs: unknown
+    owned_paths: unknown
+    depends_on: unknown
+    exports: unknown
+    imports: unknown
+    kind?: string | null
+    priority: string
+    requirement_ids?: unknown
+  }>) {
+    return stableJSON(goals.map((goal) => ({
+      id: goal.id,
+      title: goal.title,
+      objective: goal.objective,
+      acceptance_specs: goal.acceptance_specs,
+      owned_paths: goal.owned_paths,
+      depends_on: goal.depends_on,
+      exports: goal.exports,
+      imports: goal.imports,
+      kind: goal.kind,
+      priority: goal.priority,
+      requirement_ids: goal.requirement_ids,
+    })))
+  }
+
   async function runIntegrityReview(): Promise<IntegrityReviewOutcome> {
     const task = requireTask(taskID)
     const activeSpec = findActiveSpecForTask(task.id)
@@ -829,6 +861,38 @@ export function createOrchestratorTools(input: {
     }
 
     const corrected = applyIntegrityCorrections(goalsForReview, verdict)
+    const correctionChangedGraph = goalContractFingerprint(corrected) !== goalContractFingerprint(goalsForReview)
+
+    if (!correctionChangedGraph) {
+      try {
+        recordIntegrityAttempt({
+          taskID,
+          sessionID: verdict.sessionID,
+          specSnapshotID: activeSpec.id,
+          verdict: "concerns",
+          perDimension: perDimensionRollup,
+          issuesCount: verdict.issues.length,
+          correctionsCount: 0,
+          missingCount: 0,
+          reason: `${verdict.summary} Proposed corrections produced no semantic goal-contract delta; treating as concerns so execution can expose concrete build evidence.`,
+        })
+      } catch (err) {
+        log.error("integrity: recordIntegrityAttempt failed", {
+          taskID,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+      return {
+        status: "reviewed",
+        specSnapshotID: activeSpec.id,
+        verdict: "concerns",
+        summary: `${verdict.summary} Proposed corrections produced no semantic goal-contract delta; execution may proceed with concerns.`,
+        sessionID: verdict.sessionID,
+        goalCount: goalsForReview.length,
+        perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
+      }
+    }
+
     const beforeIDs = new Set(goalsForReview.map((g) => g.id))
     const afterIDs = new Set(corrected.map((g) => g.id))
     const removedByIntegrity = [...beforeIDs].filter((id) => !afterIDs.has(id))
