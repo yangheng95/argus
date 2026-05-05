@@ -4,6 +4,8 @@
 
 Overlay benchmark `20260505-151125` showed the orchestrator re-entering Architect after a goal had already passed. That is not a robust scheduling strategy. It means the initial goal graph was not treated as a durable collaboration contract after execution began.
 
+Overlay benchmark `20260505-154347` showed the next failure mode: after a Build failure, the orchestrator jumped to `restart_from_stage(plan)` with "architect contract incomplete" instead of first diagnosing the failed goal and retrying or point-correcting the same graph. That is the same root problem in another lane.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -12,6 +14,7 @@ The orchestrator reads status snapshots, but it does not read a first-class coll
 
 - whether the current graph has entered execution,
 - which goals are now dispatchable by dependency evidence,
+- which failed goals remain inside the current graph and need diagnostic retry,
 - which goals are blocked by unfinished dependencies,
 - which repair lane fits ordinary collaboration drift,
 - when Architect re-entry would be a structural re-plan instead of normal execution.
@@ -27,6 +30,7 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It does not limit editable files.
 - It makes the collaboration contract explicit every wake.
 - It routes ordinary shared-file edits to Build `files_changed[]` and point contract corrections to `modify_goal`.
+- It routes failed Build attempts to `query_failed_goals` and same-goal retry before any upstream restart.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 
 ## Acceptance
@@ -34,5 +38,7 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - A task with any goal attempt renders a "Collaboration Closure" section.
 - The section lists dispatchable pending goals whose dependencies are satisfied.
 - The section lists blocked pending goals with the dependency statuses that block them.
+- The section lists failed goals as same-graph diagnostic recovery work.
 - The section says ordinary shared-file collaboration belongs to Build reports and `modify_goal`, not Architect re-planning.
+- The section says Build failure alone is not a reason to restart upstream.
 - Tests prove the projection appears after execution starts and remains absent or pre-execution-scoped before the first attempt.

@@ -46,6 +46,8 @@ describe("core prompt hygiene", () => {
     expect(orchestrator.replace(/\s+/g, " ")).toContain("`owned_paths` are collaboration responsibilities, not a file sandbox")
     expect(orchestrator).toContain("Frequent Architect re-runs are a planning-quality indicator")
     expect(orchestrator).toContain("use `modify_goal` instead of reopening the entire graph")
+    expect(orchestrator).toContain("try the smallest same-graph repair")
+    expect(orchestrator).toContain("Re-enter Architect only when the evidence shows a genuinely new prerequisite goal")
   })
 
   test("orchestrator source routes collaboration drift through durable closure lanes", async () => {
@@ -55,6 +57,7 @@ describe("core prompt hygiene", () => {
     expect(describe).toContain("Collaboration Closure")
     expect(describe).toContain("shared collaboration contract")
     expect(describe).toContain("Build `files_changed[]` reports")
+    expect(describe).toContain("Failed goals stay inside the current collaboration closure")
 
     expect(tools).not.toContain("NEXT: re-run architect or integrity")
     expect(tools).not.toContain("architect or integrity produces a pass/concerns attempt")
