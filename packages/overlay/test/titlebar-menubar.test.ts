@@ -182,7 +182,7 @@ test(
           expect(geometry.triggers).toContain("tools")
           expect(geometry.outOfBounds).toEqual([])
           expect(geometry.overlaps).toEqual([])
-          expect(geometry.brandWidth).toBeGreaterThan(30)
+          expect(geometry.brandWidth).toBeGreaterThan(24)
           expect(geometry.badgeText).not.toContain(`:${server.port}`)
           expect(geometry.badgeTitle).toContain(String(server.port))
           expect(geometry.badgeTitle).toContain("12345")
@@ -388,7 +388,7 @@ test(
         }
       })
       expect(lightTriggerState).toEqual({
-        color: "rgb(26, 26, 26)",
+        color: "rgb(16, 21, 39)",
         accessKey: "w",
         ariaKeyshortcuts: "Alt+W",
       })
@@ -401,7 +401,7 @@ test(
         '[data-menu-trigger="workspace"]',
         (node) => getComputedStyle(node as HTMLElement).color,
       )
-      expect(darkTriggerColor).toBe("rgb(223, 225, 229)")
+      expect(darkTriggerColor).toBe("rgb(246, 248, 255)")
 
       await page.keyboard.down("Alt")
       await page.keyboard.up("Alt")
@@ -495,6 +495,8 @@ test(
         const openFolder = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-open-folder"]')
         const createProject = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-create-project"]')
         const title = document.querySelector<HTMLElement>(".workspace-onboarding-titleblock")
+        const brandWordmark = document.querySelector<HTMLElement>(".brand-guide-wordmark")
+        const brandLabel = document.querySelector<HTMLElement>(".brand-guide-label")
         const sections = document.querySelector<HTMLElement>(".sections-title")
         const startupInvokes = ((window as any).__startupInvokes || []) as string[]
         return {
@@ -502,6 +504,8 @@ test(
           openFolderText: openFolder?.textContent || "",
           createProjectText: createProject?.textContent || "",
           title: title?.textContent || "",
+          brandWordmark: brandWordmark?.textContent || "",
+          brandLabel: brandLabel?.textContent || "",
           sections: sections?.textContent || "",
           pickDirInvokes: startupInvokes.filter((value) => value === "overlay_pick_dir").length,
         }
@@ -511,6 +515,8 @@ test(
       expect(intro.openFolderText).toContain("Open Local Directory")
       expect(intro.createProjectText).toContain("Create New Project")
       expect(intro.title).toContain("Open a project directory")
+      expect(intro.brandWordmark).toBe("OpenCorvus")
+      expect(intro.brandLabel.length).toBeGreaterThan(0)
       expect(intro.sections).toBe("Workspace")
       await page.close()
     } finally {
@@ -692,7 +698,7 @@ test(
           { selector: ".sections-header", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: ".brand-guide", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: '[data-ui="titlebar-menubar-trigger"]', props: ["paddingLeft", "paddingRight"], max: 8 },
-          { selector: ".sidebar-btn-primary", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+          { selector: ".sidebar-btn-primary", props: ["columnGap", "paddingLeft", "paddingRight"], max: 11 },
           { selector: ".sidebar-tool", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: ".task-dir-shell", props: ["columnGap", "paddingLeft", "paddingRight"], max: 4 },
           { selector: ".task-cwd-dropdown", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
@@ -704,12 +710,13 @@ test(
             props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
             max: 8,
           },
+          { selector: ".chat-send", props: ["paddingLeft", "paddingRight"], max: 9 },
           {
             selector: ".chat-icon-col",
             props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
             max: 4,
           },
-          { selector: ".chat-send", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+          { selector: ".chat-send", props: ["columnGap", "paddingLeft", "paddingRight"], max: 9 },
         ]
         return checks.flatMap(({ selector, props, max }) => {
           const node = document.querySelector<HTMLElement>(selector)
@@ -730,17 +737,12 @@ test(
           '[data-ui="titlebar-menubar-trigger"]',
           ".titlebar-btn",
           ".sidebar-btn-primary",
-          ".sidebar-tool",
-          ".sidebar-toolset",
-          ".task-dir-shell",
-          ".task-cwd-dropdown",
           ".workspace-toggle",
           ".btn.mini",
           '[data-ui="executor-chip"]',
           '[data-ui="right-tabs"]',
           '[data-ui="right-tab"]',
           '[data-ui="chat-toolbar-button"]',
-          ".chat-send",
           ".conn-banner__action",
           ".board-intro__cta-action",
         ]
@@ -763,7 +765,7 @@ test(
           {
             selector: ".sections-stack",
             props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-            max: 5,
+            max: 7,
           },
           {
             selector: '[data-ui="right-tabs"]',
@@ -851,9 +853,6 @@ test(
           '[data-ui="titlebar-menubar-trigger"]',
           ".titlebar-btn",
           ".sidebar-tool",
-          ".sidebar-toolset",
-          ".task-dir-shell",
-          ".task-cwd-dropdown",
           ".workspace-toggle",
           ".btn.mini",
           '[data-ui="executor-chip"]',

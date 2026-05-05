@@ -2,10 +2,18 @@
   max-width: min(calc(760px * var(--ui-scale)), calc(100vw - calc(48px * var(--ui-scale))));
 }
 
+.workspace-onboarding-form {
+  background: color-mix(in srgb, var(--surface) 98%, var(--surface-inset));
+}
+
+.workspace-onboarding-header {
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-strong)) !important;
+}
+
 .workspace-onboarding {
   display: flex;
   flex-direction: column;
-  gap: calc(18px * var(--ui-scale));
+  gap: calc(20px * var(--ui-scale));
 }
 
 .workspace-onboarding-titleblock {
@@ -19,19 +27,17 @@
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-soft);
+  color: var(--accent);
 }
 
 .workspace-onboarding-hero {
   display: flex;
   flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(16px * var(--ui-scale));
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(20px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: var(--oc-radius-large);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, white 4%, transparent), color-mix(in srgb, var(--accent) 2%, transparent) 78%, transparent),
-    color-mix(in srgb, var(--surface-inset) 94%, transparent);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
 }
 
 .workspace-onboarding-status {
@@ -40,9 +46,9 @@
   gap: calc(8px * var(--ui-scale));
   width: fit-content;
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 18%, transparent);
   border-radius: calc(999px * var(--ui-scale));
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-strong));
   color: var(--text-strong);
   font-size: var(--ui-font-meta);
   font-weight: var(--ui-font-weight-strong);
@@ -77,36 +83,41 @@
 
 .workspace-onboarding-lead {
   color: var(--text);
+  font-size: var(--ui-font-heading);
+  line-height: 1.45;
 }
 
 .workspace-onboarding-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: calc(12px * var(--ui-scale));
+  gap: calc(14px * var(--ui-scale));
 }
 
 .workspace-onboarding-action {
   display: flex;
   flex-direction: column;
-  gap: calc(14px * var(--ui-scale));
-  padding: calc(16px * var(--ui-scale));
+  justify-content: space-between;
+  gap: calc(16px * var(--ui-scale));
+  min-height: calc(176px * var(--ui-scale));
+  padding: calc(18px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: var(--oc-radius-large);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, white 4%, transparent), transparent 74%),
-    color-mix(in srgb, var(--surface) 88%, transparent);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
 }
 
 .workspace-onboarding-action[data-kind="open"] {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 72%),
-    color-mix(in srgb, var(--surface) 90%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-strong));
 }
 
 .workspace-onboarding-action[data-kind="create"] {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--good) 8%, transparent), transparent 72%),
-    color-mix(in srgb, var(--surface) 90%, transparent);
+  border-color: color-mix(in srgb, var(--border) 92%, transparent);
+  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+}
+
+.workspace-onboarding-action[data-busy="true"] {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-strong));
 }
 
 .workspace-onboarding-action-head {
@@ -117,18 +128,20 @@
 
 .workspace-onboarding-action-icon {
   flex: 0 0 auto;
-  width: calc(34px * var(--ui-scale));
-  height: calc(34px * var(--ui-scale));
+  width: calc(38px * var(--ui-scale));
+  height: calc(38px * var(--ui-scale));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: calc(10px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 92%, transparent);
   color: var(--accent);
 }
 
 .workspace-onboarding-action[data-kind="create"] .workspace-onboarding-action-icon {
-  color: var(--good);
+  background: color-mix(in srgb, var(--surface) 90%, var(--surface-inset));
+  color: var(--text);
 }
 
 .workspace-onboarding-action-copy {
@@ -143,7 +156,7 @@
 .workspace-onboarding-recent-name {
   margin: 0;
   color: var(--text-strong);
-  font-size: var(--ui-font-control);
+  font-size: var(--ui-font-title);
   font-weight: var(--ui-font-weight-strong);
 }
 
@@ -151,6 +164,10 @@
   display: flex;
   flex-direction: column;
   gap: calc(12px * var(--ui-scale));
+  padding: calc(18px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: var(--oc-radius-large);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
 }
 
 .workspace-onboarding-section-head {
@@ -175,19 +192,26 @@
   padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
   color: inherit;
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
 }
 
 .workspace-onboarding-recent-item:hover,
 .workspace-onboarding-recent-item:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 24%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent 78%),
-    color-mix(in srgb, var(--surface-hover) 92%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-hover));
   outline: none;
+}
+
+.workspace-onboarding-recent-item[data-busy="true"] {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-hover));
 }
 
 .workspace-onboarding-recent-item:disabled {
@@ -198,7 +222,7 @@
 .workspace-onboarding-recent-icon {
   width: calc(18px * var(--ui-scale));
   height: calc(18px * var(--ui-scale));
-  color: var(--text-soft);
+  color: var(--accent);
 }
 
 .workspace-onboarding-recent-copy {
@@ -223,6 +247,7 @@
 
 .workspace-onboarding-footnote {
   font-size: var(--ui-font-meta);
+  color: var(--text-muted);
 }
 
 @media (max-width: 860px) {

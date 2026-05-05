@@ -70,17 +70,15 @@
 }
 
 /* Composer shell: the operator's primary input surface.
-   Rounded card floating above the chat scroll — matches the reference
-   design (chat ui.png) which shows a pill/card input. Replaces the old
-   `border-radius: 0` + `margin: 0` flat treatment (iter17, 2026-05-02)
-   that was superseded by the 2026-05-04 reference-design request. */
+   The parent layout owns outer spacing, so this shell stays marginless
+   while carrying its own border, radius, and inner padding. */
 .chat-input {
   --chat-compose-scale: 1;
   position: relative;
   display: flex;
   flex-direction: column;
   gap: calc(2px * var(--ui-scale));
-  margin: 0 calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  margin: 0;
   padding: calc(4px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 34%, transparent);
   border-radius: var(--oc-radius-large);
@@ -172,7 +170,7 @@
   height: 100%;
   min-width: calc(78px * var(--ui-scale));
   min-height: calc(72px * var(--ui-scale) * var(--chat-compose-scale));
-  padding: 0 calc(12px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 46%, transparent);
   border-radius: var(--oc-radius-soft);
   background: var(--accent);
