@@ -11,7 +11,7 @@ import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { goalStatusByID } from "../../src/engine/describe"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
-import { recordIntegrityAttempt, startNewAttempt } from "../../src/engine/persist"
+import { beginBuildAttempt, recordIntegrityAttempt, startNewAttempt, updateGoalRun } from "../../src/engine/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { findGoal, findGoalLatestWorkspace, findLatestIntegrityAttemptArtifact, listGoalRunsByGoal } from "../../src/engine/store"
@@ -1030,6 +1030,235 @@ describe("orchestrator tools", () => {
           .readByPhaseAndGoal("retry", siblingGoalID)
           .find((entry) => entry.key === `retry_analysis_${siblingGoalID}`)
         expect(retryFeedback?.value).toContain(`Action: run goal ${siblingGoalID}`)
+      },
+    })
+  })
+
+  test("post-build architecture rework invalidates live dependent goals", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_goal_review_cascade_${stamp}`
+    const taskID = `tsk_goal_review_cascade_${stamp}`
+    const goalID = `goal_review_root_${stamp}`
+    const childGoalID = `goal_review_child_${stamp}`
+    const specID = `spec_${goalID}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal review dependency cascade test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Goal review cascade route test",
+          taskTitle: "Goal review cascade route task",
+          request: "Architecture review must close over already-running dependents",
+          goalTitle: "Foundation goal",
+          goalSlug: "foundation-goal",
+          objective: "Build the foundation contract",
+          now,
+          specID,
+        })
+        Database.use((db) =>
+          db.insert(EngineGoalTable).values({
+            id: childGoalID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            title: "Dependent goal",
+            slug: "dependent-goal",
+            objective: "Build on the foundation contract",
+            acceptance_specs: [],
+            owned_paths: ["src/dependent.ts"],
+            depends_on: [goalID],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+            source: "test",
+            status: "pending",
+            order_index: 1,
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({
+            metadata: {
+              architect_fidelity: {
+                sourceCoverage: [{
+                  id: "src-foundation",
+                  paths: ["src/index.ts"],
+                  goal_ids: [goalID],
+                  action: "modify",
+                  rationale: "test fixture source coverage",
+                }],
+                referenceCoverage: [],
+                assemblyOwners: [{
+                  surface: "test-app",
+                  goal_id: childGoalID,
+                  rationale: "test fixture assembly owner",
+                }],
+              },
+            },
+          }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const childRunID = beginBuildAttempt({
+          taskID,
+          goalID: childGoalID,
+          sessionID: "ses_live_dependent",
+        })
+        expect(goalStatusByID(childGoalID)).toBe("running")
+
+        reviewIntegrityImpl = async () => ({
+          verdict: "needs_correction",
+          summary: "Foundation contract changed under dependent work",
+          dimensions: [
+            {
+              id: "goal_fidelity",
+              verdict: "needs_correction",
+              issues: [{
+                description: "Foundation acceptance omitted a shared interface",
+                type: "coverage_gap",
+                goalIDs: [goalID],
+              }],
+            },
+            { id: "technical_feasibility", verdict: "pass", issues: [] },
+            { id: "hallucination", verdict: "pass", issues: [] },
+            { id: "solution_quality", verdict: "pass", issues: [] },
+          ],
+          issues: [{
+            description: "Foundation acceptance omitted a shared interface",
+            type: "coverage_gap",
+            goalIDs: [goalID],
+          }],
+          corrections: [],
+          missingGoals: [],
+          sessionID: "ses_integrity_cascade",
+        })
+        buildAgentRunImpl = async (input: any) => ({
+          result: {
+            status: "passed",
+            summary: "Foundation goal built successfully.",
+            files_changed: [{
+              path: "src/index.ts",
+              summary: "Implemented the foundation contract.",
+              reason: "Required by the foundation goal.",
+            }],
+            tests: [],
+            commit_ref: "cascade123",
+          },
+          sessionID: "ses_goal_review_cascade",
+          worktreeDir: input.managedWorktree.directory,
+          worktreeBranch: input.managedWorktree.branch,
+          worktreeBaseRef: input.managedWorktree.baseRef,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Implement the foundation goal",
+          reason: "Per-goal pipeline execution.",
+        }, {} as any)
+
+        expect(result).toContain("architecture_review: needs_correction")
+        expect(result).toContain(`goal=${goalID}`)
+        expect(result).toContain(`goal=${childGoalID}`)
+        expect(result).toContain("architecture_review_dependency_rework")
+        expect(goalStatusByID(goalID)).toBe("pending")
+        expect(goalStatusByID(childGoalID)).toBe("pending")
+        expect(listGoalRunsByGoal(childGoalID)[0]?.id).toBe(childRunID)
+        expect(listGoalRunsByGoal(childGoalID)[0]?.status).toBe("aborted")
+        expect(listGoalRunsByGoal(childGoalID)[0]?.superseded_reason).toBe("architecture_review_dependency_rework")
+        const retryFeedback = createDecisionLog(taskID)
+          .readByPhaseAndGoal("retry", childGoalID)
+          .find((entry) => entry.key === `retry_analysis_${childGoalID}`)
+        expect(retryFeedback?.value).toContain(`upstream architecture_review reopened goals: ${goalID}`)
+      },
+    })
+  })
+
+  test("build finalization ignores stale reports from invalidated goal runs", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_stale_build_${stamp}`
+    const taskID = `tsk_stale_build_${stamp}`
+    const goalID = `goal_stale_build_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "stale build report test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Stale build report test",
+          taskTitle: "Stale build report task",
+          request: "A cancelled build report must not resurrect a goal",
+          goalTitle: "Single goal",
+          goalSlug: "single-goal",
+          objective: "Verify stale reports are ignored",
+          now,
+        })
+        buildAgentRunImpl = async (input: any) => {
+          const liveRun = listGoalRunsByGoal(goalID)[0]
+          updateGoalRun(liveRun.id, {
+            status: "aborted",
+            error: "architecture_review_dependency_rework: invalidated while agent was running",
+          })
+          return {
+            result: {
+              status: "passed",
+              summary: "This report arrived after invalidation.",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Late stale change.",
+                reason: "Should not finalize after invalidation.",
+              }],
+              tests: [],
+              commit_ref: "stale123",
+            },
+            sessionID: "ses_stale_build",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Implement the single goal",
+          reason: "Per-goal pipeline execution.",
+        }, {} as any)
+
+        expect(result).toContain("build_result_ignored")
+        expect(result).toContain("architecture_review: (not run")
+        expect(result).toContain("Call build again after the dependency rework")
+        expect(goalStatusByID(goalID)).toBe("pending")
+        expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("aborted")
       },
     })
   })
