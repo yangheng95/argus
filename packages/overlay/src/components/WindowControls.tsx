@@ -132,6 +132,7 @@ export function WindowControls() {
           variant="ghost"
           size="icon"
           tone="neutral"
+          data-chrome="window-control"
           title={t("titlebar.minimize")}
           aria-label={t("titlebar.minimize")}
           onClick={handleMinimize}
@@ -148,6 +149,7 @@ export function WindowControls() {
           variant="ghost"
           size="icon"
           tone="neutral"
+          data-chrome="window-control"
           data-maximized={isMaximized() ? "true" : "false"}
           title={maxLabel()}
           aria-label={maxLabel()}
@@ -165,6 +167,7 @@ export function WindowControls() {
           variant="ghost"
           size="icon"
           tone="danger"
+          data-chrome="window-control"
           title={t("titlebar.close")}
           aria-label={t("titlebar.close")}
           onClick={() => void handleClose()}

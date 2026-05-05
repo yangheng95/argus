@@ -488,15 +488,10 @@
   --oc-button-height: var(--ui-titlebar-btn-height);
   --oc-button-padding-x: 0;
   --oc-button-border: 0 solid transparent;
-  --oc-button-bg: color-mix(in srgb, var(--surface-strong) 86%, transparent);
 
   height: var(--ui-titlebar-btn-height);
   width: var(--ui-titlebar-btn-width);
   min-width: var(--ui-titlebar-btn-width);
-}
-
-.titlebar-window-controls .oc-button[data-tone="danger"] {
-  --oc-button-bg: color-mix(in srgb, var(--bad) 18%, var(--surface-strong));
 }
 
 .titlebar-menu-trigger-compact {
