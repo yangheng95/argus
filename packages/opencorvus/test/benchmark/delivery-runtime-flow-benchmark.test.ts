@@ -139,7 +139,7 @@ async function frontendFixture(input: { interactive: boolean | "auth-gated" }) {
   await fs.mkdir(path.join(dir, "dist"), { recursive: true })
   await fs.writeFile(path.join(dir, "package.json"), JSON.stringify({
     type: "module",
-    packageManager: "bun@1.3.12",
+    packageManager: "bun@1.3.13",
     dependencies: {
       react: "0.0.0",
     },

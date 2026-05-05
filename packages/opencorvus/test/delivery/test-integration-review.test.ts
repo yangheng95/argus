@@ -131,7 +131,7 @@ async function packageFixture(input: {
   tempDirs.push(dir)
   await fs.writeFile(path.join(dir, "package.json"), JSON.stringify({
     type: "module",
-    packageManager: "bun@1.3.12",
+    packageManager: "bun@1.3.13",
     scripts: input.scripts,
   }, null, 2))
   for (const [file, text] of Object.entries(input.files)) {

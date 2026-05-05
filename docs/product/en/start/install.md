@@ -4,7 +4,7 @@
 
 | Dependency | Version | Notes |
 |---|---|---|
-| Bun | ≥ 1.3.10 | Declared as `packageManager` in `package.json:7` |
+| Bun | ≥ 1.3.13 | Declared as `packageManager` in `package.json:7` |
 | Node.js | ≥ 22 | `@tsconfig/node22` target |
 | Git | any | Used for worktree-based parallel execution |
 | Python | ≥ 3.9 (optional) | Required by code execution and some skills |

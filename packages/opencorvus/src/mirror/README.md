@@ -203,7 +203,7 @@ Phase 1 所有测试用 `emit: undefined`。Phase 2 才在 `engine/model.ts` 新
 }
 ```
 
-Bun 1.3.12 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 全部可直接用。
+Bun 1.3.13 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 全部可直接用。
 
 ---
 
@@ -228,7 +228,7 @@ Bun 1.3.12 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 
 |---|---|
 | Playwright → puppeteer-core 迁移可能需改写 | **mirror 代码已是 puppeteer-core**，17 API 触点全 1:1 等价 |
 | `pattern/*` 可能隐性依赖 LLM / service | **零 LLM**；唯一跨目录 import（`compileElement`）随 `url-compile` 自然消解；`token-estimator` 纯算法需同步搬 |
-| pngjs Bun 下 zlib `writeSync` 崩溃 | **Bun 1.3.12 实测通过**，`PNG.sync.read/write` round-trip OK |
+| pngjs Bun 下 zlib `writeSync` 崩溃 | **Bun 1.3.13 实测通过**，`PNG.sync.read/write` round-trip OK |
 
 ---
 
