@@ -74,6 +74,33 @@ import {
 
 const log = Log.create({ service: "task-tools" })
 
+type IntegrityReviewOutcome =
+  | {
+      status: "blocked"
+      headline: string
+      pointer: string
+    }
+  | {
+      status: "reviewed"
+      specSnapshotID: string
+      verdict: "pass" | "concerns" | "needs_correction"
+      summary: string
+      sessionID: string
+      goalCount: number
+      perDimension: Array<string>
+      correctionsCount: number
+      missingCount: number
+      issues: string[]
+      issueGoalIDs: string[]
+      correctionGoalIDs: string[]
+    }
+
+// Post-build architecture review is task/spec scoped. Parallel Build tool
+// calls can complete in the same orchestrator turn; without this single-flight
+// latch they all create independent integrity sessions and duplicate retry
+// actions for the same graph snapshot.
+const integrityReviewSingleflight = new Map<string, Promise<IntegrityReviewOutcome>>()
+
 const PersistedArchitectFidelitySchema = z.object({
   sourceCoverage: z.array(SourceCoverageEntrySchema).default([]),
   referenceCoverage: z.array(ReferenceCoverageEntrySchema).default([]),
@@ -657,27 +684,6 @@ export function createOrchestratorTools(input: {
     // intentional no-op: see workflow.ts::projectGoalSteps
   }
 
-  type IntegrityReviewOutcome =
-    | {
-        status: "blocked"
-        headline: string
-        pointer: string
-      }
-    | {
-        status: "reviewed"
-        specSnapshotID: string
-        verdict: "pass" | "concerns" | "needs_correction"
-        summary: string
-        sessionID: string
-        goalCount: number
-        perDimension: Array<string>
-        correctionsCount: number
-        missingCount: number
-        issues: string[]
-        issueGoalIDs: string[]
-        correctionGoalIDs: string[]
-      }
-
   function renderIntegrityOutcome(outcome: IntegrityReviewOutcome) {
     if (outcome.status === "blocked") {
       return SubAgentProtocol.yieldResult({
@@ -729,6 +735,28 @@ export function createOrchestratorTools(input: {
         pointer: `spec ${activeSpec.id}`,
       }
     }
+
+    const singleflightKey = `${task.id}:${activeSpec.id}`
+    const inflight = integrityReviewSingleflight.get(singleflightKey)
+    if (inflight) return inflight
+
+    const reviewPromise = runIntegrityReviewOnce({ task, activeSpec, dbGoals })
+    integrityReviewSingleflight.set(singleflightKey, reviewPromise)
+    try {
+      return await reviewPromise
+    } finally {
+      if (integrityReviewSingleflight.get(singleflightKey) === reviewPromise) {
+        integrityReviewSingleflight.delete(singleflightKey)
+      }
+    }
+  }
+
+  async function runIntegrityReviewOnce(ctx: {
+    task: TaskRow
+    activeSpec: NonNullable<ReturnType<typeof findActiveSpecForTask>>
+    dbGoals: ReturnType<typeof listGoals>
+  }): Promise<IntegrityReviewOutcome> {
+    const { task, activeSpec, dbGoals } = ctx
 
     const { findRequirements } = await import("@/engine/store")
     const reqRows = findRequirements(activeSpec.id)
