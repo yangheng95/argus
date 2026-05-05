@@ -456,25 +456,28 @@ export function updateGoalWorkspace(input: {
   workspaceBaseRef?: string | null
   now?: number
 }) {
-  const now = input.now ?? Date.now()
   const goal = findGoal(input.goalID)
   if (!goal) {
     throw new Error(`updateGoalWorkspace: goal ${input.goalID} not found`)
   }
   const tip = findLatestTipGoalRun(input.goalID)
   if (!tip) {
-    // No attempt yet — synthesise a queued artifact carrying the workspace
-    // pointer so the next dispatch / cleanup / board view sees one source.
-    createGoalRun({
-      taskID: goal.task_id,
-      goalID: input.goalID,
-      coordinatorRunID: "synthetic",
-      workspaceDir: input.workspaceDir ?? undefined,
-      workspaceBranch: input.workspaceBranch ?? undefined,
-      workspaceBaseRef: input.workspaceBaseRef ?? undefined,
-      now,
-    })
-    return
+    // Phase G (2026-05-05): no fallback (rule 7). The pre-fix branch
+    // synthesised a queued artifact with coordinatorRunID="synthetic" —
+    // a fake run pointer that polluted the run reference graph. The only
+    // legitimate callers that reach this state are post-finalize cleanup
+    // (writer.ts:cleanupGoalWorkspaceForGoal already gates on
+    // findGoalLatestWorkspace, so a non-null directory implies a tip
+    // exists) and the post-build-success workspace patch (the attempt
+    // artifact created by beginBuildAttempt is the tip). If no tip exists
+    // here, an upstream caller is using the workspace writer as an
+    // attempt-creation backdoor — that's a contract violation, not a
+    // recoverable case.
+    throw new Error(
+      `updateGoalWorkspace: goal ${input.goalID} has no goal_run_attempt artifact; ` +
+      `workspace pointers ride the per-attempt payload — open an attempt via ` +
+      `beginBuildAttempt before recording the workspace.`,
+    )
   }
   const patch: Partial<import("./store").GoalRunRow> = {
     workspace_dir: input.workspaceDir,
@@ -631,9 +634,11 @@ function appendGoalRunArtifact(input: {
  * Atomic intent:
  *   1. Supersede the terminal tip (if any) with `reason` as a typed enum.
  *      Idempotent — already-superseded tips are a no-op.
- *   2. Optionally reset `goal.workspace_dir` (when the new attempt must
- *      not inherit the prior worktree — e.g. modify_contract on a
- *      structurally different acceptance set).
+ *   2. Optionally reset the goal's persistent workspace pointer
+ *      (engine_artifact[goal_run_attempt].payload.workspace_*; pre-Phase B
+ *      this lived on engine_goal columns) — clears when the new attempt
+ *      must not inherit the prior worktree, e.g. modify_contract on a
+ *      structurally different acceptance set.
  *   3. syncGoalStatus → emits transition events via the in-memory
  *      lastEmittedStatus map. No cache write; current state is live-
  *      derived by every reader via goalStatusByID.
@@ -725,12 +730,28 @@ function openGoalImplementationVersion(input: {
   // value (beginBuildAttempt / createGoalRun take the returned retryCount
   // and write it into payload.retry_count). No engine_goal write needed.
   const currentCount = tip?.retry_count ?? 0
+
+  // Pre-supersede states never bump:
+  //   - no tip yet: retry_count starts at 0.
+  //   - tip is non-terminal: there's nothing to supersede, the live attempt
+  //     keeps its count.
   if (
     !tip ||
-    (tip.status !== "failed" && tip.status !== "aborted" && tip.status !== "completed") ||
-    tip.superseded_reason
+    (tip.status !== "failed" && tip.status !== "aborted" && tip.status !== "completed")
   ) {
     return { retryCount: currentCount }
+  }
+
+  // Idempotent already-superseded path: a prior `startNewAttempt` (or
+  // earlier openGoalImplementationVersion call) marked this terminal tip
+  // with `superseded_reason`. The next attempt's V label is `currentCount
+  // + 1`. Returning `currentCount` here was the Phase E miss — the tip's
+  // retry_count is the SUPERSEDED attempt's count, never the upcoming one.
+  // Pre-Phase-E this lookup went through engine_goal.retry_count which
+  // startNewAttempt had bumped synchronously; the column is gone now, so
+  // the bump has to happen here.
+  if (tip.superseded_reason) {
+    return { retryCount: currentCount + 1 }
   }
 
   supersedeGoalRun({ oldGoalRunID: tip.id, reason: input.reason, now: input.now })

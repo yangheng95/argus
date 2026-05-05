@@ -1017,12 +1017,13 @@ export namespace Worktree {
    * process (bun test runner, fsmonitor, vite dev server, MSVC-file-locked
    * `node_modules/*.dll`) still holds a handle, the rm fails — but the two
    * git-level deletes already succeeded. Residue on disk: everything except
-   * `.git`. If cleanup clears `engine_goal.workspace_dir` despite that
-   * physical failure, the next dispatch loses the only pointer to the leaked
-   * worktree. If it reuses a directory with broken `.git` linkage, git
-   * operations can walk up and land on the PRIMARY repo's `.git` — commits
-   * go to master, the goal branch never advances, every retry silently
-   * overwrites itself.
+   * `.git`. If cleanup clears the goal's persistent workspace pointer
+   * (engine_artifact[goal_run_attempt].payload.workspace_dir; pre-Phase B
+   * this lived as engine_goal.workspace_dir) despite that physical failure,
+   * the next dispatch loses the only pointer to the leaked worktree. If it
+   * reuses a directory with broken `.git` linkage, git operations can walk
+   * up and land on the PRIMARY repo's `.git` — commits go to master, the
+   * goal branch never advances, every retry silently overwrites itself.
    * Callers that intend to reuse a recorded workspace_dir must gate on this.
    */
   export async function isValid(directory: string): Promise<{ valid: boolean; reason?: string }> {

@@ -6,9 +6,9 @@ import {
   EngineGoalTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
-import { beginBuildAttempt, startNewAttempt } from "../../src/engine/persist"
+import { beginBuildAttempt, startNewAttempt, updateGoalWorkspace } from "../../src/engine/persist"
 import { goalStatusByID } from "../../src/engine/describe"
-import { findGoal, findGoalRun } from "../../src/engine/store"
+import { findGoalLatestWorkspace, findGoalRun, getGoalRetryCount } from "../../src/engine/store"
 import { resetDatabase } from "../fixture/db"
 
 /**
@@ -87,7 +87,6 @@ function seedBaseline() {
       priority: "blocking",
       source: "test",
       status: "passed",
-      retry_count: 0,
       order_index: 0,
       time_created: now,
       time_updated: now,
@@ -163,7 +162,7 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
 
     expect(result.supersededTipID).toBe(gr)
     expect(result.retryCount).toBe(1)
-    expect(findGoal(goalID)?.retry_count).toBe(1)
+    expect(getGoalRetryCount(goalID)).toBe(1)
     const tip = findGoalRun(gr)
     expect(tip?.superseded_reason).toBe("delivery_rework")
     expect(tip?.superseded_at).toBeGreaterThan(0)
@@ -187,7 +186,7 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
     const result = startNewAttempt({ goalID, reason: "manual_retry" })
 
     expect(result.retryCount).toBe(1)
-    expect(findGoal(goalID)?.retry_count).toBe(1)
+    expect(getGoalRetryCount(goalID)).toBe(1)
     expect(findGoalRun(gr)?.superseded_reason).toBe("manual_retry")
     expect(goalStatusByID(goalID)).toBe("pending")
   })
@@ -212,7 +211,7 @@ describe("Goal.startNewAttempt — no-op branches", () => {
     const result = startNewAttempt({ goalID, reason: "delivery_rework" })
     expect(result.supersededTipID).toBeUndefined()
     expect(result.retryCount).toBe(0)
-    expect(findGoal(goalID)?.retry_count).toBe(0)
+    expect(getGoalRetryCount(goalID)).toBe(0)
     // With no goal_run, deriveGoalStatus returns undefined and
     // syncGoalStatus keeps whatever engine_goal started with.
     expect(goalStatusByID(goalID)).toBe(before!)
@@ -229,7 +228,7 @@ describe("Goal.startNewAttempt — no-op branches", () => {
 
     expect(result.supersededTipID).toBeUndefined()
     expect(result.retryCount).toBe(0)
-    expect(findGoal(goalID)?.retry_count).toBe(0)
+    expect(getGoalRetryCount(goalID)).toBe(0)
     expect(findGoalRun(gr)?.superseded_reason).toBeFalsy()
     // Goal stays running — live converges naturally; mechanism doesn't
     // short-circuit the executor.
@@ -252,7 +251,7 @@ describe("Goal.startNewAttempt — idempotence", () => {
 
     expect(second.supersededTipID).toBeUndefined()
     expect(second.retryCount).toBe(1)
-    expect(findGoal(goalID)?.retry_count).toBe(1)
+    expect(getGoalRetryCount(goalID)).toBe(1)
     const row = findGoalRun(gr)
     expect(row?.superseded_reason).toBe("delivery_rework") // NOT overwritten
     expect(row?.superseded_at).toBe(firstReasonAt!)
@@ -261,18 +260,17 @@ describe("Goal.startNewAttempt — idempotence", () => {
 
 describe("Goal.startNewAttempt — options", () => {
   test("resetWorkspace nulls workspace_dir / workspace_branch / workspace_base_ref", () => {
-    Database.use((db) =>
-      db.update(EngineGoalTable)
-        .set({
-          workspace_dir: "C:/tmp/ws-x",
-          workspace_branch: "opencorvus/x",
-          workspace_base_ref: "abc123",
-        })
-        .where(eq(EngineGoalTable.id, goalID))
-        .run(),
-    )
     const gr = `grun_ws_${Date.now()}`
     insertGoalRun({ id: gr, status: "completed" })
+    // Phase B (2026-05-05): workspace pointer lives on the latest attempt
+    // artifact, so seed it AFTER insertGoalRun (so the patch lands on the
+    // tip that the resetWorkspace path will null out).
+    updateGoalWorkspace({
+      goalID,
+      workspaceDir: "C:/tmp/ws-x",
+      workspaceBranch: "opencorvus/x",
+      workspaceBaseRef: "abc123",
+    })
 
     const result = startNewAttempt({
       goalID,
@@ -281,11 +279,11 @@ describe("Goal.startNewAttempt — options", () => {
     })
 
     expect(result.resetWorkspace).toBe(true)
-    const g = findGoal(goalID)
-    expect(g?.workspace_dir).toBeNull()
-    expect(g?.workspace_branch).toBeNull()
-    expect(g?.workspace_base_ref).toBeNull()
-    expect(g?.retry_count).toBe(1)
+    const ws = findGoalLatestWorkspace(goalID)
+    expect(ws.directory).toBeNull()
+    expect(ws.branch).toBeNull()
+    expect(ws.baseRef).toBeNull()
+    expect(getGoalRetryCount(goalID)).toBe(1)
   })
 
   test("beginBuildAttempt records the current goal retry_count for the visible V label", () => {
@@ -313,7 +311,7 @@ describe("Goal.startNewAttempt — options", () => {
       runID,
     })
 
-    expect(findGoal(goalID)?.retry_count).toBe(1)
+    expect(getGoalRetryCount(goalID)).toBe(1)
     expect(findGoalRun(gr)?.superseded_reason).toBe("build_retry")
     expect(findGoalRun(nextRunID)?.retry_count).toBe(1)
   })

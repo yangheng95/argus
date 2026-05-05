@@ -106,7 +106,6 @@ function seedTaskWithGoals(goals: Array<{
         priority: "blocking",
         source: "test",
         status: g.status,
-        retry_count: 0,
         order_index: order++,
         time_created: now,
         time_updated: now,

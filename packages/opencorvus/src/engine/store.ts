@@ -509,28 +509,28 @@ export function listGoalRunsByGoal(goalID: string): GoalRunRow[] {
 /**
  * Phase B (2026-05-05): single source for "the persistent worktree this goal
  * occupies right now". Replaces the engine_goal.workspace_dir / branch /
- * base_ref columns. Reads the latest goal_run_attempt artifact (newest
- * time_created, not filtered by supersede chain — even superseded attempts
- * may have left a worktree on disk that the next dispatch wants to recover).
- * Returns null when the goal has no attempts yet OR when the latest attempt
+ * base_ref columns. Reads the live tip (newest goal_run that is not
+ * superseded by another goal_run); supersede-state artifacts on retired
+ * tips don't shadow the live attempt's pointer.
+ *
+ * Returns null when the goal has no attempts yet OR when the live tip
  * recorded workspace_dir = null (terminal cleanup, resetWorkspace, etc.).
  *
  * The columns are gone (rule 8: no dual source), so every read in the build
  * dispatch path, the cleanup path, and the board view comes through this
- * helper. The latest attempt's payload IS the persistent state.
+ * helper. The live tip's payload IS the persistent state.
  */
 export function findGoalLatestWorkspace(goalID: string): {
   directory: string | null
   branch: string | null
   baseRef: string | null
 } {
-  const rows = listGoalRunsByGoal(goalID)
-  if (rows.length === 0) return { directory: null, branch: null, baseRef: null }
-  const latest = rows[0]
+  const tip = findLatestTipGoalRun(goalID)
+  if (!tip) return { directory: null, branch: null, baseRef: null }
   return {
-    directory: latest.workspace_dir,
-    branch: latest.workspace_branch,
-    baseRef: latest.workspace_base_ref,
+    directory: tip.workspace_dir,
+    branch: tip.workspace_branch,
+    baseRef: tip.workspace_base_ref,
   }
 }
 
@@ -541,14 +541,23 @@ export function findGoalLatestWorkspace(goalID: string): {
  * two writers, two readers, kept in sync only by convention. Rule 8 forbids
  * the duplicate; the column is gone now.
  *
- * Returns the retry_count of the newest goal_run_attempt artifact, which by
- * construction equals the cumulative attempts-1 (zero-based). Goals with no
- * attempts return 0 — same default the column carried.
+ * Returns "the V number the next attempt will carry":
+ *
+ *   - No attempts yet → 0 (first attempt is V1 = 0+1).
+ *   - Live tip (status active, no superseded_reason) → tip.retry_count
+ *     (this IS the live attempt's V number, no bump).
+ *   - Superseded tip (startNewAttempt patched superseded_reason but no
+ *     new attempt artifact has been written yet) → tip.retry_count + 1.
+ *     The bump can't ride on a separate column anymore (Phase E retired
+ *     engine_goal.retry_count); it has to be derived from the supersede
+ *     state, otherwise the gap between startNewAttempt and the next
+ *     beginBuildAttempt reports the retired attempt's V number and the
+ *     overlay shows a stale label.
  */
 export function getGoalRetryCount(goalID: string): number {
-  const rows = listGoalRunsByGoal(goalID)
-  if (rows.length === 0) return 0
-  return rows[0].retry_count
+  const tip = findLatestTipGoalRun(goalID)
+  if (!tip) return 0
+  return tip.retry_count + (tip.superseded_reason ? 1 : 0)
 }
 
 /**
