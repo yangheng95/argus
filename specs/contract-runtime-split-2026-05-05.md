@@ -59,8 +59,39 @@ goal #1，剩 16 个 pending；DB 实查发现 #2/#7/#8/#15 的
   goal_run_attempt artifact payload（已存在 workspaceDir 字段，复用）。
 - 已存在 DB 直接 `bun run db:reset`（rule 18：禁止迁移，直接重建）。
 
-`retry_count` **保留在 engine_goal**：它是 goal 级累计计数器（V 标签来源），不属
-于运行时短暂状态；只有写入 `startNewAttempt` 这一处递增。
+### Phase E（CRON challenge，2026-05-05）：retry_count 一并搬走
+
+原方案（上一版本）保留 `engine_goal.retry_count`，理由是单写者无观察到 desync。
+CRON 5 分钟检查复读 rule 8 后判定：技术上仍是双源，必须移走。
+
+- 删除 `engine_goal.retry_count` 列。
+- 新 helper `engine/store.ts:getGoalRetryCount(goalID)` 读最新 attempt artifact。
+- `openGoalImplementationVersion` 从 `tip.retry_count + 1` 派生 bump，不写 engine_goal。
+- `startNewAttempt` resetWorkspace 路径同步去掉 retry_count 列写入。
+- 所有读者（viewGoal / board.ts / V 标签 / architect existing-goals）走 helper。
+
+### Phase F + G（Subagent 二次复核驱动，2026-05-05）：3 个隐藏 bug + fixture 修复
+
+`code-reviewer` subagent 跨文件复核发现：
+
+- `findGoalLatestWorkspace` / `getGoalRetryCount` 读最新 artifact 时被 supersede
+  patch 干扰（`Math.max(existing.time_updated + 1, now)` 让 supersede 比新 attempt
+  晚 1ms），导致 V 标签和 workspace 指针读到 retired attempt 的值。改成读 live
+  tip（`findLatestTipGoalRun` 过滤掉被 supersede_of 引用的 row）。
+- `getGoalRetryCount` 在 startNewAttempt-之后/beginBuildAttempt-之前的窗口期返
+  回旧值。修复：tip 携带 `superseded_reason` 时返回 `tip.retry_count + 1`。
+- `openGoalImplementationVersion` 已被 supersede 路径仍 early-return 旧 count。
+  修复：拆分 early-return，已 superseded 返 `currentCount + 1`。
+- `updateGoalWorkspace` 的 `coordinatorRunID: "synthetic"` 后门：build dispatch 在
+  beginBuildAttempt 之前调 updateGoalWorkspace，撞上 no-tip 路径就建一个假 run
+  指向的 queued artifact。这两条 pre-beginBuildAttempt 调用本身就是冗余（
+  beginBuildAttempt 接管 workspace 指针），删除并把 `updateGoalWorkspace` 的 no-
+  tip 路径改成 throw（rule 7：禁止 fallback）。
+- 12 个测试 fixture 仍向 EngineGoalTable insert `retry_count: 0` 等已删除列。
+  Drizzle 静默丢弃未知字段，导致 8 个 start-new-attempt 测试原本"通过"是基于
+  对 undefined 的断言。subagent 批量修复，新增 `seedAttemptWithWorkspace` 帮助
+  函数让 fixture 直接写 attempt artifact，绕开 updateGoalWorkspace 后门。
+- 新测试 `test/engine/update-goal-workspace-no-tip.test.ts` 把 Phase G 契约钉住。
 
 ### Phase C：DB 重建 + 测试
 
@@ -77,4 +108,15 @@ goal #1，剩 16 个 pending；DB 实查发现 #2/#7/#8/#15 的
 
 - orchestrator 在 goal #1 完成后直接派 deliver 而非接着派 #2-#16 的 LLM 决策
   问题（属另一类 bug，单独追）。
-- retry_count 是否应该派生而非缓存（数据规范化，不影响 contract 一致性）。
+
+## Commit 串
+
+| Phase | Commit | 说明 |
+|---|---|---|
+| A | `c4c9e06da` | fidelity prefix + dispatch 顺序 + owned_paths 重叠 |
+| B | `c13aa7671` | 删 workspace_dir/branch/base_ref 三列 |
+| E | `e53c05aaf` | 删 retry_count 列（CRON challenge 推动） |
+| F+G | `a5d476cad` | subagent 二次复核：4 个 prod bug + 12 fixture 修复 |
+
+每个 commit 通过 pre-push hook（typecheck / api:routes-check / docs:check / i18n /
+secret-scan）。146/146 测试绿。
