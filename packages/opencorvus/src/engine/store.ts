@@ -1020,49 +1020,51 @@ export function listGoalWorkspacesForProject(
 }
 
 /**
- * Sessions that produced a protocol event for this task within the last
- * `windowMs` milliseconds. This is the describe-layer view of "what agents
- * are currently working" — it covers pre-plan sessions (requirements /
- * architect / integrity / design-analyst) which `goals` and `run` miss
- * entirely because they're gated on `active_plan_version_id`.
+ * Sessions whose latest durable `session.status` event is still active.
+ * This is the describe-layer view of "what agents are currently working" —
+ * it covers pre-plan sessions (requirements / architect / integrity /
+ * design-analyst) which `goals` and `run` miss entirely because they're
+ * gated on `active_plan_version_id`.
  *
- * Source: protocol_event is the append-only truth for agent activity; we do
- * not gate on `status` columns (rule 23: no state machine). Join with
- * SessionTable only to surface `kind` / `goal_id` for UI labelling.
- *
- * Sessions that have emitted a `session.status` event with
- * `properties.status.type === "terminal"` are excluded — that is the
- * single-source terminal signal for any session (orchestrator root,
- * subagent, future phases). See packages/opencorvus/src/session/status.ts
- * and specs/new-arch/07-panel-reactivity.md §session 终态信号源.
+ * Source: `session.status` is the append-only truth for session lifecycle.
+ * A recent-activity window is the wrong source here: a legitimate LLM turn
+ * can be silent until the activity idle gate fires, and hiding it from
+ * activeSessions makes the scheduler/overlay describe a live build as gone.
+ * The session remains active until its newest status becomes `idle` or
+ * `terminal`.
  */
-export function listActiveSessionsForTask(taskID: string, windowMs = 60_000) {
-  const threshold = Date.now() - windowMs
+export function listActiveSessionsForTask(taskID: string) {
   return Database.use((db) =>
     db
       .select({
         sessionID: ProtocolEventTable.session_id,
         kind: SessionTable.kind,
         goalID: SessionTable.goal_id,
-        lastActivityMs: sql<number>`MAX(${ProtocolEventTable.emitted_at})`.as("last_activity_ms"),
+        lastActivityMs: ProtocolEventTable.emitted_at,
       })
       .from(ProtocolEventTable)
       .innerJoin(SessionTable, eq(SessionTable.id, ProtocolEventTable.session_id))
       .where(
         and(
           eq(ProtocolEventTable.task_id, taskID),
+          eq(ProtocolEventTable.type, "session.status"),
           isNotNull(ProtocolEventTable.session_id),
-          gt(ProtocolEventTable.emitted_at, threshold),
+          sql`json_extract(${ProtocolEventTable.payload}, '$.status.type') IN ('streaming', 'retry')`,
           sql`NOT EXISTS (
-            SELECT 1 FROM protocol_event AS pe_done
-            WHERE pe_done.session_id = ${ProtocolEventTable.session_id}
-              AND pe_done.type = 'session.status'
-              AND json_extract(pe_done.payload, '$.status.type') = 'terminal'
+            SELECT 1 FROM protocol_event AS pe_newer
+            WHERE pe_newer.session_id = ${ProtocolEventTable.session_id}
+              AND pe_newer.type = 'session.status'
+              AND (
+                pe_newer.emitted_at > ${ProtocolEventTable.emitted_at}
+                OR (
+                  pe_newer.emitted_at = ${ProtocolEventTable.emitted_at}
+                  AND pe_newer.seq > ${ProtocolEventTable.seq}
+                )
+              )
           )`,
         ),
       )
-      .groupBy(ProtocolEventTable.session_id)
-      .orderBy(desc(sql`last_activity_ms`))
+      .orderBy(desc(ProtocolEventTable.emitted_at))
       .all()
       .flatMap((row) =>
         row.sessionID
