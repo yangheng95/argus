@@ -3,19 +3,36 @@
 // Uses direct imports.
 // imports as of Phase 4 cleanup.
 
-import { settingsStore } from "../store/settings";
-import { boardStore, loadTasks } from "../store/board";
+import { boardStore, loadBoard } from "../store/board";
 import { appStore } from "../store/app";
 import { loadConfigInfo } from "./init";
 import { apiJson } from "./api";
-import { getHostTransport } from "./host-transport";
 import { selectedTaskDirectory } from "../store/board";
 import { t } from "../utils/i18n";
 import { renderMarkdown, escapeHtml } from "../utils/markdown";
 import { describeToolPart } from "../utils/tool";
-import { setDialogStore } from "../store/dialog";
+import { dialogStore, setDialogStore, type ConfigDialogTab } from "../store/dialog";
+import { panelMessage } from "./chat";
 
 let sessionDialogSeq = 0;
+const OVERLAY_VERSION = "0.0.1-alpha";
+const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>([
+  "general",
+  "permissions",
+  "prompt",
+  "channel",
+  "tools",
+  "memory",
+  "providers",
+  "agent-models",
+  "about",
+]);
+
+function normalizeConfigTab(tabName: string): ConfigDialogTab {
+  return CONFIG_DIALOG_TABS.has(tabName as ConfigDialogTab)
+    ? (tabName as ConfigDialogTab)
+    : "general";
+}
 
 function renderSessionToolChip(part: any): string {
   const display = describeToolPart(part, selectedTaskDirectory());
@@ -52,19 +69,7 @@ export async function openChannelSettings(_channelID?: string): Promise<void> {
  * Switch the active tab in the config sidebar.
  */
 export function switchConfigTab(tabName: string): void {
-  const sidebar = document.getElementById("configSidebar");
-  const content = document.getElementById("configContent");
-  if (!sidebar || !content) return;
-
-  for (const btn of sidebar.querySelectorAll(".config-nav-item")) {
-    const el = btn as HTMLElement;
-    el.classList.toggle("active", el.dataset.configTab === tabName);
-  }
-
-  for (const panel of content.querySelectorAll(".config-tab-panel")) {
-    const el = panel as HTMLElement;
-    el.classList.toggle("active", el.dataset.configPanel === tabName);
-  }
+  setDialogStore("config", "activeTab", normalizeConfigTab(tabName));
 }
 
 /**
@@ -74,56 +79,18 @@ export function focusConfigSection(name: string): void {
   if (!name) return;
   switchConfigTab(name);
   if (name === "channel") {
-    const channelList = document.getElementById("channelList") as HTMLElement | null;
-    channelList?.scrollTo?.({ top: 0 });
+    queueMicrotask(() => {
+      const channelList = document.getElementById("channelList") as HTMLElement | null;
+      channelList?.scrollTo?.({ top: 0 });
+    });
   }
 }
 
 /**
  * Populate the About panel runtime grid with server/platform info.
  */
-const OVERLAY_VERSION = "0.0.1-alpha";
-
-function escapeAboutHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
 export function renderAboutVersion(): void {
-  const grid = document.getElementById("aboutRuntimeGrid");
-  if (!grid) return;
-
   const config = appStore.config;
-  const connected = appStore.config !== null;
-  const rows: Array<[string, string]> = [
-    [t("about.rt_overlay"), "v" + OVERLAY_VERSION],
-    [t("about.rt_core"), (config as any)?.version || t("about.rt_unavailable")],
-    [t("about.rt_server"), settingsStore.serverUrl || "-"],
-    [t("about.rt_pid"), typeof appStore.serverPid === "number" ? String(appStore.serverPid) : "-"],
-    [t("about.rt_connection"), connected ? t("about.rt_connected") : t("about.rt_disconnected")],
-    [t("about.rt_directory"), settingsStore.directory || "-"],
-    [t("about.rt_executor"), settingsStore.executor || "-"],
-    [t("about.rt_tasks"), String(boardStore.tasks?.length || 0)],
-  ];
-
-  // Additional server info
-  if ((config as any)?.platform) rows.push([t("about.platform"), (config as any).platform]);
-  if ((config as any)?.goVersion) rows.push([t("about.go_version"), (config as any).goVersion]);
-
-  const hostKind = getHostTransport().kind;
-  const runtimeLabel =
-    hostKind === "tauri" ? "Tauri Desktop" : hostKind === "vscode" ? "VS Code Webview" : "Browser";
-  rows.push([t("about.runtime_type"), runtimeLabel]);
-
-  grid.innerHTML = rows
-    .map(
-      ([label, value]) =>
-        `<div class="about-info-label">${escapeAboutHtml(label)}</div><div class="about-info-value">${escapeAboutHtml(value)}</div>`,
-    )
-    .join("");
-
-  // Version is shown as a tooltip on the copyright footer (hover to see
-  // "Overlay vX.Y.Z / core ..."). The inline children are static markup in
-  // ChatComposer.tsx; we only mutate the title attribute here.
   const chatVersion = document.getElementById("chatVersion");
   if (chatVersion) {
     const connected = config !== null;
@@ -139,20 +106,89 @@ export function renderAboutVersion(): void {
  * Pre-loads config info and refreshes the about panel.
  */
 export function openConfigDialog(section?: string): void {
-  const configDialog = document.getElementById(
-    "configDialog",
-  ) as HTMLDialogElement | null;
-  if (!configDialog) return;
-
-  if (!configDialog.open) {
-    configDialog.showModal();
-  }
-
- // Load config info (populates appStore) then refresh about panel.
+  setDialogStore("config", "open", true);
   void loadConfigInfo().then(() => renderAboutVersion());
 
   if (section) {
     focusConfigSection(section);
+  }
+}
+
+export function closeConfigDialog(): void {
+  setDialogStore("config", "open", false);
+}
+
+export function setConfigSidebarWidth(width: number): void {
+  if (!Number.isFinite(width) || width <= 0) return;
+  setDialogStore("config", "sidebarWidth", Math.round(width));
+}
+
+export function openGoalDialog(goalID = "", title = "", acceptance = ""): void {
+  setDialogStore("goal", {
+    open: true,
+    goalID,
+    title,
+    acceptance,
+    saving: false,
+  });
+}
+
+function resetGoalDialog(): void {
+  setDialogStore("goal", {
+    open: false,
+    goalID: "",
+    title: "",
+    acceptance: "",
+    saving: false,
+  });
+}
+
+export function closeGoalDialog(): void {
+  resetGoalDialog();
+}
+
+export async function saveGoalDialog(): Promise<void> {
+  if (dialogStore.goal.saving || !boardStore.selectedTaskID) return;
+  const goalID = dialogStore.goal.goalID.trim();
+  const title = dialogStore.goal.title.trim();
+  const acceptanceText = dialogStore.goal.acceptance.trim();
+  if (!title) return;
+
+  setDialogStore("goal", "saving", true);
+  try {
+    const taskID = boardStore.selectedTaskID || undefined;
+    if (goalID) {
+      const criterion = acceptanceText || "The requested change is implemented and acceptance checks pass.";
+      const acceptanceSpec = {
+        id: `acc-operator-${goalID}-${Date.now()}`,
+        source_requirement_id: "operator",
+        goal_id: goalID,
+        title: title.slice(0, 80),
+        severity: "essential",
+        scorers: [
+          {
+            type: "llm_judge",
+            name: "operator-acceptance",
+            criteria: criterion,
+            inputs: ["delivery_summary", "changed_files"],
+          },
+        ],
+      };
+      await panelMessage(`Update goal ${goalID}.`, {
+        goalID,
+        description: title,
+        acceptance_specs: [acceptanceSpec],
+        taskID,
+      });
+    } else {
+      const payload = acceptanceText ? `/goal ${title}\nAcceptance: ${acceptanceText}` : `/goal ${title}`;
+      await panelMessage(payload, { taskID });
+    }
+    resetGoalDialog();
+    await loadBoard({ sync: true });
+  } catch (err) {
+    console.error("Failed to save goal", err);
+    setDialogStore("goal", "saving", false);
   }
 }
 

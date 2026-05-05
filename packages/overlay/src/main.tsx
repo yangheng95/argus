@@ -60,18 +60,12 @@ import {
 import { settingsStore, setSettingsStore, saveSettings } from "./store/settings";
 import { initPaneResizers, cancelPaneResize, currentUIScale } from "./services/pane";
 import { panelMessage } from "./services/chat";
-import PromptCatalog from "./components/settings/PromptCatalog";
-import ChannelsPanel from "./components/settings/ChannelsPanel";
-import SkillMarketPanel from "./components/settings/SkillMarketPanel";
-import ProvidersPanel from "./components/settings/ProvidersPanel";
-import GeneralPanel from "./components/settings/GeneralPanel";
-import AgentModelsPanel from "./components/settings/AgentModelsPanel";
-import { PermissionsPanel } from "./components/settings/PermissionsPanel";
-import { MemoryPanel } from "./components/MemoryPanel";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { CommandPalette } from "./components/CommandPalette";
 import { AppDialogHost } from "./components/AppDialogHost";
 import { SessionDialogHost } from "./components/SessionDialogHost";
+import { GoalDialogHost } from "./components/GoalDialogHost";
+import { ConfigDialogHost } from "./components/ConfigDialogHost";
 import { WorkspaceOnboardingDialog } from "./components/WorkspaceOnboardingDialog";
 import { Tab, Tabs } from "./components/ui/Tabs";
 import { waitForLogDrain, AppLog } from "./utils/log";
@@ -92,7 +86,7 @@ import {
   loadRecentDirectories,
   removeRecentDirectory,
 } from "./services/workspace";
-import { openConfigDialog, switchConfigTab, setupDialogBackdropClose, renderAboutVersion } from "./services/dialog";
+import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog";
 import { loadConversation } from "./store/messages";
 import { cardTreeStore } from "./store/card-tree";
 import {
@@ -606,78 +600,8 @@ function installGlobalBridges(): void {
   (window as any).loadConversation = loadConversation;
 }
 
-function installGoalFormHandlers(): void {
-  const form = document.getElementById("goalForm") as HTMLFormElement | null;
-  const dialog = document.getElementById("goalDialog") as HTMLDialogElement | null;
-  const cancelBtn = document.getElementById("btnCancelGoal");
-  if (!form || !dialog) return;
-  if ((form as any).__goalBound) return;
-  (form as any).__goalBound = true;
-
-  cancelBtn?.addEventListener("click", () => dialog.close());
-
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    if (!boardStore.selectedTaskID) return;
-    const goalID = (document.getElementById("goalId") as HTMLInputElement | null)?.value.trim() || "";
-    const title = (document.getElementById("goalDescription") as HTMLTextAreaElement | null)?.value.trim() || "";
-    const acceptanceText = (document.getElementById("goalCriteria") as HTMLTextAreaElement | null)?.value.trim() || "";
-    if (!title) return;
-    const taskID = boardStore.selectedTaskID || undefined;
-
-    // Non-blocking save: close the dialog immediately and fire the update
-    // asynchronously so the operator's UI is never frozen waiting for the
-    // server. Errors surface via console + subsequent loadBoard diff.
-    dialog.close();
-
-    void (async () => {
-      try {
-        if (goalID) {
-          // The backend's UpdateGoalInput requires acceptance_specs[].min(1).
-          // Wrap the operator's free-text criterion into a single essential
-          // llm_judge spec — same shape that addOperatorGoal synthesizes when
-          // an operator-defined goal arrives without structured specs. We
-          // intentionally keep the form simple (one textarea) rather than
-          // expose the full spec editor; richer authoring belongs to the
-          // requirements agent's structured tools.
-          const fallbackCriterion = "The requested change is implemented and acceptance checks pass.";
-          const criterion = acceptanceText || fallbackCriterion;
-          const acceptanceSpec = {
-            id: `acc-operator-${goalID}-${Date.now()}`,
-            source_requirement_id: "operator",
-            goal_id: goalID,
-            title: title.slice(0, 80),
-            severity: "essential",
-            scorers: [
-              {
-                type: "llm_judge",
-                name: "operator-acceptance",
-                criteria: criterion,
-                inputs: ["delivery_summary", "changed_files"],
-              },
-            ],
-          };
-          await panelMessage(`Update goal ${goalID}.`, {
-            goalID,
-            description: title,
-            acceptance_specs: [acceptanceSpec],
-            taskID,
-          });
-        } else {
-          const payload = acceptanceText ? `/goal ${title}\nAcceptance: ${acceptanceText}` : `/goal ${title}`;
-          await panelMessage(payload, { taskID });
-        }
-        await loadBoard({ sync: true });
-      } catch (err) {
-        console.error("Failed to save goal", err);
-      }
-    })();
-  });
-}
-
 installGlobalBridges();
 setupDialogBackdropClose();
-installGoalFormHandlers();
 
 // ── Mount: Conversation ──
 
@@ -773,15 +697,7 @@ if (boardEl) {
           if (id) void cancelTask(id);
         }}
         onEditGoal={(goalId, title, detail) => {
-          const goalDialog = document.getElementById("goalDialog") as HTMLDialogElement | null;
-          const goalIdInput = document.getElementById("goalId") as HTMLInputElement | null;
-          const goalDesc = document.getElementById("goalDescription") as HTMLTextAreaElement | null;
-          const goalCrit = document.getElementById("goalCriteria") as HTMLTextAreaElement | null;
-          if (!goalDialog || !goalIdInput || !goalDesc || !goalCrit) return;
-          goalIdInput.value = goalId || "";
-          goalDesc.value = title || "";
-          goalCrit.value = detail || "";
-          goalDialog.show();
+          openGoalDialog(goalId || "", title || "", detail || "");
         }}
         onDeleteGoal={async (goalId) => {
           if (!goalId || !boardStore.selectedTaskID) return;
@@ -1078,109 +994,7 @@ if (logViewerEl) {
   );
 }
 
-// ── Mount: Config Dialog Panels ──
-
-const promptBody = document.getElementById("promptBody");
-if (promptBody) {
-  promptBody.innerHTML = "";
-  render(() => <PromptCatalog />, promptBody);
-}
-
-const generalBody = document.getElementById("generalBody");
-if (generalBody) {
-  generalBody.innerHTML = "";
-  render(() => <GeneralPanel />, generalBody);
-}
-
-const permissionsBody = document.getElementById("permissionsBody");
-if (permissionsBody) {
-  permissionsBody.innerHTML = "";
-  render(() => <PermissionsPanel />, permissionsBody);
-}
-
-const channelConfigBody = document.getElementById("channelConfigBody");
-if (channelConfigBody) {
-  channelConfigBody.innerHTML = "";
-  render(() => <ChannelsPanel />, channelConfigBody);
-}
-
-const toolsConfigBody = document.getElementById("toolsConfigBody");
-if (toolsConfigBody) {
-  toolsConfigBody.innerHTML = "";
-  render(() => <SkillMarketPanel />, toolsConfigBody);
-}
-
-const memoryBody = document.getElementById("memoryBody");
-if (memoryBody) {
-  memoryBody.innerHTML = "";
-  render(
-    () => <MemoryPanel taskID={boardStore.selectedTaskID || undefined} />,
-    memoryBody,
-  );
-}
-
-const providersConfigBody = document.getElementById("providersConfigBody");
-if (providersConfigBody) {
-  providersConfigBody.innerHTML = "";
-  render(() => <ProvidersPanel />, providersConfigBody);
-}
-
-// AgentModelsPanel auto-fetches at mount via createResource. Defer mount until
-// initApp() has run syncApiConfig(), otherwise the initial /agent +
-// /config/providers fetches go out before credentials/serverUrl are set —
-// which hangs the WebView when Basic auth is configured.
-
-// ── Native dialog close handlers ──
-// Settings dialog (configDialog) close button — no longer handles it.
-
 document.addEventListener("DOMContentLoaded", () => {
-  document
-    .getElementById("btnCloseConfigDialog")
-    ?.addEventListener("click", () => {
-      (
-        document.getElementById("configDialog") as HTMLDialogElement | null
-      )?.close();
-    });
- // ── Config tab navigation ──
-  document.getElementById("configSidebar")?.addEventListener("click", (event) => {
-    const btn = (event.target as HTMLElement).closest<HTMLElement>(".config-nav-item");
-    const tab = btn?.dataset.configTab;
-    if (tab) switchConfigTab(tab);
-  });
-
- // ── Config sidebar resizer ──
-  {
-    const configResizer = document.getElementById("configResizer");
-    const configSidebar = document.getElementById("configSidebar");
-    configResizer?.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0 || !configSidebar) return;
-      configResizer.dataset.active = "true";
-      document.body.dataset.resizing = "true";
-      e.preventDefault();
-      const layout = configSidebar.parentElement;
-      function onMove(ev: PointerEvent) {
-        if (!layout) return;
-        const rect = layout.getBoundingClientRect();
-        const scale = currentUIScale();
-        const min = 140 * scale;
-        const max = 320 * scale;
-        const next = Math.round(Math.min(max, Math.max(min, ev.clientX - rect.left)));
-        configSidebar!.style.width = next + "px";
-        configSidebar!.style.minWidth = next + "px";
-      }
-      function onUp() {
-        delete configResizer!.dataset.active;
-        delete document.body.dataset.resizing;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        window.removeEventListener("pointercancel", onUp);
-      }
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-      window.addEventListener("pointercancel", onUp);
-    });
-  }
-
  // ── Workspace panel resizer ──
  // Drag the horizontal divider above the workspace to adjust its height.
  // Height is persisted to settings.workspacePanelHeight and applied as an
@@ -1602,11 +1416,6 @@ document.addEventListener("keydown", (ev) => {
 void (async () => {
   try {
     await initApp();
-    const agentModelsBody = document.getElementById("agentModelsBody");
-    if (agentModelsBody) {
-      agentModelsBody.innerHTML = "";
-      render(() => <AgentModelsPanel />, agentModelsBody);
-    }
     renderAboutVersion();
     const connBannerHost = document.createElement("div");
     connBannerHost.id = "connectionBannerHost";
@@ -1624,6 +1433,14 @@ void (async () => {
     appDialogHost.id = "appDialogHost";
     document.body.appendChild(appDialogHost);
     render(() => <AppDialogHost />, appDialogHost);
+    const goalDialogHost = document.createElement("div");
+    goalDialogHost.id = "goalDialogHost";
+    document.body.appendChild(goalDialogHost);
+    render(() => <GoalDialogHost />, goalDialogHost);
+    const configDialogHost = document.createElement("div");
+    configDialogHost.id = "configDialogHost";
+    document.body.appendChild(configDialogHost);
+    render(() => <ConfigDialogHost />, configDialogHost);
     const onboardingHost = document.createElement("div");
     onboardingHost.id = "workspaceOnboardingHost";
     document.body.appendChild(onboardingHost);
