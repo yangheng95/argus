@@ -32,6 +32,8 @@ Overlay benchmark `20260505-195237` verified that diagnostic-only Integrity fail
 
 Overlay benchmark `20260505-200735` verified the repaired pre-execution chain: requirements and architect completed, correction-bearing Integrity attempts did not start execution, a later `concerns` verdict with zero corrections/missing goals allowed all three Build goals to pass, and Build reported per-file change lists. It then exposed the delivery-completion version of the same protocol drift: Delivery visually rendered the calculator, found runtime failures cleared, and listed all user requirements as satisfied, but still planned to reject because the host manifest had classified `review:integrity verdict=concerns` as a failed blocker. The root cause was an over-broad delivery gate predicate: `issues_count > 0` made correction-free concerns equivalent to an unresolved architectural defect.
 
+Overlay benchmark `20260505-212207` verified that pre-build Integrity is now blocking execution and can restart upstream, but exposed a lane-classification failure. The same spec received three correction-bearing `needs_correction` attempts; the third attempt had every dimension failing and issue count increased from 6 to 27. Because the code checked diagnostic-only dimensions before same-spec goal-layer non-convergence, the mixed failure restarted Requirements and inflated the requirements snapshot from 22 rows to 30. The invariant is narrower: repeated same-spec goal-layer non-convergence must restart `plan` while preserving the validated requirement snapshot; only pure diagnostic-only Integrity failure restarts `requirements`.
+
 The prior attempted fix was a hard tool gate. That is the wrong architectural direction: it blocks one symptom, but it does not improve the scientific quality of the scheduling surface the orchestrator reads.
 
 ## Root Cause
@@ -84,7 +86,7 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - It makes Build and Delivery reject hand-edited generated/compiled artifacts as a way to mask source/runtime divergence; generated artifacts must be regenerated from the source of truth or the runtime wiring must be fixed.
 - It treats any Integrity correction or missing-goal proposal as blocking protocol evidence: the reviewer normalizes that dimension to `needs_correction`, persisted attempts retain correction/missing counts for every verdict, workflow projection marks correction-bearing attempts failed, and build/create-run preflight blocks before run/worktree side effects.
 - It routes diagnostic-only Integrity `needs_correction` findings, currently hallucination, to `restart_from_stage('requirements')` instead of applying goal corrections and re-reviewing the same spec.
-- It routes repeated non-converging goal-layer Integrity corrections to `restart_from_stage('plan')` so Architect owns a fresh decomposition instead of letting the same spec review forever.
+- It routes repeated non-converging goal-layer Integrity corrections to `restart_from_stage('plan')` so Architect owns a fresh decomposition instead of letting the same spec review forever. This lane has priority over mixed diagnostic findings when the current review still contains goal-layer blockers; diagnostic-only restart is reserved for pure upstream grounding failures.
 - It reserves Architect re-entry as a structural re-plan that requires delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.
 - It makes Architect require an active requirements spec snapshot before any Architect session is created, so upstream restarts cannot accidentally continue into downstream planning against an empty REQ-N source.
 - It makes Delivery treat Integrity `concerns` with zero corrections and zero missing goals as advisory evidence. Delivery still blocks on missing Integrity review, `needs_correction`, `fail`, nonzero corrections, or nonzero missing goals.
@@ -106,6 +108,6 @@ Add a derived, persisted-read projection to `describeTask` and render it into th
 - Tests prove generated/compiled runtime artifacts cannot become a second hand-edited implementation path.
 - Tests prove correction-bearing Integrity concerns cannot start execution and are projected as failed review work.
 - Tests prove diagnostic-only Integrity failures restart upstream and do not call the goal-correction path.
-- Tests prove repeated same-spec goal-layer Integrity corrections restart plan and do not apply yet another correction.
+- Tests prove repeated same-spec goal-layer Integrity corrections restart plan and do not apply yet another correction, including mixed diagnostic-plus-goal-layer failures.
 - Tests prove Architect does not create a child session when no active requirements spec snapshot exists.
 - Tests prove correction-free Integrity concerns do not fail the delivery manifest gate, while correction-bearing attempts still block delivery.
