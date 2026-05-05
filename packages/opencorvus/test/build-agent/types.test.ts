@@ -6,6 +6,18 @@ describe("BuildResultSchema", () => {
     const payload = {
       status: "passed",
       summary: "Implemented NoteStore with create/list/toggle/remove",
+      files_changed: [
+        {
+          path: "src/note-store.ts",
+          summary: "Added NoteStore create/list/toggle/remove logic.",
+          reason: "Core implementation file for the requested store behavior.",
+        },
+        {
+          path: "src/note-store.test.ts",
+          summary: "Added regression tests for NoteStore behavior.",
+          reason: "Acceptance evidence for the store contract.",
+        },
+      ],
       patch_summary: "- Added src/note-store.ts\n- Added src/note-store.test.ts",
       commit_ref: "abc1234",
       tests: [
@@ -20,6 +32,13 @@ describe("BuildResultSchema", () => {
     const payload = {
       status: "failed",
       summary: "Build failed — acceptance_spec 'every toggle flips done' not met",
+      files_changed: [
+        {
+          path: "src/note-store.ts",
+          summary: "Partially changed toggle logic before verification failed.",
+          reason: "The failing acceptance spec required changing toggle behavior.",
+        },
+      ],
       patch_summary: "- Partial src/note-store.ts (no tests yet)",
       error: "toggle returned old done value for first call; root cause not identified",
       tests: [
@@ -34,6 +53,7 @@ describe("BuildResultSchema", () => {
     const parsed = BuildResultSchema.safeParse({
       status: "passed",
       summary: "",
+      files_changed: [{ path: "src/a.ts", summary: "Changed a", reason: "Required for test" }],
       patch_summary: "",
     })
     expect(parsed.success).toBe(false)
@@ -43,6 +63,7 @@ describe("BuildResultSchema", () => {
     const parsed = BuildResultSchema.safeParse({
       status: "accepted",
       summary: "ok",
+      files_changed: [{ path: "src/a.ts", summary: "Changed a", reason: "Required for test" }],
       patch_summary: "",
     })
     expect(parsed.success).toBe(false)
@@ -52,6 +73,7 @@ describe("BuildResultSchema", () => {
     const parsed = BuildResultSchema.safeParse({
       status: "passed",
       summary: "no-op run",
+      files_changed: [{ path: "src/a.ts", summary: "Changed a", reason: "Required for test" }],
       patch_summary: "",
     })
     expect(parsed.success).toBe(true)
@@ -79,8 +101,19 @@ describe("BuildResultSchema", () => {
     const parsed = BuildResultSchema.safeParse({
       status: "passed",
       summary: "implemented",
+      files_changed: [{ path: "src/a.ts", summary: "Changed a", reason: "Required for test" }],
       patch_summary: "",
       error: "should not exist on passed branch",
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  test("passed results require explained file changes", () => {
+    const parsed = BuildResultSchema.safeParse({
+      status: "passed",
+      summary: "claimed success without file-level explanation",
+      files_changed: [],
+      patch_summary: "",
     })
     expect(parsed.success).toBe(false)
   })

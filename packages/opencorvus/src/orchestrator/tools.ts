@@ -4255,44 +4255,6 @@ export function createOrchestratorTools(input: {
           await trackStepStart("build")
         }
 
-        // Bootstrap-first gate: when the architect registered any
-        // `kind: "bootstrap"` goal, that goal must reach `passed` (build +
-        // deliver merged into primary) before any non-bootstrap goal may
-        // dispatch. Rationale: bootstrap goals own scaffold files
-        // (package.json / tsconfig / vite.config / src/main.* / src/App.*)
-        // that every other goal would inevitably touch on a fresh worktree.
-        // Running them in parallel produces guaranteed merge_back conflicts
-        // on those scaffold files because each goal's worktree starts from
-        // an un-scaffolded primary. Serialising bootstrap → fan-out is the
-        // only architecture that avoids the conflict class.
-        if (attachedGoalID) {
-          const { findGoal: findGoalNow, listGoals: listGoalsNow } = await import("@/engine/store")
-          const { goalStatusByID } = await import("@/engine/describe")
-          const target = findGoalNow(attachedGoalID)
-          if (target && target.kind !== "bootstrap") {
-            const allGoals = listGoalsNow(taskID)
-            const blocker = allGoals.find((g) => g.kind === "bootstrap" && goalStatusByID(g.id) !== "passed")
-            if (blocker) {
-              log.warn("build: bootstrap-first gate rejected non-bootstrap dispatch", {
-                taskID,
-                requestedGoal: attachedGoalID,
-                requestedKind: target.kind,
-                pendingBootstrap: blocker.id,
-                pendingBootstrapStatus: goalStatusByID(blocker.id),
-              })
-              return (
-                `build: rejected — goal ${attachedGoalID} (kind=${target.kind}) cannot dispatch ` +
-                `while bootstrap goal ${blocker.id} (${blocker.title}) is in status ` +
-                `"${goalStatusByID(blocker.id)}". Bootstrap goals own scaffold-level files ` +
-                `(package.json / tsconfig / vite.config / src/main.* / src/App.*) that every ` +
-                `other goal would re-scaffold on its own worktree. Run the bootstrap goal first ` +
-                `(build → deliver → merged to primary), THEN dispatch feature / system / ` +
-                `verification goals in parallel.`
-              )
-            }
-          }
-        }
-
         // Phase 5-c: delegate to BuildAgent.run. It owns the child session
         // (kind=build), creates an isolated worktree (parallel-safe for
         // multi-goal fan-out), gates concurrency via BuildSemaphore, and
@@ -4512,8 +4474,9 @@ export function createOrchestratorTools(input: {
               return { category: e.key, title, spec, goalIDs }
             })
 
+            const siblingGoals = listGoals(taskID)
             const dependencies = dependsOn.length > 0
-              ? listGoals(taskID)
+              ? siblingGoals
                   .filter((g) => dependsOn.includes(g.id))
                   .map((g) => ({
                     id: g.id,
@@ -4521,6 +4484,16 @@ export function createOrchestratorTools(input: {
                     objective: g.objective,
                   }))
               : []
+            const collaborationGoals = siblingGoals.map((g) => ({
+              id: g.id,
+              title: g.title,
+              kind: g.kind,
+              status: goalStatusByID(g.id),
+              owned_paths: Array.isArray(g.owned_paths) ? g.owned_paths as string[] : [],
+              depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
+              exports: Array.isArray(g.exports) ? g.exports as string[] : [],
+              imports: Array.isArray(g.imports) ? g.imports as string[] : [],
+            }))
 
             const designSpecs = Array.isArray(task.design_specs)
               ? (task.design_specs as any)
@@ -4541,7 +4514,7 @@ export function createOrchestratorTools(input: {
                   "### Required For This Retry",
                   "- Address each rejection above before changing anything else.",
                   "- Do NOT repeat an approach that was already tried and rejected.",
-                  "- If the root cause sits outside owned_paths, surface it as a SCOPE BLOCKER instead of widening scope.",
+                  "- If the fix touches a shared file, explain the collaboration impact in files_changed[] instead of hiding the cross-goal dependency.",
                 ].join("\n")
               : undefined
             const deliveryFeedback = await composeLatestDeliveryFeedbackForBuild({
@@ -4563,6 +4536,7 @@ export function createOrchestratorTools(input: {
               requirements: requirements.length > 0 ? requirements : undefined,
               architectContracts: architectContracts.length > 0 ? architectContracts : undefined,
               dependencies: dependencies.length > 0 ? dependencies : undefined,
+              collaborationGoals,
               designSpecs,
               fidelity: filterGoalFidelityState({
                 goalID: goal.id,
@@ -4662,6 +4636,7 @@ export function createOrchestratorTools(input: {
                 summary: `Build agent contract violation (${runErr.code}): ${runErr.message.slice(0, 200)}`,
                 patch_summary: "",
                 tests: [],
+                files_changed: [],
                 error: runErr.message,
               }
               buildOutcome = {
@@ -4743,6 +4718,7 @@ export function createOrchestratorTools(input: {
                   workspaceBaseRef: worktreeBaseRef ?? undefined,
                   error: result.status === "failed" ? result.error : undefined,
                   diffs,
+                  fileChanges: result.files_changed,
                   summary: result.summary,
                 })
                 // Backfill session_id on the goal_run now that BuildAgent.run
@@ -4810,6 +4786,9 @@ export function createOrchestratorTools(input: {
           const testLines = result.tests.length > 0
             ? result.tests.map((t) => `  - ${t.passed ? "✓" : "✗"} ${t.name}${t.detail ? `: ${t.detail}` : ""}`).join("\n")
             : "  (none reported)"
+          const fileLines = result.files_changed.length > 0
+            ? result.files_changed.map((f) => `  - ${f.path}: ${f.summary} — ${f.reason}`).join("\n")
+            : "  (none reported)"
           const commitLine = result.commit_ref ? `- commit_ref: ${result.commit_ref}` : "- commit_ref: (none)"
           const errorLine = result.status === "failed" ? `\n- error: ${result.error}` : ""
           const worktreeLine = worktreeDir ? `\n- worktreeDir: ${worktreeDir}` : ""
@@ -4819,6 +4798,7 @@ export function createOrchestratorTools(input: {
             `### Build report\n` +
             `- summary: ${result.summary}\n` +
             `- patch_summary: ${result.patch_summary || "(empty)"}\n` +
+            `- files_changed:\n${fileLines}\n` +
             `${commitLine}${errorLine}${worktreeLine}${cleanupLine}\n` +
             `- tests:\n${testLines}\n\n` +
             `### Next step\n` +

@@ -57,6 +57,15 @@ export const BuildTestResult = z.object({
 })
 export type BuildTestResult = z.infer<typeof BuildTestResult>
 
+export const BuildFileChange = z.object({
+  path: z.string().min(1).describe("Project-relative file path changed by this build."),
+  summary: z.string().min(1).describe("Concrete description of what changed in this file."),
+  reason: z.string().min(1).describe(
+    "Why this file needed to change for the current goal, dependency, or shared integration surface.",
+  ),
+})
+export type BuildFileChange = z.infer<typeof BuildFileChange>
+
 /**
  * Terminal payload the build agent records through report_build_result.
  * Orchestrator reads this typed result and decides
@@ -76,6 +85,12 @@ const BuildResultBase = {
     .string()
     .min(1)
     .describe("One-line plain-prose description of what changed (or why it failed)."),
+  files_changed: z
+    .array(BuildFileChange)
+    .describe(
+      "Every project file changed by this build, with the build agent's own explanation. " +
+        "Passed builds must explain each changed file; failed builds may be empty only when no file was changed.",
+    ),
   patch_summary: z
     .string()
     .describe(
@@ -96,11 +111,13 @@ const BuildResultBase = {
 export const BuildPassedResultSchema = z.object({
   status: z.literal("passed"),
   ...BuildResultBase,
+  files_changed: z.array(BuildFileChange).min(1),
 }).strict()
 
 export const BuildFailedResultSchema = z.object({
   status: z.literal("failed"),
   ...BuildResultBase,
+  files_changed: z.array(BuildFileChange).default([]),
   error: z
     .string()
     .trim()

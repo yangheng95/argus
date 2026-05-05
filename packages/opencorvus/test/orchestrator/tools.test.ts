@@ -274,6 +274,11 @@ describe("orchestrator tools", () => {
           result: {
             status: "passed",
             summary: "Goal built successfully",
+            files_changed: [{
+              path: "src/index.ts",
+              summary: "Changed scoped implementation file.",
+              reason: "Required by the mocked goal build.",
+            }],
             patch_summary: "Changed scoped files",
             tests: [],
             commit_ref: "abc1234",
@@ -498,6 +503,11 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Goal built successfully",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Changed scoped implementation file.",
+                reason: "Required by the mocked goal build.",
+              }],
               patch_summary: "Changed scoped files",
               tests: [],
               commit_ref: "abc1234",
@@ -571,6 +581,7 @@ describe("orchestrator tools", () => {
             result: {
               status: "failed",
               summary: "Goal build failed",
+              files_changed: [],
               patch_summary: "",
               tests: [],
               error: "diagnostic failure",
@@ -638,6 +649,11 @@ describe("orchestrator tools", () => {
           result: {
             status: "passed",
             summary: "Goal built successfully",
+            files_changed: [{
+              path: "src/index.ts",
+              summary: "Changed scoped implementation file.",
+              reason: "Required by the mocked goal build.",
+            }],
             patch_summary: "Changed scoped files",
             tests: [],
             commit_ref: "abc1234",

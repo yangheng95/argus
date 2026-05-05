@@ -64,8 +64,8 @@ export const GoalContractFieldsSchema = z.object({
     .array(z.string().min(1))
     .min(1)
     .describe(
-      "Files this goal has EXCLUSIVE write access to. " +
-        "Must be discovered via tool exploration — do not guess.",
+      "Primary responsibility paths for this goal. These guide collaboration and review; " +
+        "they are not a file sandbox. Must be discovered via tool exploration — do not guess.",
     ),
   depends_on: z
     .array(z.string())

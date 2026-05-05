@@ -245,13 +245,11 @@ describe("P5 — renderTaskDescription emits the bootstrap-first paragraph", () 
         const md = renderTaskDescription(desc)
         expect(md).toContain("Bootstrap-first dispatch order")
         expect(md).toContain(`gol_boot_${stamp}`)
-        // Physical-fact disclosure of the gate's existence — codex
-        // [P1] "Keep an enforceable bootstrap safety guard". Without
-        // this disclosure the gate is a hidden state machine (rule 13).
-        expect(md).toContain("dispatch tool will refuse non-bootstrap")
-        // The actual conflict reasoning the LLM should internalise.
+        expect(md).toContain("Plan deliberately")
+        expect(md).toContain("files_changed[]")
+        expect(md).not.toContain("dispatch tool will refuse non-bootstrap")
         expect(md).toContain("scaffold-level files")
-        expect(md).toContain("merge conflicts")
+        expect(md).toContain("coordination risk")
       },
     })
   })
@@ -269,7 +267,7 @@ describe("P5 — renderTaskDescription emits the bootstrap-first paragraph", () 
         const desc = await describeTask(taskID)
         const md = renderTaskDescription(desc)
         expect(md).not.toContain("Bootstrap-first dispatch order")
-        expect(md).not.toContain("dispatch tool will refuse non-bootstrap")
+        expect(md).not.toContain("files_changed[] can explain")
       },
     })
   })

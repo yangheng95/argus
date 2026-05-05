@@ -52,10 +52,9 @@ export function emptyArchitectFidelityState(): ArchitectFidelityState {
 
 /**
  * Single source for path equality across architect fidelity checks and the
- * cross-goal owned_paths overlap check. Architect inputs may arrive with
- * mixed separators (`src/foo` vs `src\foo`), trailing slashes, or `./`
- * prefixes. Normalise once so prefix containment, set membership, and
- * overlap detection all agree.
+ * coverage checks. Architect inputs may arrive with mixed separators
+ * (`src/foo` vs `src\foo`), trailing slashes, or `./` prefixes. Normalise
+ * once so prefix containment and set membership agree.
  */
 export function normalizeCoveragePath(input: string): string {
   const stripped = input.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/g, "")
