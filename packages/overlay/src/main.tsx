@@ -62,6 +62,7 @@ import { initPaneResizers, cancelPaneResize, currentUIScale } from "./services/p
 import { panelMessage } from "./services/chat";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { CommandPalette } from "./components/CommandPalette";
+import { NotificationCenter } from "./components/NotificationCenter";
 import { AppDialogHost } from "./components/AppDialogHost";
 import { SessionDialogHost } from "./components/SessionDialogHost";
 import { GoalDialogHost } from "./components/GoalDialogHost";
@@ -74,6 +75,7 @@ import { stopTimers } from "./services/sync";
 import { nativeOpen, nativePrompt } from "./utils/native";
 import { eventClosest } from "./utils/dom-utils";
 import { shortPath } from "./utils/tool";
+import { notifyError, notifyWarning } from "./services/notify";
 import {
   applyDirectory,
   browseDirectory,
@@ -603,6 +605,15 @@ function installGlobalBridges(): void {
 installGlobalBridges();
 setupDialogBackdropClose();
 
+// ── Mount: NotificationCenter ──
+// Keep the in-app notification layer alive before any async boot work, so
+// startup and operator-action failures can surface even when OS-level
+// notifications are unavailable or permission has not been granted.
+const notificationHost = document.createElement("div");
+notificationHost.id = "notificationCenterHost";
+document.body.appendChild(notificationHost);
+render(() => <NotificationCenter />, notificationHost);
+
 // ── Mount: Conversation ──
 
 const chatScroll = document.getElementById("chatScroll");
@@ -643,17 +654,29 @@ if (sidebarTitleEl) {
         responseKind: "text",
       });
       if (res.status === 409) {
-        window.alert(t("sidebar.reset_db_blocked"));
+        notifyWarning({
+          id: "system:reset-db",
+          title: t("sidebar.reset_db_blocked_title"),
+          message: t("sidebar.reset_db_blocked"),
+        });
         return;
       }
       if (!res.ok) {
         const text = typeof res.body === "string" && res.body ? res.body : `HTTP ${res.status}`;
-        window.alert(t("sidebar.reset_db_failed", { error: text }));
+        notifyError({
+          id: "system:reset-db",
+          title: t("sidebar.reset_db_failed_title"),
+          message: t("sidebar.reset_db_failed", { error: text }),
+        });
         return;
       }
       window.location.reload();
     } catch (err) {
-      window.alert(t("sidebar.reset_db_failed", { error: err instanceof Error ? err.message : String(err) }));
+      notifyError({
+        id: "system:reset-db",
+        title: t("sidebar.reset_db_failed_title"),
+        message: t("sidebar.reset_db_failed", { error: err instanceof Error ? err.message : String(err) }),
+      });
     }
   });
 }

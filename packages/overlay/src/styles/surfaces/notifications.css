@@ -1,0 +1,133 @@
+.app-notifications {
+  position: fixed;
+  right: calc(14px * var(--ui-scale));
+  bottom: calc(14px * var(--ui-scale));
+  z-index: var(--ui-z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(8px * var(--ui-scale));
+  width: min(calc(360px * var(--ui-scale)), calc(100vw - 28px * var(--ui-scale)));
+  pointer-events: none;
+}
+
+.app-notification {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: calc(26px * var(--ui-scale)) minmax(0, 1fr) calc(24px * var(--ui-scale));
+  align-items: start;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
+  color: var(--text);
+  box-shadow:
+    0 calc(12px * var(--ui-scale)) calc(24px * var(--ui-scale)) color-mix(in srgb, black 18%, transparent),
+    inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, white 8%, transparent);
+}
+
+.app-notification[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--good) 34%, var(--border));
+}
+
+.app-notification[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--warn) 38%, var(--border));
+}
+
+.app-notification[data-tone="error"] {
+  border-color: color-mix(in srgb, var(--bad) 42%, var(--border));
+}
+
+.app-notification[data-tone="progress"],
+.app-notification[data-tone="info"] {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+}
+
+.app-notification__mark {
+  width: calc(24px * var(--ui-scale));
+  height: calc(24px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  background: var(--subtle-2);
+}
+
+.app-notification[data-tone="success"] .app-notification__mark {
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+  color: var(--good);
+}
+
+.app-notification[data-tone="warning"] .app-notification__mark {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+}
+
+.app-notification[data-tone="error"] .app-notification__mark {
+  background: color-mix(in srgb, var(--bad) 18%, transparent);
+  color: var(--bad);
+}
+
+.app-notification[data-tone="progress"] .app-notification__mark,
+.app-notification[data-tone="info"] .app-notification__mark {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.app-notification__spinner {
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  border: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-top-color: var(--accent);
+  animation: app-notification-spin 0.9s linear infinite;
+}
+
+.app-notification__copy {
+  min-width: 0;
+  display: grid;
+  gap: calc(3px * var(--ui-scale));
+}
+
+.app-notification__title {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+
+.app-notification__message {
+  font-size: var(--ui-font-meta);
+  line-height: 1.35;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.app-notification .oc-button[data-ui="app-notification-close"] {
+  --oc-button-height: calc(22px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-bg: transparent;
+  --oc-button-color: var(--text-muted);
+}
+
+.app-notification .oc-button[data-ui="app-notification-close"]:hover,
+.app-notification .oc-button[data-ui="app-notification-close"]:focus-visible {
+  --oc-button-bg: var(--subtle-2);
+  --oc-button-color: var(--text-strong);
+}
+
+.app-notification .oc-button[data-ui="app-notification-close"] > svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+}
+
+@keyframes app-notification-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

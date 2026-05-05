@@ -69,3 +69,11 @@ test("Button solid tones keep readable foreground and dedicated hover chrome", (
   );
   expect(css).toContain(".oc-button:not([data-tone=\"danger\"]):not([data-variant=\"solid\"]):hover");
 });
+
+test("Button primitive owns the canonical keyboard focus ring", () => {
+  const css = readFileSync(BUTTON_CSS, "utf8");
+
+  expect(css).toMatch(/\.oc-button:focus-visible\s*\{[^}]*outline:\s*var\(--oc-border-width\)\s+solid\s+var\(--accent\);/s);
+  expect(css).toMatch(/\.oc-button:focus-visible\s*\{[^}]*outline-offset:\s*calc\(1px \* var\(--ui-scale\)\);/s);
+  expect(css).not.toMatch(/\.oc-button[^{]*:focus-visible\s*\{[^}]*outline:\s*none\s*;/s);
+});

@@ -4,8 +4,7 @@ import { settingsStore, setSettingsStore, saveSettings } from "../../store/setti
 import { configure as configureApi } from "../../services/api";
 import { checkConnection } from "../../services/connection";
 import { reloadProjectScope } from "../../services/config";
-import { requestNotificationPermission, notificationPermissionState } from "../../services/notify";
-import { nativeMessage } from "../../services/app-dialog";
+import { ensureDesktopNotificationPermission } from "../../services/notify";
 import { Button } from "../ui/Button";
 import { SurfaceHeader } from "../ui/SurfaceHeader";
 
@@ -111,25 +110,7 @@ export default function GeneralPanel() {
                   setSettingsStore("desktopNotifications", enabled);
                   saveSettings();
                   if (!enabled) return;
-                  const state = notificationPermissionState();
-                  if (state === "unsupported") {
-                    void nativeMessage(t("settings.desktop_notifications_unsupported"), {
-                      title: t("settings.desktop_notifications_label"),
-                    });
-                    return;
-                  }
-                  if (state === "granted") return;
-                  // Eager prompt — Chrome/Edge respect a re-prompt after a
-                  // prior denial when triggered from a fresh user gesture
-                  // (this onChange handler is a click). Firefox treats
-                  // denial as sticky and we surface that with a dialog.
-                  void requestNotificationPermission().then((result) => {
-                    if (result !== "granted") {
-                      void nativeMessage(t("settings.desktop_notifications_blocked"), {
-                        title: t("settings.desktop_notifications_label"),
-                      });
-                    }
-                  });
+                  void ensureDesktopNotificationPermission("settings");
                 }}
               />
             </label>
