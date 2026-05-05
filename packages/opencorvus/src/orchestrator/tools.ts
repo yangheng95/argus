@@ -694,6 +694,9 @@ export function createOrchestratorTools(input: {
         perDimension: Array<string>
         issues: string[]
         restartSummary: string
+        restartStage: RestartStage
+        nextAction: string
+        restartReason: string
       }
 
   function renderIntegrityOutcome(outcome: IntegrityReviewOutcome) {
@@ -727,8 +730,8 @@ export function createOrchestratorTools(input: {
       return SubAgentProtocol.yieldResult({
         headline:
           `Integrity verdict: needs_correction (${outcome.perDimension.join(", ")}). ` +
-          `${outcome.summary} Diagnostic-only findings require upstream repair; ` +
-          `${outcome.restartSummary}. NEXT: run requirements before architect/build.`,
+          `${outcome.summary} ${outcome.restartReason}; ` +
+          `${outcome.restartSummary}. NEXT: run ${outcome.nextAction} before build.`,
         fields: [
           ["issues", outcome.issues],
           ["spec_snapshot_id", outcome.specSnapshotID],
@@ -774,6 +777,26 @@ export function createOrchestratorTools(input: {
       `or the task is explicitly restarted upstream. ` +
       `issues=${issuesCount}, corrections=${correctionsCount}, missing=${missingCount}.`
     )
+  }
+
+  async function countPriorGoalLayerIntegrityCorrections(specSnapshotID: string): Promise<number> {
+    const { EngineArtifactTable } = await import("@/engine/engine.sql")
+    const row = Database.use((db) =>
+      db.select({ count: sql<number>`count(*)` })
+        .from(EngineArtifactTable)
+        .where(and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "integrity_attempt"),
+          sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${specSnapshotID}`,
+          sql`json_extract(${EngineArtifactTable.payload}, '$.verdict') = 'needs_correction'`,
+          sql`(
+            coalesce(json_extract(${EngineArtifactTable.payload}, '$.corrections_count'), 0) > 0
+            OR coalesce(json_extract(${EngineArtifactTable.payload}, '$.missing_count'), 0) > 0
+          )`,
+        ))
+        .get(),
+    )
+    return Number(row?.count ?? 0)
   }
 
   function stableJSON(value: unknown): string {
@@ -950,6 +973,50 @@ export function createOrchestratorTools(input: {
         perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
         issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
         restartSummary,
+        restartStage: "requirements",
+        nextAction: "requirements",
+        restartReason: "Diagnostic-only findings require upstream repair",
+      }
+    }
+
+    const priorGoalLayerCorrectionAttempts = await countPriorGoalLayerIntegrityCorrections(activeSpec.id)
+    if (priorGoalLayerCorrectionAttempts >= 2) {
+      try {
+        recordIntegrityAttempt({
+          taskID,
+          sessionID: verdict.sessionID,
+          specSnapshotID: activeSpec.id,
+          verdict: "needs_correction",
+          perDimension: perDimensionRollup,
+          issuesCount: verdict.issues.length,
+          correctionsCount: verdict.corrections.length,
+          missingCount: verdict.missingGoals.length,
+          reason:
+            `${verdict.summary} Goal-layer integrity corrections did not converge after ` +
+            `${priorGoalLayerCorrectionAttempts + 1} attempts for this spec; restarting plan.`,
+        })
+      } catch (err) {
+        log.error("integrity: recordIntegrityAttempt failed", {
+          taskID,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+      const restartSummary = await restartTaskFromStage(
+        "plan",
+        `goal-layer integrity corrections did not converge after ${priorGoalLayerCorrectionAttempts + 1} attempts for spec ${activeSpec.id}`,
+      )
+      return {
+        status: "restarted",
+        specSnapshotID: activeSpec.id,
+        verdict: "needs_correction",
+        summary: verdict.summary,
+        sessionID: verdict.sessionID,
+        perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
+        issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
+        restartSummary,
+        restartStage: "plan",
+        nextAction: "architect",
+        restartReason: "Goal-layer Integrity corrections did not converge on the active spec",
       }
     }
 
@@ -4495,7 +4562,7 @@ export function createOrchestratorTools(input: {
               if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
               return (
                 `build: blocked before goal ${attachedGoalID} — integrity restarted upstream from spec ` +
-                `${integrityOutcome.specSnapshotID}. Run requirements before dispatching build.`
+                `${integrityOutcome.specSnapshotID}. Run ${integrityOutcome.nextAction} before dispatching build.`
               )
             }
           }
@@ -4566,7 +4633,7 @@ export function createOrchestratorTools(input: {
                 if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
                 return (
                   `build: blocked before goal ${attachedGoalID} — integrity restarted upstream from spec ` +
-                  `${integrityOutcome.specSnapshotID}. Run requirements before dispatching build.`
+                  `${integrityOutcome.specSnapshotID}. Run ${integrityOutcome.nextAction} before dispatching build.`
                 )
               }
             }
