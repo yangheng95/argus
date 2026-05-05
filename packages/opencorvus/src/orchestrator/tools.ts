@@ -685,6 +685,16 @@ export function createOrchestratorTools(input: {
         addedGoals: string[]
         removedGoals: string[]
       }
+    | {
+        status: "restarted"
+        specSnapshotID: string
+        verdict: "needs_correction"
+        summary: string
+        sessionID: string
+        perDimension: Array<string>
+        issues: string[]
+        restartSummary: string
+      }
 
   function renderIntegrityOutcome(outcome: IntegrityReviewOutcome) {
     if (outcome.status === "blocked") {
@@ -709,6 +719,20 @@ export function createOrchestratorTools(input: {
           ["corrections_count", String(outcome.correctionsCount)],
           ["missing_count", String(outcome.missingCount)],
           ["summary", outcome.summary],
+        ],
+        pointer: `integrity session ${outcome.sessionID}`,
+      })
+    }
+    if (outcome.status === "restarted") {
+      return SubAgentProtocol.yieldResult({
+        headline:
+          `Integrity verdict: needs_correction (${outcome.perDimension.join(", ")}). ` +
+          `${outcome.summary} Diagnostic-only findings require upstream repair; ` +
+          `${outcome.restartSummary}. NEXT: run requirements before architect/build.`,
+        fields: [
+          ["issues", outcome.issues],
+          ["spec_snapshot_id", outcome.specSnapshotID],
+          ["per_dimension", outcome.perDimension],
         ],
         pointer: `integrity session ${outcome.sessionID}`,
       })
@@ -885,6 +909,47 @@ export function createOrchestratorTools(input: {
         correctionsCount: verdict.corrections.length,
         missingCount: verdict.missingGoals.length,
         perDimension: perDimensionLabels.map((label, index) => `${label}(${verdict.dimensions[index]?.issues.length ?? 0}issues)`),
+      }
+    }
+
+    const { INTEGRITY_DIMENSIONS } = await import("@/integrity/dimensions")
+    const dimensionsByID = new Map(INTEGRITY_DIMENSIONS.map((dimension) => [dimension.id, dimension]))
+    const upstreamOnlyDimensions = verdict.dimensions.filter((dimension) => {
+      if (dimension.verdict !== "needs_correction") return false
+      return dimensionsByID.get(dimension.id)?.canProposeCorrections === false
+    })
+    if (upstreamOnlyDimensions.length > 0) {
+      try {
+        recordIntegrityAttempt({
+          taskID,
+          sessionID: verdict.sessionID,
+          specSnapshotID: activeSpec.id,
+          verdict: "needs_correction",
+          perDimension: perDimensionRollup,
+          issuesCount: verdict.issues.length,
+          correctionsCount: verdict.corrections.length,
+          missingCount: verdict.missingGoals.length,
+          reason: `${verdict.summary} Diagnostic-only dimensions require upstream restart: ${upstreamOnlyDimensions.map((d) => d.id).join(", ")}.`,
+        })
+      } catch (err) {
+        log.error("integrity: recordIntegrityAttempt failed", {
+          taskID,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+      const restartSummary = await restartTaskFromStage(
+        "requirements",
+        `integrity diagnostic-only dimension(s) require upstream repair: ${upstreamOnlyDimensions.map((d) => d.id).join(", ")}`,
+      )
+      return {
+        status: "restarted",
+        specSnapshotID: activeSpec.id,
+        verdict: "needs_correction",
+        summary: verdict.summary,
+        sessionID: verdict.sessionID,
+        perDimension: verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`),
+        issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
+        restartSummary,
       }
     }
 
@@ -4426,6 +4491,13 @@ export function createOrchestratorTools(input: {
                 `${integrityOutcome.specSnapshotID}. Re-read the corrected goals and choose the next dispatch from the new graph.`
               )
             }
+            if (integrityOutcome.status === "restarted") {
+              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+              return (
+                `build: blocked before goal ${attachedGoalID} — integrity restarted upstream from spec ` +
+                `${integrityOutcome.specSnapshotID}. Run requirements before dispatching build.`
+              )
+            }
           }
           const reviewedIntegrity = findLatestIntegrityAttemptArtifact({
             taskID,
@@ -4488,6 +4560,13 @@ export function createOrchestratorTools(input: {
                 return (
                   `build: blocked before goal ${attachedGoalID} — integrity corrected the active goal graph for spec ` +
                   `${integrityOutcome.specSnapshotID}. Re-read the corrected goals and choose the next dispatch from the new graph.`
+                )
+              }
+              if (integrityOutcome.status === "restarted") {
+                if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+                return (
+                  `build: blocked before goal ${attachedGoalID} — integrity restarted upstream from spec ` +
+                  `${integrityOutcome.specSnapshotID}. Run requirements before dispatching build.`
                 )
               }
             }

@@ -365,9 +365,9 @@ wastes budget and clouds the trace.
   per-dimension verdict (pass / concerns / needs_correction) plus an aggregate
   (worst-of). On aggregate `needs_correction` the goal set has been re-upserted in
   place; on `concerns` proceed only when the recorded attempt has zero correction
-  actions and zero missing goals; on
-  hallucination findings, prefer `restart_from_stage('requirements')` or
-  `restart_from_stage('design_analysis')` over goal-layer edits.
+  actions and zero missing goals; on diagnostic-only `needs_correction`
+  findings such as hallucination, the scheduler restarts upstream instead of
+  re-reviewing the same goal graph.
   Use when: architect just produced a non-trivial goal graph (≥3 goals, OR cross-goal
     contracts, OR foundational decisions architect derived rather than user-stated),
     OR delivery feedback hints the decomposition has drifted from user intent.
