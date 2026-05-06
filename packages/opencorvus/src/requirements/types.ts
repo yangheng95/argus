@@ -1,10 +1,9 @@
 /**
  * Requirements data shapes — narrow scope: REQ-N list + foundational decisions.
  *
- * The Requirements Agent no longer produces goals, metric specs, challenge
- * seeds, traceability, or cross-goal contracts. The Architect owns every
- * part of decomposition — see @/architect/types for the Architect-emitted
- * types (ArchitectChallengeSeed, ArchitectGoalMetricSpec, …).
+ * The Requirements Agent no longer produces goals, traceability, fidelity
+ * coverage, assembly ownership, or cross-goal contracts. The Architect owns
+ * decomposition — see @/architect/types for the Architect-emitted types.
  */
 
 export interface ParsedRequirement {

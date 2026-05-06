@@ -1811,7 +1811,6 @@ export function createOrchestratorTools(input: {
           const { ArchitectAgent } = await import("@/architect/agent")
           const { upsertGoalsFromArchitect } = await import("@/engine/persist")
           const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
-          const { persistArchitectMetrics } = await import("@/metrics/store")
 
           const result = await ArchitectAgent.coordinate({
             goals: existingGoals.map((g) => ({
@@ -1963,16 +1962,8 @@ export function createOrchestratorTools(input: {
                 ? task.metadata as Record<string, unknown>
                 : {}
 
-            persistArchitectMetrics({
-              task_id: taskID,
-              goal_id_map: llmToDBID,
-              goal_metric_specs: result.goalMetricSpecs,
-              global_metric_specs: result.globalMetricSpecs,
-            })
-
             db.update(EngineTaskTable)
               .set({
-                architect_challenge_seeds: result.challengeSeeds as unknown as Record<string, unknown>[],
                 metadata: {
                   ...taskMetadata,
                   architect_fidelity: mappedArchitectFidelity,
@@ -2004,9 +1995,7 @@ export function createOrchestratorTools(input: {
 
           const summary = SubAgentProtocol.yieldResult({
             headline:
-              `Architect decomposition complete: ${persisted.length} goals, ${result.goalMetricSpecs.length} goal metrics, ` +
-              `${result.globalMetricSpecs.length} global metrics, ${result.challengeSeeds.length} challenge seeds, ` +
-              `${result.contracts.length} contracts.` +
+              `Architect decomposition complete: ${persisted.length} goals, ${result.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
               ` NEXT: dispatch eligible per-goal \`build({ goalID })\`; each non-pass post-build architecture_review routes rework feedback to the affected goal IDs it names.`,
             summary: result.summary,
@@ -2169,30 +2158,6 @@ export function createOrchestratorTools(input: {
         // i.e. the LAST entry in the trajectory.
         const iteration = Math.max(0, priorIterations.length - 1)
 
-        const rawSeeds = Array.isArray(task.architect_challenge_seeds)
-          ? (task.architect_challenge_seeds as Array<Record<string, unknown>>)
-          : []
-        const architectSeeds = rawSeeds
-          .filter(
-            (s) =>
-              typeof s.id === "string" &&
-              (s.scope === "goal" || s.scope === "global") &&
-              typeof s.target_ref === "string" &&
-              typeof s.claim === "string" &&
-              typeof s.rationale === "string" &&
-              (s.priority_hint === "high" ||
-                s.priority_hint === "medium" ||
-                s.priority_hint === "low"),
-          )
-          .map((s) => ({
-            id: s.id as string,
-            scope: s.scope as "goal" | "global",
-            target_ref: s.target_ref as string,
-            claim: s.claim as string,
-            rationale: s.rationale as string,
-            priority_hint: s.priority_hint as "high" | "medium" | "low",
-          }))
-
         const { runProsecutor } = await import("@/prosecutor")
         const pRes = await runProsecutor({
           task: {
@@ -2203,7 +2168,7 @@ export function createOrchestratorTools(input: {
           },
           iteration,
           defenderVerdict: verdict,
-          architectSeeds,
+          architectSeeds: [],
           signal: input.signal,
         })
 

@@ -90,50 +90,6 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           kind: "verification",
           requirement_ids: ["REQ-1"],
         })
-        for (const goalID of ["goal_main", "goal_tests"]) {
-          for (const name of [
-            "functional_correctness",
-            "scenario_coverage",
-            "contract_compliance",
-            "regression_count",
-          ]) {
-            collector.goal_metric_specs.push({
-              goal_id: goalID,
-              name,
-              description: `${name} must pass`,
-              unit: "ratio",
-              direction: "higher_better",
-              target: 1,
-              floor: 0.8,
-              weight: 1,
-              gate_class: "blocking",
-              evaluator_kind: "judge",
-              evaluator_config: {},
-              source_requirement_ids: ["REQ-1"],
-            })
-          }
-        }
-        for (const name of [
-          "cross_goal_contract_consistency",
-          "non_regression_surface",
-          "architecture_integrity",
-          "user_intent_fidelity",
-        ]) {
-          collector.global_metric_specs.push({
-            name,
-            description: `${name} must pass`,
-            unit: "ratio",
-            direction: "higher_better",
-            target: 1,
-            floor: 0.8,
-            weight: 1,
-            gate_class: "blocking",
-            evaluator_kind: "judge",
-            evaluator_config: {},
-            source_requirement_ids: ["REQ-1"],
-          })
-        }
-
         expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
         collector.traceability.push({
           requirementID: "REQ-1",

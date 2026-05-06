@@ -2,9 +2,8 @@
  * Zod-validated tool calls for the Architect Agent.
  *
  * The Architect is the authoritative goal decomposer: it registers goals,
- * traceability, and cross-goal contracts. It may attach optional metric specs
- * or challenge seeds as diagnostic hints, but those are not a parallel
- * acceptance contract. Every registration path writes into a single collector; the
+ * traceability, fidelity coverage, assembly ownership, and cross-goal contracts.
+ * Every registration path writes into a single collector; the
  * orchestrator tool reads the finalized collector after the agent session
  * ends and performs DB upsert + event emission in one place.
  *
@@ -26,11 +25,8 @@ import {
 import type { AcceptanceSpec } from "@/acceptance/types"
 import type { VisualSpec } from "@/design-analyst/types"
 import type {
-  ArchitectChallengeSeed,
   ArchitectContract,
   ArchitectDecisionKey,
-  ArchitectGlobalMetricSpec,
-  ArchitectGoalMetricSpec,
   TraceabilityEntry,
 } from "./types"
 import {
@@ -39,25 +35,6 @@ import {
   SourceCoverageEntrySchema,
   ReferenceCoverageEntrySchema,
 } from "./fidelity"
-
-/**
- * Recommended diagnostic metric names. Acceptance gating is owned by
- * acceptance_specs plus DeliveryEvidenceManifest, not a parallel Architect
- * metric ruler.
- */
-export const RECOMMENDED_GOAL_METRICS = [
-  "functional_correctness",
-  "scenario_coverage",
-  "contract_compliance",
-  "regression_count",
-] as const
-
-export const RECOMMENDED_GLOBAL_METRICS = [
-  "cross_goal_contract_consistency",
-  "non_regression_surface",
-  "architecture_integrity",
-  "user_intent_fidelity",
-] as const
 
 // ---------------------------------------------------------------------------
 // Collector — single buffer for the full Architect output
@@ -86,9 +63,6 @@ export interface RegisteredContract {
 
 export interface ArchitectCollector {
   goals: RegisteredGoal[]
-  goal_metric_specs: ArchitectGoalMetricSpec[]
-  global_metric_specs: ArchitectGlobalMetricSpec[]
-  challenge_seeds: ArchitectChallengeSeed[]
   traceability: TraceabilityEntry[]
   source_coverage: Array<z.infer<typeof SourceCoverageEntrySchema>>
   reference_coverage: Array<z.infer<typeof ReferenceCoverageEntrySchema>>
@@ -122,9 +96,6 @@ function toRegisteredGoal(input: unknown): RegisteredGoal {
 function emptyCollector(): ArchitectCollector {
   return {
     goals: [],
-    goal_metric_specs: [],
-    global_metric_specs: [],
-    challenge_seeds: [],
     traceability: [],
     source_coverage: [],
     reference_coverage: [],
@@ -232,12 +203,6 @@ export function architectValidationIssues(
       issues.push(
         `Verification goal ${verificationGoal.id}: owned_paths must stay under tests/integration, tests/e2e, or tests/regression: ${invalidOwnedPaths.join(", ")}`,
       )
-    }
-  }
-
-  for (const seed of collector.challenge_seeds) {
-    if (seed.scope === "goal" && !knownGoalIDs.has(seed.target_ref)) {
-      issues.push(`Challenge seed ${seed.id}: target goal "${seed.target_ref}" is not registered`)
     }
   }
 
@@ -410,9 +375,9 @@ export function createArchitectOutputTools(input: {
         "Remove a previously-registered goal (typically during a re-run when " +
         "delivery feedback showed the goal was redundant or wrong). The goal " +
         "id is recorded so the orchestrator can delete the DB row on finalize. " +
-        "Cascades to every dependent registration: per-goal metrics, challenge " +
-        "seeds scoped to this goal, traceability rows referencing it, and " +
-        "cross-goal contracts that mention it. Goal is the single source of " +
+        "Cascades to every dependent registration: traceability rows referencing " +
+        "it, fidelity coverage, assembly ownership, and cross-goal contracts " +
+        "that mention it. Goal is the single source of " +
         "truth for these dependents — there is no orphan recovery path.",
       inputSchema: z.object({
         id: z.string().min(1).describe("Goal id to remove"),
@@ -432,8 +397,6 @@ export function createArchitectOutputTools(input: {
         }
 
         const cascade = {
-          goal_metric_specs: 0,
-          challenge_seeds: 0,
           traceability_rows: 0,
           traceability_refs: 0,
           source_coverage_rows: 0,
@@ -444,18 +407,6 @@ export function createArchitectOutputTools(input: {
           contracts: 0,
           contract_refs: 0,
         }
-
-        const beforeMetrics = collector.goal_metric_specs.length
-        collector.goal_metric_specs = collector.goal_metric_specs.filter(
-          (m) => m.goal_id !== id,
-        )
-        cascade.goal_metric_specs = beforeMetrics - collector.goal_metric_specs.length
-
-        const beforeSeeds = collector.challenge_seeds.length
-        collector.challenge_seeds = collector.challenge_seeds.filter(
-          (s) => !(s.scope === "goal" && s.target_ref === id),
-        )
-        cascade.challenge_seeds = beforeSeeds - collector.challenge_seeds.length
 
         const traceNext: TraceabilityEntry[] = []
         for (const t of collector.traceability) {
@@ -526,8 +477,6 @@ export function createArchitectOutputTools(input: {
         collector.contracts = contractNext
 
         const cascadeBits: string[] = []
-        if (cascade.goal_metric_specs) cascadeBits.push(`${cascade.goal_metric_specs} goal metric(s)`)
-        if (cascade.challenge_seeds) cascadeBits.push(`${cascade.challenge_seeds} challenge seed(s)`)
         if (cascade.traceability_rows || cascade.traceability_refs) {
           cascadeBits.push(
             `${cascade.traceability_refs} traceability ref(s) (${cascade.traceability_rows} row(s) dropped)`,
@@ -551,129 +500,6 @@ export function createArchitectOutputTools(input: {
         }
         const cascadeMsg = cascadeBits.length > 0 ? ` Cascaded: ${cascadeBits.join(", ")}.` : ""
         return `OK: goal "${id}" removed. Reason: ${reason}. (${collector.goals.length} remaining)${cascadeMsg}`
-      },
-    }),
-
-    register_goal_metric_spec: tool({
-      description:
-        "Register or overwrite ONE per-goal metric, keyed by (goal_id, name). " +
-        "Calling again with the same key replaces the prior spec — this is the " +
-        "single correction path for target / floor mistakes during the " +
-        "architect iteration. Metrics are optional diagnostic hints; they do " +
-        "not replace acceptance_specs or DeliveryEvidenceManifest gates.",
-      inputSchema: z.object({
-        goal_id: z
-          .string()
-          .min(1)
-          .describe(
-            "The architect-level goal id this metric belongs to (must match a prior register_goal).",
-          ),
-        ...metricCommonFields(),
-      }),
-      execute: async (input) => {
-        if (!collector.goals.some((g) => g.id === input.goal_id)) {
-          return `Error: goal "${input.goal_id}" not registered — call register_goal first`
-        }
-        if (
-          input.gate_class === "blocking" &&
-          input.floor === input.target &&
-          input.direction === "higher_better"
-        ) {
-          return `Error: blocking metric "${input.name}" has floor==target (${input.floor}) — floor must be strictly lower than target for higher_better direction`
-        }
-        const spec: ArchitectGoalMetricSpec = {
-          goal_id: input.goal_id,
-          name: input.name,
-          description: input.description,
-          unit: input.unit,
-          direction: input.direction,
-          target: input.target,
-          floor: input.floor,
-          weight: input.weight,
-          gate_class: input.gate_class,
-          evaluator_kind: input.evaluator_kind,
-          evaluator_config: input.evaluator_config,
-          source_requirement_ids: input.source_requirement_ids,
-        }
-        const dupIdx = collector.goal_metric_specs.findIndex(
-          (m) => m.goal_id === input.goal_id && m.name === input.name,
-        )
-        if (dupIdx >= 0) {
-          collector.goal_metric_specs[dupIdx] = spec
-          return `OK: goal metric "${input.name}" overwritten for ${input.goal_id} (${collector.goal_metric_specs.length} total goal metrics)`
-        }
-        collector.goal_metric_specs.push(spec)
-        return `OK: goal metric "${input.name}" registered for ${input.goal_id} (${collector.goal_metric_specs.length} total goal metrics)`
-      },
-    }),
-
-    register_global_metric_spec: tool({
-      description:
-        "Register or overwrite ONE global (task-scoped) metric, keyed by name. " +
-        "Calling again with the same name replaces the prior spec. Global " +
-        "metrics are optional diagnostic hints; acceptance gating remains in " +
-        "acceptance_specs and host delivery evidence.",
-      inputSchema: z.object(metricCommonFields()),
-      execute: async (input) => {
-        if (
-          input.gate_class === "blocking" &&
-          input.floor === input.target &&
-          input.direction === "higher_better"
-        ) {
-          return `Error: blocking metric "${input.name}" has floor==target (${input.floor}) — floor must be strictly lower than target`
-        }
-        const dupIdx = collector.global_metric_specs.findIndex((m) => m.name === input.name)
-        if (dupIdx >= 0) {
-          collector.global_metric_specs[dupIdx] = input
-          return `OK: global metric "${input.name}" overwritten (${collector.global_metric_specs.length} total globals)`
-        }
-        collector.global_metric_specs.push(input)
-        return `OK: global metric "${input.name}" registered (${collector.global_metric_specs.length} total globals)`
-      },
-    }),
-
-    register_challenge_seed: tool({
-      description:
-        "Register a challenge seed — a candidate reproducer or risk " +
-        "area worth probing. Downstream reviewers may read these as priors. " +
-        "Seeds are optional; register 0–6 based " +
-        "on how risk-heavy the task feels.",
-      inputSchema: z.object({
-        id: z
-          .string()
-          .min(1)
-          .describe("Seed id; free-form but stable across finalize/retry."),
-        scope: z.enum(["goal", "global"]),
-        target_ref: z
-          .string()
-          .min(1)
-          .describe(
-            "Goal id (for scope='goal') or free-form risk label (for scope='global').",
-          ),
-        claim: z
-          .string()
-          .min(5)
-          .describe(
-            "The concrete reproducer / counterexample hypothesis, one sentence.",
-          ),
-        rationale: z
-          .string()
-          .min(5)
-          .describe("Why this is worth probing — reference the code/PRD evidence."),
-        priority_hint: z.enum(["high", "medium", "low"]),
-      }),
-      execute: async (input) => {
-        if (collector.challenge_seeds.some((s) => s.id === input.id)) {
-          return `Error: seed id "${input.id}" already registered`
-        }
-        if (
-          input.scope === "goal" &&
-          !collector.goals.some((g) => g.id === input.target_ref)
-        ) {
-          return `Warning: seed "${input.id}" references goal "${input.target_ref}" that isn't registered`
-        }
-        collector.challenge_seeds.push(input)
-        return `OK: challenge seed "${input.id}" registered (${collector.challenge_seeds.length} total)`
       },
     }),
 
@@ -803,9 +629,7 @@ export function createArchitectOutputTools(input: {
 
     submit_architect: tool({
       description:
-        "Validate the full Architect output (goals + traceability + contracts, " +
-        "plus any optional metrics/seeds) and finalize. Call AFTER every register/modify " +
-        "tool. Returns a list of issues if any — fix them and call again.",
+        "Validate the full Architect output (goals + traceability + fidelity coverage + contracts) and finalize. Call AFTER every register/modify tool. Returns a list of issues if any — fix them and call again.",
       inputSchema: z.object({
         summary: z
           .string()
@@ -826,8 +650,6 @@ export function createArchitectOutputTools(input: {
           return [
             "PASS: Architect output finalized.",
             `  ${collector.goals.length} goals (${collector.removed_goal_ids.length} removed),`,
-            `  ${collector.goal_metric_specs.length} goal metrics, ${collector.global_metric_specs.length} global metrics,`,
-            `  ${collector.challenge_seeds.length} challenge seeds,`,
             `  ${collector.traceability.length} traceability mappings,`,
             `  ${collector.source_coverage.length} source coverage rows, ${collector.reference_coverage.length} reference coverage rows, ${collector.assembly_owners.length} assembly owners,`,
             `  ${collector.contracts.length} cross-goal contracts across ${categories.size} categories.`,
@@ -852,43 +674,5 @@ export function createArchitectOutputTools(input: {
     getCollector() {
       return collector
     },
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Shared Zod shapes for metric registration
-// ---------------------------------------------------------------------------
-
-function metricCommonFields() {
-  return {
-    name: z
-      .string()
-      .min(1)
-      .describe("Metric name. Prefer a concrete name tied to the diagnostic signal being measured."),
-    description: z
-      .string()
-      .min(5)
-      .describe("One-sentence description of what this metric captures."),
-    unit: z.string().min(1).describe("'ratio' | 'count' | 'latency_ms' | ..."),
-    direction: z.enum(["higher_better", "lower_better"]),
-    target: z.number().describe("Aspirational threshold."),
-    floor: z
-      .number()
-      .describe("Lower bound for interpreting this diagnostic metric."),
-    weight: z.number().min(0).describe("Relative weight when a downstream diagnostic aggregator consumes this metric."),
-    gate_class: z.enum(["blocking", "diagnostic", "efficiency"]),
-    evaluator_kind: z
-      .enum(["shell", "judge", "query", "aggregator"])
-      .describe("How the diagnostic raw_value is computed."),
-    evaluator_config: z
-      .record(z.string(), z.unknown())
-      .default({})
-      .describe(
-        "Kind-specific config (e.g. {cmd} for shell, {criteria, rubric} for judge).",
-      ),
-    source_requirement_ids: z
-      .array(z.string())
-      .default([])
-      .describe("REQ-N IDs this metric ties back to; [] for cross-cutting globals."),
   }
 }
