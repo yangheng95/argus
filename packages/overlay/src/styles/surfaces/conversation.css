@@ -138,19 +138,25 @@
 }
 
 .chat-task-status .status-copy {
+  /* center, not baseline. baseline alignment depended on identical
+     line-heights between `.status-label` and `.elapsed`, which they
+     don't have at the chat density (label inherits, elapsed sets 1).
+     Center + matching line-height: 1 on both spans below makes the
+     icon, label and elapsed all share the same midline. */
   display: flex;
   min-width: 0;
   flex-direction: row;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
   gap: calc(6px * var(--ui-scale));
-  line-height: 1.2;
+  line-height: 1;
 }
 
 .chat-task-status .status-label {
   font-size: var(--ui-font-meta);
   text-transform: none;
   letter-spacing: 0.01em;
+  line-height: 1;
 }
 
 .chat-task-status .elapsed {
@@ -881,7 +887,7 @@ body[data-theme="vscode-dark"] .task-bar {
 }
 
 .task-flag input {
-  accent-color: var(--accent);
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
 }
 
 /* ── Recent Directory Panel (popup from task-cwd-dropdown) ── */

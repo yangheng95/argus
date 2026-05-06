@@ -210,6 +210,14 @@ body {
   --oc-header-bg: var(--surface-strong);
   --oc-titlebar-menu-text: var(--text-strong);
 
+  /* Native form-control tint (checkbox / radio / range / progress / select
+   * indeterminate stripes). Single source of truth — surface CSS used to
+   * sprinkle `accent-color: var(--accent)` per-component (field.css,
+   * settings.css, titlebar.css), each one a copy of the same intent
+   * (rule 9). One declaration here covers every native control without
+   * the per-surface dance. */
+  accent-color: var(--accent);
+
   /* Diff palette derived from the active theme's accent/bad/good
    * + text-strong tokens. Previously declared at :root in styles.css,
    * which froze them to the dark-default values; light + vscode-dark

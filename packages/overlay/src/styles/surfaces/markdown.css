@@ -88,7 +88,7 @@
 .md-content ul li input[type="checkbox"] {
   margin: 0 calc(6px * var(--ui-scale)) 0 calc(-16px * var(--ui-scale));
   vertical-align: -2px;
-  accent-color: var(--accent);
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
   cursor: default;
 }
 .md-content ul li:has(input[type="checkbox"]) {
