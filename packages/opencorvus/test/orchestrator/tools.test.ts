@@ -872,13 +872,17 @@ describe("orchestrator tools", () => {
           verdict: "needs_correction",
           summary: "Goal graph must change",
           dimensions: [
-            { id: "goal_fidelity", verdict: "needs_correction", issues: [{ description: "Split the goal", type: "coverage_gap" }] },
+            { id: "goal_fidelity", verdict: "needs_correction", issues: [{ description: "Split the goal", type: "coverage_gap", goalIDs: [goalID] }] },
             { id: "technical_feasibility", verdict: "pass", issues: [] },
             { id: "hallucination", verdict: "pass", issues: [] },
-            { id: "solution_quality", verdict: "needs_correction", issues: [{ description: "Current goal is too broad", type: "granularity" }] },
+            { id: "solution_quality", verdict: "needs_correction", issues: [{ description: "Current goal is too broad", type: "granularity", goalIDs: [goalID] }] },
           ],
-          issues: [{ description: "Split the goal", type: "coverage_gap" }],
-          corrections: [{ type: "split_goal" }],
+          // The review names the just-built goal as the affected target;
+          // post-Fix 2 the orchestrator routes rework only to DB-resolvable
+          // goal IDs (no fallback to attachedGoalID).
+          // See specs/architecture-review-rework-closure-2026-05-06.md.
+          issues: [{ description: "Split the goal", type: "coverage_gap", goalIDs: [goalID] }],
+          corrections: [{ type: "split_goal", goalID }],
           missingGoals: [],
           sessionID: "ses_integrity_corrected",
         })

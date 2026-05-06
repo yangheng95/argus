@@ -80,8 +80,28 @@ Call this tool exactly once at the end:
 - `status`: `"passed"` or `"failed"`
 - `summary`: one-line plain-prose description of what changed (or why you failed)
 - `files_changed`: every project file changed by this build, each with `path`, `summary`, and `reason`
+- `reused_prior_attempt`: `{ rationale }` — set ONLY in the retry-only exception below
 - `error`: concrete failure reason when status="failed"
 - `tests`: array of { name, passed, detail? } - one entry per verification command you actually ran
+
+### Retry-only exception: prior attempt already satisfies the goal
+
+When the orchestrator opens an `architecture_review_rework` (or other retry) attempt,
+your worktree is already populated with the previous attempt's files and commits.
+Read those files first. If — after reading — you confirm the existing worktree
+state ALREADY satisfies every acceptance_spec without further edits:
+
+  1. Call `merge_back` (publishes the prior commits to primary).
+  2. Call `report_build_result` with:
+       status: "passed"
+       files_changed: []
+       reused_prior_attempt: { rationale: "<concrete sentences naming each acceptance_spec the existing files satisfy and why the prior failure root-caused something other than the file contents>" }
+
+The host audits this path: `baseRef..HEAD` must contain the prior attempt's
+commits, otherwise the empty worktree is an escape attempt and the report is
+rejected. Do NOT fabricate `files_changed[]` entries to describe files you did
+not touch this session — the per-file coverage check audits against the actual
+git diff. Do NOT report status="failed" if the work is genuinely complete.
 
 ## Language
 Respond in titles / summaries in the same language as the task request. Default to Chinese (simplified) if ambiguous.
