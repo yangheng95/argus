@@ -101,7 +101,7 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
   ])
 })
 
-test("integrity escalates correction-bearing concerns into needs_correction", async () => {
+test("integrity preserves correction-bearing concerns verdict (no host reconciliation)", async () => {
   const { reviewIntegrity } = await import("../../src/integrity/agent")
   runnerImpl = async (input: any) => {
     await input.toolKit.tools.submit_goal_fidelity_verdict.execute({
@@ -151,8 +151,13 @@ test("integrity escalates correction-bearing concerns into needs_correction", as
     goals: [baseGoal],
   })
 
-  expect(result.verdict).toBe("needs_correction")
-  expect(result.dimensions.find((d) => d.id === "solution_quality")?.verdict).toBe("needs_correction")
+  // B11 (spec architecture-rework-loosening-plan-2026-05-06.md): the host
+  // no longer rewrites the integrity LLM's submitted verdict. The LLM said
+  // "concerns" — that's what flows out, even with a correction attached.
+  // The orchestrator LLM reads the full review markdown (issues +
+  // corrections) and decides whether to act. CLAUDE.md rule 13.
+  expect(result.verdict).toBe("concerns")
+  expect(result.dimensions.find((d) => d.id === "solution_quality")?.verdict).toBe("concerns")
   expect(result.corrections).toHaveLength(1)
 })
 

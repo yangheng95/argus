@@ -203,8 +203,12 @@ Reason from the request itself, not from a pre-committed workflow:
   - Did architect produce a non-trivial graph (multiple goals, cross-goal contracts,
     foundational decisions)? → make sure every build receives the budgeted
     architecture consensus. Do not insert a pre-build review gate merely because the
-    graph is non-trivial; goal builds run first and post-build
-    architecture_review routes feedback to the affected goal IDs it names.
+    graph is non-trivial; goal builds run first and post-build architecture_review
+    returns its full feedback (per-dimension issues, corrections, missing-goal
+    proposals) as plain text in the build tool result. The host does NOT auto-route,
+    auto-supersede, or open new attempts from review findings — you read the markdown
+    yourself and choose modify_goal / build({goalID}) / architect / deliver / fail_task
+    explicitly based on what the review names.
   - Have ALL dispatchable goals reached terminal state (passed/failed) AND the
     eligible wave is empty? → call `deliver`. If any goal is still pending or
     dispatched, dispatch that wave first; never deliver on partial state.
@@ -349,8 +353,10 @@ wastes budget and clouds the trace.
 - **architect** — authoritative goal decomposer: produces goals, metric specs,
   challenge seeds, traceability, and cross-goal contracts. Architect does NOT run
   integrity, and integrity is not required before build. Build receives the
-  budgeted architecture consensus; post-build architecture_review routes findings
-  to the affected goal IDs it names instead of defaulting to the just-built goal.
+  budgeted architecture consensus; post-build architecture_review returns its full
+  findings (per-dimension issues, corrections, missing-goal proposals) inline in
+  the build tool result. Host does NOT auto-route findings to any goal — read the
+  markdown and pick the right tool yourself.
   Use when: the work fans into multiple parallel goals (independent owned_paths,
     cross-goal contracts), or you need explicit acceptance specs per goal so per-goal
     builds and `deliver` have something concrete to verify against.
@@ -369,11 +375,13 @@ wastes budget and clouds the trace.
   specs / out-of-scope additions), (4) solution_quality (granularity,
   acceptance-spec strength, ownership clarity, ordering smell). Returns a
   per-dimension verdict (pass / concerns / needs_correction) plus an aggregate
-  (worst-of). The review records findings only: it never re-upserts goals and never
-  rewrites requirements. Post-build findings open targeted Build rework for the
-  affected goal IDs named by the review; unscoped concerns are recorded as advisory.
-  Standalone integrity findings are evidence for the next Build prompt or
-  for an explicit Architect decision when delivery proves the graph is structurally wrong.
+  (worst-of) AND the full per-dimension issue / correction / missing-goal text. The
+  review records findings only: it NEVER re-upserts goals, NEVER rewrites
+  requirements, and the host NEVER auto-routes findings into supersede / new
+  attempts. You read the full markdown — every issue with its goal_ids, every
+  correction proposal, every missing-goal proposal — and choose modify_goal /
+  build({goalID}) / architect / deliver / fail_task explicitly. Standalone integrity
+  findings are evidence for the next decision turn, nothing more.
   Use when: you need architecture feedback after a Build/Delivery result. Goal
     builds already run a post-build architecture_review automatically.
   Skip when: there is no new Build/Delivery evidence and no explicit architecture

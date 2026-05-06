@@ -217,12 +217,15 @@ const PIPELINE: MiniWorkflow = {
     {
       // Per-goal 实现：每个 goal 派发到 build agent（在 worktree 中）。
       // Orchestrator calls the unified `build` tool with goalID; the build
-      // prompt carries a budgeted architecture-consensus view and
-      // architecture_review routes feedback to affected goal IDs.
+      // prompt carries a budgeted architecture-consensus view. After the
+      // build completes, post-build architecture_review runs and its full
+      // findings are returned inline in the build tool result — host does
+      // not auto-route or auto-supersede; orchestrator LLM reads the
+      // markdown and decides explicitly.
       id: "build",
       tool: "build",
       label: "Executor",
-      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入；architecture_review 会按指名 goal 路由返工反馈。",
+      hint: "执行器在隔离 worktree 中完成一个 goal。每个 build 收到架构共识输入；build 完成后 architecture_review 的完整反馈会原文返回给 orchestrator，由 orchestrator LLM 自行决定后续动作（modify_goal / build / architect / deliver / fail_task）。",
       scope: "goal",
       skippable: false,
       after: ["architect"],
@@ -234,7 +237,7 @@ const PIPELINE: MiniWorkflow = {
       id: "integrity",
       tool: "integrity",
       label: "Review",
-      hint: "架构复核记录：goal build 完成后自动写入 architecture_review 反馈。该阶段不是 build 前置门槛；返工按 review 指名 goal 路由，不自动改写 goal 图。",
+      hint: "架构复核记录：goal build 完成后自动跑一次 architecture_review，完整反馈（含 issues / corrections / missing_goals 文本）随 build 工具结果回传。该阶段不是 build 前置门槛，host 不会自动改写 goal 图、不会自动 supersede attempt；orchestrator LLM 读完反馈后显式选择下一步。",
       scope: "task",
       skippable: true,
       after: ["build"],
@@ -372,11 +375,15 @@ function taskStepStatusByTool(
         specSnapshotID: activeSpec.id,
       })
       const verdict = integrityAttemptVerdict(latest)
-      if (verdict === "needs_correction") return "failed"
-      const payload = latest?.payload as Record<string, unknown> | null | undefined
-      const correctionsCount = typeof payload?.corrections_count === "number" ? payload.corrections_count : 0
-      const missingCount = typeof payload?.missing_count === "number" ? payload.missing_count : 0
-      if (correctionsCount > 0 || missingCount > 0) return "failed"
+      // Architecture review is advisory in the workflow strip too. A
+      // needs_correction verdict, a non-zero corrections_count, or a
+      // non-zero missing_count is no longer a workflow "failed" — it's
+      // information for the orchestrator LLM to act on. The host does
+      // not declare the integrity step "failed" based on counts; if the
+      // LLM didn't address the review's corrections, downstream stages
+      // (build feedback / delivery decision) will surface that as
+      // evidence. Spec architecture-rework-loosening-plan-2026-05-06.md
+      // (C2). CLAUDE.md rule 13.
       return verdict ? "completed" : "pending"
     }
     case "build":

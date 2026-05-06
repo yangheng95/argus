@@ -106,7 +106,13 @@ const BuildResultBase = {
 export const BuildPassedResultSchema = z.object({
   status: z.literal("passed"),
   ...BuildResultBase,
-  files_changed: z.array(BuildFileChange).min(1),
+  // Empty `files_changed` is legal: the build agent may publish a prior
+  // attempt's worktree without further edits, or report passed for a goal
+  // whose acceptance was met by environmental setup. The orchestrator LLM
+  // cross-checks against the host's `actual_changed_files` ground truth
+  // (see RunOutput.actualChangedFiles) and decides if the empty report is
+  // honest. CLAUDE.md rule 13 — host doesn't enforce a minimum here.
+  files_changed: z.array(BuildFileChange),
 }).strict()
 
 export const BuildFailedResultSchema = z.object({
@@ -128,34 +134,34 @@ export type BuildResult = z.infer<typeof BuildResultSchema>
 
 /**
  * Typed contract violation thrown by BuildAgent.run when a MirrorCode build
- * session ends without honouring its terminal-tool contract. Two shapes:
+ * session ends without honouring its terminal-tool contract.
  *
  *   - missing_terminal_report — session ended without a `report_build_result`
- *     tool call that validates against BuildResultSchema. Pre-fix, this
- *     surfaced as a generic `build agent: terminal build report did not
- *     match BuildResultSchema` Error and the orchestrator only saw a tool
- *     error. The actual progress (file edits, tool calls) was invisible
- *     above the BuildResult window.
- *
- *   - merge_back_blocked — session ended with merge_back unfinished after
- *     report_build_result(passed) was rejected. The previous synthesis
- *     path constructed a fake success-encoded-as-failed BuildResult inside
- *     BuildAgent.run (rule-7 fallback); v3 P2 replaces that synthesis with
- *     a typed throw the orchestrator catches and converts.
+ *     tool call that validates against BuildResultSchema. Surfaces as a typed
+ *     error so the orchestrator's tool result is well-formed (instead of a
+ *     generic `terminal build report did not match BuildResultSchema` Error
+ *     that hides the underlying agent progress).
  *
  * Scope: MirrorCode executor only. External executors (codex / claude-code)
  * host-synthesise the BuildResult after the provider finishes — there is
  * no in-session report_build_result tool call to be missing.
+ *
+ * The earlier `merge_back_blocked` variant was removed alongside the host-
+ * side merge_back-before-passed guard: the orchestrator LLM now reads the
+ * merge_back facts (RunOutput.mergeBackStatus / lastMergeBackOutcome /
+ * publishedCommitRef) returned in the build tool result and decides what
+ * to do, rather than the host throwing on its behalf. Spec
+ * architecture-rework-loosening-plan-2026-05-06.md (B8).
  */
 export class BuildAgentContractError extends Error {
-  readonly code: "missing_terminal_report" | "merge_back_blocked"
+  readonly code: "missing_terminal_report"
   readonly diagnostics: {
     sessionID?: string
     parseError?: string
     lastMergeBackOutcome?: string | null
   }
   constructor(
-    code: "missing_terminal_report" | "merge_back_blocked",
+    code: "missing_terminal_report",
     diagnostics: {
       sessionID?: string
       parseError?: string

@@ -350,19 +350,15 @@ export async function reviewIntegrity(input: {
           }))
         }
 
-        // Verdict reconciliation: corrections/missing goals are executable
-        // repair actions, not advisory notes. Any dimension that emits them
-        // must block execution so the orchestrator can apply or route the
-        // repair before build starts.
-        let verdict = sub.verdict as IntegrityVerdict
-        if (corrections.length > 0 || missingGoals.length > 0) {
-          verdict = "needs_correction"
-        } else if (verdict === "pass" && issues.length > 0) {
-          verdict = "concerns"
-        }
-        if (verdict === "needs_correction" && issues.length === 0 && corrections.length === 0 && missingGoals.length === 0) {
-          verdict = "pass"
-        }
+        // No verdict reconciliation. The integrity LLM's submitted verdict
+        // is taken at face value. Any auto-rewriting of the verdict
+        // (e.g. "promote pass-with-issues to concerns" or "demote
+        // needs_correction-without-corrections to concerns") is a
+        // state-machine layer that the orchestrator LLM doesn't need —
+        // it sees the full per-dimension breakdown including issues,
+        // corrections, and missing_goals via the rendered markdown and
+        // decides next steps itself. CLAUDE.md rule 13.
+        const verdict = sub.verdict as IntegrityVerdict
 
         collector.dimensions.set(d.id, { id: d.id, verdict, issues, corrections, missingGoals })
         return `OK: ${d.id}=${verdict} recorded (${issues.length} issue(s), ${corrections.length} correction(s), ${missingGoals.length} missing_goal(s)).`

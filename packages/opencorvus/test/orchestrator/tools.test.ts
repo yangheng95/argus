@@ -916,20 +916,23 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
+        // Post-fix (architecture-rework-loosening-plan-2026-05-06): the
+        // host returns the full review markdown inline and does NOT
+        // auto-supersede / open new attempts. Goals stay where they are;
+        // orchestrator LLM reads the markdown and chooses next action.
         expect(result).toContain("status=passed")
         expect(result).toContain("architecture_review: needs_correction")
-        expect(result).toContain("architecture_review_rework: opened targeted retry")
+        expect(result).toContain("### Architecture review")
+        expect(result).toContain("Goal graph must change")
+        expect(result).not.toContain("architecture_review_rework: opened")
         expect(buildCalls).toBe(1)
         const runs = listGoalRunsByGoal(goalID)
         expect(runs).toHaveLength(1)
-        expect(runs[0]?.superseded_reason).toBe("architecture_review_rework")
-        expect(goalStatusByID(goalID)).toBe("pending")
+        // Review verdict alone never supersedes anything anymore — the goal
+        // run terminates as completed under its original attempt and the
+        // orchestrator LLM is the one who decides next.
+        expect(runs[0]?.superseded_reason).toBeFalsy()
         expect(findGoal(goalID)).toBeTruthy()
-        const retryFeedback = createDecisionLog(taskID)
-          .readByPhaseAndGoal("retry", goalID)
-          .find((entry) => entry.key === `retry_analysis_${goalID}`)
-        expect(retryFeedback?.value).toContain("needs_correction: Goal graph must change")
-        expect(retryFeedback?.value).toContain(`Action: run goal ${goalID}`)
       },
     })
   })
@@ -1014,11 +1017,13 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
+        // Post-fix: review markdown returned inline; no auto-rework. The
+        // orchestrator LLM reads the markdown and chooses next action
+        // explicitly.
         expect(result).toContain("architecture_review: concerns")
-        expect(result).toContain("architecture_review_rework: opened targeted retry")
-        expect(result).toContain("Call build again")
-        expect(goalStatusByID(goalID)).toBe("pending")
-        expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBe("architecture_review_rework")
+        expect(result).toContain("### Architecture review")
+        expect(result).not.toContain("architecture_review_rework: opened")
+        expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBeFalsy()
       },
     })
   })
@@ -1162,16 +1167,19 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
+        // Post-fix: the host returns the full review markdown inline (with
+        // the affected goal_ids inside it) but does NOT auto-route or
+        // supersede any goal. The orchestrator LLM reads the markdown,
+        // sees the issue tagged with the sibling goal ID, and decides
+        // what to call next.
         expect(result).toContain("architecture_review: concerns")
-        expect(result).toContain(`goal=${siblingGoalID}`)
+        expect(result).toContain("### Architecture review")
+        // Affected goal_ids appear inside the markdown for the LLM to read.
+        expect(result).toContain(siblingGoalID)
         expect(result).not.toContain(`goal=${goalID} superseded_tip`)
+        // Neither the just-built goal nor the sibling were auto-superseded.
         expect(goalStatusByID(goalID)).toBe("passed")
-        expect(goalStatusByID(siblingGoalID)).toBe("pending")
         expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBeFalsy()
-        const retryFeedback = createDecisionLog(taskID)
-          .readByPhaseAndGoal("retry", siblingGoalID)
-          .find((entry) => entry.key === `retry_analysis_${siblingGoalID}`)
-        expect(retryFeedback?.value).toContain(`Action: run goal ${siblingGoalID}`)
       },
     })
   })
@@ -1317,19 +1325,19 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
+        // Post-fix: the host no longer cascades an architecture review
+        // verdict to dependent goals — it surfaces the verdict + markdown
+        // and the orchestrator LLM decides whether to abort the dependent's
+        // running attempt and re-dispatch. The dependent's live attempt
+        // therefore stays running (CLAUDE.md rule 13 — no auto-cancel).
         expect(result).toContain("architecture_review: needs_correction")
-        expect(result).toContain(`goal=${goalID}`)
-        expect(result).toContain(`goal=${childGoalID}`)
-        expect(result).toContain("architecture_review_dependency_rework")
-        expect(goalStatusByID(goalID)).toBe("pending")
-        expect(goalStatusByID(childGoalID)).toBe("pending")
+        expect(result).toContain("### Architecture review")
+        expect(result).not.toContain("architecture_review_dependency_rework")
+        // Just-built goal is not auto-pending'd.
+        expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBeFalsy()
+        // Live dependent attempt is left for the orchestrator to manage.
         expect(listGoalRunsByGoal(childGoalID)[0]?.id).toBe(childRunID)
-        expect(listGoalRunsByGoal(childGoalID)[0]?.status).toBe("aborted")
-        expect(listGoalRunsByGoal(childGoalID)[0]?.superseded_reason).toBe("architecture_review_dependency_rework")
-        const retryFeedback = createDecisionLog(taskID)
-          .readByPhaseAndGoal("retry", childGoalID)
-          .find((entry) => entry.key === `retry_analysis_${childGoalID}`)
-        expect(retryFeedback?.value).toContain(`upstream architecture_review reopened goals: ${goalID}`)
+        expect(listGoalRunsByGoal(childGoalID)[0]?.status).toBe("running")
       },
     })
   })
@@ -1402,7 +1410,9 @@ describe("orchestrator tools", () => {
 
         expect(result).toContain("build_result_ignored")
         expect(result).toContain("architecture_review: (not run")
-        expect(result).toContain("Call build again after the dependency rework")
+        // Post-fix: NEXT-step prose tells the orchestrator LLM the host
+        // doesn't auto-route, leaves the choice to the LLM.
+        expect(result).toContain("does not auto-route")
         expect(goalStatusByID(goalID)).toBe("pending")
         expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("aborted")
       },
@@ -1529,7 +1539,9 @@ describe("orchestrator tools", () => {
         const result = await tools.integrity.execute({}, {} as any)
 
         expect(result).toContain("Integrity verdict: needs_correction")
-        expect(result).toContain("does not rewrite requirements or goals")
+        // Post-fix: review headline now states the advisory contract
+        // explicitly without referring to the deleted auto-route mechanism.
+        expect(result).toContain("nothing in code supersedes goals")
         expect(findGoal(goalID)).toBeTruthy()
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         expect(artifact?.label).toBe("verdict-needs_correction")

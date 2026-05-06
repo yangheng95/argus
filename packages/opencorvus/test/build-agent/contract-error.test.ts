@@ -47,15 +47,20 @@ describe("BuildAgentContractError", () => {
     expect(err.name).toBe("BuildAgentContractError")
   })
 
-  test("merge_back_blocked carries sessionID + lastMergeBackOutcome", () => {
+  test("missing_terminal_report carries lastMergeBackOutcome diagnostic when supplied", () => {
+    // The host no longer throws a separate merge_back_blocked variant
+    // (spec architecture-rework-loosening-plan-2026-05-06.md B8): the
+    // orchestrator LLM reads the merge facts in the build tool result and
+    // decides next. But missing_terminal_report still surfaces the most
+    // recent merge_back tool outcome in its diagnostics so the orchestrator
+    // can include it in the next attempt's prompt.
     const err = new BuildAgentContractError(
-      "merge_back_blocked",
+      "missing_terminal_report",
       { sessionID: "ses_xyz", lastMergeBackOutcome: "conflict on src/main.ts" },
-      "Build session ended before merge_back completed: conflict on src/main.ts",
+      "Build agent terminated without a valid report_build_result tool call: …",
     )
-    expect(err.code).toBe("merge_back_blocked")
+    expect(err.code).toBe("missing_terminal_report")
     expect(err.diagnostics.lastMergeBackOutcome).toBe("conflict on src/main.ts")
-    expect(err.message).toMatch(/merge_back/)
   })
 
   test("converts to a schema-valid BuildFailedResult shape (no worktree field, all required fields present)", () => {
