@@ -742,9 +742,18 @@
    surface boundary. */
 .config-dialog-layout {
   display: flex;
-  flex: 1;
+  /* Density refresh 2026-05-06: dropped `flex: 1` so the layout height
+   * is driven by the taller of (sidebar nav height) and (active tab
+   * content height) instead of stretching to fill the whole dialog
+   * frame. This fixes the "huge empty modal under a small Providers
+   * panel" symptom — when content is short, the modal shrinks to fit. */
   min-height: 0;
   overflow: hidden;
+  /* Cap with the dialog's own max-height (minus header / actions) so
+   * tabs with long lists still scroll inside instead of overflowing
+   * the modal. The 120px reservation covers the header + close button
+   * row plus the dialog's own padding. */
+  max-height: calc(min(calc(100vh - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale))) - calc(120px * var(--ui-scale)));
 }
 
 /* Sidebar nav rail: vertical list of tab buttons inside the
@@ -754,10 +763,14 @@
 .config-sidebar {
   display: flex;
   flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-  width: clamp(calc(176px * var(--ui-scale)), calc(200px * var(--ui-scale)), calc(220px * var(--ui-scale)));
-  min-width: clamp(calc(176px * var(--ui-scale)), calc(200px * var(--ui-scale)), calc(220px * var(--ui-scale)));
-  padding: calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  gap: calc(1px * var(--ui-scale));
+  width: clamp(calc(168px * var(--ui-scale)), calc(188px * var(--ui-scale)), calc(208px * var(--ui-scale)));
+  min-width: clamp(calc(168px * var(--ui-scale)), calc(188px * var(--ui-scale)), calc(208px * var(--ui-scale)));
+  /* Density refresh 2026-05-06: dropped from 12/10 → 8/6. The nav was
+   * the most visible source of "modal feels empty" — 8 short labels
+   * spread across ~600px of vertical space. Tighter padding lets the
+   * full nav read as one block instead of a sparse list. */
+  padding: calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-right: var(--oc-border-width) solid var(--divider-soft);
   background: var(--subtle-1);
   overflow-y: auto;
@@ -771,9 +784,13 @@
 .config-nav-item {
   display: flex;
   align-items: center;
-  gap: calc(10px * var(--ui-scale));
+  gap: calc(9px * var(--ui-scale));
   width: 100%;
-  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  /* Density refresh 2026-05-06: dropped from 8/12 → 5/9. Combined with
+   * the tighter sidebar padding above, this brings the nav block from
+   * ~36px per row to ~28px — comparable to VSCode/Linear settings nav
+   * density. */
+  padding: calc(5px * var(--ui-scale)) calc(9px * var(--ui-scale));
   border: none;
   border-radius: var(--oc-radius-soft);
   background: transparent;
@@ -809,9 +826,10 @@
   content: "";
   position: absolute;
   left: 0;
-  top: calc(6px * var(--ui-scale));
-  bottom: calc(6px * var(--ui-scale));
-  width: calc(3px * var(--ui-scale));
+  /* Density refresh: shorter rail to match the new 5px row padding. */
+  top: calc(4px * var(--ui-scale));
+  bottom: calc(4px * var(--ui-scale));
+  width: calc(2px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   background: var(--accent);
 }
@@ -861,9 +879,13 @@
   flex: 1;
   min-width: 0;
   overflow-y: auto;
+  /* Density refresh 2026-05-06: padding dropped from 16-22 / 18-28 to
+   * 12-16 / 14-18. The dialog already gives us a 16px frame; keeping
+   * 28px on the inner panel meant card content sat ~50px from the
+   * dialog edge with no payoff. */
   padding:
-    clamp(calc(16px * var(--ui-scale)), calc(20px * var(--ui-scale)), calc(22px * var(--ui-scale)))
-    clamp(calc(18px * var(--ui-scale)), calc(24px * var(--ui-scale)), calc(28px * var(--ui-scale)));
+    clamp(calc(12px * var(--ui-scale)), calc(14px * var(--ui-scale)), calc(16px * var(--ui-scale)))
+    clamp(calc(14px * var(--ui-scale)), calc(16px * var(--ui-scale)), calc(18px * var(--ui-scale)));
 }
 
 .config-tab-panel {
@@ -877,7 +899,8 @@
 .config-tab-panel > .config-section-body {
   display: flex;
   flex-direction: column;
-  gap: calc(14px * var(--ui-scale));
+  /* Density refresh: 14 → 10 between siblings inside a tab panel. */
+  gap: calc(10px * var(--ui-scale));
 }
 
 /* Subsection density inside the content panel — overrides the
@@ -1903,7 +1926,8 @@
 .config-panel-group {
   display: flex;
   flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
+  /* Density refresh: 10 → 6 between header and card inside a group. */
+  gap: calc(6px * var(--ui-scale));
 }
 
 .config-panel-group-title {
@@ -1926,8 +1950,10 @@
 .config-panel-card {
   display: flex;
   flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  /* Density refresh: gap 10 → 6, padding 14/16 → 10/12. Cards now
+   * read as a unit instead of a stack of separated rows. */
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
   background: var(--subtle-1);

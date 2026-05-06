@@ -42,19 +42,40 @@
   width: calc(100% - calc(32px * var(--ui-scale)));
   max-width: var(--ui-dialog-width);
   max-height: calc(100vh - calc(80px * var(--ui-scale)));
+  /* `height: fit-content` shrinks the modal to the natural sum of its
+   * flex children. Without this Chromium gives a `<dialog>:modal` in
+   * the top layer enough vertical space to fill the max-height even
+   * when the children only need a fraction (the same UA quirk that
+   * makes top-layer form controls drop their inherited color-scheme).
+   * Audited 2026-05-06 against goal / app / session dialogs — they
+   * already declared their own children's heights, so shrinking the
+   * frame to fit-content does not clip anything. */
+  height: fit-content;
   overflow-y: auto;
   background: var(--dialog-bg);
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
   box-shadow: none;
-  padding: calc(18px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  /* Density refresh 2026-05-06: dialog-form padding was sized for the
+   * primary panel (18/20) which made the modal feel airy and empty.
+   * Compressed to 14/16 — modals carry their own focus framing via
+   * the backdrop dim, so the inner padding can be tighter than the
+   * top-level surfaces without losing breathing room. */
+  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
   display: flex;
   flex-direction: column;
-  gap: calc(16px * var(--ui-scale));
+  gap: calc(12px * var(--ui-scale));
 }
 
 .dialog-wide .dialog-form {
   max-width: var(--ui-dialog-wide-width);
+  /* Density refresh 2026-05-06: cap at 620px scaled so wide dialogs
+   * (settings / log viewer) sit in the upper-middle of the viewport
+   * instead of stretching to `calc(100vh - 80px)`. Combined with the
+   * `height: fit-content` rule on the base `.dialog-form`, the
+   * settings modal collapses to its content height and tabs with long
+   * lists scroll inside the body. */
+  max-height: min(calc(100vh - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale)));
 }
 
 .dialog-title {
@@ -64,6 +85,15 @@
   letter-spacing: 0.01em;
   line-height: 1.2;
   margin: 0;
+}
+
+/* The settings dialog renders inside `.config-dialog-head` and uses a
+ * tighter visual rhythm than the prompt / confirm modals. The 18-22px
+ * base feels billboard-y in a 380px tall settings frame; pulling it
+ * down to ~15px aligns with the nav row size and matches the density
+ * users expect in a "Preferences" dialog (VS Code / Linear). */
+.config-dialog-head .dialog-title {
+  font-size: calc(15px * var(--ui-scale));
 }
 
 .dialog-subtitle {
