@@ -1272,6 +1272,35 @@ window.addEventListener("beforeunload", () => {
 });
 installSystemThemeListener(() => applyTheme(settingsStore.theme));
 
+// Dev-only hook used by `script/snap-settings.ts` to drive the config
+// dialog open from puppeteer. Vite dev does not happily serve the
+// `.ts` modules to a dynamic-import call from a foreign origin, so the
+// snap script cannot reach `openConfigDialog` through the module graph
+// — it reaches in via `window.__OC_DEV__` instead. Gated on
+// `import.meta.env.DEV` so the production bundle does not carry it.
+//
+// `ensureConfigHost` is here because the production init IIFE only
+// mounts <ConfigDialogHost /> *after* `initApp()` resolves — and
+// without a running daemon `initApp()` blocks indefinitely. The snap
+// script calls `ensureConfigHost()` first so it can open the dialog
+// even when the rest of the app is offline.
+if (import.meta.env.DEV) {
+  let configHostMounted = false;
+  function ensureConfigHost(): void {
+    if (configHostMounted) return;
+    if (document.getElementById("configDialogHost")) {
+      configHostMounted = true;
+      return;
+    }
+    const host = document.createElement("div");
+    host.id = "configDialogHost";
+    document.body.appendChild(host);
+    render(() => <ConfigDialogHost />, host);
+    configHostMounted = true;
+  }
+  (window as any).__OC_DEV__ = { openConfigDialog, ensureConfigHost };
+}
+
 // ── Directory action buttons (#taskDir, #recentDirPanel) ──
 
 function renderRecentDirPanel(): void {
