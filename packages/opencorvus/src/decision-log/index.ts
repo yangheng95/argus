@@ -63,7 +63,17 @@ export interface DecisionLogReader {
    * entries were omitted. Callers on hot paths (orchestrator read_context)
    * must pass a limit to avoid unbounded prompt growth as the log grows.
    */
-  toPromptSection(options?: { limit?: number; valueCap?: number }): string
+  toPromptSection(options?: {
+    limit?: number
+    valueCap?: number
+    /** Phases to omit from the section. Useful when the caller renders
+     *  some phases in their own dedicated sections (e.g. `phase=review`
+     *  surfaces as "## Architecture review history") and wants the
+     *  general decision-log section to skip those — otherwise the
+     *  high-frequency phase eats the latest-N window and pushes
+     *  architect / requirements decisions out of prompt. */
+    excludePhases?: string[]
+  }): string
   /**
    * Format all decisions for a specific phase as a text block for prompt
    * injection. Includes both task-scoped entries and goal-scoped entries
@@ -210,8 +220,17 @@ export function createDecisionLog(taskID: string): DecisionLog {
       return row ? rowToEntry(row) : undefined
     },
 
-    toPromptSection(options?: { limit?: number; valueCap?: number }): string {
-      const all = this.read()
+    toPromptSection(options?: { limit?: number; valueCap?: number; excludePhases?: string[] }): string {
+      const allRaw = this.read()
+      if (allRaw.length === 0) return ""
+      // Filter excluded phases first so the latest-N slice is taken AFTER
+      // exclusion. Otherwise a high-frequency excluded phase would still
+      // push other entries out of the read() ascending window before the
+      // limit is applied.
+      const excludeSet = new Set(options?.excludePhases ?? [])
+      const all = excludeSet.size > 0
+        ? allRaw.filter((e) => !excludeSet.has(e.phase))
+        : allRaw
       if (all.length === 0) return ""
       const limit = options?.limit
       // `read()` returns ascending by time_created. Keep the latest slice so
