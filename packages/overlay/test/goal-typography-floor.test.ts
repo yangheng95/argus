@@ -1,9 +1,23 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 const MIN_FONT_PX = 10;
-const stylesCss = readFileSync(resolve(import.meta.dir, "../src/styles.css"), "utf8");
+
+function walkCss(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) out.push(...walkCss(full));
+    else if (entry.endsWith(".css")) out.push(full);
+  }
+  return out;
+}
+
+// Concatenate all surface + cascade + primitive CSS files (styles.css was
+// dissolved 2026-05-04 into this decomposed architecture).
+const STYLES_ROOT = resolve(import.meta.dir, "../src/styles");
+const stylesCss = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n");
 
 const tokenValues = new Map<string, string>();
 for (const match of stylesCss.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {

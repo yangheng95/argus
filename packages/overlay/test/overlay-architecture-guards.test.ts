@@ -293,7 +293,7 @@ describe("overlay architecture guards", () => {
     // selector that starts with `body[data-theme=…]` or `body:is(…data-theme…)`.
     // Theme palette (`--accent-gradient`) drives the gradient↔flat split
     // — themes never touch button chrome directly.
-    for (const cls of ["sidebar-btn-primary", "btn-primary", "board-intro__cta-action"]) {
+    for (const cls of ["btn-primary", "board-intro__cta-action"]) {
       const themeSelector = new RegExp(
         `body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))[^{]*\\.${cls}\\b`,
       )
@@ -420,25 +420,19 @@ describe("overlay architecture guards", () => {
   })
 
   test("primary action canonical reads palette tokens, not literals", () => {
-    // Canonical extracted from styles.css into surfaces/legacy-button.css
-    // (2026-05-04). Lives as a surface (not a primitive) because the
-    // class-chain pattern (.btn-ghost / .btn.mini / .btn.danger /
-    // .btn-primary) doesn't follow the data-attribute variant rule the
-    // primitives guard enforces. The shared cross-class rule is used by
-    // .btn-primary (generic), .sidebar-btn-primary (sidebar) and
-    // .board-intro__cta-action (board).
+    // Canonical extracted from styles.css into surfaces/btn.css (2026-05-04).
+    // BoardIntro was deleted (commit 9978c43ba) and sidebar new-task moved
+    // to the Button primitive, so the canonical is just `.btn-primary`.
     const styles = readText(join(OVERLAY_ROOT, "src/styles/surfaces/btn.css"))
-    // The shared canonical at the multi-class selector for the three
-    // primary siblings must consume `--accent-gradient` and
-    // `--text-on-accent`. No raw `#fff`, no raw rgba(), no
-    // `var(--accent-gradient, …fallback…)` remains.
-    const sharedRule = styles.match(
-      /\.btn-primary,\s*\.sidebar-btn-primary,\s*\.board-intro__cta-action\s*\{([^}]*)\}/,
-    )
+    // The shared canonical must consume `--accent-gradient` and `--text-on-accent`.
+    // No raw `#fff`, no raw rgba(), no `var(--accent-gradient, …fallback…)` remains.
+    const sharedRule = styles.match(/\.btn-primary\s*\{([^}]*)\}/)
     expect(sharedRule).not.toBeNull()
     expect(sharedRule![1]).toContain("background: var(--accent-gradient)")
     expect(sharedRule![1]).toContain("color: var(--text-on-accent)")
     expect(sharedRule![1]).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba\(|hsla\(/)
+    // BoardIntro was deleted — .board-intro__cta-action must NOT appear in btn.css.
+    expect(styles).not.toContain(".board-intro__cta-action")
   })
 
   test("titlebar status pill and status-icon are owned by surfaces/titlebar.css", () => {
@@ -552,7 +546,6 @@ describe("overlay architecture guards", () => {
     for (const className of [
       "sidebar",
       "sidebar-toolset",
-      "sidebar-tool",
       "sidebar-title",
       "sidebar-subtitle",
       "sidebar-header-actions",
@@ -562,7 +555,12 @@ describe("overlay architecture guards", () => {
     }
 
     expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\]\s*\{/)
-    expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\] \.sidebar-toggle svg/)
+    expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\] \[data-ui="sidebar-toggle-button"\] svg/)
+    expect(html).toContain('data-ui="sidebar-refresh-button"')
+    expect(html).toContain('data-ui="sidebar-toggle-button"')
+    expect(html).toContain('data-ui="sidebar-new-task-button"')
+    expect(html).not.toContain('class="sidebar-tool"')
+    expect(html).not.toContain('class="sidebar-btn sidebar-btn-primary"')
 
     const sidebarAt = html.indexOf('href="styles/surfaces/sidebar.css"')
     expect(sidebarAt).toBeGreaterThan(-1)
@@ -595,8 +593,8 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
+    // frontend-preview family must be in inspector.css, not cascade layer
     for (const className of [
-      "section-icon-btn",
       "frontend-preview",
       "frontend-preview-toolbar",
       "frontend-preview-url",
@@ -607,53 +605,70 @@ describe("overlay architecture guards", () => {
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(inspectorSurface).toMatch(/\.section-icon-btn:hover,\s*\.section-icon-btn:focus-visible\s*\{/)
+    // Section icon button was renamed to .oc-section__icon-btn (Step 9.E migration)
+    expect(inspectorSurface).toMatch(/\.oc-section__icon-btn\s*\{/)
+    expect(inspectorSurface).toMatch(/\.oc-section__icon-btn:hover,\s*\.oc-section__icon-btn:focus-visible\s*\{/)
     expect(inspectorSurface).toMatch(/\.frontend-preview-empty\[data-kind="error"\]\s*\{/)
     expect(inspectorSurface).toContain("background: white")
     expect(inspectorSurface).toContain("var(--oc-border-width)")
   })
 
   test("section content rails (icon, title, badge, body, caret) are owned by surfaces/inspector.css", () => {
+    // After Step 9.E migration, the legacy .section-* family was replaced by
+    // .oc-section__* primitives. inspector.css now hosts the surface-specific
+    // overrides (size, color, phase-state variants) on top of the structural
+    // base in primitives/section.css.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+    const sectionPrimitive = readText(join(OVERLAY_ROOT, "src/styles/primitives/section.css"))
 
+    // Legacy names must not appear in cascade layer
     for (const className of [
       "section-icon",
       "section-title",
       "section-badge",
-      "section-head-action",
       "section-body",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(styles).not.toMatch(/(^|\n)\.section-head::before\s*\{/)
-    expect(inspectorSurface).toMatch(/\.section-head::before\s*\{/)
-    expect(inspectorSurface).toMatch(/\.section\[open\] > \.section-head::before\s*\{/)
-    expect(inspectorSurface).toMatch(/\.section-badge\[data-tone="(?:good|bad|warn|accent)"\](?:::before)?\s*\{/)
-    expect(inspectorSurface).toMatch(/\.section-badge\[data-variant="metric"\]/)
+    // section-head-action stays in inspector.css (surface-specific, not primitive)
+    expect(inspectorSurface).toMatch(/(^|\n)\.section-head-action\s*\{/)
+
+    // New primitive names live in primitives/section.css + inspector.css overrides
+    expect(sectionPrimitive).toMatch(/(^|\n)\.oc-section__icon\s*\{/)
+    expect(sectionPrimitive).toMatch(/(^|\n)\.oc-section__title\s*\{/)
+    expect(sectionPrimitive).toMatch(/(^|\n)\.oc-section__badge\s*\{/)
+    expect(sectionPrimitive).toMatch(/(^|\n)\.oc-section__body\s*\{/)
+
+    // Inspector surface owns the caret + badge tone variants
+    expect(inspectorSurface).toMatch(/\.oc-section__head::before\s*\{/)
+    expect(inspectorSurface).toMatch(/\.oc-section\[open\] > \.oc-section__head::before\s*\{/)
+    expect(inspectorSurface).toMatch(/\.oc-section__badge\[data-tone="(?:good|bad|warn|accent)"\](?:::before)?\s*\{/)
+    expect(inspectorSurface).toMatch(/\.oc-section__badge\[data-variant="metric"\]/)
     expect(inspectorSurface).toContain("var(--oc-radius-pill)")
   })
 
   test("section shell + head baseline are owned by surfaces/inspector.css", () => {
+    // After Step 9.E migration, .section → .oc-section, .section-head → .oc-section__head.
+    // inspector.css owns the surface-level card chrome (background, border-radius,
+    // overflow, hover wash) on top of the structural base in primitives/section.css.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
-    for (const selector of ["section", "section-head"]) {
-      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${selector}\\s*\\{`))
-      expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${selector}\\s*\\{`))
-    }
+    // Legacy .section and .section-head must not be in cascade layer
+    expect(styles).not.toMatch(/(^|\n)\.section\s*\{/)
+    expect(styles).not.toMatch(/(^|\n)\.section-head\s*\{/)
 
-    // Flat-redesign Step 2 (2026-05-04): the `.section:last-child` rule
-    // re-asserted bottom border on the last card in a stack. With the
-    // `.section { border: 0 }` change (rule §2.2 A), there is no
-    // shared border to re-assert — the rule was retired. Pin its
-    // absence on both layers so it doesn't crawl back.
+    // New names are in inspector.css
+    expect(inspectorSurface).toMatch(/(^|\n)\.oc-section\s*\{/)
+    expect(inspectorSurface).toMatch(/(^|\n)\.oc-section__head\s*\{/)
+
+    // Flat-redesign Step 2 (2026-05-04): .section:last-child must be gone everywhere.
     expect(styles).not.toMatch(/(^|\n)\.section:last-child\s*\{/)
-    expect(inspectorSurface).not.toMatch(/\.section:last-child\s*\{/)
-    expect(inspectorSurface).toMatch(/\.section-head::-webkit-details-marker\s*\{/)
-    expect(inspectorSurface).toMatch(/\.section-head:hover\s*\{/)
+    expect(inspectorSurface).not.toMatch(/\.oc-section:last-child\s*\{/)
+    expect(inspectorSurface).toMatch(/\.oc-section__head::-webkit-details-marker\s*\{/)
+    expect(inspectorSurface).toMatch(/\.oc-section__head:hover\s*\{/)
     expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
   })
 
@@ -821,7 +836,7 @@ describe("overlay architecture guards", () => {
       "workspace-body",
       "workspace-view",
       "diff-preview-panel",
-      "diff-preview-head",
+      // diff-preview-head replaced by .oc-panel__header override in Step 9.E
       "diff-preview-copy",
       "diff-preview-scope",
       "diff-preview-path",
@@ -829,7 +844,7 @@ describe("overlay architecture guards", () => {
       "diff-preview-body",
       "diff-preview-empty",
       "file-view-panel",
-      "file-view-head",
+      // file-view-head replaced by .oc-panel__header override in Step 9.E
       "file-view-path",
       "file-view-body",
       "file-view-empty",
@@ -837,6 +852,12 @@ describe("overlay architecture guards", () => {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(workspaceSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
+
+    // diff-preview-head and file-view-head were replaced by .oc-panel__header overrides
+    expect(workspaceSurface).toMatch(/\.diff-preview-panel > \.oc-panel__header\s*\{/)
+    expect(workspaceSurface).toMatch(/\.file-view-panel > \.oc-panel__header\s*\{/)
+    expect(workspaceSurface).not.toMatch(/(^|\n)\.diff-preview-head\s*\{/)
+    expect(workspaceSurface).not.toMatch(/(^|\n)\.file-view-head\s*\{/)
 
     expect(styles).not.toMatch(/(^|\n)\.pane-resizer\.pane-resizer-workspace\s*\{/)
     expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace\s*\{/)
@@ -1601,25 +1622,25 @@ describe("overlay architecture guards", () => {
   })
 
   test("section phase-state variants are owned by surfaces/inspector.css", () => {
+    // After Step 9.E migration, .section[data-phase-state] → .oc-section[data-phase-state].
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const variant of ["related", "active"]) {
-      expect(styles).not.toMatch(new RegExp(`\\.section\\[data-phase-state="${variant}"\\]\\s*\\{`))
+      expect(styles).not.toMatch(new RegExp(`\\.oc-section\\[data-phase-state="${variant}"\\]\\s*\\{`))
       expect(inspectorSurface).toMatch(
-        new RegExp(`\\.section\\[data-phase-state="${variant}"\\]\\s*\\{`),
+        new RegExp(`\\.oc-section\\[data-phase-state="${variant}"\\]\\s*\\{`),
       )
     }
 
     expect(inspectorSurface).toMatch(
-      /\.section\[data-phase-state="active"\] \.section-badge:not\(:empty\)::before\s*\{/,
+      /\.oc-section\[data-phase-state="active"\] \.oc-section__badge:not\(:empty\)::before\s*\{/,
     )
     // Flat-redesign Step 2 (2026-05-04): the active phase-state stack
-    // dropped its outer drop-shadow (was `box-shadow: ... 0 10px 22px
-    // color-mix(... black 10%, transparent)`) per rule §2.2 C — the
-    // accent identifier is now a 2px left-stripe rendered via `::after`.
+    // dropped its outer drop-shadow per rule §2.2 C — the accent identifier
+    // is now a 2px left-stripe rendered via `::after`.
     expect(inspectorSurface).toMatch(
-      /\.section\[data-phase-state="active"\]::after\s*\{/,
+      /\.oc-section\[data-phase-state="active"\]::after\s*\{/,
     )
     expect(inspectorSurface).not.toMatch(/rgba\(91,\s*141,\s*239/)
     expect(inspectorSurface).not.toMatch(/rgba\(10,\s*16,\s*24/)
@@ -2264,11 +2285,12 @@ describe("overlay architecture guards", () => {
           selector,
         )
         const hasHeaderControl =
-          /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|sidebar-tool|workspace-toggle)\b/.test(selector)
+          /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|workspace-toggle)\b/.test(selector) ||
+          /\[data-ui="sidebar-(?:refresh|toggle|new-task)-button"\]/.test(selector)
         if (!isThemeSelector || !hasHeaderControl) continue
 
         expect(selector).not.toMatch(
-          /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|sidebar-tool|workspace-toggle)\b/,
+          /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|workspace-toggle)\b|\[data-ui="sidebar-(?:refresh|toggle|new-task)-button"\]/,
         )
       }
     }
@@ -2295,8 +2317,9 @@ describe("overlay architecture guards", () => {
     expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
     expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("border-radius: var(--oc-radius-soft)")
     expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("background: var(--oc-control-bg)")
-    expect(soloRuleBody(sidebarSurface, ".sidebar-tool")).toContain("border-radius: var(--oc-radius-soft)")
-    expect(soloRuleBody(sidebarSurface, ".sidebar-tool")).toContain("border: var(--oc-border-width) solid transparent")
+    expect(sidebarSurface).toContain('.sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"]')
+    expect(sidebarSurface).toContain('.sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"]')
+    expect(sidebarSurface).toContain('.oc-button[data-ui="sidebar-new-task-button"]')
     const workspaceSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
     expect(soloRuleBody(workspaceSurface, ".workspace-toggle")).toContain("border-radius: var(--oc-radius-soft)")
     expect(soloRuleBody(workspaceSurface, ".workspace-toggle")).toContain("border: var(--oc-border-width) solid transparent")
@@ -2936,6 +2959,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("right panel card radius and body padding are canonical, not theme scoped", () => {
+    // After Step 9.E migration, .section → .oc-section, .section-body → .oc-section__body.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")),
@@ -2950,7 +2974,7 @@ describe("overlay architecture guards", () => {
         )
         if (
           !isThemeSelector ||
-          !/(?:^|[\s>+~,])\.(?:section|gwg|section-body|gwg-body)(?:$|[\s:{.#\[,>+~])/.test(selector)
+          !/(?:^|[\s>+~,])\.(?:oc-section|gwg|oc-section__body|gwg-body)(?:$|[\s:{.#\[,>+~])/.test(selector)
         ) {
           continue
         }
@@ -2959,14 +2983,14 @@ describe("overlay architecture guards", () => {
       }
     }
 
-    expect(soloRuleBody(inspectorSurface, ".section")).toContain(
+    expect(soloRuleBody(inspectorSurface, ".oc-section")).toContain(
       "border-radius: var(--oc-radius-soft)",
     )
     expect(soloRuleBody(inspectorSurface, ".gwg")).toContain(
       "border-radius: var(--oc-radius-soft)",
     )
 
-    expect(soloRuleBody(inspectorSurface, ".section-body")).toContain(
+    expect(soloRuleBody(inspectorSurface, ".oc-section__body")).toContain(
       "padding: 0 var(--ui-gap-sm) var(--ui-gap-sm)",
     )
     expect(soloRuleBody(inspectorSurface, ".gwg-body")).toContain(
@@ -2974,55 +2998,22 @@ describe("overlay architecture guards", () => {
     )
   })
 
-  test("board intro density and typography are canonical, not theme scoped", () => {
-    // .board-intro family canonicals moved from styles.css to
-    // surfaces/board.css. The theme-bleed assertion still scans
-    // styles.css (no theme overrides should remain there for any
-    // .board-intro descendant). The density/typography spot-checks
-    // now read board.css since that file owns the canonicals. The
-    // .board-intro__cta-action shared rule with .btn-primary /
-    // .sidebar-btn-primary stays in styles.css and is excluded from
-    // the theme-bleed scan as before.
+  test("BoardIntro was deleted — no .board-intro CSS or component references remain", () => {
+    // BoardIntro.tsx was deleted in commit 9978c43ba (2026-05-04).
+    // board.css was deleted with it. Assert that no ghost references remain.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
-    const board = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/board.css")))
+    const btn = readText(join(OVERLAY_ROOT, "src/styles/surfaces/btn.css"))
 
-    expect(card).not.toMatch(/\.board-intro(?:__|\b)/)
-
-    for (const source of [styles, board]) {
-      for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-        const selector = match[1] ?? ""
-        const body = match[2] ?? ""
-        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-          selector,
-        )
-        if (!isThemeSelector || !/\.board-intro(?:__|\b)/.test(selector)) continue
-        if (/\.board-intro__cta-action\b/.test(selector)) continue
-
-        expect(body).not.toMatch(
-          /\b(?:display|gap|grid-template-columns|overflow|-webkit-line-clamp|-webkit-box-orient|font-size|line-height|letter-spacing|text-transform|padding(?:-[a-z]+)?|border|border-radius)\s*:/,
-        )
-      }
-    }
-
-    expect(soloRuleBody(board, ".board-intro")).toContain("gap: calc(1px * var(--ui-scale))")
-    expect(soloRuleBody(board, ".board-intro")).toContain("padding: calc(1px * var(--ui-scale))")
-    expect(soloRuleBody(board, ".board-intro__title")).toContain("font-size: var(--ui-font-body)")
-    expect(soloRuleBody(board, ".board-intro__section")).toContain("border-radius: var(--oc-radius-soft)")
-    expect(soloRuleBody(board, ".board-intro__section")).toContain("border: 0")
-    expect(soloRuleBody(board, ".board-intro__modes")).toContain(
-      "grid-template-columns: repeat(auto-fit, minmax(calc(128px * var(--ui-scale)), 1fr))",
-    )
-    expect(soloRuleBody(board, ".board-intro__cta")).toContain("border-radius: var(--oc-radius-soft)")
-    expect(soloRuleBody(board, ".board-intro__mode-desc,\n.board-intro__agent-desc")).toContain(
-      "-webkit-line-clamp: 2",
-    )
-
-    // Single-source assertion: the canonicals no longer live in
-    // styles.css (only the cross-cutting .btn-primary multi-selector
-    // mentions .board-intro__cta-action there).
+    // No standalone .board-intro rules in cascade layer
     expect(styles).not.toMatch(/^\.board-intro\s*\{/m)
     expect(styles).not.toMatch(/^\.board-intro__title\s*\{/m)
+    // No board-intro rules leaked into card.css
+    expect(card).not.toMatch(/\.board-intro(?:__|\b)/)
+    // No .board-intro__cta-action in the btn.css primary-action selector
+    expect(btn).not.toContain(".board-intro__cta-action")
+    // board.css must not exist (was deleted with BoardIntro.tsx)
+    expect(existsSync(join(OVERLAY_ROOT, "src/styles/surfaces/board.css"))).toBe(false)
   })
 
   test("chat scroll layout is canonical, not theme scoped", () => {

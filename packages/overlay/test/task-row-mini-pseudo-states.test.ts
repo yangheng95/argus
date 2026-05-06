@@ -34,18 +34,24 @@
 // border-color) and stay legitimate.
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
-const RAW = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
-  "utf8",
-)
-// Strip CSS block comments before walking rule heads — the
-// regex below otherwise picks up `*/` comment-end fragments
-// as part of the next rule's selector list and misses the
-// real selector.
-const STYLES = RAW.replace(/\/\*[\s\S]*?\*\//g, "")
+const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
+
+function walkCss(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkCss(full))
+    else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+// Concatenate all surface + cascade + primitive CSS files (styles.css was
+// dissolved 2026-05-04 into this decomposed architecture).
+const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
 
 function countTopLevelRulesEndingWithSelector(selector: string): number {
   // Walk every CSS rule by splitting the file at closing `}`

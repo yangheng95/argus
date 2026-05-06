@@ -18,13 +18,27 @@
 // name` outside comments — still pins below.
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
-const STYLES = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
-  "utf8",
-)
+const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
+const CASCADE_DIR = path.join(STYLES_ROOT, "cascade")
+
+function walkCss(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkCss(full))
+    else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+// styles.css was dissolved 2026-05-04 into cascade + surface files. The
+// "no .titlebar in styles.css" guard is now "no .titlebar in cascade layer"
+// (cascade owns cross-cutting rules; surface-specific chrome lives in titlebar.css).
+const CASCADE_CSS = walkCss(CASCADE_DIR).map((f) => readFileSync(f, "utf8")).join("\n")
+
 const TITLEBAR_SURFACE = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "titlebar.css"),
   "utf8",
@@ -51,8 +65,8 @@ function ruleBody(text: string, selector: string): string {
 }
 
 describe(".titlebar is defined exactly once", () => {
-  test("styles.css no longer defines `.titlebar` at all (migrated to surfaces/titlebar.css)", () => {
-    expect(countRulesStartingWith(STYLES, ".titlebar")).toBe(0)
+  test("cascade layer does not define `.titlebar` at all (migrated to surfaces/titlebar.css)", () => {
+    expect(countRulesStartingWith(CASCADE_CSS, ".titlebar")).toBe(0)
   })
 
   test("surfaces/titlebar.css declares exactly one solo top-level `.titlebar { … }` rule", () => {
@@ -73,15 +87,13 @@ describe(".brand-name is dead CSS after iter6 and removed", () => {
     expect(HTML).not.toMatch(/class=["']brand-name["']/)
   })
 
-  test("no styles.css selector still references `.brand-name`", () => {
-    // Allow a `.brand-name` substring inside comments (so the
-    // historical comment that explains why the class is gone
-    // can survive). Forbid only an actual selector token —
-    // `.brand-name {` or `.brand-name,` or `.brand-name {whitespace`.
+  test("no cascade or surface CSS still references `.brand-name` as a selector", () => {
+    // Allow a `.brand-name` substring inside comments (so historical
+    // comments explaining why the class is gone can survive). Forbid
+    // only an actual selector token — `.brand-name {` or `.brand-name,`.
     const selectorRe = /\.brand-name(?=[\s,{:.\[])/
-    // Strip CSS comments before checking so doc-only mentions
-    // of the historical class do not trip the regression.
-    const stripped = STYLES.replace(/\/\*[\s\S]*?\*\//g, "")
+    // Strip CSS comments before checking so doc-only mentions do not trip.
+    const stripped = CASCADE_CSS.replace(/\/\*[\s\S]*?\*\//g, "")
     expect(stripped).not.toMatch(selectorRe)
   })
 })

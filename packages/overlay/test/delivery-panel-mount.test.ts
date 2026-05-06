@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readdirSync, statSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const overlayRoot = path.resolve(import.meta.dir, "..");
@@ -10,6 +11,24 @@ async function readSrc(rel: string): Promise<string> {
 async function readJson(rel: string): Promise<Record<string, unknown>> {
   const raw = await Bun.file(path.join(overlayRoot, rel)).text();
   return JSON.parse(raw) as Record<string, unknown>;
+}
+
+function walkCss(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) out.push(...walkCss(full));
+    else if (entry.endsWith(".css")) out.push(full);
+  }
+  return out;
+}
+
+// Synchronous concatenation of all surface + cascade + primitive CSS.
+// Tests that assert structural CSS properties use this instead of the
+// deleted monolith src/styles.css.
+function readAllSurfaceCss(): string {
+  const root = path.join(overlayRoot, "src", "styles");
+  return walkCss(root).map((f) => readFileSync(f, "utf8")).join("\n");
 }
 
 // Regression for "no delivery card visible during bench":
@@ -64,16 +83,19 @@ test("main.tsx mounts AgentWorkflowPanel as a root right-panel tab", async () =>
 
 test("AgentWorkflowPanel renders a calm workflow map without high-energy effects", async () => {
   const component = await readSrc("src/components/AgentWorkflowPanel.tsx");
-  const css = await readSrc("src/styles.css");
+  // Workflow CSS now lives in surfaces/agent-workflow.css (styles.css was
+  // dissolved 2026-05-04). The "/* Calm workflow map */" landmark comment
+  // belonged to the monolith; we now read the dedicated surface file.
+  const css = await readSrc("src/styles/surfaces/agent-workflow.css");
   expect(component).toContain('class="agent-workflow-orb"');
   expect(component).toContain('class="agent-workflow-beam"');
   expect(component).not.toContain("agent-workflow-card-aura");
-  expect(css).toContain("/* Calm workflow map */");
-  const workflowCss = css.slice(css.indexOf("/* Calm workflow map */"));
-  expect(workflowCss).not.toContain("@keyframes workflow-");
-  expect(workflowCss).not.toContain("agent-workflow-card-aura");
-  expect(workflowCss).not.toContain("drop-shadow");
-  expect(workflowCss).not.toContain("backdrop-filter");
+  // The whole agent-workflow surface is the calm workflow map — assert
+  // no high-energy effects appear anywhere in it.
+  expect(css).not.toContain("@keyframes workflow-");
+  expect(css).not.toContain("agent-workflow-card-aura");
+  expect(css).not.toContain("drop-shadow");
+  expect(css).not.toContain("backdrop-filter");
 });
 
 test("DeliveryPanel and DeliveryEvidenceGroup are exported from components/Board.tsx", async () => {
@@ -108,8 +130,10 @@ test("DeliveryPanel drives chrome via [data-verdict] (not the lifecycle status m
   expect(board).not.toContain("empty.delivery");
 });
 
-test("styles.css maps verdict tone to the panel's pseudo-element left-edge accent", async () => {
-  const css = await readSrc("src/styles.css");
+test("surface CSS maps verdict tone to the panel's pseudo-element left-edge accent", async () => {
+  // delivery-panel chrome moved from styles.css to surfaces/inspector.css
+  // (styles.css was dissolved 2026-05-04).
+  const css = readAllSurfaceCss();
   // Per-tone left-edge colors — rejected MUST be red, accepted MUST be green.
   // The accent is a pseudo-element rail, not a decorative border, so the
   // right-panel no-border chrome contract and verdict semantics can coexist.
@@ -124,7 +148,9 @@ test("styles.css maps verdict tone to the panel's pseudo-element left-edge accen
 });
 
 test("evidence rows reuse the shared .verdict-pill primitive — no per-row color rules", async () => {
-  const css = await readSrc("src/styles.css");
+  // verdict-pill primitive moved from styles.css to surfaces/inspector.css
+  // (styles.css was dissolved 2026-05-04).
+  const css = readAllSurfaceCss();
   const board = await readSrc("src/components/Board.tsx");
   // The shared primitive exists, with at least the four delivery tones.
   expect(css).toMatch(/\.verdict-pill\s*\{/);
