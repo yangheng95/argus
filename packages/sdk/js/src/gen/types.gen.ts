@@ -893,6 +893,8 @@ export type CompactionPart = {
   messageID: string
   type: "compaction"
   auto: boolean
+  overflow?: boolean
+  tail_start_id?: string
 }
 
 export type Part =
@@ -2392,6 +2394,14 @@ export type Config = {
      * Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.7 — start compacting at 70% so the agent has room to land its next reply without overflowing.
      */
     threshold?: number
+    /**
+     * Number of most recent real user turns to preserve verbatim after compaction. Defaults to 2.
+     */
+    tail_turns?: number
+    /**
+     * Token budget for the verbatim recent-tail retained after compaction.
+     */
+    preserve_recent_tokens?: number
   }
   /**
    * Assistant agent configuration — controls requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior
@@ -10800,6 +10810,69 @@ export type ExportTaskResponses = {
 }
 
 export type ExportTaskResponse = ExportTaskResponses[keyof ExportTaskResponses]
+
+export type ExportTaskArchiveData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/export/task/{taskID}/archive"
+}
+
+export type ExportTaskArchiveErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ExportTaskArchiveError = ExportTaskArchiveErrors[keyof ExportTaskArchiveErrors]
+
+export type ExportTaskArchiveResponses = {
+  /**
+   * Zip archive (application/zip) — see Content-Disposition for filename
+   */
+  200: Blob | File
+}
+
+export type ExportTaskArchiveResponse = ExportTaskArchiveResponses[keyof ExportTaskArchiveResponses]
+
+export type ExportImportData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    overwrite?: "true" | "false"
+  }
+  url: "/export/import"
+}
+
+export type ExportImportErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExportImportError = ExportImportErrors[keyof ExportImportErrors]
+
+export type ExportImportResponses = {
+  /**
+   * Import succeeded
+   */
+  201: {
+    taskID: string
+    importedFromTaskID?: string
+    restoredFiles: number
+    skippedFiles: Array<string>
+    directory: string
+  }
+}
+
+export type ExportImportResponse = ExportImportResponses[keyof ExportImportResponses]
 
 export type ExportSessionData = {
   body?: never

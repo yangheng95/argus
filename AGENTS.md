@@ -61,6 +61,8 @@
 
 **15a.** 用户消息是任务继续推进的真实事件，不是状态机输入。任何任务生命周期展示状态（active/cancelled/completed/failed 等）都只能作为界面和调度提示，禁止作为消息可达性 gate；收到用户消息时必须保留原 conversation history、decision-log、goal/run/artifact 上下文，并让同一任务继续被编排器读取和决策，禁止清空 context 或要求用户先手动 retry。
 
+**15b.** Overlay 是会话/任务归档导入导出的唯一产品入口。禁止把 CLI import/export 当作当前功能入口、验收依据或修复对象；涉及导入导出时必须以 Overlay 触发的 HTTP 契约和可视化交互为准。
+
 ---
 
 ## 三、代码质量与技术债
