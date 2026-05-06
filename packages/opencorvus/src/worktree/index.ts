@@ -9,6 +9,7 @@ import { Project } from "../project/project"
 import { Database, eq } from "../storage/db"
 import { ProjectTable } from "../project/project.sql"
 import { fn } from "../util/fn"
+import { git as runGit } from "../util/git"
 import { Log } from "../util/log"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
@@ -199,8 +200,9 @@ export namespace Worktree {
         // previous merge (`git commit`) and commit ordinary edits before
         // retrying, otherwise we silently subsume their state into a new
         // merge commit and lose the signal.
-        const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`
-          .quiet().nothrow().cwd(input.worktreeDir)
+        const mergeHead = await runGit(["rev-parse", "--verify", "--quiet", "MERGE_HEAD"], {
+          cwd: input.worktreeDir, timeoutProfile: "fast",
+        })
         if (mergeHead.exitCode === 0) {
           throw new MergeFailedError({
             message:
@@ -210,7 +212,9 @@ export namespace Worktree {
             branch: input.branch,
           })
         }
-        const status = await $`git status --porcelain`.quiet().nothrow().cwd(input.worktreeDir)
+        const status = await runGit(["status", "--porcelain"], {
+          cwd: input.worktreeDir, timeoutProfile: "default",
+        })
         if (outputText(status.stdout).trim().length > 0) {
           throw new MergeFailedError({
             message:
@@ -244,18 +248,21 @@ export namespace Worktree {
         // files; we capture and re-throw without aborting so the in-session
         // agent can reconcile in place. Host-path callers preserve the same
         // worktree for the next attempt.
-        const merged = await $`git merge --no-edit ${primaryBranch}`
-          .quiet().nothrow().cwd(input.worktreeDir)
+        const merged = await runGit(["merge", "--no-edit", primaryBranch], {
+          cwd: input.worktreeDir, timeoutProfile: "default",
+        })
         if (merged.exitCode !== 0) {
-          const conflictList = await $`git diff --name-only --diff-filter=U`
-            .quiet().nothrow().cwd(input.worktreeDir)
+          const conflictList = await runGit(["diff", "--name-only", "--diff-filter=U"], {
+            cwd: input.worktreeDir, timeoutProfile: "default",
+          })
           const conflictPaths = outputText(conflictList.stdout)
             .split("\n")
             .map((line) => line.trim())
             .filter(Boolean)
 
-          const primaryTipProbe = await $`git rev-parse refs/heads/${primaryBranch}`
-            .quiet().nothrow().cwd(primaryDir)
+          const primaryTipProbe = await runGit(["rev-parse", `refs/heads/${primaryBranch}`], {
+            cwd: primaryDir, timeoutProfile: "fast",
+          })
           const primaryTip = outputText(primaryTipProbe.stdout)
 
           throw new MergeConflictError({
@@ -274,8 +281,9 @@ export namespace Worktree {
         // Step 2 — ff-merge into primary. Must succeed: goal branch's tip
         // now strictly descends primary's tip (either via ff or via merge
         // commit produced in step 1).
-        const ff = await $`git merge --ff-only --no-edit ${input.branch}`
-          .quiet().nothrow().cwd(primaryDir)
+        const ff = await runGit(["merge", "--ff-only", "--no-edit", input.branch], {
+          cwd: primaryDir, timeoutProfile: "default",
+        })
         if (ff.exitCode !== 0) {
           const stderr = errorText(ff) || "git merge --ff-only failed after successful merge"
           throw new MergeFailedError({
@@ -285,7 +293,9 @@ export namespace Worktree {
           })
         }
 
-        const headProbe = await $`git rev-parse HEAD`.quiet().nothrow().cwd(primaryDir)
+        const headProbe = await runGit(["rev-parse", "HEAD"], {
+          cwd: primaryDir, timeoutProfile: "fast",
+        })
         const primaryHead = outputText(headProbe.stdout)
         return { primaryBranch, primaryHead, primaryRecoveryCommit }
       })
@@ -552,28 +562,24 @@ export namespace Worktree {
   }
 
   async function inspectBlockedMergeWorktree(directory: string) {
-    const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`
-      .quiet()
-      .nothrow()
-      .cwd(directory)
-      .then((result) => result.exitCode === 0)
-      .catch(() => false)
-    const dirtyPaths = await $`git -c core.quotepath=false status --porcelain`
-      .quiet()
-      .nothrow()
-      .cwd(directory)
-      .then((result) =>
-        outputText(result.stdout)
+    const mergeHeadResult = await runGit(["rev-parse", "--verify", "--quiet", "MERGE_HEAD"], {
+      cwd: directory, timeoutProfile: "fast",
+    }).catch(() => undefined)
+    const mergeHead = mergeHeadResult?.exitCode === 0
+    const dirtyResult = await runGit(["-c", "core.quotepath=false", "status", "--porcelain"], {
+      cwd: directory, timeoutProfile: "default",
+    }).catch(() => undefined)
+    const dirtyPaths = dirtyResult
+      ? outputText(dirtyResult.stdout)
           .split("\n")
           .map((line) => line.trim())
-          .filter(Boolean),
-      )
-      .catch(() => [])
+          .filter(Boolean)
+      : []
     return { mergeHead, dirtyPaths }
   }
 
   async function commitPrimaryDirtyWorktree(input: { branch: string; primaryDir: string; dirtyPaths: string[] }) {
-    const add = await $`git add -A`.quiet().nothrow().cwd(input.primaryDir)
+    const add = await runGit(["add", "-A"], { cwd: input.primaryDir, timeoutProfile: "default" })
     if (add.exitCode !== 0) {
       throw new MergeFailedError({
         message:
@@ -583,10 +589,14 @@ export namespace Worktree {
         stderr: errorText(add),
       })
     }
-    const commit = await $`git -c user.name=opencorvus -c user.email=opencorvus@local commit -m ${"chore(opencorvus): preserve primary worktree changes before merge_back"}`
-      .quiet()
-      .nothrow()
-      .cwd(input.primaryDir)
+    const commit = await runGit(
+      [
+        "-c", "user.name=opencorvus",
+        "-c", "user.email=opencorvus@local",
+        "commit", "-m", "chore(opencorvus): preserve primary worktree changes before merge_back",
+      ],
+      { cwd: input.primaryDir, timeoutProfile: "default" },
+    )
     if (commit.exitCode !== 0) {
       throw new MergeFailedError({
         message:
@@ -596,7 +606,9 @@ export namespace Worktree {
         stderr: errorText(commit),
       })
     }
-    const head = await $`git rev-parse HEAD`.quiet().nothrow().cwd(input.primaryDir)
+    const head = await runGit(["rev-parse", "HEAD"], {
+      cwd: input.primaryDir, timeoutProfile: "fast",
+    })
     if (head.exitCode !== 0) {
       throw new MergeFailedError({
         message:
@@ -637,14 +649,14 @@ export namespace Worktree {
   }
 
   async function sweep(root: string) {
-    const first = await $`git clean -ffdx`.quiet().nothrow().cwd(root)
+    const first = await runGit(["clean", "-ffdx"], { cwd: root, timeoutProfile: "default" })
     if (first.exitCode === 0) return first
 
     const entries = failed(first)
     if (!entries.length) return first
 
     await prune(root, entries)
-    return $`git clean -ffdx`.quiet().nothrow().cwd(root)
+    return runGit(["clean", "-ffdx"], { cwd: root, timeoutProfile: "default" })
   }
 
   async function canonical(input: string) {
@@ -665,7 +677,9 @@ export namespace Worktree {
    * main, master, or another local branch name.
    */
   async function primaryWorktreeInfo(): Promise<PrimaryWorktreeInfo> {
-    const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
+    const list = await runGit(["worktree", "list", "--porcelain"], {
+      cwd: Instance.worktree, timeoutProfile: "default",
+    })
     if (list.exitCode !== 0) {
       throw new Error(errorText(list) || "Failed to read git worktrees")
     }
@@ -744,10 +758,9 @@ export namespace Worktree {
     const ref = `refs/heads/${branch}`
 
     const dirExists = await exists(directory)
-    const branchCheck = await $`git show-ref --verify --quiet ${ref}`
-      .quiet()
-      .nothrow()
-      .cwd(Instance.worktree)
+    const branchCheck = await runGit(["show-ref", "--verify", "--quiet", ref], {
+      cwd: Instance.worktree, timeoutProfile: "fast",
+    })
     const branchExists = branchCheck.exitCode === 0
 
     if (dirExists || branchExists) {
@@ -769,15 +782,13 @@ export namespace Worktree {
       // branch ref was left over from a prior crash, or (b) the worktree was
       // never registered against this branch (so remove() didn't touch it).
       // Re-probe and clean up independently.
-      const stillExists = await $`git show-ref --verify --quiet ${ref}`
-        .quiet()
-        .nothrow()
-        .cwd(Instance.worktree)
+      const stillExists = await runGit(["show-ref", "--verify", "--quiet", ref], {
+        cwd: Instance.worktree, timeoutProfile: "fast",
+      })
       if (stillExists.exitCode === 0) {
-        const del = await $`git branch -D ${branch}`
-          .quiet()
-          .nothrow()
-          .cwd(Instance.worktree)
+        const del = await runGit(["branch", "-D", branch], {
+          cwd: Instance.worktree, timeoutProfile: "fast",
+        })
         if (del.exitCode !== 0) {
           throw new CreateFailedError({
             message:
@@ -815,7 +826,9 @@ export namespace Worktree {
       if (await exists(directory)) continue
 
       const ref = `refs/heads/${branch}`
-      const branchCheck = await $`git show-ref --verify --quiet ${ref}`.quiet().nothrow().cwd(Instance.worktree)
+      const branchCheck = await runGit(["show-ref", "--verify", "--quiet", ref], {
+        cwd: Instance.worktree, timeoutProfile: "fast",
+      })
       if (branchCheck.exitCode === 0) continue
 
       return Info.parse({ name, branch, directory })
@@ -922,7 +935,9 @@ export namespace Worktree {
       // bootstrap broke earlier — fail loud rather than paper over with a
       // `git add -A` "initial scaffold" empty commit that historically
       // swallowed `node_modules/` into HEAD before .gitignore landed.
-      const hasCommits = (await $`git rev-parse --verify HEAD`.quiet().cwd(primaryDir).nothrow()).exitCode === 0
+      const hasCommits = (await runGit(["rev-parse", "--verify", "HEAD"], {
+        cwd: primaryDir, timeoutProfile: "fast",
+      })).exitCode === 0
       if (!hasCommits) {
         throw new CreateFailedError({
           message:
@@ -933,10 +948,10 @@ export namespace Worktree {
         })
       }
 
-      const created = await $`git worktree add --no-checkout -b ${info.branch} ${info.directory} ${primary.branch}`
-        .quiet()
-        .nothrow()
-        .cwd(primaryDir)
+      const created = await runGit(
+        ["worktree", "add", "--no-checkout", "-b", info.branch, info.directory, primary.branch],
+        { cwd: primaryDir, timeoutProfile: "default" },
+      )
       if (created.exitCode !== 0) {
         throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
       }
@@ -947,7 +962,9 @@ export namespace Worktree {
     const projectID = Instance.project.id
     const extra = input?.startCommand?.trim()
     const populate = async () => {
-      const populated = await $`git reset --hard`.quiet().nothrow().cwd(info.directory)
+      const populated = await runGit(["reset", "--hard"], {
+        cwd: info.directory, timeoutProfile: "default",
+      })
       if (populated.exitCode !== 0) {
         const message = errorText(populated) || "Failed to populate worktree"
         log.error("worktree checkout failed", { directory: info.directory, message })
@@ -1031,7 +1048,9 @@ export namespace Worktree {
     if (!(await exists(gitLink))) {
       return { valid: false, reason: `missing .git linkage at ${gitLink}` }
     }
-    const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
+    const list = await runGit(["worktree", "list", "--porcelain"], {
+      cwd: Instance.worktree, timeoutProfile: "default",
+    })
     if (list.exitCode !== 0) {
       return { valid: false, reason: errorText(list) || "git worktree list failed" }
     }
@@ -1054,10 +1073,9 @@ export namespace Worktree {
     const validity = await isValid(input.directory)
     if (validity.valid) return { status: "recovered", directory: input.directory, branch: input.branch }
 
-    const branchCheck = await $`git show-ref --verify --quiet refs/heads/${input.branch}`
-      .quiet()
-      .nothrow()
-      .cwd(Instance.worktree)
+    const branchCheck = await runGit(["show-ref", "--verify", "--quiet", `refs/heads/${input.branch}`], {
+      cwd: Instance.worktree, timeoutProfile: "fast",
+    })
     if (branchCheck.exitCode !== 0) {
       return { status: "unrecoverable", reason: `branch ${input.branch} does not exist` }
     }
@@ -1082,10 +1100,9 @@ export namespace Worktree {
     }
 
     await fs.mkdir(path.dirname(input.directory), { recursive: true })
-    const added = await $`git worktree add --force ${input.directory} ${input.branch}`
-      .quiet()
-      .nothrow()
-      .cwd(Instance.worktree)
+    const added = await runGit(["worktree", "add", "--force", input.directory, input.branch], {
+      cwd: Instance.worktree, timeoutProfile: "default",
+    })
     if (added.exitCode !== 0) {
       return { status: "unrecoverable", reason: errorText(added) || "git worktree add failed" }
     }
@@ -1145,12 +1162,14 @@ export namespace Worktree {
 
     const stop = async (target: string) => {
       if (!(await exists(target))) return
-      await $`git fsmonitor--daemon stop`.quiet().nothrow().cwd(target)
+      await runGit(["fsmonitor--daemon", "stop"], { cwd: target, timeoutProfile: "fast" })
     }
 
     // All git operations serialized to prevent concurrent corruption with create/merge
     return withGitLock(async () => {
-      const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
+      const list = await runGit(["worktree", "list", "--porcelain"], {
+        cwd: Instance.worktree, timeoutProfile: "default",
+      })
       if (list.exitCode !== 0) {
         throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
       }
@@ -1167,9 +1186,13 @@ export namespace Worktree {
       }
 
       await stop(entry.path)
-      const removed = await $`git worktree remove --force ${entry.path}`.quiet().nothrow().cwd(Instance.worktree)
+      const removed = await runGit(["worktree", "remove", "--force", entry.path], {
+        cwd: Instance.worktree, timeoutProfile: "default",
+      })
       if (removed.exitCode !== 0) {
-        const next = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
+        const next = await runGit(["worktree", "list", "--porcelain"], {
+          cwd: Instance.worktree, timeoutProfile: "default",
+        })
         if (next.exitCode !== 0) {
           throw new RemoveFailedError({
             message: errorText(removed) || errorText(next) || "Failed to remove git worktree",
@@ -1186,7 +1209,9 @@ export namespace Worktree {
 
       const branch = entry.branch?.replace(/^refs\/heads\//, "")
       if (branch) {
-        const deleted = await $`git branch -D ${branch}`.quiet().nothrow().cwd(Instance.worktree)
+        const deleted = await runGit(["branch", "-D", branch], {
+          cwd: Instance.worktree, timeoutProfile: "fast",
+        })
         if (deleted.exitCode !== 0) {
           throw new RemoveFailedError({ message: errorText(deleted) || "Failed to delete worktree branch" })
         }
@@ -1211,7 +1236,9 @@ export namespace Worktree {
     }
 
     const worktreePath = await withGitLock(async () => {
-      const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
+      const list = await runGit(["worktree", "list", "--porcelain"], {
+        cwd: Instance.worktree, timeoutProfile: "default",
+      })
       if (list.exitCode !== 0) {
         throw new ResetFailedError({ message: errorText(list) || "Failed to read git worktrees" })
       }
@@ -1247,7 +1274,9 @@ export namespace Worktree {
       const target = primaryInfo.branch
 
       const worktreePath = entry.path
-      const resetToTarget = await $`git reset --hard ${target}`.quiet().nothrow().cwd(worktreePath)
+      const resetToTarget = await runGit(["reset", "--hard", target], {
+        cwd: worktreePath, timeoutProfile: "default",
+      })
       if (resetToTarget.exitCode !== 0) {
         throw new ResetFailedError({ message: errorText(resetToTarget) || "Failed to reset worktree to target" })
       }
@@ -1257,22 +1286,30 @@ export namespace Worktree {
         throw new ResetFailedError({ message: errorText(clean) || "Failed to clean worktree" })
       }
 
-      const update = await $`git submodule update --init --recursive --force`.quiet().nothrow().cwd(worktreePath)
+      const update = await runGit(["submodule", "update", "--init", "--recursive", "--force"], {
+        cwd: worktreePath, timeoutProfile: "network",
+      })
       if (update.exitCode !== 0) {
         throw new ResetFailedError({ message: errorText(update) || "Failed to update submodules" })
       }
 
-      const subReset = await $`git submodule foreach --recursive git reset --hard`.quiet().nothrow().cwd(worktreePath)
+      const subReset = await runGit(["submodule", "foreach", "--recursive", "git reset --hard"], {
+        cwd: worktreePath, timeoutProfile: "default",
+      })
       if (subReset.exitCode !== 0) {
         throw new ResetFailedError({ message: errorText(subReset) || "Failed to reset submodules" })
       }
 
-      const subClean = await $`git submodule foreach --recursive git clean -fdx`.quiet().nothrow().cwd(worktreePath)
+      const subClean = await runGit(["submodule", "foreach", "--recursive", "git clean -fdx"], {
+        cwd: worktreePath, timeoutProfile: "default",
+      })
       if (subClean.exitCode !== 0) {
         throw new ResetFailedError({ message: errorText(subClean) || "Failed to clean submodules" })
       }
 
-      const status = await $`git status --porcelain=v1`.quiet().nothrow().cwd(worktreePath)
+      const status = await runGit(["status", "--porcelain=v1"], {
+        cwd: worktreePath, timeoutProfile: "default",
+      })
       if (status.exitCode !== 0) {
         throw new ResetFailedError({ message: errorText(status) || "Failed to read git status" })
       }
