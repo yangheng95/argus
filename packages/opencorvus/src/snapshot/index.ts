@@ -1,4 +1,3 @@
-import { $ } from "bun"
 import path from "path"
 import fs from "fs/promises"
 import { Log } from "../util/log"
@@ -8,6 +7,8 @@ import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
 import { Project } from "../project/project"
+import { git as runGit, type GitOptions } from "../util/git"
+import { Process } from "../util/process"
 import { FileDiff as _FileDiff, Patch as _Patch } from "./types"
 import type { FileDiff as _FileDiffType, Patch as _PatchType } from "./types"
 
@@ -33,18 +34,15 @@ export namespace Snapshot {
     if (cfg.snapshot === false) return
     const git = gitdir()
     if (await fs.mkdir(git, { recursive: true })) {
-      await $`git init`
-        .env({
-          ...process.env,
-          GIT_DIR: git,
-          GIT_WORK_TREE: Instance.worktree,
-        })
-        .quiet()
-        .nothrow()
-      await $`git --git-dir ${git} config core.autocrlf ${coreAutocrlf}`.quiet().nothrow()
-      await $`git --git-dir ${git} config core.longpaths true`.quiet().nothrow()
-      await $`git --git-dir ${git} config core.symlinks ${coreSymlinks}`.quiet().nothrow()
-      await $`git --git-dir ${git} config core.fsmonitor false`.quiet().nothrow()
+      await runGit(["init"], {
+        cwd: Instance.directory,
+        env: { GIT_DIR: git, GIT_WORK_TREE: Instance.worktree },
+        timeoutProfile: "default",
+      })
+      await runGit(["--git-dir", git, "config", "core.autocrlf", coreAutocrlf], { cwd: Instance.directory, timeoutProfile: "fast" })
+      await runGit(["--git-dir", git, "config", "core.longpaths", "true"], { cwd: Instance.directory, timeoutProfile: "fast" })
+      await runGit(["--git-dir", git, "config", "core.symlinks", coreSymlinks], { cwd: Instance.directory, timeoutProfile: "fast" })
+      await runGit(["--git-dir", git, "config", "core.fsmonitor", "false"], { cwd: Instance.directory, timeoutProfile: "fast" })
       log.info("initialized")
     }
     // Use per-call temporary index to prevent race conditions when multiple
@@ -54,12 +52,15 @@ export namespace Snapshot {
     const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
     try {
       await add(git, indexFile)
-      const hash = await $`git --git-dir ${git} --work-tree ${Instance.worktree} write-tree`
-        .env({ ...process.env, GIT_INDEX_FILE: indexFile })
-        .quiet()
-        .cwd(Instance.directory)
-        .nothrow()
-        .text()
+      const result = await runGit(
+        ["--git-dir", git, "--work-tree", Instance.worktree, "write-tree"],
+        {
+          cwd: Instance.directory,
+          env: { GIT_INDEX_FILE: indexFile },
+          timeoutProfile: "default",
+        },
+      )
+      const hash = result.text()
       log.info("tracking", { hash, cwd: Instance.directory, git })
       return hash.trim()
     } finally {
@@ -79,12 +80,22 @@ export namespace Snapshot {
     const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
     try {
       await add(git, indexFile)
-      const result =
-        await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --name-only ${hash} -- .`
-          .env({ ...process.env, GIT_INDEX_FILE: indexFile })
-          .quiet()
-          .cwd(Instance.directory)
-          .nothrow()
+      const result = await runGit(
+        [
+          "-c", `core.autocrlf=${coreAutocrlf}`,
+          "-c", "core.longpaths=true",
+          "-c", `core.symlinks=${coreSymlinks}`,
+          "-c", "core.quotepath=false",
+          "--git-dir", git,
+          "--work-tree", Instance.worktree,
+          "diff", "--no-ext-diff", "--name-only", hash, "--", ".",
+        ],
+        {
+          cwd: Instance.directory,
+          env: { GIT_INDEX_FILE: indexFile },
+          timeoutProfile: "default",
+        },
+      )
 
       // If git diff fails, return empty patch
       if (result.exitCode !== 0) {
@@ -155,12 +166,22 @@ export namespace Snapshot {
     const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
     try {
       await add(git, indexFile)
-      const result =
-        await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff ${hash} -- .`
-          .env({ ...process.env, GIT_INDEX_FILE: indexFile })
-          .quiet()
-          .cwd(Instance.worktree)
-          .nothrow()
+      const result = await runGit(
+        [
+          "-c", `core.autocrlf=${coreAutocrlf}`,
+          "-c", "core.longpaths=true",
+          "-c", `core.symlinks=${coreSymlinks}`,
+          "-c", "core.quotepath=false",
+          "--git-dir", git,
+          "--work-tree", Instance.worktree,
+          "diff", "--no-ext-diff", hash, "--", ".",
+        ],
+        {
+          cwd: Instance.worktree,
+          env: { GIT_INDEX_FILE: indexFile },
+          timeoutProfile: "default",
+        },
+      )
 
       if (result.exitCode !== 0) {
         log.warn("failed to get diff", {
@@ -187,9 +208,18 @@ export namespace Snapshot {
     const status = new Map<string, "added" | "deleted" | "modified">()
 
     const statuses = await gitText(
-      $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --name-status --no-renames ${from} ${to} -- .`
-        .quiet()
-        .cwd(Instance.directory),
+      runGit(
+        [
+          "-c", `core.autocrlf=${coreAutocrlf}`,
+          "-c", "core.longpaths=true",
+          "-c", `core.symlinks=${coreSymlinks}`,
+          "-c", "core.quotepath=false",
+          "--git-dir", git,
+          "--work-tree", Instance.worktree,
+          "diff", "--no-ext-diff", "--name-status", "--no-renames", from, to, "--", ".",
+        ],
+        { cwd: Instance.directory, timeoutProfile: "default" },
+      ),
       "diffFull name-status",
     )
 
@@ -202,9 +232,18 @@ export namespace Snapshot {
     }
 
     const numstat = await gitText(
-      $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --no-renames --numstat ${from} ${to} -- .`
-        .quiet()
-        .cwd(Instance.directory),
+      runGit(
+        [
+          "-c", `core.autocrlf=${coreAutocrlf}`,
+          "-c", "core.longpaths=true",
+          "-c", `core.symlinks=${coreSymlinks}`,
+          "-c", "core.quotepath=false",
+          "--git-dir", git,
+          "--work-tree", Instance.worktree,
+          "diff", "--no-ext-diff", "--no-renames", "--numstat", from, to, "--", ".",
+        ],
+        { cwd: Instance.directory, timeoutProfile: "default" },
+      ),
       "diffFull numstat",
     )
     const textFiles: string[] = []
@@ -254,17 +293,11 @@ export namespace Snapshot {
     return path.join(Global.Path.data, "snapshot", project.id)
   }
 
-  type GitCommand = {
-    nothrow(): Promise<{
-      exitCode: number
-      text(): string
-      stderr: Uint8Array
-      stdout: Uint8Array
-    }>
-  }
-
-  async function gitText(command: GitCommand, label: string) {
-    const result = await command.nothrow()
+  async function gitText(
+    command: Promise<{ exitCode: number; text(): string; stderr: Buffer | Uint8Array }>,
+    label: string,
+  ) {
+    const result = await command
     if (result.exitCode !== 0) {
       throw new Error(`${label} failed: ${new TextDecoder().decode(result.stderr).trim()}`)
     }
@@ -287,9 +320,16 @@ export namespace Snapshot {
   async function checkoutSnapshotPaths(git: string, hash: string, files: string[]) {
     for (const chunk of chunks(files, 200)) {
       await gitText(
-        $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} checkout ${hash} -- ${chunk}`
-          .quiet()
-          .cwd(Instance.worktree),
+        runGit(
+          [
+            "-c", "core.longpaths=true",
+            "-c", `core.symlinks=${coreSymlinks}`,
+            "--git-dir", git,
+            "--work-tree", Instance.worktree,
+            "checkout", hash, "--", ...chunk,
+          ],
+          { cwd: Instance.worktree, timeoutProfile: "default" },
+        ),
         "snapshot checkout",
       )
     }
@@ -309,9 +349,17 @@ export namespace Snapshot {
     if (files.length === 0) return objects
     for (const chunk of chunks(files, 200)) {
       const text = await gitText(
-        $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} ls-tree -r -z ${hash} -- ${chunk}`
-          .quiet()
-          .cwd(Instance.worktree),
+        runGit(
+          [
+            "-c", "core.longpaths=true",
+            "-c", `core.symlinks=${coreSymlinks}`,
+            "-c", "core.quotepath=false",
+            "--git-dir", git,
+            "--work-tree", Instance.worktree,
+            "ls-tree", "-r", "-z", hash, "--", ...chunk,
+          ],
+          { cwd: Instance.worktree, timeoutProfile: "default" },
+        ),
         "snapshot ls-tree",
       )
       for (const entry of text.split("\0")) {
@@ -331,44 +379,67 @@ export namespace Snapshot {
   async function catFileBatch(git: string, objects: string[]) {
     const out = new Map<string, string>()
     if (objects.length === 0) return out
-    const proc = Bun.spawn(["git", "--git-dir", git, "cat-file", "--batch"], {
-      cwd: Instance.worktree,
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-    })
-    proc.stdin.write(`${objects.join("\n")}\n`)
-    proc.stdin.end()
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout).arrayBuffer(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ])
-    if (exitCode !== 0) throw new Error(`snapshot cat-file failed: ${stderr.trim()}`)
+    // git()'s spawn flow can't pipe stdin (it sets stdin: "ignore"), so this
+    // path uses Process.spawn directly. To match the rest of util/git, give
+    // it the same wall-clock deadline + abort-on-timeout semantics:
+    // long-running cat-file batches would otherwise pin diffFull forever
+    // when the git child stalls (Windows fsmonitor, antivirus locking the
+    // pack files, etc.).
+    const controller = new AbortController()
+    const timeoutMs = 90_000
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const proc = Process.spawn(
+        ["git", "--git-dir", git, "cat-file", "--batch"],
+        {
+          cwd: Instance.worktree,
+          stdin: "pipe",
+          stdout: "pipe",
+          stderr: "pipe",
+          abort: controller.signal,
+        },
+      )
+      if (!proc.stdin) throw new Error("snapshot cat-file: stdin not available")
+      proc.stdin.write(`${objects.join("\n")}\n`)
+      proc.stdin.end()
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout as unknown as ReadableStream<Uint8Array>).arrayBuffer(),
+        new Response(proc.stderr as unknown as ReadableStream<Uint8Array>).text(),
+        proc.exited,
+      ])
+      if (exitCode !== 0) {
+        if (controller.signal.aborted) {
+          throw new Error(`snapshot cat-file timed out after ${timeoutMs}ms`)
+        }
+        throw new Error(`snapshot cat-file failed: ${stderr.trim()}`)
+      }
 
-    const bytes = new Uint8Array(stdout)
-    const decoder = new TextDecoder()
-    let offset = 0
-    while (offset < bytes.length) {
-      const lineEnd = bytes.indexOf(10, offset)
-      if (lineEnd < 0) throw new Error("snapshot cat-file returned truncated header")
-      const header = decoder.decode(bytes.subarray(offset, lineEnd))
-      offset = lineEnd + 1
-      const [object, type, rawSize] = header.split(" ")
-      const size = Number(rawSize)
-      if (!object || type !== "blob" || !Number.isInteger(size) || size < 0) {
-        throw new Error(`unexpected cat-file header: ${header}`)
+      const bytes = new Uint8Array(stdout)
+      const decoder = new TextDecoder()
+      let offset = 0
+      while (offset < bytes.length) {
+        const lineEnd = bytes.indexOf(10, offset)
+        if (lineEnd < 0) throw new Error("snapshot cat-file returned truncated header")
+        const header = decoder.decode(bytes.subarray(offset, lineEnd))
+        offset = lineEnd + 1
+        const [object, type, rawSize] = header.split(" ")
+        const size = Number(rawSize)
+        if (!object || type !== "blob" || !Number.isInteger(size) || size < 0) {
+          throw new Error(`unexpected cat-file header: ${header}`)
+        }
+        const end = offset + size
+        if (end > bytes.length) throw new Error(`snapshot cat-file truncated blob: ${object}`)
+        out.set(object, decoder.decode(bytes.subarray(offset, end)))
+        offset = end
+        if (offset < bytes.length) {
+          if (bytes[offset] !== 10) throw new Error(`snapshot cat-file missing separator after ${object}`)
+          offset++
+        }
       }
-      const end = offset + size
-      if (end > bytes.length) throw new Error(`snapshot cat-file truncated blob: ${object}`)
-      out.set(object, decoder.decode(bytes.subarray(offset, end)))
-      offset = end
-      if (offset < bytes.length) {
-        if (bytes[offset] !== 10) throw new Error(`snapshot cat-file missing separator after ${object}`)
-        offset++
-      }
+      return out
+    } finally {
+      clearTimeout(timer)
     }
-    return out
   }
 
   function chunks<T>(items: T[], size: number) {
@@ -379,13 +450,22 @@ export namespace Snapshot {
 
   async function add(git: string, indexFile?: string) {
     await syncExclude(git)
-    const env = indexFile ? { ...process.env, GIT_INDEX_FILE: indexFile } : undefined
-    const cmd = $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} add .`
-      .quiet()
-      .cwd(Instance.directory)
-      .nothrow()
-    if (env) await cmd.env(env)
-    else await cmd
+    const opts: GitOptions = {
+      cwd: Instance.directory,
+      timeoutProfile: "default",
+    }
+    if (indexFile) opts.env = { GIT_INDEX_FILE: indexFile }
+    await runGit(
+      [
+        "-c", `core.autocrlf=${coreAutocrlf}`,
+        "-c", "core.longpaths=true",
+        "-c", `core.symlinks=${coreSymlinks}`,
+        "--git-dir", git,
+        "--work-tree", Instance.worktree,
+        "add", ".",
+      ],
+      opts,
+    )
   }
 
   // Baseline exclude rules layered on top of the user project's own
@@ -444,11 +524,12 @@ export namespace Snapshot {
   }
 
   async function excludes() {
-    const file = await $`git rev-parse --path-format=absolute --git-path info/exclude`
-      .quiet()
-      .cwd(Instance.worktree)
-      .nothrow()
-      .text()
+    const result = await runGit(
+      ["rev-parse", "--path-format=absolute", "--git-path", "info/exclude"],
+      { cwd: Instance.worktree, timeoutProfile: "fast" },
+    )
+    if (result.exitCode !== 0) return
+    const file = result.text()
     if (!file.trim()) return
     const exists = await fs
       .stat(file.trim())
