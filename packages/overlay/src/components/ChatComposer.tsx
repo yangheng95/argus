@@ -98,6 +98,36 @@ const FILE_ACCEPT = [
 // pattern in addAttachment is unit-testable via a FileReader factory
 // override (Bun test runner has no jsdom).
 
+// Names that propagate from drop / paste / file-picker into the
+// orchestrator's attachment inventory must be:
+//   - non-empty (paste hands us "" on Chromium)
+//   - shell-safe (no path separators, no metacharacters) — server-side
+//     `displayFilename` rejects unsafe names and falls back to a sha
+//     handle that is unreadable to sub-agents
+// Mirrors the SAFE_FILENAME_RE rule in
+// `opencorvus/src/storage/attachment-store.ts`. Keeping the regex
+// duplicated here (the server-side helper is not bundled into the
+// overlay) is the lesser evil; the alternative is shipping the server
+// rule through the SDK just for one literal.
+const SAFE_FILENAME_RE = /^[A-Za-z0-9._\-一-鿿 ]+$/;
+const PASTE_EXT_BY_MIME: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/svg+xml": "svg",
+  "application/pdf": "pdf",
+  "text/plain": "txt",
+};
+function chooseAttachmentFilename(original: string | undefined, mime: string): string {
+  if (original && SAFE_FILENAME_RE.test(original)) return original;
+  const ext = PASTE_EXT_BY_MIME[mime] ?? (mime.split("/")[1] ?? "bin").replace(/[^A-Za-z0-9]/g, "");
+  // Stamp lets the operator distinguish multiple pastes within one
+  // composer session at a glance — sha-style handles all blur together.
+  const stamp = new Date().toISOString().replace(/[-:T]/g, "").replace(/\..+/, "");
+  return `pasted-${stamp}.${ext || "bin"}`;
+}
+
 // ── Component ──
 
 export function ChatComposer(props: ChatComposerProps) {
@@ -274,9 +304,19 @@ export function ChatComposer(props: ChatComposerProps) {
       });
       return;
     }
+    // Clipboard paste hands us a synthesized File whose `name` is often
+    // empty (Chromium) or an opaque "image.png" with no clue what was
+    // copied. Empty/unsafe names propagate to the orchestrator inventory
+    // and then surface to sub-agents as a 64-char sha — the operator
+    // saw e.g. `529bae80…970.png` instead of "the image I pasted".
+    // Fix at the single client-side seam (drop / paste / picker all flow
+    // here per rule 9) so every downstream consumer gets a stable,
+    // human-readable handle.
+    const mime = file.type || "application/octet-stream";
+    const filename = chooseAttachmentFilename(file.name, mime);
     setAttachments((prev) => [
       ...prev,
-      { mime: file.type || "application/octet-stream", url, filename: file.name },
+      { mime, url, filename },
     ]);
   }
 
