@@ -16,7 +16,8 @@
 .field-inline input[type="checkbox"] {
   width: calc(16px * var(--ui-scale));
   height: calc(16px * var(--ui-scale));
-  accent-color: var(--accent);
+  /* `accent-color` is now declared once at body scope
+   * (tokens/design-language.css). */
 }
 
 .field-label {
@@ -30,6 +31,20 @@
 }
 
 .field-input {
+  /* `appearance: none` strips the UA control chrome so our `background`
+   * actually wins. Without this, Chromium renders inputs with the
+   * platform light-scheme widget on top of our `var(--surface-inset)`
+   * — the symptom showing up most clearly inside `<dialog showModal>`,
+   * because top-layer form controls sometimes drop the body's
+   * inherited `color-scheme: dark` and fall back to a bright
+   * UA widget that the page CSS cannot recolour.
+   *
+   * Search and number inputs also carry UA-only sub-elements (the
+   * search cancel button, the number spinner) that survive `appearance:
+   * none` on the input itself; the rules below kill them too so dark
+   * themes do not get rogue light glyphs poking through. */
+  appearance: none;
+  -webkit-appearance: none;
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
   background: var(--surface-inset);
@@ -43,6 +58,48 @@
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* `<input type="search">` ships a UA cancel button rendered with the
+ * platform colour scheme; on dark themes it shows up as a light-grey
+ * glyph that ignores token colors. Strip it so the search field looks
+ * like any other `.field-input`. */
+.field-input[type="search"]::-webkit-search-cancel-button,
+.field-input[type="search"]::-webkit-search-decoration {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* `<input type="number">` spinner buttons are also UA chrome; identical
+ * theme leak and identical fix. The form fields that need a numeric
+ * stepper render their own +/- via the surrounding component. */
+.field-input[type="number"]::-webkit-outer-spin-button,
+.field-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.field-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Chromium's autofill burns a `background-color: rgb(232, 240, 254)`
+ * onto credential fields with `!important` priority that ordinary
+ * declarations cannot override. The canonical workaround is an inset
+ * `box-shadow` thick enough to repaint the entire field; the long
+ * transition keeps Chromium from animating back to the autofill colour
+ * a few hundred milliseconds after focus.
+ *
+ * Without this the password / API-key inputs in the settings dialog
+ * sit as white blocks on top of the dark surface even when the rest
+ * of the dialog is correctly dark. */
+.field-input:-webkit-autofill,
+.field-input:-webkit-autofill:hover,
+.field-input:-webkit-autofill:focus,
+.field-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-inset) inset !important;
+  -webkit-text-fill-color: var(--text-strong) !important;
+  caret-color: var(--text-strong);
+  transition: background-color 9999s ease-in-out 0s;
 }
 textarea.field-input {
   resize: vertical;

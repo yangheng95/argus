@@ -581,7 +581,7 @@
   width: calc(13px * var(--ui-scale));
   height: calc(13px * var(--ui-scale));
   margin: 0;
-  accent-color: var(--accent);
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
   flex: 0 0 auto;
 }
 

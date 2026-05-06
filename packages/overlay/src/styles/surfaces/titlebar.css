@@ -658,13 +658,13 @@
 
 .titlebar-menubar-toggle input[type="checkbox"] {
   flex: none;
-  accent-color: var(--accent);
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
 }
 
 .titlebar-menubar-range input[type="range"] {
   width: calc(116px * var(--ui-scale));
   flex: none;
-  accent-color: var(--accent);
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
 }
 
 .titlebar-theme-options-menubar {

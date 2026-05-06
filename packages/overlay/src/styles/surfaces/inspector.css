@@ -147,7 +147,12 @@
   width: 100%;
   min-height: 0;
   border: 0;
-  background: white;
+  /* The iframe paints whatever its `srcdoc` contains; the frame
+   * element itself only shows in the brief moment before the doc
+   * loads or around the doc's body margin. Use the active theme's
+   * canvas surface so it does not flash bright-white inside dark
+   * themes (regression: pre-fix this was hard-coded `white`). */
+  background: var(--surface-inset);
 }
 
 .frontend-preview-empty {
@@ -2627,7 +2632,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   background: var(--subtle-2);
 }
 .criteria-check input {
-  accent-color: var(--accent);
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
 }
 .criteria-check input:checked + span {
   color: var(--text-strong);

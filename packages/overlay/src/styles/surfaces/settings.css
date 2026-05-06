@@ -2169,7 +2169,7 @@
 .config-toggle-list-item input[type="checkbox"] {
   width: calc(16px * var(--ui-scale));
   height: calc(16px * var(--ui-scale));
-  accent-color: var(--accent);
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
   flex-shrink: 0;
   cursor: pointer;
 }
@@ -2452,7 +2452,7 @@
 .opacity-field input[type="range"] {
   width: 100%;
   height: calc(4px * var(--ui-scale));
-  accent-color: var(--accent);
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
   cursor: pointer;
   margin: calc(4px * var(--ui-scale)) 0;
 }
