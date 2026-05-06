@@ -224,11 +224,6 @@ export const EngineTaskTable = sqliteTable(
      *  carried several other fields that turned out to be dead). Read by the
      *  dispatch tool when creating runs. */
     executor: text().notNull().$type<EngineExecutor>().default("mirrorcode"),
-    /** Architect-produced challenge seeds for the Prosecutor. Promoted from
-     *  task.metadata._architect_challenge_seeds. Written once by the
-     *  architect tool in orchestrator/tools.ts, read on each delivery
-     *  iteration by the Prosecutor. */
-    architect_challenge_seeds: text({ mode: "json" }).$type<Array<Record<string, unknown>>>(),
     /** Delivery verdict criteria rollup — unified stream of
      *  deferred_checks + rejection_details + startup/frontend checks, used
      *  by the overlay Quality Gates panel. Promoted from

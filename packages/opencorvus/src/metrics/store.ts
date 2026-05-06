@@ -43,106 +43,7 @@ export const MAX_CHALLENGE_PER_ITER = 1
 export const MAX_CHALLENGE_PER_TASK = 3
 
 // ---------------------------------------------------------------------------
-// Architect bulk persist — take the RequirementsResult metric specs and
-// insert them as baselines. Challenge seeds are stashed on task.metadata
-// for the Prosecutor to read in Phase 4.
-// ---------------------------------------------------------------------------
-
-interface ArchitectMetricsInput {
-  task_id: string
-  /** Architect-level goal id → DB goal id (from orchestrator's llmToDBID map). */
-  goal_id_map: ReadonlyMap<string, string>
-  goal_metric_specs: ReadonlyArray<{
-    goal_id: string
-    name: string
-    description: string
-    unit: string
-    direction: "higher_better" | "lower_better"
-    target: number
-    floor: number
-    weight: number
-    gate_class: "blocking" | "diagnostic" | "efficiency"
-    evaluator_kind: "shell" | "judge" | "query" | "aggregator"
-    evaluator_config: Record<string, unknown>
-    source_requirement_ids: string[]
-  }>
-  global_metric_specs: ReadonlyArray<{
-    name: string
-    description: string
-    unit: string
-    direction: "higher_better" | "lower_better"
-    target: number
-    floor: number
-    weight: number
-    gate_class: "blocking" | "diagnostic" | "efficiency"
-    evaluator_kind: "shell" | "judge" | "query" | "aggregator"
-    evaluator_config: Record<string, unknown>
-    source_requirement_ids: string[]
-  }>
-}
-
-/**
- * Persist all Architect-emitted baseline specs for a task. Called once, right
- * after insertGoalRows(). Throws if any spec references an unknown goal id
- * (the caller should have built goal_id_map from the same llmToDBID map used
- * to remap depends_on).
- */
-export function persistArchitectMetrics(input: ArchitectMetricsInput): {
-  goal_specs_written: number
-  global_specs_written: number
-} {
-  let goalWritten = 0
-  let globalWritten = 0
-  for (const m of input.goal_metric_specs) {
-    const dbGoalID = input.goal_id_map.get(m.goal_id)
-    if (!dbGoalID) {
-      throw new MetricWriteError({
-        message: `goal metric "${m.name}" references unknown architect goal "${m.goal_id}"`,
-        code: "unknown_goal",
-      })
-    }
-    registerBaselineSpec({
-      task_id: input.task_id,
-      scope: "goal",
-      goal_id: dbGoalID,
-      name: m.name,
-      description: m.description,
-      unit: m.unit,
-      direction: m.direction,
-      target: m.target,
-      floor: m.floor,
-      weight: m.weight,
-      gate_class: m.gate_class,
-      evaluator_kind: m.evaluator_kind,
-      evaluator_config: m.evaluator_config,
-      source_requirement_ids: m.source_requirement_ids,
-    })
-    goalWritten++
-  }
-  for (const m of input.global_metric_specs) {
-    registerBaselineSpec({
-      task_id: input.task_id,
-      scope: "global",
-      goal_id: null,
-      name: m.name,
-      description: m.description,
-      unit: m.unit,
-      direction: m.direction,
-      target: m.target,
-      floor: m.floor,
-      weight: m.weight,
-      gate_class: m.gate_class,
-      evaluator_kind: m.evaluator_kind,
-      evaluator_config: m.evaluator_config,
-      source_requirement_ids: m.source_requirement_ids,
-    })
-    globalWritten++
-  }
-  return { goal_specs_written: goalWritten, global_specs_written: globalWritten }
-}
-
-// ---------------------------------------------------------------------------
-// Baseline specs (Architect only)
+// Baseline specs
 // ---------------------------------------------------------------------------
 
 interface BaselineSpecInput {
@@ -553,4 +454,3 @@ function clip01(x: number): number {
   if (x > 1) return 1
   return x
 }
-

@@ -113,6 +113,23 @@ describe("core prompt hygiene", () => {
     expect(text).toContain('category: "shared_type"')
   })
 
+  test("architect prompt and tool surface do not expose duplicate metric or challenge lanes", async () => {
+    const architect = await readPrompt("architect")
+    const outputTools = await readSource("architect/output-tools.ts")
+
+    for (const deadName of [
+      "register_goal_metric_spec",
+      "register_global_metric_spec",
+      "register_challenge_seed",
+    ]) {
+      expect(architect).not.toContain(deadName)
+      expect(outputTools).not.toContain(deadName)
+    }
+    expect(outputTools).not.toContain("RECOMMENDED_GOAL_METRICS")
+    expect(outputTools).not.toContain("RECOMMENDED_GLOBAL_METRICS")
+    expect(architect).toContain("The verification goal's `acceptance_specs` are the quality contract")
+  })
+
   test("architect and build prompts carry repository discipline without hidden reminder injection", async () => {
     const architect = await readPrompt("architect")
     const build = await readPrompt("build")

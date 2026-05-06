@@ -3,8 +3,8 @@
  *
  * The Architect sits between Requirements and Dispatch. It reads the
  * requirement list + foundational decisions, explores the codebase, and
- * produces the final goal set along with optional metric specs, challenge seeds,
- * traceability, and cross-goal interface contracts. On a re-run (triggered
+ * produces the final goal set along with traceability, fidelity coverage,
+ * assembly ownership, and cross-goal interface contracts. On a re-run (triggered
  * by delivery/evaluation feedback) it also refines the existing goal set.
  */
 import type { GoalContractFields } from "@/pipeline/types"
@@ -37,60 +37,6 @@ export interface ArchitectContract {
   title: string
   spec: string
   goalIDs: string[]
-}
-
-// ---------------------------------------------------------------------------
-// Optional metric specs emitted by the Architect (per-goal + global).
-//
-// LLM-facing: `goal_id` refers to the Architect's own string id (e.g.
-// "goal_api"), not the DB row. The orchestrator maps LLM id → DB id at
-// persistence time. Field semantics match engine_metric_spec exactly
-// except `source` / `created_by` / `frozen_at` / `id` which are assigned
-// by the store layer. These are diagnostic hints; acceptance gating is owned
-// by acceptance_specs and delivery evidence.
-// ---------------------------------------------------------------------------
-
-export interface ArchitectGoalMetricSpec {
-  goal_id: string
-  name: string
-  description: string
-  unit: string
-  direction: "higher_better" | "lower_better"
-  target: number
-  floor: number
-  weight: number
-  gate_class: "blocking" | "diagnostic" | "efficiency"
-  evaluator_kind: "shell" | "judge" | "query" | "aggregator"
-  evaluator_config: Record<string, unknown>
-  source_requirement_ids: string[]
-}
-
-export interface ArchitectGlobalMetricSpec {
-  name: string
-  description: string
-  unit: string
-  direction: "higher_better" | "lower_better"
-  target: number
-  floor: number
-  weight: number
-  gate_class: "blocking" | "diagnostic" | "efficiency"
-  evaluator_kind: "shell" | "judge" | "query" | "aggregator"
-  evaluator_config: Record<string, unknown>
-  source_requirement_ids: string[]
-}
-
-/**
- * Candidate challenge priors the Architect thinks are worth probing. These
- * are optional diagnostics, not a parallel acceptance contract.
- */
-export interface ArchitectChallengeSeed {
-  id: string
-  scope: "goal" | "global"
-  /** goal_id when scope='goal'; free-form risk identifier when scope='global'. */
-  target_ref: string
-  claim: string
-  rationale: string
-  priority_hint: "high" | "medium" | "low"
 }
 
 // ---------------------------------------------------------------------------
@@ -144,9 +90,6 @@ export interface ArchitectResult {
   goals: GoalContractFields[]
   /** Goal IDs the Architect chose to drop during a re-run. */
   removedGoalIDs: string[]
-  goalMetricSpecs: ArchitectGoalMetricSpec[]
-  globalMetricSpecs: ArchitectGlobalMetricSpec[]
-  challengeSeeds: ArchitectChallengeSeed[]
   traceability: TraceabilityEntry[]
   fidelity: ArchitectFidelityCoverage
   /** Cross-goal interface contracts written to the Decision Log. */

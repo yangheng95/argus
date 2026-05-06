@@ -268,9 +268,9 @@ const PROSECUTOR_MAX_STEPS = 8
 
 const PROSECUTOR_SYSTEM = PROSECUTOR_CORE
 
-/** Architect-authored probe hints — task start priors for the Prosecutor.
- *  Shape matches requirements/types.ts::ArchitectChallengeSeed; duplicated
- *  here to keep this module free of a cycle on the requirements layer. */
+/** Optional externally-authored probe hints for the Prosecutor.
+ *  Architect no longer emits these; keep the input shape local so callers that
+ *  already have explicit probes can pass them without coupling to another layer. */
 export interface ArchitectSeedInput {
   id: string
   scope: "goal" | "global"

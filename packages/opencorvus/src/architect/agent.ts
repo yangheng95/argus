@@ -8,8 +8,8 @@
  *
  * Authority:
  * ✓ Produces the final goal set (add / modify / split / remove)
- * ✓ Optionally registers diagnostic metric specs and challenge seeds
  * ✓ Records REQ-N → goal traceability
+ * ✓ Records fidelity coverage and assembly ownership
  * ✓ Resolves cross-goal interfaces into binding Decision Log contracts
  *
  * Constraints:
@@ -224,9 +224,6 @@ export namespace ArchitectAgent {
     log.info("architect agent output", {
       goals: goals.length,
       removed: collector.removed_goal_ids.length,
-      goalMetrics: collector.goal_metric_specs.length,
-      globalMetrics: collector.global_metric_specs.length,
-      challengeSeeds: collector.challenge_seeds.length,
       traceability: collector.traceability.length,
       sourceCoverage: collector.source_coverage.length,
       referenceCoverage: collector.reference_coverage.length,
@@ -237,9 +234,6 @@ export namespace ArchitectAgent {
     return {
       goals,
       removedGoalIDs: collector.removed_goal_ids,
-      goalMetricSpecs: collector.goal_metric_specs,
-      globalMetricSpecs: collector.global_metric_specs,
-      challengeSeeds: collector.challenge_seeds,
       traceability: collector.traceability,
       fidelity: {
         sourceCoverage: collector.source_coverage,
