@@ -20,6 +20,7 @@ import { EngineService } from "@/task-api"
 import { sessionGoalID } from "./task-event"
 import { Publisher } from "@/engine/publisher"
 import { EngineGit } from "@/engine/git"
+import { git as runGit } from "@/util/git"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent } from "@/engine/model"
@@ -2946,16 +2947,15 @@ export function createOrchestratorTools(input: {
         // delivery agent judges the actual changes.
         if (allDiffs.length === 0 && goalRuns.length === 0) {
           try {
-            const { $: $bun } = await import("bun")
             const cwd = Instance.directory
-            const statusResult = await $bun`git status --porcelain=v1 -uall`.cwd(cwd).quiet().nothrow()
+            const statusResult = await runGit(["status", "--porcelain=v1", "-uall"], { cwd, timeoutProfile: "default" })
             const statusLines = statusResult.stdout.toString().split("\n").filter((line) => line.trim().length > 0)
             for (const raw of statusLines) {
               // Porcelain format: "XY file" (X=index status, Y=worktree status). Extract the path.
               const file = raw.slice(3).trim().replace(/^"(.+)"$/, "$1")
               if (!file || seenFiles.has(file)) continue
               let diff = ""
-              const diffResult = await $bun`git diff HEAD -- ${file}`.cwd(cwd).quiet().nothrow()
+              const diffResult = await runGit(["diff", "HEAD", "--", file], { cwd, timeoutProfile: "default" })
               if (diffResult.exitCode === 0) diff = diffResult.stdout.toString()
               if (!diff) {
                 // New / untracked — read raw contents so the delivery agent
