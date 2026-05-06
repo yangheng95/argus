@@ -477,6 +477,36 @@ wastes budget and clouds the trace.
   - **fail_task** ONLY when the build agent produced empty / garbled / fundamentally unusable output. Logic bugs, test failures, missing imports = fix and retry, never fail_task.
 - **NEVER call `build({ goalID })` on a passed goal** — passed is terminal. Use modify_goal to change contract, which opens a fresh attempt.
 
+### Use the decision_log review history to escalate accumulated problems
+
+`read_context scope=decisions` (or `all`) surfaces the cumulative `phase=review`
+entries written after every post-build architecture review. Treat that history
+as your accumulator of unresolved architectural debt:
+
+- One review with `needs_correction` after a single goal build is normal — the
+  builder may have left local issues for the next per-goal build to address.
+- The same architectural concerns recurring across two or three reviews on the
+  SAME spec snapshot is the signal that the goal graph itself cannot absorb
+  them at the per-goal layer. Climb the repair ladder explicitly:
+  1. If a specific goal's contract is the root cause → `modify_goal` on that
+     goal, then `build({ goalID })` to re-run it under the corrected contract.
+  2. If the architecture review keeps naming missing capabilities, ownership
+     overlap, or unsupported claims that no single contract patch resolves →
+     re-enter `architect` to refine / split / remove goals (a new spec snapshot
+     resets the review accumulator naturally).
+  3. If multiple consecutive reviews under different spec snapshots still
+     surface the same blocker (after architect re-runs and modify_goal
+     attempts) → escalate to `restart_from_stage` upstream of the offending
+     decision, or `fail_task` with the decision_log evidence cited as the
+     reason. Never burn budget reflexively re-dispatching the same goal under
+     the same contract while the review keeps repeating itself.
+
+The decision_log entry value is intentionally compact (verdict + per-dim
+counts + summary + top issues). Read it for the trend; if you need full
+issue text for a specific review, read_context's Integrity section carries
+the most recent review's full markdown, and the engine_artifact row archives
+every historical review verbatim.
+
 ## Goal Numbering And Versions
 
 - The operator-facing label is `#G{stable-order}V{implementation-version}`.

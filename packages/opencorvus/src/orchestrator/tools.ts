@@ -918,6 +918,41 @@ export function createOrchestratorTools(input: {
         error: err instanceof Error ? err.message : String(err),
       })
     }
+    // Append a compact decision_log row so the orchestrator's read_context
+    // automatically surfaces the accumulated review history (latest 20
+    // entries, ≤ 600 chars per value). The full review_markdown stays in
+    // engine_artifact for one-shot fidelity; this row is the cumulative
+    // signal the orchestrator LLM needs to spot recurring issues across
+    // multiple post-build reviews — same issues reappearing means the
+    // current goal graph cannot absorb them and architect re-run / fail_task
+    // becomes the cheaper repair (per orchestrator-core.txt's repair ladder).
+    try {
+      const dimSummary = verdict.dimensions
+        .map((d) => `${d.id}:${d.verdict}(${d.issues.length}i/${d.corrections.length}c/${d.missingGoals.length}m)`)
+        .join(", ")
+      const topIssues = verdict.issues
+        .slice(0, 5)
+        .map((i) => `[${i.type}] ${i.description}`)
+        .join("; ")
+      const issueTail = verdict.issues.length > 5
+        ? ` (+${verdict.issues.length - 5} more in engine_artifact)`
+        : ""
+      const value =
+        `verdict=${verdict.verdict} | dims=${dimSummary} | counts=${verdict.issues.length}i/${verdict.corrections.length}c/${verdict.missingGoals.length}m` +
+        (verdict.summary ? ` | summary=${verdict.summary}` : "") +
+        (topIssues ? ` | top: ${topIssues}${issueTail}` : "")
+      decisionLog.append({
+        phase: "review",
+        key: `review_${verdict.verdict}_${verdict.sessionID}`,
+        value,
+        reason: "post-build architecture_review",
+      })
+    } catch (err) {
+      log.warn("integrity: decision_log review append failed (non-fatal)", {
+        taskID,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
     return {
       status: "reviewed",
       specSnapshotID: activeSpec.id,
