@@ -115,6 +115,7 @@ Write as soon as you have the knowledge. Future agents and future sessions benef
 - NEVER revert, reset, or overwrite changes you did not make unless explicitly requested.
 - Do not amend commits unless explicitly requested.
 - NEVER use destructive commands (git reset --hard, git checkout --) unless specifically approved by the user.
+- NEVER stage or commit `.opencorvus/` — it's per-machine engine state, not project source. Leave it untracked even if `git add -A` would otherwise include it.
 - Commit messages must be concise and reflect the user's intent, not describe mechanics.
 
 # Code references
