@@ -44,7 +44,7 @@ import type {
   ParsedRequirement,
   RequirementsDecision,
 } from "./types"
-import { createArchitectOutputTools, isArchitectReadyToFinalize, type RegisteredGoal } from "./output-tools"
+import { createArchitectOutputTools, type RegisteredGoal } from "./output-tools"
 import { AttachmentStore } from "@/storage/attachment-store"
 
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
@@ -151,7 +151,15 @@ export namespace ArchitectAgent {
       terminalTool: {
         toolName: "submit_architect",
         isSatisfied: (collector) => collector.finalized,
-        shouldExposeOnlyTerminalTool: isArchitectReadyToFinalize,
+        // MUST use the toolKit's predicate (closes over workDir/designSpecs/
+        // requireReferenceCoverage) so terminal-tool scoping never disagrees
+        // with submit_architect's own validation. Passing the standalone
+        // `isArchitectReadyToFinalize(collector)` here drops the workDir-
+        // dependent fidelity check and traps the model in a retry loop:
+        // predicate says "ready, only submit_architect exposed", tool says
+        // "ISSUES, retry", model has no other tool to fix the underlying
+        // state with → 鬼打墙. Rule 8 (single source).
+        shouldExposeOnlyTerminalTool: () => outputToolKit.isReadyToFinalize(),
       },
     })
 

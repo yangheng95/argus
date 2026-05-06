@@ -602,3 +602,93 @@ test("architect validator allows pure bootstrap dependencies without fake import
   const issues = architectValidationIssues(collector)
   expect(issues).not.toContain("Goal goal_types: depends_on is set but imports is empty")
 })
+
+// Regression: terminal-tool scoping must not disagree with submit_architect's
+// own validation. Earlier `architect/agent.ts` passed the standalone
+// `isArchitectReadyToFinalize(collector)` (no workDir) to
+// `shouldExposeOnlyTerminalTool` while submit_architect ran the full check
+// against the workDir filesystem; if a registered owned_path existed on disk
+// without matching `register_source_coverage`, the predicate said "ready,
+// expose only submit_architect" but submit_architect kept returning ISSUES,
+// trapping the model in a tight retry loop ("鬼打墙"). The toolkit-bound
+// `isReadyToFinalize()` MUST share the closure with `submit_architect.execute`
+// (rule 8: single source of truth).
+test("toolkit isReadyToFinalize agrees with submit_architect when workDir owned paths exist", async () => {
+  const dir = freshWorkDir()
+  // Create a file that matches FEATURE_GOAL.owned_paths so the workDir-aware
+  // fidelity check (`fs.existsSync(...)` in architect/fidelity.ts) finds it.
+  mkdirSync(path.join(dir, "src"), { recursive: true })
+  writeFileSync(path.join(dir, "src", "index.ts"), "export type Router = unknown\n")
+  // The verification goal also needs its owned path to exist for the test to
+  // exercise both feature and verify coverage paths.
+  mkdirSync(path.join(dir, "tests", "integration"), { recursive: true })
+  writeFileSync(path.join(dir, "tests", "integration", "router.test.ts"), "// placeholder\n")
+
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: dir })
+  const { tools } = kit
+
+  await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
+  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-1", goal_ids: ["goal_feature", "goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_contract.execute!(
+    {
+      category: "interface_contract",
+      title: "Router",
+      spec: "```ts\nexport type Router = unknown\n```",
+      goal_ids: ["goal_feature", "goal_verify"],
+    } as any,
+    {} as any,
+  )
+  await registerAssemblyOwner(tools)
+
+  // The standalone (workDir-less) predicate would return TRUE here — that was
+  // exactly the bug. Capturing it in the test pins the divergence so any
+  // future regression that re-introduces the standalone form is caught.
+  expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(true)
+  // The toolkit-bound predicate sees workDir and refuses until source
+  // coverage is registered for the existing owned path.
+  expect(kit.isReadyToFinalize()).toBe(false)
+  const rejected = await tools.submit_architect.execute!(
+    { summary: "Workdir owned paths still need source coverage." } as any,
+    {} as any,
+  )
+  expect(rejected).toMatch(/^ISSUES \(/)
+  expect(rejected).toContain("Missing source coverage for existing owned paths")
+  expect(kit.getCollector().finalized).toBe(false)
+
+  await tools.register_source_coverage.execute!(
+    {
+      id: "src-feature-router",
+      goal_ids: ["goal_feature"],
+      paths: ["src/index.ts"],
+      action: "modify",
+      rationale: "Feature goal owns the router source on disk.",
+    } as any,
+    {} as any,
+  )
+  await tools.register_source_coverage.execute!(
+    {
+      id: "src-verify-router",
+      goal_ids: ["goal_verify"],
+      paths: ["tests/integration/router.test.ts"],
+      action: "modify",
+      rationale: "Verification goal owns the router integration test on disk.",
+    } as any,
+    {} as any,
+  )
+
+  expect(kit.isReadyToFinalize()).toBe(true)
+  const accepted = await tools.submit_architect.execute!(
+    { summary: "Source coverage now matches workdir owned paths." } as any,
+    {} as any,
+  )
+  expect(accepted).toMatch(/^PASS: Architect output finalized\./)
+  expect(kit.getCollector().finalized).toBe(true)
+})
