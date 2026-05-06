@@ -144,7 +144,10 @@ export function architectValidationIssues(
     ) {
       issues.push(`Goal ${g.id}: ${g.kind} goal must declare at least one export`)
     }
-    if (g.depends_on.length > 0 && g.imports.length === 0) {
+    const nonBootstrapDeps = g.depends_on.filter(
+      (depID) => !bootstrapGoals.some((bootstrap) => bootstrap.id === depID),
+    )
+    if (nonBootstrapDeps.length > 0 && g.imports.length === 0) {
       issues.push(`Goal ${g.id}: depends_on is set but imports is empty`)
     }
     for (const spec of g.acceptance_specs) {

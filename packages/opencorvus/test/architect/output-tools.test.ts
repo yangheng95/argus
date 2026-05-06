@@ -569,3 +569,36 @@ test("architect validator rejects a bootstrap goal that is not in every downstre
     .filter((issue) => issue.startsWith("Bootstrap goal "))
   expect(acceptedBootstrapIssues).toEqual([])
 })
+
+test("architect validator allows pure bootstrap dependencies without fake imports", () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
+  const collector = kit.getCollector()
+  collector.goals.push({
+    ...FEATURE_GOAL,
+    id: "goal_bootstrap",
+    title: "Bootstrap",
+    acceptance_specs: [acceptance("goal_bootstrap", "REQ-1")],
+    owned_paths: ["package.json", "src/main.tsx", "src/App.tsx"],
+    exports: ["Runnable project scaffold"],
+    kind: "bootstrap" as const,
+  })
+  collector.goals.push({
+    ...FEATURE_GOAL,
+    id: "goal_types",
+    title: "Shared Types",
+    acceptance_specs: [acceptance("goal_types", "REQ-2")],
+    owned_paths: ["src/types/index.ts"],
+    depends_on: ["goal_bootstrap"],
+    exports: ["Message", "Conversation"],
+    imports: [],
+    requirement_ids: ["REQ-2"],
+  })
+  collector.goals.push({
+    ...VERIFY_GOAL,
+    depends_on: ["goal_bootstrap", "goal_types"],
+    imports: ["Message, Conversation from goal_types"],
+  })
+
+  const issues = architectValidationIssues(collector)
+  expect(issues).not.toContain("Goal goal_types: depends_on is set but imports is empty")
+})
