@@ -562,6 +562,25 @@ export function getGoalRetryCount(goalID: string): number {
 }
 
 /**
+ * Count goal_run rows for `goalID` whose `superseded_reason` equals `reason`.
+ * Used as a convergence boundary: a caller can refuse to open the
+ * (N+1)-th attempt under the same reason once this count reaches its limit
+ * and instead surface evidence to the orchestrator (e.g.
+ * `architecture_review_rework` reaching MAX_REVIEW_REWORK_PER_GOAL signals
+ * the same goal graph cannot converge under that rework family — orchestrator
+ * should escalate to architect re-run if delivery evidence supports it).
+ *
+ * Counts are inclusive of the live tip when its `superseded_reason` is
+ * already patched (startNewAttempt patches the tip then writes a fresh
+ * attempt artifact; both rows count if both carry the same reason).
+ *
+ * See specs/architecture-review-rework-closure-2026-05-06.md (Layer 3).
+ */
+export function countGoalAttemptsBySupersedeReason(goalID: string, reason: string): number {
+  return listGoalRunsByGoal(goalID).filter((r) => r.superseded_reason === reason).length
+}
+
+/**
  * Latest goal_run for a goal that is itself a tip of the supersede chain —
  * i.e. no newer goal_run points at it via supersede_of. Callers planning a
  * retry should pass this row's id as the `supersedeOf` to createGoalRun.
