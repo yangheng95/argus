@@ -74,6 +74,8 @@ import {
   isTaskTerminal,
 } from "@/engine/task-status"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
+import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
+import { createDecisionLog } from "@/decision-log"
 import { Orchestrator } from "@/orchestrator/agent"
 import { DIRECT_REPLY_AGENT_KINDS } from "@/orchestrator/direct-reply"
 import { overlayMeta } from "@/orchestrator/protocol/message-bridge"
@@ -136,6 +138,33 @@ import { Identifier } from "@/id/id"
 import { AttachmentStore } from "@/storage/attachment-store"
 
 const log = Log.create({ service: "assistant" })
+
+/**
+ * Per-call deadline for `executor.abort()` during cancelTask / abortRun.
+ * Mirrorcode and other executors await child-process cooperation; if the
+ * child is unresponsive (hung mirrorcode adapter, dead network), the abort
+ * promise can hang forever. 5s is generous for an in-process abort and
+ * tight enough that users see the cancel succeed (UI stops spinning).
+ * Tests can override via CancelTaskOptions.
+ */
+const CANCEL_ABORT_TIMEOUT_MS = 5_000
+
+/**
+ * Per-call deadline for the cleanup pass (`abortLiveExecutionForTask` with
+ * `cleanupGoalWorkspaces: true`). The cleanup walks worktrees and runs
+ * multiple `git worktree remove` invocations — Phase-1 of the systemic
+ * sweep migrates those to `util/git`'s timeout, but the aggregate still
+ * needs an outer bound. 60s covers ~30 worktrees at ~2s each before we
+ * give up and let updateTask publish so the API unblocks.
+ */
+const CANCEL_CLEANUP_TIMEOUT_MS = 60_000
+
+export interface CancelTaskOptions {
+  /** Override the per-abort deadline (ms). Tests use this to keep wall time small. */
+  abortTimeoutMs?: number
+  /** Override the cleanup deadline (ms). Tests use this to force timeout in <1s. */
+  cleanupTimeoutMs?: number
+}
 
 async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
   const owningTask = taskIDForSession(sessionID)
@@ -1267,8 +1296,32 @@ export namespace EngineService {
     return viewInteraction(requireInteraction(interactionID))
   }
 
-  export async function cancelTask(taskID: string) {
+  export async function cancelTask(taskID: string, options?: CancelTaskOptions) {
     const task = requireTask(taskID)
+    const decisions = createDecisionLog(taskID)
+    const abortTimeoutMs = options?.abortTimeoutMs ?? CANCEL_ABORT_TIMEOUT_MS
+    const cleanupTimeoutMs = options?.cleanupTimeoutMs ?? CANCEL_CLEANUP_TIMEOUT_MS
+
+    // Helper: log + decision_log breadcrumb when an abort exceeds its
+    // deadline, but never throw. cancelTask MUST reach updateTask({status:
+    // "cancelled"}) so the API stops blocking and the UI unblocks; an
+    // unresponsive executor is recorded so the operator can investigate
+    // potential zombie children separately (rule 22 — fail loud, don't
+    // bypass the lifecycle).
+    const onAbortTimeout = (label: string, err: unknown, refs: Record<string, unknown>) => {
+      if (err instanceof AwaitTimeoutError) {
+        log.warn(`${label} timed out during cancelTask`, { taskID, ...refs, ms: err.ms })
+        decisions.append({
+          phase: "cancel",
+          key: "abort_timeout",
+          value: JSON.stringify({ label, ms: err.ms, ...refs }),
+          reason: "executor.abort or cleanup did not respond within deadline; cancel proceeded so UI unblocks. Possible zombie child — investigate before another task starts in the same workspace.",
+        })
+      } else {
+        log.warn(`${label} failed during cancelTask`, { taskID, ...refs, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+
     // Abort Orchestrator and any in-progress pipeline stage
     Orchestrator.abort(taskID)
     abortTaskPipeline(taskID)
@@ -1287,27 +1340,37 @@ export namespace EngineService {
       // was dead (written only, never read). Resolve via the parent run.
       const coordinatorRun = findRun(row.coordinator_run_id)
       if (!coordinatorRun) return
-      await ExecutorRegistry.require(coordinatorRun.executor).abort({
+      const abortP = ExecutorRegistry.require(coordinatorRun.executor).abort({
         sessionID:
           typeof refs?.provider_session_id === "string"
             ? refs.provider_session_id
             : row.session_id ?? undefined,
         queueTaskID: typeof refs?.queue_task_id === "string" ? refs.queue_task_id : undefined,
-      }).catch(() => false)
+      })
+      await withTimeout(abortP, abortTimeoutMs, "executor.abort liveGoalRun")
+        .catch((err) => onAbortTimeout("executor.abort liveGoalRun", err, { goalRunID: row.id, runID: coordinatorRun.id }))
     }))
     const { abortLiveExecutionForTask } = await import("@/engine/writer")
-    await abortLiveExecutionForTask({
-      taskID,
-      reason: "task cancelled",
-      cleanupGoalWorkspaces: true,
-      includeRuns: false,
-    })
+    await withTimeout(
+      abortLiveExecutionForTask({
+        taskID,
+        reason: "task cancelled",
+        cleanupGoalWorkspaces: true,
+        includeRuns: false,
+      }),
+      cleanupTimeoutMs,
+      "abortLiveExecutionForTask",
+    ).catch((err) => onAbortTimeout("abortLiveExecutionForTask", err, {}))
     const run = findActiveRunForTask(task.id)
     if (run) {
-      await ExecutorRegistry.require(run.executor).abort({
-        sessionID: run.session_id ?? undefined,
-        queueTaskID: run.executor_ref?.queue_task_id,
-      })
+      await withTimeout(
+        ExecutorRegistry.require(run.executor).abort({
+          sessionID: run.session_id ?? undefined,
+          queueTaskID: run.executor_ref?.queue_task_id,
+        }),
+        abortTimeoutMs,
+        "executor.abort run",
+      ).catch((err) => onAbortTimeout("executor.abort run", err, { runID: run.id }))
     }
     if (run) {
       await updateRun(
@@ -1593,11 +1656,29 @@ export namespace EngineService {
     }
   }
 
-  export async function abortRun(runID: string) {
+  export async function abortRun(runID: string, options?: { abortTimeoutMs?: number }) {
     const run = requireRun(runID)
-    await ExecutorRegistry.require(run.executor).abort({
-      sessionID: run.session_id ?? undefined,
-      queueTaskID: run.executor_ref?.queue_task_id,
+    const abortTimeoutMs = options?.abortTimeoutMs ?? CANCEL_ABORT_TIMEOUT_MS
+    const decisions = createDecisionLog(run.task_id)
+    await withTimeout(
+      ExecutorRegistry.require(run.executor).abort({
+        sessionID: run.session_id ?? undefined,
+        queueTaskID: run.executor_ref?.queue_task_id,
+      }),
+      abortTimeoutMs,
+      "executor.abort run",
+    ).catch((err) => {
+      if (err instanceof AwaitTimeoutError) {
+        log.warn("executor.abort timed out during abortRun", { runID, ms: err.ms })
+        decisions.append({
+          phase: "cancel",
+          key: "abort_timeout",
+          value: JSON.stringify({ label: "executor.abort run", ms: err.ms, runID }),
+          reason: "abortRun's executor.abort exceeded deadline; run will still be marked aborted so the API unblocks. Possible zombie child.",
+        })
+      } else {
+        log.warn("executor.abort failed during abortRun", { runID, error: err instanceof Error ? err.message : String(err) })
+      }
     })
     await updateRun(
       run,
