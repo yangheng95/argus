@@ -7,13 +7,27 @@
 // canonical from its new home.
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
-const STYLES = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
-  "utf8",
-)
+const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
+const CASCADE_DIR = path.join(STYLES_ROOT, "cascade")
+
+function walkCss(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkCss(full))
+    else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+// styles.css was dissolved 2026-05-04. The "no .titlebar-utility in
+// styles.css" guard is now "no .titlebar-utility in cascade layer" — the
+// cascade owns cross-cutting rules; surface-specific chrome lives in titlebar.css.
+const CASCADE_CSS = walkCss(CASCADE_DIR).map((f) => readFileSync(f, "utf8")).join("\n")
+
 const TITLEBAR_SURFACE = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "titlebar.css"),
   "utf8",
@@ -36,8 +50,8 @@ function soloRuleBody(text: string, selector: string): string {
 }
 
 describe(".titlebar-utility is a single source of truth", () => {
-  test("styles.css no longer defines `.titlebar-utility` at all (migrated to surfaces/titlebar.css)", () => {
-    expect(countSoloTopLevelRules(STYLES, ".titlebar-utility")).toBe(0)
+  test("cascade layer does not define `.titlebar-utility` at all (migrated to surfaces/titlebar.css)", () => {
+    expect(countSoloTopLevelRules(CASCADE_CSS, ".titlebar-utility")).toBe(0)
   })
 
   test("surfaces/titlebar.css declares exactly one solo top-level `.titlebar-utility { … }` rule", () => {

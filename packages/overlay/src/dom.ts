@@ -47,10 +47,6 @@ export interface DomRefs {
  // Task meta
   taskStatus: HTMLElement | null;
 
- // Config dialog
-  configDialog: HTMLDialogElement | null;
-  btnCloseConfigDialog: HTMLButtonElement | null;
-
  // Prompt section
   promptSection: HTMLElement | null;
   promptBody: HTMLElement | null;
@@ -121,35 +117,6 @@ export interface DomRefs {
   taskListPanel: HTMLElement | null;
   btnRefreshTasks: HTMLButtonElement | null;
   btnCreateTask: HTMLButtonElement | null;
-
- // Goal dialog
-  goalDialog: HTMLDialogElement | null;
-  goalForm: HTMLFormElement | null;
-  goalDialogTitle: HTMLElement | null;
-  goalId: HTMLInputElement | null;
-  goalDescription: HTMLTextAreaElement | null;
-  goalCriteria: HTMLTextAreaElement | null;
-  btnCancelGoal: HTMLButtonElement | null;
-
- // Diff dialog
-  diffDialog: HTMLDialogElement | null;
-  diffDialogTitle: HTMLElement | null;
-  diffDialogMeta: HTMLElement | null;
-  diffDialogBody: HTMLElement | null;
-  btnCloseDiff: HTMLButtonElement | null;
-
- // Generic app dialog
-  appDialog: HTMLDialogElement | null;
-  appDialogTitle: HTMLElement | null;
-  appDialogBody: HTMLElement | null;
-  appDialogInputField: HTMLElement | null;
-  appDialogInputLabel: HTMLElement | null;
-  appDialogInput: HTMLInputElement | null;
-  appDialogSelectField: HTMLElement | null;
-  appDialogSelectLabel: HTMLElement | null;
-  appDialogSelect: HTMLSelectElement | null;
-  btnAppDialogCancel: HTMLButtonElement | null;
-  btnAppDialogOk: HTMLButtonElement | null;
 
  // Knowledge: Memory
   memoryBadge: HTMLElement | null;
@@ -234,10 +201,6 @@ export function getDomRefs(): DomRefs {
  // Task meta
     taskStatus: $<HTMLElement>("#taskStatus"),
 
- // Config dialog
-    configDialog: $<HTMLDialogElement>("#configDialog"),
-    btnCloseConfigDialog: $<HTMLButtonElement>("#btnCloseConfigDialog"),
-
  // Prompt section
     promptSection: $<HTMLElement>("#promptSection"),
     promptBody: $<HTMLElement>("#promptBody"),
@@ -309,35 +272,6 @@ export function getDomRefs(): DomRefs {
     taskListPanel: $<HTMLElement>("#taskListPanel"),
     btnRefreshTasks: $<HTMLButtonElement>("#btnRefreshTasks"),
     btnCreateTask: $<HTMLButtonElement>("#btnCreateTask"),
-
- // Goal dialog
-    goalDialog: $<HTMLDialogElement>("#goalDialog"),
-    goalForm: $<HTMLFormElement>("#goalForm"),
-    goalDialogTitle: $<HTMLElement>("#goalDialogTitle"),
-    goalId: $<HTMLInputElement>("#goalId"),
-    goalDescription: $<HTMLTextAreaElement>("#goalDescription"),
-    goalCriteria: $<HTMLTextAreaElement>("#goalCriteria"),
-    btnCancelGoal: $<HTMLButtonElement>("#btnCancelGoal"),
-
- // Diff dialog
-    diffDialog: $<HTMLDialogElement>("#diffDialog"),
-    diffDialogTitle: $<HTMLElement>("#diffDialogTitle"),
-    diffDialogMeta: $<HTMLElement>("#diffDialogMeta"),
-    diffDialogBody: $<HTMLElement>("#diffDialogBody"),
-    btnCloseDiff: $<HTMLButtonElement>("#btnCloseDiff"),
-
- // Generic app dialog
-    appDialog: $<HTMLDialogElement>("#appDialog"),
-    appDialogTitle: $<HTMLElement>("#appDialogTitle"),
-    appDialogBody: $<HTMLElement>("#appDialogBody"),
-    appDialogInputField: $<HTMLElement>("#appDialogInputField"),
-    appDialogInputLabel: $<HTMLElement>("#appDialogInputLabel"),
-    appDialogInput: $<HTMLInputElement>("#appDialogInput"),
-    appDialogSelectField: $<HTMLElement>("#appDialogSelectField"),
-    appDialogSelectLabel: $<HTMLElement>("#appDialogSelectLabel"),
-    appDialogSelect: $<HTMLSelectElement>("#appDialogSelect"),
-    btnAppDialogCancel: $<HTMLButtonElement>("#btnAppDialogCancel"),
-    btnAppDialogOk: $<HTMLButtonElement>("#btnAppDialogOk"),
 
  // Knowledge: Memory
     memoryBadge: $<HTMLElement>("#memoryBadge"),

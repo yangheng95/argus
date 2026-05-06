@@ -37,15 +37,24 @@
 // non-whitespace, non-comment character should be a `,`.
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
-const RAW = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
-  "utf8",
-)
-// Strip block comments so we walk only real code.
-const STYLES = RAW.replace(/\/\*[\s\S]*?\*\//g, "")
+const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
+
+function walkCss(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkCss(full))
+    else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+// Concatenate all surface + cascade + primitive CSS files (styles.css was
+// dissolved 2026-05-04 into this decomposed architecture).
+const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
 
 describe("styles.css carries no dangling selector lists", () => {
   test("every rule head ends with a selector segment, not a trailing comma", () => {

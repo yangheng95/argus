@@ -573,8 +573,107 @@ Step 4 落地后，`ChatComposer.tsx` / `Board.tsx statusIcon()` / `CardHeader.t
 5. 视觉对比 benchmark（pending）
 6. SECTION_ICONS / chevron pseudo / dead code 清理 ✅
 7. Step 0 theme 抽象修复 ✅
-8a. motion / elevation / opacity token 收敛（in progress）
-8b. 剩余 SVG icon 迁 Icon primitive（in progress）
-8c. main.tsx 三拆 + dialog store 统一（待审）
+8a. motion / elevation / opacity token 收敛 ✅
+8b. 剩余 SVG icon 迁 Icon primitive ✅
+8c. main.tsx 三拆 + dialog store 统一（superseded by Step 9）
+
+### v4 → v5 修订（2026-05-04 用户反馈：组件抽象批评）
+
+**触发**：用户原话："业余的很，现在的组件也没有模板，也不会复用，样式也是各各玩各的，傻的一逼"。
+
+Step 8a/8b 把 token / icon 收敛清干净，但这是**表层**——组件骨架根本没建立 primitive 层。具体债：
+
+1. **Panel 体系无基类** — 11 个 Panel（AgentWorkflowPanel / ArchitectPanel / ChangesPanel / ChatComposer / DeliveryEvidenceGroup / EvaluationCriteriaPanel / FilesSection / FrontendPreviewPanel / GoalWorkflowGroup / InteractionCard / RequirementsPanel）每个自己写一遍：导出函数 → 顶层 div → optional summary → For→Card 渲染。无 `<PanelContainer>` / `<PanelHeader>` / `<PanelBody>` 基类。
+2. **Dialog 双系统并存** — 原生 `<dialog>` 元素 + 手写 form 事件委托（main.tsx:610-783 goalForm）vs render mount 派的 `openConfigDialog()` + Tab。无 `dialogStore.show({ kind, props })` 单一入口。
+3. **交互 hook 全缺** — 161 处 onClick/onKeyDown 各自实现 hotkey / focus trap / disclosure：CommandPalette 自己写 Cmd+K / Esc / Up/Down / focus restore；ChatComposer 自己写 Shift+Enter / Enter submit / Ctrl+K / paste；Card / CommandPalette / MemoryPanel 各自 createSignal(false) 重复造 disclosure。0 个 `useHotkey` / `useFocusTrap` / `useDisclosure` composable。
+4. **Style primitive CSS 缺位** — 已有 `.oc-button`（primitives/button.css）和 `.oc-tabs`（primitives/tabs.css），但缺 `.oc-panel` / `.oc-section` / `.oc-dialog` / `.oc-field` / `.oc-icon-button` / `.oc-list-row` / `.oc-empty-state`。每个 surface CSS 文件自己写一套 `.{name}-panel` / `.{name}-row` / `.{name}-head`，hover/focus/active 状态各自定义，无 primitive class 复用。
+5. **状态原语缺位** — open/close、armed-confirm、busy、selected、loading 全是各组件 createSignal 散写，无 `useDisclosure` / `useArmedConfirm` / `useAsyncAction`。
+
+---
+
+### Step 9 — Component primitive layer rebuild
+
+设计骨架（先落盘契约，再分批实施）：
+
+#### 9.1 Solid hooks（`src/solid/`）
+
+| hook | 签名 | 替换调用点 |
+|---|---|---|
+| `useDisclosure(initial?: boolean)` | `→ { open, toggle, close, openIt, set }` | 27 处 `createSignal(false)` |
+| `useHotkey(map: Record<string, Handler>, opts?)` | `→ void`（自动 mount/cleanup window keydown） | CommandPalette、ChatComposer、Card、TitlebarMenubar 等 |
+| `useFocusTrap(elRef: () => HTMLElement \| undefined, active: () => boolean)` | `→ void`（focus loop + restore on inactive） | CommandPalette priorFocus、Dialog backdrop |
+| `useArmedConfirm(action: () => void, windowMs?)` | `→ { armed, fire, disarm }` | TaskList DeleteButton/CancelButton 两个独立实现 |
+| `useAsyncAction<T>(fn)` | `→ { busy, run, error }` | TaskList ExportButton、settings save 等手写 busy |
+| `useSelection<T>(items, eq?)` | `→ { selected, select, isSelected }` | CommandPalette、ExecutorSelector 各自实现 selected index |
+
+#### 9.2 Component primitives（`src/components/primitives/`）
+
+| primitive | props | 替换 |
+|---|---|---|
+| `<Panel>` | `header?, body, footer?, collapsible?, accent?` | 11 个 panel 头尾骨架 |
+| `<Section>` | `title, icon?, defaultOpen?, accent?, children` | 替换 `<details class="section">` 散写 |
+| `<Dialog>` | `open, onClose, title, size?, children`（传 ref 以打开/关闭） | goalForm + openConfigDialog 双系统 |
+| `<Field>` | `label, hint?, error?, children` | settings panel 表单字段散写 |
+| `<IconButton>` | `name, label, onClick, tone?, size?` | 现 `<button><Icon/></button>` 散写 |
+| `<EmptyState>` | `icon?, title, description?, action?` | 各 panel 空态各自实现 |
+| `<ListRow>` | `selected?, onSelect, children` | CommandPalette / ExecutorSelector / TaskList row |
+| `<Toolbar>` | `align?, gap?, children` | ChatComposer toolbar / titlebar nav 散写 |
+
+#### 9.3 Style primitives（`src/styles/primitives/`）
+
+新增（沿用 `.oc-*` 命名空间）：
+
+- `panel.css` — `.oc-panel { ... }` + `.oc-panel__header` + `.oc-panel__body` + `.oc-panel[data-collapsible]`。surface 文件改为只覆盖 `--oc-panel-*` 变量做差异。
+- `section.css` — `.oc-section` + `.oc-section__head` + `.oc-section__icon` + `.oc-section__title` + `.oc-section[data-state="active"]`。
+- `dialog.css` 重构 — `.oc-dialog` + `.oc-dialog__backdrop` + `.oc-dialog__panel` + `.oc-dialog__head` + `.oc-dialog__body` + `.oc-dialog__foot`。废 `surfaces/dialog.css` 老 class。
+- `field.css` — `.oc-field` + `.oc-field__label` + `.oc-field__hint` + `.oc-field__error`。
+- `icon-button.css` — `.oc-icon-button` 独立于 `.oc-button` 因为 size/padding 语义不同。
+- `list-row.css` — `.oc-list-row` 通用行。
+- `empty-state.css` — 已存在但 surface 而非 primitive；提升 + 收敛到 primitive class set。
+
+#### 9.4 Dialog store（`src/store/dialog.ts`）
+
+```ts
+type DialogSpec =
+  | { kind: "goal"; props: { ... } }
+  | { kind: "config"; props: { tab?: ConfigTab } }
+  | { kind: "confirm"; props: { title; body; onConfirm } }
+  | { kind: "memory" }
+  | ...;
+
+createStore<{ stack: DialogSpec[] }>;
+dialogStore.show(spec); dialogStore.close(); dialogStore.closeAll();
+```
+
+main.tsx 内 goalForm 的 783 行手写代码全删，改成 `dialogStore.show({ kind: "goal", props })` + `<DialogHost />` 单根渲染所有 dialog。openConfigDialog() 同样收敛。
+
+#### 9.5 main.tsx 拆分（superseded 的 8c 仍要做）
+
+main.tsx 1639 行 → 拆 `bootstrap.ts`（5 phase init）+ `bridges.ts`（全局 window.* 函数 + document 委托）+ `layout.ts`（render mount）+ `services/api-client.ts`（fetch 唯一入口）。根加 Solid `ErrorBoundary`。
+
+#### 9.6 实施顺序（每个子步独立 commit + push + 测试）
+
+| 子步 | 先决 | 范围 |
+|---|---|---|
+| 9.A `useDisclosure` + 收敛 27 callsite | — | 1-2 文件改动 |
+| 9.B `useHotkey` + 收敛 5 callsite | — | CommandPalette / ChatComposer / Card / TitlebarMenubar |
+| 9.C `useFocusTrap` + Dialog primitive 雏形 | 9.A | CommandPalette 复用 |
+| 9.D `<Panel>` + `<Section>` primitive + style primitive CSS | — | 不改 surface，先建 primitive |
+| 9.E 11 个 Panel 迁 `<Panel>` 基类 | 9.D | 一批一批 commit |
+| 9.F dialog store + `<DialogHost>` + 替换 goalForm + openConfigDialog | 9.C | 删 783 行 |
+| 9.G main.tsx 拆 bootstrap/bridges/layout + ErrorBoundary | 9.F | 收尾 |
+| 9.H `useArmedConfirm` / `useAsyncAction` / `useSelection` 收敛 | 9.A | 小补丁 |
+| 9.I Field / IconButton / EmptyState / ListRow / Toolbar primitive 落地 | 9.D | 全 surface 收尾 |
+
+每个子步必须配新测试（rule 36）：hook 测试 + primitive 渲染测试 + 收敛回归守护（"剩余手写 disclosure callsite 数量 = 0"）。
+
+#### 9.7 风险与不做什么
+
+- **不**引第三方 hook 库（@solid-primitives）— 当前需求 Solid 内建 + 几行就够
+- **不**引第三方 dialog 库 — 原生 `<dialog>` + `useFocusTrap` 足够
+- **不**做 Storybook 整改（除非 primitive 落地后 story 渲染异常单独 issue）
+- **不**回避 main.tsx 拆分 — Step 8c 列"待审"是错的，9.G 必做
+- **风险**：Panel primitive 改 11 个 panel → 视觉需对比 benchmark 兜底（合并入 Step 5）
+- **风险**：dialog store 切换 → goalForm 改写工作量超预期 → 子步 9.F 单独 commit 可独立 revert
 
 **Step 1 已加的 2 个 weight token** 保留，新增 `--ui-font-weight-medium`。font-weight-coverage 测试白名单从 2 个扩到 3 个，baseline 从 177 收敛到 0。

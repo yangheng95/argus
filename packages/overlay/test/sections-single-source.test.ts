@@ -20,13 +20,18 @@
 //   chain remains absent.
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
-const STYLES = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
-  "utf8",
-)
+// styles.css was dissolved 2026-05-04. The cascade layer (base + typography +
+// dark + light + vscode-dark) is where cross-cutting rules live; .sections
+// must not appear there (it lives in surfaces/inspector.css exclusively).
+const CASCADE_DIR = path.resolve(import.meta.dir, "..", "src", "styles", "cascade")
+const CASCADE_CSS = readdirSync(CASCADE_DIR)
+  .filter((f) => f.endsWith(".css"))
+  .map((f) => readFileSync(path.join(CASCADE_DIR, f), "utf8"))
+  .join("\n")
+
 const INSPECTOR_SURFACE = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "inspector.css"),
   "utf8",
@@ -51,8 +56,8 @@ function soloRuleBody(text: string, selector: string): string {
 }
 
 describe(".sections is a single source of truth", () => {
-  test("styles.css no longer defines `.sections` at all (migrated to surfaces/inspector.css)", () => {
-    expect(countSoloTopLevelRules(STYLES, ".sections")).toBe(0)
+  test("cascade layer does not define `.sections` (migrated to surfaces/inspector.css)", () => {
+    expect(countSoloTopLevelRules(CASCADE_CSS, ".sections")).toBe(0)
   })
 
   test("surfaces/inspector.css declares exactly one solo top-level `.sections { … }` rule", () => {
@@ -64,6 +69,6 @@ describe(".sections is a single source of truth", () => {
   })
 
   test("`.sections` is no longer riding on `.sidebar, .chat, .sections { … !important }` flat resets", () => {
-    expect(STYLES).not.toMatch(/\.sidebar,[\s\n]*\.chat,[\s\n]*\.sections\s*\{[^}]*!important/)
+    expect(CASCADE_CSS).not.toMatch(/\.sidebar,[\s\n]*\.chat,[\s\n]*\.sections\s*\{[^}]*!important/)
   })
 })

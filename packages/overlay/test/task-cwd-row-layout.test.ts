@@ -21,14 +21,24 @@
 // before the workspace info on the right.
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
-const RAW = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
-  "utf8",
-)
-const STYLES = RAW.replace(/\/\*[\s\S]*?\*\//g, "")
+const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
+
+function walkCss(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkCss(full))
+    else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+// Concatenate all surface + cascade + primitive CSS files (styles.css was
+// dissolved 2026-05-04 into this decomposed architecture).
+const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
 
 function soloRuleBody(selector: string): string {
   for (const chunk of STYLES.split("}")) {

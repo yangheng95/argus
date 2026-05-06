@@ -48,15 +48,6 @@
   max-width: var(--ui-dialog-wide-width);
 }
 
-/* Compound selector raises specificity to (0, 2, 0) so the diff
- * dialog width wins over the wider-dialog default `.dialog-wide
- * .dialog-form` at the same level, cascading by source order. The
- * previous bare `.diff-dialog-form` selector lost on specificity
- * and needed `!important` to defend its width. */
-.dialog-wide .diff-dialog-form {
-  max-width: var(--ui-dialog-diff-width);
-}
-
 .dialog-title {
   font-size: clamp(calc(18px * var(--ui-scale)), calc(19px * var(--ui-scale)), calc(22px * var(--ui-scale)));
   font-weight: var(--ui-font-weight-strong);

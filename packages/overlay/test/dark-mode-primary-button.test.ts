@@ -4,7 +4,7 @@
 // Original user feedback (2026-05-02 22:57): "深色模式下渐变色按钮有点
 // 奇怪" — the gradient primary buttons look weird in dark mode. The
 // original fix used a `body:is([data-theme="dark"], …) :is(.btn-primary,
-// .sidebar-btn-primary, .board-intro__cta-action)` selector to force a
+// .board-intro__cta-action)` selector to force a
 // solid accent on dark surfaces. That made the theme override button
 // chrome, which violates the "themes only swap palette" contract this
 // codebase now enforces.
@@ -14,36 +14,47 @@
 // `--accent-gradient-hover` to `var(--accent-hover)`). The shared
 // canonical at the multi-class selector reads `--accent-gradient`
 // directly, so dark surfaces resolve to a solid accent without any
-// theme selector touching `.btn-primary` / `.sidebar-btn-primary` /
-// `.board-intro__cta-action`. Light keeps the linear-gradient palette
+// theme selector touching `.btn-primary` / `.board-intro__cta-action`.
+// Light keeps the linear-gradient palette
 // because the original complaint was scoped to dark.
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
-const STYLES = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
-  "utf8",
-)
+const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
+const CASCADE_DIR = path.join(STYLES_ROOT, "cascade")
+
+function walkCss(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkCss(full))
+    else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+// Concatenate all surface + cascade + primitive CSS files (styles.css was
+// dissolved 2026-05-04 into this decomposed architecture).
+const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
 
 function rootBodyOfTheme(theme: "dark" | "vscode-dark"): string {
-  // styles.css carries multiple `body[data-theme="<theme>"]` palette
-  // blocks (the original early-cascade palette and the iter22 "cohesive
-  // workbench" palette later in the file). The iter22 block wins under
-  // CSS cascade, so this helper returns the last matching block — that is
-  // the one that actually decides the rendered palette.
+  // Theme palette blocks now live in styles/cascade/{dark,vscode-dark}.css.
+  // The helper reads that file and returns the body of the sole
+  // `body[data-theme="<theme>"] { … }` block — there should be exactly one.
+  const file = readFileSync(path.join(CASCADE_DIR, `${theme}.css`), "utf8")
   const headRe = new RegExp(
     `body\\[data-theme="${theme}"\\]\\s*\\{`,
     "g",
   )
-  const matches = [...STYLES.matchAll(headRe)]
+  const matches = [...file.matchAll(headRe)]
   if (matches.length === 0) throw new Error(`theme block for ${theme} not found`)
   const last = matches[matches.length - 1]!
   const open = last.index! + last[0].length - 1
-  const close = STYLES.indexOf("\n}", open)
+  const close = file.indexOf("\n}", open)
   if (close < 0) throw new Error(`theme block ${theme} missing close brace`)
-  return STYLES.slice(open + 1, close)
+  return file.slice(open + 1, close)
 }
 
 describe("dark-mode primary buttons render with a solid accent (no multi-hue gradient)", () => {
@@ -67,7 +78,7 @@ describe("dark-mode primary buttons render with a solid accent (no multi-hue gra
     // retired in favour of a palette-only approach.
     const themeWithPrimaryRe = new RegExp(
       "body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))" +
-        "[^{]*(?:\\.btn-primary|\\.sidebar-btn-primary|\\.board-intro__cta-action)\\b",
+        "[^{]*(?:\\.btn-primary|\\.board-intro__cta-action)\\b",
       "g",
     )
     const stripped = STYLES.replace(/\/\*[\s\S]*?\*\//g, "")

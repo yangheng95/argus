@@ -32,13 +32,24 @@
 // helpers consolidate to one too (last value wins anyway).
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
-const STYLES = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
-  "utf8",
-)
+const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
+
+function walkCss(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkCss(full))
+    else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+// Concatenate all surface + cascade + primitive CSS files (styles.css was
+// dissolved 2026-05-04 into this decomposed architecture).
+const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
 
 function countSoloTopLevelRules(selector: string): number {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -49,7 +60,7 @@ function countSoloTopLevelRules(selector: string): number {
 function soloRuleBody(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   const head = new RegExp(`(^|\\n)${escaped}\\s*\\{`, "m").exec(STYLES)
-  if (!head) throw new Error(`solo ${selector} not found in styles.css`)
+  if (!head) throw new Error(`solo ${selector} not found in surface files`)
   const open = head.index + head[0].length - 1
   const close = STYLES.indexOf("}", open)
   if (close < 0) throw new Error(`malformed block for ${selector}`)

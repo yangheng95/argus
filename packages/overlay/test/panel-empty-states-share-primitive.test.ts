@@ -26,11 +26,25 @@
 //   3. The legacy per-panel CSS rules are gone (no dual source).
 
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
 const SRC = path.resolve(import.meta.dir, "..", "src")
-const STYLES = readFileSync(path.join(SRC, "styles.css"), "utf8")
+const STYLES_ROOT = path.join(SRC, "styles")
+
+function walkCss(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkCss(full))
+    else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+// Concatenate all surface + cascade + primitive CSS files (styles.css was
+// dissolved 2026-05-04 into this decomposed architecture).
+const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
 
 function readComponent(rel: string): string {
   return readFileSync(path.join(SRC, "components", rel), "utf8")
@@ -57,7 +71,7 @@ describe("right-panel components emit the shared empty-hint primitive", () => {
   }
 })
 
-describe("styles.css declares .empty-hint--card on the shared card-chrome group", () => {
+describe("surface CSS declares .empty-hint--card on the shared card-chrome group", () => {
   test("the card-chrome selector list advertises .empty-hint--card", () => {
     // Anchored at the canonical nested-card block (lines 2444+ before the
     // refactor). We assert the modifier sits in the same selector group
