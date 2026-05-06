@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { SECRET_PATTERNS, scan } from "../../../script/secret-scan"
+import { SECRET_PATTERNS, parseGitIndexPaths, scan } from "../../../script/secret-scan"
 
 /**
  * Regression for the historical leak that triggered this guard:
@@ -118,5 +118,36 @@ describe("scan", () => {
       "slack-token",
       "jwt",
     ])
+  })
+})
+
+describe("parseGitIndexPaths", () => {
+  function indexBuffer(paths: string[]) {
+    const header = Buffer.alloc(12)
+    header.write("DIRC", 0, "ascii")
+    header.writeUInt32BE(2, 4)
+    header.writeUInt32BE(paths.length, 8)
+    const entries = paths.map((rel) => {
+      const encoded = Buffer.from(rel, "utf8")
+      const fixed = Buffer.alloc(62)
+      fixed.writeUInt16BE(encoded.length, 60)
+      const rawLength = fixed.length + encoded.length + 1
+      const padding = (8 - (rawLength % 8)) % 8
+      return Buffer.concat([fixed, encoded, Buffer.alloc(1 + padding)])
+    })
+    return Buffer.concat([header, ...entries, Buffer.alloc(20)])
+  }
+
+  test("reads tracked paths from a v2 git index without spawning git", () => {
+    expect(parseGitIndexPaths(indexBuffer(["src/index.ts", "docs/readme.md"]))).toEqual([
+      "src/index.ts",
+      "docs/readme.md",
+    ])
+  })
+
+  test("rejects unsupported git index versions loudly", () => {
+    const data = indexBuffer(["src/index.ts"])
+    data.writeUInt32BE(4, 4)
+    expect(() => parseGitIndexPaths(data)).toThrow("unsupported git index version 4")
   })
 })

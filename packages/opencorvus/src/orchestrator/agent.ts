@@ -166,14 +166,18 @@ export namespace Orchestrator {
         })
       }
 
-      // 1. Resolve model — respects agent.task.model in user config; otherwise
-      //    inherits the user's most recent in-session model pick from the
-      //    originating task session; otherwise Provider.defaultModel().
-      const model = await resolveAgentModel("orchestrator", { sessionID: task.session_id }).catch((e) => {
-        log.error("orchestrator: no LLM model available", { taskID, error: e instanceof Error ? e.message : String(e) })
-        return undefined
-      })
-      if (!model) return
+      // 1. Resolve model — strict config only: agent.orchestrator.model first,
+      //    then top-level model. Missing config is a task-visible startup
+      //    failure, never a silent return or implicit provider fallback.
+      let model: Awaited<ReturnType<typeof resolveAgentModel>>
+      try {
+        model = await resolveAgentModel("orchestrator", { sessionID: task.session_id })
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        log.error("orchestrator: no LLM model available", { taskID, error: msg })
+        await updateTask(task, { status: "failed", error: `Orchestrator error: ${msg}` }, `Orchestrator failed: ${msg}`)
+        return
+      }
 
       // 2. Resolve the task's single orchestrator child session. LLM context
       //    is still reconstructed from DB state (goals, runs, deliveries,
@@ -420,7 +424,9 @@ export namespace Orchestrator {
         })
       }
       // Surface the error on the task so UI/orphan-recovery can see it.
-      // Don't change task status — let orphan recovery decide the next step.
+      // Don't change task status here — runtime-visible stream faults are
+      // persisted as artifacts above; missing startup prerequisites fast-fail
+      // at their source before the LLM wake begins.
       try {
         const current = requireTask(taskID)
         const { isTaskTerminal } = await import("@/engine/task-status")

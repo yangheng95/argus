@@ -21,7 +21,6 @@
  *   anywhere on the same line are skipped. Use sparingly.
  */
 
-import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -81,12 +80,56 @@ export interface ScanOptions {
   patterns?: ReadonlyArray<SecretPattern>
 }
 
-export function listTrackedFiles(repoRoot: string): string[] {
-  const r = spawnSync("git", ["-C", repoRoot, "ls-files"], { encoding: "utf8" })
-  if (r.status !== 0) {
-    throw new Error(`git ls-files failed (status=${r.status}): ${r.stderr}`)
+function readUInt32BE(buf: Buffer, offset: number): number {
+  if (offset + 4 > buf.length) throw new Error("git index is truncated")
+  return buf.readUInt32BE(offset)
+}
+
+function gitIndexPath(repoRoot: string): string {
+  if (process.env.GIT_INDEX_FILE) return process.env.GIT_INDEX_FILE
+  const dotGit = path.join(repoRoot, ".git")
+  const stat = fs.statSync(dotGit)
+  if (stat.isDirectory()) return path.join(dotGit, "index")
+  const content = fs.readFileSync(dotGit, "utf8").trim()
+  const match = /^gitdir:\s*(.+)$/i.exec(content)
+  if (!match) throw new Error(`unsupported .git file format at ${dotGit}`)
+  const gitDir = path.isAbsolute(match[1]!) ? match[1]! : path.resolve(repoRoot, match[1]!)
+  return path.join(gitDir, "index")
+}
+
+export function parseGitIndexPaths(data: Buffer): string[] {
+  if (data.length < 12 || data.toString("ascii", 0, 4) !== "DIRC") {
+    throw new Error("git index header is missing DIRC signature")
   }
-  return r.stdout.split(/\r?\n/).filter(Boolean)
+  const version = readUInt32BE(data, 4)
+  if (version !== 2 && version !== 3) {
+    throw new Error(`unsupported git index version ${version}; secret scan expects v2/v3 index entries`)
+  }
+  const count = readUInt32BE(data, 8)
+  const files: string[] = []
+  let offset = 12
+  for (let i = 0; i < count; i++) {
+    const entryStart = offset
+    const fixed = 62
+    if (offset + fixed > data.length) throw new Error(`git index entry ${i} is truncated`)
+    const flags = data.readUInt16BE(offset + 60)
+    offset += fixed
+    if (version === 3 && (flags & 0x4000) !== 0) {
+      if (offset + 2 > data.length) throw new Error(`git index entry ${i} extended flags are truncated`)
+      offset += 2
+    }
+    const nul = data.indexOf(0, offset)
+    if (nul < 0) throw new Error(`git index entry ${i} path is not null-byte terminated`)
+    files.push(data.toString("utf8", offset, nul))
+    offset = nul + 1
+    const padding = (8 - ((offset - entryStart) % 8)) % 8
+    offset += padding
+  }
+  return files
+}
+
+export function listTrackedFiles(repoRoot: string): string[] {
+  return parseGitIndexPaths(fs.readFileSync(gitIndexPath(repoRoot)))
 }
 
 function shouldScan(rel: string): boolean {
