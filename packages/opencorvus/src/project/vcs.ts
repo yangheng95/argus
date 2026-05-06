@@ -1,9 +1,9 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
-import { $ } from "bun"
 import z from "zod"
 import path from "path"
 import { Log } from "@/util/log"
+import { git } from "@/util/git"
 import { Instance, lazyInstanceState } from "./instance"
 import { Project } from "./project"
 import { Filesystem } from "@/util/filesystem"
@@ -97,24 +97,20 @@ export namespace Vcs {
   }
 
   async function currentCommit(cwd: string): Promise<string | undefined> {
-    const out = await $`git rev-parse --short HEAD`
-      .quiet()
-      .nothrow()
-      .cwd(cwd)
-      .text()
-      .then((x) => x.trim())
-      .catch(() => "")
+    const result = await git(["rev-parse", "--short", "HEAD"], { cwd, timeoutProfile: "fast" })
+    if (result.exitCode !== 0) return undefined
+    const out = result.text().trim()
     return out || undefined
   }
 
   async function currentBranch() {
-    return $`git rev-parse --abbrev-ref HEAD`
-      .quiet()
-      .nothrow()
-      .cwd(Instance.worktree)
-      .text()
-      .then((x) => x.trim())
-      .catch(() => undefined)
+    const result = await git(["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: Instance.worktree,
+      timeoutProfile: "fast",
+    })
+    if (result.exitCode !== 0) return undefined
+    const out = result.text().trim()
+    return out || undefined
   }
 
   const state = lazyInstanceState(
@@ -177,12 +173,11 @@ export namespace Vcs {
     const commit = await currentCommit(Instance.directory)
     const rawBranch = await state().then((s) => s.branch())
     const branch = commit ? rawBranch : undefined
-    const text = await $`git status --porcelain=v1 --branch`
-      .quiet()
-      .nothrow()
-      .cwd(Instance.directory)
-      .text()
-      .catch(() => "")
+    const result = await git(["status", "--porcelain=v1", "--branch"], {
+      cwd: Instance.directory,
+      timeoutProfile: "default",
+    })
+    const text = result.exitCode === 0 ? result.text() : ""
     return parse(text, { initialized: true, branch, commit })
   }
 }
