@@ -28,6 +28,7 @@ import z from "zod"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { $ } from "bun"
+import { git as runGit } from "@/util/git"
 import { tool, type ToolSet } from "ai"
 import { Log } from "@/util/log"
 import { runAgentSession } from "@/agent/runner"
@@ -314,7 +315,8 @@ export namespace BuildAgent {
         })
         baseRef = input.managedWorktree.baseRef ?? undefined
         if (!baseRef) {
-          baseRef = (await $`git rev-parse HEAD`.quiet().nothrow().cwd(managedDir).text()).trim() || undefined
+          const result = await runGit(["rev-parse", "HEAD"], { cwd: managedDir, timeoutProfile: "fast" })
+          baseRef = result.exitCode === 0 ? result.text().trim() || undefined : undefined
         }
       } else if (ownsWorktree) {
         const targetLabel = labelFromTarget(input.target)
@@ -334,7 +336,8 @@ export namespace BuildAgent {
           runID: findActiveRunForTask(input.task.id)?.id,
           goalID: input.target.kind === "goal" ? input.target.id : undefined,
         })
-        baseRef = (await $`git rev-parse HEAD`.quiet().nothrow().cwd(worktreeDir).text()).trim() || undefined
+        const result = await runGit(["rev-parse", "HEAD"], { cwd: worktreeDir, timeoutProfile: "fast" })
+        baseRef = result.exitCode === 0 ? result.text().trim() || undefined : undefined
       }
 
       // Stage user-contract image attachments into `<worktree>/references/`
@@ -770,7 +773,8 @@ export namespace BuildAgent {
       // Worktree HEAD captured for the orchestrator independent of merge.
       let worktreeHead: string | undefined
       if (worktreeDir) {
-        const head = (await $`git rev-parse HEAD`.quiet().nothrow().cwd(worktreeDir).text()).trim()
+        const result = await runGit(["rev-parse", "HEAD"], { cwd: worktreeDir, timeoutProfile: "fast" })
+        const head = result.exitCode === 0 ? result.text().trim() : ""
         if (head) worktreeHead = head.slice(0, 12)
       }
 
@@ -1709,13 +1713,10 @@ async function collectGoalContributionDiffs(worktreeDir: string, baseRef: string
 }
 
 export async function resolveGoalContributionBaseRef(worktreeDir: string, baseRef: string): Promise<string> {
-  const parentsRaw = (
-    await $`git show --no-patch --pretty=%P HEAD`
-      .quiet()
-      .nothrow()
-      .cwd(worktreeDir)
-      .text()
-  ).trim()
+  const parentsResult = await runGit(["show", "--no-patch", "--pretty=%P", "HEAD"], {
+    cwd: worktreeDir, timeoutProfile: "fast",
+  })
+  const parentsRaw = parentsResult.exitCode === 0 ? parentsResult.text().trim() : ""
   const parents = parentsRaw.split(/\s+/).filter(Boolean)
   return parents.length >= 2 ? parents[1]! : baseRef
 }
@@ -1732,17 +1733,20 @@ export async function resolveGoalContributionBaseRef(worktreeDir: string, baseRe
  * worktree-internal files like ownership markers.
  */
 async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<FileDiff[]> {
-  const headRaw = (await $`git rev-parse HEAD`.quiet().nothrow().cwd(worktreeDir).text()).trim()
+  const headResult = await runGit(["rev-parse", "HEAD"], { cwd: worktreeDir, timeoutProfile: "fast" })
+  const headRaw = headResult.exitCode === 0 ? headResult.text().trim() : ""
   if (!headRaw || headRaw === baseRef) return []
 
   const status = new Map<string, "added" | "deleted" | "modified">()
-  const statusOut = (
-    await $`git -c core.quotepath=false diff --no-ext-diff --name-status --no-renames ${baseRef} ${headRaw} -- .`
-      .quiet()
-      .nothrow()
-      .cwd(worktreeDir)
-      .text()
-  ).trim()
+  const statusResult = await runGit(
+    [
+      "-c", "core.quotepath=false",
+      "diff", "--no-ext-diff", "--name-status", "--no-renames",
+      baseRef, headRaw, "--", ".",
+    ],
+    { cwd: worktreeDir, timeoutProfile: "default" },
+  )
+  const statusOut = statusResult.exitCode === 0 ? statusResult.text().trim() : ""
   for (const line of statusOut.split("\n")) {
     if (!line) continue
     const [code, file] = line.split("\t")
@@ -1751,13 +1755,15 @@ async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<F
     status.set(file, kind)
   }
 
-  const numstatOut = (
-    await $`git -c core.quotepath=false diff --no-ext-diff --no-renames --numstat ${baseRef} ${headRaw} -- .`
-      .quiet()
-      .nothrow()
-      .cwd(worktreeDir)
-      .text()
-  ).trim()
+  const numstatResult = await runGit(
+    [
+      "-c", "core.quotepath=false",
+      "diff", "--no-ext-diff", "--no-renames", "--numstat",
+      baseRef, headRaw, "--", ".",
+    ],
+    { cwd: worktreeDir, timeoutProfile: "default" },
+  )
+  const numstatOut = numstatResult.exitCode === 0 ? numstatResult.text().trim() : ""
 
   const result: FileDiff[] = []
   for (const line of numstatOut.split("\n")) {
@@ -1768,10 +1774,10 @@ async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<F
     const isBinary = additions === "-" && deletions === "-"
     const before = isBinary
       ? ""
-      : (await $`git show ${baseRef}:${file}`.quiet().nothrow().cwd(worktreeDir).text())
+      : (await runGit(["show", `${baseRef}:${file}`], { cwd: worktreeDir, timeoutProfile: "default" })).text()
     const after = isBinary
       ? ""
-      : (await $`git show ${headRaw}:${file}`.quiet().nothrow().cwd(worktreeDir).text())
+      : (await runGit(["show", `${headRaw}:${file}`], { cwd: worktreeDir, timeoutProfile: "default" })).text()
     const added = isBinary ? 0 : parseInt(additions, 10)
     const removed = isBinary ? 0 : parseInt(deletions, 10)
     result.push({
