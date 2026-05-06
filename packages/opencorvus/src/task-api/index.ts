@@ -278,7 +278,10 @@ async function continueTaskMessage(
   const attachmentSummary = attachments.length > 0
     ? [
         "Attachments:",
-        ...attachments.map((ref) => `- ${ref.filename ?? ref.sha} — ${ref.mime} — url: ${ref.url}`),
+        ...attachments.map((ref, index) => {
+          const name = AttachmentStore.displayFilename({ filename: ref.filename, mime: ref.mime, sha: ref.sha, index })
+          return `- ${name} — ${ref.mime} — url: ${ref.url}`
+        }),
       ].join("\n")
     : undefined
   const openedTask = await openTaskForOperatorMessage(task)

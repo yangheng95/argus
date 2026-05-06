@@ -231,16 +231,19 @@ export namespace AttachmentStore {
     const hint = opts.hint
       ?? "Multimodal attachments (image / pdf / audio / video) are already in your context as file parts. " +
          "Reference-only attachments (text / json) are not inlined — fetch them via the `read` tool using the listed url."
-    const formatRow = (a: AttachmentLike, kind: "inline" | "reference") => {
+    const formatRow = (a: AttachmentLike, kind: "inline" | "reference", index: number) => {
       const sizeKb = typeof a.size === "number" ? `${Math.max(1, Math.round(a.size / 1024))} KB, ` : ""
-      const name = a.filename ?? a.sha ?? "(unnamed)"
+      // displayFilename gives a readable name even when the upload path
+      // dropped the original filename — never let a 64-char sha surface
+      // as the user-visible name for the attachment.
+      const name = displayFilename({ filename: a.filename, mime: a.mime, sha: a.sha, index })
       const mime = a.mime ?? "application/octet-stream"
       const tag = kind === "inline" ? "[inlined as file part]" : "[reference — read via tool]"
       return `- ${name} — ${mime} — ${sizeKb}${tag} url: ${a.url}`
     }
     const lines = [
-      ...multimodal.map((a) => formatRow(a, "inline")),
-      ...referenceOnly.map((a) => formatRow(a, "reference")),
+      ...multimodal.map((a, i) => formatRow(a, "inline", i)),
+      ...referenceOnly.map((a, i) => formatRow(a, "reference", multimodal.length + i)),
     ].join("\n")
     return `\n\n${header}\n${hint}\n\n${lines}`
   }
@@ -399,8 +402,8 @@ export namespace AttachmentStore {
         )
       }
 
-      const filename = chooseStagedFilename({
-        original: a.filename,
+      const filename = displayFilename({
+        filename: a.filename,
         mime: typeof a.mime === "string" ? a.mime : "",
         sha: a.sha,
         index: i,
@@ -442,16 +445,38 @@ export namespace AttachmentStore {
 
   // ASCII-printable + space; reject shell metacharacters and path separators.
   const SAFE_FILENAME_RE = /^[A-Za-z0-9._\-一-鿿 ]+$/
-  function chooseStagedFilename(input: {
-    original?: string
-    mime: string
+
+  /**
+   * Single source of truth for "what name should the LLM / user see for
+   * this attachment?" (CLAUDE.md rule 9). Use this everywhere a sha-based
+   * fallback would otherwise show through — `renderAttachmentInventory`
+   * for sub-agent prompts, `task-api` for user-facing message lists,
+   * `delivery/tools.ts` for the visual reference inventory, and the
+   * `stageToWorktree` copy step (a stable name for tools that resolve
+   * paths inside the worktree).
+   *
+   * Fallback ladder when `original` is missing or contains shell-unsafe
+   * characters:
+   *   1. `attachment-{index+1}-{sha8}.{ext}` — preserves task-relative
+   *      ordering and traces back to storage; readable at a glance.
+   *   2. With no sha:  `attachment-{index+1}-noref.{ext}` — signals the
+   *      missing provenance instead of letting the caller invent one.
+   *
+   * Never returns a 64-char sha alone: that is the storage filename, not
+   * a UI / LLM filename, and surfacing it directly was the bug a previous
+   * commit tried to fix only for the staging path.
+   */
+  export function displayFilename(input: {
+    filename?: string
+    mime?: string
     sha?: string
-    index: number
+    index?: number
   }): string {
-    if (input.original && SAFE_FILENAME_RE.test(input.original)) return input.original
-    const ext = extensionFor(input.mime, input.original)
+    if (input.filename && SAFE_FILENAME_RE.test(input.filename)) return input.filename
+    const ext = extensionFor(input.mime ?? "", input.filename)
     const shaPrefix = (input.sha ?? "").slice(0, 8) || "noref"
-    return `attachment-${input.index + 1}-${shaPrefix}.${ext}`
+    const idx = typeof input.index === "number" ? input.index + 1 : 1
+    return `attachment-${idx}-${shaPrefix}.${ext}`
   }
 
   /** Extract the stored filename (`<sha>.<ext>`) from a reference URL. */

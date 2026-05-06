@@ -779,9 +779,10 @@ function renderExecutorReports(delivery: DeliveryInfo | undefined): string {
 
 function renderAttachmentToolInventory(attachments: DeliveryToolAttachment[]): string {
   if (attachments.length === 0) return "No attachments."
-  return "# Attachments\n\n" + attachments.map((item) => {
+  return "# Attachments\n\n" + attachments.map((item, index) => {
     const sizeKb = `${Math.max(1, Math.round(item.size / 1024))} KB`
-    return `- ${item.filename ?? item.sha} mime=${item.mime} intent=${item.intent ?? "(none)"} size=${sizeKb} sha=${item.sha} url=${item.url}`
+    const name = AttachmentStore.displayFilename({ filename: item.filename, mime: item.mime, sha: item.sha, index })
+    return `- ${name} mime=${item.mime} intent=${item.intent ?? "(none)"} size=${sizeKb} sha=${item.sha} url=${item.url}`
   }).join("\n")
 }
 
