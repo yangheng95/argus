@@ -296,6 +296,18 @@ export function createArchitectOutputTools(input: {
   let collector = emptyCollector()
   const dir = input.workDir ?? Instance.directory
 
+  // Single source of truth for "is the architect output complete?". Both the
+  // terminal-tool-scoping predicate (`isReadyToFinalize` below) and the
+  // `submit_architect` tool's own validation MUST go through this closure —
+  // otherwise the predicate may say "done, expose only submit_architect" while
+  // the tool still sees fidelity issues that depend on workDir, trapping the
+  // model in a tight retry loop (rule 8: single source).
+  const validate = () => architectValidationIssues(collector, {
+    workDir: dir,
+    designSpecs: input.designSpecs,
+    requireReferenceCoverage: input.requireReferenceCoverage,
+  })
+
   // Seed the collector with existing goals so modify_goal / remove_goal work
   // without the LLM having to re-register them first. register_goal still
   // wins if the LLM chooses to overwrite an existing id.
@@ -641,11 +653,7 @@ export function createArchitectOutputTools(input: {
       }),
       execute: async ({ summary }) => {
         collector.summary = summary
-        const issues = architectValidationIssues(collector, {
-          workDir: dir,
-          designSpecs: input.designSpecs,
-          requireReferenceCoverage: input.requireReferenceCoverage,
-        })
+        const issues = validate()
         const categories = new Set(collector.contracts.map((c) => c.category))
 
         if (issues.length === 0) {
@@ -676,6 +684,12 @@ export function createArchitectOutputTools(input: {
     },
     getCollector() {
       return collector
+    },
+    /** Same predicate `submit_architect` uses to decide PASS — pass this to
+     *  `terminalTool.shouldExposeOnlyTerminalTool` so scoping never gets
+     *  ahead of the tool's own validation. */
+    isReadyToFinalize() {
+      return validate().length === 0
     },
   }
 }
