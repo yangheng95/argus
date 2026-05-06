@@ -304,6 +304,65 @@ export function insertRequirements(
   })
 }
 
+export function copyRequirementsToSpecSnapshot(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    fromSpecSnapshotID: string
+    toSpecSnapshotID: string
+    now: number
+  },
+) {
+  if (input.fromSpecSnapshotID === input.toSpecSnapshotID) {
+    throw new Error(`copyRequirementsToSpecSnapshot: source and target spec are identical (${input.fromSpecSnapshotID})`)
+  }
+
+  const existingTargetRows = db
+    .select({ id: EngineRequirementTable.id })
+    .from(EngineRequirementTable)
+    .where(eq(EngineRequirementTable.spec_snapshot_id, input.toSpecSnapshotID))
+    .all()
+  if (existingTargetRows.length > 0) {
+    throw new Error(
+      `copyRequirementsToSpecSnapshot: target spec ${input.toSpecSnapshotID} already has ` +
+        `${existingTargetRows.length} requirement row(s)`,
+    )
+  }
+
+  const sourceRows = db
+    .select()
+    .from(EngineRequirementTable)
+    .where(and(
+      eq(EngineRequirementTable.task_id, input.taskID),
+      eq(EngineRequirementTable.spec_snapshot_id, input.fromSpecSnapshotID),
+    ))
+    .orderBy(EngineRequirementTable.order_index)
+    .all()
+
+  for (const row of sourceRows) {
+    db.insert(EngineRequirementTable)
+      .values({
+        id: Identifier.ascending("requirement"),
+        task_id: input.taskID,
+        spec_snapshot_id: input.toSpecSnapshotID,
+        title: row.title,
+        description: row.description,
+        status: row.status,
+        priority: row.priority,
+        acceptance: row.acceptance,
+        evidence_refs: row.evidence_refs,
+        non_goals: row.non_goals,
+        metadata: row.metadata,
+        order_index: row.order_index,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  }
+
+  return sourceRows.length
+}
+
 export function createGoalRun(input: {
   taskID: string
   goalID: string

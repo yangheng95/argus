@@ -4,22 +4,23 @@ import path from "node:path"
 import { Database, and, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineArtifactTable, EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EngineRequirementTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { createDecisionLog } from "../../src/decision-log"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { goalStatusByID } from "../../src/engine/describe"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
-import { beginBuildAttempt, recordIntegrityAttempt, startNewAttempt, updateGoalRun } from "../../src/engine/persist"
+import { beginBuildAttempt, insertRequirements, recordIntegrityAttempt, startNewAttempt, updateGoalRun } from "../../src/engine/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { findGoal, findGoalLatestWorkspace, findLatestIntegrityAttemptArtifact, listGoalRunsByGoal } from "../../src/engine/store"
+import { findActiveSpecForTask, findGoal, findGoalLatestWorkspace, findLatestIntegrityAttemptArtifact, findRequirements, listGoalRunsByGoal } from "../../src/engine/store"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { Filesystem } from "../../src/util/filesystem"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
+let architectCoordinateImpl: ((input: any) => Promise<any>) | undefined
 
 mock.module("@/build/agent", () => ({
   BuildAgent: {
@@ -34,6 +35,15 @@ mock.module("@/integrity", () => ({
   reviewIntegrity: (input: any) => {
     if (!reviewIntegrityImpl) throw new Error("reviewIntegrity mock not configured")
     return reviewIntegrityImpl(input)
+  },
+}))
+
+mock.module("@/architect/agent", () => ({
+  ArchitectAgent: {
+    coordinate: (input: any) => {
+      if (!architectCoordinateImpl) throw new Error("ArchitectAgent.coordinate mock not configured")
+      return architectCoordinateImpl(input)
+    },
   },
 }))
 
@@ -135,6 +145,7 @@ describe("orchestrator tools", () => {
   beforeEach(async () => {
     await resetDatabase()
     tmp = await tmpdir()
+    architectCoordinateImpl = undefined
     reviewIntegrityImpl = async () => ({
       verdict: "pass",
       summary: "Integrity pass",
@@ -154,6 +165,7 @@ describe("orchestrator tools", () => {
   afterEach(async () => {
     buildAgentRunImpl = undefined
     reviewIntegrityImpl = undefined
+    architectCoordinateImpl = undefined
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
@@ -358,6 +370,123 @@ describe("orchestrator tools", () => {
           db.select().from(SessionTable).where(eq(SessionTable.kind, "architect")).all(),
         )
         expect(architectSessions).toHaveLength(0)
+      },
+    })
+  })
+
+  test("architect promotion keeps requirements attached to the active spec", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_architect_requirement_copy_${stamp}`
+    const taskID = `tsk_architect_requirement_copy_${stamp}`
+    const reqSpecID = `spec_requirements_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable).values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "Architect requirement copy test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      }).run()
+      db.insert(EngineTaskTable).values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Architect requirement copy task",
+        request: "Build a typed app shell",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      }).run()
+      db.insert(EngineSpecSnapshotTable).values({
+        id: reqSpecID,
+        task_id: taskID,
+        version: 1,
+        status: "ready",
+        summary: "Requirements parsed",
+        content: "# Requirements\n- REQ-1 typed app shell",
+        scope: "typed app shell",
+        time_created: now,
+        time_updated: now,
+      }).run()
+      insertRequirements(db, {
+        taskID,
+        specSnapshotID: reqSpecID,
+        now,
+        requirements: [{
+          id: "REQ-1",
+          title: "Typed app shell",
+          description: "The app shell renders and typechecks.",
+          acceptance: ["typecheck passes"],
+          evidence_refs: ["user request"],
+          priority: "blocking",
+        }],
+      })
+    })
+
+    architectCoordinateImpl = async (input: any) => {
+      expect(input.requirements.map((r: any) => r.id)).toEqual(["REQ-1"])
+      return {
+        summary: "One goal architecture.",
+        goals: [{
+          id: "goal_app_shell",
+          title: "App shell",
+          objective: "Implement a typed app shell.",
+          acceptance_specs: [{
+            id: "acc-app-shell",
+            source_requirement_id: "REQ-1",
+            goal_id: "goal_app_shell",
+            title: "typecheck passes",
+            scorers: [{
+              type: "llm_judge",
+              name: "typecheck evidence",
+              criteria: "The app shell typechecks.",
+            }],
+            severity: "essential",
+          }],
+          owned_paths: ["src/App.tsx"],
+          depends_on: [],
+          exports: ["AppShell"],
+          imports: [],
+          kind: "bootstrap",
+          requirement_ids: ["REQ-1"],
+          priority: "blocking",
+        }],
+        removedGoalIDs: [],
+        traceability: [{ requirementID: "REQ-1", goalIDs: ["goal_app_shell"] }],
+        fidelity: { sourceCoverage: [], referenceCoverage: [], assemblyOwners: [] },
+        contracts: [],
+      }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect requirement copy test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.architect.execute({}, {} as any)
+        expect(result).toContain("Architect decomposition complete")
+
+        const activeSpec = findActiveSpecForTask(taskID)
+        expect(activeSpec?.id).toBeTruthy()
+        expect(activeSpec?.id).not.toBe(reqSpecID)
+        const activeRequirements = findRequirements(activeSpec!.id)
+        expect(activeRequirements.map((r) => r.description)).toEqual(["The app shell renders and typechecks."])
+        expect(activeRequirements[0]?.metadata).toMatchObject({ source_requirement_id: "REQ-1" })
+
+        const sourceRows = Database.use((db) =>
+          db.select().from(EngineRequirementTable).where(eq(EngineRequirementTable.spec_snapshot_id, reqSpecID)).all(),
+        )
+        expect(sourceRows).toHaveLength(1)
       },
     })
   })

@@ -1809,7 +1809,7 @@ export function createOrchestratorTools(input: {
           }))
 
           const { ArchitectAgent } = await import("@/architect/agent")
-          const { upsertGoalsFromArchitect } = await import("@/engine/persist")
+          const { copyRequirementsToSpecSnapshot, upsertGoalsFromArchitect } = await import("@/engine/persist")
           const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
 
           const result = await ArchitectAgent.coordinate({
@@ -1913,6 +1913,13 @@ export function createOrchestratorTools(input: {
             }).run()
 
             if (priorSpecSnapshotID) {
+              copyRequirementsToSpecSnapshot(db, {
+                taskID,
+                fromSpecSnapshotID: priorSpecSnapshotID,
+                toSpecSnapshotID: newSpecSnapshotID,
+                now,
+              })
+
               db.update(EngineSpecSnapshotTable)
                 .set({ status: "superseded", time_updated: now })
                 .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
