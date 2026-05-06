@@ -1110,13 +1110,26 @@ describe("overlay architecture guards", () => {
     )
   })
 
-  test("settings dialog shell + sidebar nav are owned by surfaces/settings.css", () => {
+  test("settings dialog shell is owned by the shared dialog primitive", () => {
+    const sources = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:css|ts|tsx)$/.test(path))
+      .map(readText)
+      .join("\n")
+    const configDialog = readText(join(OVERLAY_ROOT, "src/components/ConfigDialogHost.tsx"))
+    const dialogSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/dialog.css"))
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+
+    expect(sources).not.toContain("config-dialog-form")
+    expect(sources).not.toContain("config-dialog-head")
+    expect(configDialog).toContain("wider={true}")
+    expect(dialogSurface).toMatch(/\.dialog-wider \.dialog-form\s*\{/)
+    expect(settingsSurface).not.toMatch(/(^|\n)\.config-dialog-(form|head)\s*\{/)
+  })
+
+  test("settings sidebar nav is owned by surfaces/settings.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const className of [
-      "config-dialog-form",
-      "config-dialog-head",
       "config-close-btn",
       "config-sidebar",
       "config-nav-item",

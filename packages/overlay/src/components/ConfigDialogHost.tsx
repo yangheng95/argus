@@ -189,9 +189,7 @@ export function ConfigDialogHost() {
     <Dialog
       id="configDialog"
       open={dialogStore.config.open}
-      wide={true}
-      formClass="config-dialog-form"
-      headerClass="config-dialog-head"
+      wider={true}
       title={t("config.title")}
       onClose={closeConfigDialog}
       headerActions={

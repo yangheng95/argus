@@ -14,6 +14,8 @@ export interface DialogProps {
   headerClass?: string;
   /** Wider width variant for dense surfaces such as the log viewer. */
   wide?: boolean;
+  /** Widest width variant for dense multi-pane dialogs. */
+  wider?: boolean;
   /** Render title as `h2` by default, override only when semantics require it. */
   titleAs?: "div" | "h1" | "h2" | "span";
   /** Whether clicking the native backdrop closes the dialog. */
@@ -34,7 +36,7 @@ export interface DialogProps {
 }
 
 export function Dialog(rawProps: DialogProps) {
-  const merged = mergeProps({ wide: false, titleAs: "h2" as const, backdropClose: true }, rawProps);
+  const merged = mergeProps({ wide: false, wider: false, titleAs: "h2" as const, backdropClose: true }, rawProps);
   const [local, rest] = splitProps(merged, [
     "open",
     "title",
@@ -42,6 +44,7 @@ export function Dialog(rawProps: DialogProps) {
     "footer",
     "headerClass",
     "wide",
+    "wider",
     "titleAs",
     "backdropClose",
     "class",
@@ -66,7 +69,9 @@ export function Dialog(rawProps: DialogProps) {
   return (
     <dialog
       {...rest}
-      class={["dialog", local.wide ? "dialog-wide" : "", local.class].filter(Boolean).join(" ")}
+      class={["dialog", local.wide ? "dialog-wide" : "", local.wider ? "dialog-wider" : "", local.class]
+        .filter(Boolean)
+        .join(" ")}
       ref={(el) => {
         dialogRef = el;
         if (typeof local.ref === "function") local.ref(el);

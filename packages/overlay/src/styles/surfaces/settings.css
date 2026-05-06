@@ -690,30 +690,6 @@
 
 /* ── Settings dialog shell + sidebar nav ─────────────────── */
 
-/* Dialog shell: settings root <dialog> form. Width/height clamp
-   via min() so the dialog fits typical screens but never grows
-   beyond ~980x760. The 32/980/760 raw px wrapped in
-   `calc(N * --ui-scale)` so the dialog scales with the UI. */
-.config-dialog-form {
-  width: min(calc(100vw - calc(32px * var(--ui-scale))), calc(980px * var(--ui-scale)));
-  max-width: none;
-  height: min(80vh, calc(760px * var(--ui-scale)));
-  max-height: calc(100vh - calc(32px * var(--ui-scale)));
-  padding: 0;
-  gap: 0;
-  overflow: hidden;
-  background: var(--dialog-bg);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
-  box-shadow: none;
-}
-
-.config-dialog-head {
-  padding: calc(16px * var(--ui-scale)) calc(20px * var(--ui-scale));
-  border-bottom: var(--oc-border-width) solid var(--divider-soft);
-  flex-shrink: 0;
-}
-
 .config-close-btn {
   display: flex;
   align-items: center;
