@@ -354,18 +354,6 @@ export async function reviewIntegrity(input: {
         // repair actions, not advisory notes. Any dimension that emits them
         // must block execution so the orchestrator can apply or route the
         // repair before build starts.
-        //
-        // The reverse direction is also a contract — `integrity-core.txt`
-        // teaches the LLM "Use `concerns` only for advisory findings that do
-        // not have an executable goal-layer repair." A `needs_correction`
-        // verdict with zero corrections and zero missing_goals is precisely
-        // an advisory finding; the LLM lacked an actionable repair to attach.
-        // Without this downgrade, post-build architecture_review fed the
-        // empty-correction verdict into rework routing, which fell back to
-        // attaching task-level architectural concerns to whichever goal had
-        // just built (architecturally unrelated to the issues), producing the
-        // V_n loop where each retry could only honestly report 0 edits.
-        // See specs/architecture-review-rework-closure-2026-05-06.md (Layer 1).
         let verdict = sub.verdict as IntegrityVerdict
         if (corrections.length > 0 || missingGoals.length > 0) {
           verdict = "needs_correction"
@@ -374,10 +362,6 @@ export async function reviewIntegrity(input: {
         }
         if (verdict === "needs_correction" && issues.length === 0 && corrections.length === 0 && missingGoals.length === 0) {
           verdict = "pass"
-        }
-        if (verdict === "needs_correction" && corrections.length === 0 && missingGoals.length === 0) {
-          // Issues exist but no actionable goal-layer repair → advisory.
-          verdict = "concerns"
         }
 
         collector.dimensions.set(d.id, { id: d.id, verdict, issues, corrections, missingGoals })

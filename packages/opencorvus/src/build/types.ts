@@ -103,44 +103,10 @@ const BuildResultBase = {
     .describe("Evidence the build actually ran verification; empty when no tests were required."),
 }
 
-/**
- * Marker the build agent attaches to a passed result when it intentionally
- * publishes a prior attempt's worktree state without further edits. Required
- * (refine below) whenever `files_changed=[]` on a passed result so the
- * orchestrator and downstream auditors can distinguish:
- *
- *   - "I implemented and verified, here are my files"        (files_changed > 0)
- *   - "Prior attempt's worktree already satisfies the goal"   (files_changed = 0
- *                                                              + reused_prior_attempt)
- *
- * This unblocks the V_n loop where `architecture_review_rework` reopens a
- * passed goal whose worktree already contains correct code: the next attempt
- * could honestly report 0 edits but the schema previously rejected that as
- * `files_changed.min(1)` and downgraded the report to a contract violation.
- * See specs/architecture-review-rework-closure-2026-05-06.md (Layer 4).
- */
-export const ReusedPriorAttemptSchema = z.object({
-  rationale: z
-    .string()
-    .min(20)
-    .describe(
-      "Why the existing worktree state already satisfies every acceptance_spec without new edits. " +
-        "Cite the prior attempt's commits and the specific spec coverage so the orchestrator can audit reuse vs. silent skip.",
-    ),
-})
-
 export const BuildPassedResultSchema = z.object({
   status: z.literal("passed"),
   ...BuildResultBase,
-  files_changed: z.array(BuildFileChange),
-  reused_prior_attempt: ReusedPriorAttemptSchema
-    .optional()
-    .describe(
-      "Set this when reporting passed with files_changed=[] — i.e. you are " +
-        "publishing the prior attempt's worktree as the final deliverable for this " +
-        "goal because it already satisfies every acceptance_spec. Omit on every other " +
-        "passed report.",
-    ),
+  files_changed: z.array(BuildFileChange).min(1),
 }).strict()
 
 export const BuildFailedResultSchema = z.object({
@@ -154,23 +120,10 @@ export const BuildFailedResultSchema = z.object({
     .describe("Concrete failure reason when status=failed."),
 }).strict()
 
-// `BuildResultSchema` is a discriminated union; zod's discriminatedUnion does
-// not accept ZodEffects members, so the cross-field refine for
-// `reused_prior_attempt` lives here on the union. Refine fires only when the
-// union has matched a passed branch, so the predicate can safely assume
-// `files_changed` and `reused_prior_attempt` exist on the parsed value.
 export const BuildResultSchema = z.discriminatedUnion("status", [
   BuildPassedResultSchema,
   BuildFailedResultSchema,
-]).refine(
-  (v) => v.status !== "passed" || v.files_changed.length > 0 || v.reused_prior_attempt !== undefined,
-  {
-    message:
-      "passed with empty files_changed[] requires reused_prior_attempt.rationale " +
-      "(use this only when the prior attempt's worktree already satisfies every acceptance_spec).",
-    path: ["reused_prior_attempt"],
-  },
-)
+])
 export type BuildResult = z.infer<typeof BuildResultSchema>
 
 /**

@@ -37,7 +37,6 @@ import {
   updateEvaluationFromDeliveryVerdict,
 } from "@/engine/persist"
 import {
-  countGoalAttemptsBySupersedeReason,
   findActivePlanForTask,
   findActiveRunForTask,
   findActiveSpecForTask,
@@ -105,41 +104,6 @@ type IntegrityReviewOutcome =
 // latch they all create independent integrity sessions and duplicate retry
 // actions for the same graph snapshot.
 const integrityReviewSingleflight = new Map<string, Promise<IntegrityReviewOutcome>>()
-
-/**
- * Resolve the set of goal IDs that should receive a post-build
- * architecture_review_rework attempt. Pure function — extracted for unit
- * testability and to anchor the contract that this layer NEVER falls back
- * to "the just-built goal" when the review names no DB-resolvable target
- * (orchestrator-core.txt:352-353; spec
- * `architecture-review-rework-closure-2026-05-06.md` Layer 2).
- *
- * `dbGoalIDs` is the set of goal IDs that currently exist in the DB for the
- * task; review issue/correction entries that name strings outside this set
- * (LLM-only logical names, deleted goals, etc.) are dropped — propagating
- * them would later fail in `findLatestTipGoalRun` / `startNewAttempt` and
- * surface as opaque errors.
- *
- * Returns the unique, DB-validated goal IDs to dispatch rework against.
- * Empty array means "no actionable target" — caller should treat the review
- * as advisory feedback for the next decision turn.
- */
-export function resolvePostBuildReviewReworkGoalIDs(input: {
-  review: Pick<
-    Extract<IntegrityReviewOutcome, { status: "reviewed" }>,
-    "issueGoalIDs" | "correctionGoalIDs"
-  >
-  dbGoalIDs: ReadonlySet<string>
-}): string[] {
-  const targetIDs = new Set<string>()
-  for (const goalID of input.review.issueGoalIDs) {
-    if (goalID && input.dbGoalIDs.has(goalID)) targetIDs.add(goalID)
-  }
-  for (const goalID of input.review.correctionGoalIDs) {
-    if (goalID && input.dbGoalIDs.has(goalID)) targetIDs.add(goalID)
-  }
-  return Array.from(targetIDs)
-}
 
 const PersistedArchitectFidelitySchema = z.object({
   sourceCoverage: z.array(SourceCoverageEntrySchema).default([]),
@@ -887,13 +851,22 @@ export function createOrchestratorTools(input: {
 
   function postBuildReviewReworkGoalIDs(input: {
     review: Extract<IntegrityReviewOutcome, { status: "reviewed" }>
+    fallbackGoalID: string
   }) {
-    // Bind DB state and delegate to the pure module-level helper. See
-    // `resolvePostBuildReviewReworkGoalIDs` above for the contract.
-    return resolvePostBuildReviewReworkGoalIDs({
-      review: input.review,
-      dbGoalIDs: new Set(listGoals(taskID).map((g) => g.id)),
-    })
+    const targetIDs = new Set<string>()
+    for (const goalID of input.review.issueGoalIDs) if (goalID) targetIDs.add(goalID)
+    for (const goalID of input.review.correctionGoalIDs) if (goalID) targetIDs.add(goalID)
+    if (targetIDs.size > 0) return Array.from(targetIDs)
+
+    if (
+      input.review.verdict === "needs_correction"
+      || input.review.correctionsCount > 0
+      || input.review.missingCount > 0
+    ) {
+      return [input.fallbackGoalID]
+    }
+
+    return []
   }
 
   function dependentGoalClosure(rootGoalIDs: string[]) {
@@ -927,62 +900,15 @@ export function createOrchestratorTools(input: {
     }))
   }
 
-  /**
-   * Maximum same-goal `architecture_review_rework` attempts before the rework
-   * loop is declared non-converging and the orchestrator must escalate (the
-   * canonical escalation path is `architect` re-run when delivery / prosecutor
-   * evidence supports it; rule 13 forbids hard-coded state-machine escalation
-   * here, so this layer only writes evidence into decision_log and lets the
-   * orchestrator LLM decide on the next turn).
-   *
-   * Boundary value chosen to match `specs/orchestrator-collaboration-closure-2026-05-05.md`
-   * L36: "after repeated same-spec correction attempts, the initial decomposition
-   * is no longer scientifically stable and Architect must re-plan." Two attempts
-   * = original Build + one rework retry; the third would compound the same
-   * task-level architecture concern onto an unrelated goal and produce the V_n
-   * loop the spec is trying to close.
-   */
-  const MAX_REVIEW_REWORK_PER_GOAL = 2
-
   async function openArchitectureReviewRework(input: {
     review: Extract<IntegrityReviewOutcome, { status: "reviewed" }>
     targetGoalIDs: string[]
-  }): Promise<{ reworkLines: string[]; exhaustedGoals: string[] }> {
+  }) {
     const { startNewAttempt } = await import("@/engine/persist")
-    const decisionLog = createDecisionLog(taskID)
     const reworkLines: string[] = []
-    const exhaustedGoals: string[] = []
     const reopenedRoots = input.targetGoalIDs.join(", ")
     for (const item of dependentGoalClosure(input.targetGoalIDs)) {
       const reason = item.direct ? "architecture_review_rework" : "architecture_review_dependency_rework"
-
-      // Convergence boundary: don't open another rework attempt under the
-      // same reason on the same goal once the limit is reached. Write a
-      // decision_log entry under phase=retry so orchestrator can read it on
-      // the next decision turn and decide whether to escalate (architect
-      // re-run / fail_task / advisory passthrough). spec L36 + L79.
-      const priorReworkCount = countGoalAttemptsBySupersedeReason(item.goalID, reason)
-      if (priorReworkCount >= MAX_REVIEW_REWORK_PER_GOAL) {
-        const exhaustedFeedback =
-          `architecture_review_rework on ${item.goalID} reached ${MAX_REVIEW_REWORK_PER_GOAL} attempts under reason="${reason}" without converging. ` +
-          `The current goal graph cannot absorb the named architecture concerns at the goal layer. ` +
-          `${input.review.verdict}: ${input.review.summary}. ` +
-          `issues=${input.review.issues.join("; ") || "none"}. ` +
-          `Decision required: escalate to \`architect\` re-run if delivery / prosecutor evidence supports a structural re-plan, or accept advisory feedback and proceed (do not auto-restart upstream).`
-        decisionLog.append({
-          goalID: item.goalID,
-          phase: "retry",
-          key: `architecture_review_exhausted_${item.goalID}`,
-          value: exhaustedFeedback,
-          reason: "review_rework_exhausted",
-        })
-        exhaustedGoals.push(item.goalID)
-        reworkLines.push(
-          `goal=${item.goalID} reason=${reason} status=exhausted prior_count=${priorReworkCount} (no new attempt opened)`,
-        )
-        continue
-      }
-
       const action = `run goal ${item.goalID}`
       const reviewFeedback = item.direct
         ? `${input.review.verdict}: ${input.review.summary}. ` +
@@ -1025,7 +951,7 @@ export function createOrchestratorTools(input: {
         `reason=${reason} retry_count=${rework.retryCount}`,
       )
     }
-    return { reworkLines, exhaustedGoals }
+    return reworkLines
   }
 
   async function restartTaskFromStage(stage: RestartStage, reason: string) {
@@ -4949,47 +4875,20 @@ export function createOrchestratorTools(input: {
               if (architectureReview.status === "reviewed" && architectureReview.verdict !== "pass") {
                 const reviewTargetGoalIDs = postBuildReviewReworkGoalIDs({
                   review: architectureReview,
+                  fallbackGoalID: attachedGoalID,
                 })
                 if (reviewTargetGoalIDs.length > 0) {
-                  const { reworkLines, exhaustedGoals } = await openArchitectureReviewRework({
+                  architectureReviewNeedsRework = true
+                  const reworkLines = await openArchitectureReviewRework({
                     review: architectureReview,
                     targetGoalIDs: reviewTargetGoalIDs,
                   })
-                  // When every targeted goal has exhausted its rework budget,
-                  // there is nothing left for build to act on. Treat it as
-                  // advisory and let delivery proceed; orchestrator reads the
-                  // `architecture_review_exhausted_*` decision_log entries on
-                  // its next turn and decides whether to escalate to
-                  // `architect` re-run based on accumulated evidence.
-                  const allExhausted =
-                    exhaustedGoals.length > 0 && exhaustedGoals.length === reviewTargetGoalIDs.length
-                  if (allExhausted) {
-                    architectureReviewNeedsRework = false
-                    architectureReviewAllowsDeliver = true
-                    architectureReviewReworkLine =
-                      `\n- architecture_review_rework: rework budget exhausted on every targeted goal (${exhaustedGoals.join(", ")}); ` +
-                      `advisory passthrough — orchestrator should consider \`architect\` re-run if delivery / prosecutor evidence supports it. ` +
-                      `Lines: ${reworkLines.join("; ")}`
-                  } else {
-                    architectureReviewNeedsRework = true
-                    const exhaustedSuffix = exhaustedGoals.length > 0
-                      ? ` Exhausted (no new attempt opened): ${exhaustedGoals.join(", ")}.`
-                      : ""
-                    architectureReviewReworkLine =
-                      `\n- architecture_review_rework: opened targeted retry (dependency-closed): ${reworkLines.join("; ")}.${exhaustedSuffix}`
-                  }
-                } else {
-                  // Review reported issues but did not name any DB-resolvable
-                  // goal it can repair at the goal layer. Per
-                  // orchestrator-core.txt:352-353 we MUST NOT default to the
-                  // just-built goal; the review becomes advisory feedback
-                  // for the next decision turn, and delivery proceeds.
-                  // Orchestrator escalates to `architect` re-run only when
-                  // delivery / prosecutor evidence proves the graph itself
-                  // is structurally wrong (spec L79).
-                  architectureReviewAllowsDeliver = true
                   architectureReviewReworkLine =
-                    `\n- architecture_review_rework: advisory feedback recorded (verdict=${architectureReview.verdict}); no goal-scoped retry target — orchestrator decides on architect re-run if delivery evidence supports it`
+                    `\n- architecture_review_rework: opened targeted retry (dependency-closed): ${reworkLines.join("; ")}`
+                } else {
+                  architectureReviewAllowsDeliver = architectureReview.verdict === "concerns"
+                  architectureReviewReworkLine =
+                    `\n- architecture_review_rework: advisory concerns recorded; no goal-scoped retry target`
                 }
               }
             } catch (reviewErr) {
