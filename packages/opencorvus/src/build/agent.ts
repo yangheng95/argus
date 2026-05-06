@@ -410,8 +410,7 @@ export namespace BuildAgent {
           description:
             "Finalize the build with status='passed' after implementation, verification, commit, and merge_back have all succeeded, " +
             "or status='failed' with a concrete blocker when the build cannot be completed. " +
-            "You must fill files_changed with one entry per project file you changed; each entry must explain what changed and why that file belonged to this milestone or shared integration surface. " +
-            "Retry-only exception: if you started in a worktree whose prior-attempt files already satisfy every acceptance_spec without further edits, report status='passed' with files_changed=[] AND reused_prior_attempt={ rationale } explaining why the existing state suffices.",
+            "You must fill files_changed with one entry per project file you changed; each entry must explain what changed and why that file belonged to this milestone or shared integration surface.",
           inputSchema: BuildResultSchema,
           execute: async (result) => {
             if (result.status === "passed" && ownsWorktree && worktreeBranch && !mergedHead) {
@@ -429,32 +428,7 @@ export namespace BuildAgent {
                 })
                 return undefined
               })
-              // reused_prior_attempt: the build agent is publishing an
-              // already-correct worktree from a prior attempt without further
-              // edits. Two integrity gates apply BEFORE the per-file
-              // coverage check (which would otherwise reject every prior-
-              // attempt file as "missing explanation"):
-              //
-              //   1. Schema already enforces "files_changed=[] requires
-              //      reused_prior_attempt.rationale".
-              //   2. Worktree must actually contain a prior contribution —
-              //      baseRef..HEAD diff non-empty. Otherwise the LLM could
-              //      stamp a rationale onto an empty worktree to escape work.
-              //
-              // When both gates pass, skip the per-file coverage check: the
-              // LLM honestly did not edit anything this session, so demanding
-              // an explanation per prior-attempt file would be the bug we
-              // just fixed (V_n loop).
-              if (result.reused_prior_attempt && result.files_changed.length === 0) {
-                if (actualDiffs !== undefined && actualDiffs.length === 0) {
-                  return (
-                    "Error: reused_prior_attempt set but baseRef..HEAD diff is empty — the worktree contains no prior-attempt contribution to publish. " +
-                    "Either implement the goal and report files_changed[] with explanations, or report status='failed' with a concrete blocker. " +
-                    "Do not use reused_prior_attempt to escape an empty worktree."
-                  )
-                }
-                // Honest 0-edit reuse: short-circuit past the per-file coverage check.
-              } else if (actualDiffs) {
+              if (actualDiffs) {
                 const coverageError = fileChangeExplanationCoverageError({
                   reported: result.files_changed,
                   diffs: actualDiffs,
