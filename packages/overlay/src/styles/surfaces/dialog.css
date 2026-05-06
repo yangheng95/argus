@@ -78,6 +78,14 @@
   max-height: min(calc(100vh - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale)));
 }
 
+.dialog-wider .dialog-form {
+  max-width: var(--ui-dialog-wider-width);
+  /* Same 620px max-height cap as `.dialog-wide` — long settings tabs
+     scroll inside `.config-content`, so the cap is consistent across
+     wide / wider modes. */
+  max-height: min(calc(100vh - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale)));
+}
+
 .dialog-title {
   font-size: clamp(calc(18px * var(--ui-scale)), calc(19px * var(--ui-scale)), calc(22px * var(--ui-scale)));
   font-weight: var(--ui-font-weight-strong);
@@ -85,15 +93,6 @@
   letter-spacing: 0.01em;
   line-height: 1.2;
   margin: 0;
-}
-
-/* The settings dialog renders inside `.config-dialog-head` and uses a
- * tighter visual rhythm than the prompt / confirm modals. The 18-22px
- * base feels billboard-y in a 380px tall settings frame; pulling it
- * down to ~15px aligns with the nav row size and matches the density
- * users expect in a "Preferences" dialog (VS Code / Linear). */
-.config-dialog-head .dialog-title {
-  font-size: calc(15px * var(--ui-scale));
 }
 
 .dialog-subtitle {
@@ -110,8 +109,8 @@
   gap: var(--ui-gap-lg);
 }
 
-.dialog-form > .dialog-head:not(.config-dialog-head),
-.dialog-form > .dialog-header:not(.config-dialog-head) {
+.dialog-form > .dialog-head,
+.dialog-form > .dialog-header {
   margin: calc(-18px * var(--ui-scale)) calc(-20px * var(--ui-scale)) 0;
   padding: calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));
   border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);

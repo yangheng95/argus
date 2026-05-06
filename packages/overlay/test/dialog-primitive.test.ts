@@ -26,8 +26,9 @@ describe("Dialog primitive", () => {
   test("renders canonical dialog shell classes", () => {
     expect(source).toContain('class={["dialog"');
     expect(source).toContain('"dialog-wide"');
+    expect(source).toContain('"dialog-wider"');
     expect(source).toContain('class={["dialog-form"');
-    expect(source).toContain('class="dialog-header"');
+    expect(source).toContain('class={["dialog-header"');
     expect(source).toContain('class="dialog-title"');
     expect(source).toContain('class="dialog-header-actions"');
     expect(source).toContain('class="dialog-actions"');

@@ -60,6 +60,7 @@
   --ui-dialog-gap: calc(12px * var(--ui-scale));
   --ui-dialog-width: calc(380px * var(--ui-scale));
   --ui-dialog-wide-width: calc(820px * var(--ui-scale));
+  --ui-dialog-wider-width: calc(980px * var(--ui-scale));
   --ui-dialog-diff-width: calc(1040px * var(--ui-scale));
   --ui-status-dot: calc(7px * var(--ui-scale));
   --ui-chat-send-size: calc(32px * var(--ui-scale));
