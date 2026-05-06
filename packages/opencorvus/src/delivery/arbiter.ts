@@ -14,12 +14,13 @@ export type DeliveryArbiterDecision = {
 
 /**
  * Delivery gate semantics:
- *   - Blocking: acceptance-spec coverage and integrity blockers (missing
- *     review, needs_correction/fail, or correction/missing-goal counts).
- *     Plain integrity concerns with zero corrective work are advisory notes.
+ *   - Blocking: acceptance-spec coverage gaps only.
  *   - Advisory: required checks (build/typecheck/test/lint), runtime probes,
- *     and the rest of the reviewer set (workspace_export, specialist:*).
- *     The delivery agent (LLM) weighs them in context.
+ *     architecture review (integrity), workspace_export reviews, and
+ *     specialist reviews. The delivery agent (LLM) reads the full evidence
+ *     (including integrity's complete review_markdown) and decides whether
+ *     they materially block acceptance. Spec
+ *     architecture-rework-loosening-plan-2026-05-06.md (C3 + C5).
  *
  * functionalAssessment.primaryFailureIds is the ground truth for the
  * blocking set; the gate just mirrors it. This keeps a single source of

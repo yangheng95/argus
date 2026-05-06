@@ -96,7 +96,7 @@ describe("pipeline workflow architecture review step", () => {
     expect(taskSteps.build).toBeUndefined()
   })
 
-  test("projects needs_correction integrity as failed instead of completed", () => {
+  test("projects needs_correction integrity as completed (advisory; orchestrator decides)", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `proj_workflow_integrity_failed_${stamp}`
@@ -156,10 +156,15 @@ describe("pipeline workflow architecture review step", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.integrity?.status).toBe("failed")
+    // C2 (spec architecture-rework-loosening-plan-2026-05-06.md): integrity
+    // is advisory — needs_correction is NOT a workflow failure. The full
+    // review markdown is surfaced to the orchestrator LLM via build tool
+    // result + read_context; the LLM decides whether the findings warrant
+    // any action.
+    expect(taskSteps.integrity?.status).toBe("completed")
   })
 
-  test("projects concerns with correction work as failed", () => {
+  test("projects concerns with correction work as completed (advisory; orchestrator decides)", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `proj_workflow_integrity_concern_failed_${stamp}`
@@ -219,6 +224,8 @@ describe("pipeline workflow architecture review step", () => {
 
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
     const taskSteps = projectTaskSteps(taskID, pipeline)
-    expect(taskSteps.integrity?.status).toBe("failed")
+    // C2: concerns + correction count > 0 is no longer a workflow failure.
+    // The orchestrator LLM reads the markdown and decides.
+    expect(taskSteps.integrity?.status).toBe("completed")
   })
 })

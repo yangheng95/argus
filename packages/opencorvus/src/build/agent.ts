@@ -208,6 +208,51 @@ export namespace BuildAgent {
      *  Empty / undefined when no merge-back happened (failed build, caller-
      *  owned worktree, or no commit_ref). */
     diffs?: FileDiff[]
+
+    // ── Merge / diff facts surfaced for the orchestrator LLM ──────────
+    // These are the build session's authoritative facts about what
+    // actually happened, independent of what the LLM self-reported. The
+    // build tool result formatter renders them inline so the orchestrator
+    // LLM can cross-check the LLM's `files_changed[]` and `commit_ref`
+    // against the host's ground truth and pick the next action itself
+    // (CLAUDE.md rule 13 — no host-side state-machine on these values).
+
+    /** Status of merge_back inside this run.
+     *   - "merged"      — merge_back returned merged; primary HEAD advanced
+     *   - "conflict"    — merge_back hit conflict, build session may or may
+     *                     not have repaired it
+     *   - "blocked"     — repository state prevented merge from starting
+     *   - "infra_error" — host-level merge infrastructure error
+     *   - "not_invoked" — agent never called merge_back (or it was not
+     *                     in the toolset for caller-owned worktrees)
+     */
+    mergeBackStatus: "merged" | "conflict" | "blocked" | "infra_error" | "not_invoked"
+    /** Last non-merged outcome text from merge_back, or undefined if the
+     *  most recent invocation actually merged (or the tool was never
+     *  invoked). Surfaced verbatim so the orchestrator LLM sees whatever
+     *  the merge_back tool reported (conflict path list, blocked reason,
+     *  etc.). */
+    lastMergeBackOutcome?: string
+    /** Primary HEAD commit (short SHA) once merge_back successfully
+     *  published. Undefined when merge_back did not succeed in this run.
+     *  Use this — not result.commit_ref — when persisting the goal's
+     *  published commit reference. */
+    publishedCommitRef?: string
+    /** Worktree HEAD commit (short SHA) at the end of the run. Always
+     *  present when a managed worktree exists. The orchestrator can
+     *  compare against publishedCommitRef to see what was committed but
+     *  not yet merged. */
+    worktreeHead?: string
+    /** Files that actually changed in this build's contribution range
+     *  (worktreeBaseRef..HEAD, with merge-commit second-parent unwrap
+     *  via resolveGoalContributionBaseRef). The host's ground truth that
+     *  the orchestrator LLM can compare to result.files_changed. */
+    actualChangedFiles?: Array<{
+      path: string
+      status: "added" | "modified" | "deleted"
+      additions: number
+      deletions: number
+    }>
   }
 
   export function composeExternalCodingSystem(input: {
@@ -398,59 +443,39 @@ export namespace BuildAgent {
 
       type BuildCollector = {
         result?: BuildResult
-        blockedBeforeMerge: boolean
       }
-      const buildCollector: BuildCollector = { blockedBeforeMerge: false }
-      const currentBuildDiffs = async () => {
-        if (!worktreeDir || !baseRef) return undefined
-        return collectGoalContributionDiffs(worktreeDir, baseRef)
-      }
+      const buildCollector: BuildCollector = {}
       const createBuildReportTools = (): ToolSet => ({
         report_build_result: tool({
           description:
-            "Finalize the build with status='passed' after implementation, verification, commit, and merge_back have all succeeded, " +
-            "or status='failed' with a concrete blocker when the build cannot be completed. " +
-            "You must fill files_changed with one entry per project file you changed; each entry must explain what changed and why that file belonged to this milestone or shared integration surface.",
+            "Finalize this build session with status='passed' or status='failed'. " +
+            "The host accepts whichever you submit — it does NOT enforce that merge_back succeeded first, " +
+            "and does NOT audit your files_changed[] against the actual git diff. " +
+            "Both facts are returned to the orchestrator alongside your report (merge_back_status, actual_changed_files), " +
+            "so the orchestrator LLM cross-checks honesty itself. " +
+            "Be honest: if you didn't merge, report status='failed' with a concrete error. " +
+            "If you legitimately reused a prior attempt's worktree without further edits, files_changed=[] is fine.",
           inputSchema: BuildResultSchema,
           execute: async (result) => {
-            if (result.status === "passed" && ownsWorktree && worktreeBranch && !mergedHead) {
-              buildCollector.blockedBeforeMerge = true
-              return (
-                "Error: cannot report status='passed' before merge_back succeeds. " +
-                "Commit the fix, call merge_back, resolve any conflicts, and call report_build_result with status='passed' only after merge_back returns status='merged'."
-              )
-            }
-            if (result.status === "passed") {
-              const actualDiffs = await currentBuildDiffs().catch((err) => {
-                log.warn("build agent: file-change coverage diff failed inside report_build_result", {
-                  taskID: input.task.id,
-                  error: err instanceof Error ? err.message : String(err),
-                })
-                return undefined
-              })
-              if (actualDiffs) {
-                const coverageError = fileChangeExplanationCoverageError({
-                  reported: result.files_changed,
-                  diffs: actualDiffs,
-                })
-                if (coverageError) {
-                  return (
-                    `Error: ${coverageError} ` +
-                    "Submit a corrected report_build_result payload by adding/removing files_changed[] entries, then call report_build_result again."
-                  )
-                }
-              }
-            }
-            const commit_ref = mergedHead ? mergedHead.slice(0, 12) : result.commit_ref ?? ""
+            // No host-side enforcement of merge_back-before-passed and no
+            // diff-coverage audit. Both facts are surfaced separately on
+            // RunOutput (mergeBackStatus / actualChangedFiles) and rendered
+            // in the orchestrator-facing build tool result. CLAUDE.md
+            // rule 13 — orchestrator LLM, not host code, decides whether
+            // to trust this self-report. Spec
+            // architecture-rework-loosening-plan-2026-05-06.md (B3 + B4 + B19).
+            //
+            // commit_ref policy: in managed worktree mode, only the merged
+            // primary HEAD is a valid published commit. If merge_back hasn't
+            // succeeded, we drop the LLM's self-reported value rather than
+            // store a worktree tip that nothing downstream can verify
+            // (rule 8 single source — the host knows the truth, not the LLM).
+            const commit_ref = mergedHead
+              ? mergedHead.slice(0, 12)
+              : (ownsWorktree && worktreeBranch ? "" : result.commit_ref ?? "")
             buildCollector.result = result.status === "passed"
-              ? {
-                  ...result,
-                  commit_ref,
-                }
-              : {
-                  ...result,
-                  commit_ref,
-                }
+              ? { ...result, commit_ref }
+              : { ...result, commit_ref }
             return `PASS: build ${result.status} result recorded.`
           },
         }),
@@ -551,13 +576,6 @@ export namespace BuildAgent {
       let out: { session: { id: string }; structured?: unknown; collector?: BuildCollector } | undefined
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
       let diffs: FileDiff[] | undefined
-      // When the agent tries to close with status=passed before merge_back,
-      // report_build_result is rejected in-session. If the model still fails to
-      // repair that by calling merge_back, preserve the worktree so the next
-      // attempt can continue from the written files instead of discarding
-      // real progress.
-      let preserveWorktreeForRetry = false
-      let mergeBackBlockedReport = false
       // Dispatch fork: executor === "mirrorcode" → in-process LLM via SessionPrompt
       // (the existing runAgentSession path with merge_back tool). Anything else
       // (claude-code, codex) → external CodingProvider; the provider edits files
@@ -593,22 +611,24 @@ export namespace BuildAgent {
             terminalTool: {
               toolName: "report_build_result",
               isSatisfied: (collector) => Boolean(collector.result),
-              // A merged HEAD makes the success terminal action host-obvious,
-              // so it is safe to hide work tools and force report_build_result.
-              // Failure is different: the concrete blocker lives in the model's
-              // work context, so failed reports stay available under "required"
-              // until a future collector-level fatal blocker exists.
-              shouldExposeOnlyTerminalTool: () => Boolean(mergedHead),
-              recovery: {
-                maxTurns: 3,
-                buildUserPrompt: ({ attempt, toolName }) =>
-                  buildTerminalReportRecoveryPrompt({ attempt, toolName, mergedHead }),
-              },
+              // Never restrict the toolset to just the terminal tool. Even
+              // after merge_back succeeds the LLM might want to revise tests
+              // or commit additional fixes; forcing a terminal-only scope is
+              // host-side flow control (CLAUDE.md rule 13). The LLM decides
+              // when it's done by calling report_build_result of its own
+              // accord. Spec architecture-rework-loosening-plan-2026-05-06.md (B5).
+              shouldExposeOnlyTerminalTool: () => false,
+              // No recovery loop. Auto-retrying with a synthetic user prompt
+              // when the LLM forgets to call report_build_result is a host-
+              // side fallback (rule 7) that masks LLM failures with three
+              // hard-coded turns (rule 13). When the agent doesn't terminate
+              // properly, throw missing_terminal_report and let the
+              // orchestrator LLM decide whether to retry the whole build or
+              // change strategy. Spec ...md (B10).
             },
           })
           const report = buildToolKit.getCollector()
           out = { ...out, collector: report }
-          mergeBackBlockedReport = report.blockedBeforeMerge
           parsed = BuildResultSchema.safeParse(report.result)
         } else {
           const externalOut = await runWithExternalProvider({
@@ -631,15 +651,12 @@ export namespace BuildAgent {
 
         // Capture the goal's diff against its original baseRef while the
         // worktree's git dir is still healthy — overlay's per-goal delivery
-        // panel reads this. Independent of merge outcome (we still want to
-        // show what the agent changed even if the merge step was skipped).
-        if (
-          ownsWorktree &&
-          worktreeDir &&
-          baseRef &&
-          parsed.success &&
-          parsed.data.status === "passed"
-        ) {
+        // panel reads this; the orchestrator-facing tool result also renders
+        // it as actual_changed_files. Always collect when the worktree
+        // exists, regardless of status: the orchestrator LLM benefits from
+        // seeing what the failed build *did* touch before failing, not just
+        // when it claimed passed.
+        if (ownsWorktree && worktreeDir && baseRef && parsed.success) {
           diffs = await collectGoalContributionDiffs(worktreeDir, baseRef).catch((err) => {
             log.warn("build agent: collectGoalDiffs failed — overlay panel will show empty file list", {
               taskID: input.task.id,
@@ -648,100 +665,49 @@ export namespace BuildAgent {
             return undefined
           })
         }
+        // No host-side coverage audit. The orchestrator-facing tool result
+        // surfaces both the LLM's self-reported files_changed and the host's
+        // actual_changed_files (from `diffs`); the orchestrator LLM
+        // cross-checks them and decides if the report is honest. CLAUDE.md
+        // rule 13. Spec architecture-rework-loosening-plan-2026-05-06.md (B6).
 
-        if (parsed.success && parsed.data.status === "passed" && Array.isArray(diffs)) {
-          const coverageError = fileChangeExplanationCoverageError({
-            reported: parsed.data.files_changed,
-            diffs,
-          })
-          if (coverageError) {
-            parsed = {
-              success: true as const,
-              data: {
-                ...parsed.data,
-                status: "failed" as const,
-                error: coverageError,
-              },
-            }
-          }
-        }
-
-        // Decide before the finally cleanup whether the next attempt should
-        // be allowed to pick up where this one left off. The continuable
-        // cases are: the model reported passed without merge_back after the
-        // guard rejected that report_build_result, or an older path somehow
-        // returned a passed payload without a merged head.
-        if (
-          ownsWorktree &&
-          worktreeBranch &&
-          !mergedHead &&
-          (
-            mergeBackBlockedReport ||
-            (parsed?.success && parsed.data.status === "passed")
-          )
-        ) {
-          preserveWorktreeForRetry = true
-        }
       } finally {
-        // Worktree lifecycle is owned by the orchestrator (rule 22 single
-        // source: orchestrator decides retry_build / fail_task /
-        // modify_goal, so it also decides when the worktree is no longer
-        // needed). Build agent only cleans up in the narrow case where it
-        // could not even produce a usable worktree state — i.e. ownership
-        // is set but the worktree dir disappeared mid-flight (rare; FS
-        // failures, OS-level rm). In every other case — pass + merged,
-        // pass without merged (continuation), merge conflict, hard failure
-        // — the worktree stays so the next build attempt can use it.
-        // engine/writer.ts cleanupGoalWorkspaces is the safety-net at
-        // task terminal that catches any orchestrator-skipped cleanup.
-        if (ownsWorktree && worktreeBranch && !mergedHead && mergeBackBlockedReport) {
-          preserveWorktreeForRetry = true
-        }
+        // Managed worktrees always preserve until the orchestrator cleans
+        // them up (rule 22 — orchestrator owns cleanup; build agent does
+        // not unilaterally delete). The earlier preserveWorktreeForRetry
+        // boolean gated by mergedHead/mergeBackBlockedReport was a
+        // host-side state machine; deleted in favour of "always preserve
+        // when the worktree is goal-managed". Spec
+        // architecture-rework-loosening-plan-2026-05-06.md (B9).
         if (ownsWorktree && worktreeDir) {
           log.info("build agent: preserving worktree — orchestrator owns cleanup", {
             taskID: input.task.id,
             worktreeDir,
             worktreeBranch,
             mergedHead: mergedHead ? mergedHead.slice(0, 12) : null,
-            preserveForRetry: preserveWorktreeForRetry,
           })
         }
       }
 
       if (!parsed || !parsed.success) {
-        // Opencode executor: the build session is contractually obligated
-        // to call report_build_result and (when ownsWorktree) to complete
-        // merge_back before reporting passed. Surface as a typed
-        // BuildAgentContractError so the orchestrator can convert it to
-        // a schema-valid failed BuildResult and continue the retry budget
-        // path WITHOUT rethrowing as a generic build-tool error.
-        // Replaces the rule-7 mergeBackBlockedReport synthesis (rule 17
-        // single path; the synthesised "success-encoded-as-failed" result
-        // is gone — the typed error carries the same diagnostic detail).
+        // The build session is contractually obligated to call
+        // report_build_result with a schema-valid payload. When it doesn't,
+        // the orchestrator gets a typed missing_terminal_report so the next
+        // tool result is still well-formed (B8: merge_back_blocked is no
+        // longer a separate throw — the host doesn't enforce
+        // merge-before-passed; the orchestrator LLM reads the merge_back
+        // facts in the build tool result and decides). Spec
+        // architecture-rework-loosening-plan-2026-05-06.md (B8).
         if (executor === "mirrorcode") {
-          if (mergeBackBlockedReport) {
-            const lastOutcome = lastMergeBackOutcome ?? "merge_back tool was never invoked"
-            throw new BuildAgentContractError(
-              "merge_back_blocked",
-              {
-                sessionID: out?.session?.id,
-                lastMergeBackOutcome: lastOutcome,
-              },
-              `Build session ended before merge_back completed: ${lastOutcome}; ` +
-                "report_build_result status='passed' was rejected because merge_back had not succeeded; " +
-                "the model did not repair the session by calling merge_back before the run ended.",
-            )
-          }
           throw new BuildAgentContractError(
             "missing_terminal_report",
             {
               sessionID: out?.session?.id,
               parseError: parsed?.error?.message,
+              lastMergeBackOutcome,
             },
             `Build agent terminated without a valid report_build_result tool call: ${parsed?.error?.message ?? "(no parsed output)"}. ` +
-              `The same build session already attempted terminal-report recovery; retry this goal only if recovery exhausted without a final report_build_result(files_changed[]) call. ` +
-              `The retained goal worktree is diagnostic evidence under .opencorvus/worktrees, not primary workspace pollution; ` +
-              `do not restart_from_stage solely because that diagnostic worktree contains partial files.`,
+              `The retained goal worktree is diagnostic evidence under .opencorvus/worktrees; the orchestrator LLM reads the build tool's merge_back / actual_changed_files facts and decides whether to retry, modify_goal, or fail_task.`,
           )
         }
         // External executors (codex / claude-code) host-synthesise the
@@ -754,36 +720,22 @@ export namespace BuildAgent {
         )
       }
 
-      // Post-run guard. Contract is "merge_back must happen inside the build
-      // session before the build returns passed". Caller-owned worktrees opt
-      // out because the caller publishes those changes.
-      if (
-        ownsWorktree &&
-        worktreeBranch &&
-        parsed.data.status === "passed" &&
-        !mergedHead
-      ) {
-        const lastOutcome = lastMergeBackOutcome ?? "merge_back tool was never invoked"
-        const guardError =
-          "merge_back was not called or did not succeed inside the build session; " +
-          `last merge_back outcome: ${lastOutcome}; ` +
-          "goal never published to primary (切法-A: build agent owns merge)."
-        parsed = {
-          success: true as const,
-          data: {
-            ...parsed.data,
-            status: "failed" as const,
-            error: guardError,
-          },
-        }
-      } else if (mergedHead && parsed.data.status === "passed") {
-        // Rewrite commit_ref to the merged primary HEAD so downstream readers
-        // (delivery overlay, evaluator) point at the published commit, not
-        // the agent's pre-merge tip (which may differ once a merge commit
-        // joins primary's lineage).
+      // commit_ref policy: in managed worktree mode, only the merged primary
+      // HEAD is a valid published commit. If the LLM reported passed without
+      // merge_back, the commit_ref is cleared so downstream readers don't
+      // mistake a worktree tip for a published commit. The merge_back facts
+      // (RunOutput.mergeBackStatus / publishedCommitRef) carry the truth.
+      // No status flip — the orchestrator LLM reads both and decides.
+      // CLAUDE.md rule 8/13. Spec ...md (B7 + B19).
+      if (mergedHead && parsed.data.status === "passed") {
         parsed = {
           success: true as const,
           data: { ...parsed.data, commit_ref: mergedHead.slice(0, 12) },
+        }
+      } else if (ownsWorktree && worktreeBranch && parsed.data.status === "passed" && !mergedHead) {
+        parsed = {
+          success: true as const,
+          data: { ...parsed.data, commit_ref: "" },
         }
       }
 
@@ -797,6 +749,48 @@ export namespace BuildAgent {
         merged: Boolean(mergedHead),
       })
 
+      // Merge-back fact summary for the orchestrator. mergeBackStatus is
+      // derived from the same in-closure variables the prior guards used —
+      // mergedHead set ⇒ "merged"; otherwise the lastMergeBackOutcome text
+      // pattern indicates which stage failed. "not_invoked" covers both
+      // caller-owned worktrees (no merge_back tool) and managed worktrees
+      // where the agent never called the tool.
+      const mergeBackStatus: RunOutput["mergeBackStatus"] = mergedHead
+        ? "merged"
+        : lastMergeBackOutcome
+          ? lastMergeBackOutcome.startsWith("conflict")
+            ? "conflict"
+            : lastMergeBackOutcome.startsWith("blocked")
+              ? "blocked"
+              : lastMergeBackOutcome.startsWith("infra_error")
+                ? "infra_error"
+                : "not_invoked"
+          : "not_invoked"
+
+      // Worktree HEAD captured for the orchestrator independent of merge.
+      let worktreeHead: string | undefined
+      if (worktreeDir) {
+        const head = (await $`git rev-parse HEAD`.quiet().nothrow().cwd(worktreeDir).text()).trim()
+        if (head) worktreeHead = head.slice(0, 12)
+      }
+
+      // Translate the contribution diff (already collected for delivery
+      // panel) into a compact host-truth files list. Render against the
+      // contribution base, not baseRef..HEAD raw, so merge commits don't
+      // attribute sibling-goal files to this build.
+      const actualChangedFiles = diffs?.map((d) => ({
+        path: d.file,
+        status: (d.status === "added" || d.status === "deleted" || d.status === "modified")
+          ? d.status
+          : "modified" as const,
+        additions: typeof (d as { additions?: number }).additions === "number"
+          ? (d as { additions: number }).additions
+          : 0,
+        deletions: typeof (d as { deletions?: number }).deletions === "number"
+          ? (d as { deletions: number }).deletions
+          : 0,
+      }))
+
       return {
         result: parsed.data,
         sessionID: out.session.id,
@@ -804,6 +798,11 @@ export namespace BuildAgent {
         worktreeBranch: ownsWorktree ? worktreeBranch : undefined,
         worktreeBaseRef: ownsWorktree ? baseRef : undefined,
         diffs,
+        mergeBackStatus,
+        lastMergeBackOutcome,
+        publishedCommitRef: mergedHead ? mergedHead.slice(0, 12) : undefined,
+        worktreeHead,
+        actualChangedFiles,
       }
     })
   }
@@ -827,25 +826,6 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "mir
     "- Commit changes with a concrete commit message before finishing.",
     "- If the dependency contract is missing, verification fails, or you cannot commit, finish with a concise failure summary and the exact blocker.",
     "- Do not call OpenCorvus-only tools such as report_build_result or merge_back; the host will publish and synthesize the terminal BuildResult after your process exits.",
-  ].join("\n")
-}
-
-function buildTerminalReportRecoveryPrompt(input: {
-  attempt: number
-  toolName: string
-  mergedHead: string | undefined
-}): string {
-  return [
-    `Protocol continuation: your previous build turn ended without calling ${input.toolName}.`,
-    "",
-    "Stay in this same build session. Do not restart the goal, do not ask the orchestrator to restart planning, and do not treat retained files under .opencorvus/worktrees as primary workspace pollution.",
-    "",
-    input.mergedHead
-      ? `merge_back already published this goal at ${input.mergedHead.slice(0, 12)}. Inspect the actual changed files if needed, then call ${input.toolName} now.`
-      : "If implementation or verification is incomplete, finish it in this worktree first. If the work cannot pass, report status='failed' with the concrete blocker.",
-    "",
-    `You must finish by calling ${input.toolName} exactly once. The payload must include files_changed[] with every changed file and a concise per-file explanation of why that change belongs to this goal and how it preserves sibling-goal contracts.`,
-    `Same-session report recovery attempt: ${input.attempt}.`,
   ].join("\n")
 }
 
@@ -1531,6 +1511,10 @@ async function runWithExternalProviderImpl(args: {
   // External provider finished without error; BuildAgent owns merge_back.
   if (!args.ownsWorktree || !args.worktreeBranch) {
     // Caller-owned worktree: skip merge here, caller will publish.
+    // files_changed=[] is now legal (B1); the orchestrator-facing build
+    // tool result surfaces the host's actual_changed_files separately,
+    // so a synthesized placeholder file entry is redundant misinformation.
+    // Spec architecture-rework-loosening-plan-2026-05-06.md (B18).
     return {
       sessionID: session.id,
       structured: {
@@ -1539,11 +1523,7 @@ async function runWithExternalProviderImpl(args: {
         summary:
           doneOutput?.trim() ||
           `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
-        files_changed: [{
-          path: "__external_executor_missing_file_report__",
-          summary: "External executor completed without OpenCorvus report_build_result access.",
-          reason: "Host synthesized this placeholder because the external executor protocol has no structured per-file report channel.",
-        }],
+        files_changed: [],
         tests: [],
       },
     }
@@ -1681,6 +1661,12 @@ async function runWithExternalProviderImpl(args: {
     }
   }
 
+  // External executors don't go through report_build_result, so we cannot
+  // get the LLM's per-file explanations. Empty files_changed is honest
+  // (B1 makes it legal); the orchestrator-facing build tool result still
+  // shows the host's actual_changed_files (computed from baseRef..HEAD)
+  // alongside this report, so the orchestrator LLM has the truth without
+  // the synthesized placeholder. Spec ...md (B18).
   return {
     sessionID: session.id,
     structured: {
@@ -1689,11 +1675,7 @@ async function runWithExternalProviderImpl(args: {
       summary:
         doneOutput?.trim() ||
         `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
-      files_changed: [{
-        path: "__external_executor_missing_file_report__",
-        summary: "External executor completed without OpenCorvus report_build_result access.",
-        reason: "Host synthesized this placeholder because the external executor protocol has no structured per-file report channel.",
-      }],
+      files_changed: [],
       tests: [],
     },
     mergedHead,
@@ -1802,26 +1784,6 @@ async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<F
     })
   }
   return result
-}
-
-export function fileChangeExplanationCoverageError(input: {
-  reported: Array<{ path: string }>
-  diffs: Array<{ file: string }>
-}): string | undefined {
-  const reported = new Set(input.reported.map((item) => normalizeBuildPath(item.path)).filter(Boolean))
-  const actual = new Set(input.diffs.map((item) => normalizeBuildPath(item.file)).filter(Boolean))
-  const missing = [...actual].filter((file) => !reported.has(file)).sort()
-  const extra = [...reported].filter((file) => !actual.has(file)).sort()
-  if (missing.length === 0 && extra.length === 0) return undefined
-  const parts: string[] = []
-  if (missing.length > 0) parts.push(`missing explanations for changed files: ${missing.join(", ")}`)
-  if (extra.length > 0) parts.push(`reported files not present in git diff: ${extra.join(", ")}`)
-  return `Build collaboration report does not match actual diff; ${parts.join("; ")}. ` +
-    `Every changed file must be explained in files_changed[].`
-}
-
-function normalizeBuildPath(input: string): string {
-  return input.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/g, "")
 }
 
 // ---------------------------------------------------------------------------

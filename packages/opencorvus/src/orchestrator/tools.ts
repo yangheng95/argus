@@ -75,6 +75,12 @@ import {
   SourceCoverageEntrySchema,
   type ArchitectFidelityState,
 } from "@/architect/fidelity"
+import type {
+  GoalCorrection,
+  IntegrityDimensionResult,
+  IntegrityResult,
+  MissingGoal,
+} from "@/integrity"
 
 const log = Log.create({ service: "task-tools" })
 
@@ -94,10 +100,79 @@ type IntegrityReviewOutcome =
       perDimension: Array<string>
       correctionsCount: number
       missingCount: number
-      issues: string[]
-      issueGoalIDs: string[]
-      correctionGoalIDs: string[]
+      /** Full per-dimension breakdown including issues / corrections /
+       *  missing_goals — kept on the outcome so every consumer (build tool
+       *  return, renderIntegrityOutcome, recordIntegrityAttempt persistence,
+       *  read_context, delivery upstream context) renders the same complete
+       *  text instead of a count summary. The orchestrator LLM reads this
+       *  markdown and decides modify_goal / build / architect / fail_task
+       *  itself; nothing in code routes/supersedes from the outcome. */
+      markdown: string
+      dimensions: IntegrityDimensionResult[]
+      corrections: GoalCorrection[]
+      missingGoals: MissingGoal[]
     }
+
+/**
+ * Render a complete integrity review as markdown text. Every issue, every
+ * correction proposal (with action / goalID / reason / updates fields), every
+ * missing-goal proposal (with title / objective / acceptance hints / owned
+ * paths), and every per-dimension verdict is included verbatim.
+ *
+ * No truncation, no count-only summarisation. The orchestrator LLM is the
+ * single decision maker for follow-up actions and needs the same evidence the
+ * integrity LLM produced. Compact rendering (one fact per line) keeps the
+ * payload prompt-friendly.
+ */
+function renderIntegrityMarkdown(input: {
+  verdict: IntegrityResult
+  sessionID: string
+}): string {
+  const { verdict, sessionID } = input
+  const lines: string[] = []
+  lines.push(`### Architecture review (verdict=${verdict.verdict}; session ${sessionID})`)
+  if (verdict.summary) lines.push(`Summary: ${verdict.summary}`)
+  for (const dim of verdict.dimensions) {
+    const issues = dim.issues ?? []
+    const corrections = dim.corrections ?? []
+    const missingGoals = dim.missingGoals ?? []
+    lines.push("")
+    lines.push(`**${dim.id} = ${dim.verdict}**`)
+    if (issues.length === 0 && corrections.length === 0 && missingGoals.length === 0) {
+      lines.push("- (no findings)")
+      continue
+    }
+    if (issues.length > 0) {
+      lines.push("- issues:")
+      for (const i of issues) {
+        const goalRef = i.goalIDs && i.goalIDs.length > 0 ? ` goal_ids=[${i.goalIDs.join(", ")}]` : ""
+        const evidence = i.evidence ? ` _evidence: ${i.evidence}_` : ""
+        lines.push(`  - [${i.type}] ${i.description}${goalRef}${evidence}`)
+      }
+    }
+    if (corrections.length > 0) {
+      lines.push("- corrections (proposed by integrity, NOT yet applied):")
+      for (const c of corrections) {
+        const updates = c.updates ? ` updates=${JSON.stringify(c.updates)}` : ""
+        lines.push(`  - ${c.action} goal=${c.goalID} — ${c.reason}${updates}`)
+      }
+    }
+    if (missingGoals.length > 0) {
+      lines.push("- missing_goals (proposed by integrity, NOT yet applied):")
+      for (const m of missingGoals) {
+        const ownedPaths = m.owned_paths ?? []
+        const hints = m.acceptance_spec_hints ?? []
+        lines.push(
+          `  - title="${m.title}" kind=${m.kind} priority=${m.priority} owned_paths=[${ownedPaths.join(", ")}] — ${m.reason}`,
+        )
+        if (hints.length > 0) {
+          for (const h of hints) lines.push(`    * acceptance hint: ${h}`)
+        }
+      }
+    }
+  }
+  return lines.join("\n")
+}
 
 // Post-build architecture review is task/spec scoped. Parallel Build tool
 // calls can complete in the same orchestrator turn; without this single-flight
@@ -698,12 +773,11 @@ export function createOrchestratorTools(input: {
     if (outcome.status === "reviewed") {
       const headline =
         outcome.verdict === "pass"
-          ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. NEXT: dispatch \`build({ goalID })\` per goal.`
-          : outcome.verdict === "concerns"
-            ? `Integrity verdict: concerns — ${outcome.perDimension.join(", ")}. ${outcome.summary} ` +
-              `Treat this as architecture-review feedback for the next build prompt; do not mutate the goal graph from the review alone.`
-            : `Integrity verdict: needs_correction — ${outcome.perDimension.join(", ")}. ${outcome.summary} ` +
-              `Treat this as architecture-review feedback for the next build prompt or an explicit architect decision; the review itself does not rewrite requirements or goals.`
+          ? `Integrity verdict: pass — ${outcome.perDimension.join(", ")}. ` +
+            `Review is advisory; orchestrator decides next step (deliver / build per goal / architect / fail_task).`
+          : `Integrity verdict: ${outcome.verdict} — ${outcome.perDimension.join(", ")}. ` +
+            `Review is advisory: nothing in code supersedes goals, opens new attempts, or mutates the graph based on this verdict. ` +
+            `Read the full markdown below and choose modify_goal / build({goalID}) / architect / deliver / fail_task explicitly.`
       return SubAgentProtocol.yieldResult({
         headline,
         fields: [
@@ -713,7 +787,9 @@ export function createOrchestratorTools(input: {
           ["corrections_count", String(outcome.correctionsCount)],
           ["missing_count", String(outcome.missingCount)],
           ["summary", outcome.summary],
-          ["issues", outcome.issues],
+          // Full review text — every issue, every correction proposal,
+          // every missing-goal proposal, with goal_ids preserved.
+          ["review_markdown", outcome.markdown],
         ],
         pointer: `integrity session ${outcome.sessionID}`,
       })
@@ -815,6 +891,7 @@ export function createOrchestratorTools(input: {
     const perDimensionLabels = verdict.dimensions.map((d) => `${d.id}=${d.verdict}`)
     const { recordIntegrityAttempt } = await import("@/engine/persist")
 
+    const markdown = renderIntegrityMarkdown({ verdict, sessionID: verdict.sessionID })
     try {
       recordIntegrityAttempt({
         taskID,
@@ -826,6 +903,14 @@ export function createOrchestratorTools(input: {
         correctionsCount: verdict.corrections.length,
         missingCount: verdict.missingGoals.length,
         reason: verdict.summary,
+        reviewMarkdown: markdown,
+        corrections: verdict.corrections.map((c) => ({
+          action: c.action,
+          goalID: c.goalID,
+          reason: c.reason,
+          updates: c.updates as Record<string, unknown> | undefined,
+        })),
+        missingGoals: verdict.missingGoals,
       })
     } catch (err) {
       log.error("integrity: recordIntegrityAttempt failed", {
@@ -843,116 +928,21 @@ export function createOrchestratorTools(input: {
       correctionsCount: verdict.corrections.length,
       missingCount: verdict.missingGoals.length,
       perDimension: perDimensionLabels.map((label, index) => `${label}(${verdict.dimensions[index]?.issues.length ?? 0}issues)`),
-      issues: verdict.issues.map((issue) => `[${issue.type}] ${issue.description}`),
-      issueGoalIDs: Array.from(new Set(verdict.issues.flatMap((issue) => issue.goalIDs ?? []))),
-      correctionGoalIDs: Array.from(new Set(verdict.corrections.map((correction) => correction.goalID))),
+      markdown,
+      dimensions: verdict.dimensions,
+      corrections: verdict.corrections,
+      missingGoals: verdict.missingGoals,
     }
   }
 
-  function postBuildReviewReworkGoalIDs(input: {
-    review: Extract<IntegrityReviewOutcome, { status: "reviewed" }>
-    fallbackGoalID: string
-  }) {
-    const targetIDs = new Set<string>()
-    for (const goalID of input.review.issueGoalIDs) if (goalID) targetIDs.add(goalID)
-    for (const goalID of input.review.correctionGoalIDs) if (goalID) targetIDs.add(goalID)
-    if (targetIDs.size > 0) return Array.from(targetIDs)
-
-    if (
-      input.review.verdict === "needs_correction"
-      || input.review.correctionsCount > 0
-      || input.review.missingCount > 0
-    ) {
-      return [input.fallbackGoalID]
-    }
-
-    return []
-  }
-
-  function dependentGoalClosure(rootGoalIDs: string[]) {
-    const goals = listGoals(taskID)
-    const roots = new Set(rootGoalIDs)
-    const dependentsByGoalID = new Map<string, string[]>()
-    for (const goal of goals) {
-      for (const depID of goal.depends_on ?? []) {
-        const dependents = dependentsByGoalID.get(depID) ?? []
-        dependents.push(goal.id)
-        dependentsByGoalID.set(depID, dependents)
-      }
-    }
-
-    const ordered: string[] = []
-    const seen = new Set<string>()
-    const queue = [...rootGoalIDs]
-    while (queue.length > 0) {
-      const goalID = queue.shift()!
-      if (seen.has(goalID)) continue
-      seen.add(goalID)
-      ordered.push(goalID)
-      for (const childID of dependentsByGoalID.get(goalID) ?? []) {
-        queue.push(childID)
-      }
-    }
-
-    return ordered.map((goalID) => ({
-      goalID,
-      direct: roots.has(goalID),
-    }))
-  }
-
-  async function openArchitectureReviewRework(input: {
-    review: Extract<IntegrityReviewOutcome, { status: "reviewed" }>
-    targetGoalIDs: string[]
-  }) {
-    const { startNewAttempt } = await import("@/engine/persist")
-    const reworkLines: string[] = []
-    const reopenedRoots = input.targetGoalIDs.join(", ")
-    for (const item of dependentGoalClosure(input.targetGoalIDs)) {
-      const reason = item.direct ? "architecture_review_rework" : "architecture_review_dependency_rework"
-      const action = `run goal ${item.goalID}`
-      const reviewFeedback = item.direct
-        ? `${input.review.verdict}: ${input.review.summary}. ` +
-          `issues=${input.review.issues.join("; ") || "none"}. ` +
-          `corrections=${input.review.correctionsCount}; missing=${input.review.missingCount}. ` +
-          `Action: ${action} and resolve the architecture_review findings before delivery; ` +
-          `do not rewrite requirements or the goal graph from the review alone.`
-        : `Dependency rework: upstream architecture_review reopened goals: ${reopenedRoots}. ` +
-          `${input.review.verdict}: ${input.review.summary}. ` +
-          `Action: ${action} after the reopened dependency goals pass again; ` +
-          `re-check the merged dependency contracts before changing files.`
-
-      const liveTip = findLatestTipGoalRun(item.goalID)
-      let abortedTipID: string | undefined
-      if (liveTip && isLiveGoalRunStatus(liveTip.status)) {
-        if (liveTip.session_id) SessionPrompt.cancel(liveTip.session_id)
-        updateGoalRunExecutorSessionStatus(liveTip.id, "aborted")
-        updateGoalRun(liveTip.id, {
-          status: "aborted",
-          error: `${reason}: upstream architecture review invalidated this attempt`,
-          blocking_reason: null,
-        })
-        abortedTipID = liveTip.id
-      }
-
-      const rework = startNewAttempt({
-        goalID: item.goalID,
-        reason,
-        feedback: {
-          value: reviewFeedback,
-          reason: item.direct
-            ? "post-build architecture_review non-pass"
-            : "post-build architecture_review dependency invalidation",
-        },
-      })
-      reworkLines.push(
-        `goal=${item.goalID}` +
-        `${abortedTipID ? ` aborted_tip=${abortedTipID}` : ""}` +
-        `${rework.supersededTipID ? ` superseded_tip=${rework.supersededTipID}` : ""} ` +
-        `reason=${reason} retry_count=${rework.retryCount}`,
-      )
-    }
-    return reworkLines
-  }
+  // (removed) postBuildReviewReworkGoalIDs / dependentGoalClosure /
+  // openArchitectureReviewRework — these were the auto-supersede +
+  // auto-startNewAttempt + dependent-cascade chain that violated
+  // CLAUDE.md rule 13 (no state-machine flow control). The orchestrator LLM
+  // now reads the full review markdown returned in the build tool result
+  // and chooses modify_goal / build({goalID}) / architect / fail_task /
+  // deliver itself. spec architecture-rework-loosening-plan-2026-05-06.md
+  // (B12 / B13 / B14).
 
   async function restartTaskFromStage(stage: RestartStage, reason: string) {
     const task = requireTask(taskID)
@@ -2004,7 +1994,7 @@ export function createOrchestratorTools(input: {
             headline:
               `Architect decomposition complete: ${persisted.length} goals, ${result.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-              ` NEXT: dispatch eligible per-goal \`build({ goalID })\`; each non-pass post-build architecture_review routes rework feedback to the affected goal IDs it names.`,
+              ` NEXT: dispatch eligible per-goal \`build({ goalID })\`; each goal build returns its post-build architecture_review markdown inline — read it and decide modify_goal / build / architect / deliver / fail_task explicitly (no auto-routing).`,
             summary: result.summary,
             fields: [
               ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
@@ -2072,11 +2062,14 @@ export function createOrchestratorTools(input: {
         "hallucination (ungrounded REQs / specs / contracts), solution_quality " +
         "(granularity, acceptance-spec strength, ownership, ordering). Returns a " +
         "per-dimension verdict (pass / concerns / needs_correction) plus an aggregate " +
-        "(worst-of). Findings are persisted as feedback only: this review never " +
-        "rewrites requirements or goals, and it does not block the first Build " +
-        "round. Each goal build automatically records post-build architecture_review " +
-        "input and runs this review after the Build report; non-pass findings route " +
-        "rework feedback to the affected goal IDs named by review issues/corrections or become evidence for an explicit Architect decision.\n\n" +
+        "(worst-of) AND the full per-dimension issue / correction / missing-goal text " +
+        "as a markdown block. Findings are persisted as evidence only: this review " +
+        "never rewrites requirements, never upserts goals, and the host never " +
+        "auto-supersedes attempts or auto-routes findings — you read the markdown " +
+        "and choose modify_goal / build({goalID}) / architect / deliver / fail_task " +
+        "explicitly. Each goal build automatically records its build report and runs " +
+        "this review after the report; the review's findings are returned inline in " +
+        "the build tool result for you to act on.\n\n" +
         "USE WHEN: architect just produced a non-trivial goal graph (≥3 goals, OR " +
         "cross-goal contracts, OR foundational decisions architect derived rather " +
         "than user-stated), OR a Build / Delivery result needs architecture feedback. " +
@@ -2673,6 +2666,7 @@ export function createOrchestratorTools(input: {
                   .map((d) => `${d.id}=${d.verdict}`)
                   .join(", ")
                 : ""
+              const reviewMarkdown = typeof p.review_markdown === "string" ? p.review_markdown : ""
               sections.push(
                 `\n## Integrity (latest)`,
                 `- verdict: ${String(p.verdict ?? "unknown")}` +
@@ -2680,6 +2674,13 @@ export function createOrchestratorTools(input: {
                   ` — issues=${Number(p.issues_count ?? 0)} corrections=${Number(p.corrections_count ?? 0)} missing=${Number(p.missing_count ?? 0)}` +
                   (matchesSnapshot ? " (current spec snapshot)" : " (STALE — newer spec snapshot exists; re-run integrity)"),
               )
+              // Surface the full review markdown (issues + corrections +
+              // missing-goal proposals) so the orchestrator LLM can act on
+              // the same evidence it had at review time, not a count.
+              // Architecture review is advisory: the orchestrator decides
+              // modify_goal / build / architect / deliver / fail_task
+              // explicitly based on this text.
+              if (reviewMarkdown) sections.push("", reviewMarkdown)
             }
           }
           const lastDeliveryRow = Database.use((db) =>
@@ -4696,6 +4697,14 @@ export function createOrchestratorTools(input: {
                   worktreeBranch: managedWorktree?.branch,
                   worktreeBaseRef: managedWorktree?.baseRef,
                   diffs: undefined,
+                  // BuildAgentContractError fires before the agent reached the
+                  // post-merge fact collection, so we surface whatever the
+                  // tool last reported (or "not_invoked" when nothing).
+                  mergeBackStatus: "not_invoked",
+                  lastMergeBackOutcome: runErr.diagnostics.lastMergeBackOutcome ?? undefined,
+                  publishedCommitRef: undefined,
+                  worktreeHead: undefined,
+                  actualChangedFiles: undefined,
                 } as Awaited<ReturnType<typeof BuildAgent.run>>,
               }
               // Drop a phase=retry decision_log entry so the next attempt's
@@ -4840,10 +4849,23 @@ export function createOrchestratorTools(input: {
           // diffs is captured by the surrounding scope's destructure for the
           // ok-branch report rendering below; pull it back out for clarity.
           const diffs = buildOutcome.result.diffs
+          // Host-truth merge / diff facts (B20). Surfaced inline in the
+          // tool result so the orchestrator LLM can cross-check the LLM's
+          // self-reported `files_changed[]` and `commit_ref` against what
+          // actually happened. Spec architecture-rework-loosening-plan-2026-05-06.md.
+          // Defaults preserve sane rendering for older test fixtures whose
+          // mocked BuildAgent.RunOutput predates these fields.
+          const mergeBackStatus = buildOutcome.result.mergeBackStatus ?? "not_invoked"
+          const lastMergeBackOutcome = buildOutcome.result.lastMergeBackOutcome
+          const publishedCommitRef = buildOutcome.result.publishedCommitRef
+          const worktreeHead = buildOutcome.result.worktreeHead
+          const actualChangedFiles = buildOutcome.result.actualChangedFiles ?? []
+          // Post-build architecture review: run it, return its full markdown
+          // inline. The host does not auto-route findings, does not supersede
+          // attempts, does not open new attempts. The orchestrator LLM reads
+          // this section and decides modify_goal / build({goalID}) /
+          // architect / deliver / fail_task itself. CLAUDE.md rule 13.
           let architectureReviewLine = "- architecture_review: (not run for task-level build)"
-          let architectureReviewReworkLine = ""
-          let architectureReviewNeedsRework = false
-          let architectureReviewAllowsDeliver = !attachedGoalID
           if (attachedGoalID && !goalRunInvalidated) {
             const buildReportForReview = {
               status: result.status,
@@ -4866,30 +4888,17 @@ export function createOrchestratorTools(input: {
               if (architectureReview.status === "blocked") {
                 architectureReviewLine = `- architecture_review: blocked (${architectureReview.headline})`
               } else {
+                // Render the full review (per-dimension issues / corrections /
+                // missing_goals) inline so the orchestrator LLM has the same
+                // evidence the integrity LLM produced. Header line keeps the
+                // count summary for quick reading; the markdown block carries
+                // every actionable detail. No automatic action is taken on
+                // the verdict — orchestrator LLM picks the next tool.
                 architectureReviewLine =
                   `- architecture_review: ${architectureReview.verdict}; ` +
                   `${architectureReview.summary}; corrections=${architectureReview.correctionsCount}; ` +
-                  `missing=${architectureReview.missingCount}`
-                architectureReviewAllowsDeliver = architectureReview.verdict === "pass"
-              }
-              if (architectureReview.status === "reviewed" && architectureReview.verdict !== "pass") {
-                const reviewTargetGoalIDs = postBuildReviewReworkGoalIDs({
-                  review: architectureReview,
-                  fallbackGoalID: attachedGoalID,
-                })
-                if (reviewTargetGoalIDs.length > 0) {
-                  architectureReviewNeedsRework = true
-                  const reworkLines = await openArchitectureReviewRework({
-                    review: architectureReview,
-                    targetGoalIDs: reviewTargetGoalIDs,
-                  })
-                  architectureReviewReworkLine =
-                    `\n- architecture_review_rework: opened targeted retry (dependency-closed): ${reworkLines.join("; ")}`
-                } else {
-                  architectureReviewAllowsDeliver = architectureReview.verdict === "concerns"
-                  architectureReviewReworkLine =
-                    `\n- architecture_review_rework: advisory concerns recorded; no goal-scoped retry target`
-                }
+                  `missing=${architectureReview.missingCount}\n\n` +
+                  architectureReview.markdown
               }
             } catch (reviewErr) {
               const reviewMsg = reviewErr instanceof Error ? reviewErr.message : String(reviewErr)
@@ -4922,6 +4931,30 @@ export function createOrchestratorTools(input: {
           const errorLine = result.status === "failed" ? `\n- error: ${result.error}` : ""
           const worktreeLine = worktreeDir ? `\n- worktreeDir: ${worktreeDir}` : ""
           const cleanupLine = goalWorkspaceCleanup ? `\n- cleanup: ${goalWorkspaceCleanup}` : ""
+          // Host-truth merge / diff fact block (B21). LLM may self-report
+          // commit_ref / files_changed[] in `result`; below is what actually
+          // happened in the worktree from the host's perspective. The
+          // orchestrator LLM cross-checks both and decides next.
+          const mergeBackLine = `- merge_back_status: ${mergeBackStatus}` +
+            (lastMergeBackOutcome ? ` (last_outcome: ${lastMergeBackOutcome})` : "")
+          const publishedLine = publishedCommitRef
+            ? `- published_commit_ref: ${publishedCommitRef} (primary HEAD after merge_back)`
+            : `- published_commit_ref: (none — merge_back did not publish)`
+          const worktreeHeadLine = worktreeHead
+            ? `- worktree_head: ${worktreeHead}`
+            : ""
+          const actualFilesLines = actualChangedFiles.length > 0
+            ? actualChangedFiles
+              .map((f) => `  - [${f.status}] ${f.path} (+${f.additions}/-${f.deletions})`)
+              .join("\n")
+            : "  (no changes detected against contribution base)"
+          const factBlock =
+            `\n\n### Worktree facts (host ground truth)\n` +
+            `${mergeBackLine}\n` +
+            `${publishedLine}\n` +
+            (worktreeHeadLine ? `${worktreeHeadLine}\n` : "") +
+            `- actual_changed_files (vs contribution base):\n${actualFilesLines}`
+
           return (
             `Build agent finished (status=${result.status}, session ${sessionID}).\n\n` +
             `### Build report\n` +
@@ -4929,16 +4962,12 @@ export function createOrchestratorTools(input: {
             `- files_changed:\n${fileLines}\n` +
             `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}\n` +
             `- tests:\n${testLines}\n` +
-            `${architectureReviewLine}${architectureReviewReworkLine}\n\n` +
+            `${architectureReviewLine}` +
+            `${factBlock}\n\n` +
             `### Next step\n` +
-            (goalRunInvalidated
-              ? `Call build again after the dependency rework that invalidated this attempt is resolved.`
-              : result.status === "passed" && architectureReviewAllowsDeliver
-              ? `If architecture_review is pass, call \`deliver\` for integrated verification.`
-              : result.status === "passed" && architectureReviewNeedsRework
-                ? `Call build again with the concrete architecture_review feedback above. Do not deliver until the review passes.`
-              : `Call build again with the concrete failed-build and architecture_review feedback above. ` +
-                `Do not re-run the same prompt.`)
+            `Read the build report, worktree facts, and architecture_review markdown above. The host does not auto-route or auto-supersede. ` +
+            `Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
+            `Choose ONE of: deliver / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage based on what the evidence supports.`
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)

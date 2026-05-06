@@ -1766,6 +1766,31 @@ export function recordIntegrityAttempt(input: {
   correctionsCount: number
   missingCount: number
   reason?: string
+  /** Full pre-rendered review markdown — every issue, every correction
+   *  proposal, every missing-goal proposal as text. Persisted alongside the
+   *  count summary so read_context / delivery upstream context can present
+   *  the orchestrator LLM the same evidence the integrity LLM produced,
+   *  rather than just counts. */
+  reviewMarkdown?: string
+  /** Structured copies of the LLM's correction / missing-goal proposals
+   *  preserved alongside the markdown so any future consumer that wants
+   *  field-level access (overlay verdict card, prosecutor seed) doesn't
+   *  have to re-parse markdown. */
+  corrections?: Array<{
+    action: "modify" | "split" | "remove"
+    goalID: string
+    reason: string
+    updates?: Record<string, unknown>
+  }>
+  missingGoals?: Array<{
+    title: string
+    objective: string
+    acceptance_spec_hints: string[]
+    owned_paths: string[]
+    kind: string
+    priority: "blocking" | "advisory"
+    reason: string
+  }>
   now?: number
 }): string {
   const id = Identifier.ascending("artifact")
@@ -1779,6 +1804,9 @@ export function recordIntegrityAttempt(input: {
     corrections_count: input.correctionsCount,
     missing_count: input.missingCount,
     reason: input.reason ?? null,
+    review_markdown: input.reviewMarkdown ?? null,
+    corrections: input.corrections ?? null,
+    missing_goals: input.missingGoals ?? null,
     time_completed: now,
   }
   Database.use((db) =>

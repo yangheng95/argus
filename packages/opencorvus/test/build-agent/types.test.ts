@@ -100,13 +100,19 @@ describe("BuildResultSchema", () => {
     expect(parsed.success).toBe(false)
   })
 
-  test("passed results require explained file changes", () => {
+  test("accepts passed result with empty files_changed (B1: 0-edit reuse legal)", () => {
+    // CLAUDE.md rule 6/13: the host doesn't enforce a minimum on
+    // files_changed. The build agent may legitimately publish a prior
+    // attempt's worktree without further edits; the orchestrator LLM
+    // cross-checks against the host's actual_changed_files ground truth
+    // (RunOutput.actualChangedFiles) and decides if the empty self-report
+    // is honest. Spec architecture-rework-loosening-plan-2026-05-06.md (B1).
     const parsed = BuildResultSchema.safeParse({
       status: "passed",
-      summary: "claimed success without file-level explanation",
+      summary: "Reused prior attempt's worktree without further edits",
       files_changed: [],
     })
-    expect(parsed.success).toBe(false)
+    expect(parsed.success).toBe(true)
   })
 })
 

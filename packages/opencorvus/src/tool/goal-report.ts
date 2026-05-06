@@ -32,8 +32,11 @@ export namespace GoalReport {
   })
 
   export const Report = z.object({
-    files_changed: z.array(FileChange).min(1).describe(
-      "Every file touched in this goal. A goal that produced zero file changes is invalid — do not call this tool without deliverables.",
+    files_changed: z.array(FileChange).describe(
+      "Every file touched in this goal. May be empty if the goal's acceptance " +
+        "was met by reusing a prior attempt's worktree without further edits — " +
+        "the orchestrator cross-checks against the host's actual_changed_files " +
+        "ground truth.",
     ),
     checks_run: z.array(CheckRun).default([]).describe(
       "Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.",

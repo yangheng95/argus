@@ -201,20 +201,17 @@ async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
  * Blocking criteria — these failures require a plan rework, not a re-run of
  * the same code:
  *   - failedCoverageIds: blocking goals without acceptance specs.
- *   - review:integrity only when the review is absent, reports
- *     needs_correction/fail, or carries corrections/missing goals. Plain
- *     concerns with zero corrective work are advisory completion notes, not
- *     proof that the integrated deliverable is incomplete.
  *
  * Advisory criteria — the delivery agent (LLM) weighs these in context and
  * decides whether they materially block acceptance:
  *   - failedCheckIds: build / typecheck / lint / unit-test commands.
  *   - failedRuntimeFlowIds: puppeteer / runtime / visual probes.
- *   - review:workspace_export and specialist:*: artifact-shape and
- *     domain-specialist findings; helpful but not gating on their own.
+ *   - all review-shaped evidence (review:integrity, review:workspace_export,
+ *     specialist:*): the delivery agent reads the full markdown evidence and
+ *     decides — host-side blocker classification on architecture review is
+ *     a state machine (CLAUDE.md rule 13). Spec
+ *     architecture-rework-loosening-plan-2026-05-06.md (C3 + C5).
  */
-const INTEGRITY_REVIEW_ID = "review:integrity"
-
 function assessFunctionalCompletion(input: {
   failedCheckIds: string[]
   failedCoverageIds: string[]
@@ -222,21 +219,19 @@ function assessFunctionalCompletion(input: {
   failedReviewIds: string[]
   specialistReviews: DeliverySpecialistReview[]
 }): DeliveryManifestFunctionalAssessment {
-  const failedIntegrityIds = input.failedReviewIds.filter((id) => id === INTEGRITY_REVIEW_ID)
-  const advisoryReviewIds = input.failedReviewIds.filter((id) => id !== INTEGRITY_REVIEW_ID)
-  const primaryFailureIds = [...input.failedCoverageIds, ...failedIntegrityIds]
+  const primaryFailureIds = [...input.failedCoverageIds]
   const auxiliaryFailureIds = [
     ...input.failedCheckIds,
     ...input.failedRuntimeFlowIds,
-    ...advisoryReviewIds,
+    ...input.failedReviewIds,
   ]
   const status = primaryFailureIds.length === 0 ? "complete" : "incomplete"
   const advisoryNote = auxiliaryFailureIds.length > 0
     ? ` ${auxiliaryFailureIds.length} advisory issue(s) recorded for the delivery agent to weigh.`
     : ""
   const summary = status === "complete"
-    ? `Functional completion passed (acceptance-spec coverage satisfied; no integrity blockers).${advisoryNote}`
-    : `Functional completion failed with ${primaryFailureIds.length} blocker(s) (coverage and/or integrity blockers).${advisoryNote}`
+    ? `Functional completion passed (acceptance-spec coverage satisfied).${advisoryNote}`
+    : `Functional completion failed with ${primaryFailureIds.length} coverage blocker(s).${advisoryNote}`
   return {
     status,
     primaryFailureIds: [...new Set(primaryFailureIds)].sort(),
@@ -346,31 +341,46 @@ function buildReviewEvidence(input: {
     corrections_count?: number
     missing_count?: number
     reason?: string | null
+    review_markdown?: string | null
   }
   const verdict = payload.verdict ?? "unknown"
   const correctionsCount = payload.corrections_count ?? 0
   const missingCount = payload.missing_count ?? 0
-  const unresolved = verdict === "needs_correction"
-    || verdict === "fail"
-    || correctionsCount > 0
-    || missingCount > 0
-    || (verdict !== "pass" && verdict !== "concerns")
+  const reviewMarkdown = typeof payload.review_markdown === "string" && payload.review_markdown.length > 0
+    ? payload.review_markdown
+    : undefined
+  // Architecture review is advisory in delivery: it never blocks accept
+  // by itself. The delivery agent reads the full markdown evidence
+  // (issues / corrections / missing_goals) and decides whether the
+  // architectural concerns warrant rejecting the deliverable. CLAUDE.md
+  // rule 13 + spec architecture-rework-loosening-plan-2026-05-06.md (C3).
+  // Only an explicit `verdict=fail` (which the integrity dimensions don't
+  // produce — only pass/concerns/needs_correction are valid) or an
+  // unknown / missing verdict still surfaces as failed evidence to flag
+  // a wiring bug to the delivery agent.
+  const status: "passed" | "failed" =
+    verdict === "pass" || verdict === "concerns" || verdict === "needs_correction"
+      ? "passed"
+      : "failed"
   return [{
     id,
     name: "Integrity Review",
-    status: unresolved ? "failed" : "passed",
+    status,
     artifactId: row.id,
     specSnapshotId: input.specSnapshotID,
     verdict,
     evidence: [
-      `verdict=${verdict}`,
+      `verdict=${verdict} (advisory; delivery agent decides)`,
       `issues_count=${payload.issues_count ?? 0}`,
       `corrections_count=${correctionsCount}`,
       `missing_count=${missingCount}`,
       payload.reason ? `reason=${payload.reason}` : undefined,
-      !unresolved && verdict === "concerns"
-        ? "concerns_without_corrections_are_advisory"
-        : undefined,
+      // Surface the full review markdown so delivery LLM reads the same
+      // evidence the integrity LLM produced (issues / corrections /
+      // missing_goals as text), not just a count summary. This is the
+      // single source for review feedback across read_context, build tool
+      // return, and delivery — eliminates the prior count-only path.
+      reviewMarkdown,
     ].filter((item): item is string => Boolean(item)),
   }]
 }
