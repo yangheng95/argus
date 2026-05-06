@@ -582,17 +582,26 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
+        // Wave-level review (B-wave / spec architecture-rework-loosening
+        // -plan-2026-05-06.md): build tool no longer triggers architecture
+        // review per goal. The build report no longer carries
+        // `architecture_review:` text — orchestrator calls `integrity`
+        // explicitly at wave boundaries. Verify review is NOT auto-run
+        // and the next-step prompt directs the LLM to call integrity.
         expect(result).toContain("status=passed")
-        expect(result).toContain("architecture_review: pass")
+        expect(result).not.toContain("architecture_review:")
+        expect(result).toContain("call `integrity`")
         expect(buildCalls).toBe(1)
         expect(buildTarget).toMatchObject({
           kind: "goal",
           id: goalID,
           objective: "Verify build runs before architecture review feedback is recorded",
         })
-        expect(architectureReviewCalls).toBe(1)
+        // Architecture review is no longer triggered by the build tool —
+        // orchestrator drives it explicitly per wave.
+        expect(architectureReviewCalls).toBe(0)
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: `spec_${goalID}` })
-        expect(artifact?.kind).toBe("integrity_attempt")
+        expect(artifact).toBeUndefined()
       },
     })
   })
@@ -916,21 +925,18 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
-        // Post-fix (architecture-rework-loosening-plan-2026-05-06): the
-        // host returns the full review markdown inline and does NOT
-        // auto-supersede / open new attempts. Goals stay where they are;
-        // orchestrator LLM reads the markdown and chooses next action.
+        // Post-fix (B-wave): build tool does NOT trigger architecture review
+        // (it was per-goal and noisy). Orchestrator calls `integrity` itself
+        // at wave boundaries. Goals stay where they are; no auto-supersede,
+        // no auto-rework.
         expect(result).toContain("status=passed")
-        expect(result).toContain("architecture_review: needs_correction")
-        expect(result).toContain("### Architecture review")
-        expect(result).toContain("Goal graph must change")
+        expect(result).not.toContain("architecture_review:")
+        expect(result).not.toContain("### Architecture review")
         expect(result).not.toContain("architecture_review_rework: opened")
+        expect(result).toContain("call `integrity`")
         expect(buildCalls).toBe(1)
         const runs = listGoalRunsByGoal(goalID)
         expect(runs).toHaveLength(1)
-        // Review verdict alone never supersedes anything anymore — the goal
-        // run terminates as completed under its original attempt and the
-        // orchestrator LLM is the one who decides next.
         expect(runs[0]?.superseded_reason).toBeFalsy()
         expect(findGoal(goalID)).toBeTruthy()
       },
@@ -1017,12 +1023,12 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
-        // Post-fix: review markdown returned inline; no auto-rework. The
-        // orchestrator LLM reads the markdown and chooses next action
-        // explicitly.
-        expect(result).toContain("architecture_review: concerns")
-        expect(result).toContain("### Architecture review")
+        // Post-fix (B-wave): build tool no longer auto-runs architecture
+        // review. Orchestrator drives integrity per wave. No supersede.
+        expect(result).not.toContain("architecture_review:")
+        expect(result).not.toContain("### Architecture review")
         expect(result).not.toContain("architecture_review_rework: opened")
+        expect(result).toContain("call `integrity`")
         expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBeFalsy()
       },
     })
@@ -1167,17 +1173,15 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
-        // Post-fix: the host returns the full review markdown inline (with
-        // the affected goal_ids inside it) but does NOT auto-route or
-        // supersede any goal. The orchestrator LLM reads the markdown,
-        // sees the issue tagged with the sibling goal ID, and decides
-        // what to call next.
-        expect(result).toContain("architecture_review: concerns")
-        expect(result).toContain("### Architecture review")
-        // Affected goal_ids appear inside the markdown for the LLM to read.
-        expect(result).toContain(siblingGoalID)
+        // Post-fix (B-wave): build tool no longer triggers review. The
+        // build report carries no architecture_review section; orchestrator
+        // calls `integrity` per wave to surface sibling-goal findings via
+        // the integrity tool result + decision_log.
+        expect(result).not.toContain("architecture_review:")
+        expect(result).not.toContain("### Architecture review")
         expect(result).not.toContain(`goal=${goalID} superseded_tip`)
-        // Neither the just-built goal nor the sibling were auto-superseded.
+        expect(result).toContain("call `integrity`")
+        // No auto-supersede.
         expect(goalStatusByID(goalID)).toBe("passed")
         expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBeFalsy()
       },
@@ -1325,17 +1329,15 @@ describe("orchestrator tools", () => {
           reason: "Per-goal pipeline execution.",
         }, {} as any)
 
-        // Post-fix: the host no longer cascades an architecture review
-        // verdict to dependent goals — it surfaces the verdict + markdown
-        // and the orchestrator LLM decides whether to abort the dependent's
-        // running attempt and re-dispatch. The dependent's live attempt
-        // therefore stays running (CLAUDE.md rule 13 — no auto-cancel).
-        expect(result).toContain("architecture_review: needs_correction")
-        expect(result).toContain("### Architecture review")
+        // Post-fix (B-wave): build tool no longer triggers review at all,
+        // so neither the just-built goal nor any dependent gets cascaded.
+        // Orchestrator calls integrity at wave boundary; dependents stay
+        // running until orchestrator decides explicitly.
+        expect(result).not.toContain("architecture_review:")
+        expect(result).not.toContain("### Architecture review")
         expect(result).not.toContain("architecture_review_dependency_rework")
-        // Just-built goal is not auto-pending'd.
+        expect(result).toContain("call `integrity`")
         expect(listGoalRunsByGoal(goalID)[0]?.superseded_reason).toBeFalsy()
-        // Live dependent attempt is left for the orchestrator to manage.
         expect(listGoalRunsByGoal(childGoalID)[0]?.id).toBe(childRunID)
         expect(listGoalRunsByGoal(childGoalID)[0]?.status).toBe("running")
       },
@@ -1409,10 +1411,11 @@ describe("orchestrator tools", () => {
         }, {} as any)
 
         expect(result).toContain("build_result_ignored")
-        expect(result).toContain("architecture_review: (not run")
-        // Post-fix: NEXT-step prose tells the orchestrator LLM the host
-        // doesn't auto-route, leaves the choice to the LLM.
-        expect(result).toContain("does not auto-route")
+        // Post-fix (B-wave): no architecture_review section in build report.
+        expect(result).not.toContain("architecture_review:")
+        // Next-step still directs orchestrator to call integrity at wave
+        // boundary (when applicable).
+        expect(result).toContain("call `integrity`")
         expect(goalStatusByID(goalID)).toBe("pending")
         expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("aborted")
       },

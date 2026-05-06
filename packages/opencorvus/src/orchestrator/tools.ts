@@ -2640,7 +2640,20 @@ export function createOrchestratorTools(input: {
         if (scope === "decisions" || scope === "all") {
           const { createDecisionLog } = await import("@/decision-log")
           const log = createDecisionLog(taskID)
-          const section = log.toPromptSection({ limit: DECISIONS_LIMIT })
+          // Architecture review history gets its own section with its own
+          // budget. Reviews fire frequently (one per goal build at the
+          // most), so without isolation they would crowd architect /
+          // requirements / intent decisions out of the latest-N window.
+          // Surface the latest 5 review summaries — enough to spot a
+          // recurring issue across consecutive reviews (the cumulative
+          // signal that drives architect re-run / fail_task per
+          // orchestrator-core.txt's repair ladder).
+          const reviewSection = log.phasePromptSection("review", "Architecture review history", { limit: 5 })
+          if (reviewSection) sections.push(`\n${reviewSection}`)
+          const section = log.toPromptSection({
+            limit: DECISIONS_LIMIT,
+            excludePhases: ["review"],
+          })
           if (section) sections.push(`\n${section}`)
         }
 
@@ -4895,12 +4908,14 @@ export function createOrchestratorTools(input: {
           const publishedCommitRef = buildOutcome.result.publishedCommitRef
           const worktreeHead = buildOutcome.result.worktreeHead
           const actualChangedFiles = buildOutcome.result.actualChangedFiles ?? []
-          // Post-build architecture review: run it, return its full markdown
-          // inline. The host does not auto-route findings, does not supersede
-          // attempts, does not open new attempts. The orchestrator LLM reads
-          // this section and decides modify_goal / build({goalID}) /
-          // architect / deliver / fail_task itself. CLAUDE.md rule 13.
-          let architectureReviewLine = "- architecture_review: (not run for task-level build)"
+          // Architecture review is no longer triggered automatically per
+          // build. Per-goal automatic review fired N times for N goals,
+          // each look at one goal's worktree in isolation, and crowded
+          // the orchestrator's prompt with redundant entries. The
+          // orchestrator now calls `integrity` explicitly at wave
+          // boundaries (see orchestrator-core.txt) so the review sees
+          // the merged primary state once per wave instead of N times.
+          // Spec architecture-rework-loosening-plan-2026-05-06.md (B-wave).
           if (attachedGoalID && !goalRunInvalidated) {
             const buildReportForReview = {
               status: result.status,
@@ -4919,30 +4934,12 @@ export function createOrchestratorTools(input: {
                 value: JSON.stringify(buildReportForReview),
                 reason: "post_build_architecture_review_input",
               })
-              const architectureReview = await runIntegrityReview()
-              if (architectureReview.status === "blocked") {
-                architectureReviewLine = `- architecture_review: blocked (${architectureReview.headline})`
-              } else {
-                // Render the full review (per-dimension issues / corrections /
-                // missing_goals) inline so the orchestrator LLM has the same
-                // evidence the integrity LLM produced. Header line keeps the
-                // count summary for quick reading; the markdown block carries
-                // every actionable detail. No automatic action is taken on
-                // the verdict — orchestrator LLM picks the next tool.
-                architectureReviewLine =
-                  `- architecture_review: ${architectureReview.verdict}; ` +
-                  `${architectureReview.summary}; corrections=${architectureReview.correctionsCount}; ` +
-                  `missing=${architectureReview.missingCount}\n\n` +
-                  architectureReview.markdown
-              }
-            } catch (reviewErr) {
-              const reviewMsg = reviewErr instanceof Error ? reviewErr.message : String(reviewErr)
-              log.warn("build: post-build architecture review failed", {
+            } catch (logErr) {
+              log.warn("build: build report decision_log append failed (non-fatal)", {
                 taskID,
                 goalID: attachedGoalID,
-                error: reviewMsg,
+                error: logErr instanceof Error ? logErr.message : String(logErr),
               })
-              architectureReviewLine = `- architecture_review: failed (${reviewMsg})`
             }
           }
 
@@ -4996,13 +4993,12 @@ export function createOrchestratorTools(input: {
             `- summary: ${result.summary}\n` +
             `- files_changed:\n${fileLines}\n` +
             `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}\n` +
-            `- tests:\n${testLines}\n` +
-            `${architectureReviewLine}` +
+            `- tests:\n${testLines}` +
             `${factBlock}\n\n` +
             `### Next step\n` +
-            `Read the build report, worktree facts, and architecture_review markdown above. The host does not auto-route or auto-supersede. ` +
-            `Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
-            `Choose ONE of: deliver / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage based on what the evidence supports.`
+            `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
+            `When the current eligible wave (every dispatchable goal whose depends_on is satisfied) reaches terminal state, call \`integrity\` ONCE to review the merged primary state — that is wave-level architecture review (not per-goal). ` +
+            `Then choose: deliver / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage based on what the build report, worktree facts, integrity history (read_context), and review verdict together support.`
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
