@@ -51,12 +51,6 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: "@", replacement: path.resolve(__dirname, "src") },
-      // Dev-only stubs for Tauri runtime APIs so `bun run dev:vite` works
-      // outside the Tauri webview (used for screenshot/visual iteration).
-      {
-        find: /^@tauri-apps\/plugin-dialog$/,
-        replacement: path.resolve(__dirname, "src/dev-stubs/tauri-dialog.ts"),
-      },
     ],
   },
 });
