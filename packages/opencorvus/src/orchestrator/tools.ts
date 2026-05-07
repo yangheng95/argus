@@ -216,6 +216,88 @@ function acceptanceSpecsToPromptLines(raw: unknown): string[] {
 }
 
 /**
+ * Pure invariant pre-flight for the `accept_build` tool's data-only
+ * checks (goal exists, latest goal_run is missing_terminal failed,
+ * worktree triple is intact). Separated from the IO-bearing checks
+ * (Worktree.isValid / collectGoalContributionDiffs / Worktree.mergeSafely)
+ * so the data-shape rejection paths are unit-testable without standing
+ * up a real worktree. Spec
+ * build-missing-terminal-review-downgrade-2026-05-07.md §5.2.
+ */
+export function preflightAcceptBuild(input: {
+  goalID: string
+  goalExists: boolean
+  latestGoalRun?: { status: string; error?: string | null } | null
+  recordedWorkspace: {
+    directory?: string | null
+    branch?: string | null
+    baseRef?: string | null | undefined
+  }
+}): { ok: true; worktreeDir: string; worktreeBranch: string; worktreeBaseRef: string }
+  | { ok: false; message: string }
+{
+  if (!input.goalExists) {
+    return { ok: false, message: `accept_build: goal ${input.goalID} not found.` }
+  }
+  const latestGr = input.latestGoalRun
+  if (!latestGr) {
+    return {
+      ok: false,
+      message:
+        `accept_build: goal ${input.goalID} has no goal_run history. Run build({ goalID }) first; ` +
+        `this tool is only valid after a missing_terminal failure.`,
+    }
+  }
+  if (latestGr.status !== "failed") {
+    return {
+      ok: false,
+      message:
+        `accept_build: goal ${input.goalID} latest goal_run is in state '${latestGr.status}', not 'failed'. ` +
+        `accept_build is only valid when the most recent build attempt failed with missing_terminal_report.`,
+    }
+  }
+  const errStr = latestGr.error ?? ""
+  // The error string lands on goal_run.error from BuildAgentContractError.message
+  // (which carries the recovery hint, NOT the typed code). The orchestrator catch
+  // path's decision_log entry separately records `code=missing_terminal_report`,
+  // and that string also gets wrapped into the AgentRunError message in some
+  // generic-rethrow paths. Match either; a future second contract code would
+  // have its own marker added here.
+  const isMissingTerminal =
+    errStr.includes("missing_terminal_report") || errStr.includes("BuildAgentContractError")
+  if (!isMissingTerminal) {
+    return {
+      ok: false,
+      message:
+        `accept_build: goal ${input.goalID} latest failure is not a missing-terminal contract violation ` +
+        `(error: ${errStr.slice(0, 160)}). Use build({ goalID }) retry / modify_goal / fail_task instead.`,
+    }
+  }
+  const worktreeDir = input.recordedWorkspace.directory?.trim() ?? ""
+  const worktreeBranch = input.recordedWorkspace.branch?.trim() ?? ""
+  const worktreeBaseRef = input.recordedWorkspace.baseRef ?? ""
+  if (!worktreeDir || !worktreeBranch) {
+    return {
+      ok: false,
+      message:
+        `accept_build: goal ${input.goalID} has no recorded worktree ` +
+        `(directory=${input.recordedWorkspace.directory ?? "null"}, ` +
+        `branch=${input.recordedWorkspace.branch ?? "null"}). ` +
+        `Cannot accept a build whose worktree was already cleaned up.`,
+    }
+  }
+  if (!worktreeBaseRef) {
+    return {
+      ok: false,
+      message:
+        `accept_build: goal ${input.goalID} worktree has no recorded baseRef — cannot compute ` +
+        `contribution diff. Use build({ goalID }) retry to re-establish the contribution base.`,
+    }
+  }
+  return { ok: true, worktreeDir, worktreeBranch, worktreeBaseRef }
+}
+
+/**
  * Returns the subset of `updates` whose value differs from the persisted
  * `goal` row. Used by `modify_goal` to filter out no-op updates so the
  * orchestrator LLM cannot trigger phase=retry decision_log feedback by
@@ -4465,7 +4547,7 @@ export function createOrchestratorTools(input: {
         }
 
         try {
-          const { BuildAgent } = await import("@/build/agent")
+          const { BuildAgent, collectGoalContributionDiffs } = await import("@/build/agent")
           const { Worktree } = await import("@/worktree")
           let target: import("@/build/types").BuildTarget
           let context: import("@/build/agent").BuildAgent.BuildContext | undefined
@@ -4780,6 +4862,14 @@ export function createOrchestratorTools(input: {
           let buildOutcome:
             | { kind: "ok"; result: Awaited<ReturnType<typeof BuildAgent.run>> }
             | { kind: "throw"; error: unknown }
+          // Tracked across the catch block so the build tool's markdown
+          // result can append an accept_build hint when the failure was a
+          // contract violation (missing_terminal_report). Other failure
+          // shapes (provider errors, abort, schema rejection) follow the
+          // normal retry / fail_task / modify_goal path.
+          let contractViolationCode:
+            | import("@/build/types").BuildAgentContractError["code"]
+            | undefined
           let goalWorkspaceCleanup: string | undefined
           try {
             const ok = await BuildAgent.run({
@@ -4806,6 +4896,58 @@ export function createOrchestratorTools(input: {
             // generic infra errors keep their existing rethrow shape.
             const { BuildAgentContractError } = await import("@/build/types")
             if (runErr instanceof BuildAgentContractError) {
+              contractViolationCode = runErr.code
+              // Collect host-side worktree facts on the failure path so the
+              // orchestrator LLM sees what the build session actually
+              // produced (file changes, HEAD) before deciding next step
+              // (build retry / accept_build / modify_goal / fail_task).
+              // Without these facts the build tool result's "Worktree facts"
+              // block renders all-undefined, leaving the LLM blind to whether
+              // the missing-terminal failure happened with substantial work
+              // already on disk vs an empty worktree. Spec
+              // build-missing-terminal-review-downgrade-2026-05-07.md §5.2.
+              let collectedDiffs: import("@/snapshot/types").FileDiff[] | undefined
+              let collectedHead: string | undefined
+              let collectedActualChangedFiles:
+                | NonNullable<Awaited<ReturnType<typeof BuildAgent.run>>["actualChangedFiles"]>
+                | undefined
+              if (managedWorktree?.directory) {
+                try {
+                  const headResult = await runGit(["rev-parse", "HEAD"], {
+                    cwd: managedWorktree.directory,
+                    timeoutProfile: "fast",
+                  })
+                  if (headResult.exitCode === 0) {
+                    const head = headResult.text().trim()
+                    if (head) collectedHead = head.slice(0, 12)
+                  }
+                } catch (gitErr) {
+                  log.warn("build catch: rev-parse HEAD failed (non-fatal)", {
+                    taskID, goalID: attachedGoalID,
+                    error: gitErr instanceof Error ? gitErr.message : String(gitErr),
+                  })
+                }
+                if (managedWorktree.baseRef) {
+                  try {
+                    const fetched = await collectGoalContributionDiffs(
+                      managedWorktree.directory,
+                      managedWorktree.baseRef,
+                    )
+                    collectedDiffs = fetched
+                    collectedActualChangedFiles = fetched.map((d) => ({
+                      path: d.file,
+                      status: (d.status ?? "modified") as "added" | "modified" | "deleted",
+                      additions: d.additions,
+                      deletions: d.deletions,
+                    }))
+                  } catch (diffErr) {
+                    log.warn("build catch: collectGoalContributionDiffs failed (non-fatal)", {
+                      taskID, goalID: attachedGoalID,
+                      error: diffErr instanceof Error ? diffErr.message : String(diffErr),
+                    })
+                  }
+                }
+              }
               const synthFailed: Awaited<ReturnType<typeof BuildAgent.run>>["result"] = {
                 status: "failed",
                 summary: `Build agent contract violation (${runErr.code}): ${runErr.message.slice(0, 200)}`,
@@ -4821,15 +4963,15 @@ export function createOrchestratorTools(input: {
                   worktreeDir: managedWorktree?.directory,
                   worktreeBranch: managedWorktree?.branch,
                   worktreeBaseRef: managedWorktree?.baseRef,
-                  diffs: undefined,
+                  diffs: collectedDiffs,
                   // BuildAgentContractError fires before the agent reached the
                   // post-merge fact collection, so we surface whatever the
                   // tool last reported (or "not_invoked" when nothing).
                   mergeBackStatus: "not_invoked",
                   lastMergeBackOutcome: runErr.diagnostics.lastMergeBackOutcome ?? undefined,
                   publishedCommitRef: undefined,
-                  worktreeHead: undefined,
-                  actualChangedFiles: undefined,
+                  worktreeHead: collectedHead,
+                  actualChangedFiles: collectedActualChangedFiles,
                 } as Awaited<ReturnType<typeof BuildAgent.run>>,
               }
               // Drop a phase=retry decision_log entry so the next attempt's
@@ -5072,6 +5214,17 @@ export function createOrchestratorTools(input: {
             (worktreeHeadLine ? `${worktreeHeadLine}\n` : "") +
             `- actual_changed_files (vs contribution base):\n${actualFilesLines}`
 
+          // Missing-terminal failures get an extra hint about accept_build.
+          // Other failure shapes (provider error, abort, schema rejection)
+          // get the standard next-step text — they require real retry, not
+          // an "accept the worktree as-is" shortcut. Spec
+          // build-missing-terminal-review-downgrade-2026-05-07.md §5.2.
+          const acceptBuildHint = contractViolationCode === "missing_terminal_report" && attachedGoalID
+            ? `\n\n**Note**: The build agent ended without calling the terminal report tool, but the worktree facts above show what was actually written. ` +
+              `If the actual_changed_files match the build agent's prose summary and indicate substantial completion, consider \`accept_build({ goalID: "${attachedGoalID}", reason: "<why you trust the worktree contribution>" })\` ` +
+              `to take the worktree contribution as the build's terminal report (host-side merge_back + finalize). ` +
+              `Use \`build({ goalID })\` retry only when the worktree facts show the build did NOT actually complete the goal (empty diff, partial files, missing critical paths).`
+            : ""
           return (
             `Build agent finished (status=${result.status}, session ${sessionID}).\n\n` +
             `### Build report\n` +
@@ -5083,7 +5236,8 @@ export function createOrchestratorTools(input: {
             `### Next step\n` +
             `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
             `When the current eligible wave (every dispatchable goal whose depends_on is satisfied) reaches terminal state, call \`integrity\` ONCE to review the merged primary state — that is wave-level architecture review (not per-goal). ` +
-            `Then choose: deliver / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage based on what the build report, worktree facts, integrity history (read_context), and review verdict together support.`
+            `Then choose: deliver / build({goalID}) / modify_goal / architect / fail_task / restart_from_stage based on what the build report, worktree facts, integrity history (read_context), and review verdict together support.` +
+            acceptBuildHint
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
@@ -5096,6 +5250,196 @@ export function createOrchestratorTools(input: {
           // agent's actor close path.
           throw err
         }
+      },
+    }),
+
+    accept_build: tool({
+      description:
+        "Accept a prior build attempt's worktree contribution as the build's terminal report when the build agent ended without calling report_build_result. " +
+        "Use this when the previous `build({ goalID })` returned a missing_terminal_report failure, the worktree facts show substantial work was actually written (non-empty actual_changed_files), and the build agent's prose summary credibly describes substantial completion. " +
+        "The host validates: (1) the goal's latest goal_run is in a missing-terminal failed state; (2) the worktree directory is intact and has a non-empty diff against the contribution base; (3) host-side merge_back into the primary branch succeeds (no conflicts). " +
+        "On success the host opens a new goal_run attempt under reason='orchestrator_accept_build', host-side merges the worktree contribution back into primary, finalizes that attempt as completed with a synthesized BuildResult, and writes a phase=build decision_log entry. " +
+        "Failure modes: " +
+        "merge_back conflict — refused; resolve via build({ goalID }) retry. " +
+        "Worktree empty / missing — refused; the build did not actually complete; use build retry / modify_goal / fail_task. " +
+        "Latest goal_run not in a missing-terminal failed state — refused; this tool is scoped to that specific failure mode. " +
+        "Do NOT use this tool to bypass real build failures (provider errors, missing acceptance criteria, broken tests). It is strictly the orchestrator's escape hatch for the specific case where the LLM finished the work but forgot to call the terminal tool. Spec build-missing-terminal-review-downgrade-2026-05-07.md §5.2.",
+      inputSchema: z.object({
+        goalID: z.string().describe("The goal ID whose latest missing_terminal failed build to accept."),
+        summary: z
+          .string()
+          .optional()
+          .describe(
+            "Optional one-line summary to record on the synthesized BuildResult. Defaults to a generic 'orchestrator-accepted (missing terminal report)' string when omitted.",
+          ),
+        reason: z
+          .string()
+          .describe(
+            "Why you trust the worktree contribution (e.g. 'actual_changed_files match prose summary; 13 component files match the goal's exports[] contract').",
+          ),
+      }),
+      execute: async ({ goalID, summary, reason }) => {
+        requireTask(taskID)
+        const { findGoal, listGoalRunsForTask, findGoalLatestWorkspace } = await import("@/engine/store")
+        const goal = findGoal(goalID)
+
+        // Invariants 1+2 (data-shape only): goal exists, latest goal_run
+        // is missing-terminal failed, worktree triple is intact. Pure
+        // helper — see preflightAcceptBuild + its unit tests.
+        const goalRuns = listGoalRunsForTask(taskID).filter((row) => row.goal_id === goalID)
+        const latestGr = goalRuns[0] // listGoalRunsForTask returns desc by time_created
+        const recorded = findGoalLatestWorkspace(goalID)
+        const preflight = preflightAcceptBuild({
+          goalID,
+          goalExists: Boolean(goal),
+          latestGoalRun: latestGr ? { status: latestGr.status, error: latestGr.error } : null,
+          recordedWorkspace: recorded,
+        })
+        if (!preflight.ok) return preflight.message
+        const { worktreeDir, worktreeBranch, worktreeBaseRef } = preflight
+
+        // Invariant 3: the worktree must have actual changes against the
+        // contribution base. An empty diff means the build did not produce
+        // anything to accept — accept_build would be inventing a fake
+        // delivery.
+        const { Worktree } = await import("@/worktree")
+        const valid = await Worktree.isValid(worktreeDir)
+        if (!valid.valid) {
+          return (
+            `accept_build: recorded worktree ${worktreeDir} is invalid (${valid.reason ?? "unknown"}). ` +
+            `Use build({ goalID }) retry — the worktree may need to be recovered first.`
+          )
+        }
+        const { collectGoalContributionDiffs } = await import("@/build/agent")
+        let diffs: import("@/snapshot/types").FileDiff[]
+        try {
+          diffs = await collectGoalContributionDiffs(worktreeDir, worktreeBaseRef)
+        } catch (diffErr) {
+          return (
+            `accept_build: failed to read worktree diff (${diffErr instanceof Error ? diffErr.message : String(diffErr)}). ` +
+            `Use build({ goalID }) retry.`
+          )
+        }
+        if (diffs.length === 0) {
+          return (
+            `accept_build: goal ${goalID} worktree has no changes against contribution base ${worktreeBaseRef}. ` +
+            `Nothing to accept — the build agent did not actually produce code. Use build({ goalID }) retry / fail_task.`
+          )
+        }
+
+        // Invariant 4: host-side merge_back. accept_build is the LAST
+        // git-affecting action for this attempt's contribution; it must
+        // succeed cleanly. Conflict / blocked / infra_error all refuse —
+        // those require LLM intervention via build({ goalID }) retry.
+        const mergeOutcome = await Worktree.mergeSafely({
+          branch: worktreeBranch,
+          worktreeDir,
+        })
+        if (mergeOutcome.status !== "merged") {
+          if (mergeOutcome.status === "conflict") {
+            return (
+              `accept_build: host-side merge_back hit a conflict on primary branch ${mergeOutcome.primaryBranch} ` +
+              `(tip ${mergeOutcome.primaryTip.slice(0, 12)}). Conflict paths: ${mergeOutcome.conflictPaths.join(", ")}. ` +
+              `accept_build refuses to auto-resolve — use build({ goalID }) retry so the build agent reconciles the conflict in-session.`
+            )
+          }
+          if (mergeOutcome.status === "blocked") {
+            return (
+              `accept_build: host-side merge_back blocked (${mergeOutcome.reason}). ` +
+              `Resolve the worktree state and use build({ goalID }) retry.`
+            )
+          }
+          return (
+            `accept_build: host-side merge_back infra_error (${mergeOutcome.reason}). ` +
+            `Investigate the worktree and try build({ goalID }) retry.`
+          )
+        }
+        const mergedHead = mergeOutcome.primaryHead
+        const commitRef = mergedHead.slice(0, 12)
+
+        // Open a new goal_run under reason=orchestrator_accept_build and
+        // immediately finalize it as completed. This keeps the event log
+        // clean (the prior failed attempt stays as the failed tip; the
+        // orchestrator decision is its own attempt boundary) and lets
+        // downstream readers (deliver / collaboration_closure / overlay)
+        // see the same finalize artifact shape as a normal build success.
+        const { startNewAttempt, beginBuildAttempt, finalizeBuildAttempt } = await import("@/engine/persist")
+        const synthSummary =
+          summary?.trim() ||
+          `Orchestrator accepted build worktree contribution after missing_terminal failure (${diffs.length} file change(s)).`
+        const fileChanges = diffs.map((d) => ({
+          path: d.file,
+          summary: "(orchestrator-accepted)",
+          reason: "(accept_build: derived from worktree git diff)",
+        }))
+        startNewAttempt({
+          goalID,
+          reason: "orchestrator_accept_build",
+          feedback: {
+            value:
+              `Orchestrator accept_build: prior missing_terminal failure was accepted as substantively complete. ` +
+              `${diffs.length} file change(s) merged to primary HEAD ${commitRef}.`,
+            reason: `accept_build: ${reason}`,
+          },
+        })
+        const newGoalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          workspaceDir: worktreeDir,
+          workspaceBranch: worktreeBranch,
+          workspaceBaseRef: worktreeBaseRef,
+        })
+        finalizeBuildAttempt({
+          goalRunID: newGoalRunID,
+          taskID,
+          goalID,
+          status: "completed",
+          commitRef,
+          workspaceDir: worktreeDir,
+          workspaceBranch: worktreeBranch,
+          workspaceBaseRef: worktreeBaseRef ?? undefined,
+          summary: synthSummary,
+          diffs: diffs.map((d) => ({
+            file: d.file,
+            before: d.before,
+            after: d.after,
+            additions: d.additions,
+            deletions: d.deletions,
+            status: d.status,
+          })),
+          fileChanges,
+        })
+
+        // Audit trail for the orchestrator decision itself (separate from
+        // the retry feedback entry written by startNewAttempt).
+        try {
+          const decisionLog = createDecisionLog(taskID)
+          decisionLog.append({
+            phase: "build",
+            goalID,
+            key: "orchestrator_accept_build",
+            value:
+              `Orchestrator accepted prior missing_terminal build attempt as substantively complete. ` +
+              `Merged ${diffs.length} file change(s) to primary HEAD ${commitRef}. ` +
+              `Synthesized BuildResult.status=passed.`,
+            reason: `accept_build: ${reason}`,
+          })
+        } catch (logErr) {
+          log.warn("accept_build: decision_log append failed (non-fatal)", {
+            taskID, goalID,
+            error: logErr instanceof Error ? logErr.message : String(logErr),
+          })
+        }
+
+        return (
+          `accept_build: goal ${goalID} accepted.\n` +
+          `- merged primary HEAD: ${commitRef} (branch ${mergeOutcome.primaryBranch})\n` +
+          `- file changes accepted: ${diffs.length}\n` +
+          `- summary: ${synthSummary}\n` +
+          `- new goal_run: ${newGoalRunID} (status=completed under reason=orchestrator_accept_build)\n\n` +
+          `### Next step\n` +
+          `This goal is now passed. When the current eligible wave reaches terminal state, call \`integrity\` ONCE to review the merged primary state, then choose: deliver / build({goalID}) for next eligible goal / modify_goal / architect / fail_task / restart_from_stage.`
+        )
       },
     }),
   }

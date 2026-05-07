@@ -145,9 +145,75 @@ orchestrator LLM 的决策空间扩展为：
 - **可观测性**：`accept_build` 调用本身被 decision_log 记录，audit 友好
 - **rule 5（不过度工程）次优**：C-B 改动更小，但牺牲 rule 13 + 引入启发式
 
-## 5. 实施方案（按 user 选定后填充）
+## 5. 实施方案（C-C minimum viable，user 已选定 C-C）
 
-待 user 决定 C-A / C-B / C-C 后填充本节。当前空位。
+### 5.1 调研成果（rule 35）
+
+- `finalizeBuildAttempt` (`engine/persist.ts:1704`) 接受 `{ status: "completed"|"failed", commitRef, diffs[], fileChanges[], summary, ... }`，completed + 非空 diffs 时附带写 `delivery` artifact。
+- `Worktree.mergeSafely({ branch, worktreeDir })` (`worktree/index.ts:312`) 是公开 export，host 可直接调用——不必经过 build session。返回 `{ status: "merged"|"conflict"|"blocked"|"infra_error", primaryHead?, primaryBranch?, conflictPaths?, ... }`。
+- `collectGoalContributionDiffs(worktreeDir, baseRef)` (`build/agent.ts:1772`) 内部 helper（非 export）。本 PR 无需访问，因为 catch path 已经持有 `managedWorktree` 三元组，可直接用 `runGit(["diff", ...])`。
+- 当前 missing_terminal catch path（`tools.ts:4807-4866`）的 synthFailed 路径：`diffs / worktreeHead / actualChangedFiles` 全 `undefined`，导致 build tool 返回 markdown 的 fact block 全是占位文本。`mergeBackStatus="not_invoked"`。
+- 现有 build tool 返回 markdown（`tools.ts:5068-5087`）已经有完整的 worktree facts 渲染逻辑——只要 catch path 把数据填满，markdown 自然带上事实。
+
+### 5.2 改动列表
+
+**A. catch path 现场采 worktree facts**（`orchestrator/tools.ts` BuildAgentContractError catch 块）
+
+当 `runErr instanceof BuildAgentContractError` 且 `managedWorktree` 存在时，现场跑：
+- `git diff --numstat <baseRef>...HEAD` 派生 `actualChangedFiles[]`（path / additions / deletions / status）
+- `git rev-parse HEAD` 取 `worktreeHead`
+- 不在 catch path 跑 collectGoalContributionDiffs（`FileDiff[]` 重，且本 PR 不需要 diff 内容，只需 path summary）
+
+把这些 facts 填进 `buildOutcome.result`，自然让 build tool 返回 markdown 含 worktree facts。
+
+**B. 新工具 `accept_build`**（`orchestrator/tools.ts` 在 build / modify_goal 区域新增）
+
+```ts
+accept_build: tool({
+  description: <详细使用场景说明 — 何时用、何时不用>,
+  inputSchema: z.object({
+    goalID: z.string(),
+    summary: z.string().optional(),
+    reason: z.string(),
+  }),
+  execute: async ({ goalID, summary, reason }) => {
+    // 1. invariant: latest goal_run for goalID 必须是 failed + missing_terminal_report 错误标记
+    // 2. invariant: worktree dir 存在且 valid + git diff vs baseRef 非空
+    // 3. host-side merge_back: Worktree.mergeSafely → 必须 status="merged"（conflict / blocked / infra_error 拒绝 accept_build，让 LLM 走 build retry）
+    // 4. 合成 BuildResult { status: "passed", commit_ref: mergedHead, summary, files_changed: <derived from git diff>, tests: [] }
+    // 5. finalizeBuildAttempt as completed + 写 delivery artifact
+    // 6. 写 decision_log entry { phase: "build", key: "accept_build", value: <reason>, reason: <orchestrator-supplied reason> }
+    // 7. 返回 markdown 描述结果
+  },
+}),
+```
+
+**核心 invariant**:
+- 必须存在 latest goal_run + 是 failed + error 含 `BuildAgentContractError` 痕迹（通过 error 字符串包含 `code=missing_terminal_report` 或类似）
+- worktree git diff vs baseRef 必须非空
+- `Worktree.mergeSafely` 必须返回 `status="merged"`（不接受 conflict —— LLM 应走 build retry 解决冲突）
+
+**C. tool description 详细使用场景**（不动 orchestrator prompt 文件）
+
+description 说清：
+- 何时用：上一次 build attempt 因 missing_terminal_report 失败 + worktree facts 显示产物完整（actual_changed_files 与 LLM prose 一致）
+- 何时**不**用：build 真正失败（worktree 空 / 测试失败 prose 显式 / merge_back blocked）—— 仍走 build retry / modify_goal / fail_task
+- host invariant 校验细节 + 拒绝路径返回的 markdown 描述
+
+### 5.3 测试矩阵（rule 36）
+
+| 测试文件 | 断言 |
+|---|---|
+| `test/orchestrator/accept-build.test.ts`（新增） | invariant 校验：goal_run 不存在 / 不是 failed / 不含 missing_terminal 标记 / worktree 空 / merge_back 非 merged —— 全 reject + 返回错误 markdown |
+| 同上 | happy path：合成 BuildResult.status=passed + commit_ref=mergedHead + files_changed 来自 git diff；finalizeBuildAttempt 被以 completed 调用；decision_log 写 accept_build entry |
+| `test/orchestrator/build-missing-terminal-facts.test.ts`（新增） | mock build path 抛 BuildAgentContractError + managedWorktree 存在 → buildOutcome.result 的 actualChangedFiles / worktreeHead 不为空；build tool 返回 markdown 含 actual_changed_files 列表 |
+
+### 5.4 不在本 PR 范围
+
+- orchestrator prompt 文件 (`@/prompt/core/orchestrator.txt`) 更新教 LLM 何时用 accept_build —— 用 tool description 自描述代替（rule 5 不过度工程）
+- accept_build 处理 conflict 路径（merge_back 冲突）—— 当前 reject conflict 让 LLM 走 build retry
+- accept_build 的 overlay UI 渲染
+- 其他 BuildAgentContractError code 扩展（当前仅 missing_terminal_report）
 
 ## 6. user 决策点
 

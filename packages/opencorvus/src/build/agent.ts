@@ -1769,7 +1769,7 @@ function resolveOption<T>(input: T | (() => T | undefined) | undefined): T | und
  * Worktree.mergeSafely, and `baseRef..HEAD` when no integration merge was
  * needed.
  */
-async function collectGoalContributionDiffs(worktreeDir: string, baseRef: string): Promise<FileDiff[]> {
+export async function collectGoalContributionDiffs(worktreeDir: string, baseRef: string): Promise<FileDiff[]> {
   const contributionBase = await resolveGoalContributionBaseRef(worktreeDir, baseRef)
   return collectGoalDiffs(worktreeDir, contributionBase)
 }
