@@ -47,16 +47,12 @@ export default defineConfig({
     outDir: "../dist-vite",
     emptyOutDir: true,
     target: "esnext",
-    rollupOptions: {
-      external: [/^@tauri-apps\//],
-    },
   },
   resolve: {
     alias: [
       { find: "@", replacement: path.resolve(__dirname, "src") },
       // Dev-only stubs for Tauri runtime APIs so `bun run dev:vite` works
       // outside the Tauri webview (used for screenshot/visual iteration).
-      // Real Tauri builds bypass these via the rollup `external` rule above.
       {
         find: /^@tauri-apps\/plugin-dialog$/,
         replacement: path.resolve(__dirname, "src/dev-stubs/tauri-dialog.ts"),
