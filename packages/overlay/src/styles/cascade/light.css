@@ -1,49 +1,82 @@
 /* ─────────────────────────────────────────────────────────────
-   Light theme palette.
+   Light theme palette — Tauri / browser host.
 
-   Theme-architecture Step 0 (2026-05-04): aligned with dark/vscode-
-   dark to declare the **same palette token set** (rule 8 — single
-   source). Previously this file was missing `--accent-shadow`,
-   `--accent-glow`, `--guide-card-shadow`, `--dialog-backdrop` (some
-   patched via design-language.css body block, others fell through
-   to dark's :root values — that leak is now closed). The structural
-   tokens that used to live here (font sizes, layout dimensions,
-   titlebar/panel/rail widths) moved to `tokens/design-language.css`
-   :root because they are theme-independent.
+   Theme isolation contract: same two-layer structure as dark.css
+   (theme-vscode-passthrough-2026-05-07). Hex literals live in the
+   ref palette section only; the semantic surface API is pure
+   `var()` + `color-mix()`.
    ───────────────────────────────────────────────────────────── */
 
 :root[data-theme="light"],
 body[data-theme="light"] {
-  color-scheme: light;
-  --text-on-accent: #ffffff;
-  --bg: #eef3ff;
-  --surface: rgba(255, 255, 255, 0.82);
-  --surface-hover: rgba(243, 247, 255, 0.96);
-  --surface-inset: #f7f9ff;
-  --surface-strong: rgba(255, 255, 255, 0.94);
-  --rail-surface: rgba(250, 252, 255, 0.9);
-  --chat-canvas: rgba(255, 255, 255, 0.78);
-  --inspector-surface: rgba(250, 252, 255, 0.9);
+  /* ── Reference palette ─────────────────────────────────────── */
+  /* Cool-white neutral ramp — bg / surfaces / text. */
+  --ref-light-neutral-0: #ffffff;
+  --ref-light-neutral-50: #fbfdff;
+  --ref-light-neutral-75: #f7f9ff;
+  --ref-light-neutral-100: #f4f7ff;
+  --ref-light-neutral-150: #f3f7ff;
+  --ref-light-neutral-200: #fafcff;
+  --ref-light-neutral-250: #eef1ff;
+  --ref-light-neutral-300: #eef3ff;
+  --ref-light-text-muted: #8a94b2;
+  --ref-light-text-soft: #66708e;
+  --ref-light-text-base: #35405c;
+  --ref-light-text-strong: #101527;
+  --ref-light-text-on-accent: #ffffff;
+  --ref-light-border: #5c70a3;
+  --ref-light-border-hover: #5565ee;
+  --ref-light-border-strong: #5467a5;
+  /* Accent (indigo-violet) ramp. */
+  --ref-light-accent-light: #4b8dff;
+  --ref-light-accent-base: #5b5ff0;
+  --ref-light-accent-strong: #474add;
+  --ref-light-accent-mid: #6757f2;
+  --ref-light-accent-deep: #8a4df3;
+  --ref-light-accent-hover-light: #367cff;
+  --ref-light-accent-hover-mid: #5748ec;
+  --ref-light-accent-hover-deep: #7c40ea;
+  /* Status hues. */
+  --ref-light-info: #2f80ed;
+  --ref-light-good: #28a66a;
+  --ref-light-warn: #c98924;
+  --ref-light-bad: #d85666;
+  /* Scrollbar thumb tint. */
+  --ref-light-scrollbar: #5f6fa2;
 
-  --body-bg: linear-gradient(135deg, #fbfdff 0%, #f4f7ff 42%, #eef1ff 100%);
-  --panel-body-bg: rgba(255, 255, 255, 0.44);
+  /* ── Semantic surface API ──────────────────────────────────── */
+  color-scheme: light;
+  --text-on-accent: var(--ref-light-text-on-accent);
+  --bg: var(--ref-light-neutral-300);
+  --surface: color-mix(in srgb, var(--ref-light-neutral-0) 82%, transparent);
+  --surface-hover: color-mix(in srgb, var(--ref-light-neutral-150) 96%, transparent);
+  --surface-inset: var(--ref-light-neutral-75);
+  --surface-strong: color-mix(in srgb, var(--ref-light-neutral-0) 94%, transparent);
+  --rail-surface: color-mix(in srgb, var(--ref-light-neutral-200) 90%, transparent);
+  --chat-canvas: color-mix(in srgb, var(--ref-light-neutral-0) 78%, transparent);
+  --inspector-surface: color-mix(in srgb, var(--ref-light-neutral-200) 90%, transparent);
+
+  --body-bg: linear-gradient(135deg, var(--ref-light-neutral-50) 0%, var(--ref-light-neutral-100) 42%, var(--ref-light-neutral-250) 100%);
+  --panel-body-bg: color-mix(in srgb, var(--ref-light-neutral-0) 44%, transparent);
   --panel-body-blur: blur(20px);
-  --chrome: rgba(255, 255, 255, 0.78);
-  --border: rgba(92, 112, 163, 0.16);
-  --border-hover: rgba(85, 101, 238, 0.34);
-  --border-strong: rgba(84, 103, 165, 0.22);
-  --text: #35405c;
-  --text-strong: #101527;
-  --text-soft: #66708e;
-  --text-muted: #8a94b2;
-  --accent: #5b5ff0;
+  --chrome: color-mix(in srgb, var(--ref-light-neutral-0) 78%, transparent);
+  --border: color-mix(in srgb, var(--ref-light-border) 16%, transparent);
+  --border-hover: color-mix(in srgb, var(--ref-light-border-hover) 34%, transparent);
+  --border-strong: color-mix(in srgb, var(--ref-light-border-strong) 22%, transparent);
+
+  --text: var(--ref-light-text-base);
+  --text-strong: var(--ref-light-text-strong);
+  --text-soft: var(--ref-light-text-soft);
+  --text-muted: var(--ref-light-text-muted);
+
+  --accent: var(--ref-light-accent-base);
   --accent-dim: color-mix(in srgb, var(--accent) 11%, transparent);
-  --accent-hover: #474add;
-  --accent-start: #4b8dff;
-  --accent-mid: #6757f2;
-  --accent-end: #8a4df3;
+  --accent-hover: var(--ref-light-accent-strong);
+  --accent-start: var(--ref-light-accent-light);
+  --accent-mid: var(--ref-light-accent-mid);
+  --accent-end: var(--ref-light-accent-deep);
   --accent-gradient: linear-gradient(135deg, var(--accent-start), var(--accent-mid) 52%, var(--accent-end));
-  --accent-gradient-hover: linear-gradient(135deg, #367cff, #5748ec 56%, #7c40ea);
+  --accent-gradient-hover: linear-gradient(135deg, var(--ref-light-accent-hover-light), var(--ref-light-accent-hover-mid) 56%, var(--ref-light-accent-hover-deep));
   --accent-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 18%, transparent);
   --accent-ring: color-mix(in srgb, var(--accent) 20%, transparent);
   --accent-glow: color-mix(in srgb, var(--accent) 18%, transparent);
@@ -52,55 +85,66 @@ body[data-theme="light"] {
     180deg,
     color-mix(in srgb, var(--accent) 10%, transparent),
     color-mix(in srgb, var(--accent) 3%, transparent) 58%,
-    rgba(255, 255, 255, 0.5)
+    color-mix(in srgb, var(--ref-light-neutral-0) 50%, transparent)
   );
-  --hover-accent-shadow: 0 18px 34px rgba(0, 0, 0, 0.1);
-  --info: #2f80ed;
-  --info-dim: rgba(47, 128, 237, 0.1);
-  --good: #28a66a;
-  --good-dim: rgba(40, 166, 106, 0.12);
-  --warn: #c98924;
-  --warn-dim: rgba(201, 137, 36, 0.12);
-  --bad: #d85666;
-  --bad-dim: rgba(216, 86, 102, 0.12);
-  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.76);
-  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  --scrollbar-thumb: rgba(95, 111, 162, 0.24);
+  --hover-accent-shadow: 0 18px 34px color-mix(in srgb, black 10%, transparent);
+
+  --info: var(--ref-light-info);
+  --info-dim: color-mix(in srgb, var(--info) 10%, transparent);
+  --good: var(--ref-light-good);
+  --good-dim: color-mix(in srgb, var(--good) 12%, transparent);
+  --warn: var(--ref-light-warn);
+  --warn-dim: color-mix(in srgb, var(--warn) 12%, transparent);
+  --bad: var(--ref-light-bad);
+  --bad-dim: color-mix(in srgb, var(--bad) 12%, transparent);
+
+  /* High-light insets — structural edge depth, not theme color. */
+  --shadow: inset 0 1px 0 color-mix(in srgb, white 72%, transparent);
+  --shadow-md: inset 0 1px 0 color-mix(in srgb, white 76%, transparent);
+  --shadow-lg: inset 0 1px 0 color-mix(in srgb, white 80%, transparent);
+
+  --scrollbar-thumb: color-mix(in srgb, var(--ref-light-scrollbar) 24%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 34%, transparent);
-  --session-scrollbar-track: rgba(255, 255, 255, 0.48);
+  --session-scrollbar-track: color-mix(in srgb, var(--ref-light-neutral-0) 48%, transparent);
+
   --subtle-1: color-mix(in srgb, var(--accent) 4%, transparent);
   --subtle-2: color-mix(in srgb, var(--accent) 6.5%, transparent);
   --subtle-3: color-mix(in srgb, var(--accent) 8.5%, transparent);
   --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
-  --dialog-bg: #ffffff;
-  --dialog-backdrop: rgba(0, 0, 0, 0.4);
+
+  --dialog-bg: var(--ref-light-neutral-0);
+  --dialog-backdrop: color-mix(in srgb, black 40%, transparent);
   --ui-scrim: color-mix(in srgb, black 40%, transparent);
   --ui-shadow-tone: color-mix(in srgb, black 12%, transparent);
   --ui-highlight-tone: color-mix(in srgb, white 56%, transparent);
   --ui-glass-tint: color-mix(in srgb, white 62%, transparent);
-  --executor-menu-bg: #ffffff;
+
+  --executor-menu-bg: var(--ref-light-neutral-0);
   --executor-menu-shadow:
     0 calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale)) var(--ui-shadow-tone);
   --executor-menu-row-hover-bg: var(--subtle-5);
+
   --task-bar-bg: var(--ui-glass-tint);
   --task-bar-backdrop-filter: blur(calc(18px * var(--ui-scale)));
   --task-bar-border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
-  --menu-panel-bg: rgba(255, 255, 255, 0.96);
-  --divider-soft: rgba(92, 112, 163, 0.12);
+
+  --menu-panel-bg: color-mix(in srgb, var(--ref-light-neutral-0) 96%, transparent);
+  --divider-soft: color-mix(in srgb, var(--ref-light-border) 12%, transparent);
+
   --panel-fill:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 58%, rgba(255, 255, 255, 0.5)),
+    linear-gradient(180deg, color-mix(in srgb, var(--ref-light-neutral-0) 70%, transparent), color-mix(in srgb, var(--ref-light-neutral-0) 30%, transparent) 58%, color-mix(in srgb, var(--ref-light-neutral-0) 50%, transparent)),
     var(--surface);
   --panel-fill-hover:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), rgba(255, 255, 255, 0.4) 58%, rgba(255, 255, 255, 0.6)),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--ref-light-neutral-0) 40%, transparent) 58%, color-mix(in srgb, var(--ref-light-neutral-0) 60%, transparent)),
     var(--surface-hover);
-  --card-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 72%), var(--subtle-1);
+  --card-fill: linear-gradient(180deg, color-mix(in srgb, var(--ref-light-neutral-0) 70%, transparent), color-mix(in srgb, var(--ref-light-neutral-0) 30%, transparent) 72%), var(--subtle-1);
   --card-fill-hover:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, transparent), rgba(255, 255, 255, 0.5) 68%), var(--surface-hover);
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, transparent), color-mix(in srgb, var(--ref-light-neutral-0) 50%, transparent) 68%), var(--surface-hover);
+
   --guide-card-border: color-mix(in srgb, var(--accent) 20%, transparent);
   --guide-card-bg:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 42%),
     var(--bg);
-  --guide-card-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+  --guide-card-shadow: 0 18px 40px color-mix(in srgb, black 8%, transparent);
 }
