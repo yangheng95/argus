@@ -40,19 +40,6 @@
   <link rel="stylesheet" href="styles/surfaces/card.css">
 </head>
 <body data-page="overlay" data-theme="light">
-  <script>
-    // Pre-render theme init: apply the default theme before host settings load.
-    // The main bundle applies the persisted host-owned theme during init.
-    (function () {
-      try {
-        document.documentElement.dataset.theme = "light";
-        document.body.dataset.theme = "light";
-      } catch {
-        document.documentElement.dataset.theme = "light";
-        document.body.dataset.theme = "light";
-      }
-    })();
-  </script>
   <!-- Titlebar (draggable) -->
   <header class="titlebar" id="titlebar">
     <div class="titlebar-left" data-tauri-drag-region>

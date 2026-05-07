@@ -1,37 +1,42 @@
 import { describe, expect, test } from "bun:test";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { DEFAULT_SETTINGS, DEFAULT_THEME } from "../src/store/settings";
-import { sanitizeTheme } from "../src/services/theme";
 
 describe("overlay default theme", () => {
-  test("settings and sanitizers default to reference light style", () => {
-    expect(DEFAULT_THEME).toBe("light");
-    expect(DEFAULT_SETTINGS.theme).toBe(DEFAULT_THEME);
-    expect(sanitizeTheme(undefined)).toBe(DEFAULT_THEME);
-    expect(sanitizeTheme("not-a-theme")).toBe(DEFAULT_THEME);
+  test("settings and sanitizers default to reference light style", async () => {
+    const settings = await fs.readFile(
+      path.join(import.meta.dir, "..", "src", "store", "settings.ts"),
+      "utf8",
+    );
+    const theme = await fs.readFile(
+      path.join(import.meta.dir, "..", "src", "services", "theme.ts"),
+      "utf8",
+    );
+    expect(settings).toContain('export const DEFAULT_THEME = "light";');
+    expect(settings).toContain("theme: DEFAULT_THEME");
+    expect(theme).toContain("return DEFAULT_THEME;");
   });
 
-  test("pre-render theme bootstrap defaults cold starts to reference light style", async () => {
+  test("pre-render theme bootstrap uses static light attributes without inline writes", async () => {
     const html = await fs.readFile(
       path.join(import.meta.dir, "..", "src", "index.html"),
       "utf8",
     );
     expect(html).toContain('<html lang="en-US" data-theme="light">');
     expect(html).toContain('<body data-page="overlay" data-theme="light">');
-    expect(html).toContain('!saved ? "light"');
-    expect(html).toContain('document.documentElement.dataset.theme = effective');
-    expect(html).toContain('document.body.dataset.theme = "light"');
+    expect(html).not.toContain("document.documentElement.dataset.theme");
+    expect(html).not.toContain("document.body.dataset.theme");
   });
 
-  test("palette-only theme files are on the runtime path", async () => {
+  test("cascade theme files are on the runtime path", async () => {
     const html = await fs.readFile(
       path.join(import.meta.dir, "..", "src", "index.html"),
       "utf8",
     );
     for (const theme of ["light", "dark", "vscode-dark"]) {
-      expect(html).toContain(`styles/themes/${theme}.css`);
+      expect(html).toContain(`styles/cascade/${theme}.css`);
     }
+    expect(html).toContain("styles/cascade/base.css");
   });
 
   test("applyTheme writes the root palette attribute and legacy body attribute", async () => {
@@ -41,5 +46,15 @@ describe("overlay default theme", () => {
     );
     expect(source).toContain("document.documentElement.dataset.theme = effective");
     expect(source).toContain("document.body.dataset.theme = effective");
+  });
+
+  test("main theme effect waits for settings hydration before first apply", async () => {
+    const source = await fs.readFile(
+      path.join(import.meta.dir, "..", "src", "main.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("const [settingsHydrated, setSettingsHydrated] = createSignal(false)");
+    expect(source).toContain("if (!settingsHydrated()) return;");
+    expect(source).toContain("onSettingsLoaded: () => setSettingsHydrated(true)");
   });
 });
