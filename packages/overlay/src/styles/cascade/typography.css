@@ -14,13 +14,29 @@
 .dialog-title,
 .oc-section__title,
 .config-section-head {
+  color: var(--text-strong);
   font-size: var(--ui-font-title);
   font-weight: var(--ui-font-weight-strong);
   letter-spacing: 0;
+  line-height: 1.2;
 }
 
-.dialog-subtitle,
-.config-subsection-head,
+.dialog-subtitle {
+  color: var(--text-strong);
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.03em;
+  margin-top: var(--ui-gap-xs);
+}
+
+.config-subsection-head {
+  color: var(--text-strong);
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
 .extension-head .field-label {
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
@@ -35,14 +51,11 @@
 }
 
 .change-subline,
-.field-label,
-.dialog-subtitle {
+.field-label {
   letter-spacing: 0.03em;
 }
 
-.oc-section__badge,
-.knowledge-scope,
-.mini-badge {
+.oc-section__badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -54,19 +67,8 @@
   letter-spacing: 0.03em;
 }
 
-.mini-badge {
-  display: inline-flex;
-  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  background: var(--accent-dim);
-  color: var(--accent);
-  font-size: var(--ui-font-small);
-  font-weight: var(--ui-font-weight-strong);
-}
-
 .oc-section__title,
-.config-section-head-text,
-.config-subsection-head {
+.config-section-head-text {
   font-weight: var(--ui-font-weight-medium);
   letter-spacing: 0;
 }

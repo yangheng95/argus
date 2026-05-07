@@ -142,6 +142,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .cmdk-backdrop {
-    animation: none !important;
+    animation: none;
   }
 }
