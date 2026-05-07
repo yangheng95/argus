@@ -215,6 +215,57 @@ description 说清：
 - accept_build 的 overlay UI 渲染
 - 其他 BuildAgentContractError code 扩展（当前仅 missing_terminal_report）
 
+## 9. codex 二审反馈（commit fabb98869 post-impl review，rule 24/35）
+
+PR commit `fabb98869` 实施后由 codex 做对抗性 post-impl review。原始 verdict: **HOLD pending revision**（三个 BLOCKING + 三个 SHOULD-FIX）。本 spec 节落盘 review 内容 + 各项处理决定（rule 35 — codex 反馈必须显式标注）。修订实施于 follow-up commit。
+
+### B-1（致命，已修）：preflight 用 substring match 识别 missing_terminal —— 真实生产 goal_run.error 不含两个 token 的任何一个，每次真实调用都被 reject。rule 20 violation + 功能不可用。
+
+**修订**：
+- `preflightAcceptBuild` signature 改：移除 `latestGoalRun.error` 字段；新增 `latestContractViolationKey?: string`
+- 检查 `latestContractViolationKey === "build_agent_contract_violation"`（typed enum-like check，rule 20 清白）
+- execute 通过 `decisionLog.readByPhaseAndGoal("retry", goalID)` 拿最新 entry，传 entry.key 给 preflight
+- 单源（rule 8）：catch path 写入 phase=retry decision_log entry 是 typed signal 的来源；preflight 检查它是 typed consumer
+- 测试 fixture 全部更新为 typed key；新增 "rule 20 regression pin" 测试
+- 删除 codex 指出的 misleading 注释（S-3）
+
+### B-2（致命，已修）：lifecycle 顺序问题 —— `Worktree.mergeSafely` 是 irreversible，但 startNewAttempt / beginBuildAttempt / finalizeBuildAttempt 在它之后。中间任意一步 throw 会留下"primary HEAD advanced 但无 completed goal_run"的半成品状态。
+
+**修订**：
+- 新顺序：`startNewAttempt → beginBuildAttempt → mergeSafely → finalizeBuildAttempt(completed) → cleanup`
+- 整个 mergeSafely 之后的 chain 用 try-catch 包裹；任何 throw → `finalizeAsFailed(newGoalRunID, errMsg)` 兜底，避免 goal_run stuck 在 running
+- mergeSafely 失败（conflict / blocked / infra_error）→ finalize new attempt as failed + return reject markdown
+- mergeSafely throw → finalize new attempt as failed + return error markdown
+- finalizeAsCompleted throw post-merge → finalize new attempt as failed + 写 `accept_build_half_applied` decision_log audit entry，让 orchestrator LLM 看到半成品状态进行人工干预
+
+### B-3（致命，已修）：normal passed-build 路径调 `cleanupCompletedGoalWorkspace`，accept_build 不调 → 双源行为（rule 16），accepted goal 的 worktree 留在硬盘上。
+
+**修订**：accept_build happy path 末尾调 `cleanupCompletedGoalWorkspace(goalID, newGoalRunID)`，cleanup 结果展示在返回 markdown 里（与 build tool passed 路径对齐）。
+
+### S-1（已修）：startNewAttempt 写 phase=retry decision_log entry，但 accept_build 立即 finalize completed → 这条 retry feedback 永远不会被读取（completed goal 不会再 build）。冗余且可能误导未来 retry 路径。
+
+**修订**：startNewAttempt 调用不传 `feedback` 参数。phase=build "orchestrator_accept_build" entry 是 accept_build 的单一 audit 来源（rule 8）。
+
+### S-2（已修）：fileChanges placeholder summary `(orchestrator-accepted)` 信息密度差。
+
+**修订**：summary 改为 `+${additions}/-${deletions}` diff stats，reason 保留 audit 字符串。overlay / 下游 renderer 展示有用 per-file 信息。
+
+### S-3（已修）：preflight 注释误导，称 "AgentRunError message in some generic-rethrow paths" 包含 markers —— 实际 trace 后 production 根本不产生这种字符串。
+
+**修订**：B-1 修订时整段重写 preflight 注释，反映 typed key 的真实工作方式。
+
+### 不采纳但记入待办（spec drift §2 + codex test gaps）
+
+- **catch path facts collection integration test**：codex 指出 spec §5.3 列了 `build-missing-terminal-facts.test.ts` 但漏实施。提取 helper 测试范围扩散（要 mock collectGoalContributionDiffs / runGit），按 rule 5 不引入。当前 catch path facts 逻辑约 30 行，分支简单，由 spec §6.2 列入 follow-up。
+- **accept_build IO 路径 integration test**：Worktree.isValid invalid / collectGoalContributionDiffs throw / Worktree.mergeSafely conflict|blocked|infra_error|merged。需要真 worktree fixture，spec §6.2 列入 follow-up。
+- **prose tail / bash history 接入 build tool markdown**：spec §3.C-C 描述了但 §5.2 未列入 minimum viable scope；orchestrator LLM 已能通过 read_context 间接获取 session content。spec §6.2 列入 follow-up。
+
+### 二审 verdict 复述
+
+> codex 原文：**Hold pending revision** — three blocking issues (B-1: substring matcher cannot match real production failures, B-2: half-applied state on persist failure after mergeSafely, B-3: worktree cleanup gap vs. normal passed path) and one consequential test gap make this commit unfit to ship.
+
+修订后预期 verdict：ship as-is（本反馈 commit 处理三项 BLOCKING + 两项 SHOULD-FIX 全部修复；test gap 接受为 follow-up scope）。再次 codex 三审验证。
+
 ## 6. user 决策点
 
 请选一个：

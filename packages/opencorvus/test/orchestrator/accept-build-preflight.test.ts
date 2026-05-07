@@ -8,11 +8,17 @@ import { preflightAcceptBuild } from "../../src/orchestrator/tools"
  * `accept_build`. It catches the cases that don't require IO before the
  * tool burns time on Worktree.isValid / git diff / Worktree.mergeSafely.
  *
+ * Codex round-2 BLOCKING B-1 fix: contract-violation detection is now
+ * by **typed decision_log key** (`latestContractViolationKey ===
+ * "build_agent_contract_violation"`) instead of error-string substring
+ * match. The execute caller does the IO read of decision_log; preflight
+ * stays pure + typed (rule 20 — no keyword-match rule logic).
+ *
  * Reject paths covered here:
  *   - goal not found
  *   - no goal_run history
  *   - latest goal_run not in failed state
- *   - latest failure is not a missing-terminal contract violation
+ *   - no build_agent_contract_violation decision_log entry for this goal
  *   - no recorded worktree directory or branch
  *   - no recorded baseRef
  *
@@ -23,11 +29,8 @@ describe("preflightAcceptBuild", () => {
   const baseInput = {
     goalID: "gol_x",
     goalExists: true,
-    latestGoalRun: {
-      status: "failed",
-      error:
-        "AgentRunError: [build] LLM error during build: BuildAgentContractError: Previous build session ended with finish=stop without producing the terminal build report. ...",
-    },
+    latestGoalRun: { status: "failed" },
+    latestContractViolationKey: "build_agent_contract_violation",
     recordedWorkspace: {
       directory: "C:/tmp/worktree/goal-x",
       branch: "goal-x",
@@ -35,7 +38,7 @@ describe("preflightAcceptBuild", () => {
     },
   }
 
-  test("happy path: missing-terminal failure with intact worktree triple → ok=true", () => {
+  test("happy path: typed contract-violation key + intact worktree triple → ok=true", () => {
     const result = preflightAcceptBuild(baseInput)
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -43,28 +46,6 @@ describe("preflightAcceptBuild", () => {
       expect(result.worktreeBranch).toBe("goal-x")
       expect(result.worktreeBaseRef).toBe("abc123def456")
     }
-  })
-
-  test("recognises BuildAgentContractError marker in error string", () => {
-    const result = preflightAcceptBuild({
-      ...baseInput,
-      latestGoalRun: {
-        status: "failed",
-        error: "BuildAgentContractError: code=missing_terminal_report; sessionID=ses_abc",
-      },
-    })
-    expect(result.ok).toBe(true)
-  })
-
-  test("recognises missing_terminal_report marker in error string", () => {
-    const result = preflightAcceptBuild({
-      ...baseInput,
-      latestGoalRun: {
-        status: "failed",
-        error: "code=missing_terminal_report fired in catch path",
-      },
-    })
-    expect(result.ok).toBe(true)
   })
 
   test("rejects when goalExists=false", () => {
@@ -87,7 +68,7 @@ describe("preflightAcceptBuild", () => {
   test("rejects when latest goal_run is in 'completed' state (not failed)", () => {
     const result = preflightAcceptBuild({
       ...baseInput,
-      latestGoalRun: { status: "completed", error: null },
+      latestGoalRun: { status: "completed" },
     })
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -98,7 +79,7 @@ describe("preflightAcceptBuild", () => {
   test("rejects when latest goal_run is in live state ('running')", () => {
     const result = preflightAcceptBuild({
       ...baseInput,
-      latestGoalRun: { status: "running", error: null },
+      latestGoalRun: { status: "running" },
     })
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -106,25 +87,24 @@ describe("preflightAcceptBuild", () => {
     }
   })
 
-  test("rejects when latest failure is a generic build error (not missing-terminal)", () => {
+  test("rejects when latestContractViolationKey is undefined (no decision_log entry)", () => {
     const result = preflightAcceptBuild({
       ...baseInput,
-      latestGoalRun: {
-        status: "failed",
-        error: "AgentRunError: [build] LLM error during build: APIError: stream interrupted",
-      },
+      latestContractViolationKey: undefined,
     })
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.message).toContain("not a missing-terminal contract violation")
-      expect(result.message).toContain("Use build({ goalID }) retry / modify_goal / fail_task")
+      expect(result.message).toContain("no build_agent_contract_violation decision_log entry")
     }
   })
 
-  test("rejects when failure error is null/empty (defensive)", () => {
+  test("rejects when latestContractViolationKey is some other phase=retry key (e.g. modify_goal generic)", () => {
+    // modify_goal writes phase=retry with key="retry_analysis_<goalID>".
+    // accept_build is scoped to build_agent_contract_violation only.
     const result = preflightAcceptBuild({
       ...baseInput,
-      latestGoalRun: { status: "failed", error: null },
+      latestContractViolationKey: "retry_analysis_gol_x",
     })
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -167,7 +147,7 @@ describe("preflightAcceptBuild", () => {
     }
   })
 
-  test("rejects when recorded baseRef is missing", () => {
+  test("rejects when recorded baseRef is missing (null)", () => {
     const result = preflightAcceptBuild({
       ...baseInput,
       recordedWorkspace: { directory: "C:/tmp/x", branch: "goal-x", baseRef: null },
@@ -203,18 +183,36 @@ describe("preflightAcceptBuild", () => {
     }
   })
 
-  test("invariant order — status check rejects before missing_terminal marker check", () => {
+  test("invariant order — status check rejects before contract-violation key check", () => {
     const result = preflightAcceptBuild({
       ...baseInput,
-      latestGoalRun: {
-        status: "completed",
-        error: "code=missing_terminal_report", // would match missing-terminal but status check first
-      },
+      latestGoalRun: { status: "completed" },
+      latestContractViolationKey: "build_agent_contract_violation", // would pass key check, but status check first
     })
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.message).toContain("not 'failed'")
       expect(result.message).not.toContain("not a missing-terminal contract violation")
+    }
+  })
+
+  test("rule 20 — no error-string substring matching (regression pin)", () => {
+    // The B-1 fix replaced `errStr.includes("missing_terminal_report") ||
+    // errStr.includes("BuildAgentContractError")` with a typed decision_log
+    // key check. Pin: an error string that DOES contain those substrings
+    // but where the decision_log key is undefined → still rejects. This
+    // proves the matcher is no longer doing keyword detection and that
+    // the prior unit-test fixtures' fake error strings are no longer
+    // load-bearing.
+    const result = preflightAcceptBuild({
+      ...baseInput,
+      latestContractViolationKey: undefined,
+      // This fixture's old "error" content lives nowhere in the new shape;
+      // the typed key is the single source of truth.
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toContain("no build_agent_contract_violation decision_log entry")
     }
   })
 })
