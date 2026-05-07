@@ -27,11 +27,10 @@
   min-height: calc(16px * var(--ui-scale));
 }
 
-/* Section card stack: scrollable body that holds inspector cards. The
-   scrollbar is hidden because the panel uses a reflow-based scroll
-   indicator instead of a visual gutter. Stack gap + outer padding
-   share `--ui-gap-sm` (6px) so the space above the first card matches
-   the gap between siblings — the right-rail's single spacing rhythm. */
+/* Section card stack: scrollable body that holds inspector cards.
+   Stack gap + outer padding share `--ui-gap-sm` (6px) so the space
+   above the first card matches the gap between siblings — the
+   right-rail's single spacing rhythm. */
 .sections-stack {
   display: flex;
   flex: 1 1 0;
@@ -40,12 +39,6 @@
   gap: var(--ui-gap-sm);
   padding: var(--ui-gap-sm);
   overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.sections-stack::-webkit-scrollbar {
-  width: 0;
-  height: 0;
 }
 
 /* Tab body container: each top-level inspector tab (workflow,
@@ -1301,7 +1294,7 @@
 }
 
 /* Step message log — scrollable container for live agent output
-   inside the step body. Custom thin scrollbar via webkit pseudos. */
+   inside the step body. */
 .gwg-step-messages {
   display: flex;
   flex-direction: column;
@@ -1309,19 +1302,6 @@
   max-height: calc(240px * var(--ui-scale));
   overflow-y: auto;
   padding-right: calc(2px * var(--ui-scale));
-}
-
-.gwg-step-messages::-webkit-scrollbar {
-  width: calc(4px * var(--ui-scale));
-}
-
-.gwg-step-messages::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: var(--oc-radius-soft);
-}
-
-.gwg-step-messages::-webkit-scrollbar-track {
-  background: transparent;
 }
 
 /* Eval checks list — itemized pass/fail rows shown after the
@@ -1569,15 +1549,6 @@
   overflow-y: auto;
   padding-left: var(--ui-gap-sm);
   border-left: calc(2px * var(--ui-scale)) solid var(--accent-dim);
-}
-
-.req-streaming-messages::-webkit-scrollbar {
-  width: calc(4px * var(--ui-scale));
-}
-
-.req-streaming-messages::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: var(--oc-radius-soft);
 }
 
 /* Spec-detail collapsible: shows the raw spec text under a

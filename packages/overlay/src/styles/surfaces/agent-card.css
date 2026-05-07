@@ -124,13 +124,6 @@
   overflow-y: auto;
 }
 
-.agent-card-body::-webkit-scrollbar {
-  width: calc(4px * var(--ui-scale));
-}
-.agent-card-body::-webkit-scrollbar-thumb {
-  background: var(--ui-glass-tint);
-  border-radius: var(--oc-radius-soft);
-}
 .agent-card-body--preview {
   max-height: calc(68px * var(--ui-scale));
   overflow: hidden;

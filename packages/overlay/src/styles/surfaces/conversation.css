@@ -642,11 +642,6 @@
   min-width: 0;
   flex: 1;
   overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.task-dir-path::-webkit-scrollbar {
-  display: none;
 }
 
 .task-dir-tool,
@@ -898,17 +893,6 @@
     0 calc(20px * var(--ui-scale)) calc(40px * var(--ui-scale)) var(--ui-shadow-tone),
     0 calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 38%, transparent);
   z-index: var(--ui-z-titlebar);
-  scrollbar-width: thin;
-  scrollbar-color: var(--subtle-5) transparent;
-}
-
-.recent-dir-panel::-webkit-scrollbar {
-  width: calc(4px * var(--ui-scale));
-}
-
-.recent-dir-panel::-webkit-scrollbar-thumb {
-  background: var(--subtle-5);
-  border-radius: var(--oc-radius-soft);
 }
 
 .recent-dir-panel-shell {
