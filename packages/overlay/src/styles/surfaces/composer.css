@@ -510,10 +510,8 @@
 
 /* Floating menu surfaced above the executor chip. Positioned
    absolutely just above the chip; scrollable when the model
-   list overflows. The shadow layers now read the shared UI
-   shadow tone token. The light-theme override that swaps the
-   surface to white + softer shadow stays in styles.css as a
-   `body[data-theme="light"]` block pending palette-tokenization. */
+   list overflows. Theme-specific surface and shadow values live
+   in cascade tokens. */
 .executor-menu {
   position: absolute;
   bottom: calc(100% + calc(6px * var(--ui-scale)));
@@ -522,13 +520,11 @@
   max-width: calc(320px * var(--ui-scale));
   max-height: calc(360px * var(--ui-scale));
   overflow-y: auto;
-  background: var(--menu-panel-bg);
-  border: var(--oc-border-width) solid var(--border-strong);
+  background: var(--executor-menu-bg);
+  border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
   padding: calc(4px * var(--ui-scale));
-  box-shadow:
-    0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) var(--ui-shadow-tone),
-    0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 56%, transparent);
+  box-shadow: var(--executor-menu-shadow);
   z-index: var(--ui-z-titlebar);
   scrollbar-width: thin;
   scrollbar-color: var(--subtle-5) transparent;
@@ -548,8 +544,7 @@
   flex-direction: column;
 }
 
-/* Menu row: one row per executor in the menu. Hover wash uses
-   raw white-at-6% — routed through color-mix. */
+/* Menu row: one row per executor in the menu. */
 .executor-menu-row {
   display: flex;
   align-items: center;
@@ -571,7 +566,7 @@
 }
 
 .executor-menu-row:hover:not(:disabled) {
-  background: var(--ui-glass-tint);
+  background: var(--executor-menu-row-hover-bg);
   color: var(--text-strong);
 }
 
@@ -624,7 +619,7 @@
 }
 
 .executor-menu-model:hover {
-  background: var(--ui-glass-tint);
+  background: var(--executor-menu-row-hover-bg);
   color: var(--text-strong);
 }
 
@@ -643,23 +638,6 @@
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   color: var(--text-strong);
   font-weight: var(--ui-font-weight-strong);
-}
-
-/* Light-theme executor-menu overrides (folded from styles.css; tokenized
-   raw hex and rgba). Kept in this surface because the executor-menu
-   already lives here; palette-only diff from dark defaults. */
-body[data-theme="light"] .executor-menu {
-  background: white;
-  border-color: var(--border);
-  box-shadow:
-    0 calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale))
-    var(--ui-shadow-tone);
-}
-
-body[data-theme="light"] .executor-menu-row:hover:not(:disabled),
-body[data-theme="light"] .executor-menu-model:hover {
-  background: var(--subtle-5);
-  color: var(--text-strong);
 }
 
 /* ── Executor Chip (model selector pill in the chat composer bottom row) ── */

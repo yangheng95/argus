@@ -783,9 +783,10 @@
   padding: 0 calc(6px * var(--ui-scale));
   margin: 0;
   border: none;
-  border-bottom: var(--oc-border-width) solid var(--border);
+  border-bottom: var(--oc-border-width) solid var(--task-bar-border-color);
   border-radius: 0;
-  background: var(--chrome);
+  background: var(--task-bar-bg);
+  backdrop-filter: var(--task-bar-backdrop-filter);
   flex-shrink: 0;
   box-shadow: none;
   transition:
@@ -796,21 +797,6 @@
 .task-bar:hover,
 .task-bar:focus-within {
   border-color: var(--border-hover);
-}
-
-body[data-theme="light"] .task-bar {
-  border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
-  background: var(--ui-glass-tint);
-  backdrop-filter: blur(calc(18px * var(--ui-scale)));
-}
-
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
-  background: var(--chrome);
-  backdrop-filter: none;
-}
-
-body[data-theme="vscode-dark"] .task-bar {
-  background: var(--surface);
 }
 
 .task-bar-main {
