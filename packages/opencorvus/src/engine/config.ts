@@ -123,6 +123,22 @@ interface DeliveryVisualConfig {
   }
 }
 
+/**
+ * DebugConfig — operator-toggled debug behaviour.
+ *
+ * `fail_on_information_missing`: when true the host (a) appends the
+ * INFORMATION MISSING fallback block to every agent's system prompt
+ * (see `prompt/information-missing.ts`), and (b) runs detection on
+ * each agent's final assistant message — if the agent emits the
+ * `<INFORMATION MISSING>` XML block the host process.exits with
+ * code 99 so operators see upstream-context drops immediately
+ * instead of a long log of guessed-default work. Toggle is exposed
+ * via overlay GeneralPanel.
+ */
+interface DebugConfig {
+  fail_on_information_missing: boolean
+}
+
 export interface EngineConfigType {
   requirements: RequirementsConfig
   architect: ArchitectConfig
@@ -132,6 +148,7 @@ export interface EngineConfigType {
   intent_analysis: IntentAnalysisConfig
   build: BuildConfig
   activity: ActivityConfig
+  debug: DebugConfig
   max_runs: number
   max_fix_runs: number
   max_executor_groups: number
@@ -194,6 +211,12 @@ const DEFAULTS: EngineConfigType = {
     // auto_detect metadata, so reference / research jobs receive the relevant
     // SOP without context-spamming unrelated implementation goals.
     skills: [],
+  },
+  debug: {
+    // Default off — host detection + prompt fallback only activate when
+    // an operator flips this in opencorvus.jsonc (or the overlay
+    // GeneralPanel toggle that PATCHes config).
+    fail_on_information_missing: false,
   },
   activity: {
     // Reasoning models can stream reasoning deltas every few seconds;
@@ -311,6 +334,10 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
         user?.activity?.executor_events_idle_ms ?? DEFAULTS.activity.executor_events_idle_ms,
       task_queue_run_timeout_ms:
         user?.activity?.task_queue_run_timeout_ms ?? DEFAULTS.activity.task_queue_run_timeout_ms,
+    },
+    debug: {
+      fail_on_information_missing:
+        user?.debug?.fail_on_information_missing ?? DEFAULTS.debug.fail_on_information_missing,
     },
     max_runs: user?.max_runs ?? DEFAULTS.max_runs,
     max_fix_runs: user?.max_fix_runs ?? DEFAULTS.max_fix_runs,

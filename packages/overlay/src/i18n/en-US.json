@@ -102,6 +102,8 @@
   "notify.permission_granted_settings_body": "Task updates can now appear in the system notification area.",
   "settings.desktop_notifications_label": "Desktop notifications",
   "settings.desktop_notifications_hint": "Ring the OS shell when a task completes, fails, is cancelled, or is waiting on you.",
+  "settings.fail_on_information_missing_label": "Fail-fast on INFORMATION MISSING (debug)",
+  "settings.fail_on_information_missing_hint": "When on, every agent prompt receives an INFORMATION MISSING fallback section and the host process.exits the moment any agent emits the <INFORMATION MISSING> XML block. Use to surface upstream context drops; leave off in production.",
   "channel.public_url_invalid": "Public URL must start with http:// or https://",
   "task_overlay.back": "Workspace",
   "task_overlay.back_title": "Back to Workspace (Esc)",
