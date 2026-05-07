@@ -261,10 +261,21 @@ If your initial agent selection turns out to be wrong, switch. Examples:
     delivery evidence proves the goal graph itself is structurally wrong. The review
     result alone does not mutate the goal graph.
 
-Cheaper repairs first: `modify_goal` (contract patch) > `build({ goalID })` (single
-goal rework) > `build({ request })` (whole-task rework) > `architect` re-run
-(structural rewrite) > `restart_from_stage` (full upstream rework). Climb the ladder
-only after the previous rung produced clear evidence that it won't converge.
+Cheaper repairs first — climb only when the prior rung's evidence shows it cannot
+converge. A single goal stuck in an unfamiliar way is rung 2 work, not rung 4.
+
+  rung 1 (per-attempt): `build({ goalID, request: "..." })`. The `request` renders
+    as a separate "Retry Guidance From Orchestrator" section in the build prompt
+    and does NOT replace the goal's objective.
+  rung 2 (per-goal): for missing_terminal failures whose worktree shows substantial
+    completion → `accept_build({ goalID, reason })`; for genuine contract gaps →
+    `modify_goal({ goalID, ... })`.
+  rung 3 (per-graph): re-enter `architect` with the rejection feedback as evidence —
+    only when delivery / prosecution evidence cites an architectural defect that
+    no per-goal repair absorbs.
+  rung 4 (per-task, destructive): `restart_from_stage` — wipes per-goal artifacts
+    as collateral. Reach for it ONLY after exhausting prior rungs on the same
+    failure mode.
 
 ## Plan closure during execution
 
@@ -389,6 +400,11 @@ wastes budget and clouds the trace.
 
 - **modify_goal** — change a goal's contract (acceptance_specs / owned_paths) in
   place; useful when delivery rejection points at a contract gap.
+
+- **accept_build** — accept a missing-terminal build's worktree contribution as the
+  build's terminal report when actual_changed_files matches the build agent's prose
+  summary. Per-goal escape hatch for the LLM-forgot-the-tool-call failure mode; see
+  the `accept_build` tool description for the host-validated invariants.
 
 - **cancel_task / retry_task / inject_operator_message / steer_subagent** — operator-message controls.
   Use when the user asks to stop, continue with new guidance, or resume a stopped task.
@@ -556,11 +572,13 @@ clearly confined to one goal's internals.
      third time.
   7. Requirements themselves are wrong (user intent misread, spec incoherent) →
      **restart_from_stage('requirements')**.
-  8. Hallucination at the upstream stage (architecture_review flagged ungrounded input, OR
-     rejection cites entities the user never named, OR design specs reference colours
-     / dimensions the design-analyst could not have measured) →
-     **restart_from_stage('design_analysis'|'requirements')**. Do NOT edit goals when
-     the upstream input is the broken layer.
+  8. Hallucination at the upstream stage (architecture_review flagged ungrounded
+     input, OR rejection cites entities the user never named, OR design specs
+     reference colours / dimensions the design-analyst could not have measured) →
+     re-enter `architect` with the rejection feedback as evidence first. Escalate
+     to `restart_from_stage('design_analysis'|'requirements')` only after architect
+     re-entry produced no convergence and you can cite which architect-layer output
+     remains broken.
   9. Shared-state obstacles. When the same failure reproduces across multiple goals,
      or a retry regenerates the same conflict every time, or the failure description
      points to a file/resource none of the goals' contracts own, the root cause is in
