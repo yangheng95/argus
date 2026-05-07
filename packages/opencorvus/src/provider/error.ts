@@ -37,6 +37,22 @@ export namespace ProviderError {
     "max_tokens_exceeded",
   ])
 
+  const QUOTA_EXHAUSTED_CODES = new Set([
+    "insufficient_quota",
+    "quota_exceeded",
+    "usage_quota_exceeded",
+    "billing_hard_limit_reached",
+    "credits_exhausted",
+  ])
+
+  const QUOTA_EXHAUSTED_PATTERNS = [
+    /usage allocated quota exceeded/i,
+    /insufficient quota/i,
+    /quota exceeded/i,
+    /credit balance/i,
+    /billing.*limit/i,
+  ]
+
   function isOpenAiErrorRetryable(e: APICallError) {
     const status = e.statusCode
     if (!status) return e.isRetryable
@@ -81,6 +97,36 @@ export namespace ProviderError {
       if (message && isOverflow(message)) return message
     }
     return undefined
+  }
+
+  export function quotaExhaustedSignal(input: {
+    statusCode?: number
+    responseBody?: string
+    message?: string
+  }): string | undefined {
+    if (input.statusCode !== 429) return undefined
+
+    const body = json(input.responseBody)
+    const root = errorObject(body)
+    const nested = root ? errorObject(root.error) : undefined
+    const sources = [nested, root].filter((source): source is Record<string, unknown> => !!source)
+    for (const source of sources) {
+      const code = stringValue(source.code)?.toLowerCase()
+      const type = stringValue(source.type)?.toLowerCase()
+      if ((code && QUOTA_EXHAUSTED_CODES.has(code)) || (type && QUOTA_EXHAUSTED_CODES.has(type))) {
+        return stringValue(source.message) ?? input.message ?? "Provider quota exhausted."
+      }
+    }
+
+    const messages = [
+      input.message,
+      ...sources.flatMap((source) => [
+        stringValue(source.message),
+        stringValue(source.error),
+      ]),
+    ].filter((value): value is string => !!value)
+    const matched = messages.find((value) => QUOTA_EXHAUSTED_PATTERNS.some((pattern) => pattern.test(value)))
+    return matched
   }
 
   function message(e: APICallError) {
@@ -210,6 +256,11 @@ export namespace ProviderError {
     }
 
     const m = message(input.error)
+    const quota = quotaExhaustedSignal({
+      statusCode: input.error.statusCode,
+      responseBody: input.error.responseBody,
+      message: m,
+    })
     if (isOverflow(m)) {
       return {
         type: "context_overflow",
@@ -223,9 +274,11 @@ export namespace ProviderError {
       type: "api_error",
       message: m,
       statusCode: input.error.statusCode,
-      isRetryable: input.providerID.startsWith("openai")
-        ? isOpenAiErrorRetryable(input.error)
-        : input.error.isRetryable,
+      isRetryable: quota
+        ? false
+        : (input.providerID.startsWith("openai")
+            ? isOpenAiErrorRetryable(input.error)
+            : input.error.isRetryable),
       responseHeaders: input.error.responseHeaders,
       responseBody: input.error.responseBody,
       metadata,

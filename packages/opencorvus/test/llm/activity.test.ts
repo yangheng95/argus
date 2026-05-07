@@ -131,12 +131,12 @@ test("rate_limit retries up to maxRetries then fails with cls=rate_limit", async
       async () => {
         calls++
         throw new APICallError({
-          message: "Provider returned HTTP 429: usage allocated quota exceeded.",
+          message: "Provider returned HTTP 429: too many requests.",
           url: "https://example/test",
           requestBodyValues: undefined,
           statusCode: 429,
-          responseHeaders: {},
-          responseBody: '{"error":"quota exceeded"}',
+          responseHeaders: { "retry-after": "1" },
+          responseBody: '{"error":{"message":"too many requests"}}',
         })
       },
       sink,
@@ -151,6 +151,37 @@ test("rate_limit retries up to maxRetries then fails with cls=rate_limit", async
   const term = events.find((e) => e.type === "terminal") as Extract<LLMActivityEvent, { type: "terminal" }>
   expect(term.outcome).toBe("failed")
   expect(term.cls).toBe("rate_limit")
+})
+
+test("quota-exhausted 429 does not retry", async () => {
+  const { events, sink } = record()
+  let calls = 0
+  await expect(
+    withLLMActivity(
+      CTX,
+      fastPolicy({ maxRetries: { default: 2, rate_limit: 2 } }),
+      new AbortController().signal,
+      async () => {
+        calls++
+        throw new APICallError({
+          message:
+            "Provider alibaba-coding-plan-cn returned HTTP 429: usage allocated quota exceeded. please try again later.",
+          url: "https://coding.dashscope.aliyuncs.com/v1/chat/completions",
+          requestBodyValues: undefined,
+          statusCode: 429,
+          responseHeaders: {},
+          responseBody:
+            '{"error":{"message":"usage allocated quota exceeded. please try again later."}}',
+        })
+      },
+      sink,
+    ),
+  ).rejects.toBeInstanceOf(LLMActivityError)
+  expect(calls).toBe(1)
+  expect(events.filter((e) => e.type === "retry").length).toBe(0)
+  const term = events.find((e) => e.type === "terminal") as Extract<LLMActivityEvent, { type: "terminal" }>
+  expect(term.outcome).toBe("failed")
+  expect(term.cls).toBe("quota_exhausted")
 })
 
 test("rate_limit succeeds after some retries", async () => {
