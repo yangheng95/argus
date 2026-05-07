@@ -31,7 +31,7 @@ import { $ } from "bun"
 import { git as runGit } from "@/util/git"
 import { tool, type ToolSet } from "ai"
 import { Log } from "@/util/log"
-import { runAgentSession } from "@/agent/runner"
+import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { SessionStatus } from "@/session/status"
@@ -106,6 +106,16 @@ export namespace BuildAgent {
       objective: string
       commit_ref?: string
     }>
+    /** First-class retry guidance from the orchestrator LLM for this
+     *  specific attempt (passed via the `request` field on the `build`
+     *  tool, which used to overwrite `target.objective` until the spec
+     *  build-missing-terminal-signal-restore-2026-05-07.md §5.2 split).
+     *  Distinct from retryFeedback: this is the current turn's direct
+     *  instruction; retryFeedback is the auto-aggregated historical
+     *  summary from decision_log phase=retry entries. When both exist,
+     *  retryGuidance renders first because the orchestrator's just-now
+     *  decision should be honoured before historical context. */
+    retryGuidance?: string
     /** Pre-rendered "Prior Attempt Failed" section from the decision log's
      *  retry entries. Empty / undefined on the first attempt. The caller
      *  composes the markdown so this agent doesn't need DB access. */
@@ -674,6 +684,27 @@ export namespace BuildAgent {
         // cross-checks them and decides if the report is honest. CLAUDE.md
         // rule 13. Spec architecture-rework-loosening-plan-2026-05-06.md (B6).
 
+      } catch (err) {
+        // B8 compliance: when the mirrorcode build session ends without
+        // calling report_build_result, runAgentSession throws an
+        // AgentRunError carrying Message.TerminalToolMissingError as
+        // cause. Convert to a typed BuildAgentContractError so the
+        // orchestrator's catch path (orchestrator/tools.ts) can recognise
+        // it and write a phase=retry decision_log entry with the correct
+        // failure-mode-specific guidance — instead of letting the LLM
+        // mis-route through modify_goal and pollute the retry channel
+        // with a generic "contract changed, re-read acceptance_specs"
+        // template (root cause of tsk_e0033e523001flSn0onlHh4Urh's 5x
+        // identical-prompt failure loop). Other AgentRunError shapes
+        // (provider 4xx/5xx, abort, schema rejection) re-throw unchanged
+        // — they have their own orchestrator-side handling. Spec
+        // build-missing-terminal-signal-restore-2026-05-07.md §5.1.
+        const contractErr = convertMissingTerminalToolError(err, {
+          sessionID: out?.session?.id,
+          lastMergeBackOutcome: lastMergeBackOutcome ?? null,
+        })
+        if (contractErr) throw contractErr
+        throw err
       } finally {
         // Managed worktrees always preserve until the orchestrator cleans
         // them up (rule 22 — orchestrator owns cleanup; build agent does
@@ -693,31 +724,16 @@ export namespace BuildAgent {
       }
 
       if (!parsed || !parsed.success) {
-        // The build session is contractually obligated to call
-        // report_build_result with a schema-valid payload. When it doesn't,
-        // the orchestrator gets a typed missing_terminal_report so the next
-        // tool result is still well-formed (B8: merge_back_blocked is no
-        // longer a separate throw — the host doesn't enforce
-        // merge-before-passed; the orchestrator LLM reads the merge_back
-        // facts in the build tool result and decides). Spec
-        // architecture-rework-loosening-plan-2026-05-06.md (B8).
-        if (executor === "mirrorcode") {
-          throw new BuildAgentContractError(
-            "missing_terminal_report",
-            {
-              sessionID: out?.session?.id,
-              parseError: parsed?.error?.message,
-              lastMergeBackOutcome,
-            },
-            `Build agent terminated without a valid report_build_result tool call: ${parsed?.error?.message ?? "(no parsed output)"}. ` +
-              `The retained goal worktree is diagnostic evidence under .opencorvus/worktrees; the orchestrator LLM reads the build tool's merge_back / actual_changed_files facts and decides whether to retry, modify_goal, or fail_task.`,
-          )
-        }
         // External executors (codex / claude-code) host-synthesise the
         // BuildResult after the provider finishes; if the structured
         // output fails BuildResultSchema validation, that's a
         // provider-side bug — keep the generic Error throw so the
         // orchestrator's existing infra-error rethrow path surfaces it.
+        // The mirrorcode missing-terminal branch was previously here but
+        // was unreachable: runAgentSession throws AgentRunError before
+        // parsed is computed, so control never reached this block. The
+        // mirrorcode signal now flows through the catch block above.
+        // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
         throw new Error(
           `build agent: external executor structured output did not match BuildResultSchema: ${parsed?.error?.message ?? "(no parsed output)"}`,
         )
@@ -1054,6 +1070,52 @@ function inputResponse(
 function singleLineText(value: string, limit = 220): string {
   const text = value.replace(/\s+/g, " ").trim()
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
+}
+
+/**
+ * Recognise an `AgentRunError` whose `cause` is a `Message.TerminalToolMissingError`
+ * and convert it to a typed `BuildAgentContractError("missing_terminal_report")`
+ * carrying a recovery hint that names the actual failure mode.
+ *
+ * Returns null when the error is not a missing-terminal failure — the caller
+ * MUST re-throw the original error in that case (provider 4xx/5xx, abort,
+ * schema rejection all have their own orchestrator-side handling).
+ *
+ * The recovery hint deliberately tells the next attempt:
+ *   - read what's already in the worktree (prior attempts wrote files)
+ *   - verify per acceptance_specs
+ *   - complete via the standard terminal report tool, not turn-final prose
+ *
+ * This is the failure-mode-specific replacement for the generic
+ * `modify_goal`-style "contract changed, re-read acceptance_specs" template
+ * that orchestrator LLMs were defaulting to before this fix — that template
+ * is correct for contract-change retries but misleads the next build agent
+ * when the actual failure was missing the terminal tool call. Spec
+ * build-missing-terminal-signal-restore-2026-05-07.md §5.1.
+ */
+export function convertMissingTerminalToolError(
+  err: unknown,
+  diagnostics: { sessionID?: string; lastMergeBackOutcome?: string | null },
+): BuildAgentContractError | null {
+  if (!(err instanceof AgentRunError)) return null
+  const cause = err.cause
+  if (!Message.TerminalToolMissingError.isInstance(cause as Error | undefined)) return null
+  return new BuildAgentContractError(
+    "missing_terminal_report",
+    {
+      sessionID: diagnostics.sessionID,
+      lastMergeBackOutcome: diagnostics.lastMergeBackOutcome ?? null,
+    },
+    // Recovery hint deliberately describes the failure FACT and points
+    // back at the standard build-agent contract instead of restating
+    // prompt instructions inline (rule 8 single source — the protocol
+    // text lives in BUILD_CORE; visible-brief hygiene forbids worker
+    // agent source files from duplicating it).
+    "Previous build session ended with finish=stop without producing the terminal " +
+      "build report. Files already written to the goal worktree by prior attempt(s); " +
+      "this turn MUST read/glob what is there and complete the build per the " +
+      "standard build-agent contract (structured terminal report, not turn-final prose).",
+  )
 }
 
 export function externalToolProtocolErrorMessage(input: {
@@ -1964,6 +2026,12 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
+    if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
+      lines.push("## Retry Guidance From Orchestrator")
+      lines.push("")
+      lines.push(context.retryGuidance.trim())
+      lines.push("")
+    }
     if (context?.retryFeedback && context.retryFeedback.trim().length > 0) {
       lines.push(context.retryFeedback)
       lines.push("")
@@ -2011,6 +2079,12 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     return lines.join("\n")
   }
   const contextLines: string[] = []
+  if (context?.retryGuidance && context.retryGuidance.trim().length > 0) {
+    contextLines.push("## Retry Guidance From Orchestrator")
+    contextLines.push("")
+    contextLines.push(context.retryGuidance.trim())
+    contextLines.push("")
+  }
   if (context?.retryFeedback && context.retryFeedback.trim().length > 0) {
     contextLines.push("## Prior Attempt Failed — Read This Before Implementing")
     contextLines.push("")

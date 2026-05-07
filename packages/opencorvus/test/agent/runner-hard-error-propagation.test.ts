@@ -145,6 +145,51 @@ describe("buildHardErrorFromFinalMessage", () => {
     expect(result!.message).toContain("StructuredOutputError")
   })
 
+  test("TerminalToolMissingError stamped → nonRetryable=true (deterministic; retrying same prompt repeats failure)", () => {
+    // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
+    // build path currently uses single-shot runAgentSession so the
+    // nonRetryable flag is defensive (no with-retry classifier reads it
+    // today). Pinned here so a future migration to runAgentSessionWithRetry
+    // does not silently turn a deterministic missing-terminal failure into
+    // an N-times-burned-budget loop.
+    const err = new Message.TerminalToolMissingError({
+      message: "Model did not call terminal tool report_build_result before the turn ended (finish=stop)",
+      toolName: "report_build_result",
+      retries: 0,
+    })
+    const result = buildHardErrorFromFinalMessage({
+      kind: "build" as const,
+      agentName: "build",
+      finalMessage: { info: { role: "assistant", error: err } },
+    })
+    expect(result).not.toBeNull()
+    expect(result!.nonRetryable).toBe(true)
+    expect(result!.message).toContain("TerminalToolMissingError")
+    expect(result!.message).toContain("report_build_result")
+  })
+
+  test("TerminalToolMissingError → AgentRunError.cause is the original error object", () => {
+    // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
+    // build/agent.ts catch block recognises this failure mode by reading
+    // err.cause and instanceOf-checking against Message.TerminalToolMissingError.
+    // Without cause propagation, build/agent.ts would have to keyword-match
+    // the message string (rule 20 — forbidden). Keep the original object
+    // accessible.
+    const err = new Message.TerminalToolMissingError({
+      message: "missing report",
+      toolName: "report_build_result",
+      retries: 0,
+    })
+    const result = buildHardErrorFromFinalMessage({
+      kind: "build" as const,
+      agentName: "build",
+      finalMessage: { info: { role: "assistant", error: err } },
+    })
+    expect(result).not.toBeNull()
+    // ECMAScript ErrorOptions.cause flows through to Error.cause.
+    expect(Message.TerminalToolMissingError.isInstance(result!.cause as Error)).toBe(true)
+  })
+
   test("agentName appears in the error message for operator triage", () => {
     const apiError = {
       name: "APIError",

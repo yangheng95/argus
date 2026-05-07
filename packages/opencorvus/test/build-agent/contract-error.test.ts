@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { BuildAgentContractError, BuildResultSchema } from "../../src/build/types"
+import { convertMissingTerminalToolError } from "../../src/build/agent"
+import { AgentRunError } from "../../src/agent/runner"
+import { Message } from "../../src/session/message"
 
 /**
  * Regression for specs/scheduler-fix-plan-2026-04-30.md P2 (commit
@@ -114,5 +117,93 @@ describe("BuildAgentContractError", () => {
     }
     const parsed = BuildResultSchema.safeParse(stray)
     expect(parsed.success).toBe(false)
+  })
+})
+
+/**
+ * Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1 +
+ * codex review BLOCKING B1: `BuildAgentContractError` must have ONE
+ * throw site (rule 8 single source). The original throw at
+ * build/agent.ts:704-714 was unreachable dead code (runAgentSession
+ * threw AgentRunError before parsed was computed). The new throw site
+ * is the catch block on the runAgentSession try (line 588 region):
+ * recognise AgentRunError carrying TerminalToolMissingError as cause
+ * → convert to BuildAgentContractError. Other AgentRunError types
+ * (provider errors, abort, etc.) re-throw unchanged.
+ */
+describe("convertMissingTerminalToolError", () => {
+  test("AgentRunError carrying TerminalToolMissingError → BuildAgentContractError", () => {
+    const innerErr = new Message.TerminalToolMissingError({
+      message: "Model did not call terminal tool report_build_result before the turn ended (finish=stop)",
+      toolName: "report_build_result",
+      retries: 0,
+    })
+    const wrapped = new AgentRunError("build", `LLM error during build: TerminalToolMissingError: ${innerErr.message}`, {
+      cause: innerErr,
+    })
+    const converted = convertMissingTerminalToolError(wrapped, {
+      sessionID: "ses_abc123",
+      lastMergeBackOutcome: null,
+    })
+    expect(converted).not.toBeNull()
+    expect(converted).toBeInstanceOf(BuildAgentContractError)
+    expect(converted!.code).toBe("missing_terminal_report")
+    expect(converted!.diagnostics.sessionID).toBe("ses_abc123")
+    expect(converted!.diagnostics.lastMergeBackOutcome).toBeNull()
+    // The recovery hint MUST describe the missing-terminal failure mode
+    // and direct the next attempt back to the standard build-agent
+    // contract (terminal report tool, not turn-final prose). It must
+    // NOT carry the modify_goal-based generic feedback the orchestrator
+    // LLM defaulted to before the fix ("re-read acceptance_specs"),
+    // and must NOT inline prompt protocol text verbatim
+    // (visible-brief-hygiene constraint, rule 8 single source).
+    expect(converted!.message).toMatch(/terminal build report/)
+    expect(converted!.message).toMatch(/standard build-agent contract/)
+    expect(converted!.message).toMatch(/structured terminal report/)
+    expect(converted!.message).toMatch(/not turn-final prose/)
+    expect(converted!.message).not.toMatch(/re-read acceptance_specs/)
+    // Hygiene: the recovery hint must not duplicate forbidden visible
+    // brief snippets (test/agent/visible-brief-hygiene.test.ts).
+    expect(converted!.message).not.toMatch(/call report_build_result exactly once/)
+  })
+
+  test("AgentRunError without cause (e.g. plain provider error) → null (re-throw unchanged)", () => {
+    const wrapped = new AgentRunError("build", "LLM error during build: APIError: stream interrupted")
+    const converted = convertMissingTerminalToolError(wrapped, { sessionID: "ses_x" })
+    expect(converted).toBeNull()
+  })
+
+  test("AgentRunError with non-terminal-missing cause → null", () => {
+    const innerErr = new Message.AbortedError({ message: "user pressed stop" })
+    const wrapped = new AgentRunError("build", "aborted", { cause: innerErr })
+    const converted = convertMissingTerminalToolError(wrapped, { sessionID: "ses_x" })
+    expect(converted).toBeNull()
+  })
+
+  test("non-AgentRunError → null", () => {
+    const plain = new Error("worktree create failed")
+    const converted = convertMissingTerminalToolError(plain, { sessionID: "ses_x" })
+    expect(converted).toBeNull()
+  })
+
+  test("non-Error value (defensive) → null", () => {
+    const converted = convertMissingTerminalToolError("string thrown", { sessionID: "ses_x" })
+    expect(converted).toBeNull()
+  })
+
+  test("forwards lastMergeBackOutcome from caller (so the orchestrator sees the merge state alongside the contract violation)", () => {
+    const innerErr = new Message.TerminalToolMissingError({
+      message: "missing report",
+      toolName: "report_build_result",
+      retries: 0,
+    })
+    const wrapped = new AgentRunError("build", "LLM error during build: TerminalToolMissingError", {
+      cause: innerErr,
+    })
+    const converted = convertMissingTerminalToolError(wrapped, {
+      sessionID: "ses_y",
+      lastMergeBackOutcome: "conflict on src/components/MessageList.tsx",
+    })
+    expect(converted!.diagnostics.lastMergeBackOutcome).toBe("conflict on src/components/MessageList.tsx")
   })
 })
