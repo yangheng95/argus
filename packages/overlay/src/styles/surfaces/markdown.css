@@ -389,7 +389,7 @@
 .md-code-lang {
   font-size: var(--ui-font-control);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
   color: var(--text-muted);
   padding: 0 calc(4px * var(--ui-scale));

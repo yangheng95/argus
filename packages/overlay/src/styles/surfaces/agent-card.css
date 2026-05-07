@@ -60,7 +60,7 @@
 }
 
 .agent-card-header:hover {
-  background: color-mix(in srgb, var(--agent-bg) 70%, white 6%);
+  background: color-mix(in srgb, var(--agent-bg) 70%, var(--ui-highlight-tone));
   border-color: var(--agent-accent);
 }
 
@@ -134,8 +134,8 @@
 .agent-card-body--preview {
   max-height: calc(68px * var(--ui-scale));
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, currentColor 40%, transparent 100%);
+  mask-image: linear-gradient(to bottom, currentColor 40%, transparent 100%);
 }
 
 .executor-tool-entry {

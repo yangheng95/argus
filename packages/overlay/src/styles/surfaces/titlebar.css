@@ -125,7 +125,7 @@
   font-weight: var(--ui-font-weight-medium);
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text);
   cursor: pointer;
   user-select: none;
@@ -168,7 +168,7 @@
   text-transform: none;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
   .titlebar {
     display: flex;
     align-items: flex-start;
@@ -198,7 +198,7 @@
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 520px) { /* breakpoint: --ui-breakpoint-sm */
   .brand-guide-copyblock {
     display: none;
   }
@@ -317,7 +317,7 @@
   color: var(--text-strong);
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   line-height: 1;
 }
 
@@ -389,7 +389,7 @@
 .brand-guide-kicker {
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-medium);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -403,7 +403,7 @@
   font-size: var(--ui-font-meta);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .brand-guide-copy {
@@ -556,7 +556,7 @@
   -webkit-app-region: no-drag;
 }
 
-@media (max-width: calc(520px * var(--ui-scale))) {
+@media (max-width: 520px) { /* breakpoint: --ui-breakpoint-sm */
   .titlebar-menubar-panel {
     position: fixed;
     top: calc(var(--ui-titlebar-height) + calc(8px * var(--ui-scale)));
@@ -672,7 +672,7 @@
   padding: calc(4px * var(--ui-scale));
 }
 
-@media (max-width: 760px) {
+@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
   .titlebar-menubar {
     flex: 1 1 auto;
     min-width: 0;
@@ -850,7 +850,7 @@
   color: var(--text-muted);
 }
 
-@media (max-width: 32.5em) {
+@media (max-width: 520px) { /* breakpoint: --ui-breakpoint-sm */
   .titlebar-status-cluster .oc-button[data-ui="titlebar-status-icon"] {
     display: none;
   }
@@ -877,7 +877,7 @@
    max-width 760px, the titlebar reflows to two stacked rows.
    ───────────────────────────────────────────────────────────── */
 
-@media (max-width: 760px) {
+@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
   .titlebar-left,
   .titlebar-utility {
     flex-basis: 100%;

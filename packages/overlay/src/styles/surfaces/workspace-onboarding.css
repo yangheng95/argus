@@ -26,7 +26,7 @@
   font-size: var(--ui-font-micro);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--accent);
 }
 
@@ -250,7 +250,7 @@
   color: var(--text-muted);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) { /* breakpoint: --ui-breakpoint-lg */
   .workspace-onboarding-actions {
     grid-template-columns: 1fr;
   }

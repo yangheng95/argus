@@ -24,7 +24,7 @@
   background: transparent;
   box-shadow: none;
   line-height: 1.3;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   font-weight: var(--ui-font-weight-strong);
   flex-shrink: 0;
   padding-left: calc(10px * var(--ui-scale));
@@ -44,7 +44,7 @@
   background: transparent;
   box-shadow: none;
   line-height: 1.3;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   font-weight: var(--ui-font-weight-strong);
   flex-shrink: 0;
   font-size: var(--ui-font-tiny);

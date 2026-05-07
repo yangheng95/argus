@@ -40,7 +40,7 @@
   align-self: center;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px) { /* breakpoint: --ui-breakpoint-lg */
   .chat-scroll > .card,
   .chat-scroll > .interaction-card,
   .chat-scroll > .card[data-kind="message"][data-role="user"],
@@ -155,7 +155,7 @@
 .chat-task-status .status-label {
   font-size: var(--ui-font-meta);
   text-transform: none;
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   line-height: 1;
 }
 
@@ -825,7 +825,7 @@
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .elapsed {
@@ -861,7 +861,7 @@
   color: var(--text-soft);
   font-size: var(--ui-font-meta);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.03em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   cursor: pointer;
   user-select: none;
 }
@@ -932,7 +932,7 @@
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .recent-dir-panel-meta {
@@ -1157,7 +1157,7 @@
    user / system message bubbles stretch full width.
    ───────────────────────────────────────────────────────────── */
 
-@media (max-width: 760px) {
+@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
   .chat-header {
     grid-template-columns: minmax(0, 1fr) auto;
   }

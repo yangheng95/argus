@@ -80,7 +80,7 @@
   font-size: clamp(calc(18px * var(--ui-scale)), calc(19px * var(--ui-scale)), calc(22px * var(--ui-scale)));
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   line-height: 1.2;
   margin: 0;
 }
