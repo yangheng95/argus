@@ -24,6 +24,7 @@ import {
   EngineArtifactTable,
   EngineExecutorSessionTable,
   EngineGoalTable,
+  EnginePlanNodeTable,
   EnginePlanVersionTable,
   EngineRequirementTable,
   EngineTaskTable,
@@ -587,26 +588,43 @@ export function resetTaskGoalsToPending(input: {
 }
 
 /**
- * Mark every active plan_version for a task as superseded. Single-source
- * enforcement of the "at most one active plan per task" invariant — the
- * read side (findActivePlanForTask) returns ORDER BY version DESC LIMIT 1,
- * which silently picks an arbitrary row if two share the same version, so
- * any code path that promotes a fresh plan must run this first to retire
+ * Mark every active plan_version for a task as superseded and discard the
+ * plan_node rows that belonged to them. Single-source enforcement of the
+ * "at most one active plan per task" invariant — the read side
+ * (findActivePlanForTask) returns ORDER BY version DESC LIMIT 1, which
+ * silently picks an arbitrary row if two share the same version, so any
+ * code path that promotes a fresh plan must run this first to retire
  * predecessors atomically.
  *
- * Intended for use inside an existing Database.transaction so the supersede
- * + insert lands as one unit. Returns the number of rows flipped.
+ * plan_node FK to plan_version is ON DELETE CASCADE, but we keep retired
+ * plan_version rows for history (status flip rather than physical DELETE),
+ * so the cascade never fires. Without an explicit DELETE the orphan
+ * plan_node rows survive supersede and the board's per-goal lookups
+ * (which only filter by goal_id, not plan) end up rendering every
+ * acceptance spec twice.
+ *
+ * Intended for use inside an existing Database.transaction so the
+ * supersede + plan_node delete + new plan insert land as one unit.
  */
 export function supersedePriorActivePlansForTask(
   db: Database.TxOrDb,
   input: { taskID: string; now: number },
 ): void {
-  db.update(EnginePlanVersionTable)
-    .set({ status: "superseded", time_updated: input.now })
+  const targets = db.select({ id: EnginePlanVersionTable.id })
+    .from(EnginePlanVersionTable)
     .where(and(
       eq(EnginePlanVersionTable.task_id, input.taskID),
       eq(EnginePlanVersionTable.status, "active"),
     ))
+    .all()
+  if (targets.length === 0) return
+  const ids = targets.map((t) => t.id)
+  db.delete(EnginePlanNodeTable)
+    .where(inArray(EnginePlanNodeTable.plan_version_id, ids))
+    .run()
+  db.update(EnginePlanVersionTable)
+    .set({ status: "superseded", time_updated: input.now })
+    .where(inArray(EnginePlanVersionTable.id, ids))
     .run()
 }
 

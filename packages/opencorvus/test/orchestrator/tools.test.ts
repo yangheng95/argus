@@ -2265,6 +2265,19 @@ describe("orchestrator tools", () => {
         .set({ plan_version_id: priorPlanID })
         .where(eq(EngineGoalTable.id, goalID))
         .run()
+      db.insert(EnginePlanNodeTable).values({
+        id: `pln_node_prior_${stamp}`,
+        task_id: taskID,
+        plan_version_id: priorPlanID,
+        kind: "goal",
+        goal_id: goalID,
+        title: "Single goal (prior)",
+        brief: "prior brief",
+        order_index: 0,
+        metadata: {},
+        time_created: now - 1000,
+        time_updated: now - 1000,
+      }).run()
     })
 
     await Instance.provide({
@@ -2305,6 +2318,21 @@ describe("orchestrator tools", () => {
         )
         expect(planNodes).toHaveLength(1)
         expect(planNodes[0].goal_id).toBe(goalID)
+
+        // Prior plan's plan_node rows must be cleared so the board's per-goal
+        // plan_node lookup (which only filters by goal_id) does not double-render.
+        const priorNodes = Database.use((db) =>
+          db.select().from(EnginePlanNodeTable)
+            .where(eq(EnginePlanNodeTable.plan_version_id, priorPlanID))
+            .all(),
+        )
+        expect(priorNodes).toHaveLength(0)
+        const allNodesForGoal = Database.use((db) =>
+          db.select().from(EnginePlanNodeTable)
+            .where(eq(EnginePlanNodeTable.goal_id, goalID))
+            .all(),
+        )
+        expect(allNodesForGoal).toHaveLength(1)
       },
     })
   })
@@ -2359,6 +2387,34 @@ describe("orchestrator tools", () => {
         .set({ plan_version_id: newerPlanID })
         .where(eq(EngineGoalTable.id, goalID))
         .run()
+      // Seed plan_node rows on BOTH dirty active plans so we can prove
+      // every prior plan_node gets cleaned up, not just the most recent one.
+      db.insert(EnginePlanNodeTable).values({
+        id: `pln_node_older_${stamp}`,
+        task_id: taskID,
+        plan_version_id: olderPlanID,
+        kind: "goal",
+        goal_id: goalID,
+        title: "Single goal (older)",
+        brief: "older brief",
+        order_index: 0,
+        metadata: {},
+        time_created: now - 2000,
+        time_updated: now - 2000,
+      }).run()
+      db.insert(EnginePlanNodeTable).values({
+        id: `pln_node_newer_${stamp}`,
+        task_id: taskID,
+        plan_version_id: newerPlanID,
+        kind: "goal",
+        goal_id: goalID,
+        title: "Single goal (newer)",
+        brief: "newer brief",
+        order_index: 0,
+        metadata: {},
+        time_created: now - 1000,
+        time_updated: now - 1000,
+      }).run()
     })
 
     await Instance.provide({
@@ -2384,6 +2440,17 @@ describe("orchestrator tools", () => {
         expect(active[0].id).not.toBe(olderPlanID)
         expect(active[0].id).not.toBe(newerPlanID)
         expect(supersededIDs).toEqual([olderPlanID, newerPlanID].sort())
+
+        // No plan_node row should remain pointing at either retired plan,
+        // and the board's per-goal lookup must surface exactly one node
+        // (the new plan's), reproducing the bug-fix scenario.
+        const nodesByGoal = Database.use((db) =>
+          db.select().from(EnginePlanNodeTable)
+            .where(eq(EnginePlanNodeTable.goal_id, goalID))
+            .all(),
+        )
+        expect(nodesByGoal).toHaveLength(1)
+        expect(nodesByGoal[0].plan_version_id).toBe(active[0].id)
       },
     })
   })
@@ -2434,6 +2501,32 @@ describe("orchestrator tools", () => {
         time_created: now - 1000,
         time_updated: now - 1000,
       }).run()
+      db.insert(EnginePlanNodeTable).values({
+        id: `pln_node_restart_older_${stamp}`,
+        task_id: taskID,
+        plan_version_id: olderPlanID,
+        kind: "goal",
+        goal_id: goalID,
+        title: "Single goal (older)",
+        brief: "older brief",
+        order_index: 0,
+        metadata: {},
+        time_created: now - 2000,
+        time_updated: now - 2000,
+      }).run()
+      db.insert(EnginePlanNodeTable).values({
+        id: `pln_node_restart_newer_${stamp}`,
+        task_id: taskID,
+        plan_version_id: newerPlanID,
+        kind: "goal",
+        goal_id: goalID,
+        title: "Single goal (newer)",
+        brief: "newer brief",
+        order_index: 0,
+        metadata: {},
+        time_created: now - 1000,
+        time_updated: now - 1000,
+      }).run()
     })
 
     await Instance.provide({
@@ -2461,6 +2554,15 @@ describe("orchestrator tools", () => {
         const supersededIDs = plans.filter((p) => p.status === "superseded").map((p) => p.id).sort()
         expect(active).toHaveLength(0)
         expect(supersededIDs).toEqual([olderPlanID, newerPlanID].sort())
+
+        // Both retired plans' plan_node rows must be gone — restart_from_stage
+        // routes through the same supersede helper.
+        const remaining = Database.use((db) =>
+          db.select().from(EnginePlanNodeTable)
+            .where(eq(EnginePlanNodeTable.task_id, taskID))
+            .all(),
+        )
+        expect(remaining).toHaveLength(0)
       },
     })
   })
