@@ -44,12 +44,14 @@ import {
   findActiveSpecForTask,
   findDeliveryByRun,
   findEvaluationByRun,
+  findGoal,
   findGoalRun,
   findLatestDeliveryVerdictArtifact,
   findLatestTipGoalRun,
   findPlan,
   getGoalRetryCount,
   listGoals,
+  listGoalsForPlan,
   requireRun,
   requireTask,
   type TaskRow,
@@ -671,6 +673,84 @@ export function createOrchestratorTools(input: {
         "and has not reached a rejected delivery cycle; continue through requirements, " +
         "architect, and per-goal build({ goalID }) instead.",
     }
+  }
+
+  function activeGoalChoices(limit = 16) {
+    const activePlan = findActivePlanForTask(taskID)
+    if (!activePlan) return ""
+    const goals = listGoalsForPlan(activePlan)
+    return goals
+      .slice(0, limit)
+      .map((goal, index) => `G${index + 1}=${goal.id} (${goal.title})`)
+      .join("; ")
+  }
+
+  function parseGoalOrdinal(reference: string): number | undefined {
+    const match = reference.trim().match(/^(?:#|g)?(\d+)$/i)
+    if (!match) return undefined
+    const value = Number.parseInt(match[1]!, 10)
+    return Number.isSafeInteger(value) && value > 0 ? value : undefined
+  }
+
+  function resolveGoalReferenceForBuild(reference: string): { ok: true; goalID: string } | { ok: false; message: string } {
+    const raw = reference.trim()
+    if (!raw) {
+      return {
+        ok: false,
+        message: "build: empty goalID. Use a durable engine_goal.id or an active-plan ordinal such as G12.",
+      }
+    }
+
+    const exact = findGoal(raw)
+    if (exact) {
+      if (exact.task_id !== taskID) {
+        return {
+          ok: false,
+          message:
+            `build: goal reference "${raw}" belongs to another task. ` +
+            `Re-read this task's collaboration_closure and use one of: ${activeGoalChoices() || "(no active goals)"}.`,
+        }
+      }
+      return { ok: true, goalID: exact.id }
+    }
+
+    const ordinal = parseGoalOrdinal(raw)
+    if (ordinal !== undefined) {
+      const activePlan = findActivePlanForTask(taskID)
+      if (!activePlan) {
+        return {
+          ok: false,
+          message:
+            `build: ordinal goal reference "${raw}" requires an active plan. ` +
+            `Use a durable engine_goal.id from collaboration_closure instead.`,
+        }
+      }
+      const goals = listGoalsForPlan(activePlan)
+      const goal = goals[ordinal - 1]
+      if (!goal) {
+        return {
+          ok: false,
+          message:
+            `build: ordinal goal reference "${raw}" is outside the active plan range ` +
+            `(1-${goals.length}). Use one of: ${activeGoalChoices() || "(no active goals)"}.`,
+        }
+      }
+      return { ok: true, goalID: goal.id }
+    }
+
+    return {
+      ok: false,
+      message:
+        `build: goal reference "${raw}" did not match a durable engine_goal.id or active-plan ordinal. ` +
+        `Re-read collaboration_closure and use one of: ${activeGoalChoices() || "(no active goals)"}.`,
+    }
+  }
+
+  function missingResolvedGoalMessage(goalID: string) {
+    return (
+      `build: resolved goal ${goalID} no longer exists in this task's active goal graph. ` +
+      `Re-read collaboration_closure and dispatch a current goal id; do not re-run architect unless the goal contract itself is wrong.`
+    )
   }
 
   async function switchExplicitBuildTaskToDirectWorkflow(attachedGoalID?: string): Promise<void> {
@@ -4467,7 +4547,10 @@ export function createOrchestratorTools(input: {
         // passed — this nests the build card under the originating goal in the
         // overlay instead of floating at the conversation root.
         const inheritedGoalID = sessionGoalID(input.agentSessionID)
-        const attachedGoalID = goalID || inheritedGoalID
+        const goalReference = goalID || inheritedGoalID
+        const resolvedGoalReference = goalReference ? resolveGoalReferenceForBuild(goalReference) : undefined
+        if (resolvedGoalReference && !resolvedGoalReference.ok) return resolvedGoalReference.message
+        const attachedGoalID = resolvedGoalReference?.goalID
         const isTaskLevelBuild = !attachedGoalID
 
         if (isTaskLevelBuild) {
@@ -4514,7 +4597,7 @@ export function createOrchestratorTools(input: {
           const goal = findGoal(attachedGoalID)
           if (!goal) {
             if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-            return `build: goal ${attachedGoalID} not found; register via architect first.`
+            return missingResolvedGoalMessage(attachedGoalID)
           }
           const activeSpec = findActiveSpecForTask(taskID)
           if (!activeSpec) {
@@ -4562,7 +4645,7 @@ export function createOrchestratorTools(input: {
             const goal = findGoal(attachedGoalID)
             if (!goal) {
               if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-              return `build: goal ${attachedGoalID} not found; register via architect first.`
+              return missingResolvedGoalMessage(attachedGoalID)
             }
             const activeSpec = findActiveSpecForTask(taskID)
             if (!activeSpec) {
