@@ -54,11 +54,21 @@ function firstBlockBody(text: string): string {
   throw new Error("unbalanced braces")
 }
 
-/** Pull every `--token-name: ...;` declaration name from a block body. */
+/** Pull every `--token-name: ...;` declaration name from a block body.
+ *
+ * `--ref-*` tokens are theme-scoped reference palette swatches
+ * (theme-vscode-passthrough-2026-05-07): each theme owns its own
+ * --ref-<theme>-* set (--ref-dark-*, --ref-light-*; vscode-dark uses
+ * --vscode-* injected by the webview instead). They are NOT meant to
+ * be symmetric across themes — only the public semantic surface API
+ * (--bg, --text, --accent, ...) is. Skip them here so the parity
+ * test compares the public contract, not the private palette. */
 function declaredTokens(blockBody: string): Set<string> {
   const out = new Set<string>()
   for (const m of blockBody.matchAll(/(--[a-z][a-z0-9-]*)\s*:/gi)) {
-    out.add(m[1]!)
+    const name = m[1]!
+    if (name.startsWith("--ref-")) continue
+    out.add(name)
   }
   return out
 }
@@ -108,6 +118,23 @@ describe("theme-architecture Step 0 — palette parity across themes", () => {
       throw new Error(
         `dark/vscode-dark asymmetry:\n` +
           (onlyInDark.length ? `  only in dark: ${onlyInDark.join(", ")}\n` : "") +
+          (onlyInVscode.length ? `  only in vscode-dark: ${onlyInVscode.join(", ")}\n` : ""),
+      )
+    }
+  })
+})
+
+describe("theme-architecture Step 0 — light↔vscode-dark symmetry", () => {
+  const lightTokens = declaredTokens(firstBlockBody(LIGHT))
+  const vscodeDarkTokens = declaredTokens(firstBlockBody(VSCODE_DARK))
+
+  test("light and vscode-dark declare the same token set", () => {
+    const onlyInLight = [...lightTokens].filter((t) => !vscodeDarkTokens.has(t)).sort()
+    const onlyInVscode = [...vscodeDarkTokens].filter((t) => !lightTokens.has(t)).sort()
+    if (onlyInLight.length || onlyInVscode.length) {
+      throw new Error(
+        `light/vscode-dark asymmetry:\n` +
+          (onlyInLight.length ? `  only in light: ${onlyInLight.join(", ")}\n` : "") +
           (onlyInVscode.length ? `  only in vscode-dark: ${onlyInVscode.join(", ")}\n` : ""),
       )
     }
