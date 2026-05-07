@@ -32,6 +32,7 @@ import {
 import {
   markDeliveryPublishing,
   finalizeDeliveryResult,
+  supersedePriorActivePlansForTask,
   updateGoalWorkspace,
   updateGoalRun,
   updateGoalRunExecutorSessionStatus,
@@ -625,6 +626,14 @@ export function createOrchestratorTools(input: {
       await import("@/engine/engine.sql")
 
     Database.transaction((db) => {
+      // Single-active-plan invariant: retire every prior active plan for this
+      // task before inserting the new one. Without this, restart_from_stage
+      // (executor) → second createExecutionRunRecord call would leave two rows
+      // with status='active' / version=1; findActivePlanForTask's
+      // `ORDER BY version DESC LIMIT 1` then returns whichever rowid wins the
+      // tie (typically the older row, whose goals were re-pointed to the new
+      // plan), and the board loads zero goals.
+      supersedePriorActivePlansForTask(db, { taskID, now })
       db.insert(EnginePlanVersionTable).values({
         id: planID,
         task_id: taskID,
@@ -1031,11 +1040,13 @@ export function createOrchestratorTools(input: {
         }
       }
 
-      if (plan.clearPlan && activePlanAtStart) {
-        db.update(EnginePlanVersionTable)
-          .set({ status: "superseded", time_updated: now })
-          .where(eq(EnginePlanVersionTable.id, activePlanAtStart.id))
-          .run()
+      if (plan.clearPlan) {
+        // Single-active-plan invariant: retire every active plan for this
+        // task, not just the row findActivePlanForTask returned. If a prior
+        // bug left multiple rows with status='active', narrowing supersede
+        // to one id would leave the others lingering and reproduce the
+        // empty-board symptom on the next read.
+        supersedePriorActivePlansForTask(db, { taskID, now })
       }
 
       if (plan.clearSpec && activeSpecAtStart) {

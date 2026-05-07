@@ -4,7 +4,7 @@ import path from "node:path"
 import { Database, and, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineArtifactTable, EngineGoalTable, EngineRequirementTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EnginePlanNodeTable, EnginePlanVersionTable, EngineRequirementTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { createDecisionLog } from "../../src/decision-log"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
@@ -14,7 +14,7 @@ import { SessionTable } from "../../src/session/session.sql"
 import { beginBuildAttempt, insertRequirements, recordIntegrityAttempt, startNewAttempt, updateGoalRun } from "../../src/engine/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { findActiveSpecForTask, findGoal, findGoalLatestWorkspace, findLatestIntegrityAttemptArtifact, findRequirements, listGoalRunsByGoal } from "../../src/engine/store"
+import { findActivePlanForTask, findActiveSpecForTask, findGoal, findGoalLatestWorkspace, findLatestIntegrityAttemptArtifact, findRequirements, listGoalRunsByGoal } from "../../src/engine/store"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { Filesystem } from "../../src/util/filesystem"
 
@@ -2216,6 +2216,251 @@ describe("orchestrator tools", () => {
         expect(await Filesystem.exists(tmp.path)).toBe(true)
         expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
         expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBe(tmp.path)
+      },
+    })
+  })
+
+  // Single-active-plan invariant: createExecutionRunRecord and
+  // restart_from_stage("plan") must each leave at most one engine_plan_version
+  // row with status='active' for any given task. The board.ts read path
+  // (findActivePlanForTask → ORDER BY version DESC LIMIT 1) silently picks
+  // an arbitrary row when several share the same version, so a violation
+  // surfaces as goals + goal_run cards disappearing from the overlay even
+  // though the data is intact in the DB.
+
+  test("createExecutionRunRecord supersedes the prior active plan", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_plan_invariant_${stamp}`
+    const taskID = `tsk_plan_invariant_${stamp}`
+    const goalID = `gol_plan_invariant_${stamp}`
+    const priorPlanID = `pln_prior_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID, taskID, goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Plan invariant project",
+      taskTitle: "Plan invariant task",
+      request: "Drive createExecutionRunRecord through prosecute and verify single active plan",
+      goalTitle: "Single goal",
+      goalSlug: "single-goal",
+      objective: "Provide a goal so prosecute reaches ensureDispatchableRunForSingleGoal",
+      now,
+    })
+    Database.use((db) => {
+      db.insert(EnginePlanVersionTable).values({
+        id: priorPlanID,
+        task_id: taskID,
+        spec_snapshot_id: `spec_${goalID}`,
+        version: 1,
+        status: "active",
+        summary: "prior active plan",
+        prompt: "prior",
+        metadata: {},
+        time_created: now - 1000,
+        time_updated: now - 1000,
+      }).run()
+      db.update(EngineGoalTable)
+        .set({ plan_version_id: priorPlanID })
+        .where(eq(EngineGoalTable.id, goalID))
+        .run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "plan invariant test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.prosecute.execute({}, {} as any)
+        expect(result).toContain("no delivery row to prosecute")
+
+        const plans = Database.use((db) =>
+          db.select().from(EnginePlanVersionTable)
+            .where(eq(EnginePlanVersionTable.task_id, taskID))
+            .all(),
+        )
+        const active = plans.filter((p) => p.status === "active")
+        const superseded = plans.filter((p) => p.status === "superseded")
+        expect(active).toHaveLength(1)
+        expect(superseded).toHaveLength(1)
+        expect(superseded[0].id).toBe(priorPlanID)
+
+        const livePlan = findActivePlanForTask(taskID)
+        expect(livePlan?.id).toBe(active[0].id)
+        expect(livePlan?.id).not.toBe(priorPlanID)
+
+        const goal = findGoal(goalID)
+        expect(goal?.plan_version_id).toBe(active[0].id)
+
+        const planNodes = Database.use((db) =>
+          db.select().from(EnginePlanNodeTable)
+            .where(eq(EnginePlanNodeTable.plan_version_id, active[0].id))
+            .all(),
+        )
+        expect(planNodes).toHaveLength(1)
+        expect(planNodes[0].goal_id).toBe(goalID)
+      },
+    })
+  })
+
+  test("createExecutionRunRecord retires every active plan even when dirty data already has multiple", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_plan_dirty_${stamp}`
+    const taskID = `tsk_plan_dirty_${stamp}`
+    const goalID = `gol_plan_dirty_${stamp}`
+    const olderPlanID = `pln_older_${stamp}`
+    const newerPlanID = `pln_newer_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID, taskID, goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Plan dirty regression",
+      taskTitle: "Plan dirty regression task",
+      request: "Two active plans must collapse to one after createExecutionRunRecord",
+      goalTitle: "Single goal",
+      goalSlug: "single-goal",
+      objective: "Reproduce the dirty-data scenario from the overlay bug",
+      now,
+    })
+    Database.use((db) => {
+      db.insert(EnginePlanVersionTable).values({
+        id: olderPlanID,
+        task_id: taskID,
+        spec_snapshot_id: `spec_${goalID}`,
+        version: 1,
+        status: "active",
+        summary: "older active plan",
+        prompt: "older",
+        metadata: {},
+        time_created: now - 2000,
+        time_updated: now - 2000,
+      }).run()
+      db.insert(EnginePlanVersionTable).values({
+        id: newerPlanID,
+        task_id: taskID,
+        spec_snapshot_id: `spec_${goalID}`,
+        version: 1,
+        status: "active",
+        summary: "newer active plan",
+        prompt: "newer",
+        metadata: {},
+        time_created: now - 1000,
+        time_updated: now - 1000,
+      }).run()
+      db.update(EngineGoalTable)
+        .set({ plan_version_id: newerPlanID })
+        .where(eq(EngineGoalTable.id, goalID))
+        .run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "plan dirty regression test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        await tools.prosecute.execute({}, {} as any)
+
+        const plans = Database.use((db) =>
+          db.select().from(EnginePlanVersionTable)
+            .where(eq(EnginePlanVersionTable.task_id, taskID))
+            .all(),
+        )
+        const active = plans.filter((p) => p.status === "active")
+        const supersededIDs = plans.filter((p) => p.status === "superseded").map((p) => p.id).sort()
+        expect(active).toHaveLength(1)
+        expect(active[0].id).not.toBe(olderPlanID)
+        expect(active[0].id).not.toBe(newerPlanID)
+        expect(supersededIDs).toEqual([olderPlanID, newerPlanID].sort())
+      },
+    })
+  })
+
+  test("restart_from_stage(plan) supersedes every active plan, not just one", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_restart_plan_${stamp}`
+    const taskID = `tsk_restart_plan_${stamp}`
+    const goalID = `gol_restart_plan_${stamp}`
+    const olderPlanID = `pln_restart_older_${stamp}`
+    const newerPlanID = `pln_restart_newer_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID, taskID, goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Restart plan stage project",
+      taskTitle: "Restart plan stage task",
+      request: "restart_from_stage(plan) collapses dirty multi-active rows",
+      goalTitle: "Single goal",
+      goalSlug: "single-goal",
+      objective: "Verify restart_from_stage retires every active plan",
+      now,
+    })
+    Database.use((db) => {
+      db.insert(EnginePlanVersionTable).values({
+        id: olderPlanID,
+        task_id: taskID,
+        spec_snapshot_id: `spec_${goalID}`,
+        version: 1,
+        status: "active",
+        summary: "older active plan",
+        prompt: "older",
+        metadata: {},
+        time_created: now - 2000,
+        time_updated: now - 2000,
+      }).run()
+      db.insert(EnginePlanVersionTable).values({
+        id: newerPlanID,
+        task_id: taskID,
+        spec_snapshot_id: `spec_${goalID}`,
+        version: 1,
+        status: "active",
+        summary: "newer active plan",
+        prompt: "newer",
+        metadata: {},
+        time_created: now - 1000,
+        time_updated: now - 1000,
+      }).run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "restart plan stage test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.restart_from_stage.execute(
+          { stage: "plan", reason: "regression test" },
+          {} as any,
+        )
+        expect(typeof result).toBe("string")
+
+        const plans = Database.use((db) =>
+          db.select().from(EnginePlanVersionTable)
+            .where(eq(EnginePlanVersionTable.task_id, taskID))
+            .all(),
+        )
+        const active = plans.filter((p) => p.status === "active")
+        const supersededIDs = plans.filter((p) => p.status === "superseded").map((p) => p.id).sort()
+        expect(active).toHaveLength(0)
+        expect(supersededIDs).toEqual([olderPlanID, newerPlanID].sort())
       },
     })
   })
