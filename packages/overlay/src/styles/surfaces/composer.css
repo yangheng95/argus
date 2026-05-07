@@ -211,18 +211,18 @@
 /* Interrupt state: same shell as chat-send but flips to the bad palette
    so the operator can tell the action is destructive (cancel an
    in-flight task). */
-.chat-interrupt {
+.chat-send[data-busy="true"] {
   border-color: color-mix(in srgb, var(--bad) 36%, transparent);
   background: var(--bad-dim);
   color: var(--bad);
   box-shadow: none;
 }
 
-.chat-interrupt:hover {
+.chat-send[data-busy="true"]:hover {
   background: color-mix(in srgb, var(--bad) 18%, var(--bad-dim));
 }
 
-.chat-interrupt:focus-visible {
+.chat-send[data-busy="true"]:focus-visible {
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--bad) 36%, transparent);
 }
 

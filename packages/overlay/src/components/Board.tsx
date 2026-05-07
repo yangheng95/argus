@@ -12,6 +12,8 @@ import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { deliveryGoalProgress } from "../utils/goal-workflow";
 import { orderedReachableCardIDs } from "../utils/card-tree";
+import { statusIconName } from "../utils/status-mapping";
+import { activeTone, verdictTone } from "../utils/verdict-tone";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
 import { ArchitectPanel } from "./ArchitectPanel";
@@ -34,29 +36,6 @@ export function statusLabel(status: string): string {
     cancelled: t("task.status.cancelled"),
   };
   return map[status] || status;
-}
-
-/** Map a task status string to an Icon primitive name. The status
- * family lives in `Icon.tsx` ICON_PATHS so the CSS .status-icon
- * coloring (driven by `[data-status="..."]`) flows through
- * `currentColor` to a single-source SVG path set. */
-export function statusIconName(status: string): IconName {
-  switch (status) {
-    case "idle":
-      return "status-idle";
-    case "queued":
-      return "status-queued";
-    case "active":
-      return "status-active";
-    case "completed":
-      return "status-completed";
-    case "failed":
-      return "status-failed";
-    case "cancelled":
-      return "status-cancelled";
-    default:
-      return "status-idle";
-  }
 }
 
 // ── StatusBadge ──
@@ -699,10 +678,10 @@ export function Board(props: BoardProps) {
           })()}
           badgeTone={(() => {
             const rs = requirements() ?? [];
-            if (rs.length === 0) return isRequirementsGenerating() ? "accent" : "";
+            if (rs.length === 0) return activeTone(isRequirementsGenerating());
             const passed = rs.filter((r: any) => r.status === "passed").length;
             const failed = rs.filter((r: any) => r.status === "failed").length;
-            return failed > 0 ? "bad" : passed === rs.length ? "good" : "accent";
+            return verdictTone({ passed, failed, total: rs.length });
           })()}
         >
           <RequirementsPanel
@@ -723,7 +702,7 @@ export function Board(props: BoardProps) {
           badgeId="architectBadge"
           phaseState={phaseFor("architect")}
           badgeText={architect() ? String(architect()!.contractCount) : ""}
-          badgeTone={architect() ? "accent" : ""}
+          badgeTone={activeTone(Boolean(architect()))}
         >
           <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
         </SectionFrame>
@@ -746,11 +725,8 @@ export function Board(props: BoardProps) {
           const gw = goalWorkflows();
           if (gw.length === 0) return "";
           const passed = gw.filter((g) => g.goalStatus === "passed").length;
-          return passed === gw.length
-            ? "good"
-            : gw.some((g) => g.goalStatus === "failed")
-              ? "bad"
-              : "accent";
+          const failed = gw.filter((g) => g.goalStatus === "failed").length;
+          return verdictTone({ passed, failed, total: gw.length });
         })()}
       >
         <GoalWorkflowList
@@ -787,7 +763,7 @@ export function Board(props: BoardProps) {
             if (list.length === 0) return "";
             const failed = list.filter((c) => c.status === "failed").length;
             const passed = list.filter((c) => c.status === "passed").length;
-            return failed > 0 ? "bad" : passed === list.length ? "good" : "accent";
+            return verdictTone({ passed, failed, total: list.length });
           })()}
         >
           <EvaluationCriteriaPanel checks={criteriaResults() ?? []} />
@@ -828,13 +804,12 @@ export function Board(props: BoardProps) {
                   : "";
           }
           const progress = deliveryGoalProgress(gs);
-          return progress.failed > 0
-            ? "bad"
-            : progress.completed === progress.total
-              ? "good"
-              : progress.completed > 0
-                ? "accent"
-                : "";
+          if (progress.total === 0 && progress.completed === 0) return "";
+          return verdictTone({
+            passed: progress.completed,
+            failed: progress.failed,
+            total: progress.total,
+          });
         })()}
       >
         <DeliveryPanel delivery={delivery()} />
