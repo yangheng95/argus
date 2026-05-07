@@ -36,7 +36,7 @@
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
   line-height: 1;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   text-transform: none;
   white-space: nowrap;
   cursor: pointer;

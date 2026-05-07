@@ -6587,6 +6587,13 @@
                                 "items": {
                                   "type": "string"
                                 }
+                              },
+                              "request_text_any": {
+                                "description": "Any listed case-insensitive substring must appear in the task request text.",
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               }
                             }
                           }
@@ -6692,6 +6699,32 @@
                             "type": "array",
                             "items": {
                               "type": "string"
+                            }
+                          },
+                          "task_signals": {
+                            "type": "object",
+                            "properties": {
+                              "has_attachment_image": {
+                                "type": "boolean"
+                              },
+                              "request_contains_url": {
+                                "type": "boolean"
+                              },
+                              "request_contains_figma_url": {
+                                "type": "boolean"
+                              },
+                              "package_has_script": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "request_text_any": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
                             }
                           }
                         }
@@ -25830,6 +25863,158 @@
           "properties"
         ]
       },
+      "Event.server.instance.disposed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "server.instance.disposed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "directory"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "SessionStatus": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "idle"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "retry"
+              },
+              "attempt": {
+                "type": "number"
+              },
+              "message": {
+                "type": "string"
+              },
+              "next": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "type",
+              "attempt",
+              "message",
+              "next"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "streaming"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "terminal"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "completed",
+                  "error",
+                  "aborted"
+                ]
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "reason"
+            ]
+          }
+        ]
+      },
+      "Event.session.status": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.status"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/SessionStatus"
+              }
+            },
+            "required": [
+              "sessionID",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.session.idle": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.idle"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.task.created": {
         "type": "object",
         "properties": {
@@ -27475,30 +27660,6 @@
           },
           "properties": {
             "$ref": "#/components/schemas/Project"
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.server.instance.disposed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "server.instance.disposed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "directory": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "directory"
-            ]
           }
         },
         "required": [
@@ -29337,134 +29498,6 @@
           "properties"
         ]
       },
-      "SessionStatus": {
-        "anyOf": [
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "idle"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "retry"
-              },
-              "attempt": {
-                "type": "number"
-              },
-              "message": {
-                "type": "string"
-              },
-              "next": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "type",
-              "attempt",
-              "message",
-              "next"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "streaming"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "terminal"
-              },
-              "reason": {
-                "type": "string",
-                "enum": [
-                  "completed",
-                  "error",
-                  "aborted"
-                ]
-              },
-              "error": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "type",
-              "reason"
-            ]
-          }
-        ]
-      },
-      "Event.session.status": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.status"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "status": {
-                "$ref": "#/components/schemas/SessionStatus"
-              }
-            },
-            "required": [
-              "sessionID",
-              "status"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.idle": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.idle"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.task-queue.completed": {
         "type": "object",
         "properties": {
@@ -30269,8 +30302,7 @@
                 "type": "object",
                 "properties": {
                   "files_changed": {
-                    "description": "Every file touched in this goal. A goal that produced zero file changes is invalid — do not call this tool without deliverables.",
-                    "minItems": 1,
+                    "description": "Every file touched in this goal. May be empty if the goal's acceptance was met by reusing a prior attempt's worktree without further edits — the orchestrator cross-checks against the host's actual_changed_files ground truth.",
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -30934,6 +30966,15 @@
             "$ref": "#/components/schemas/Event.installation.update-available"
           },
           {
+            "$ref": "#/components/schemas/Event.server.instance.disposed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.status"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.idle"
+          },
+          {
             "$ref": "#/components/schemas/Event.task.created"
           },
           {
@@ -31039,9 +31080,6 @@
             "$ref": "#/components/schemas/Event.project.updated"
           },
           {
-            "$ref": "#/components/schemas/Event.server.instance.disposed"
-          },
-          {
             "$ref": "#/components/schemas/Event.server.connected"
           },
           {
@@ -31073,12 +31111,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.permission.replied"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.status"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.idle"
           },
           {
             "$ref": "#/components/schemas/Event.task-queue.completed"
@@ -32841,7 +32873,7 @@
                     "maximum": 9007199254740991
                   },
                   "skills": {
-                    "description": "Additional skill paths for build agent (mirror toolchain SOP defaults)",
+                    "description": "Operator-forced build skills. Leave empty for auto_detect-driven skill routing.",
                     "type": "array",
                     "items": {
                       "type": "string"
@@ -32870,6 +32902,16 @@
                     "type": "integer",
                     "minimum": 1000,
                     "maximum": 9007199254740991
+                  }
+                }
+              },
+              "debug": {
+                "description": "Operator-toggled debug behaviour. Settings here are diagnostic — they affect host runtime decisions and prompt content.",
+                "type": "object",
+                "properties": {
+                  "fail_on_information_missing": {
+                    "description": "When true, the host injects an INFORMATION MISSING fallback section into every agent's system prompt and exits the process with code 99 the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.",
+                    "type": "boolean"
                   }
                 }
               },

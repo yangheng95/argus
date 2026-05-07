@@ -147,7 +147,19 @@ export namespace Server {
         .route("/ui", OverlayUI.routes())
         .use(async (c, next) => {
           // Control-plane routes must stay available even if project bootstrap is broken.
-          if (c.req.path === "/log" || c.req.path === "/shutdown" || c.req.path === "/restart") {
+          // /favicon.ico is browser-issued before the overlay UI sets the
+          // x-opencorvus-directory header (browsers fetch favicons before
+          // any app JS runs). Without this bypass it throws
+          // DirectoryRequiredError on every page load — noisy in logs and
+          // a real failure for non-Tauri preview windows that have no UI
+          // chance to attach the directory header. Falls through to the
+          // root router; if no handler matches, the request 404s cleanly.
+          if (
+            c.req.path === "/log"
+            || c.req.path === "/shutdown"
+            || c.req.path === "/restart"
+            || c.req.path === "/favicon.ico"
+          ) {
             return next()
           }
           const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory")

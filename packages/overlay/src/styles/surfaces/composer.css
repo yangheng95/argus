@@ -183,7 +183,7 @@
   flex-shrink: 0;
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   text-transform: none;
   box-shadow: none;
   transition:

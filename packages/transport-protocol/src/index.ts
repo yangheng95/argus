@@ -147,6 +147,14 @@ export interface ExtensionUiCommandMessage {
   payload: unknown
 }
 
+export type HostTheme = "light" | "vscode-dark"
+
+export interface ExtensionHostThemeMessage {
+  protocol: typeof PROTOCOL_VERSION
+  type: "host:theme"
+  theme: HostTheme
+}
+
 /**
  * Concrete payload for `kind: "composer.attach"`. The webview pushes
  * this onto its existing chat-attachments store so the file becomes a
@@ -185,6 +193,7 @@ export type ExtensionMessage =
   | ExtensionStreamErrorMessage
   | ExtensionStreamCloseMessage
   | ExtensionUiCommandMessage
+  | ExtensionHostThemeMessage
   | ExtensionProtocolMismatchMessage
 
 // ── Helpers ──
@@ -198,6 +207,7 @@ export const EXTENSION_MESSAGE_TYPES = [
   "stream.error",
   "stream.close",
   "ui-command",
+  "host:theme",
 ] as const
 
 /** Whitelisted WebviewMessage `type` values. */

@@ -1,16 +1,18 @@
 // ── Desktop notifications ──
 //
 // Surfaces task lifecycle (success / failure / cancellation / pending
-// interaction) as an OS-level notification via the standard Web
-// Notification API. Tauri's WebView2 / WKWebView host both support this
-// natively, so no Tauri plugin dependency is needed — the same code path
-// works in the bundled overlay and in `bun run dev:vite`.
+// interaction) as an OS-level notification. In the bundled overlay we
+// route through `tauri-plugin-notification` (host.native), which uses
+// the OS's native Toast API and survives Windows' AppUserModelID gate
+// that silently swallows raw `new Notification(...)` calls inside
+// WebView2. In `bun run dev:vite` (browser host) we fall back to the
+// Web Notification API so dev still works.
 //
 // Quiet rules:
 //   * Skip when settingsStore.desktopNotifications is false.
 //   * Skip when document.hasFocus() AND boardStore.selectedTaskID is the
 //     task that just changed — the operator is already looking at it.
-//   * Skip if Notification API is missing (e.g. older webviews).
+//   * Skip if the host reports the notification surface as unsupported.
 //
 // Permission is requested lazily on the first event the operator opted
 // into. Denial sticks for the session and we degrade to a single console
@@ -21,6 +23,9 @@ import { boardStore } from "../store/board";
 import { messageStore } from "../store/messages";
 import { t } from "../utils/i18n";
 import { createStore } from "solid-js/store";
+import { getHostTransport } from "./host-transport";
+
+type HostPermission = "granted" | "denied" | "default" | "unsupported";
 
 type NotificationKind = "completed" | "failed" | "cancelled" | "interaction";
 export type AppNotificationTone = "info" | "success" | "warning" | "error" | "progress";
@@ -38,9 +43,6 @@ export interface AppNotificationItem extends Required<Omit<AppNotificationInput,
   timeoutMs: number;
 }
 
-type LookupTitle = (taskID: string) => string | undefined;
-
-let permissionState: NotificationPermission | "uninitialized" = "uninitialized";
 let permissionRequestPending = false;
 let notificationSeq = 0;
 const notificationTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -49,8 +51,32 @@ export const [notificationStore, setNotificationStore] = createStore<{ items: Ap
   items: [],
 });
 
-function notificationApiAvailable(): boolean {
-  return typeof window !== "undefined" && "Notification" in window;
+async function readHostPermission(): Promise<HostPermission> {
+  try {
+    const result = (await getHostTransport().native({ kind: "notification.permission" })) as HostPermission;
+    return result;
+  } catch (err) {
+    console.warn("[notify] permission probe failed", err);
+    return "unsupported";
+  }
+}
+
+async function requestHostPermission(): Promise<HostPermission> {
+  try {
+    const result = (await getHostTransport().native({ kind: "notification.requestPermission" })) as HostPermission;
+    return result;
+  } catch (err) {
+    console.warn("[notify] permission request failed", err);
+    return "denied";
+  }
+}
+
+async function sendHostNotification(title: string, body: string, tag: string): Promise<void> {
+  try {
+    await getHostTransport().native({ kind: "notification.send", title, body, tag });
+  } catch (err) {
+    console.warn("[notify] failed to dispatch notification", err);
+  }
 }
 
 function nextNotificationID(): string {
@@ -122,56 +148,15 @@ export function notifyError(input: Omit<AppNotificationInput, "tone">): string {
   return showNotification({ ...input, tone: "error" });
 }
 
-async function ensurePermission(): Promise<NotificationPermission> {
-  if (!notificationApiAvailable()) return "denied";
-  // W2-V34: this path runs from lifecycle event handlers (task complete,
-  // task failed, etc.) that are NOT user gestures. Calling
-  // Notification.requestPermission() here is rejected by WebKit (darwin
-  // Tauri WKWebView) with "Notification prompting can only be done from a
-  // user gesture" and the permission is recorded as "denied" without ever
-  // showing the OS prompt. The user can only recover by changing OS-level
-  // settings.
-  //
-  // We now ONLY read Notification.permission and degrade quietly. The
-  // Explicit prompt paths live in ensureDesktopNotificationPermission():
-  // startup requests permission once for the product entry, and the
-  // settings toggle can retry from a real user click.
-  const current = Notification.permission;
-  permissionState = current;
-  if (current !== "granted") {
-    console.warn(
-      `[notify] Notification permission is "${current}"; degrading to in-app feedback only. Startup/settings permission requests use ensureDesktopNotificationPermission().`,
-    );
-  }
-  return current;
-}
-
-/** Surface the live platform permission state to settings UI so the
- *  General toggle can warn when permission is denied at the OS level
- *  and the toggle alone won't help. Re-reads each call so OS-side
- *  changes propagate immediately. */
-export function notificationPermissionState(): NotificationPermission | "unsupported" {
-  if (!notificationApiAvailable()) return "unsupported";
-  return Notification.permission;
-}
-
-/** Force a fresh permission prompt. Some browsers respect a re-prompt
- *  after a prior denial when triggered from a fresh user gesture
- *  (Chrome/Edge on Windows do; Firefox treats denial as sticky). The
- *  caller is responsible for invoking this from a click / change event
- *  handler — calling it speculatively will be ignored by the platform.
- *  Returns the resolved permission. */
-export async function requestNotificationPermission(): Promise<NotificationPermission> {
-  if (!notificationApiAvailable()) return "denied";
-  // Reset our cache so a previously-denied state doesn't short-circuit
-  // ensurePermission's check.
-  permissionState = "uninitialized" as NotificationPermission | "uninitialized";
-  if (permissionRequestPending) return Notification.permission;
+/** Force a fresh permission prompt via the host. Tauri host always
+ *  returns "granted" on Windows because the OS Toast subsystem is
+ *  enabled per-app via Settings, not via in-app prompt; the browser
+ *  host (dev) re-prompts via Web Notification API on user gesture. */
+export async function requestNotificationPermission(): Promise<HostPermission> {
+  if (permissionRequestPending) return readHostPermission();
   permissionRequestPending = true;
   try {
-    const result = await Notification.requestPermission();
-    permissionState = result;
-    return result;
+    return await requestHostPermission();
   } finally {
     permissionRequestPending = false;
   }
@@ -179,9 +164,9 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 
 export async function ensureDesktopNotificationPermission(
   source: "startup" | "settings" = "settings",
-): Promise<NotificationPermission | "unsupported"> {
+): Promise<HostPermission> {
   if (!settingsStore.desktopNotifications) return "denied";
-  const state = notificationPermissionState();
+  const state = await readHostPermission();
   if (state === "unsupported") {
     notifyWarning({
       id: "system:notification-permission",
@@ -225,7 +210,7 @@ export async function ensureDesktopNotificationPermission(
         error: err instanceof Error ? err.message : String(err),
       }),
     });
-    return notificationPermissionState() === "unsupported" ? "unsupported" : Notification.permission;
+    return "denied";
   }
 }
 
@@ -274,20 +259,13 @@ async function dispatch(taskID: string, kind: NotificationKind, override?: { bod
     message: body,
   });
   if (shouldSuppressDesktop(taskID)) return;
-  const permission = await ensurePermission();
+  const permission = await readHostPermission();
   if (permission !== "granted") return;
-  try {
-    // tag = taskID coalesces successive notifications for the same task
-    // into a single notification slot in the OS shell.
-    new Notification(title, {
-      body,
-      tag: `oc:${taskID}:${kind}`,
-      // requireInteraction stays false so the OS can auto-dismiss; the
-      // operator is more annoyed by stuck notifications than by missing one.
-    });
-  } catch (err) {
-    console.warn("[notify] failed to dispatch notification", err);
-  }
+  // tag coalesces successive notifications for the same task into a
+  // single notification slot in the OS shell (tauri-plugin-notification
+  // forwards it to WinRT's Group/Tag identifiers; Web Notification API
+  // honors `tag` natively in dev).
+  await sendHostNotification(title, body, `oc:${taskID}:${kind}`);
 }
 
 // Public entry points called from the SSE event router.

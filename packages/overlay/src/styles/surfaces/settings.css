@@ -362,7 +362,7 @@
 
 /* Extension row: one card per installed extension. The row's
    `--surface-inset` background was moved into this canonical
-   directly during iter30 because the late `!important` reset
+   directly during iter30 because the late forced reset
    was forcing the rendered bg anyway (see styles.css note for
    the iter30 audit). */
 .extension-row {
@@ -1001,7 +1001,7 @@
   font-size: var(--ui-font-title);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   line-height: 1.2;
   box-sizing: border-box;
   min-height: calc(32px * var(--ui-scale));
@@ -1281,8 +1281,8 @@
 
 /* ── About panel (settings tab) ──────────────────────────── */
 
-.about-body {
-  gap: calc(20px * var(--ui-scale)) !important;
+.config-tab-panel > .config-section-body.about-body {
+  gap: calc(20px * var(--ui-scale));
 }
 
 .about-section {
@@ -2002,7 +2002,7 @@
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-medium);
   color: var(--text-soft);
-  letter-spacing: normal;
+  letter-spacing: var(--ui-letter-spacing-normal);
 }
 
 .config-panel-card .dialog-actions {
@@ -2313,7 +2313,7 @@
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
   text-transform: none;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
 }
 
 .config-inline-form {

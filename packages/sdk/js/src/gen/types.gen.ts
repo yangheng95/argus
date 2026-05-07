@@ -18,6 +18,47 @@ export type EventInstallationUpdateAvailable = {
   }
 }
 
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
+  }
+}
+
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      next: number
+    }
+  | {
+      type: "streaming"
+    }
+  | {
+      type: "terminal"
+      reason: "completed" | "error" | "aborted"
+      error?: string
+    }
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+  }
+}
+
 export type EventTaskCreated = {
   type: "task.created"
   properties: {
@@ -429,13 +470,6 @@ export type Project = {
 export type EventProjectUpdated = {
   type: "project.updated"
   properties: Project
-}
-
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
 }
 
 export type EventServerConnected = {
@@ -968,40 +1002,6 @@ export type EventPermissionReplied = {
   }
 }
 
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "streaming"
-    }
-  | {
-      type: "terminal"
-      reason: "completed" | "error" | "aborted"
-      error?: string
-    }
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
 export type EventTaskQueueCompleted = {
   type: "task-queue.completed"
   properties: {
@@ -1271,7 +1271,7 @@ export type EventGoalReport = {
     sessionID: string
     report: {
       /**
-       * Every file touched in this goal. A goal that produced zero file changes is invalid — do not call this tool without deliverables.
+       * Every file touched in this goal. May be empty if the goal's acceptance was met by reusing a prior attempt's worktree without further edits — the orchestrator cross-checks against the host's actual_changed_files ground truth.
        */
       files_changed: Array<{
         path: string
@@ -1487,6 +1487,9 @@ export type EventWorkspaceFailed = {
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
+  | EventServerInstanceDisposed
+  | EventSessionStatus
+  | EventSessionIdle
   | EventTaskCreated
   | EventTaskUpdated
   | EventSpecCreated
@@ -1522,7 +1525,6 @@ export type Event =
   | EventDeliveryEvidenceUpdated
   | EventIntegrityReviewCompleted
   | EventProjectUpdated
-  | EventServerInstanceDisposed
   | EventServerConnected
   | EventGlobalDisposed
   | EventLspClientDiagnostics
@@ -1534,8 +1536,6 @@ export type Event =
   | EventMessagePartRemoved
   | EventPermissionAsked
   | EventPermissionReplied
-  | EventSessionStatus
-  | EventSessionIdle
   | EventTaskQueueCompleted
   | EventQuestionAsked
   | EventQuestionReplied
@@ -2519,7 +2519,7 @@ export type Config = {
        */
       max_steps?: number
       /**
-       * Additional skill paths for build agent (mirror toolchain SOP defaults)
+       * Operator-forced build skills. Leave empty for auto_detect-driven skill routing.
        */
       skills?: Array<string>
     }
@@ -2539,6 +2539,15 @@ export type Config = {
        * Total wall-clock cap for a single queued task run, ms
        */
       task_queue_run_timeout_ms?: number
+    }
+    /**
+     * Operator-toggled debug behaviour. Settings here are diagnostic — they affect host runtime decisions and prompt content.
+     */
+    debug?: {
+      /**
+       * When true, the host injects an INFORMATION MISSING fallback section into every agent's system prompt and exits the process with code 99 the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.
+       */
+      fail_on_information_missing?: boolean
     }
     /**
      * Maximum total task runs
@@ -5980,6 +5989,10 @@ export type AppSkillsResponses = {
          * Any of the listed npm/bun scripts exists in the project's package.json.
          */
         package_has_script?: Array<string>
+        /**
+         * Any listed case-insensitive substring must appear in the task request text.
+         */
+        request_text_any?: Array<string>
       }
     }
     priority?: number
@@ -6013,6 +6026,13 @@ export type SkillInstalledResponses = {
     auto_detect?: {
       files?: Array<string>
       deps?: Array<string>
+      task_signals?: {
+        has_attachment_image?: boolean
+        request_contains_url?: boolean
+        request_contains_figma_url?: boolean
+        package_has_script?: Array<string>
+        request_text_any?: Array<string>
+      }
     }
     priority?: number
     dir?: string

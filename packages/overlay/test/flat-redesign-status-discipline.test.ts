@@ -40,7 +40,7 @@ function expectNoViolations(kind: string, violations: string[], guidance: string
 }
 
 describe("flat-redesign status discipline", () => {
-  it.skip("components do not map status values through status class functions", () => {
+  it("components do not map status values through status class functions", () => {
     const violations = grepComponents(/function\s+.*[Ss]tatus.*Class\s*\(.*\)\s*:\s*string/)
     expectNoViolations(
       "status class function",
@@ -49,7 +49,7 @@ describe("flat-redesign status discipline", () => {
     )
   })
 
-  it.skip("components do not contain unicode geometric status glyph literals", () => {
+  it("components do not contain unicode geometric status glyph literals", () => {
     const violations = grepComponents(/[✔◐✕○✓✗−]/u)
     expectNoViolations(
       "unicode geometric status glyph literal",

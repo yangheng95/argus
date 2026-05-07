@@ -267,8 +267,8 @@
    element is currently a stub (`#chatGoalsStrip` is never populated by
    any runtime path), but the chrome stays so a future re-enable does
    not need to re-derive the design. The earlier rgba-gradient backdrop
-   was overwritten by a late `var(--surface-inset) !important` override
-   in styles.css; the surface declares the rendered value directly. */
+   was overwritten by a late forced reset in styles.css; the surface
+   declares the rendered value directly. */
 .chat-goals-strip {
   display: flex;
   flex-wrap: wrap;
@@ -678,7 +678,7 @@
 .task-dir-editor {
   font-size: calc(10px * var(--ui-scale));
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
 }
 
 .task-dir-tool-label {

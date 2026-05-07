@@ -1367,7 +1367,9 @@ document.addEventListener("keydown", (ev) => {
 void (async () => {
   try {
     await initApp({
-      onSettingsLoaded: () => setSettingsHydrated(true),
+      onSettingsLoaded: () => {
+        setSettingsHydrated(true);
+      },
     });
     renderAboutVersion();
     const connBannerHost = document.createElement("div");
