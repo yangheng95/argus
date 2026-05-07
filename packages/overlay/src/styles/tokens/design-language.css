@@ -90,6 +90,20 @@
   --ui-opacity-subtle: 0.85;
   --ui-opacity-full: 1;
 
+  /* Letter-spacing — semantic tightness levels. */
+  --ui-letter-spacing-tight: -0.01em;
+  --ui-letter-spacing-normal: 0;
+  --ui-letter-spacing-loose: 0.04em;
+
+  /* Responsive breakpoints (px literals retained in @media rules).
+   * Browsers do not support var() in media query conditions without a
+   * custom-media transform, so surface styles cite these token names in
+   * breakpoint comments and keep the matching px values in place. */
+  --ui-breakpoint-sm: 520px;
+  --ui-breakpoint-md: 760px;
+  --ui-breakpoint-lg: 900px;
+  --ui-breakpoint-xl: 1120px;
+
   --oc-header-height: calc(40px * var(--ui-scale, 1));
   --oc-header-padding-x: calc(6px * var(--ui-scale, 1));
   --oc-header-padding-y: 0;

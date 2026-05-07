@@ -332,7 +332,7 @@ body {
 .card__round--lead {
   margin-right: calc(4px * var(--ui-scale));
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: color-mix(in srgb, var(--card-stage) 90%, var(--text));
   background: color-mix(in srgb, var(--card-stage) 18%, transparent);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--card-stage) 28%, transparent);
@@ -504,7 +504,7 @@ body {
 
 .card__stat-value {
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: color-mix(in srgb, var(--text) 90%, transparent);
 }
 
@@ -777,7 +777,7 @@ body {
   color: var(--text-soft);
   font-size: var(--card-meta-size);
   line-height: 1.3;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   cursor: pointer;
   transition: color var(--ui-duration-base) var(--ui-timing-standard);
 }
@@ -869,7 +869,7 @@ body {
   color: color-mix(in srgb, var(--card-stage) 78%, var(--text-muted));
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-medium);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
 }
 
@@ -934,7 +934,7 @@ body {
   font-size: var(--ui-font-tiny);
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 .card-boundary:not(:first-child) {
   margin-top: calc(6px * var(--ui-scale));
@@ -1007,7 +1007,7 @@ body {
 .card[data-kind="message"][data-role="system"] > .card__head .card__title {
   font-size: var(--ui-font-tiny);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--card-system-rail);
   font-weight: var(--ui-font-weight-strong);
 }
@@ -1067,7 +1067,7 @@ body {
   padding: 0 calc(6px * var(--ui-scale));
   font-size: calc(10px * var(--ui-scale));
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-soft);
   opacity: var(--ui-opacity-disabled);
   white-space: nowrap;
@@ -1090,7 +1090,7 @@ body {
   padding: 0 calc(4px * var(--ui-scale));
   font-size: calc(10px * var(--ui-scale));
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-muted);
   opacity: var(--ui-opacity-dim);
   white-space: nowrap;
@@ -1591,7 +1591,7 @@ body {
 }
 .task-progress__heading {
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
   color: var(--text-muted);
   font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
@@ -1613,6 +1613,7 @@ body {
 .task-progress__bar-fill {
   position: absolute;
   inset: 0 auto 0 0;
+  width: var(--progress-passed, 0%);
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--good) 80%, transparent),
@@ -1623,6 +1624,7 @@ body {
 .task-progress__bar-fail {
   position: absolute;
   inset: 0 0 0 auto;
+  width: var(--progress-failed, 0%);
   background: color-mix(in srgb, var(--bad) 80%, transparent);
 }
 
@@ -1659,7 +1661,7 @@ body {
   flex: none;
   font-variant-numeric: tabular-nums;
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
   color: color-mix(in srgb, var(--text-muted) 92%, var(--text-soft));
 }

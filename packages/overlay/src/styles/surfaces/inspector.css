@@ -198,7 +198,7 @@
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-medium);
   color: var(--text-strong);
-  letter-spacing: 0.03em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: none;
 }
 
@@ -241,7 +241,7 @@
 .oc-section__badge[data-variant="metric"] {
   padding-left: 0;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .oc-section__badge[data-variant="metric"]::before {
@@ -458,7 +458,7 @@
   font-size: var(--ui-font-control);
   color: var(--text-soft);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .eval-error-detail {
@@ -586,7 +586,7 @@
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .criteria-group-count {
@@ -751,7 +751,7 @@
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-strong);
   line-height: 1.28;
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-strong);
 }
 
@@ -760,7 +760,7 @@
   font-variant-numeric: tabular-nums;
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
@@ -860,7 +860,7 @@
 .gwg-objective-label {
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-muted);
   margin-bottom: calc(3px * var(--ui-scale));
 }
@@ -885,7 +885,7 @@
 .gwg-done-definition-label {
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-muted);
   margin-bottom: calc(3px * var(--ui-scale));
 }
@@ -970,7 +970,7 @@
   flex: 1;
   font-weight: var(--ui-font-weight-medium);
   color: var(--text);
-  letter-spacing: 0.005em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -987,7 +987,7 @@
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   background: var(--subtle-2);
@@ -1189,7 +1189,7 @@
   font-weight: var(--ui-font-weight-strong);
   color: var(--text);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .gwg-diff-additions {
@@ -1243,7 +1243,7 @@
   color: var(--text);
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   cursor: pointer;
   transition:
     background var(--ui-duration-base) var(--ui-timing-standard),
@@ -1267,7 +1267,7 @@
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   font-variant-numeric: tabular-nums;
   line-height: 1.4;
 }
@@ -1395,25 +1395,25 @@
   border-radius: var(--oc-radius-soft);
 }
 
-/* Status modifiers — passed / failed / pending. Inset rings'
+/* Status data attributes — passed / failed / pending. Inset rings'
    raw rgba on --good / --bad routed through color-mix. */
-.gwg-check--passed .gwg-check-icon {
+.gwg-check[data-check-status="passed"] .gwg-check-icon {
   background: var(--good-dim);
   color: var(--good);
   box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--good) 35%, transparent) inset;
 }
 
-.gwg-check--failed .gwg-check-icon {
+.gwg-check[data-check-status="failed"] .gwg-check-icon {
   background: var(--bad-dim);
   color: var(--bad);
   box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 35%, transparent) inset;
 }
 
-.gwg-check--failed .gwg-check-name {
+.gwg-check[data-check-status="failed"] .gwg-check-name {
   color: var(--bad);
 }
 
-.gwg-check--pending .gwg-check-icon {
+.gwg-check[data-check-status="pending"] .gwg-check-icon {
   background: var(--subtle-2);
   color: var(--text-muted);
 }
@@ -1482,7 +1482,7 @@
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
   border-radius: var(--oc-radius-pill);
   flex-shrink: 0;
@@ -1649,7 +1649,7 @@
   font-size: var(--ui-font-small);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .integrity__list {
@@ -1736,7 +1736,7 @@
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
   border-radius: var(--oc-radius-pill);
   background: var(--warn-dim);
@@ -2093,7 +2093,7 @@
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-muted);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 .criteria-item .criteria-name {
   font-family: var(--mono);
@@ -2231,7 +2231,7 @@
   font-size: var(--ui-font-control);
   font-family: var(--mono);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-muted);
   text-align: right;
 }
@@ -2329,7 +2329,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-medium);
   color: var(--text-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 .goal-title-brief {
   flex: 1;
@@ -2432,7 +2432,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-small);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   flex-shrink: 0;
@@ -2533,7 +2533,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   line-height: 1.4;
 }
 .verdict-pill[data-verdict="pass"],
@@ -2597,7 +2597,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-soft);
 }
 

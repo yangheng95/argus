@@ -290,7 +290,7 @@
   text-overflow: ellipsis;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 /* Status badge: an auto-width chip with a small leading pip. The pip is
@@ -858,7 +858,7 @@
 .project-group-name {
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.015em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-strong);
 }
 
