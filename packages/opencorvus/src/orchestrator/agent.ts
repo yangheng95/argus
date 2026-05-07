@@ -601,8 +601,9 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
   // We render the last few iterations' snapshots + the latest rework signal
   // (verdict summary + issues) so the assistant sees both the aggregated
   // signal AND the concrete delivery-agent feedback for the most recent round.
-  // Call `query_metric_trajectory` for the full detail including per-metric
-  // results and open counterexamples.
+  // The orchestrator decides next steps from this rendered snapshot directly;
+  // per-metric details + open counterexamples live on the prosecutor and
+  // delivery sub-agent sessions, not in an orchestrator tool surface.
   const iterationHistory = readHistForPrompt(task.id)
   if (iterationHistory.length > 0) {
     const RENDER_RECENT = 3
@@ -653,8 +654,8 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
     }
     ctx.push("")
     ctx.push(
-      "Call `query_metric_trajectory` for full per-metric results + counterexamples. " +
-      "You decide what to do: patch code, modify/add goals, adjust scope — based on where the trajectory is stuck.",
+      "You decide what to do next from the trajectory + latest delivery feedback above: " +
+      "patch code, modify/add goals, adjust scope — based on where the loop is stuck.",
     )
     ctx.push("")
   }

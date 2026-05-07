@@ -167,6 +167,39 @@ test("integrity agent does not expose registry tools", async () => {
   })
 })
 
+test("prosecutor agent does not expose registry tools", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const prosecutor = await Agent.get("prosecutor")
+      expect(prosecutor).toBeDefined()
+      expect(prosecutor?.hidden).toBe(true)
+      // Registry tools (read/edit/bash/mirror/...) must stay out — the
+      // prosecutor's verdict + counterexample tools are injected per run via
+      // toolKit. A missing include here would re-expand the registry and
+      // bloat the system prompt with ~30 unused tool schemas.
+      expect(prosecutor?.tools).toEqual({ include: [] })
+    },
+  })
+})
+
+test("orchestrator include list excludes the dead query_metric_trajectory reference", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const orchestrator = await Agent.get("orchestrator")
+      expect(orchestrator).toBeDefined()
+      // query_metric_trajectory is defined inside delivery/prosecutor toolkits
+      // and never injected into the orchestrator. Naming it in the include
+      // list mislead readers (and prior prompt drafts) into thinking the
+      // orchestrator could call it. Keep the list aligned with reality.
+      expect(orchestrator?.tools?.include).not.toContain("query_metric_trajectory")
+    },
+  })
+})
+
 test("custom agent from config creates new agent", async () => {
   await using tmp = await tmpdir({
     config: {

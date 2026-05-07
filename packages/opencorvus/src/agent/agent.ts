@@ -275,7 +275,6 @@ export namespace Agent {
             "task_report",
             "goal_report",
             "analytics",
-            "query_metric_trajectory",
             // user interaction
             "question",
             // own bookkeeping
@@ -356,6 +355,14 @@ export namespace Agent {
         name: "prosecutor",
         description: "Prosecutor stage. Adversarial half of the delivery Dynamic Adversarial Metrics loop; files counterexamples against the defender (delivery) verdict.",
         steps: 1000,
+        // Prosecutor's tool surface (query_metric_trajectory, query_diff,
+        // mark_counterexample, propose_challenge_metric,
+        // resolve_counterexample) is injected per run via toolKit in
+        // prosecutor/agent.ts. Registry tools (read/edit/bash/mirror/...)
+        // have no role here; without this empty include the prosecutor would
+        // pull in the full registry and bloat its system prompt with ~30
+        // unused tool schemas. Mirrors integrity / delivery contract.
+        tools: { include: [] as string[] },
         options: {},
         mode: "primary",
         native: true,
