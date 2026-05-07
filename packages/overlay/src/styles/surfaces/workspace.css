@@ -408,16 +408,22 @@ body[data-resizing="row"] {
   cursor: row-resize;
   user-select: none;
 }
-body[data-resizing="row"] * {
-  cursor: row-resize !important;
+body[data-resizing="row"] *,
+body[data-resizing="row"] .pane-resizer,
+body[data-resizing="row"] .pane-resizer::before,
+body[data-resizing="row"] .pane-resizer::after {
+  cursor: row-resize;
 }
 
 body[data-resizing="true"] {
   cursor: col-resize;
   user-select: none;
 }
-body[data-resizing="true"] * {
-  cursor: col-resize !important;
+body[data-resizing="true"] *,
+body[data-resizing="true"] .pane-resizer,
+body[data-resizing="true"] .pane-resizer::before,
+body[data-resizing="true"] .pane-resizer::after {
+  cursor: col-resize;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -535,8 +541,8 @@ body[data-resizing="true"] * {
 }
 
 .oc-section[open] > .oc-section__head,
-.config-section[open] > .config-section-head,
-.config-subsection[open] > .config-subsection-head {
+.config-section[open] > summary,
+.config-subsection[open] > summary {
   border-bottom: 0;
 }
 

@@ -88,6 +88,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .conn-banner__dot {
-    animation: none !important;
+    animation: none;
   }
 }

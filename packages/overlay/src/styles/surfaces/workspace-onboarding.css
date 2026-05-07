@@ -7,7 +7,7 @@
 }
 
 .workspace-onboarding-header {
-  background: color-mix(in srgb, var(--accent) 4%, var(--surface-strong)) !important;
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-strong));
 }
 
 .workspace-onboarding {
