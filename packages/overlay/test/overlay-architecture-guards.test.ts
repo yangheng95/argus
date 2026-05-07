@@ -195,9 +195,21 @@ describe("overlay architecture guards", () => {
     // that the browser actually evaluates.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
+    const surfaceThemeSelectors = walkFiles(
+      join(OVERLAY_ROOT, "src/styles/surfaces"),
+      (path) => path.endsWith(".css"),
+    ).flatMap((file) =>
+      readText(file)
+        .split(/\r?\n/)
+        .flatMap((line, index) =>
+          /body(?:\[data-theme=|:is\([^)]*data-theme)/.test(line)
+            ? [`${file}:${index + 1}: ${line.trim()}`]
+            : [],
+        ),
+    )
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(6)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(3)
+    expect(surfaceThemeSelectors).toEqual([])
   })
 
   test("styles.css has no hard-coded accent/bad/warn rgb expansions outside comments", () => {
@@ -667,7 +679,7 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).not.toMatch(/\.oc-section:last-child\s*\{/)
     expect(inspectorSurface).toMatch(/\.oc-section__head::-webkit-details-marker\s*\{/)
     expect(inspectorSurface).toMatch(/\.oc-section__head:hover\s*\{/)
-    expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
+    expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
   test("gwg actions + chevron + body + objective are owned by surfaces/inspector.css", () => {
@@ -692,7 +704,7 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.gwg:hover \.gwg-action-btn,/)
     expect(inspectorSurface).toMatch(/\.gwg-action-delete:hover\s*\{/)
     expect(inspectorSurface).toMatch(/\.gwg--expanded \.gwg-chevron\s*\{/)
-    expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
+    expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
   test("task dir bar (TaskDirBar) is owned by surfaces/conversation.css", () => {
@@ -775,8 +787,16 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.62\)/)
 
     expect(conversationSurface).toMatch(/\.task-bar:hover,\s*\.task-bar:focus-within\s*\{/)
-    expect(conversationSurface).toMatch(/body\[data-theme="light"\] \.task-bar\s*\{/)
-    expect(conversationSurface).toMatch(/body:is\(\[data-theme="dark"\][^)]*\) \.task-bar\s*\{/)
+    expect(conversationSurface).toMatch(
+      /\.task-bar\s*\{[\s\S]*?border-bottom:\s*var\(--oc-border-width\)\s+solid\s+var\(--task-bar-border-color\)/,
+    )
+    expect(conversationSurface).toMatch(/\.task-bar\s*\{[\s\S]*?background:\s*var\(--task-bar-bg\)/)
+    expect(conversationSurface).toMatch(
+      /\.task-bar\s*\{[\s\S]*?backdrop-filter:\s*var\(--task-bar-backdrop-filter\)/,
+    )
+    expect(conversationSurface).not.toMatch(
+      /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))[\s\S]*?\.task-bar\b/,
+    )
     expect(conversationSurface).toMatch(/\.recent-dir-panel::-webkit-scrollbar\s*\{/)
     expect(conversationSurface).toMatch(/\.recent-dir-row:hover\s*\{/)
     expect(conversationSurface).toMatch(/\.recent-dir-row\[data-active="true"\]\s*\{/)
@@ -1570,7 +1590,7 @@ describe("overlay architecture guards", () => {
 
     expect(inspectorSurface).not.toMatch(/#c3d2ee/)
     expect(inspectorSurface).toMatch(/\.gwg--passed::before[\s\S]*?var\(--text-soft\)/)
-    expect(inspectorSurface).toContain("color-mix(in srgb, black 12%, transparent)")
+    expect(inspectorSurface).toContain("var(--ui-shadow-tone)")
   })
 
   test("criteria group baseline is owned by surfaces/inspector.css", () => {

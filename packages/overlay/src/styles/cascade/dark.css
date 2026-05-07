@@ -83,6 +83,14 @@ body[data-theme="dark"] {
   --ui-shadow-tone: color-mix(in srgb, black 32%, transparent);
   --ui-highlight-tone: color-mix(in srgb, white 6%, transparent);
   --ui-glass-tint: color-mix(in srgb, white 4%, transparent);
+  --executor-menu-bg: var(--menu-panel-bg);
+  --executor-menu-shadow:
+    0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) var(--ui-shadow-tone),
+    0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 56%, transparent);
+  --executor-menu-row-hover-bg: var(--surface-hover);
+  --task-bar-bg: var(--chrome);
+  --task-bar-backdrop-filter: none;
+  --task-bar-border-color: var(--border);
   --menu-panel-bg: rgba(28, 33, 58, 0.96);
   --divider-soft: rgba(170, 183, 236, 0.11);
   --panel-fill: var(--surface);

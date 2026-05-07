@@ -27,8 +27,8 @@
 
 /* Card surface + tone aliases — declared on `body` so the var()
  * substitution for the underlying surface / accent / good / warn /
- * bad tokens happens at body scope, where the active
- * `body[data-theme="..."]` palette overrides are in effect. Putting
+ * bad tokens happens at body scope, where the active theme palette
+ * overrides are in effect. Putting
  * these on `:root` resolves them once against :root's dark surface +
  * accent tokens and the resolved value then inherits unchanged into
  * the light theme — that is exactly the bug that made every
@@ -321,7 +321,7 @@ body {
   letter-spacing: 0;
   /* --border carries enough contrast across all themes (≥10% in dark, ≥12%
      in light, satisfies WCAG AA over the canonical surface). The previous
-     body[data-theme="light"] override is gone — palette token differs by
+     light theme override is gone — palette token differs by
      theme on its own. */
   background: var(--border);
   border-radius: var(--oc-radius-soft);
