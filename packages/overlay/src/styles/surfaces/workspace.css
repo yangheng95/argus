@@ -116,10 +116,6 @@
   flex: 1;
   min-width: 0;
   overflow-x: auto;
-  scrollbar-width: none;
-}
-.workspace-tabs::-webkit-scrollbar {
-  display: none;
 }
 
 /* Sub-tab strip inside the workspace body — subordinate to the parent

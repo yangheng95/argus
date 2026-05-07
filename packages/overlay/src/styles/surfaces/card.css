@@ -727,11 +727,6 @@ body {
   font-family: var(--mono);
   font-size: calc(var(--card-sub-size) - calc(0.2px * var(--ui-scale)));
   line-height: 1.46;
-  scrollbar-width: auto;
-}
-
-.card[data-kind="tool"].card--expanded .card__subtitle::-webkit-scrollbar {
-  display: initial;
 }
 
 /* ── Body ────────────────────────────────────────────────── */

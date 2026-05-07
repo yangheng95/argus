@@ -526,17 +526,6 @@
   padding: calc(4px * var(--ui-scale));
   box-shadow: var(--executor-menu-shadow);
   z-index: var(--ui-z-titlebar);
-  scrollbar-width: thin;
-  scrollbar-color: var(--subtle-5) transparent;
-}
-
-.executor-menu::-webkit-scrollbar {
-  width: calc(4px * var(--ui-scale));
-}
-
-.executor-menu::-webkit-scrollbar-thumb {
-  background: var(--subtle-5);
-  border-radius: var(--oc-radius-soft);
 }
 
 .executor-menu-group {
