@@ -61,3 +61,30 @@ export function decodeDataUrlText(dataUrl: string): string {
   }
   return raw.toString("utf-8")
 }
+
+/**
+ * Strictly extract the raw base64 payload from a `data:<mime>;base64,<bytes>`
+ * URL. Throws when the input is anything other than a base64 data URL — the
+ * caller is forwarding bytes to a strict downstream that rejects empty or
+ * garbled buffers (e.g. `Buffer.from(undefined, "base64")` returns an empty
+ * buffer that AttachmentStore.write would happily persist as "the user's
+ * reference image"). Rule 7 — no silent fallback for binary attachments.
+ *
+ * Accepts `data:image/png;base64,<bytes>` and the percent-encoded variant
+ * with optional padding; rejects URL-encoded payloads, http(s):// URLs, and
+ * server-relative `/attachment/...` URLs (those are stored attachments and
+ * should NEVER reach this helper — call AttachmentStore lookup instead).
+ */
+const DATA_URL_BASE64_PATTERN = /^data:[^;,]+(?:;[^;,]+)*;base64,/i
+
+export function decodeDataUrlBase64(dataUrl: string, context: string): string {
+  if (typeof dataUrl !== "string" || !DATA_URL_BASE64_PATTERN.test(dataUrl)) {
+    const preview = typeof dataUrl === "string" && dataUrl.length > 60
+      ? `${dataUrl.slice(0, 60)}…`
+      : String(dataUrl)
+    throw new Error(
+      `${context}: expected data URL of form "data:<mime>;base64,<bytes>", got ${JSON.stringify(preview)}`,
+    )
+  }
+  return dataUrl.slice(dataUrl.indexOf(",") + 1)
+}

@@ -62,9 +62,25 @@ const GatewayStats = z.object({
   }).optional(),
 })
 
-const GatewayChannelMessageInput = ChannelIngressInput.omit({ platform: true }).extend({
-  platform: ChannelId.optional(),
-})
+// Lazy schema factory — defers `ChannelIngressInput.omit(...)` evaluation so
+// the construction does NOT run at module load. The eager top-level `const`
+// previously crashed when something imported `ChannelIngress` (or other
+// channel/ingress.ts members) before `gateway.ts` finished its own load: at
+// that moment `ChannelIngressInput` is still in TDZ inside channel/ingress.ts
+// and `.omit()` throws ReferenceError. The fix is structural — call the
+// factory inside the route registration, where the import cycle has settled.
+let _gatewayChannelMessageInputCache: ReturnType<typeof buildGatewayChannelMessageInput> | undefined
+function buildGatewayChannelMessageInput() {
+  return ChannelIngressInput.omit({ platform: true }).extend({
+    platform: ChannelId.optional(),
+  })
+}
+function getGatewayChannelMessageInput() {
+  if (!_gatewayChannelMessageInputCache) {
+    _gatewayChannelMessageInputCache = buildGatewayChannelMessageInput()
+  }
+  return _gatewayChannelMessageInputCache
+}
 
 function fakeGatewayToolContext(): Tool.Context {
   const abort = new AbortController()
@@ -232,7 +248,7 @@ export function GatewayRoutes() {
           },
         },
       }),
-      validator("json", GatewayChannelMessageInput),
+      validator("json", getGatewayChannelMessageInput()),
       async (c) => {
         const platform = ChannelId.parse(c.req.param("platform"))
         const input = c.req.valid("json")

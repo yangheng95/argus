@@ -147,6 +147,58 @@ describe("panel.create_task attachment forwarding", () => {
     })
   })
 
+  test("rejects non-data-URL attachments instead of silently writing garbage bytes", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const createSpy = spyOn(EngineService, "createTask").mockResolvedValue("never_called")
+
+        const tool = await PanelTool.init()
+
+        let thrown: unknown
+        try {
+          await tool.execute(
+            {
+              action: "create_task",
+              request: "Build it.",
+              allow_create: true,
+            },
+            {
+              sessionID: Identifier.ascending("session"),
+              messageID: Identifier.ascending("message"),
+              agent: "panel-test",
+              abort: new AbortController().signal,
+              messages: [],
+              metadata() {},
+              async ask() {},
+              extra: {
+                surface: "panel",
+                // server-relative URL — this is the AttachmentStore-served form,
+                // NOT a base64 data URL. Pre-fix this got cast to "the user's
+                // reference image" with corrupted bytes.
+                attachments: [
+                  { mime: "image/png", url: "/attachment/proj/abc.png", filename: "bad.png" },
+                ],
+              },
+            },
+          )
+        } catch (err) {
+          thrown = err
+        }
+
+        // The strict decoder must throw so the operator sees the bad
+        // ingress instead of getting a silently corrupted task.
+        expect(thrown).toBeInstanceOf(Error)
+        expect((thrown as Error).message).toContain("bad.png")
+        expect((thrown as Error).message).toContain("data URL")
+        // createTask must NOT be called with the broken bytes.
+        expect(createSpy).not.toHaveBeenCalled()
+      },
+    })
+  })
+
   test("does not pass attachments field when only text attachments are supplied", async () => {
     await using tmp = await tmpdir({ git: true })
 

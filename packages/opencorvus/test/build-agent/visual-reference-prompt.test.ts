@@ -71,4 +71,31 @@ describe("renderVisualContractPreamble", () => {
     ])
     expect(out).toContain("deadbeef0123")
   })
+
+  test("inlined mode (default): tells the LLM file parts are inlined above", () => {
+    const out = renderVisualContractPreamble(
+      [{ mime: "image/png", filename: "ui.png", size: 1, sha: "v" }],
+      { mode: "inlined" },
+    )
+    expect(out).toContain("inlined above as multimodal parts")
+    // Inlined mode talks about "file part decode failure", not "missing on disk".
+    expect(out).toContain("inlined file part")
+    expect(out).not.toContain("missing on disk")
+  })
+
+  test("staged-only mode (external provider): tells the LLM to read from disk", () => {
+    const out = renderVisualContractPreamble(
+      [{ mime: "image/png", filename: "ui.png", size: 1, sha: "v" }],
+      { mode: "staged-only" },
+    )
+    expect(out).toContain("staged on disk")
+    expect(out).toContain("references/")
+    // The wording must NOT promise inlining — codex / claude-code don't
+    // get multimodal file parts, and a "look above" claim would be a lie
+    // that the model would trust.
+    expect(out).not.toContain("inlined above as multimodal parts")
+    // Must still demand fail-loud on missing file.
+    expect(out).toContain("missing on disk")
+    expect(out).toContain("report_build_result")
+  })
 })

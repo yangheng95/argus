@@ -63,6 +63,17 @@ export namespace ChannelIngress {
         source: input.source,
         allow_create: input.allow_create,
         metadata: meta(input),
+        // Forward channel attachments — without this, slack/feishu/etc.
+        // file uploads disappear at the control-plane boundary before
+        // panel.create_task / panel.send_task_message can do anything
+        // with them. Each MessageAttachmentInput (`{filename, mime, url?,
+        // data?}`) is normalized into ControlAttachment's required data-URL
+        // form so the downstream control-plane LLM session sees the bytes
+        // as multimodal file parts and panel.* tools can decode them
+        // strictly via decodeDataUrlBase64.
+        ...(input.attachments.length > 0
+          ? { attachments: input.attachments.map(toControlAttachment) }
+          : {}),
       })),
     )
   }
@@ -169,6 +180,45 @@ function find(platform: string, channel: string, thread: string) {
         ),
       )
       .get(),
+  )
+}
+
+/**
+ * Normalize a channel attachment into a ControlAttachment (data-URL form).
+ *
+ * - `data` field: build `data:<mime>;base64,<data>` so the control-plane LLM
+ *   session and `panel.create_task` see the canonical strict shape.
+ * - `url` already a data URL: pass through.
+ * - Anything else (`http(s)://...`, `/attachment/...`, missing both fields):
+ *   throw. Pre-fix, these silently became "the user's reference image" with
+ *   garbage bytes once panel.* did its lenient base64 cast. Rule 7.
+ */
+function toControlAttachment(att: z.infer<typeof MessageAttachmentInput>): {
+  mime: string
+  url: string
+  filename?: string
+} {
+  const filename = att.filename
+  if (typeof att.data === "string" && att.data.length > 0) {
+    return {
+      mime: att.mime,
+      url: `data:${att.mime};base64,${att.data}`,
+      ...(filename ? { filename } : {}),
+    }
+  }
+  if (typeof att.url === "string" && att.url.startsWith("data:")) {
+    return {
+      mime: att.mime,
+      url: att.url,
+      ...(filename ? { filename } : {}),
+    }
+  }
+  throw new Error(
+    `ChannelIngress attachment "${filename ?? att.mime}": expected base64 \`data\` field or \`url\` of form "data:<mime>;base64,<bytes>"; got ${
+      typeof att.url === "string" && att.url.length > 60
+        ? `${att.url.slice(0, 60)}…`
+        : JSON.stringify(att.url)
+    }`,
   )
 }
 
