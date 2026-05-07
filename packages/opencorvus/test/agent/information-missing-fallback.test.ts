@@ -55,25 +55,45 @@ describe("INFORMATION_MISSING_FALLBACK_TEXT constant — single source for the r
     expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/<item>[^<]*missing field[^<]*<\/item>/)
   })
 
-  test("forbids guessing / silent proceeding", () => {
-    expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("Then stop")
-    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/Do\s+NOT guess defaults/)
-    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/do\s+NOT silently proceed/)
+  test("inverts default behaviour — guessing is FORBIDDEN, emission is the goal", () => {
+    // The load-bearing inversion: helpful extrapolation is the BUG here.
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/guessing is FORBIDDEN/)
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/Helpful\s+extrapolation is the bug/)
+    // Stop / no-tool-call instruction.
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("No tool calls")
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/Stop after the block/)
   })
 
-  test("cites concrete trigger examples (retry / contract / artifact / prior failure)", () => {
-    expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("retry without reason")
-    expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("goal contract fields absent")
-    expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("referenced artifact named without payload")
-    expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("previous attempt failed")
+  test("closes the helpful-bias loophole with explicit permission rules", () => {
+    // Convention-fill is empirically the dominant cause of silent proceed
+    // (kimi / general helpful-bias LLMs — verified 0 emissions in
+    // benchmark project-v7ZJEI before this prompt strengthened, 2026-05-07).
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/Convention is a guess/)
+    // Ad-hoc resolution must NOT mask the dispatcher drop.
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/Ad-hoc resolution masks the dispatcher drop/)
+    // "Run dies" rationalisation is explicitly closed.
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/EMIT ANYWAY/)
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/Inferring user intent is exactly the failure/)
   })
 
-  test("declares the host's process-exit fatal-signal contract", () => {
-    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(
-      /host detects this XML block.*IMMEDIATELY[\s\S]*exits the process/,
-    )
-    expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("fatal signal")
+  test("cites concrete trigger examples covering each documented dispatcher drop class", () => {
+    // Bare retry signal — the dispatcher should have named the failure mode.
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/no\s+`request`\s+\/\s+`reason`\s+\/\s+`feedback`/)
+    // Goal contract field absent.
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("acceptance_specs")
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("owned_paths")
+    // Referenced artifact without payload.
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/artifact[\s\S]*payload is absent/)
+    // "Previous attempt failed" hint without concrete evidence.
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/previous attempt failed[\s\S]*no concrete error/)
+    // Convention-fill trigger — kimi-style helpful-bias loophole.
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/inferring from convention/)
+  })
+
+  test("declares the host's process-exit contract with concrete exit code", () => {
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/host detects[\s\S]*<INFORMATION MISSING>[\s\S]*process\.exits[\s\S]*code 99/)
     expect(INFORMATION_MISSING_FALLBACK_TEXT).toContain("ONE emit")
+    expect(INFORMATION_MISSING_FALLBACK_TEXT).toMatch(/desired outcome/)
   })
 })
 
