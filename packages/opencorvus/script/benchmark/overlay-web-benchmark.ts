@@ -1271,6 +1271,17 @@ async function writeBenchmarkModelConfig(dir: string, model: string) {
           options: {},
         },
       },
+      // Bench runs always fail-fast on context drops. When any agent
+      // emits <INFORMATION MISSING>...</INFORMATION MISSING> the host
+      // process.exits with code 99 (see prompt/information-missing.ts +
+      // agent/runner.ts). Surfaces dispatcher-level context drops as
+      // hard signals instead of letting agents guess past them — the
+      // primary signal benchmarks exist to catch.
+      assistant: {
+        debug: {
+          fail_on_information_missing: true,
+        },
+      },
     },
     null,
     2,
