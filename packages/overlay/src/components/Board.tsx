@@ -743,7 +743,7 @@ export function Board(props: BoardProps) {
       <Show when={taskKind() !== "build"}>
         <SectionFrame
           id="evaluationCriteriaSection"
-          title={t("section.criteria") || "评估指标"}
+          title={t("section.criteria")}
           icon="criteria"
           bodyId="evaluationCriteriaBody"
           badgeId="evaluationCriteriaBadge"

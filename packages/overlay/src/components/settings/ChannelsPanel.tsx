@@ -197,6 +197,7 @@ export default function ChannelsPanel() {
       <div class="extension-head">
         <label class="field">
           <span class="field-label">{t("channel.public_url")}</span>
+          {/* Fixed example URL; the locale-sensitive field label/hint already carries the instruction. */}
           <input
             class="field-input"
             type="url"
@@ -363,6 +364,7 @@ export default function ChannelsPanel() {
                   return (
                     <label class="field">
                       <span class="field-label">{field.label}</span>
+                      {/* Channel schemas own these placeholders; render the configured example verbatim. */}
                       <input
                         class="field-input"
                         type={inputType}

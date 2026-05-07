@@ -519,6 +519,7 @@ export default function SkillMarketPanel() {
           <div class="config-inline-form">
             <label class="field">
               <span class="field-label">{t("mcp.name")}</span>
+              {/* Fixed MCP server-name example. */}
               <input
                 class="field-input"
                 type="text"
@@ -541,6 +542,7 @@ export default function SkillMarketPanel() {
             <Show when={mcpForm.type === "remote"}>
               <label class="field">
                 <span class="field-label">{t("mcp.remote_url")}</span>
+                {/* Fixed remote MCP URL example. */}
                 <input
                   class="field-input"
                   type="url"
@@ -553,6 +555,7 @@ export default function SkillMarketPanel() {
             <Show when={mcpForm.type === "local"}>
               <label class="field">
                 <span class="field-label">{t("mcp.command")}</span>
+                {/* Fixed command example. */}
                 <input
                   class="field-input"
                   type="text"
@@ -563,6 +566,7 @@ export default function SkillMarketPanel() {
               </label>
               <label class="field">
                 <span class="field-label">{t("mcp.arguments")}</span>
+                {/* Fixed command-line argument example. */}
                 <input
                   class="field-input"
                   type="text"

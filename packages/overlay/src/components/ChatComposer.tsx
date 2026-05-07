@@ -462,7 +462,7 @@ export function ChatComposer(props: ChatComposerProps) {
                 <button
                   type="button"
                   class="chat-attachment-remove"
-                  aria-label="Remove"
+                  aria-label={t("chat.attachment.remove")}
                   onClick={() => removeAttachment(index())}
                 >
                   &times;
