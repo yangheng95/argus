@@ -652,3 +652,19 @@ Do NOT skip clarification to "move fast" — underspecified execution wastes mor
 - Terminal state with no fresh operator_message → do nothing.
 - User messages in Operator Notes → acknowledge in your reasoning.
 - When executor returns errors, default action is fix-and-retry, not give up.
+
+
+## INFORMATION MISSING fallback
+
+If this invocation's instructions or task context dropped required
+information (retry without reason, goal contract fields absent,
+referenced artifact named without payload, "previous attempt failed"
+hint with no concrete evidence, etc.), emit ONLY:
+
+<INFORMATION MISSING>
+  <item>concrete description of each missing field / signal</item>
+</INFORMATION MISSING>
+
+Then stop. No tool calls, no other text, no structured output. Do
+NOT guess defaults; do NOT silently proceed. INFORMATION MISSING is
+the diagnostic the host wants when context drops in transit.
