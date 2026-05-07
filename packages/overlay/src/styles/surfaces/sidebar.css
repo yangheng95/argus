@@ -648,8 +648,8 @@
     linear-gradient(180deg, color-mix(in srgb, var(--bad) 10%, transparent), color-mix(in srgb, var(--bad) 3.4%, transparent) 72%, transparent),
     color-mix(in srgb, var(--surface-strong) 74%, transparent);
   box-shadow:
-    0 calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, black 10%, transparent),
-    inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, white 3%, transparent);
+    0 calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 31%, transparent),
+    inset 0 calc(1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
   font-size: var(--ui-font-control);
   color: var(--text-soft);
 }

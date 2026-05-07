@@ -23,8 +23,8 @@
   background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
   color: var(--text);
   box-shadow:
-    0 calc(12px * var(--ui-scale)) calc(24px * var(--ui-scale)) color-mix(in srgb, black 18%, transparent),
-    inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, white 8%, transparent);
+    0 calc(12px * var(--ui-scale)) calc(24px * var(--ui-scale)) var(--ui-shadow-tone),
+    inset 0 calc(1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
 }
 
 .app-notification[data-tone="success"] {

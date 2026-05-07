@@ -128,7 +128,7 @@
   width: calc(4px * var(--ui-scale));
 }
 .agent-card-body::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, white 12%, transparent);
+  background: var(--ui-glass-tint);
   border-radius: var(--oc-radius-soft);
 }
 .agent-card-body--preview {
@@ -199,7 +199,7 @@
 .executor-tool-output {
   margin: calc(2px * var(--ui-scale)) 0 calc(4px * var(--ui-scale)) calc(28px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  background: color-mix(in srgb, black 20%, transparent);
+  background: color-mix(in srgb, var(--ui-shadow-tone) 62%, transparent);
   border-radius: var(--oc-radius-soft);
   font-family: var(--mono);
   font-size: var(--ui-font-control);
