@@ -17,7 +17,7 @@
   align-items: flex-start;
   justify-content: center;
   padding-top: 12vh;
-  animation: cmdk-fade 0.12s ease;
+  animation: cmdk-fade var(--ui-duration-base) ease;
 }
 
 @keyframes cmdk-fade {
