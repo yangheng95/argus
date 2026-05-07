@@ -5,12 +5,12 @@
    `:root, body[data-theme="dark"]` selector that doubled as the
    implicit fallback for any token light/vscode-dark forgot to
    redeclare was retired (rule 7 — no fallback, rule 8 — no
-   double source). Three changes:
+   double source). Follow-up Batch 4 now scopes the theme to the
+   actual theme attributes on html/body:
 
-   1. Selector is now `body:not([data-theme]), body[data-theme="dark"]`.
-      The `body:not([data-theme])` half handles the boot-time flicker
-      before the JS theme controller stamps `data-theme` on body —
-      same visual default as before, but no `:root` leak.
+   1. Selector now targets the html and body dark data-theme
+      attributes. The old unset-body boot safety net was a dead path
+      after index.html started with an explicit light data-theme.
    2. Structural tokens (font families, font sizes, layout
       dimensions, title/subhead weight + tracking) moved to
       `tokens/design-language.css` :root — they are theme-
@@ -21,9 +21,10 @@
       breaks the test.
    ───────────────────────────────────────────────────────────── */
 
-body:not([data-theme]),
+:root[data-theme="dark"],
 body[data-theme="dark"] {
   color-scheme: dark;
+  --text-on-accent: #ffffff;
   --bg: #111528;
   --surface: rgba(28, 33, 58, 0.86);
   --surface-hover: rgba(39, 45, 77, 0.96);

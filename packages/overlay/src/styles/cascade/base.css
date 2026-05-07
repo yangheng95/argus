@@ -21,13 +21,10 @@
    ───────────────────────────────────────────────────────────── */
 
 :root {
-  color-scheme: dark;
   --ui-scale: 1;
   --ui-window-opacity: var(--ui-opacity-full);
 
-  --text-on-accent: #ffffff;
   --session-scrollbar-size: calc(12px * var(--ui-scale));
-  --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
 
   --ui-font-label: var(--ui-font-meta);
   --ui-gap-xs: calc(4px * var(--ui-scale));

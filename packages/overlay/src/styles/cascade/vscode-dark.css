@@ -10,8 +10,10 @@
    are theme-independent.
    ───────────────────────────────────────────────────────────── */
 
+:root[data-theme="vscode-dark"],
 body[data-theme="vscode-dark"] {
   color-scheme: dark;
+  --text-on-accent: #ffffff;
   --bg: #1e1e1e;
   --surface: rgba(37, 37, 38, 0.92);
   --surface-hover: rgba(45, 45, 48, 0.98);

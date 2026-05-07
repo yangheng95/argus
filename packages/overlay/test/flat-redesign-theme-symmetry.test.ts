@@ -1,12 +1,11 @@
 /**
  * Coverage guard for theme-architecture Step 0 (specs/overlay-flat-redesign/plan.md §八 v3+).
  *
- * Pins the three structural fixes that retire the cross-theme leak:
+ * Pins the structural fixes that retire the cross-theme leak:
  *
- *   1. cascade/dark.css must NOT declare its palette block on `:root`.
- *      The legacy `:root, body[data-theme="dark"]` combined selector
- *      made dark the implicit fallback for any token light/vscode-dark
- *      forgot to redeclare.
+ *   1. Theme selectors must target the real theme attributes on both
+ *      `:root` and `body`, while dark must not keep the dead
+ *      `body:not([data-theme])` boot path.
  *
  *   2. The three theme files in `cascade/` declare the **same set of
  *      palette tokens**. Any asymmetry — a token declared in one
@@ -19,7 +18,7 @@
  *
  * Adding a token to one theme without the other two breaks test (2);
  * adding a structural token to a theme block breaks test (3); restoring
- * the `:root, ...` combined selector breaks test (1).
+ * the dead boot selector breaks test (1).
  */
 
 import { describe, expect, test } from "bun:test"
@@ -40,8 +39,7 @@ const LIGHT = readCascade("light.css")
 const VSCODE_DARK = readCascade("vscode-dark.css")
 
 /** Extract the body of the FIRST `<selector> { ... }` block. The cascade
- * theme files each hold exactly one such block; the `body:not([data-
- * theme]), body[data-theme="dark"]` shape on dark is one selector head. */
+ * theme files each hold exactly one such block. */
 function firstBlockBody(text: string): string {
   const open = text.indexOf("{")
   if (open < 0) throw new Error("no block found")
@@ -65,28 +63,24 @@ function declaredTokens(blockBody: string): Set<string> {
   return out
 }
 
-describe("theme-architecture Step 0 — no :root leak in dark.css", () => {
-  test("cascade/dark.css selector does not include `:root`", () => {
-    // The first `{` line in the file is the palette block selector head.
+describe("theme-architecture Step 0 — theme selectors target data-theme", () => {
+  test("cascade/dark.css selector targets :root and body data-theme", () => {
     const head = DARK.slice(0, DARK.indexOf("{")).trim()
-    expect(head).not.toMatch(/(?:^|\s|,)\s*:root\b/)
-  })
-
-  test("cascade/dark.css uses the body:not([data-theme]) safety net", () => {
-    const head = DARK.slice(0, DARK.indexOf("{")).trim()
-    expect(head).toContain("body:not([data-theme])")
+    expect(head).toContain(':root[data-theme="dark"]')
     expect(head).toContain('body[data-theme="dark"]')
+    expect(head).not.toContain("body:not([data-theme])")
   })
 
-  test("cascade/light.css and vscode-dark.css are scoped to body[data-theme]", () => {
-    expect(LIGHT.slice(0, LIGHT.indexOf("{"))).toContain('body[data-theme="light"]')
-    expect(VSCODE_DARK.slice(0, VSCODE_DARK.indexOf("{"))).toContain(
-      'body[data-theme="vscode-dark"]',
-    )
-    expect(LIGHT.slice(0, LIGHT.indexOf("{"))).not.toMatch(/(?:^|\s|,)\s*:root\b/)
-    expect(VSCODE_DARK.slice(0, VSCODE_DARK.indexOf("{"))).not.toMatch(
-      /(?:^|\s|,)\s*:root\b/,
-    )
+  test("cascade/light.css selector targets :root and body data-theme", () => {
+    const head = LIGHT.slice(0, LIGHT.indexOf("{")).trim()
+    expect(head).toContain(':root[data-theme="light"]')
+    expect(head).toContain('body[data-theme="light"]')
+  })
+
+  test("cascade/vscode-dark.css selector targets :root and body data-theme", () => {
+    const head = VSCODE_DARK.slice(0, VSCODE_DARK.indexOf("{")).trim()
+    expect(head).toContain(':root[data-theme="vscode-dark"]')
+    expect(head).toContain('body[data-theme="vscode-dark"]')
   })
 })
 

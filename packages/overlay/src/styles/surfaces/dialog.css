@@ -9,15 +9,6 @@
   max-height: 100%;
   width: 100%;
   height: 100%;
-  /* Native `<dialog showModal()>` is hoisted to the top layer.
-   * Chromium has historically been inconsistent about propagating
-   * `color-scheme` from the originating tree into the top layer for
-   * form controls, so the body's `color-scheme: dark` would not always
-   * reach the inputs inside the dialog. Declaring `inherit` here makes
-   * the inheritance explicit and stable, which is what makes the
-   * native checkbox / scrollbar / autofill chrome inside the dialog
-   * follow the active theme instead of drifting to the UA light scheme. */
-  color-scheme: inherit;
 }
 
 #appDialog {
@@ -45,8 +36,7 @@
   /* `height: fit-content` shrinks the modal to the natural sum of its
    * flex children. Without this Chromium gives a `<dialog>:modal` in
    * the top layer enough vertical space to fill the max-height even
-   * when the children only need a fraction (the same UA quirk that
-   * makes top-layer form controls drop their inherited color-scheme).
+   * when the children only need a fraction.
    * Audited 2026-05-06 against goal / app / session dialogs — they
    * already declared their own children's heights, so shrinking the
    * frame to fit-content does not clip anything. */
