@@ -25,14 +25,9 @@ import {
 } from "./components/WorkspacePanel";
 import type { DiffTarget } from "./services/diff";
 import { initApp } from "./services/init";
-import { applyTasks, loadTasks, boardStore, loadBoard, setBoardStore, setBoardData } from "./store/board";
-import {
-  messageStore,
-  setMessages,
-  setSelectedTaskID,
-  setSseConnected,
-} from "./store/messages";
-import { appStore, setAppStore } from "./store/app";
+import { loadTasks, boardStore, loadBoard } from "./store/board";
+import { messageStore } from "./store/messages";
+import { appStore } from "./store/app";
 import {
   selectTask,
   retryTask,
@@ -487,114 +482,15 @@ function installGlobalBridges(): void {
     applyZoom(next);
     saveSettings();
   };
-  // Benchmark / test instrumentation: direct bridge into reactive stores.
-  // Tests mutate this proxy and expect the real Solid UI to update immediately.
-  const testStateTarget: Record<string, unknown> = {};
-  const readState = (prop: PropertyKey): unknown => {
-    if (typeof prop !== "string") return Reflect.get(testStateTarget, prop);
-    if (prop === "directory") return activeDirectory();
-    if (prop === "board") return boardStore.board;
-    if (prop === "tasks") return boardStore.tasks;
-    if (prop === "pendingTasks") return boardStore.pendingTasks;
-    if (prop === "selectedTaskID") return boardStore.selectedTaskID;
-    if (prop === "path") return boardStore.path;
-    if (prop === "vcs") return boardStore.vcs;
-    if (prop === "changes") return boardStore.changes;
-    if (prop === "messages") return messageStore.messages;
-    if (prop === "sseConnected") return messageStore.sseConnected;
-    if (prop in appStore) return (appStore as unknown as Record<string, unknown>)[prop];
-    if (prop === "settings") return settingsStore;
-    if (prop in settingsStore) return (settingsStore as unknown as Record<string, unknown>)[prop];
-    return Reflect.get(testStateTarget, prop);
-  };
-  const writeState = (prop: PropertyKey, value: unknown): boolean => {
-    if (typeof prop !== "string") return Reflect.set(testStateTarget, prop, value);
-    if (prop === "directory") {
-      setSettingsStore("directory", typeof value === "string" ? value : "");
-      return true;
-    }
-    if (prop === "board") {
-      setBoardData(value as any);
-      return true;
-    }
-    if (prop === "tasks") {
-      applyTasks(Array.isArray(value) ? (value as any[]) : []);
-      return true;
-    }
-    if (prop === "pendingTasks") {
-      setBoardStore("pendingTasks", Array.isArray(value) ? (value as any[]) : []);
-      return true;
-    }
-    if (prop === "selectedTaskID") {
-      const next = typeof value === "string" ? value : "";
-      setBoardStore("selectedTaskID", next);
-      setSelectedTaskID(next);
-      return true;
-    }
-    if (prop === "path") {
-      setBoardStore("path", value as any);
-      return true;
-    }
-    if (prop === "vcs") {
-      setBoardStore("vcs", value as any);
-      return true;
-    }
-    if (prop === "changes") {
-      setBoardStore("changes", Array.isArray(value) ? (value as any[]) : []);
-      return true;
-    }
-    if (prop === "messages") {
-      setMessages(Array.isArray(value) ? (value as any[]) : []);
-      return true;
-    }
-    if (prop === "sseConnected") {
-      setSseConnected(value === true);
-      return true;
-    }
-    if (prop in appStore) {
-      setAppStore(prop as any, value as any);
-      return true;
-    }
-    if (prop in settingsStore) {
-      setSettingsStore(prop as any, value as any);
-      return true;
-    }
-    return Reflect.set(testStateTarget, prop, value);
-  };
-  (window as any).state = new Proxy(testStateTarget, {
-    get(_target, prop) {
-      return readState(prop);
-    },
-    set(_target, prop, value) {
-      return writeState(prop, value);
-    },
-    ownKeys() {
-      return Array.from(
-        new Set([
-          ...Reflect.ownKeys(testStateTarget),
-          ...Object.keys(boardStore),
-          ...Object.keys(messageStore),
-          ...Object.keys(appStore),
-          ...Object.keys(settingsStore),
-          "directory",
-          "settings",
-        ]),
-      );
-    },
-    getOwnPropertyDescriptor(_target, prop) {
-      return {
-        configurable: true,
-        enumerable: true,
-        writable: true,
-        value: readState(prop),
-      };
-    },
-  });
   // Test hook: snapshot the current card tree as a flat JSON shape. Used by
   // Playwright / integration tests to read the live store-backed tree.
   (window as any).renderConversation = () =>
     cardTreeStore.order.map((id) => cardTreeStore.cards[id]).filter(Boolean);
   (window as any).cardTree = cardTreeStore;
+  // Benchmark hook: expose named stores so external probes do not depend on
+  // the legacy aggregate `state` bridge.
+  (window as any).boardStore = boardStore;
+  (window as any).settingsStore = settingsStore;
   (window as any).applyDirectory = applyDirectory;
   (window as any).loadTasks = loadTasks;
   (window as any).selectTask = selectTask;
