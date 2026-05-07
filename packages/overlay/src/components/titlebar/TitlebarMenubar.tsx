@@ -351,6 +351,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
   const zoomPercent = createMemo(() => Math.round(settingsStore.zoom * 100));
 
   return (
+    /* OpenCorvus is the product brand name, so this menubar landmark keeps the literal brand label. */
     <div class="titlebar-menubar" role="menubar" aria-label="OpenCorvus" data-no-drag="true" ref={(el) => (rootRef = el)}>
       <For each={menus()}>
         {(menu) => (

@@ -299,7 +299,7 @@ export function CommandPalette() {
           class="cmdk-panel"
           role="dialog"
           aria-modal="true"
-          aria-label="Command palette"
+          aria-label={t("command_palette.label")}
           onClick={(e) => e.stopPropagation()}
         >
           <input
