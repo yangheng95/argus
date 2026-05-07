@@ -77,11 +77,11 @@ describe("flat-redesign Rule A — surface containers have no resting self-borde
     expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b\s+(?:var\(--border\)|transparent)/)
   })
 
-  test(".section right-rail card has no self-border", () => {
-    const body = ruleBody(inspector, ".section")
+  test(".oc-section right-rail card has no self-border", () => {
+    const body = ruleBody(inspector, ".oc-section")
     expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b\s+var\(--border\)/)
     // Stack divider re-assertion is also retired.
-    expect(inspector).not.toMatch(/\.section:last-child\s*\{/)
+    expect(inspector).not.toMatch(/\.oc-section:last-child\s*\{/)
   })
 
   test(".executor-chip resting state has no border", () => {
@@ -148,13 +148,13 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
     expect(body).not.toMatch(/border-color\s*:/)
   })
 
-  test(".section[data-phase-state=\"active\"] uses left-stripe via ::after, not border-color", () => {
-    const body = ruleBody(inspector, '.section[data-phase-state="active"]')
+  test(".oc-section[data-phase-state=\"active\"] uses left-stripe via ::after, not border-color", () => {
+    const body = ruleBody(inspector, '.oc-section[data-phase-state="active"]')
     expect(body).not.toMatch(/border-color\s*:/)
     // Outer drop-shadow chrome was the other half of the active state — also retired.
     expect(body).not.toMatch(/box-shadow\s*:\s*[^;]*\binset\b/)
     // The accent left-stripe `::after` rule must exist.
-    expect(inspector).toMatch(/\.section\[data-phase-state="active"\]::after\s*\{/)
+    expect(inspector).toMatch(/\.oc-section\[data-phase-state="active"\]::after\s*\{/)
   })
 
   test(".executor-selector[data-open=\"true\"] .executor-chip uses bg-tint, not border-color", () => {

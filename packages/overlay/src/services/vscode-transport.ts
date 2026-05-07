@@ -37,6 +37,7 @@ import type {
   TransportResponse,
 } from "./host-transport"
 import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, nativeUnsupported } from "./host-transport"
+import { publishHostTheme } from "./host-theme"
 import { loadBrowserOverlaySettings, saveBrowserOverlaySettings } from "./overlay-settings-storage"
 
 // ── VS Code API singleton ──
@@ -215,6 +216,10 @@ function handleIncoming(raw: unknown): void {
           console.error(`[vscode-transport] ui-command handler threw kind=${msg.kind}`, err)
         }
       }
+      return
+    }
+    case "host:theme": {
+      publishHostTheme(msg.theme)
       return
     }
   }
