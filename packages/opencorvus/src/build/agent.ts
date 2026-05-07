@@ -432,7 +432,18 @@ export namespace BuildAgent {
             //   3. renderAttachmentInventory → textual ledger of EVERY
             //      attachment (multimodal + reference-only) so the LLM
             //      anchors its reasoning to "I have these files"
+            //
+            // Plus an UNCONDITIONAL contract preamble (only when this dispatch
+            // actually carries multimodal references): the static system
+            // prompt's reference-fidelity language is conditional ("If the
+            // prompt depends on screenshots…"), and models routinely judge
+            // their way out of the condition. The preamble eliminates that
+            // judgement: when this branch runs, attachments demonstrably
+            // exist; restoration is therefore not optional. Filenames are
+            // listed so the model cannot pretend "no specific image was named".
+            const visualContractPreamble = renderVisualContractPreamble(allMultimodal)
             const enrichedText =
+              visualContractPreamble +
               text +
               AttachmentStore.renderStagedList(stagedAttachments) +
               AttachmentStore.renderAttachmentInventory(allMultimodal)
@@ -1877,6 +1888,54 @@ function compactLine(value: string, max = 320): string {
   const normalized = value.replace(/\s+/g, " ").trim()
   if (normalized.length <= max) return normalized
   return `${normalized.slice(0, max)}…`
+}
+
+/**
+ * Render an UNCONDITIONAL visual-contract preamble, prepended to the build
+ * agent's user prompt only when this dispatch carries multimodal references
+ * (image / pdf / etc.). The static system prompt's reference-fidelity
+ * language is conditional ("If the prompt depends on screenshots…"); models
+ * frequently judge their way out of the condition and treat references as
+ * inspiration. The preamble removes the judgement call: when this branch
+ * runs, attachments demonstrably exist; restoration is therefore not
+ * optional. Filenames are listed so the model cannot pretend "no specific
+ * image was named". Only image/pdf-shaped MIMEs are listed — text/JSON
+ * attachments take a different prompt path (read_attachment / inline).
+ */
+export function renderVisualContractPreamble(
+  attachments: ReadonlyArray<{ mime: string; filename?: string; size?: number; sha?: string }>,
+): string {
+  if (attachments.length === 0) return ""
+  const visual = attachments.filter((a) =>
+    typeof a?.mime === "string" &&
+    (a.mime.startsWith("image/") || a.mime === "application/pdf"),
+  )
+  if (visual.length === 0) return ""
+  const lines: string[] = [
+    "## Visual Reference Contract (binding for this dispatch)",
+    "",
+    "The file(s) below are inlined above as multimodal parts AND staged on",
+    "disk under `references/`. They are the authoritative visual target for",
+    "this dispatch — restore their pixels 1:1 within stack constraints.",
+    "NOT inspiration; NOT optional. Restoring something that \"looks vaguely",
+    "similar\" is a verified failure, not partial credit.",
+    "",
+  ]
+  for (const att of visual) {
+    const name = att.filename ?? att.sha ?? "(unnamed attachment)"
+    const size = typeof att.size === "number" ? ` — ${att.size} bytes` : ""
+    lines.push(`- ${name} (${att.mime}${size})`)
+  }
+  lines.push("")
+  lines.push(
+    "If you cannot read the pixels from the inlined file part (model is not",
+    "vision-capable, decode failure, etc.), fail this goal via",
+    "`report_build_result` with a concrete blocker that names the file —",
+    "do NOT guess from filename or surrounding prose and proceed.",
+    "",
+    "",
+  )
+  return lines.join("\n")
 }
 
 export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext): string {
