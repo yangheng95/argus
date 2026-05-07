@@ -4,7 +4,7 @@ import { EngineService } from "@/task-api"
 import { Session } from "@/session"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema } from "@/panel/capability"
-import { isDecodableText, decodeDataUrlText } from "@/session/text-mime"
+import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
 
@@ -99,17 +99,20 @@ export const PanelTool = Tool.define("panel", {
           .join("")
         const binaryAttachments = rawAttachments
           .filter((a) => !isDecodableText(a.mime, a.filename))
-          .map((a) => {
-            // overlay sends data URLs (data:<mime>;base64,<bytes>); the engine
-            // schema expects raw base64 only. Strip the prefix once here so
-            // EngineService.createTask sees a clean TaskAttachmentInput.
-            const data = a.url.includes(",") ? a.url.split(",", 2)[1] : a.url
-            return {
-              mime: a.mime,
-              data,
-              ...(a.filename ? { filename: a.filename } : {}),
-            }
-          })
+          .map((a) => ({
+            mime: a.mime,
+            // Strict: the upstream control-plane LLM session received a
+            // ControlAttachment.url (declared shape: data URL). If a caller
+            // sends a server-relative URL (e.g. /attachment/<sha>...), this
+            // throws — silently treating an HTTP path as base64 would persist
+            // garbage bytes as "the user's reference image" and trigger the
+            // exact fidelity-0 surface this fix is closing. Rule 7.
+            data: decodeDataUrlBase64(
+              a.url,
+              `panel.create_task attachment "${a.filename ?? a.mime}"`,
+            ),
+            ...(a.filename ? { filename: a.filename } : {}),
+          }))
         const baseRequest = originalText || params.request
         const request = attachmentTexts ? baseRequest + attachmentTexts : baseRequest
         const taskID = await EngineService.createTask({
@@ -139,10 +142,40 @@ export const PanelTool = Tool.define("panel", {
         }
       }
       case "send_task_message": {
+        // Forward control-plane LLM attachments to the task message ingress
+        // exactly the same way create_task does — text MIMEs are inlined into
+        // the message prose, binary MIMEs are decoded once and passed as
+        // TaskMessageInput.attachments so handleTaskMessage's
+        // appendTaskAttachment loop surfaces them on task.attachments.
+        // Without this, follow-up screenshots on a bound task vanish at the
+        // control-plane edge, mirroring the original create_task bug.
+        const followAttachments = Array.isArray(ctx.extra?.attachments)
+          ? (ctx.extra.attachments as Array<{ mime: string; url: string; filename?: string }>)
+          : []
+        const followText = followAttachments
+          .filter((a) => isDecodableText(a.mime, a.filename))
+          .map((a) => {
+            const content = decodeDataUrlText(a.url)
+            if (!content) return ""
+            return `\n\n--- ${a.filename ?? "attachment"} ---\n${content}`
+          })
+          .filter(Boolean)
+          .join("")
+        const followBinaries = followAttachments
+          .filter((a) => !isDecodableText(a.mime, a.filename))
+          .map((a) => ({
+            mime: a.mime,
+            data: decodeDataUrlBase64(
+              a.url,
+              `panel.send_task_message attachment "${a.filename ?? a.mime}"`,
+            ),
+            ...(a.filename ? { filename: a.filename } : {}),
+          }))
         const result = await EngineService.handleTaskMessage(params.taskID, {
-          text: params.text,
+          text: followText ? params.text + followText : params.text,
           source: params.source ?? ctx.extra?.source ?? "panel",
           user_id: params.user_id,
+          ...(followBinaries.length > 0 ? { attachments: followBinaries } : {}),
         })
         return {
           title: "Task message",

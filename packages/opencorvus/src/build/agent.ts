@@ -441,7 +441,9 @@ export namespace BuildAgent {
             // judgement: when this branch runs, attachments demonstrably
             // exist; restoration is therefore not optional. Filenames are
             // listed so the model cannot pretend "no specific image was named".
-            const visualContractPreamble = renderVisualContractPreamble(allMultimodal)
+            const visualContractPreamble = renderVisualContractPreamble(allMultimodal, {
+              mode: "inlined",
+            })
             const enrichedText =
               visualContractPreamble +
               text +
@@ -450,6 +452,20 @@ export namespace BuildAgent {
             return [{ type: "text" as const, text: enrichedText }, ...inline]
           }
         : undefined
+      // External coding providers (codex / claude-code) get only a single
+      // text prompt — no multimodal file parts, no attachment inventory.
+      // The visual contract has to ride on the prompt itself, with the
+      // "staged-only" wording so the LLM is told it must `read` the
+      // worktree's references/<filename> on disk (not pretend it saw
+      // pixels in the message). Mirrors the mirrorcode path so external
+      // executors stop free-styling away from screenshots they were given.
+      const buildExternalPromptText = allMultimodal.length > 0
+        ? () =>
+            renderVisualContractPreamble(allMultimodal, { mode: "staged-only" }) +
+            buildPromptText() +
+            AttachmentStore.renderStagedList(stagedAttachments) +
+            AttachmentStore.renderAttachmentInventory(allMultimodal)
+        : buildPromptText
 
       // Tracks whether `merge_back` ever returned `merged` for this build
       // session. The post-run guard below uses it to reject "agent claimed
@@ -663,7 +679,7 @@ export namespace BuildAgent {
             worktreeDir: worktreeDir!,
             worktreeBranch,
             ownsWorktree,
-            buildPromptText,
+            buildPromptText: buildExternalPromptText,
             taskSignals,
             signal: input.signal,
             onSessionCreated: input.onSessionCreated,
@@ -1892,7 +1908,7 @@ function compactLine(value: string, max = 320): string {
 
 /**
  * Render an UNCONDITIONAL visual-contract preamble, prepended to the build
- * agent's user prompt only when this dispatch carries multimodal references
+ * agent's user prompt whenever this dispatch carries multimodal references
  * (image / pdf / etc.). The static system prompt's reference-fidelity
  * language is conditional ("If the prompt depends on screenshots…"); models
  * frequently judge their way out of the condition and treat references as
@@ -1901,9 +1917,22 @@ function compactLine(value: string, max = 320): string {
  * optional. Filenames are listed so the model cannot pretend "no specific
  * image was named". Only image/pdf-shaped MIMEs are listed — text/JSON
  * attachments take a different prompt path (read_attachment / inline).
+ *
+ * `mode`:
+ *   - `"inlined"` (mirrorcode in-process build): file parts are inlined in
+ *     the user message above this text. Tell the LLM it can look at them
+ *     directly and fail loudly if it can't.
+ *   - `"staged-only"` (external coding providers — codex, claude-code):
+ *     no inline file parts in the protocol; the bytes only exist on disk
+ *     in the goal worktree's `references/` directory. Tell the LLM where
+ *     to read them and require it to actually open them before claiming
+ *     the visual is done.
  */
+export type VisualContractMode = "inlined" | "staged-only"
+
 export function renderVisualContractPreamble(
   attachments: ReadonlyArray<{ mime: string; filename?: string; size?: number; sha?: string }>,
+  options: { mode?: VisualContractMode } = {},
 ): string {
   if (attachments.length === 0) return ""
   const visual = attachments.filter((a) =>
@@ -1911,14 +1940,16 @@ export function renderVisualContractPreamble(
     (a.mime.startsWith("image/") || a.mime === "application/pdf"),
   )
   if (visual.length === 0) return ""
+  const mode = options.mode ?? "inlined"
+  const sourceLine = mode === "inlined"
+    ? "The file(s) below are inlined above as multimodal parts AND staged on disk under `references/`."
+    : "The file(s) below are staged on disk under `references/<filename>`. Your runtime cannot inline them as multimodal message parts — you MUST open each one through the project's read tool / image-viewing tool before producing UI code."
   const lines: string[] = [
     "## Visual Reference Contract (binding for this dispatch)",
     "",
-    "The file(s) below are inlined above as multimodal parts AND staged on",
-    "disk under `references/`. They are the authoritative visual target for",
-    "this dispatch — restore their pixels 1:1 within stack constraints.",
-    "NOT inspiration; NOT optional. Restoring something that \"looks vaguely",
-    "similar\" is a verified failure, not partial credit.",
+    sourceLine,
+    "They are the authoritative visual target for this dispatch — restore their pixels 1:1 within stack constraints.",
+    "NOT inspiration. NOT optional. Restoring something that \"looks vaguely similar\" is a verified failure, not partial credit.",
     "",
   ]
   for (const att of visual) {
@@ -1927,14 +1958,22 @@ export function renderVisualContractPreamble(
     lines.push(`- ${name} (${att.mime}${size})`)
   }
   lines.push("")
-  lines.push(
-    "If you cannot read the pixels from the inlined file part (model is not",
-    "vision-capable, decode failure, etc.), fail this goal via",
-    "`report_build_result` with a concrete blocker that names the file —",
-    "do NOT guess from filename or surrounding prose and proceed.",
-    "",
-    "",
-  )
+  if (mode === "inlined") {
+    lines.push(
+      "If you cannot read the pixels from the inlined file part (model is not",
+      "vision-capable, decode failure, etc.), fail this goal via",
+      "`report_build_result` with a concrete blocker that names the file —",
+      "do NOT guess from filename or surrounding prose and proceed.",
+    )
+  } else {
+    lines.push(
+      "If you cannot read the staged file (missing on disk, unreadable, your",
+      "tools cannot ingest its MIME), fail this goal via `report_build_result`",
+      "with a concrete blocker that names the file — do NOT guess from filename",
+      "or surrounding prose and proceed.",
+    )
+  }
+  lines.push("", "")
   return lines.join("\n")
 }
 
