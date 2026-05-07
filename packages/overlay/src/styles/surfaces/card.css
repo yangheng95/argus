@@ -623,7 +623,7 @@ body {
   border-radius: 50%;
   border: calc(1.6px * var(--ui-scale)) solid var(--warn-dim);
   border-top-color: var(--warn);
-  animation: card-spin 0.8s linear infinite;
+  animation: card-spin var(--ui-duration-loop-spin) linear infinite;
 }
 @keyframes card-spin {
   to { transform: rotate(360deg); }
@@ -1685,7 +1685,7 @@ body {
   background: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
   border-color: color-mix(in srgb, var(--warn) 36%, var(--card-border));
   color: color-mix(in srgb, var(--warn) 70%, var(--text-strong));
-  animation: task-progress-pulse 1.6s ease-in-out infinite;
+  animation: task-progress-pulse var(--ui-duration-loop-pulse) ease-in-out infinite;
 }
 .task-progress__pill[data-state="blocked"] {
   background: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));

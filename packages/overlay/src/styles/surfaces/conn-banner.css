@@ -37,7 +37,7 @@
   border-radius: 50%;
   background: var(--bad);
   box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 40%, transparent);
-  animation: conn-banner-pulse 1.4s ease-in-out infinite;
+  animation: conn-banner-pulse var(--ui-duration-loop-connection-pulse) ease-in-out infinite;
 }
 
 .conn-banner[data-status="connecting"] .conn-banner__dot {

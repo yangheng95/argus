@@ -84,7 +84,7 @@
 }
 
 .task-switch-progress[data-active="true"]::before {
-  animation: task-switch-progress-slide 1.1s ease-in-out infinite;
+  animation: task-switch-progress-slide var(--ui-duration-loop-progress) ease-in-out infinite;
 }
 
 @keyframes task-switch-progress-slide {
