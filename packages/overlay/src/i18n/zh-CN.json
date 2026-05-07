@@ -102,6 +102,8 @@
   "notify.permission_granted_settings_body": "任务更新现在可以显示在系统通知区域。",
   "settings.desktop_notifications_label": "桌面通知",
   "settings.desktop_notifications_hint": "任务完成、失败、取消或等待响应时通知系统提醒。",
+  "settings.fail_on_information_missing_label": "INFORMATION MISSING 失败立即退出（调试）",
+  "settings.fail_on_information_missing_hint": "开启后，所有 agent 的 system prompt 会注入 INFORMATION MISSING fallback 段；任意 agent 输出 <INFORMATION MISSING> XML 块时 host 立即 process.exit，把上游信息丢失立刻暴露出来。仅排查用，生产请关闭。",
   "channel.public_url_invalid": "公共 URL 必须以 http:// 或 https:// 开头",
   "task_overlay.back": "工作区",
   "task_overlay.back_title": "返回工作区 (Esc)",
