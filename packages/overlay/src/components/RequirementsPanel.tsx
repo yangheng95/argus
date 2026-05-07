@@ -38,14 +38,6 @@ function typeBadgeClass(type: string): string {
   }
 }
 
-function statusBadgeClass(status: string): string {
-  switch (status) {
-    case "passed": return "req-status--passed";
-    case "failed": return "req-status--failed";
-    default: return "req-status--pending";
-  }
-}
-
 export function RequirementsPanel(props: RequirementsPanelProps) {
   const hasData = () => props.requirements && props.requirements.length > 0;
   const hasStream = () => props.streamingMessages && props.streamingMessages.length > 0;
@@ -82,7 +74,7 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
                 </div>
                 <div class="req-item-meta">
                   <span class={`req-type ${typeBadgeClass(req.type)}`}>{req.type}</span>
-                  <span class={`req-status ${statusBadgeClass(req.status || "pending")}`}>
+                  <span class="req-status" data-req-status={req.status || "pending"}>
                     {req.status || "pending"}
                   </span>
                   <Show when={req.priority === "advisory"}>

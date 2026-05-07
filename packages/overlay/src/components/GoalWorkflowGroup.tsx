@@ -9,8 +9,10 @@ import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
+import { goalStatusToTaskStatus } from "../utils/status-mapping";
 import { StaticTextPart } from "./TextPart";
 import { Icon } from "./Icon";
+import { statusIconName } from "./Board";
 
 // ── Types ──
 
@@ -85,26 +87,6 @@ interface GoalWorkflowGroupProps {
   onDeleteGoal?: (goalID: string) => void;
 }
 
-// ── Helpers ──
-
-function goalStatusIconName(status: string): "status-completed" | "status-failed" | "status-active" | "status-idle" {
-  switch (status) {
-    case "passed": return "status-completed";
-    case "failed": return "status-failed";
-    case "running": return "status-active";
-    default: return "status-idle";
-  }
-}
-
-function goalStatusClass(status: string): string {
-  switch (status) {
-    case "passed": return "gwg--passed";
-    case "failed": return "gwg--failed";
-    case "running": return "gwg--running";
-    default: return "gwg--pending";
-  }
-}
-
 // ── Main GoalWorkflowGroup ──
 
 export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
@@ -122,7 +104,8 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
 
   return (
     <div
-      class={`gwg ${goalStatusClass(props.goal.goalStatus)}`}
+      class="gwg"
+      data-goal-status={props.goal.goalStatus}
       classList={{ "gwg--expanded": expanded() }}
     >
       <div
@@ -136,7 +119,7 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
         }}
       >
         <span class="gwg-status-icon" data-status={props.goal.goalStatus}>
-          <Icon name={goalStatusIconName(props.goal.goalStatus)} />
+          <Icon name={statusIconName(goalStatusToTaskStatus(props.goal.goalStatus))} />
         </span>
         <div class="gwg-title-row">
           <span class="gwg-title">{props.goal.goalTitle}</span>

@@ -16,6 +16,9 @@
  */
 import { For, Show } from "solid-js";
 import { familyOrder, familyLabel } from "../utils/criteria";
+import { goalStatusToTaskStatus } from "../utils/status-mapping";
+import { Icon } from "./Icon";
+import { statusIconName } from "./Board";
 
 interface CriteriaCheck {
   name: string;
@@ -27,13 +30,6 @@ interface CriteriaCheck {
 
 interface Props {
   checks: CriteriaCheck[];
-}
-
-function statusIcon(status: string): string {
-  if (status === "passed") return "✓";
-  if (status === "failed") return "✗";
-  if (status === "skipped") return "−";
-  return "·";
 }
 
 function groupByFamily(checks: CriteriaCheck[]) {
@@ -62,14 +58,14 @@ export function EvaluationCriteriaPanel(props: Props) {
     <div class="criteria-panel">
       <div class="criteria-summary">
         <span class="criteria-summary-item criteria-summary-item--passed">
-          {statusIcon("passed")} {summary().passed}
+          <Icon name={statusIconName(goalStatusToTaskStatus("passed"))} /> {summary().passed}
         </span>
         <span class="criteria-summary-item criteria-summary-item--failed">
-          {statusIcon("failed")} {summary().failed}
+          <Icon name={statusIconName(goalStatusToTaskStatus("failed"))} /> {summary().failed}
         </span>
         <Show when={summary().skipped > 0}>
           <span class="criteria-summary-item criteria-summary-item--skipped">
-            {statusIcon("skipped")} {summary().skipped}
+            <Icon name={statusIconName(goalStatusToTaskStatus("skipped"))} /> {summary().skipped}
           </span>
         </Show>
       </div>
@@ -80,9 +76,9 @@ export function EvaluationCriteriaPanel(props: Props) {
             <ul class="criteria-list">
               <For each={items}>
                 {(item) => (
-                  <li class={`criteria-item criteria-item--${item.status}`}>
+                  <li class="criteria-item" data-criteria-status={item.status}>
                     <span class="criteria-status" data-result={item.status}>
-                      {statusIcon(item.status)}
+                      <Icon name={statusIconName(goalStatusToTaskStatus(item.status))} />
                     </span>
                     <span class="criteria-name">{item.label || item.name}</span>
                     <Show when={item.evidence}>
