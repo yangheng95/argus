@@ -1,100 +1,56 @@
 /* ─────────────────────────────────────────────────────────────
-   Dark theme palette — Tauri / browser host.
+   Dark theme palette.
 
-   Theme isolation contract (theme-vscode-passthrough-2026-05-07,
-   user 2026-05-07: "所有主题都要隔离"):
+   Theme-architecture Step 0 (2026-05-04): the legacy
+   `:root, body[data-theme="dark"]` selector that doubled as the
+   implicit fallback for any token light/vscode-dark forgot to
+   redeclare was retired (rule 7 — no fallback, rule 8 — no
+   double source). Follow-up Batch 4 now scopes the theme to the
+   actual theme attributes on html/body:
 
-   Every theme file is structured into two clearly separated layers,
-   matching the Material 3 / GitHub Primer / Adobe Spectrum
-   convention of *ref tokens* feeding *sys tokens*:
-
-     1. Reference palette (--ref-*) — raw color swatches for THIS
-        theme only. Hex literals live here and only here. Other
-        themes never reference these — light.css has its own
-        --ref-* set, vscode-dark.css uses --vscode-* injected by
-        the webview.
-
-     2. Semantic surface API (--bg / --text / --accent / ...) — the
-        public token contract every surface and primitive consumes.
-        These resolve through `var(--ref-*)` and `color-mix()`; no
-        hex / rgb / rgba literal is permitted here. The same name
-        set is declared in every theme — flat-redesign-theme-
-        symmetry.test pins the parity. flat-redesign-cascade-no-
-        literal.test pins the no-literal discipline.
-
-   What "isolation" buys us: a surface that wants e.g. a slightly
-   warmer accent hover only edits this one file's ref layer, and
-   every consumer follows. Cross-theme leak is impossible — one
-   theme cannot accidentally reference another theme's ref token
-   because the names are theme-scoped (--ref-dark-* vs --ref-light-*).
+   1. Selector now targets the html and body dark data-theme
+      attributes. The old unset-body boot safety net was a dead path
+      after index.html started with an explicit light data-theme.
+   2. Structural tokens (font families, font sizes, layout
+      dimensions, title/subhead weight + tracking) moved to
+      `tokens/design-language.css` :root — they are theme-
+      independent physical constants.
+   3. Three theme files declare the **same palette token set**.
+      Symmetry is enforced by `test/flat-redesign-theme-symmetry.
+      test.ts`. Adding a token to one theme without the other two
+      breaks the test.
    ───────────────────────────────────────────────────────────── */
 
 :root[data-theme="dark"],
 body[data-theme="dark"] {
-  /* ── Reference palette ─────────────────────────────────────── */
-  /* Neutral cool-violet ramp — bg / surfaces / text. */
-  --ref-dark-neutral-950: #111528;
-  --ref-dark-neutral-900: #121628;
-  --ref-dark-neutral-850: #14182c;
-  --ref-dark-neutral-800: #171c32;
-  --ref-dark-neutral-750: #191e34;
-  --ref-dark-neutral-700: #1c213a;
-  --ref-dark-neutral-650: #1f2339;
-  --ref-dark-neutral-600: #222744;
-  --ref-dark-neutral-550: #272d4d;
-  --ref-dark-text-muted: #727fa9;
-  --ref-dark-text-soft: #9ea9d1;
-  --ref-dark-text-base: #c8d0ee;
-  --ref-dark-text-strong: #f6f8ff;
-  --ref-dark-text-on-accent: #ffffff;
-  --ref-dark-border: #aab7ec;
-  --ref-dark-border-strong: #b8c4f6;
-  --ref-dark-divider: #b2beeb;
-  /* Accent (violet-blue) ramp. */
-  --ref-dark-accent-light: #4b8dff;
-  --ref-dark-accent-base: #7b83ff;
-  --ref-dark-accent-strong: #9b82ff;
-  --ref-dark-accent-deep: #9b62ff;
-  --ref-dark-accent-border: #7c86ff;
-  /* Status hues. */
-  --ref-dark-info: #78a8ff;
-  --ref-dark-good: #70c990;
-  --ref-dark-warn: #d7a15e;
-  --ref-dark-bad: #ef7f86;
-  /* Scrollbar thumb tint (lighter neutral). */
-  --ref-dark-scrollbar: #aab7ec;
-
-  /* ── Semantic surface API ──────────────────────────────────── */
   color-scheme: dark;
-  --text-on-accent: var(--ref-dark-text-on-accent);
-  --bg: var(--ref-dark-neutral-950);
-  --surface: color-mix(in srgb, var(--ref-dark-neutral-700) 86%, transparent);
-  --surface-hover: color-mix(in srgb, var(--ref-dark-neutral-550) 96%, transparent);
-  --surface-inset: color-mix(in srgb, var(--ref-dark-neutral-850) 92%, transparent);
-  --surface-strong: color-mix(in srgb, var(--ref-dark-neutral-600) 94%, transparent);
-  --rail-surface: color-mix(in srgb, var(--ref-dark-neutral-750) 90%, transparent);
-  --chat-canvas: color-mix(in srgb, var(--ref-dark-neutral-900) 82%, transparent);
-  --inspector-surface: color-mix(in srgb, var(--ref-dark-neutral-750) 90%, transparent);
+  --text-on-accent: #ffffff;
+  --bg: #111528;
+  --surface: rgba(28, 33, 58, 0.86);
+  --surface-hover: rgba(39, 45, 77, 0.96);
+  --surface-inset: rgba(20, 24, 44, 0.92);
+  --surface-strong: rgba(34, 39, 68, 0.94);
+  --rail-surface: rgba(25, 30, 52, 0.9);
+  --chat-canvas: rgba(18, 22, 40, 0.82);
+  --inspector-surface: rgba(25, 30, 52, 0.9);
 
   --body-bg: var(--bg);
   --panel-body-bg: var(--bg);
   --panel-body-blur: none;
-  --chrome: color-mix(in srgb, var(--ref-dark-neutral-800) 82%, transparent);
-  --border: color-mix(in srgb, var(--ref-dark-border) 15%, transparent);
-  --border-hover: color-mix(in srgb, var(--ref-dark-accent-border) 38%, transparent);
-  --border-strong: color-mix(in srgb, var(--ref-dark-border-strong) 24%, transparent);
-
-  --text: var(--ref-dark-text-base);
-  --text-strong: var(--ref-dark-text-strong);
-  --text-soft: var(--ref-dark-text-soft);
-  --text-muted: var(--ref-dark-text-muted);
-
-  --accent: var(--ref-dark-accent-base);
+  --chrome: rgba(23, 28, 50, 0.82);
+  --border: rgba(170, 183, 236, 0.15);
+  --border-hover: rgba(124, 134, 255, 0.38);
+  --border-strong: rgba(184, 196, 246, 0.24);
+  --text: #c8d0ee;
+  --text-strong: #f6f8ff;
+  --text-soft: #9ea9d1;
+  --text-muted: #727fa9;
+  --accent: #7b83ff;
   --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
-  --accent-hover: var(--ref-dark-accent-strong);
-  --accent-start: var(--ref-dark-accent-light);
-  --accent-mid: var(--ref-dark-accent-base);
-  --accent-end: var(--ref-dark-accent-deep);
+  --accent-hover: #9b82ff;
+  --accent-start: #4b8dff;
+  --accent-mid: #7b83ff;
+  --accent-end: #9b62ff;
   --accent-gradient: var(--accent);
   --accent-gradient-hover: var(--accent-hover);
   --accent-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 24%, transparent);
@@ -102,57 +58,46 @@ body[data-theme="dark"] {
   --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
   --hover-accent-border: color-mix(in srgb, var(--accent) 32%, transparent);
   --hover-accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
-  --hover-accent-shadow: 0 12px 30px color-mix(in srgb, var(--ref-dark-neutral-600) 60%, transparent);
-
-  --info: var(--ref-dark-info);
-  --info-dim: color-mix(in srgb, var(--info) 12%, transparent);
-  --good: var(--ref-dark-good);
-  --good-dim: color-mix(in srgb, var(--good) 14%, transparent);
-  --warn: var(--ref-dark-warn);
-  --warn-dim: color-mix(in srgb, var(--warn) 13%, transparent);
-  --bad: var(--ref-dark-bad);
-  --bad-dim: color-mix(in srgb, var(--bad) 14%, transparent);
-
-  /* High-light insets — structural edge depth, not theme color. */
-  --shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
-  --shadow-md: inset 0 1px 0 color-mix(in srgb, white 4.5%, transparent);
-  --shadow-lg: inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
-
-  --scrollbar-thumb: color-mix(in srgb, var(--ref-dark-scrollbar) 22%, transparent);
+  --hover-accent-shadow: 0 12px 30px rgba(42, 52, 112, 0.2);
+  --info: #78a8ff;
+  --info-dim: rgba(120, 168, 255, 0.12);
+  --good: #70c990;
+  --good-dim: rgba(112, 201, 144, 0.14);
+  --warn: #d7a15e;
+  --warn-dim: rgba(215, 161, 94, 0.13);
+  --bad: #ef7f86;
+  --bad-dim: rgba(239, 127, 134, 0.14);
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --scrollbar-thumb: rgba(170, 183, 236, 0.22);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 36%, transparent);
-  --session-scrollbar-track: color-mix(in srgb, white 4%, transparent);
-
+  --session-scrollbar-track: rgba(255, 255, 255, 0.04);
   --subtle-1: color-mix(in srgb, var(--accent) 4%, transparent);
   --subtle-2: color-mix(in srgb, var(--accent) 6%, transparent);
   --subtle-3: color-mix(in srgb, var(--accent) 8%, transparent);
   --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
-
-  --dialog-bg: var(--ref-dark-neutral-700);
+  --dialog-bg: #1c213a;
   --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
   --ui-scrim: color-mix(in srgb, black 60%, transparent);
   --ui-shadow-tone: color-mix(in srgb, black 32%, transparent);
   --ui-highlight-tone: color-mix(in srgb, white 6%, transparent);
   --ui-glass-tint: color-mix(in srgb, white 4%, transparent);
-
   --executor-menu-bg: var(--menu-panel-bg);
   --executor-menu-shadow:
     0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) var(--ui-shadow-tone),
     0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 56%, transparent);
   --executor-menu-row-hover-bg: var(--surface-hover);
-
   --task-bar-bg: var(--chrome);
   --task-bar-backdrop-filter: none;
   --task-bar-border-color: var(--border);
-
-  --menu-panel-bg: color-mix(in srgb, var(--ref-dark-neutral-650) 96%, transparent);
-  --divider-soft: color-mix(in srgb, var(--ref-dark-divider) 11%, transparent);
-
+  --menu-panel-bg: rgba(28, 33, 58, 0.96);
+  --divider-soft: rgba(170, 183, 236, 0.11);
   --panel-fill: var(--surface);
   --panel-fill-hover: var(--surface-hover);
   --card-fill: var(--surface-inset);
   --card-fill-hover: var(--surface-hover);
-
   --guide-card-border: color-mix(in srgb, var(--accent) 22%, transparent);
   --guide-card-bg:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 44%),
