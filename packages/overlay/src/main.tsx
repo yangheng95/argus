@@ -595,6 +595,10 @@ function installGlobalBridges(): void {
   (window as any).renderConversation = () =>
     cardTreeStore.order.map((id) => cardTreeStore.cards[id]).filter(Boolean);
   (window as any).cardTree = cardTreeStore;
+  // Test hook: expose named stores for external benchmark reads without the
+  // legacy aggregate state bridge.
+  (window as any).boardStore = boardStore;
+  (window as any).settingsStore = settingsStore;
   (window as any).applyDirectory = applyDirectory;
   (window as any).loadTasks = loadTasks;
   (window as any).selectTask = selectTask;
