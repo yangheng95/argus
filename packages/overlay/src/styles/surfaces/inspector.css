@@ -358,7 +358,7 @@
 
 .oc-section__head:hover {
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 74%),
+    linear-gradient(180deg, var(--ui-highlight-tone), transparent 74%),
     color-mix(in srgb, var(--surface-strong) 66%, var(--surface-inset) 34%);
 }
 
@@ -405,7 +405,7 @@
 
 .oc-section[data-phase-state="active"] > .oc-section__head {
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 72%),
+    linear-gradient(180deg, var(--ui-highlight-tone), transparent 72%),
     color-mix(in srgb, var(--accent) 7%, var(--surface-strong));
   box-shadow: none;
   animation: none;
@@ -633,14 +633,14 @@
 }
 
 .gwg:hover {
-  box-shadow: 0 calc(9px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, black 12%, transparent);
+  box-shadow: 0 calc(9px * var(--ui-scale)) calc(18px * var(--ui-scale)) var(--ui-shadow-tone);
 }
 
 .gwg--expanded {
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, white 2.8%, transparent),
+      var(--ui-highlight-tone),
       color-mix(in srgb, var(--accent) 1.2%, transparent)
     ),
     color-mix(in srgb, var(--surface) 96%, transparent);
@@ -843,7 +843,7 @@
   gap: var(--ui-gap-sm);
   padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-top: var(--oc-border-width) solid color-mix(in srgb, var(--subtle-3) 72%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, white 1.5%, transparent), transparent 26%);
+  background: linear-gradient(180deg, var(--ui-highlight-tone), transparent 26%);
 }
 
 /* Objective block: Architect-written 1-2 sentence execution
@@ -2275,10 +2275,10 @@ details.goal-item {
   transition: background var(--ui-duration-fast);
 }
 details.goal-item:hover {
-  background: color-mix(in srgb, white 2%, transparent);
+  background: var(--ui-glass-tint);
 }
 details.goal-item[open] {
-  background: color-mix(in srgb, white 2%, transparent);
+  background: var(--ui-glass-tint);
 }
 
 .goal-item-head {
@@ -2342,7 +2342,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 .goal-item-id:hover {
   opacity: var(--ui-opacity-full);
-  background: color-mix(in srgb, white 8%, transparent);
+  background: var(--ui-glass-tint);
 }
 
 .goal-item-body {
@@ -2570,7 +2570,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .session-msg[data-role="assistant"] {
   border-color: color-mix(in srgb, var(--accent) 16%, var(--border));
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 74%, transparent),
+    linear-gradient(180deg, var(--ui-highlight-tone), color-mix(in srgb, var(--accent) 1.2%, transparent) 74%, transparent),
     color-mix(in srgb, var(--surface) 88%, transparent);
 }
 

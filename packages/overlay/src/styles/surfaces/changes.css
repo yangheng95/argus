@@ -104,7 +104,7 @@
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
   background: var(--surface);
-  box-shadow: 0 calc(10px * var(--ui-scale)) calc(22px * var(--ui-scale)) color-mix(in srgb, black 18%, transparent);
+  box-shadow: 0 calc(10px * var(--ui-scale)) calc(22px * var(--ui-scale)) var(--ui-shadow-tone);
 }
 .changes-goal-picker-row {
   display: flex;

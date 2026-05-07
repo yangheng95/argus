@@ -510,11 +510,10 @@
 
 /* Floating menu surfaced above the executor chip. Positioned
    absolutely just above the chip; scrollable when the model
-   list overflows. The two raw-rgba black box-shadows routed
-   through `color-mix(black, X%, transparent)`. The light-theme
-   override that swaps the surface to white + softer shadow
-   stays in styles.css as a `body[data-theme="light"]` block
-   pending palette-tokenization. */
+   list overflows. The shadow layers now read the shared UI
+   shadow tone token. The light-theme override that swaps the
+   surface to white + softer shadow stays in styles.css as a
+   `body[data-theme="light"]` block pending palette-tokenization. */
 .executor-menu {
   position: absolute;
   bottom: calc(100% + calc(6px * var(--ui-scale)));
@@ -528,8 +527,8 @@
   border-radius: var(--oc-radius-large);
   padding: calc(4px * var(--ui-scale));
   box-shadow:
-    0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) color-mix(in srgb, black 32%, transparent),
-    0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, black 18%, transparent);
+    0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) var(--ui-shadow-tone),
+    0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 56%, transparent);
   z-index: var(--ui-z-titlebar);
   scrollbar-width: thin;
   scrollbar-color: var(--subtle-5) transparent;
@@ -572,7 +571,7 @@
 }
 
 .executor-menu-row:hover:not(:disabled) {
-  background: color-mix(in srgb, white 6%, transparent);
+  background: var(--ui-glass-tint);
   color: var(--text-strong);
 }
 
@@ -625,7 +624,7 @@
 }
 
 .executor-menu-model:hover {
-  background: color-mix(in srgb, white 6%, transparent);
+  background: var(--ui-glass-tint);
   color: var(--text-strong);
 }
 
@@ -654,7 +653,7 @@ body[data-theme="light"] .executor-menu {
   border-color: var(--border);
   box-shadow:
     0 calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale))
-    color-mix(in srgb, black 12%, transparent);
+    var(--ui-shadow-tone);
 }
 
 body[data-theme="light"] .executor-menu-row:hover:not(:disabled),

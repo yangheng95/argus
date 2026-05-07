@@ -145,7 +145,7 @@
   background: var(--hover-accent-wash);
   border-color: var(--hover-accent-border);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     var(--hover-accent-shadow);
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
@@ -349,7 +349,7 @@
   background: var(--hover-accent-wash);
   border-color: var(--hover-accent-border);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     var(--hover-accent-shadow);
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
@@ -579,7 +579,7 @@
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
   padding: calc(10px * var(--ui-scale)) 0;
-  border-bottom: var(--oc-border-width) solid color-mix(in srgb, white 4%, transparent);
+  border-bottom: var(--oc-border-width) solid var(--ui-highlight-tone);
   content-visibility: auto;
   contain-intrinsic-size: 0 calc(48px * var(--ui-scale));
 }
@@ -944,8 +944,8 @@
    group). Hover/focus-within wash uses raw rgba on `--accent`
    (rgb(91,141,239) is the literal expansion of `--accent`,
    `#548af7`) — routed through `color-mix(var(--accent) X%,
-   transparent)`. Inset white highlight at 4% alpha was
-   replaced with `color-mix(white X%, transparent)` direct. */
+   transparent)`. The inset highlight reads the shared UI
+   highlight tone token. */
 .config-section {
   border: 0;
   border-radius: var(--oc-radius-soft);
@@ -975,7 +975,7 @@
     ),
     var(--subtle-1);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     var(--hover-accent-shadow);
 }
 
@@ -1061,7 +1061,7 @@
   border-bottom-color: var(--hover-accent-border);
   border-left-color: var(--hover-accent-border);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     0 0 0 var(--oc-border-width) var(--hover-accent-border);
 }
 
@@ -1091,7 +1091,7 @@
     );
   border-color: color-mix(in srgb, var(--accent) 12%, transparent);
   border-top-color: transparent;
-  box-shadow: inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 3%, transparent);
+  box-shadow: inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone);
 }
 
 /* Inner collapsible (one per group inside Extensions). Mirrors
@@ -1125,7 +1125,7 @@
     ),
     var(--surface-inset);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     var(--hover-accent-shadow);
 }
 
@@ -1197,7 +1197,7 @@
   border-bottom-color: var(--hover-accent-border);
   border-left-color: var(--hover-accent-border);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     0 0 0 var(--oc-border-width) var(--hover-accent-border);
 }
 
@@ -1227,7 +1227,7 @@
     );
   border-color: color-mix(in srgb, var(--accent) 12%, transparent);
   border-top-color: transparent;
-  box-shadow: inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 3%, transparent);
+  box-shadow: inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone);
 }
 
 /* Flat (non-collapsible) groups inside the Extensions tab —

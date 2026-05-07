@@ -67,6 +67,10 @@ body[data-theme="vscode-dark"] {
   --subtle-5: rgba(255, 255, 255, 0.145);
   --dialog-bg: #1f2339;
   --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
+  --ui-scrim: color-mix(in srgb, black 60%, transparent);
+  --ui-shadow-tone: color-mix(in srgb, black 32%, transparent);
+  --ui-highlight-tone: color-mix(in srgb, white 4%, transparent);
+  --ui-glass-tint: color-mix(in srgb, white 3%, transparent);
   --menu-panel-bg: rgba(31, 35, 57, 0.96);
   --divider-soft: rgba(178, 190, 235, 0.1);
   --panel-fill: var(--surface);

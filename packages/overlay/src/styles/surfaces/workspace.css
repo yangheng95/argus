@@ -152,7 +152,7 @@
 }
 .workspace-tab:hover {
   color: var(--text-strong);
-  background: color-mix(in srgb, white 4%, transparent);
+  background: var(--ui-glass-tint);
 }
 .workspace-tab[data-active="true"] {
   color: var(--text-strong);

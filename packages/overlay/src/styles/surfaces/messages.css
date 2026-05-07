@@ -21,7 +21,7 @@
     calc(var(--ui-input-padding-x) + calc(12px * var(--ui-scale)));
   border-radius: var(--oc-radius-large);
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 2.8%, transparent), color-mix(in srgb, white 0%, transparent) 72%),
+    linear-gradient(180deg, var(--ui-highlight-tone), transparent 72%),
     color-mix(in srgb, var(--surface-inset) 82%, transparent);
   border: none;
   box-shadow: none;

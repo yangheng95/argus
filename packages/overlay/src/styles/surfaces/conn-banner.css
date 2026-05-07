@@ -22,7 +22,7 @@
   background: color-mix(in srgb, var(--bad) 18%, var(--surface-strong));
   color: var(--text-strong);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 56%, transparent);
-  box-shadow: 0 calc(18px * var(--ui-scale)) calc(40px * var(--ui-scale)) color-mix(in srgb, black 32%, transparent);
+  box-shadow: 0 calc(18px * var(--ui-scale)) calc(40px * var(--ui-scale)) var(--ui-shadow-tone);
   font-size: var(--ui-font-control);
 }
 

@@ -79,6 +79,10 @@ body[data-theme="dark"] {
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
   --dialog-bg: #1c213a;
   --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
+  --ui-scrim: color-mix(in srgb, black 60%, transparent);
+  --ui-shadow-tone: color-mix(in srgb, black 32%, transparent);
+  --ui-highlight-tone: color-mix(in srgb, white 6%, transparent);
+  --ui-glass-tint: color-mix(in srgb, white 4%, transparent);
   --menu-panel-bg: rgba(28, 33, 58, 0.96);
   --divider-soft: rgba(170, 183, 236, 0.11);
   --panel-fill: var(--surface);
