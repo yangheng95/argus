@@ -29,6 +29,7 @@
 import { Identifier } from "@/id/id"
 import { withStreamActivity, type StreamActivityGate } from "@/util/stream-activity"
 import { APICallError } from "ai"
+import { ProviderError } from "@/provider/error"
 
 /**
  * Mutually exclusive error categories. Priority (high → low) when multiple
@@ -43,6 +44,7 @@ export type ErrorClass =
   | "first_byte"
   | "idle"
   | "rate_limit"
+  | "quota_exhausted"
   | "tls"
   | "network"
   | "server_5xx"
@@ -257,6 +259,7 @@ function classify(err: unknown, ctx: ClassifyContext): ErrorClass {
   // explicit override path for callers that already extracted it.
   let httpStatus = ctx.httpStatus
   let bodyHead = ctx.bodyHead
+  const message = err instanceof Error ? err.message : String(err)
   if (APICallError.isInstance(err)) {
     httpStatus = httpStatus ?? err.statusCode
     bodyHead =
@@ -266,7 +269,18 @@ function classify(err: unknown, ctx: ClassifyContext): ErrorClass {
   if (typeof httpStatus === "number") {
     if (httpStatus === 408) return "request_timeout"
     if (httpStatus === 413) return "payload_too_large"
-    if (httpStatus === 429) return "rate_limit"
+    if (httpStatus === 429) {
+      if (
+        ProviderError.quotaExhaustedSignal({
+          statusCode: httpStatus,
+          responseBody: bodyHead,
+          message,
+        })
+      ) {
+        return "quota_exhausted"
+      }
+      return "rate_limit"
+    }
     if (httpStatus >= 500 && httpStatus < 600) return "server_5xx"
     if (httpStatus >= 400 && httpStatus < 500) {
       // 422 with context-overflow body wording is provider-specific;
@@ -278,7 +292,6 @@ function classify(err: unknown, ctx: ClassifyContext): ErrorClass {
     }
   }
 
-  const message = err instanceof Error ? err.message : String(err)
   if (
     /context.{0,12}overflow|maximum context|context.{0,8}length|too many tokens|prompt is too long|exceeds.*context|range of input length should be/i.test(
       message,
@@ -304,6 +317,7 @@ function isRetryable(cls: ErrorClass): boolean {
   return !(
     cls === "external_abort" ||
     cls === "total_timeout" ||
+    cls === "quota_exhausted" ||
     cls === "client_4xx" ||
     cls === "request_timeout" ||
     cls === "payload_too_large" ||

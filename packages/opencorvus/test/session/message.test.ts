@@ -1411,15 +1411,12 @@ describe("session.message.fromError", () => {
     expect(Message.APIError.isInstance(result)).toBe(true)
   })
 
-  test("propagates 429 quota body as retryable APIError", () => {
-    // Regression for the 2026-04-28 incident: alibaba-coding-plan-cn returned
-    // HTTP 429 "usage allocated quota exceeded. please try again later." The
-    // provider-fetch wrapper used to throw a plain Error which fell through
-    // to NamedError.Unknown — bypassing SessionRetry's APIError-aware backoff
-    // and turning a transient rate-limit into an orchestrator wake loop.
-    // After the fix the wrapper throws an APICallError with statusCode=429,
-    // and the AI SDK marks 429 as retryable by default; Message.fromError
-    // must surface that as Message.APIError(isRetryable=true).
+  test("propagates 429 quota body as non-retryable APIError", () => {
+    // alibaba-coding-plan-cn returns HTTP 429 for allocated quota exhaustion,
+    // not just short-window throttling. The provider-fetch wrapper must still
+    // surface an APIError with statusCode=429, but this body must be marked
+    // non-retryable so the session does not burn repeated LLM turns against a
+    // depleted account.
     const result = Message.fromError(
       new APICallError({
         message:
@@ -1435,7 +1432,7 @@ describe("session.message.fromError", () => {
     ) as Message.APIError
     expect(Message.APIError.isInstance(result)).toBe(true)
     expect(result.data.statusCode).toBe(429)
-    expect(result.data.isRetryable).toBe(true)
+    expect(result.data.isRetryable).toBe(false)
   })
 
   test("serializes unknown inputs", () => {
