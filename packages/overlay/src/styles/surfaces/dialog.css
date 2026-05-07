@@ -222,7 +222,7 @@
  * components/services/index.html (rule 17 candidate for deletion;
  * preserved here pending explicit user approval rather than
  * silently dropped). */
-.session-actions .btn {
+.session-actions .oc-button {
   flex: 1 1 calc(160px * var(--ui-scale));
   min-width: calc(160px * var(--ui-scale));
 }

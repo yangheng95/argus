@@ -28,7 +28,7 @@ test("Button primitive exposes the canonical data-attribute contract", () => {
   const source = readFileSync(BUTTON_SOURCE, "utf8");
 
   expect(source).toContain('export const BUTTON_VARIANTS = ["solid", "outline", "ghost"] as const');
-  expect(source).toContain('export const BUTTON_SIZES = ["sm", "md", "icon"] as const');
+  expect(source).toContain('export const BUTTON_SIZES = ["mini", "sm", "md", "icon"] as const');
   expect(source).toContain('export const BUTTON_TONES = ["neutral", "accent", "danger"] as const');
   expect(source).toContain("export type ButtonVariant = (typeof BUTTON_VARIANTS)[number]");
   expect(source).toContain("export type ButtonSize = (typeof BUTTON_SIZES)[number]");
@@ -68,6 +68,20 @@ test("Button solid tones keep readable foreground and dedicated hover chrome", (
     /\.oc-button\[data-variant="solid"\]\[data-tone="accent"\]:hover,[^}]*--oc-button-bg:\s*var\(--accent-hover\);/s,
   );
   expect(css).toContain(".oc-button:not([data-tone=\"danger\"]):not([data-variant=\"solid\"]):hover");
+});
+
+test("Button mini size owns the retired compact-button padding contract", () => {
+  const css = readFileSync(BUTTON_CSS, "utf8");
+
+  expect(css).toMatch(
+    /\.oc-button\[data-size="mini"\]\s*\{[^}]*--oc-button-padding-x:\s*var\(--ui-btn-mini-padding-x\);/s,
+  );
+  expect(css).toMatch(
+    /\.oc-button\[data-size="mini"\]\s*\{[^}]*--oc-button-padding-y:\s*var\(--ui-btn-mini-padding-y\);/s,
+  );
+  expect(css).toMatch(
+    /\.oc-button\[data-size="mini"\]\s*\{[^}]*font-size:\s*var\(--ui-font-small\);/s,
+  );
 });
 
 test("Button primitive owns the canonical keyboard focus ring", () => {

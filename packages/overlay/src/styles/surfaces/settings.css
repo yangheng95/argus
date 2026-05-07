@@ -474,7 +474,7 @@
   color: var(--text-muted);
 }
 
-.channel-doc-card .btn {
+.channel-doc-card .oc-button {
   white-space: nowrap;
 }
 
@@ -2009,7 +2009,7 @@
   padding-top: calc(4px * var(--ui-scale));
 }
 
-.config-content .btn.mini {
+.config-content .oc-button[data-size="mini"] {
   font-size: var(--ui-font-control);
 }
 
