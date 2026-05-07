@@ -1,7 +1,9 @@
 import * as vscode from "vscode"
 import {
   PROTOCOL_VERSION,
+  type ExtensionHostThemeMessage,
   type ExtensionUiCommandMessage,
+  type HostTheme,
 } from "@opencorvus-ai/transport-protocol"
 import type { SidecarHandle } from "../sidecar/manager"
 import { TransportBridge } from "../transport/bridge"
@@ -26,6 +28,21 @@ import { renderOverlayHtml } from "./html"
  * stalls the webview main thread.
  */
 const UI_COMMAND_MAX_BYTES = 6 * 1024 * 1024
+
+const VSCODE_THEME_KIND_TO_OVERLAY_THEME: Record<number, HostTheme> = {
+  [vscode.ColorThemeKind.Light]: "light",
+  [vscode.ColorThemeKind.Dark]: "vscode-dark",
+  [vscode.ColorThemeKind.HighContrast]: "vscode-dark",
+  [vscode.ColorThemeKind.HighContrastLight]: "light",
+}
+
+export function overlayThemeFromColorThemeKind(kind: vscode.ColorThemeKind): HostTheme {
+  const theme = VSCODE_THEME_KIND_TO_OVERLAY_THEME[kind]
+  if (!theme) {
+    throw new Error(`OpenCorvus: unmapped VS Code color theme kind ${kind}.`)
+  }
+  return theme
+}
 
 export class OpencorvusPanel {
   /** The currently open panel, or undefined when none is shown. The
@@ -63,8 +80,7 @@ export class OpencorvusPanel {
     panel.onDidDispose(() => {
       const c = OpencorvusPanel.current
       if (c) {
-        c.bridge?.dispose()
-        c.bridge = undefined
+        c.disposeResources()
       }
       OpencorvusPanel.current = undefined
     })
@@ -78,6 +94,11 @@ export class OpencorvusPanel {
   ) {
     this.panel = panel
     this.sidecar = sidecar
+    this.disposables.push(
+      vscode.window.onDidChangeActiveColorTheme((theme) => {
+        this.postHostTheme(overlayThemeFromColorThemeKind(theme.kind))
+      }),
+    )
     this.refresh(sidecar)
   }
 
@@ -114,8 +135,18 @@ export class OpencorvusPanel {
       webview: this.panel.webview,
       mediaUiUri,
       hostLocale: vscode.env.language,
+      vscodeInitialTheme: overlayThemeFromColorThemeKind(vscode.window.activeColorTheme.kind),
     })
     this.panel.webview.html = rendered.html
+  }
+
+  private postHostTheme(theme: HostTheme): void {
+    const msg: ExtensionHostThemeMessage = {
+      protocol: PROTOCOL_VERSION,
+      type: "host:theme",
+      theme,
+    }
+    void this.panel.webview.postMessage(msg)
   }
 
   /**
@@ -172,10 +203,16 @@ export class OpencorvusPanel {
   }
 
   dispose(): void {
+    this.disposeResources()
+    this.panel.dispose()
+  }
+
+  private disposeResources(): void {
     while (this.disposables.length) {
       const d = this.disposables.pop()
       try { d?.dispose() } catch {}
     }
-    this.panel.dispose()
+    this.bridge?.dispose()
+    this.bridge = undefined
   }
 }

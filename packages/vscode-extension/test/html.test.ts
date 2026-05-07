@@ -86,6 +86,7 @@ describe("renderOverlayHtml", () => {
       webview,
       mediaUiUri,
       hostLocale,
+      vscodeInitialTheme: "vscode-dark",
     })
   }
 
@@ -141,6 +142,11 @@ describe("renderOverlayHtml", () => {
   test("injects window.__OPENCORVUS_ASSET_BASE__ bootstrap for runtime locale fetches", () => {
     const { html } = render("en-US")
     expect(html).toMatch(/window\.__OPENCORVUS_ASSET_BASE__="https:\/\/test-cdn\/[^"]+\/"/)
+  })
+
+  test("injects the initial VS Code theme contract", () => {
+    const { html } = render("en-US")
+    expect(html).toContain('window.__OC_VSCODE_INITIAL_THEME__="vscode-dark"')
   })
 
   test("each render produces a fresh nonce", () => {

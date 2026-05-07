@@ -4,8 +4,11 @@ import * as os from "node:os"
 import * as path from "node:path"
 
 let createdPanel: any
+let activeColorThemeKind = 2
+let colorThemeListeners: Array<(theme: { kind: number }) => void> = []
 
 mock.module("vscode", () => ({
+  ColorThemeKind: { Light: 1, Dark: 2, HighContrast: 3, HighContrastLight: 4 },
   ViewColumn: { Beside: 2 },
   env: { language: "en-US" },
   Uri: {
@@ -16,6 +19,19 @@ mock.module("vscode", () => ({
     },
   },
   window: {
+    activeColorTheme: {
+      get kind() {
+        return activeColorThemeKind
+      },
+    },
+    onDidChangeActiveColorTheme(cb: (theme: { kind: number }) => void) {
+      colorThemeListeners.push(cb)
+      return {
+        dispose() {
+          colorThemeListeners = colorThemeListeners.filter((listener) => listener !== cb)
+        },
+      }
+    },
     createWebviewPanel(_viewType: string, title: string, viewColumn: number, options: unknown) {
       const disposers: Array<() => void> = []
       let htmlAssignments = 0
@@ -73,6 +89,8 @@ describe("OpencorvusPanel", () => {
 
   beforeEach(() => {
     createdPanel = undefined
+    activeColorThemeKind = 2
+    colorThemeListeners = []
     extensionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-panel-"))
     const mediaUi = path.join(extensionRoot, "media", "ui")
     fs.mkdirSync(mediaUi, { recursive: true })
@@ -184,11 +202,39 @@ describe("OpencorvusPanel", () => {
     OpencorvusPanel.show(context as any, sidecar as any)
 
     expect(createdPanel.webview.html).toContain("<meta http-equiv=\"Content-Security-Policy\"")
+    expect(createdPanel.webview.html).toContain('window.__OC_VSCODE_INITIAL_THEME__="vscode-dark"')
     expect(createdPanel.webview.html).toContain("<div id=\"root\"></div>")
     expect(createdPanel.htmlAssignments).toBe(1)
 
     OpencorvusPanel.show(context as any, sidecar as any)
 
     expect(createdPanel.htmlAssignments).toBe(1)
+  })
+
+  test("posts host:theme when VS Code color theme changes", async () => {
+    await bootPanel()
+    expect(colorThemeListeners.length).toBe(1)
+    const before = createdPanel.postedMessages.length
+
+    activeColorThemeKind = 1
+    colorThemeListeners[0]!({ kind: activeColorThemeKind })
+
+    const delta = createdPanel.postedMessages.slice(before)
+    expect(delta).toEqual([
+      {
+        protocol: 1,
+        type: "host:theme",
+        theme: "light",
+      },
+    ])
+  })
+
+  test("disposes the VS Code color theme listener with the panel", async () => {
+    const { OpencorvusPanel } = await bootPanel()
+    expect(colorThemeListeners.length).toBe(1)
+
+    OpencorvusPanel.current!.dispose()
+
+    expect(colorThemeListeners.length).toBe(0)
   })
 })
