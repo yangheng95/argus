@@ -1123,12 +1123,15 @@ document.getElementById("btnChatCopyAll")?.addEventListener("click", () => {
   void copyChatConversation();
 });
 
+const [settingsHydrated, setSettingsHydrated] = createSignal(false);
+
 disposers.push(createRoot((dispose) => {
   // body.dataset.workspace / .connection writes were dead — no CSS or JS in
   // the codebase reads either attribute. Removed (rule 10). The static
   // initial `data-workspace="offline"` in index.html is also stripped.
 
   createEffect(() => {
+    if (!settingsHydrated()) return;
     applyTheme(settingsStore.theme);
     applyZoom(settingsStore.zoom);
     applyOpacity(settingsStore.opacity);
@@ -1467,7 +1470,9 @@ document.addEventListener("keydown", (ev) => {
 (window as any).__overlayInitSettled = false;
 void (async () => {
   try {
-    await initApp();
+    await initApp({
+      onSettingsLoaded: () => setSettingsHydrated(true),
+    });
     renderAboutVersion();
     const connBannerHost = document.createElement("div");
     connBannerHost.id = "connectionBannerHost";
