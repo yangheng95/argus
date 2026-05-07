@@ -1,7 +1,8 @@
 // Regression for iter4 of the right-panel design-language audit.
 //
-// `.btn` (the overlay's primary button primitive at styles.css:6339)
-// carried `text-transform: uppercase` and `letter-spacing: 0.05em`,
+// `.oc-button` owns the overlay's primary button typography. The retired
+// legacy class family once carried `text-transform: uppercase` and
+// `letter-spacing: 0.05em`,
 // which force-uppercased every button label across the overlay
 // regardless of what i18n returned. So `Copy All` became `COPY ALL`,
 // `Set up` became `SET UP`, etc — directly clashing with the Title
@@ -42,7 +43,7 @@ const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n
 
 function ruleBody(selector: string): string {
   // Match a CSS rule that STARTS with the given selector (so a
-  // descendant rule like `.foo .btn { ... }` doesn't steal the match).
+  // descendant rule like `.foo .oc-button { ... }` doesn't steal the match).
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   const head = new RegExp(`(^|\\n)\\s*${escaped}(?=[\\s,{[])[^{]*\\{`, "m").exec(STYLES)
   if (!head) throw new Error(`selector ${selector} not found in surface files`)
@@ -52,14 +53,14 @@ function ruleBody(selector: string): string {
   return STYLES.slice(open + 1, close)
 }
 
-describe(".btn primary primitive renders Title Case action labels", () => {
-  test(".btn does NOT force-uppercase its label", () => {
-    const body = ruleBody(".btn")
+describe(".oc-button primary primitive renders Title Case action labels", () => {
+  test(".oc-button does NOT force-uppercase its label", () => {
+    const body = ruleBody(".oc-button")
     expect(body).not.toContain("text-transform: uppercase")
   })
 
-  test(".btn does NOT carry the all-caps wide letter-spacing", () => {
-    const body = ruleBody(".btn")
+  test(".oc-button does NOT carry the all-caps wide letter-spacing", () => {
+    const body = ruleBody(".oc-button")
     // The 0.05em wide letter-spacing was paired with text-transform:
     // uppercase to make all-caps labels readable. With Title Case the
     // wide tracking just looks loose, so it goes too. A button can

@@ -34,7 +34,6 @@
   <link rel="stylesheet" href="styles/surfaces/conn-banner.css">
   <link rel="stylesheet" href="styles/surfaces/notifications.css">
   <link rel="stylesheet" href="styles/surfaces/ndjson-log.css">
-  <link rel="stylesheet" href="styles/surfaces/btn.css">
   <link rel="stylesheet" href="styles/surfaces/empty-state.css">
   <link rel="stylesheet" href="styles/surfaces/inline-pill.css">
   <link rel="stylesheet" href="styles/surfaces/header.css">
@@ -242,8 +241,10 @@
             <span class="chat-count" id="chatCount"></span>
             <button
               type="button"
-              class="btn btn-ghost mini"
+              class="oc-button"
               id="btnChatCopyAll"
+              data-variant="ghost"
+              data-size="mini"
               data-i18n="chat.copy_all"
               data-i18n-title="chat.copy_all"
               data-i18n-aria-label="chat.copy_all"
@@ -252,8 +253,10 @@
             >Copy All</button>
             <button
               type="button"
-              class="btn btn-ghost mini workspace-toggle"
+              class="oc-button workspace-toggle"
               id="btnWorkspaceToggle"
+              data-variant="ghost"
+              data-size="mini"
               data-i18n-title="workspace.toggle"
               data-i18n-aria-label="workspace.toggle"
               title="Toggle workspace"

@@ -857,7 +857,7 @@ body[data-theme="vscode-dark"] .task-bar {
   flex-shrink: 0;
 }
 
-.task-cwd-actions .btn {
+.task-cwd-actions .oc-button {
   white-space: nowrap;
 }
 

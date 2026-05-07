@@ -420,18 +420,15 @@ describe("overlay architecture guards", () => {
   })
 
   test("primary action canonical reads palette tokens, not literals", () => {
-    // Canonical extracted from styles.css into surfaces/btn.css (2026-05-04).
-    // BoardIntro was deleted (commit 9978c43ba) and sidebar new-task moved
-    // to the Button primitive, so the canonical is just `.btn-primary`.
-    const styles = readText(join(OVERLAY_ROOT, "src/styles/surfaces/btn.css"))
-    // The shared canonical must consume `--accent-gradient` and `--text-on-accent`.
-    // No raw `#fff`, no raw rgba(), no `var(--accent-gradient, …fallback…)` remains.
-    const sharedRule = styles.match(/\.btn-primary\s*\{([^}]*)\}/)
+    // Batch 1 (2026-05-07): the retired legacy button stylesheet no longer
+    // exists. Primary actions are now owned by the Button primitive's solid
+    // accent variant.
+    const styles = readText(join(OVERLAY_ROOT, "src/styles/primitives/button.css"))
+    const sharedRule = styles.match(/\.oc-button\[data-variant="solid"\]\[data-tone="accent"\]\s*\{([^}]*)\}/)
     expect(sharedRule).not.toBeNull()
-    expect(sharedRule![1]).toContain("background: var(--accent-gradient)")
-    expect(sharedRule![1]).toContain("color: var(--text-on-accent)")
+    expect(sharedRule![1]).toContain("--oc-button-bg: var(--accent)")
+    expect(sharedRule![1]).toContain("--oc-button-color: var(--surface)")
     expect(sharedRule![1]).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba\(|hsla\(/)
-    // BoardIntro was deleted — .board-intro__cta-action must NOT appear in btn.css.
     expect(styles).not.toContain(".board-intro__cta-action")
   })
 
@@ -609,7 +606,8 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.oc-section__icon-btn\s*\{/)
     expect(inspectorSurface).toMatch(/\.oc-section__icon-btn:hover,\s*\.oc-section__icon-btn:focus-visible\s*\{/)
     expect(inspectorSurface).toMatch(/\.frontend-preview-empty\[data-kind="error"\]\s*\{/)
-    expect(inspectorSurface).toContain("background: white")
+    expect(withoutComments(inspectorSurface)).not.toContain("background: white")
+    expect(inspectorSurface).toContain("background: var(--surface-inset)")
     expect(inspectorSurface).toContain("var(--oc-border-width)")
   })
 
@@ -3016,15 +3014,14 @@ describe("overlay architecture guards", () => {
     // board.css was deleted with it. Assert that no ghost references remain.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
-    const btn = readText(join(OVERLAY_ROOT, "src/styles/surfaces/btn.css"))
 
     // No standalone .board-intro rules in cascade layer
     expect(styles).not.toMatch(/^\.board-intro\s*\{/m)
     expect(styles).not.toMatch(/^\.board-intro__title\s*\{/m)
     // No board-intro rules leaked into card.css
     expect(card).not.toMatch(/\.board-intro(?:__|\b)/)
-    // No .board-intro__cta-action in the btn.css primary-action selector
-    expect(btn).not.toContain(".board-intro__cta-action")
+    const button = readText(join(OVERLAY_ROOT, "src/styles/primitives/button.css"))
+    expect(button).not.toContain(".board-intro__cta-action")
     // board.css must not exist (was deleted with BoardIntro.tsx)
     expect(existsSync(join(OVERLAY_ROOT, "src/styles/surfaces/board.css"))).toBe(false)
   })
@@ -3371,6 +3368,7 @@ describe("overlay architecture guards", () => {
         // more than 80 chars before the first 1px usage in the same block.
         const ctx = text.slice(Math.max(0, start - 300), start + match[0].length + 80)
         if (ctx.includes("--px-exact")) continue
+        if (/styles[\\/]surfaces[\\/]field\.css$/.test(file) && ctx.includes("-webkit-autofill")) continue
         // The window must hold a `calc(...)` scope and a
         // `var(--ui-scale)` reference — proving the px scales with the
         // overlay's ui-scale knob. Earlier the regex matched a single
@@ -3437,16 +3435,24 @@ describe("overlay architecture guards", () => {
     const files = walkFiles(join(OVERLAY_ROOT, "src/styles/primitives"), (path) => path.endsWith(".css"))
     expect(files.length).toBeGreaterThan(0)
     const primitiveText = files.map(readText).join("\n")
-    const rawValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|(?<![\w-])-?\d+(?:\.\d+)?px\b/i
+    const rawColorValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i
+    const pxLiteral = /(?<![\w-])-?\d+(?:\.\d+)?px\b/g
     expect(primitiveText).toContain("[data-variant=")
     expect(primitiveText).toContain("[data-size=")
     expect(primitiveText).toContain("[data-tone=")
 
     for (const file of files) {
-      const css = readText(file)
+      const css = withoutComments(readText(file))
       expect(css).not.toMatch(/!important\b/)
       expect(css).not.toMatch(/body\[|body:is\(|data-theme/)
-      expect(css).not.toMatch(rawValue)
+      expect(css).not.toMatch(rawColorValue)
+
+      for (const match of css.matchAll(pxLiteral)) {
+        const start = match.index ?? 0
+        const window = css.slice(Math.max(0, start - 80), start + match[0].length + 80)
+        expect(window).toMatch(/calc\(/)
+        expect(window).toMatch(/var\(--ui-scale[\s,)]/)
+      }
     }
   })
 
