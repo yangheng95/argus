@@ -45,6 +45,9 @@
 import ORCHESTRATOR_CORE from "@/prompt/core/orchestrator-core.txt"
 import { Provider } from "@/provider/provider"
 import { resolveAgentModel } from "@/agent/model"
+import { EngineConfig } from "@/engine"
+import { INFORMATION_MISSING_FALLBACK_TEXT } from "@/prompt/information-missing"
+import { messageHasInformationMissing, extractInformationMissingBlock } from "@/agent/runner"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import type { Message } from "@/session/message"
@@ -208,6 +211,20 @@ export namespace Orchestrator {
       //    decision branch downstream reads the describe snapshot, not an
       //    invented re-read instruction.
       const system = await buildSystemParts(task, event, workflow, workflowState)
+      // INFORMATION MISSING fallback — single source per rule 8. The runner.ts
+      // path injects this for every worker agent (build / architect / delivery
+      // / ...); the orchestrator uses its own SessionPrompt.prompt path
+      // (see file header for why) and so must inject here. Without this, a
+      // toggle flipped ON would silently leave the orchestrator without
+      // the diagnostic — the whole point is "every agent's prompt receives
+      // the fallback" so that whoever lost their context surfaces it.
+      // Appended as a separate array element so it lands after the static
+      // ORCHESTRATOR_INSTRUCTIONS + the per-wake describe block, matching
+      // the runner's "fallback last" placement.
+      const debugCfg = (await EngineConfig.get()).debug
+      if (debugCfg.fail_on_information_missing) {
+        system.push(INFORMATION_MISSING_FALLBACK_TEXT)
+      }
       const userText = orchestratorUserText(task, event)
       // Build multimodal content when task has file attachments. We re-inline
       // image/pdf bytes on EVERY wake, not just the first. The orchestrator
@@ -356,6 +373,32 @@ export namespace Orchestrator {
         finishReason: assistantInfo?.finish,
         streamErrors: streamErrors.length,
       })
+
+      // INFORMATION MISSING signal — same contract as the worker path in
+      // agent/runner.ts. When the operator has flipped the toggle and the
+      // orchestrator emits the XML diagnostic block (because its own wake
+      // input dropped required context — e.g. event.note empty + no
+      // describe snapshot can resolve the next action), exit the process
+      // immediately so the operator sees the dispatcher-side context drop
+      // instead of a long log of guessed-default work. Mirrors the
+      // injection above (rule 8 single source).
+      if (debugCfg.fail_on_information_missing && finalMessage && messageHasInformationMissing(finalMessage)) {
+        const block = extractInformationMissingBlock(finalMessage) ?? "<INFORMATION MISSING>...</INFORMATION MISSING>"
+        log.error("INFORMATION MISSING signal — terminating process", {
+          agentName: "orchestrator",
+          taskID,
+          sessionID: agentSession.id,
+          block: block.slice(0, 1200),
+        })
+        // eslint-disable-next-line no-console
+        console.error(
+          `\n[FATAL] INFORMATION MISSING detected in orchestrator stream — terminating process.\n` +
+          `Task: ${taskID}\n` +
+          `Session: ${agentSession.id}\n` +
+          `${block}\n`,
+        )
+        process.exit(99)
+      }
 
       if (AgentTrace.isEnabled()) {
         const finalText = finalMessage?.parts
