@@ -20,26 +20,72 @@
  * (host-side detection helpers).
  */
 
-export const INFORMATION_MISSING_FALLBACK_TEXT = `## INFORMATION MISSING fallback
+export const INFORMATION_MISSING_FALLBACK_TEXT = `## INFORMATION MISSING fallback (debug toggle ON — guessing is FORBIDDEN)
 
-If this invocation's instructions or task context dropped required
-information (retry without reason, goal contract fields absent,
-referenced artifact named without payload, "previous attempt failed"
-hint with no concrete evidence, etc.), emit ONLY:
+This invocation runs with the operator's debug toggle ON. The
+operator wants to surface every place the dispatcher chain dropped
+context — not "best-effort" output. Your job is INVERTED from
+default agent behaviour: you must emit the diagnostic block whenever
+you would otherwise GUESS, INFER, or FILL FROM CONVENTION. Helpful
+extrapolation is the bug here, not a feature.
+
+Emit IMMEDIATELY when ANY of these are true:
+
+- The orchestrator/parent re-dispatched you with no \`request\` /
+  \`reason\` / \`feedback\` field, or those fields are empty / generic
+  ("retry", "try again", "fix it"). A bare retry signal is a context
+  drop; the dispatcher should have named the failure mode.
+- A goal contract field that the prompt structurally references is
+  missing or empty — acceptance_specs[] empty, owned_paths[] empty
+  when files_changed[] is required, depends_on[] missing when the
+  prompt says "those goals are merged into your worktree base".
+- The prompt names an artifact (image, screenshot, reference URL,
+  attachment://<sha>, prior delivery feedback, decision_log entry,
+  spec line, file path) but the actual payload is absent.
+- The prompt says "previous attempt failed" / "rejection feedback" /
+  "delivery rejection" but no concrete error / failure_class /
+  expected_fix / category is provided.
+- You are about to write or call a tool with a value (color,
+  dimension, copy text, model ID, env var name, file path, route,
+  config key, version pin, regex, schema field) that the prompt
+  did NOT state explicitly, and you'd be inferring from convention,
+  training data, prior projects, common practice, or "obvious" sense.
+- You are about to call a tool whose required argument you cannot
+  fill verbatim from prompt content — even if the missing argument
+  is "minor" or has a "reasonable default".
+
+Format — emit ONLY this and stop:
 
 <INFORMATION MISSING>
-  <item>concrete description of each missing field / signal</item>
+  <item>missing field: name. referenced where: location in the prompt that named it (or "structurally implied by tool X / contract Y"). would have guessed: the value you were about to pick.</item>
 </INFORMATION MISSING>
 
-Then stop. No tool calls, no other text, no structured output. Do
-NOT guess defaults; do NOT silently proceed. INFORMATION MISSING is
-the diagnostic the host wants when context drops in transit.
+No tool calls. No prose. No structured output. No apology. No
+"let me proceed anyway". Stop after the block.
 
-The host detects this XML block in any agent's stream and IMMEDIATELY
-exits the process (fatal signal — the entire run terminates). Use it
-ONLY for truly missing required information; not for minor uncertainty
-you can resolve from available context. You have ONE emit — enumerate
-every missing field in ONE block.`
+Permission rules — these CLOSE the helpful-bias loophole:
+
+- "I can fill this from convention / common sense / training data /
+  prior project memory" → **EMIT THE BLOCK**. Convention is a guess.
+  The toggle exists precisely to surface convention-fill.
+- "I can read the file / re-fetch the URL / search code to resolve" →
+  **EMIT THE BLOCK**. Ad-hoc resolution masks the dispatcher drop.
+  The dispatcher should have provided the field; if it didn't, that
+  is the bug we want to see.
+- "It's a minor field, the result will be fine" → **EMIT**. The
+  toggle is binary; minor missing fields are still missing.
+- "If I don't proceed the run dies" → **EMIT ANYWAY**. A run that
+  exits with a named missing field is a SUCCESS for the toggle's
+  purpose; a run that completes with silent guesses is the FAILURE
+  mode this toggle was built to detect. Do not weigh "keep the run
+  going" against emission.
+- "But the user clearly meant X" → if the prompt didn't say X
+  literally, **EMIT**. Inferring user intent is exactly the failure
+  mode under audit.
+
+The host detects \`<INFORMATION MISSING>\` in your stream and
+process.exits the run with code 99. That is the desired outcome.
+You have ONE emit — enumerate every missing field in ONE block.`
 
 /**
  * Append the fallback block to a system prompt. Trims trailing whitespace
