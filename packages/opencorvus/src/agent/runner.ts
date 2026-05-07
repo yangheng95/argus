@@ -383,12 +383,18 @@ export function buildHardErrorFromFinalMessage(input: {
 
 /**
  * Pure check: does the final assistant message carry an INFORMATION
- * MISSING XML diagnostic block? Every agent's prompt instructs it to
- * emit this block (and ONLY this block) when invocation context drops
- * required information; the host treats it as a fatal signal and exits
- * the process. Spec — 2026-05-07 INFORMATION MISSING fallback contract;
- * `test/agent/information-missing-fallback.test.ts` pins the prompt
- * surface in every agent core file.
+ * MISSING XML diagnostic block? When the operator flips
+ * `debug.fail_on_information_missing` (default OFF), the host appends
+ * the fallback section to every agent's system prompt at runtime
+ * (`appendInformationMissingFallback`); the prompt then instructs the
+ * agent to emit this block (and ONLY this block) when invocation
+ * context drops required information, and the host treats the block
+ * as a fatal signal and exits the process. Spec — 2026-05-07
+ * INFORMATION MISSING debug toggle; `prompt/information-missing.ts`
+ * owns the fallback text. The companion test
+ * `test/agent/information-missing-fallback.test.ts` pins (a) the
+ * helper / constant surface and (b) the contract that .txt core
+ * prompts must NOT carry the section so the toggle stays binary.
  *
  * Detection is a typed-tag substring (rule 20 boundary): the tag
  * `<INFORMATION MISSING>` is a structured marker the prompt asks the
