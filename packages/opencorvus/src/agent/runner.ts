@@ -357,10 +357,26 @@ export function buildHardErrorFromFinalMessage(input: {
   // loop deterministically-failing requests.
   const isRetryable = (err as { data?: { isRetryable?: boolean } }).data
     ?.isRetryable
+  // TerminalToolMissingError is deterministic: the same prompt produces the
+  // same finish=stop without the tool call (long-context attention drift
+  // toward "I'm done, here's a summary" mode). Treat as non-retryable so
+  // any future runAgentSessionWithRetry adoption on the build path does
+  // not burn N attempts on a guaranteed-identical failure. Spec
+  // build-missing-terminal-signal-restore-2026-05-07.md §5.1.
+  const isTerminalToolMissing = Message.TerminalToolMissingError.isInstance(
+    err as Error,
+  )
   return new AgentRunError(
     kind,
     `LLM error during ${agentName}: ${errName}: ${errMessage}`,
-    { nonRetryable: isRetryable === false },
+    {
+      nonRetryable: isRetryable === false || isTerminalToolMissing,
+      // Preserve the original error as cause so downstream catch blocks
+      // (e.g. build/agent.ts converting missing-terminal into a typed
+      // BuildAgentContractError) can instanceof-check rather than
+      // keyword-match the message string (rule 20).
+      cause: err as Error,
+    },
   )
 }
 

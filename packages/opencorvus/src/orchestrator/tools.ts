@@ -215,6 +215,48 @@ function acceptanceSpecsToPromptLines(raw: unknown): string[] {
   })
 }
 
+/**
+ * Returns the subset of `updates` whose value differs from the persisted
+ * `goal` row. Used by `modify_goal` to filter out no-op updates so the
+ * orchestrator LLM cannot trigger phase=retry decision_log feedback by
+ * resubmitting the SAME contract — that pattern was misused as a side
+ * channel when build failures had unrelated root causes (e.g. missing
+ * terminal tool call), polluting the next attempt's retry feedback with
+ * a generic "contract changed, re-read acceptance_specs" template that
+ * had nothing to do with the actual failure.
+ *
+ * Compared via JSON serialization: arrays / strings / primitive unions
+ * round-trip identically as long as both sides are already deserialized
+ * to the same shape (the goal row from listGoals is, and Zod-validated
+ * `updates` is). Spec build-missing-terminal-signal-restore-2026-05-07.md
+ * §5.3.
+ */
+export function computeContractFieldChanges(
+  updates: Record<string, unknown>,
+  goal: Record<string, unknown>,
+): Record<string, unknown> {
+  const contractFields = [
+    "title",
+    "objective",
+    "acceptance_specs",
+    "owned_paths",
+    "depends_on",
+    "exports",
+    "imports",
+    "priority",
+    "kind",
+  ] as const
+  const setValues: Record<string, unknown> = {}
+  for (const f of contractFields) {
+    const incoming = updates[f]
+    if (incoming === undefined) continue
+    const current = goal[f]
+    if (JSON.stringify(incoming) === JSON.stringify(current)) continue
+    setValues[f] = incoming
+  }
+  return setValues
+}
+
 export function validatePersistedArchitectFidelity(input: {
   task: TaskRow
   goals: Array<{ id: string; owned_paths?: string[] }>
@@ -2432,36 +2474,37 @@ export function createOrchestratorTools(input: {
         const goal = dbGoals.find(g => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
 
-        const setValues: Record<string, unknown> = { time_updated: Date.now() }
-        if (updates.title !== undefined) setValues.title = updates.title
-        if (updates.objective !== undefined) setValues.objective = updates.objective
-        if (updates.acceptance_specs !== undefined) setValues.acceptance_specs = updates.acceptance_specs
-        if (updates.owned_paths !== undefined) setValues.owned_paths = updates.owned_paths
-        if (updates.depends_on !== undefined) setValues.depends_on = updates.depends_on
-        if (updates.exports !== undefined) setValues.exports = updates.exports
-        if (updates.imports !== undefined) setValues.imports = updates.imports
-        if (updates.priority !== undefined) setValues.priority = updates.priority
-        if (updates.kind !== undefined) setValues.kind = updates.kind
+        // Deep-equality no-op detection (rule 2 + rule 7) via the
+        // computeContractFieldChanges helper: only fields whose submitted
+        // value actually differs from the persisted value are counted as
+        // changed. The orchestrator LLM was previously using modify_goal
+        // as a side-channel to trigger phase=retry feedback when build
+        // attempts failed for unrelated reasons (e.g. missing terminal
+        // tool call) — passing the SAME acceptance_specs back in still
+        // wrote a "Goal contract changed... re-read acceptance_specs"
+        // entry into the decision log, polluting the next build agent's
+        // prior-attempt context. Spec
+        // build-missing-terminal-signal-restore-2026-05-07.md §5.3 +
+        // tsk_e0033e523001flSn0onlHh4Urh's 4-attempt loop.
+        const setValues = computeContractFieldChanges(
+          updates as Record<string, unknown>,
+          goal as unknown as Record<string, unknown>,
+        )
 
-        // Contract change → drive the goal back to "pending" so it re-executes.
-        // We do NOT write engine_goal.status directly: every path goes through
-        // the goal_run chain so syncGoalStatus() projects the new status. This
-        // keeps engine_goal.status authored by exactly two writers
-        // (syncGoalStatus via updateGoalRun / Goal.startNewAttempt, and
-        // updateGoalCascadeFailed for no-goal_run cascades).
-        const contractFields = ["title", "objective", "acceptance_specs", "owned_paths", "depends_on", "exports", "imports", "priority", "kind"]
-        const contractChanged = contractFields.some(f => f in setValues)
+        const changed = Object.keys(setValues)
+        const contractChanged = changed.length > 0
         const statusReset = contractChanged && (goalStatusByID(goal.id) === "passed" || goalStatusByID(goal.id) === "failed")
 
-        const { EngineGoalTable } = await import("@/engine/engine.sql")
-        Database.use((db) => {
-          db.update(EngineGoalTable)
-            .set(setValues as any)
-            .where(eq(EngineGoalTable.id, goalID))
-            .run()
-        })
-
-        const changed = Object.keys(setValues).filter(k => k !== "time_updated")
+        if (contractChanged) {
+          setValues.time_updated = Date.now()
+          const { EngineGoalTable } = await import("@/engine/engine.sql")
+          Database.use((db) => {
+            db.update(EngineGoalTable)
+              .set(setValues as any)
+              .where(eq(EngineGoalTable.id, goalID))
+              .run()
+          })
+        }
 
         let abortedRuns = 0
         let supersededTipID: string | undefined
@@ -4294,7 +4337,11 @@ export function createOrchestratorTools(input: {
       description:
         "Implementation dispatcher. Runs the build agent (read / write / edit / bash) in-process to apply " +
         "one scoped change. Two valid shapes exist. `build({ goalID })` is the normal workflow " +
-        "shape after architect has registered goals; include `request` only for concrete retry/rework guidance that supplements the goal contract. `build({ request })` without goalID is valid only " +
+        "shape after architect has registered goals; on retry/rework, populate `request` with " +
+        "concrete guidance for the next attempt — the goal contract (objective / acceptance_specs / " +
+        "owned_paths) is preserved untouched and your `request` is rendered as a separate " +
+        "'Retry Guidance From Orchestrator' section ahead of historical retry feedback, so filling it " +
+        "never costs you any architect-committed contract. `build({ request })` without goalID is valid only " +
         "when the task itself is explicit `kind=build`, or after a rejected delivery verdict when the " +
         "whole integrated tree needs rework. Fresh `kind=workflow` tasks MUST go through requirements / " +
         "architect before build, even if the request looks simple. " +
@@ -4310,7 +4357,7 @@ export function createOrchestratorTools(input: {
           .string()
           .optional()
           .describe(
-            "Optional for per-goal pipeline builds because the persisted goal supplies the work contract. Required for task-level direct builds or whole-task rework; include the user's request plus concise rejected delivery details the build agent must address.",
+            "For per-goal builds: optional retry/rework guidance for THIS attempt, rendered as a separate 'Retry Guidance From Orchestrator' section in the build prompt. Does NOT replace the goal's objective / acceptance_specs / owned_paths — populate freely whenever you have concrete advice for the next attempt (e.g. 'previous attempt did not call report_build_result before turn end; this attempt MUST call it after verification'). For task-level direct builds (no goalID): required; include the user's request plus concise rejected delivery details the build agent must address.",
           ),
         reason: z
           .string()
@@ -4541,7 +4588,16 @@ export function createOrchestratorTools(input: {
               kind: "goal",
               id: goal.id,
               title: goal.title,
-              objective: requestText.length > 0 ? requestText : goal.objective,
+              // Always sourced from goal.objective. The previous
+              // "requestText overrides goal.objective" behaviour silently
+              // discarded the architect-committed objective when the
+              // orchestrator LLM filled `request` for retry guidance —
+              // which is why the LLM never filled it (rule preservation
+              // beat retry signal). requestText now flows into
+              // context.retryGuidance instead, leaving the architect
+              // contract intact. Spec
+              // build-missing-terminal-signal-restore-2026-05-07.md §5.2.
+              objective: goal.objective,
               acceptance_specs: acceptanceSpecsToPromptLines(goal.acceptance_specs),
               owned_paths: Array.isArray(goal.owned_paths) ? (goal.owned_paths as string[]) : [],
               exports: Array.isArray(goal.exports) ? (goal.exports as string[]) : [],
@@ -4638,6 +4694,11 @@ export function createOrchestratorTools(input: {
               enabled: retryEntries.length > 0 || Boolean(deliveryFeedback),
             })
 
+            // Phase B (2026-05-07): the orchestrator LLM's `request` text
+            // now flows into context.retryGuidance instead of replacing
+            // target.objective. Empty string means no current-turn
+            // guidance; the renderer drops the section.
+            // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.2.
             context = {
               requirements: requirements.length > 0 ? requirements : undefined,
               architectContracts: architectContracts.length > 0 ? architectContracts : undefined,
@@ -4645,11 +4706,16 @@ export function createOrchestratorTools(input: {
               collaborationGoals,
               designSpecs,
               fidelity: taskFidelity,
+              retryGuidance: requestText.length > 0 ? requestText : undefined,
               retryFeedback,
               deliveryFeedback,
               retryAttachments,
             }
           } else {
+            // Task-level direct build: target.text carries the request
+            // verbatim (it IS the work), so retryGuidance does not apply
+            // to this branch — there's no separate goal contract for the
+            // request to "supplement".
             target = { kind: "request", text: requestText }
             const deliveryFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID })
             const retryAttachments = await loadLatestRenderedRetryAttachment({
@@ -4770,6 +4836,14 @@ export function createOrchestratorTools(input: {
               // prompt receives the structured contract diagnostic instead
               // of just "tool failed". Single source: decision_log; the
               // orchestrator already reads phase=retry filtered by goalID.
+              //
+              // value carries the LLM-facing recovery hint (rendered into
+              // the next build prompt's "Prior Attempt Failed" section by
+              // the retryFeedback composer). Use BuildAgentContractError's
+              // message directly (single source per rule 8 — the hint text
+              // is owned by build/agent.ts:convertMissingTerminalToolError).
+              // reason carries the audit metadata.
+              // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
               if (attachedGoalID) {
                 try {
                   const { createDecisionLog } = await import("@/decision-log")
@@ -4777,8 +4851,8 @@ export function createOrchestratorTools(input: {
                     phase: "retry",
                     goalID: attachedGoalID,
                     key: "build_agent_contract_violation",
-                    value: `code=${runErr.code}; sessionID=${runErr.diagnostics.sessionID ?? "?"}`,
-                    reason: runErr.message,
+                    value: runErr.message,
+                    reason: `build_agent_contract_violation: code=${runErr.code}; sessionID=${runErr.diagnostics.sessionID ?? "?"}`,
                   })
                 } catch (logErr) {
                   log.warn("build: failed to record contract-violation decision_log entry (non-fatal)", {

@@ -46,6 +46,89 @@ describe("build agent prompt context", () => {
     expect(prompt.indexOf("Raw verdict artifact JSON")).toBeLessThan(prompt.indexOf("# Goal: Calculator UI"))
   })
 
+  /**
+   * Spec build-missing-terminal-signal-restore-2026-05-07.md §5.2.
+   * retryGuidance is the orchestrator LLM's first-class instruction for
+   * THIS attempt — it must render before historical retryFeedback (the
+   * orchestrator's just-now decision honours over historical context),
+   * and never replace the goal's objective / acceptance_specs.
+   */
+  test("goal-path renders retryGuidance under its own heading and preserves the goal contract", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "goal",
+        id: "gol_chat_ui",
+        title: "聊天UI组件",
+        objective: "Build the chat UI components per Gemini design.",
+        acceptance_specs: ["MessageList renders streaming messages"],
+        owned_paths: ["src/components"],
+        exports: [],
+        imports: [],
+        depends_on: [],
+      },
+      {
+        retryGuidance:
+          "Previous attempt did not call report_build_result before turn ended. This attempt MUST call it exactly once after verification.",
+        retryFeedback:
+          "## Prior Attempt Failed — Read This Before Implementing\n- coordinator note: see retry context.",
+      },
+    )
+
+    // retryGuidance heading present and content rendered
+    expect(prompt).toContain("## Retry Guidance From Orchestrator")
+    expect(prompt).toContain("Previous attempt did not call report_build_result")
+    expect(prompt).toContain("MUST call it exactly once")
+
+    // Order: retryGuidance before retryFeedback before the goal contract
+    expect(prompt.indexOf("## Retry Guidance From Orchestrator")).toBeLessThan(
+      prompt.indexOf("## Prior Attempt Failed"),
+    )
+    expect(prompt.indexOf("## Prior Attempt Failed")).toBeLessThan(prompt.indexOf("# Goal: 聊天UI组件"))
+
+    // The architect-committed objective is preserved verbatim — retryGuidance
+    // does NOT replace it (the bug spec §5.2 fixes).
+    expect(prompt).toContain("**Objective**: Build the chat UI components per Gemini design.")
+  })
+
+  test("request-path renders retryGuidance under its own heading", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "request",
+        text: "Implement the calculator.",
+      },
+      {
+        retryGuidance: "Re-run after fixing the missing terminal tool call.",
+        deliveryFeedback: "Raw verdict JSON.",
+      },
+    )
+
+    expect(prompt).toContain("## Retry Guidance From Orchestrator")
+    expect(prompt).toContain("Re-run after fixing the missing terminal tool call.")
+    expect(prompt.indexOf("## Retry Guidance From Orchestrator")).toBeLessThan(
+      prompt.indexOf("## Canonical Delivery Rejection Feedback"),
+    )
+    expect(prompt.indexOf("## Canonical Delivery Rejection Feedback")).toBeLessThan(prompt.indexOf("# Request"))
+  })
+
+  test("retryGuidance section is dropped when undefined / empty / whitespace-only", () => {
+    const baseTarget = {
+      kind: "goal" as const,
+      id: "gol_x",
+      title: "X",
+      objective: "Build X.",
+      acceptance_specs: [],
+      owned_paths: [],
+      exports: [],
+      imports: [],
+      depends_on: [],
+    }
+    expect(buildUserPrompt(baseTarget, {})).not.toContain("## Retry Guidance From Orchestrator")
+    expect(buildUserPrompt(baseTarget, { retryGuidance: "" })).not.toContain("## Retry Guidance From Orchestrator")
+    expect(buildUserPrompt(baseTarget, { retryGuidance: "   \n\n\t  " })).not.toContain(
+      "## Retry Guidance From Orchestrator",
+    )
+  })
+
   test("goal-path build restates 1:1 fidelity when visual contract exists", () => {
     const prompt = buildUserPrompt(
       {
