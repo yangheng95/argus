@@ -21,7 +21,7 @@ const model: Provider.Model = {
     input: {
       text: true,
       audio: false,
-      image: false,
+      image: true,
       video: false,
       pdf: false,
     },
@@ -104,7 +104,19 @@ function basePart(messageID: string, id: string) {
 }
 
 describe("session.message.toModelMessage", () => {
-  test("filters out messages with no parts", () => {
+  test("rejects text visibility split flags at the message boundary", () => {
+    const base = {
+      ...basePart("m-user", "p1"),
+      type: "text",
+      text: "hello",
+    }
+
+    expect(Message.Part.safeParse({ ...base, synthetic: true }).success).toBe(false)
+    expect(Message.Part.safeParse({ ...base, ignored: true }).success).toBe(false)
+    expect(Message.Part.safeParse({ ...base, audience: { ui: false } }).success).toBe(false)
+  })
+
+  test("filters out messages with no parts", async () => {
     const input: Message.WithParts[] = [
       {
         info: userInfo("m-empty"),
@@ -122,7 +134,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "hello" }],
@@ -130,7 +142,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("filters out messages with only ignored parts", () => {
+  test("includes every user text part without visibility flags", async () => {
     const messageID = "m-user"
 
     const input: Message.WithParts[] = [
@@ -140,17 +152,21 @@ describe("session.message.toModelMessage", () => {
           {
             ...basePart(messageID, "p1"),
             type: "text",
-            text: "ignored",
-            ignored: true,
+            text: "visible",
           },
         ] as Message.Part[],
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([])
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
+      {
+        role: "user",
+        content: [{ type: "text", text: "visible" }],
+      },
+    ])
   })
 
-  test("includes synthetic text parts", () => {
+  test("includes every assistant text part without visibility flags", async () => {
     const messageID = "m-user"
 
     const input: Message.WithParts[] = [
@@ -161,7 +177,6 @@ describe("session.message.toModelMessage", () => {
             ...basePart(messageID, "p1"),
             type: "text",
             text: "hello",
-            synthetic: true,
           },
         ] as Message.Part[],
       },
@@ -172,13 +187,12 @@ describe("session.message.toModelMessage", () => {
             ...basePart("m-assistant", "a1"),
             type: "text",
             text: "assistant",
-            synthetic: true,
           },
         ] as Message.Part[],
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "hello" }],
@@ -190,7 +204,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("converts user text/file parts and injects compaction/subtask prompts", () => {
+  test("converts user text/file parts and injects compaction/subtask prompts", async () => {
     const messageID = "m-user"
 
     const input: Message.WithParts[] = [
@@ -205,8 +219,7 @@ describe("session.message.toModelMessage", () => {
           {
             ...basePart(messageID, "p2"),
             type: "text",
-            text: "ignored",
-            ignored: true,
+            text: "second text",
           },
           {
             ...basePart(messageID, "p3"),
@@ -245,11 +258,12 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [
           { type: "text", text: "hello" },
+          { type: "text", text: "second text" },
           {
             type: "file",
             mediaType: "image/png",
@@ -263,7 +277,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("converts assistant tool completion into tool-call + tool-result messages with attachments", () => {
+  test("converts assistant tool completion into tool-call + tool-result messages with attachments", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -315,7 +329,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "run tool" }],
@@ -345,7 +359,7 @@ describe("session.message.toModelMessage", () => {
               type: "content",
               value: [
                 { type: "text", text: "ok" },
-                { type: "media", mediaType: "image/png", data: "Zm9v" },
+                { type: "image-data", mediaType: "image/png", data: "Zm9v" },
               ],
             },
             providerOptions: { openai: { tool: "meta" } },
@@ -355,7 +369,146 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("omits provider metadata when assistant model differs", () => {
+  test("compaction projection strips media and truncates large tool outputs", async () => {
+    const userID = "m-user-compact"
+    const assistantID = "m-assistant-compact"
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [
+          {
+            ...basePart(userID, "u1"),
+            type: "text",
+            text: "summarize this",
+          },
+          {
+            ...basePart(userID, "u2"),
+            type: "file",
+            mime: "image/png",
+            filename: "large.png",
+            url: "data:image/png;base64,Zm9v",
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-compact",
+            tool: "read",
+            state: {
+              status: "completed",
+              input: { path: "huge.log" },
+              output: "0123456789".repeat(20),
+              title: "Read",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-compact"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "tool.png",
+                  url: "data:image/png;base64,YmFy",
+                },
+              ],
+            },
+            metadata: {},
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const result = await Message.toModelMessages(input, model, {
+      stripMedia: true,
+      toolOutputMaxChars: 40,
+    })
+    const wire = JSON.stringify(result)
+
+    expect(wire).toContain("[Attached image/png: large.png omitted from compaction context]")
+    expect(wire).toContain("Tool output truncated for compaction")
+    expect(wire).not.toContain("data:image/png;base64")
+  })
+
+  test("screenshot-only tool output (no text) emits image-data without an empty text part", async () => {
+    // Regression: AI SDK v6 ToolModelOutput.content rejects items where the
+    // discriminator type matches but the required field is undefined. Pre-fix
+    // we always emitted `{type: "text", text: outputObject.text}` first; when
+    // a tool produced only attachments (e.g. screen tool with no caption) the
+    // text part landed with `text: undefined` and failed standardizePrompt
+    // with `Invalid prompt: The messages do not match the ModelMessage[] schema`.
+    // Assert the empty text part is gone AND no project-scoped media-type
+    // shape leaks back in.
+    const userID = "m-user"
+    const assistantID = "m-assistant"
+
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [
+          {
+            ...basePart(userID, "u1"),
+            type: "text",
+            text: "screenshot please",
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-screen-1",
+            tool: "screen",
+            state: {
+              status: "completed",
+              input: { region: "active" },
+              output: "",
+              title: "Screen",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-1"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "shot.png",
+                  url: "data:image/png;base64,UE5H",
+                },
+              ],
+            },
+            metadata: {},
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const result = await await Message.toModelMessages(input, model)
+    const toolMsg = result.find((m: { role: string }) => m.role === "tool") as
+      | {
+          role: "tool"
+          content: Array<{
+            type: string
+            output: { type: string; value: Array<{ type: string; text?: string; data?: string }> }
+          }>
+        }
+      | undefined
+    expect(toolMsg).toBeDefined()
+    const output = toolMsg!.content[0].output
+    expect(output.type).toBe("content")
+    // No empty text part survived.
+    expect(output.value.find((p) => p.type === "text")).toBeUndefined()
+    // The attachment landed under the v6 `image-data` discriminator (not the
+    // deprecated `media` shape).
+    const imagePart = output.value.find((p) => p.type === "image-data")
+    expect(imagePart).toBeDefined()
+    expect(imagePart!.data).toBe("UE5H")
+  })
+
+  test("omits provider metadata when assistant model differs", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -398,7 +551,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "run tool" }],
@@ -430,7 +583,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("replaces compacted tool output with placeholder", () => {
+  test("replaces compacted tool output with placeholder", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -466,7 +619,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "run tool" }],
@@ -497,7 +650,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("converts assistant tool error into error-text tool result", () => {
+  test("converts assistant tool error into error-text tool result", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -533,7 +686,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "run tool" }],
@@ -566,7 +719,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("filters assistant messages with non-abort errors", () => {
+  test("filters assistant messages with non-abort errors", async () => {
     const assistantID = "m-assistant"
 
     const input: Message.WithParts[] = [
@@ -586,10 +739,10 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([])
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([])
   })
 
-  test("includes aborted assistant messages only when they have non-step-start/reasoning content", () => {
+  test("includes aborted assistant messages only when they have non-step-start/reasoning content", async () => {
     const assistantID1 = "m-assistant-1"
     const assistantID2 = "m-assistant-2"
 
@@ -629,7 +782,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "assistant",
         content: [
@@ -640,7 +793,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("splits assistant messages on step-start boundaries", () => {
+  test("splits assistant messages on step-start boundaries", async () => {
     const assistantID = "m-assistant"
 
     const input: Message.WithParts[] = [
@@ -665,7 +818,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "assistant",
         content: [{ type: "text", text: "first" }],
@@ -677,7 +830,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("drops messages that only contain step-start parts", () => {
+  test("drops messages that only contain step-start parts", async () => {
     const assistantID = "m-assistant"
 
     const input: Message.WithParts[] = [
@@ -692,10 +845,10 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([])
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([])
   })
 
-  test("converts pending/running tool calls to error results to prevent dangling tool_use", () => {
+  test("converts pending/running tool calls to error results to prevent dangling tool_use", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -739,7 +892,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    const result = Message.toModelMessages(input, model)
+    const result = await Message.toModelMessages(input, model)
 
     expect(result).toStrictEqual([
       {
@@ -782,6 +935,345 @@ describe("session.message.toModelMessage", () => {
           },
         ],
       },
+    ])
+  })
+
+  test("projects earlier stateful-snapshot tool results to a superseded note", async () => {
+    const firstAssistant = "m-a1"
+    const secondUser = "m-u2"
+    const secondAssistant = "m-a2"
+
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo("m-u1"),
+        parts: [
+          { ...basePart("m-u1", "u1"), type: "text", text: "check state" },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(firstAssistant, "m-u1"),
+        parts: [
+          {
+            ...basePart(firstAssistant, "a1-tool"),
+            type: "tool",
+            callID: "call-first",
+            tool: "read_context",
+            state: {
+              status: "completed",
+              input: { scope: "all" },
+              output: "SNAPSHOT_OLD: goals + decisions + deliveries (4000 tokens of state)",
+              title: "read_context",
+              metadata: {},
+              time: { start: 0, end: 1 },
+            },
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: userInfo(secondUser),
+        parts: [
+          { ...basePart(secondUser, "u2"), type: "text", text: "check again" },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(secondAssistant, secondUser),
+        parts: [
+          {
+            ...basePart(secondAssistant, "a2-tool"),
+            type: "tool",
+            callID: "call-latest",
+            tool: "read_context",
+            state: {
+              status: "completed",
+              input: { scope: "all" },
+              output: "SNAPSHOT_LATEST: current state",
+              title: "read_context",
+              metadata: {},
+              time: { start: 2, end: 3 },
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const out = await Message.toModelMessages(input, model)
+    // Find the two tool-result messages and inspect their output values.
+    const toolResults = out
+      .filter((m) => m.role === "tool")
+      .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+      .filter((c: any) => c.type === "tool-result") as Array<{ toolCallId: string; output: { type: string; value: string } }>
+
+    expect(toolResults.length).toBe(2)
+    const first = toolResults.find((r) => r.toolCallId === "call-first")!
+    const latest = toolResults.find((r) => r.toolCallId === "call-latest")!
+    expect(first.output.value).toBe("[read_context snapshot superseded by a later call in this session]")
+    expect(latest.output.value).toBe("SNAPSHOT_LATEST: current state")
+    // Make sure we did not drop the old payload's original bytes before projection ran
+    expect(first.output.value).not.toContain("SNAPSHOT_OLD")
+  })
+
+  test("does not project non-stateful tool results (e.g. bash) across turns", async () => {
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo("m-u1"),
+        parts: [
+          { ...basePart("m-u1", "u1"), type: "text", text: "run" },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo("m-a1", "m-u1"),
+        parts: [
+          {
+            ...basePart("m-a1", "a1"),
+            type: "tool",
+            callID: "bash-1",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { cmd: "ls" },
+              output: "OUTPUT_FIRST",
+              title: "Bash",
+              metadata: {},
+              time: { start: 0, end: 1 },
+            },
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: userInfo("m-u2"),
+        parts: [
+          { ...basePart("m-u2", "u2"), type: "text", text: "again" },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo("m-a2", "m-u2"),
+        parts: [
+          {
+            ...basePart("m-a2", "a2"),
+            type: "tool",
+            callID: "bash-2",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { cmd: "pwd" },
+              output: "OUTPUT_SECOND",
+              title: "Bash",
+              metadata: {},
+              time: { start: 2, end: 3 },
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const out = await Message.toModelMessages(input, model)
+    const toolResults = out
+      .filter((m) => m.role === "tool")
+      .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+      .filter((c: any) => c.type === "tool-result") as Array<{ toolCallId: string; output: { type: string; value: string } }>
+    expect(toolResults.length).toBe(2)
+    expect(toolResults[0].output.value).toBe("OUTPUT_FIRST")
+    expect(toolResults[1].output.value).toBe("OUTPUT_SECOND")
+  })
+
+  test("keeps a single stateful-snapshot call unchanged when it is the only one", async () => {
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo("m-u1"),
+        parts: [
+          { ...basePart("m-u1", "u1"), type: "text", text: "check state once" },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo("m-a1", "m-u1"),
+        parts: [
+          {
+            ...basePart("m-a1", "a1"),
+            type: "tool",
+            callID: "only",
+            tool: "query_failed_goals",
+            state: {
+              status: "completed",
+              input: {},
+              output: "FAILED_GOALS_SNAPSHOT",
+              title: "query_failed_goals",
+              metadata: {},
+              time: { start: 0, end: 1 },
+            },
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const out = await Message.toModelMessages(input, model)
+    const toolResults = out
+      .filter((m) => m.role === "tool")
+      .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+      .filter((c: any) => c.type === "tool-result") as Array<{ toolCallId: string; output: { type: string; value: string } }>
+    expect(toolResults.length).toBe(1)
+    expect(toolResults[0].output.value).toBe("FAILED_GOALS_SNAPSHOT")
+  })
+
+  test("preserves reasoning on every assistant message — no strip (cache + Anthropic protocol)", async () => {
+    // Locks in pass-through. Stripping older reasoning was tried and
+    // reverted because it broke prompt-cache hits (cache prefix bytes
+    // change every turn) and risked Anthropic's thinking+tool_use
+    // protocol requirement. See toModelMessages comment for the full
+    // rationale.
+    const turn = (i: number): Message.WithParts[] => [
+      {
+        info: userInfo(`u${i}`),
+        parts: [{ ...basePart(`u${i}`, `up${i}`), type: "text", text: `q${i}` }] as Message.Part[],
+      },
+      {
+        info: assistantInfo(`a${i}`, `u${i}`),
+        parts: [
+          {
+            ...basePart(`a${i}`, `ar${i}`),
+            type: "reasoning",
+            text: `thought-${i}`,
+            time: { start: 0 },
+          },
+          {
+            ...basePart(`a${i}`, `at${i}`),
+            type: "text",
+            text: `answer-${i}`,
+          },
+        ] as Message.Part[],
+      },
+    ]
+    const input: Message.WithParts[] = [...turn(1), ...turn(2), ...turn(3)]
+    const out = await Message.toModelMessages(input, model)
+
+    const reasoningTexts: string[] = []
+    for (const msg of out) {
+      if (msg.role !== "assistant") continue
+      const content = Array.isArray(msg.content) ? msg.content : []
+      for (const part of content as Array<{ type: string; text?: string }>) {
+        if (part.type === "reasoning" && typeof part.text === "string") {
+          reasoningTexts.push(part.text)
+        }
+      }
+    }
+    expect(reasoningTexts).toStrictEqual(["thought-1", "thought-2", "thought-3"])
+  })
+})
+
+describe("session.message.filterCompacted", () => {
+  async function* stream(messages: Message.WithParts[]) {
+    for (const message of messages) yield message
+  }
+
+  test("keeps the completed compaction summary and all newer turns", async () => {
+    const compactionUser = "m-compaction-user"
+    const compactionSummary = "m-compaction-summary"
+    const recentUser = "m-recent-user"
+    const recentAssistant = "m-recent-assistant"
+
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: assistantInfo(recentAssistant, recentUser),
+        parts: [{ ...basePart(recentAssistant, "p-recent-assistant"), type: "text", text: "recent answer" }],
+      },
+      {
+        info: userInfo(recentUser),
+        parts: [{ ...basePart(recentUser, "p-recent-user"), type: "text", text: "recent question" }],
+      },
+      {
+        info: {
+          ...assistantInfo(compactionSummary, compactionUser),
+          summary: true,
+          finish: "stop",
+        },
+        parts: [{ ...basePart(compactionSummary, "p-summary"), type: "text", text: "summary" }],
+      },
+      {
+        info: userInfo(compactionUser),
+        parts: [{ ...basePart(compactionUser, "p-compaction"), type: "compaction", auto: true }],
+      },
+      {
+        info: assistantInfo("m-old-assistant", "m-old-user"),
+        parts: [{ ...basePart("m-old-assistant", "p-old-assistant"), type: "text", text: "old answer" }],
+      },
+      {
+        info: userInfo("m-old-user"),
+        parts: [{ ...basePart("m-old-user", "p-old-user"), type: "text", text: "old question" }],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([
+      compactionUser,
+      compactionSummary,
+      recentUser,
+      recentAssistant,
+    ])
+  })
+
+  test("retains exact recent tail when compaction stores tail_start_id", async () => {
+    const compactionUser = "m-compaction-user"
+    const compactionSummary = "m-compaction-summary"
+    const retainedUser = "m-retained-user"
+    const retainedAssistant = "m-retained-assistant"
+    const recentUser = "m-recent-user"
+    const recentAssistant = "m-recent-assistant"
+
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: assistantInfo(recentAssistant, recentUser),
+        parts: [{ ...basePart(recentAssistant, "p-recent-assistant"), type: "text", text: "recent answer" }],
+      },
+      {
+        info: userInfo(recentUser),
+        parts: [{ ...basePart(recentUser, "p-recent-user"), type: "text", text: "recent question" }],
+      },
+      {
+        info: {
+          ...assistantInfo(compactionSummary, compactionUser),
+          summary: true,
+          finish: "stop",
+        },
+        parts: [{ ...basePart(compactionSummary, "p-summary"), type: "text", text: "summary" }],
+      },
+      {
+        info: userInfo(compactionUser),
+        parts: [
+          {
+            ...basePart(compactionUser, "p-compaction"),
+            type: "compaction",
+            auto: true,
+            tail_start_id: retainedUser,
+          },
+        ],
+      },
+      {
+        info: assistantInfo(retainedAssistant, retainedUser),
+        parts: [{ ...basePart(retainedAssistant, "p-retained-assistant"), type: "text", text: "retained answer" }],
+      },
+      {
+        info: userInfo(retainedUser),
+        parts: [{ ...basePart(retainedUser, "p-retained-user"), type: "text", text: "retained question" }],
+      },
+      {
+        info: assistantInfo("m-old-assistant", "m-old-user"),
+        parts: [{ ...basePart("m-old-assistant", "p-old-assistant"), type: "text", text: "old answer" }],
+      },
+      {
+        info: userInfo("m-old-user"),
+        parts: [{ ...basePart("m-old-user", "p-old-user"), type: "text", text: "old question" }],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([
+      retainedUser,
+      retainedAssistant,
+      compactionUser,
+      compactionSummary,
+      recentUser,
+      recentAssistant,
     ])
   })
 })
@@ -842,41 +1334,18 @@ describe("session.message.fromError", () => {
     })
   })
 
-  test("maps github-copilot 403 to reauth guidance", () => {
-    const error = new APICallError({
-      message: "forbidden",
-      url: "https://api.githubcopilot.com/v1/chat/completions",
-      requestBodyValues: {},
-      statusCode: 403,
-      responseHeaders: { "content-type": "application/json" },
-      responseBody: '{"error":"forbidden"}',
-      isRetryable: false,
-    })
-
-    const result = Message.fromError(error, { providerID: "github-copilot" })
-
-    expect(result).toStrictEqual({
-      name: "APIError",
-      data: {
-        message:
-          "Please reauthenticate with the copilot provider to ensure your credentials work properly with OpenCorvus.",
-        statusCode: 403,
-        isRetryable: false,
-        responseHeaders: { "content-type": "application/json" },
-        responseBody: '{"error":"forbidden"}',
-        metadata: {
-          url: "https://api.githubcopilot.com/v1/chat/completions",
-        },
-      },
-    })
-  })
-
   test("detects context overflow from APICallError provider messages", () => {
     const cases = [
       "prompt is too long: 213462 tokens > 200000 maximum",
       "Your input exceeds the context window of this model",
+      "This model's maximum context length is 128000 tokens. However, your messages resulted in 130000 tokens.",
+      "context length exceeded",
       "The input token count (1196265) exceeds the maximum number of tokens allowed (1048575)",
+      "input length exceeds model limit",
+      "request too large",
+      "too many tokens in prompt",
       "Please reduce the length of the messages or completion",
+      "Provider alibaba-coding-plan-cn returned HTTP 400: InternalError.Algo.InvalidParameter: Range of input length should be [1, 258048]",
       "400 status code (no body)",
       "413 status code (no body)",
     ]
@@ -895,6 +1364,37 @@ describe("session.message.fromError", () => {
     })
   })
 
+  test("detects provider overflow from structured APICallError bodies", () => {
+    const cases = [
+      {
+        providerID: "openai-compatible",
+        body: { error: { code: "context_length_exceeded", message: "maximum context length exceeded" } },
+      },
+      {
+        providerID: "hexin",
+        body: { error: { type: "context_overflow", message: "hexin normalized context overflow" } },
+      },
+      {
+        providerID: "mistral",
+        body: { code: "request_too_large", message: "request too large" },
+      },
+    ]
+
+    for (const item of cases) {
+      const error = new APICallError({
+        message: "400 Bad Request",
+        url: "https://example.com",
+        requestBodyValues: {},
+        statusCode: 400,
+        responseHeaders: { "content-type": "application/json" },
+        responseBody: JSON.stringify(item.body),
+        isRetryable: false,
+      })
+      const result = Message.fromError(error, { providerID: item.providerID })
+      expect(Message.ContextOverflowError.isInstance(result)).toBe(true)
+    }
+  })
+
   test("does not classify 429 no body as context overflow", () => {
     const result = Message.fromError(
       new APICallError({
@@ -909,6 +1409,33 @@ describe("session.message.fromError", () => {
     )
     expect(Message.ContextOverflowError.isInstance(result)).toBe(false)
     expect(Message.APIError.isInstance(result)).toBe(true)
+  })
+
+  test("propagates 429 quota body as retryable APIError", () => {
+    // Regression for the 2026-04-28 incident: alibaba-coding-plan-cn returned
+    // HTTP 429 "usage allocated quota exceeded. please try again later." The
+    // provider-fetch wrapper used to throw a plain Error which fell through
+    // to NamedError.Unknown — bypassing SessionRetry's APIError-aware backoff
+    // and turning a transient rate-limit into an orchestrator wake loop.
+    // After the fix the wrapper throws an APICallError with statusCode=429,
+    // and the AI SDK marks 429 as retryable by default; Message.fromError
+    // must surface that as Message.APIError(isRetryable=true).
+    const result = Message.fromError(
+      new APICallError({
+        message:
+          "Provider alibaba-coding-plan-cn returned HTTP 429: usage allocated quota exceeded. please try again later.",
+        url: "https://coding.dashscope.aliyuncs.com/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 429,
+        responseHeaders: { "content-type": "application/json" },
+        responseBody:
+          '{"error":{"message":"usage allocated quota exceeded. please try again later."}}',
+      }),
+      { providerID: "alibaba-coding-plan-cn" },
+    ) as Message.APIError
+    expect(Message.APIError.isInstance(result)).toBe(true)
+    expect(result.data.statusCode).toBe(429)
+    expect(result.data.isRetryable).toBe(true)
   })
 
   test("serializes unknown inputs", () => {

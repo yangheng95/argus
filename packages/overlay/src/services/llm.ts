@@ -109,7 +109,7 @@ export interface AuthDialogCallbacks {
   ) => Promise<boolean>;
 
   /** Open a URL in an external browser. */
-  nativeOpen: (url: string) => Promise<void>;
+  nativeOpen: (url: string) => Promise<boolean | void>;
 
   /**
  * Show the LLM notice banner.
@@ -274,8 +274,7 @@ export function llmSelectionKey(
  * are no explicit form values selected.
  * Pass empty strings for formProviderID / formModelID when the form has not
  * been touched.
- * TODO: DOM side — callers that previously read from dom.llmProvider /
- * dom.llmModel should pass those values as formProviderID / formModelID.
+ * Solid callers pass the current form values as formProviderID / formModelID.
  */
 export function llmCurrent(
   formProviderID: string,
@@ -621,10 +620,8 @@ export async function authorizeProvider(
 
 /**
  * Dispatch to the correct auth flow (OAuth vs API-key prompt) for one method.
- * Returns true on success, false if cancelled, or "input" if the user should
- * focus the API key field instead.
- * TODO: DOM side — the "input" return case means the caller should call
- * dom.llmApiKey?.focus(). In Solid, set focus via a ref instead.
+ * Returns true on success, false if cancelled, or "input" if the caller should
+ * focus its API key field.
  */
 export async function runProviderAuthMethod(
   providerID: string,
@@ -649,8 +646,7 @@ export async function runProviderAuthMethod(
 /**
  * Authenticate a provider by prompting the user to choose an auth method and
  * running the appropriate flow.
- * The providerID must be passed explicitly instead of being read from the DOM.
- * TODO: DOM side — callers should pass dom.llmProvider?.value?.trim() as providerID.
+ * The providerID must be passed explicitly by the canonical provider UI.
  */
 export async function authenticateSelectedProvider(
   providerID: string,

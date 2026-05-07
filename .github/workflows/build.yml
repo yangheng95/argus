@@ -126,9 +126,19 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # The build script reads MODELS_DEV_API_JSON; mount the file into
+          # the container so the path the env var points to actually exists.
+          # Without this -v line every musl build inside Docker hit ENOENT.
+          # `--user $(id -u):$(id -g)` makes the container write artifacts as
+          # the runner user, otherwise dist/ ends up owned by root and the
+          # next host-side step (Stage overlay web bundle into CLI dist)
+          # hits EACCES on mkdir.
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -v "$GITHUB_WORKSPACE:/workspace" \
+            -v /tmp/models-api-clean.json:/tmp/models-api-clean.json:ro \
             -w /workspace/packages/opencorvus \
+            -e HOME=/tmp \
             -e MODELS_DEV_API_JSON=/tmp/models-api-clean.json \
             -e OPENCORVUS_RELEASE="${OPENCORVUS_RELEASE}" \
             -e OPENCORVUS_VERSION="${OPENCORVUS_VERSION}" \
@@ -137,6 +147,30 @@ jobs:
             -e GH_TOKEN="${GH_TOKEN}" \
             oven/bun:alpine \
             sh -c "bun install && bun run script/build.ts --single --baseline --musl-only --no-clean"
+
+      - name: Build overlay web bundle
+        # The CLI ships its overlay UI as static assets under
+        # `dist/opencorvus-<platform>/ui/`. build.ts compiles only the
+        # native binary, so we must run vite separately and stage the
+        # output ourselves; otherwise check-release-assets fails on every
+        # platform with "Missing required file: ui/index.html".
+        working-directory: packages/overlay
+        run: bun run build:vite
+
+      - name: Stage overlay web bundle into CLI dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="packages/overlay/dist-vite"
+          if [[ ! -d "$src" ]]; then
+            echo "vite output missing at $src" >&2
+            exit 1
+          fi
+          for d in packages/opencorvus/dist/opencorvus-*; do
+            [[ -d "$d" ]] || continue
+            mkdir -p "$d/ui"
+            cp -R "$src"/. "$d/ui/"
+          done
 
       - name: Validate CLI assets
         run: |
@@ -195,7 +229,14 @@ jobs:
             libssl-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            xdg-utils
+          # `xdg-utils` provides /usr/bin/xdg-open which Tauri's AppImage
+          # bundler shells out to during `--bundles appimage`. Without it
+          # the bundle step fails with "xdg-open binary not found
+          # /usr/bin/xdg-open" after .deb and .rpm have already been
+          # produced. ubuntu-latest happens to ship it preinstalled but
+          # ubuntu-24.04-arm doesn't, so the linux-arm64 runner failed.
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -214,17 +255,44 @@ jobs:
       - name: Stage overlay artifacts
         shell: bash
         run: |
+          set -euo pipefail
           OUT="packages/overlay/dist-artifacts/${{ matrix.platform }}"
           mkdir -p "$OUT"
-          cp -f packages/overlay/src-tauri/target/release/opencorvus-overlay* "$OUT/" 2>/dev/null || true
-          find packages/overlay/src-tauri/target/release/bundle -type f -exec cp {} "$OUT/" \; 2>/dev/null || true
+          REL="packages/overlay/src-tauri/target/release"
+          BIN="opencorvus-overlay"
+          if [[ "${{ matrix.platform }}" == windows-* ]]; then BIN="$BIN.exe"; fi
+          cp "$REL/$BIN" "$OUT/$BIN"
+
+          # Tauri emits installer bundles under target/release/bundle/<type>/.
+          # macOS .app is a directory; tar it so Finder still sees a bundle
+          # after the artifact zip round-trips through GitHub Actions.
+          # Other types (dmg, deb, rpm, AppImage, msi, NSIS *-setup.exe) are
+          # single files copied verbatim.
+          BUNDLE="$REL/bundle"
+          if [[ -d "$BUNDLE" ]]; then
+            if [[ "${{ matrix.platform }}" == darwin-* && -d "$BUNDLE/macos" ]]; then
+              for app in "$BUNDLE/macos"/*.app; do
+                [[ -d "$app" ]] || continue
+                tar -czf "$OUT/$(basename "$app").tar.gz" -C "$BUNDLE/macos" "$(basename "$app")"
+              done
+            fi
+            find "$BUNDLE" -type f \
+              \( -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \
+                 -o -name '*.AppImage' -o -name '*.msi' -o -name '*-setup.exe' \) \
+              -exec cp {} "$OUT/" \;
+          fi
 
       - name: Validate overlay assets
-        run: >
-          bun ./script/check-release-assets.ts overlay
-          --dir packages/overlay/dist-artifacts/${{ matrix.platform }}
-          --platform "${{ matrix.platform }}"
-          --version "${{ needs.prepare.outputs.version }}"
+        run: |
+          EXTRA=""
+          if [[ "${{ needs.prepare.outputs.release }}" == "1" ]]; then
+            EXTRA="--require-bundle"
+          fi
+          bun ./script/check-release-assets.ts overlay \
+            --dir packages/overlay/dist-artifacts/${{ matrix.platform }} \
+            --platform "${{ matrix.platform }}" \
+            --version "${{ needs.prepare.outputs.version }}" \
+            $EXTRA
 
       - name: Upload overlay artifact
         uses: actions/upload-artifact@v4

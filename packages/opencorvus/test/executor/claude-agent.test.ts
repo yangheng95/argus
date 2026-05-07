@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import type { CodingEventInfo } from "../../src/executor/compat"
+import type { CodingEventInfo } from "../../src/executor/contract"
 import type { ClaudeAgentClient, ClaudeAgentHandle } from "../../src/executor/claude-agent"
 import { ClaudeAgentExecutor } from "../../src/executor/claude-agent"
 import { ManagedCodingExecutor } from "../../src/executor/managed"
+import { Instance } from "../../src/project/instance"
+import { tmpdir } from "../fixture/fixture"
 
 describe("claude agent executor", () => {
   test("maps sdk messages to coding events", async () => {
@@ -58,6 +60,15 @@ describe("claude agent executor", () => {
   })
 
   test("respond resolves pending approval callbacks", async () => {
+    // audit-2026-04-29 W2-V29 — adapter.events() calls
+    // EngineConfig.get() which requires AsyncLocalStorage context
+    // from Instance.provide. Pre-fix the test wrapped nothing →
+    // "No context found for instance" throw on the events
+    // for-await loop. Wrap in tmpdir + Instance.provide.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
     const requests: Array<{ id: string }> = []
     const adapter = ManagedCodingExecutor.create(ClaudeAgentExecutor.create({
       run(input) {
@@ -120,6 +131,8 @@ describe("claude agent executor", () => {
       },
     })
     expect(resolved).toBe(true)
+      },
+    })
   })
 })
 

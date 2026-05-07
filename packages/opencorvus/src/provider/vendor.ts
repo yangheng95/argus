@@ -17,18 +17,6 @@ export type CustomLoader = (provider: Provider.Info) => Promise<{
   options?: Record<string, any>
 }>
 
-function isGpt5OrLater(modelID: string): boolean {
-  const match = /^gpt-(\d+)/.exec(modelID)
-  if (!match) {
-    return false
-  }
-  return Number(match[1]) >= 5
-}
-
-function shouldUseCopilotResponsesApi(modelID: string): boolean {
-  return isGpt5OrLater(modelID) && !modelID.startsWith("gpt-5-mini")
-}
-
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   async anthropic() {
     return {
@@ -68,26 +56,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       autoload: false,
       async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
         return sdk.responses(modelID)
-      },
-      options: {},
-    }
-  },
-  "github-copilot": async () => {
-    return {
-      autoload: false,
-      async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-        if (sdk.responses === undefined && sdk.chat === undefined) return sdk.languageModel(modelID)
-        return shouldUseCopilotResponsesApi(modelID) ? sdk.responses(modelID) : sdk.chat(modelID)
-      },
-      options: {},
-    }
-  },
-  "github-copilot-enterprise": async () => {
-    return {
-      autoload: false,
-      async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-        if (sdk.responses === undefined && sdk.chat === undefined) return sdk.languageModel(modelID)
-        return shouldUseCopilotResponsesApi(modelID) ? sdk.responses(modelID) : sdk.chat(modelID)
       },
       options: {},
     }
@@ -140,10 +108,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     const awsBearerToken = iife(() => {
       const envToken = process.env.AWS_BEARER_TOKEN_BEDROCK
       if (envToken) return envToken
-      if (auth?.type === "api") {
-        process.env.AWS_BEARER_TOKEN_BEDROCK = auth.key
-        return auth.key
-      }
+      if (auth?.type === "api") return auth.key
       return undefined
     })
 
@@ -160,7 +125,9 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       region: defaultRegion,
     }
 
-    if (!awsBearerToken) {
+    if (awsBearerToken) {
+      providerOptions.apiKey = awsBearerToken
+    } else {
       const credentialProviderOptions = profile ? { profile } : {}
 
       providerOptions.credentialProvider = fromNodeProviderChain(credentialProviderOptions)
@@ -331,10 +298,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     const envServiceKey = iife(() => {
       const envAICoreServiceKey = process.env.AICORE_SERVICE_KEY
       if (envAICoreServiceKey) return envAICoreServiceKey
-      if (auth?.type === "api") {
-        process.env.AICORE_SERVICE_KEY = auth.key
-        return auth.key
-      }
+      if (auth?.type === "api") return auth.key
       return undefined
     })
     const deploymentId = process.env.AICORE_DEPLOYMENT_ID
@@ -342,7 +306,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
 
     return {
       autoload: !!envServiceKey,
-      options: envServiceKey ? { deploymentId, resourceGroup } : {},
+      options: envServiceKey ? { apiKey: envServiceKey, deploymentId, resourceGroup } : {},
       async getModel(sdk: any, modelID: string) {
         return sdk(modelID)
       },
@@ -494,9 +458,6 @@ export function smallModelPriority(providerID: string, _region?: string): string
   ]
   if (providerID.startsWith("opencorvus")) {
     priority = ["gpt-5-nano"]
-  }
-  if (providerID.startsWith("github-copilot")) {
-    priority = ["gpt-5-mini", "claude-haiku-4.5", ...priority]
   }
   return priority
 }

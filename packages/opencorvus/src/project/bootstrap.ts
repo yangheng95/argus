@@ -9,15 +9,15 @@ import { Command } from "../command"
 import { Instance } from "./instance"
 import { Vcs } from "./vcs"
 import { Log } from "@/util/log"
-import { Snapshot } from "../snapshot"
+import { ProjectGC } from "./gc"
 import { Truncate } from "../tool/truncation"
 import { CronService } from "../scheduler/cron-service"
 import { EventService } from "../scheduler/event-service"
 import { TaskQueueService } from "../scheduler/task-queue-service"
-import { OrchestratorService } from "@/orchestrator/service"
+import { EngineService } from "@/task-api"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Config } from "@/config/config"
-import { ensureTaskMessageProtocolBridge } from "@/server/routes/task-message-protocol-bridge"
+import { ensureTaskMessageProtocolBridge } from "@/orchestrator/protocol/message-bridge"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -27,12 +27,14 @@ export async function InstanceBootstrap() {
   FileWatcher.init()
   File.init()
   Vcs.init()
-  Snapshot.init()
+  // Snapshot has no init/cleanup of its own — disk reclaim is ProjectGC's
+  // sole responsibility (whole-project rm). See snapshot/index.ts.
+  ProjectGC.init()
   Truncate.init()
   CronService.init()
   EventService.init()
   TaskQueueService.init()
-  OrchestratorService.init()
+  EngineService.init()
   ensureTaskMessageProtocolBridge()
   await ChannelSupervisor.sync(await Config.get()).catch((error) => {
     Log.Default.warn("channel supervisor init failed", { error: String(error) })

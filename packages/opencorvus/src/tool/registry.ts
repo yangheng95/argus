@@ -2,25 +2,24 @@ import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
-import { GrepTool } from "./grep"
+import { SearchCodeTool } from "./grep"
 import { BatchTool } from "./batch"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TodoReadTool, TodoWriteTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
-import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Config } from "../config/config"
 import path from "path"
 import { type ToolContext as PluginToolContext, type ToolDefinition } from "@opencorvus-ai/plugin"
 import z from "zod"
 import { Plugin } from "../plugin"
 import { WebSearchTool } from "./websearch"
-import { CodeSearchTool } from "./codesearch"
+import { ExternalCodeSearchTool } from "./codesearch"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
@@ -32,17 +31,30 @@ import { MemoryTool } from "./memory"
 import { ScheduleTool } from "./schedule"
 import { PlannerTool } from "./planner"
 import { PanelTool } from "./panel"
-import { TuiTool } from "./tui"
 import { TaskReportTool } from "./task-report"
-import { PlanEnterTool, PlanExitTool } from "./plan"
-import { SpecEnterTool, SpecExitTool } from "./spec"
+import { GoalReportTool } from "./goal-report"
+import {
+  WebpageExtractTool,
+  WebpageCompileTool,
+  WebpageAnalyzeTool,
+  WebpageImageExtractTool,
+  WebpageImageCompileTool,
+  WebpageImageAnalyzeTool,
+  WebpageRenderTool,
+  WebpageEvaluateTool,
+  WebpageTextDiffTool,
+  WebpageVisionJudgeTool,
+  FigmaExtractTool,
+  FigmaCompileTool,
+  FigmaAnalyzeTool,
+} from "../mirror/tools"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
 
-  export const state = Instance.state(async () => {
+  export const state = lazyInstanceState(async () => {
     const custom = [] as Tool.Info[]
 
     const matches = await Config.directories().then((dirs) =>
@@ -113,33 +125,41 @@ export namespace ToolRegistry {
     const question = ["app", "cli", "desktop"].includes(Flag.OPENCORVUS_CLIENT) || Flag.OPENCORVUS_ENABLE_QUESTION_TOOL
 
     return [
-      InvalidTool,
       ...(question ? [QuestionTool] : []),
       BashTool,
       ReadTool,
       GlobTool,
-      GrepTool,
+      SearchCodeTool,
       EditTool,
       WriteTool,
       TaskTool,
-      PlanEnterTool,
-      PlanExitTool,
-      SpecEnterTool,
-      SpecExitTool,
       WebFetchTool,
       TodoWriteTool,
       TodoReadTool,
       WebSearchTool,
-      CodeSearchTool,
+      ExternalCodeSearchTool,
       SkillTool,
       ApplyPatchTool,
       MemoryTool,
       ScheduleTool,
       PlannerTool,
       PanelTool,
-      TuiTool,
       TaskReportTool,
+      GoalReportTool,
       AnalyticsTool,
+      WebpageExtractTool,
+      WebpageCompileTool,
+      WebpageAnalyzeTool,
+      WebpageImageExtractTool,
+      WebpageImageCompileTool,
+      WebpageImageAnalyzeTool,
+      WebpageRenderTool,
+      WebpageEvaluateTool,
+      WebpageTextDiffTool,
+      WebpageVisionJudgeTool,
+      FigmaExtractTool,
+      FigmaCompileTool,
+      FigmaAnalyzeTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
@@ -157,9 +177,19 @@ export namespace ToolRegistry {
     },
     agent?: Agent.Info,
   ) {
-    const tools = await all()
+    let items = await all()
+
+    // Agent tool adapter: filter by agent's declared tool set
+    if (agent?.tools?.include) {
+      const set = new Set(agent.tools.include)
+      items = items.filter((t) => set.has(t.id))
+    } else if (agent?.tools?.exclude) {
+      const set = new Set(agent.tools.exclude)
+      items = items.filter((t) => !set.has(t.id))
+    }
+
     const result = await Promise.all(
-      tools
+      items
         .filter((t) => {
           // use apply tool in same format as codex
           const usePatch =

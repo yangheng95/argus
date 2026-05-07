@@ -1,12 +1,15 @@
 import z from "zod"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Bus } from "@/bus"
+import { GlobalBus } from "@/bus/global"
 import { BusEvent } from "@/bus/bus-event"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionTable } from "@/session/session.sql"
+import { Message } from "@/session/message"
 import { Database, and, eq, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
+import { EngineConfig } from "@/engine/config"
 import { Scheduler } from "./index"
 import { TaskQueueTable } from "./task-queue.sql"
 
@@ -34,30 +37,74 @@ export namespace TaskQueueService {
   const log = Log.create({ service: "task-queue-service" })
 
   const POLL_INTERVAL_MS = 500
-  const RUN_TIMEOUT_ENV = "OPENCORVUS_TASK_QUEUE_RUN_TIMEOUT_MS"
-  const RUN_TIMEOUT_MS = 30 * 60 * 1000
-  const HEARTBEAT_ENV = "OPENCORVUS_TASK_QUEUE_HEARTBEAT_MS"
-  const HEARTBEAT_MS = 15 * 1000
   const BATCH_SIZE = 10
   const CONCURRENCY_ENV = "OPENCORVUS_TASK_QUEUE_CONCURRENCY"
   const CONCURRENCY_DEFAULT = 4
 
-  const state = Instance.state(() => ({
-    running: false,
+  const state = lazyInstanceState(() => ({
+    polling: false,
+    inFlight: new Set<Promise<void>>(),
   }))
 
   export function init() {
     Scheduler.register({
       id: "task-queue-service.poll",
       interval: POLL_INTERVAL_MS,
-      run: poll,
+      run: async () => {
+        await poll()
+      },
       scope: "instance",
     })
     log.info("task queue service initialized")
   }
 
   export async function runNow() {
-    await poll()
+    const started = await poll()
+    await Promise.allSettled(started)
+  }
+
+  export type QueuedTaskStatus = {
+    taskID: string
+    sessionID: string
+    status: "queued" | "retrying" | "running" | "completed" | "failed"
+    retryCount: number
+    maxRetries: number
+    source: string
+    prompt: string
+    error: string | null
+    startedAt: number | null
+    completedAt: number | null
+    updatedAt: number
+  }
+
+  export function getStatus(input: { sessionID: string; taskID: string; source: string }): QueuedTaskStatus | null {
+    const row = Database.use((db) =>
+      db
+        .select()
+        .from(TaskQueueTable)
+        .where(
+          and(
+            eq(TaskQueueTable.id, input.taskID),
+            eq(TaskQueueTable.session_id, input.sessionID),
+            eq(TaskQueueTable.source, input.source),
+          ),
+        )
+        .get(),
+    )
+    if (!row) return null
+    return {
+      taskID: row.id,
+      sessionID: row.session_id,
+      status: row.status,
+      retryCount: row.retry_count,
+      maxRetries: row.max_retries,
+      source: row.source,
+      prompt: row.prompt,
+      error: row.error_message ?? null,
+      startedAt: row.time_started ?? null,
+      completedAt: row.time_completed ?? null,
+      updatedAt: row.time_updated,
+    }
   }
 
   export async function executePrompt(raw: { sessionID: string; prompt: unknown; source?: string }) {
@@ -107,28 +154,53 @@ export namespace TaskQueueService {
 
   async function poll() {
     const current = state()
-    if (current.running) return
-    current.running = true
-    await run(Date.now()).finally(() => {
-      current.running = false
-    })
+    if (current.polling) return []
+    current.polling = true
+    return run(Date.now())
   }
 
-  async function run(now: number): Promise<void> {
-    recover(now)
-    const limit = concurrency()
-    const queued = pending(limit)
-    if (queued.length === 0) return
-    log.info("found queued tasks", { count: queued.length, projectID: Instance.project.id })
-    const list: Array<typeof TaskQueueTable.$inferSelect> = []
-    for (const item of queued) {
-      if (list.length >= limit) break
-      const task = claim(item.id, item.session_id)
-      if (!task) continue
-      list.push(task)
+  async function run(now: number): Promise<Promise<void>[]> {
+    const current = state()
+    // audit-2026-04-29 W2-V28 — polling clear MUST happen before
+    // run's async Promise resolves so the next runNow's poll can
+    // proceed in the same microtask flush. Pre-fix the
+    // `return run(...).finally(() => polling=false)` pattern in
+    // poll() set polling=false in a chained .finally microtask
+    // that fired AFTER the test's await firstRunning resume —
+    // which was queued earlier when firstStarted fired inside the
+    // mock during list.map. The test's resume ran first, called
+    // runNow → poll, which saw polling=still=true and SKIPPED.
+    // Bury the clear inside run's try/finally so it lands
+    // synchronously within run's body, before the body returns.
+    try {
+      await recover(now)
+      const limit = Math.max(0, concurrency() - current.inFlight.size)
+      if (limit === 0) return []
+      const queued = pending(limit)
+      if (queued.length === 0) return []
+      log.info("found queued tasks", { count: queued.length, projectID: Instance.project.id })
+      const list: Array<typeof TaskQueueTable.$inferSelect> = []
+      for (const item of queued) {
+        if (list.length >= limit) break
+        const task = claim(item.id, item.session_id)
+        if (!task) continue
+        list.push(task)
+      }
+      if (list.length === 0) return []
+      const started = list.map((task) => {
+        let running!: Promise<void>
+        running = execute(task)
+          .catch((error) => fail(task, error))
+          .finally(() => {
+            current.inFlight.delete(running)
+          })
+        current.inFlight.add(running)
+        return running
+      })
+      return started
+    } finally {
+      current.polling = false
     }
-    if (list.length === 0) return
-    await Promise.all(list.map((task) => execute(task).catch((error) => fail(task, error))))
   }
 
   function concurrency() {
@@ -257,25 +329,42 @@ export namespace TaskQueueService {
     if (!metadata.success) {
       throw new Error("invalid queue metadata")
     }
-    const timer = setInterval(() => {
+    // Chunk-driven heartbeat: touch() only fires when SessionPrompt actually
+    // makes progress (message.part.delta / message.part.updated). Replaces
+    // the old unconditional setInterval(touch, 15s) which kept time_updated
+    // fresh even while the upstream LLM stream was dead — defeating the
+    // recover() staleness gate. GlobalBus subscription covers worktree
+    // Instances too (session lives in one, executor in another).
+    const handler = (msg: { payload: any }) => {
+      const event = msg.payload
+      if (!event || typeof event.type !== "string") return
+      if (event.type !== Message.Event.PartDelta.type && event.type !== Message.Event.PartUpdated.type) return
+      const props = event.properties ?? {}
+      const sid =
+        (typeof props.sessionID === "string" && props.sessionID) ||
+        (typeof props.part === "object" && props.part && typeof props.part.sessionID === "string" && props.part.sessionID) ||
+        undefined
+      if (sid !== task.session_id) return
       try {
         touch(task.id)
       } catch (error) {
-        log.warn("task heartbeat update failed", {
+        log.warn("task progress touch failed", {
           id: task.id,
           sessionID: task.session_id,
           error: message(error),
         })
       }
-    }, heartbeat())
-    timer.unref()
-    await executePrompt({
-      sessionID: task.session_id,
-      prompt: metadata.data.input,
-      source: "task-queue-service",
-    }).finally(() => {
-      clearInterval(timer)
-    })
+    }
+    GlobalBus.on("event", handler)
+    try {
+      await executePrompt({
+        sessionID: task.session_id,
+        prompt: metadata.data.input,
+        source: "task-queue-service",
+      })
+    } finally {
+      GlobalBus.off("event", handler)
+    }
     const now = Date.now()
     Database.use((db) =>
       db
@@ -293,8 +382,8 @@ export namespace TaskQueueService {
     Bus.publish(TaskQueueEvent.Completed, { queueTaskID: task.id, sessionID: task.session_id })
   }
 
-  function recover(now: number) {
-    const timeout = runTimeout()
+  async function recover(now: number) {
+    const timeout = await runTimeout()
     const stale = Database.use((db) =>
       db
         .select()
@@ -383,22 +472,12 @@ export namespace TaskQueueService {
     )
   }
 
-  function runTimeout() {
-    const raw = process.env[RUN_TIMEOUT_ENV]
-    if (!raw) return RUN_TIMEOUT_MS
-    const value = Number(raw)
-    if (!Number.isFinite(value)) return RUN_TIMEOUT_MS
-    if (value < 1000) return 1000
-    return Math.floor(value)
-  }
-
-  function heartbeat() {
-    const raw = process.env[HEARTBEAT_ENV]
-    if (!raw) return HEARTBEAT_MS
-    const value = Number(raw)
-    if (!Number.isFinite(value)) return HEARTBEAT_MS
-    if (value < 1000) return 1000
-    return Math.floor(value)
+  async function runTimeout() {
+    // Single source: engine/config.ts ActivityConfig.task_queue_run_timeout_ms.
+    // No OPENCORVUS_TASK_QUEUE_RUN_TIMEOUT_MS env — assistant.activity in
+    // opencorvus.jsonc is the one place to adjust it (CLAUDE.md #25).
+    const cfg = await EngineConfig.get()
+    return cfg.activity.task_queue_run_timeout_ms
   }
 }
 

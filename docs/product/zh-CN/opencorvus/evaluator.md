@@ -1,0 +1,83 @@
+# Evaluator 质量闸门
+
+Evaluator 决定"交付物合不合格"。它先跑**确定性检查**（真·命令），再由 **LLM judge** 兜底裁定最终 verdict。
+
+## 两阶段评估
+
+### 阶段 1：确定性检查
+
+`evaluateGoal`（`packages/opencorvus/src/evaluator/per-goal.ts`）按优先级执行：
+
+1. **从 `done_definition` 提取命令**：解析 Goal 验收标准文本中的可执行命令（`pnpm test`、`cargo build`、`pytest` 等），直接运行，以 exit-code 为准。
+2. **Project discovery**：从 `owned_paths` 向上找最近的 `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`，自动发现 build/test/lint 命令。
+3. **语义标准**：无法执行的纯文字标准（如"符合架构规范"）只作 evidence，不影响 pass/fail。
+
+### 阶段 2：LLM judge
+
+仅当确定性检查**不足以裁定**（例如没有可执行的测试）时，LLM judge 才出场，产出 `EvaluatorAnalysis`（`src/evaluator/types.ts:37`）：
+
+```typescript
+interface EvaluatorAnalysis {
+  verdict: "accepted" | "rejected" | "inconclusive"
+  goal_statuses: GoalStatus[]
+  replan_guidance?: string       // rejected 时的重规划建议
+}
+```
+
+## CheckSelector
+
+合法 selector 列表（`src/check/policy.ts:3`）：
+
+```
+build | test | lint | verify_cmd | ui_review |
+code_quality | code_review | dead_code_review |
+startup | spec_check
+```
+
+`spec_check`（规格一致性检查）**默认开启**——这是 OpenCorvus 作为 harness 的核心卖点之一。
+
+## Tier 分级
+
+配置 `assistant.evaluator.tier`：
+
+| tier | 包含的检查 |
+|---|---|
+| `core` | build + test + spec_check |
+| `standard`（默认） | core + lint + startup |
+| `full` | standard + ui_review + visual + puppeteer + code_quality |
+
+## `selectorsSatisfied` 语义
+
+`src/check/policy.ts:45` 的关键实现：
+
+```
+1. 过滤掉 status === "skipped" 的检查
+2. 每个声明的 selector 必须有至少一条匹配且 passed 的检查
+3. 未运行的 selector 不算通过
+```
+
+**注意**：没跑 = 不通过。这防止"静默跳过 build 然后声称 accepted"。
+
+## Verdict 语义
+
+| verdict | 后续动作 |
+|---|---|
+| `accepted` | 进入 Delivery 阶段 |
+| `rejected` | 重试（同一 plan） 或 重规划（新 plan）——根据 `replan_guidance` 决定 |
+| `inconclusive` | 视为 rejected 但优先 replan（无法判决通常意味着信息不全） |
+
+## 与 Benchmark 的关系
+
+benchmark 的 `qualityVerdict === "accepted"` 就是指 evaluator 返回 `accepted` 且 `required_check_pass_rate > 0`（`script/benchmark/quality-gates.ts`）。
+
+## 已知坑
+
+1. **空输出 = inconclusive**：executor 返回空字符串时，evaluator 必须标 `inconclusive`，**不能**标 accepted（历史 bug：空输出被当成"没问题所以通过"）。
+2. **build 检查被跳过**：如果 worktree 合并失败（`EEXIST`），build 无法执行，**不能**因此放过——要标 rejected。
+3. **TypeScript 错误未被检测**：确保 `qa_rule_selectors` 包含 `lint` 或 `typecheck`。
+
+## 你接下来要看的
+
+- [配置](./configuration.md)
+- [Benchmark](../operations/benchmark.md)
+- [Troubleshooting](../operations/troubleshooting.md)

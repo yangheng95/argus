@@ -1,13 +1,14 @@
 // ── Message Store ──
 // Solid reactive store for conversation messages, agent events, and SSE state.
 
-import { createStore, produce, reconcile } from "solid-js/store";
-import { batch, createMemo, createRoot } from "solid-js";
-import { apiJson, apiUrl } from "../services/api";
+import { createStore, produce } from "solid-js/store";
+import { batch, createMemo, createRoot, type Accessor } from "solid-js";
+import { apiJson } from "../services/api";
 import { boardStore } from "../store/board";
-import { clearConversationUiState } from "./conversation-ui";
+import { clearConversationUiState, loadConversationUiStateForTask } from "./conversation-ui";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
 import { syncSectionPhases } from "../utils/section";
+import { normalizeToolPartRecord } from "../utils/tool";
 
 // ── Types ──
 
@@ -34,40 +35,31 @@ export interface Part {
 export interface Message {
   info: MessageInfo;
   parts: Part[];
-  _synthetic?: boolean;
-}
-
-export interface AgentCardMessage {
-  _synthetic: true;
-  _agentCard: true;
-  _agentStage: string;
-  _agentStatus: string;
-  _agentRound: number;
-  _agentCardKey: string;
-  _agentMessages: any[];
-  _agentGoalGroup?: true;
-  _agentGoalID?: string;
-  _agentGoalTitle?: string;
-  _agentGoalStatus?: string;
-  _agentGoalDescription?: string;
-  _agentGoalSteps?: Array<{ stepID: string; label: string; status: string; summary?: string }>;
-  _agentArchitect?: { summary: string; categories?: string[] };
-  _agentInternalCards?: AgentCardMessage[];
-  info: MessageInfo;
-  parts: Part[];
 }
 
 // ── Store ──
 
 const [store, setStore] = createStore({
+  /**
+   * Chronologically sorted flat list of all messages. Primary source of truth
+   * for message content. Consumers that need all messages read this.
+   */
   messages: [] as Message[],
-  agentEvents: [] as any[],
+  /**
+   * Parallel session-indexed view into `messages` — values are references to
+   * the same Message objects, grouped and sorted per sessionID. Maintained
+   * alongside the flat array.
+   *
+   * Why both: the flat list supports "show me everything" consumers; the
+   * per-session view is what unlocks Solid's fine-grained reactivity. When
+   * a memo reads `messagesBySession[sid]`, Solid tracks only that key's
+   * sub-tree — a part delta on session A does not fan out to session B's
+   * downstream work. The old single-array iteration model re-ran every
+   * card memo on every SSE delta; this shape is the structural fix.
+   */
+  messagesBySession: {} as Record<string, Message[]>,
   selectedTaskID: "" as string,
-  showTranscriptDetails: false,
-  agentStatus: null as any,
   sseConnected: false,
-  /** @deprecated No longer used — kept only for store shape compatibility. */
-  conversationUpdatedAt: 0 as number,
  // ── Chat request / attachments (mirrors state.chatRequest / state.chatAttachments) ──
   /** AbortController for the active chat HTTP request; null when idle */
   chatRequest: null as AbortController | null,
@@ -81,7 +73,10 @@ export { store as messageStore };
 
 const messageIndex = new Map<string, Message>();
 // Buffer for parts that arrive before their parent message.updated event.
-const _pendingParts = new Map<string, any[]>();
+// Cleared on task switch (clearMessages). No TTL — SSE is meant to deliver
+// message.updated first; if it doesn't, that's a backend-ordering bug to fix
+// at the source, not a symptom to paper over here.
+const _pendingParts = new Map<string, { parts: any[] }>();
 
 function rebuildMessageIndex() {
   messageIndex.clear();
@@ -90,8 +85,28 @@ function rebuildMessageIndex() {
   }
 }
 
-export function messageById(id: string): Message | undefined {
+function messageById(id: string): Message | undefined {
   return messageIndex.get(id);
+}
+
+/**
+ * Resolve a message's session bucket key. Messages without an info.sessionID
+ * fall into the "" bucket (rare; transcript reconstruction edge cases).
+ */
+function sessionKeyOf(message: Message | undefined): string {
+  const sid = message?.info?.sessionID;
+  return typeof sid === "string" ? sid : "";
+}
+
+/**
+ * Locate an already-stored message within its session bucket. Returns -1 if
+ * the bucket is empty or the message isn't present. Uses reference equality
+ * on Message objects — the flat `messages` array and `messagesBySession`
+ * share the same object references.
+ */
+function sessionBucketIndexOf(sid: string, msg: Message): number {
+  const bucket = store.messagesBySession[sid];
+  return bucket ? bucket.indexOf(msg) : -1;
 }
 
 // ── Sorting ──
@@ -108,11 +123,6 @@ function finiteMessageTime(item: Message | undefined): number | undefined {
 
 function messageOrderTime(item: Message): number {
   return finiteMessageTime(item) ?? UNTIMED_MESSAGE_ORDER;
-}
-
-/** @deprecated Use finiteMessageTime or messageOrderTime instead */
-function messageTime(item: Message): number {
-  return finiteMessageTime(item) ?? 0;
 }
 
 function sortMessages(list: Message[]): Message[] {
@@ -210,7 +220,6 @@ function partSignature(part: any): string {
     callID: part?.callID || "",
     description: part?.description || "",
     prompt: part?.prompt || "",
-    audience: record(part?.audience) ? part.audience : null,
     state: record(part?.state) ? part.state : part?.state ?? null,
     files: Array.isArray(part?.files) ? part.files : [],
     process: record(part?.process) ? part.process : null,
@@ -240,8 +249,11 @@ function normalizeLoadedPart(
   messageID: string,
   sessionID: string,
   index: number,
+  previousPart?: Part,
 ): Part {
-  const part = record(input) ? { ...input } : { type: "text", text: String(input || "") };
+  const seed: Record<string, any> = record(input) ? { ...input } : { type: "text", text: String(input || "") };
+  const normalized = normalizeToolPartRecord(seed, previousPart);
+  const part: Record<string, any> = record(normalized) ? { ...normalized } : seed;
   const id =
     typeof part.id === "string" && part.id.trim()
       ? part.id.trim()
@@ -257,7 +269,7 @@ function normalizeLoadedPart(
       typeof part.sessionID === "string" && part.sessionID.trim()
         ? part.sessionID.trim()
         : sessionID,
-  };
+  } as Part;
 }
 
 function normalizeLoadedMessage(input: any): Message {
@@ -272,11 +284,22 @@ function normalizeLoadedMessage(input: any): Message {
     typeof info.sessionID === "string" && info.sessionID.trim()
       ? info.sessionID.trim()
       : "";
-  const parts = Array.isArray(message.parts)
-    ? message.parts.map((part: any, index: number) =>
-        normalizeLoadedPart(part, id, sessionID, index),
-      )
-    : [];
+  const partsSource = Array.isArray(message.parts) ? message.parts : [];
+  const parts: Part[] = [];
+  const partIndex = new Map<string, number>();
+  for (let index = 0; index < partsSource.length; index += 1) {
+    const rawPart = partsSource[index];
+    const rawID = typeof rawPart?.id === "string" && rawPart.id.trim() ? rawPart.id.trim() : "";
+    const previous = rawID ? parts[partIndex.get(rawID) ?? -1] : undefined;
+    const normalizedPart = normalizeLoadedPart(rawPart, id, sessionID, index, previous);
+    const existingIndex = partIndex.get(normalizedPart.id);
+    if (existingIndex !== undefined) {
+      parts[existingIndex] = normalizedPart;
+      continue;
+    }
+    partIndex.set(normalizedPart.id, parts.length);
+    parts.push(normalizedPart);
+  }
   return {
     ...message,
     info: {
@@ -292,7 +315,7 @@ function normalizeLoadedMessage(input: any): Message {
   };
 }
 
-export function normalizeLoadedMessages(messages: any[]): Message[] {
+function normalizeLoadedMessages(messages: any[]): Message[] {
   return (Array.isArray(messages) ? messages : []).map((message) =>
     normalizeLoadedMessage(message),
   );
@@ -320,505 +343,13 @@ export function mergeLoadedConversationMessages(
   return normalizeLoadedMessages(result);
 }
 
-import { normalizeAgentRole, AGENT_CARD_STAGES, classifyMessage } from "../utils/message";
-import { rootTaskSessionID } from "../store/board";
 
-const MAX_LIVE_AGENT_MESSAGES = 12;
-
-type AgentRound = {
-  channelID: string;
-  stage: string;
-  sessionID: string;
-  messages: any[];
-  startTime: number;
-  endTime: number;
-};
-
-/** Active pipeline stages — exported so conversation.ts can reuse. */
-export function activeAgentStages(): Set<string> {
-  const status = String(boardStore.board?.task?.status || "").trim().toLowerCase();
-  if (status === "active" && Array.isArray(store.agentEvents) && store.agentEvents.length > 0) {
-    return new Set(
-      store.agentEvents
-        .map((item: any) => {
-          const raw = String(item?.stage || "").trim().toLowerCase();
-          return raw ? normalizeAgentRole(raw) : "";
-        })
-        .filter((r: string) => r && AGENT_CARD_STAGES.has(r as any)),
-    );
-  }
-  return new Set();
-}
-
-function messageEndTime(message: any): number {
-  return Number(
-    message?.info?.time?.completed || message?.info?.time?.updated || messageTime(message),
-  );
-}
-
-function agentEventTime(event: any): number {
-  return Number(event?.time?.created || event?.timestamp || 0);
-}
-
-function agentEventDisplayText(event: any): string {
-  const live = typeof event?._liveText === "string" ? event._liveText : "";
-  if (live) return live;
-  const target = typeof event?._targetText === "string" ? event._targetText : "";
-  if (target) return target;
-  if (typeof event?.text === "string" && event.text) return event.text;
-  if (typeof event?.summary === "string" && event.summary) return event.summary;
-  return "";
-}
-
-function agentEventToolName(event: any): string {
-  if (typeof event?.toolName === "string" && event.toolName.trim()) return event.toolName.trim();
-  const summary = String(event?.summary || "");
-  const split = summary.split("→");
-  return split.length > 1 ? String(split[split.length - 1] || "").trim() : "";
-}
-
-function agentEventToolPart(event: any): any | null {
-  const tool = agentEventToolName(event);
-  if (!tool) return null;
-  const created = agentEventTime(event) || Date.now();
-  const id = typeof event?.id === "string" && event.id ? event.id : `tool:${tool}:${created}`;
-  const kind = String(event?.kind || "").trim().toLowerCase();
-  const status =
-    kind === "tool_result"
-      ? "completed"
-      : kind === "error"
-        ? "error"
-        : "running";
-  const summary = agentEventDisplayText(event).trim() || tool;
-  return {
-    id: `agent-tool:${id}`,
-    type: "tool",
-    callID: id,
-    tool,
-    state: {
-      status,
-      input: {},
-      ...(status === "completed" ? { output: summary, title: tool } : {}),
-      ...(status === "error" ? { error: summary } : {}),
-      ...(status === "running"
-        ? {
-            title: summary,
-            metadata: { synthetic: true },
-            time: { start: created },
-          }
-        : {}),
-    },
-  };
-}
-
-// Cache live agent messages by content-key to maintain referential stability
-// for Solid's `<For>`, which tracks items by reference.
-const _agentMsgCache = new Map<string, any>();
-
-function agentMessage(event: any): any | null {
-  if (!event || typeof event !== "object") return null;
-  const stage = String(event?.stage || "").trim().toLowerCase();
-  if (!stage) return null;
-  const created = agentEventTime(event) || Date.now();
-  const eventID =
-    typeof event?.id === "string" && event.id
-      ? event.id
-      : `${stage}:${String(event?.kind || "status")}:${created}`;
-  const kind = String(event?.kind || "status").trim().toLowerCase();
-  const text = agentEventDisplayText(event).trim();
-  const msgID = `agent-event:${stage}:${eventID}`;
-  const cacheKey = `${msgID}:${kind}:${text}`;
-  const cached = _agentMsgCache.get(cacheKey);
-  if (cached) return cached;
-  const resolvedRole = normalizeAgentRole(stage);
-  const base = {
-    _synthetic: true,
-    info: {
-      id: msgID,
-      role: "assistant",
-      resolvedRole,
-      agent: stage,
-      time: { created },
-    },
-    parts: [] as any[],
-  };
-
-  let msg: any = null;
-
-  if (kind === "reasoning_delta" && text) {
-    msg = {
-      ...base,
-      parts: [
-        {
-          id: `reasoning:${eventID}`,
-          type: "reasoning",
-          text,
-          _targetText: typeof event?._targetText === "string" ? event._targetText : text,
-        },
-      ],
-    };
-  } else if (kind === "tool_call" || kind === "tool_delta" || kind === "tool_result") {
-    const part = agentEventToolPart(event);
-    msg = part ? { ...base, parts: [part] } : null;
-  } else if (text) {
-    msg = {
-      ...base,
-      parts: [
-        {
-          id: `text:${eventID}`,
-          type: "text",
-          text,
-          _targetText: typeof event?._targetText === "string" ? event._targetText : text,
-        },
-      ],
-    };
-  }
-
-  if (msg) _agentMsgCache.set(cacheKey, msg);
-  return msg;
-}
-
-function agentRoundStatus(
-  stage: string,
-  round: AgentRound,
-  roundIndex: number,
-  rounds: AgentRound[],
-  latestStageEvent: any,
-): string {
-  if (roundIndex < rounds.length - 1) return "completed";
-  const active = activeAgentStages().has(stage);
-  const latestKind = String(latestStageEvent?.kind || "").trim().toLowerCase();
-  const latestSummary = String(latestStageEvent?.summary || "");
-  if (latestKind === "error") return "error";
-  if (latestKind === "status" && /finished|completed|done/i.test(latestSummary)) {
-    return "completed";
-  }
-  if (active) return "running";
-  return "completed";
-}
-
-/**
- * Merge consecutive reasoning_delta events into a single accumulated event.
- * Prevents fragmented rendering where each token appears as a separate message.
- */
-function mergeAgentReasoningDeltas(events: any[]): any[] {
-  const result: any[] = [];
-  let accum: any = null;
-  for (const event of events) {
-    const kind = String(event?.kind || "").trim().toLowerCase();
-    if (kind === "reasoning_delta") {
-      if (!accum) {
-        accum = { ...event };
-      } else {
-        const prev = String(accum._targetText || accum.summary || accum.text || "");
-        const delta = String(event._targetText || event.summary || event.text || "");
-        const merged = prev + delta;
-        accum._targetText = merged;
-        accum.summary = merged;
-        if (typeof accum.text === "string") accum.text = merged;
-        if (event.time?.created > (accum.time?.created || 0)) accum.time = event.time;
-      }
-    } else {
-      if (accum) { result.push(accum); accum = null; }
-      result.push(event);
-    }
-  }
-  if (accum) result.push(accum);
-  return result;
-}
-
-// ── Agent cards: reactive derivation ──
-// agentCards is a pure computation derived from store.messages, store.agentEvents,
-// boardStore.board (goal titles), and rootTaskSessionID(). Solid's reactive graph
-// guarantees that consumers always see a consistent snapshot — no manual rebuild
-// calls, no timing gaps between source updates and derived state.
-
-function computeAgentCards(): { cards: Record<string, AgentCardMessage>; order: string[] } {
-  const roundsByStage: Record<string, AgentRound[]> = {};
-  const latestEventByStage = new Map<string, any>();
-
-  const rootSID = rootTaskSessionID();
-  for (const message of store.messages) {
-    const stage = message.info?.channel || classifyMessage(message, rootSID);
-    if (stage === "main" || stage === "filtered") continue;
-    // Skip user-role messages inside agent cards — they are internal orchestrator
-    // prompts (goal prompts, trigger messages), never actual user input.
-    if (String(message.info?.role || "").toLowerCase() === "user") continue;
-    const sessionID =
-      typeof message?.info?.sessionID === "string" ? message.info.sessionID.trim() : "";
-    const fallbackID =
-      typeof message?.info?.id === "string" && message.info.id ? message.info.id : hashText(messageSignature(message));
-    const channelID = stage === "executor"
-      ? `${stage}:message:${fallbackID}`
-      : sessionID
-        ? `${stage}:session:${sessionID}`
-        : `${stage}:message:${fallbackID}`;
-    const round = roundsByStage[stage] || [];
-    let entry = round.find((item) => item.channelID === channelID);
-    if (!entry) {
-      entry = {
-        channelID,
-        stage,
-        sessionID,
-        messages: [],
-        startTime: Infinity,
-        endTime: 0,
-      };
-      round.push(entry);
-      roundsByStage[stage] = round;
-    }
-    entry.messages.push(message);
-    const created = finiteMessageTime(message) ?? Infinity;
-    if (created < entry.startTime) entry.startTime = created;
-    const completed = messageEndTime(message);
-    if (completed > entry.endTime) entry.endTime = completed;
-  }
-
-  const liveEventsByStage = new Map<string, any[]>();
-  for (const event of Array.isArray(store.agentEvents) ? store.agentEvents : []) {
-    const rawStage = String(event?.stage || "").trim().toLowerCase();
-    const stage = normalizeAgentRole(rawStage);
-    if (!AGENT_CARD_STAGES.has(stage)) continue;
-    const items = liveEventsByStage.get(stage) || [];
-    items.push(event);
-    liveEventsByStage.set(stage, items);
-    latestEventByStage.set(stage, event);
-  }
-
-  for (const [stage, events] of liveEventsByStage.entries()) {
-    const mergedEvents = mergeAgentReasoningDeltas(
-      events.slice().sort((left, right) => agentEventTime(left) - agentEventTime(right)),
-    );
-    const liveMessages = mergedEvents
-      .map((event) => agentMessage(event))
-      .filter(Boolean)
-      .slice(-MAX_LIVE_AGENT_MESSAGES);
-    if (liveMessages.length === 0) continue;
-    const existing = roundsByStage[stage] || [];
-    if (existing.length > 0) continue;
-    existing.push({
-      channelID: `${stage}:live`,
-      stage,
-      sessionID: "",
-      messages: liveMessages,
-      startTime: messageTime(liveMessages[0]),
-      endTime: Math.max(...liveMessages.map((message: any) => messageEndTime(message))),
-    });
-    roundsByStage[stage] = existing;
-  }
-
-  // ── Goal group assembly ──
-  // Board-driven: use goalWorkflows + lanes for goal info & sessionID→goalID mapping.
-  // Executor messages are matched to goals via sessionID.
-  // Other per-goal stages (planner, evaluator) use message goalID (bridge-stamped).
-  // All per-goal stages are collected into goal group cards.
-  // Task-scope stages (goal/decompose, architect, delivery, spec) stay standalone.
-
-  const PER_GOAL_STAGES = new Set(["planner", "executor", "evaluator"]);
-
-  // Build sessionID→goalID + goalID→info maps from board data
-  const sessionToGoal = new Map<string, string>();
-  const goalInfoMap = new Map<string, { id: string; title: string; status: string }>();
-
-  for (const gw of boardStore.board?.goalWorkflows || []) {
-    goalInfoMap.set(gw.goalID, { id: gw.goalID, title: gw.goalTitle, status: gw.goalStatus });
-  }
-  const goalsLane = (boardStore.board?.lanes || []).find((l: any) => l.id === "goals");
-  for (const card of goalsLane?.cards || []) {
-    if (!goalInfoMap.has(card.id)) {
-      goalInfoMap.set(card.id, { id: card.id, title: card.title || "", status: card.status || "pending" });
-    }
-    const sid = card?.metadata?.sessionID;
-    if (typeof sid === "string" && sid) {
-      sessionToGoal.set(sid, card.id);
-    }
-    // Also map executorSessionID (the opencode executor's native session)
-    const exSid = card?.metadata?.executorSessionID;
-    if (typeof exSid === "string" && exSid) {
-      sessionToGoal.set(exSid, card.id);
-    }
-  }
-
-  /** Resolve goalID for a round: session mapping (executor) → message goalID (bridge) → "" */
-  function resolveGoalID(round: AgentRound): string {
-    // 1. Session-based (from board lanes, reliable for executor)
-    if (round.sessionID && sessionToGoal.has(round.sessionID)) {
-      return sessionToGoal.get(round.sessionID)!;
-    }
-    // 2. Message-based (bridge-stamped goalID, for planner/evaluator)
-    for (const msg of round.messages) {
-      const gid = typeof msg?.info?.goalID === "string" ? msg.info.goalID : "";
-      if (gid) return gid;
-    }
-    return "";
-  }
-
-  const nextCards: Record<string, AgentCardMessage> = {};
-  const nextOrder: string[] = [];
-
-  function buildCard(
-    stage: string,
-    round: AgentRound,
-    roundLabel: number,
-    status: string,
-  ): AgentCardMessage {
-    const created =
-      Number.isFinite(round.startTime) && round.startTime > 0 ? round.startTime : Date.now();
-    return {
-      _synthetic: true,
-      _agentCard: true,
-      _agentStage: stage,
-      _agentStatus: status,
-      _agentRound: roundLabel,
-      _agentCardKey: round.channelID,
-      _agentMessages: round.messages
-        .slice()
-        .sort((left, right) => messageOrderTime(left) - messageOrderTime(right)),
-      info: {
-        id: `agent-card:${round.channelID}`,
-        role: "agent-card",
-        agent: stage,
-        sessionID: round.sessionID,
-        time: { created },
-      },
-      parts: [],
-    };
-  }
-
-  // Collect per-goal step cards: goalID → step entries
-  const goalStepCards = new Map<string, { stage: string; card: AgentCardMessage; startTime: number }[]>();
-
-  for (const [stage, rounds] of Object.entries(roundsByStage)) {
-    rounds.sort((left, right) => left.startTime - right.startTime);
-
-    if (PER_GOAL_STAGES.has(stage)) {
-      for (let index = 0; index < rounds.length; index += 1) {
-        const round = rounds[index];
-        const gid = resolveGoalID(round);
-        const roundLabel = rounds.length > 1 ? index + 1 : 0;
-        const status = agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage));
-        const card = buildCard(stage, round, roundLabel, status);
-
-        if (gid) {
-          const entries = goalStepCards.get(gid) || [];
-          entries.push({ stage, card, startTime: round.startTime });
-          goalStepCards.set(gid, entries);
-        } else {
-          // No goal association — standalone card
-          nextCards[round.channelID] = card;
-          nextOrder.push(round.channelID);
-        }
-      }
-    } else {
-      // Task-scope stages: standalone cards
-      for (let index = 0; index < rounds.length; index += 1) {
-        const round = rounds[index];
-        const roundLabel = rounds.length > 1 ? index + 1 : 0;
-        const status = agentRoundStatus(stage, round, index, rounds, latestEventByStage.get(stage));
-        const cardID = round.channelID;
-        nextCards[cardID] = buildCard(stage, round, roundLabel, status);
-        nextOrder.push(cardID);
-      }
-    }
-  }
-
-  // Build goal group cards — board-driven: every goal from board gets a card,
-  // even if no planner/executor/evaluator messages have arrived yet.
-  // Look up goal descriptions from board lanes
-  const goalDescMap = new Map<string, string>();
-  for (const gc of goalsLane?.cards || []) {
-    const desc = gc.detail || gc.description;
-    if (gc.id && desc) goalDescMap.set(gc.id, desc);
-  }
-
-  // Build per-goal step info from goalWorkflows
-  const goalStepsMap = new Map<string, Array<{ stepID: string; label: string; status: string; summary?: string }>>();
-  for (const gw of boardStore.board?.goalWorkflows || []) {
-    goalStepsMap.set(gw.goalID, (gw.steps || []).map((s: any) => ({
-      stepID: s.stepID, label: s.label, status: s.status, summary: s.summary,
-    })));
-  }
-
-  // Architect summary (shared across all goals)
-  const architectData = boardStore.board?.architect as { summary?: string; categories?: string[] } | undefined;
-
-  // Ensure every board goal has an entry in goalStepCards (may be empty)
-  for (const [gid] of goalInfoMap) {
-    if (!goalStepCards.has(gid)) goalStepCards.set(gid, []);
-  }
-
-  for (const [gid, entries] of goalStepCards) {
-    entries.sort((a, b) => a.startTime - b.startTime);
-    const goalInfo = goalInfoMap.get(gid);
-    const groupKey = `goal-group:${gid}`;
-    const groupStart = entries.length > 0
-      ? Math.min(...entries.map(e => e.startTime))
-      : Date.now();
-    const groupStatus = entries.length === 0
-      ? (goalInfo?.status === "passed" || goalInfo?.status === "failed" ? goalInfo.status : "pending")
-      : entries.some(e => e.card._agentStatus === "running")
-        ? "running"
-        : entries.some(e => e.card._agentStatus === "error")
-          ? "error"
-          : "completed";
-
-    nextCards[groupKey] = {
-      _synthetic: true,
-      _agentCard: true,
-      _agentGoalGroup: true,
-      _agentGoalID: gid,
-      _agentGoalTitle: goalInfo?.title || "",
-      _agentGoalStatus: goalInfo?.status || groupStatus,
-      _agentGoalDescription: goalDescMap.get(gid) || "",
-      _agentGoalSteps: goalStepsMap.get(gid),
-      _agentArchitect: architectData?.summary ? { summary: architectData.summary, categories: architectData.categories } : undefined,
-      _agentInternalCards: entries.map(e => e.card),
-      _agentStage: "executor",
-      _agentStatus: groupStatus,
-      _agentRound: 0,
-      _agentCardKey: groupKey,
-      _agentMessages: [],
-      info: {
-        id: `agent-card:${groupKey}`,
-        role: "agent-card",
-        agent: "executor",
-        sessionID: entries[0]?.card.info.sessionID || "",
-        time: { created: Number.isFinite(groupStart) && groupStart > 0 ? groupStart : Date.now() },
-      },
-      parts: [],
-    };
-    nextOrder.push(groupKey);
-  }
-
-  nextOrder.sort(
-    (left, right) =>
-      messageOrderTime(nextCards[left]) - messageOrderTime(nextCards[right]) || left.localeCompare(right),
-  );
-
-  return { cards: nextCards, order: nextOrder };
-}
-
-// createRoot keeps the memo alive outside of a component tree (module-level singleton).
-const agentCardsMemo = createRoot(() =>
-  createMemo(computeAgentCards, { cards: {} as Record<string, AgentCardMessage>, order: [] as string[] }),
-);
-
-/** Reactive accessor: agent cards derived from messages + events + board. */
-export function agentCards(): Record<string, AgentCardMessage> {
-  return agentCardsMemo().cards;
-}
-
-/** Reactive accessor: ordered agent card IDs. */
-export function agentCardOrder(): string[] {
-  return agentCardsMemo().order;
-}
 
 // ── Full load from transcript ──
 
 export async function syncTask(taskID: string) {
   if (!taskID) {
     clearMessages();
-    clearAgentEvents();
     return;
   }
   try {
@@ -853,7 +384,6 @@ function touchReasoningPart(part: any): any {
 export async function loadConversation(): Promise<void> {
   if (!boardStore.selectedTaskID) {
     setMessages([]);
-    clearAgentEvents();
     return;
   }
   if (_convLoading) {
@@ -861,8 +391,21 @@ export async function loadConversation(): Promise<void> {
     await _convLoading;
     return;
   }
-  const requestTaskID = String(boardStore.selectedTaskID || "");
   const loading = (async () => {
+    // audit-2026-04-29 W2-V16 — pre-fix the loop condition was
+    // `_convQueued && requestTaskID === boardStore.selectedTaskID`,
+    // where `requestTaskID` was the task at the FIRST call's entry.
+    // Concurrent scenario: user on task A → loadConversation runs;
+    // user switches to B mid-fetch and a second loadConversation
+    // bumps `_convQueued = true`. The first loop's iteration finds
+    // taskID !== selectedTaskID and `continue`s — but the outer
+    // condition's stale `requestTaskID === "A"` check is now false
+    // against selectedTaskID="B", so the loop exits and B's queued
+    // load is silently dropped. The conversation panel then shows
+    // whatever was set last (empty / stale A messages). The inner
+    // `taskID` re-read on every iteration plus the post-await
+    // identity check already handle the within-iteration race; the
+    // loop just needs `while (_convQueued)`.
     do {
       _convQueued = false;
       const taskID = String(boardStore.selectedTaskID || "");
@@ -870,22 +413,15 @@ export async function loadConversation(): Promise<void> {
         setMessages([]);
         return;
       }
-      const transcript = await fetch(
-        apiUrl(`task/${encodeURIComponent(taskID)}/transcript`),
-        {
-          headers: { Accept: "application/json" },
-        },
-      )
-        .then((res) => (res.ok ? res.json() : []))
-        .catch(() => []);
-      const timeline = await fetch(
-        apiUrl(`control/timeline?taskID=${encodeURIComponent(taskID)}`),
-        {
-          headers: { Accept: "application/json" },
-        },
-      )
-        .then((res) => (res.ok ? res.json() : []))
-        .catch(() => []);
+      // Pre-existing `.catch(() => [])` silent fallback is preserved here
+      // — plan §5.4 calls these out as cleanup for a future milestone.
+      // M3.A only re-routes through the HostTransport chokepoint.
+      const transcript = await apiJson(
+        `task/${encodeURIComponent(taskID)}/transcript`,
+      ).catch(() => []);
+      const timeline = await apiJson(
+        `control/timeline?taskID=${encodeURIComponent(taskID)}`,
+      ).catch(() => []);
       if (taskID !== boardStore.selectedTaskID) continue;
       const merged = mergeLoadedConversationMessages(
         Array.isArray(timeline) ? timeline : [],
@@ -898,7 +434,7 @@ export async function loadConversation(): Promise<void> {
       }));
       setMessages(merged);
       syncSectionPhases(boardStore.board, boardStore.changes.length);
-    } while (_convQueued && requestTaskID === boardStore.selectedTaskID);
+    } while (_convQueued);
   })();
   _convLoading = loading;
   try {
@@ -912,7 +448,7 @@ export async function loadConversation(): Promise<void> {
 
 // ── Apply SSE events ──
 
-export function applyMessageEvent(event: any): boolean {
+function applyMessageEvent(event: any): boolean {
   const type = event.type || "";
   const properties =
     typeof event?.properties === "object" &&
@@ -925,21 +461,30 @@ export function applyMessageEvent(event: any): boolean {
         ? event.payload
         : {};
 
+  // All mutation branches below touch two reactive views in lock-step:
+  //   1. `store.messages` — flat chronological array (legacy consumers)
+  //   2. `store.messagesBySession[sid]` — per-session bucket (card memos)
+  // Both hold references to the SAME Message objects, but Solid tracks
+  // them as independent reactive slots. Writing only one side leaves the
+  // other's subscribers unnotified — so every write is mirrored.
+
   if (type === "message.updated") {
     const info = properties.info;
     if (!info?.id) return false;
     const existing = messageById(info.id);
     if (existing) {
+      const merged = mergeMessageInfo(existing.info, info);
       const idx = store.messages.indexOf(existing);
-      if (idx >= 0) {
-        setStore("messages", idx, "info", mergeMessageInfo(existing.info, info));
-      }
+      if (idx >= 0) setStore("messages", idx, "info", merged);
+      const sid = sessionKeyOf(existing);
+      const sIdx = sessionBucketIndexOf(sid, existing);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "info", merged);
       return true;
     }
     // Flush any parts that arrived before this message
-    const buffered = _pendingParts.get(info.id);
-    if (buffered) _pendingParts.delete(info.id);
-    const msg: Message = { info: mergeMessageInfo(undefined, info), parts: buffered || [] };
+    const bufferedEntry = _pendingParts.get(info.id);
+    if (bufferedEntry) _pendingParts.delete(info.id);
+    const msg: Message = { info: mergeMessageInfo(undefined, info), parts: bufferedEntry?.parts ?? [] };
     let insertIdx = 0;
     setStore(
       "messages",
@@ -947,7 +492,24 @@ export function applyMessageEvent(event: any): boolean {
         insertIdx = insertSorted(msgs, msg);
       }),
     );
-    messageIndex.set(info.id, store.messages[insertIdx]);
+    // The object we put into the session bucket must be the SAME reference
+    // Solid wrapped in the flat array — otherwise sub-path updates on either
+    // side won't propagate to the other.
+    const stored = store.messages[insertIdx];
+    messageIndex.set(info.id, stored);
+    const sid = sessionKeyOf(stored);
+    const existingBucket = store.messagesBySession[sid];
+    if (!existingBucket) {
+      setStore("messagesBySession", sid, [stored]);
+    } else {
+      setStore(
+        "messagesBySession",
+        sid,
+        produce((arr: Message[]) => {
+          insertSorted(arr, stored);
+        }),
+      );
+    }
     return true;
   }
 
@@ -957,24 +519,35 @@ export function applyMessageEvent(event: any): boolean {
     let message = messageById(part.messageID);
     if (!message) {
       // Buffer: message.updated hasn't arrived yet. Store part for later.
-      const buf = _pendingParts.get(part.messageID) || [];
-      buf.push(part);
-      _pendingParts.set(part.messageID, buf);
+      const existing = _pendingParts.get(part.messageID);
+      if (existing) {
+        existing.parts.push(part);
+      } else {
+        _pendingParts.set(part.messageID, { parts: [part] });
+      }
       return true;
     }
     const idx = store.messages.indexOf(message);
+    const sid = sessionKeyOf(message);
+    const sIdx = sessionBucketIndexOf(sid, message);
     const partIdx = message.parts.findIndex((p: Part) => p.id === part.id);
     if (partIdx >= 0) {
       setStore("messages", idx, "parts", partIdx, part);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, part);
     } else {
-      setStore(
-        "messages",
-        idx,
-        "parts",
-        produce((parts: Part[]) => {
-          parts.push(part);
-        }),
-      );
+      // CRITICAL: messages[idx] and messagesBySession[sid][sIdx] share the same
+      // Message reference — so `.parts` is a single JS array. Using `produce`
+      // with push() twice would push the new part ONCE into that shared array
+      // (via the first setStore), then push it AGAIN on the second setStore
+      // (because produce reads the now-modified array). That is how users saw
+      // every tool card appearing in duplicate.
+      //
+      // Compute the new array ONCE and assign it as a value to both reactive
+      // paths. Value assignment is idempotent — the second setStore sees the
+      // same target and re-emits the same reference without mutating.
+      const nextParts = [...message.parts, part];
+      setStore("messages", idx, "parts", nextParts);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", nextParts);
     }
     return true;
   }
@@ -991,6 +564,8 @@ export function applyMessageEvent(event: any): boolean {
     }
 
     const msgIdx = store.messages.indexOf(message);
+    const sid = sessionKeyOf(message);
+    const sIdx = sessionBucketIndexOf(sid, message);
     const partIdx = message.parts.findIndex(
       (p: Part) => p.id === properties.partID,
     );
@@ -999,46 +574,45 @@ export function applyMessageEvent(event: any): boolean {
       if (partIdx < 0) return false;
       const part = message.parts[partIdx];
       if (part.type !== "tool" || !part.state) return false;
-      setStore(
-        "messages",
-        msgIdx,
-        "parts",
-        partIdx,
-        "state",
-        "raw",
-        (prev: string) => (prev || "") + properties.delta,
-      );
+      // CRITICAL: messages and messagesBySession hold the SAME Message object
+      // refs. If we used a functional updater `(prev) => prev + delta` and ran
+      // it twice (once per mirrored setStore), the second call would read the
+      // already-appended value and double the delta — producing "aa bb cc" for
+      // each streamed token. Resolve the new value ONCE, then write it as a
+      // plain value to both reactive paths.
+      const nextRaw = ((part.state as any).raw || "") + properties.delta;
+      setStore("messages", msgIdx, "parts", partIdx, "state", "raw", nextRaw);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, "state", "raw", nextRaw);
       return true;
     }
 
- // text delta
+    // text delta
     if (partIdx < 0) {
- // Create placeholder part
-      setStore(
-        "messages",
-        msgIdx,
-        "parts",
-        produce((parts: Part[]) => {
-          parts.push({
-            id: properties.partID,
-            type: "text",
-            text: properties.delta,
-            sessionID: properties.sessionID,
-            messageID: properties.messageID,
-          });
-        }),
-      );
+      // Create placeholder part on both views. Same shared-array gotcha as in
+      // message.part.updated's push branch — assign a freshly-built array to
+      // both reactive paths instead of running `produce(push)` twice, which
+      // would otherwise duplicate the placeholder in the shared parts array.
+      const newPart: Part = {
+        id: properties.partID,
+        type: "text",
+        text: properties.delta,
+        sessionID: properties.sessionID,
+        messageID: properties.messageID,
+      };
+      const nextParts = [...message.parts, newPart];
+      setStore("messages", msgIdx, "parts", nextParts);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", nextParts);
       return true;
     }
 
-    setStore(
-      "messages",
-      msgIdx,
-      "parts",
-      partIdx,
-      "text",
-      (prev: string) => (prev || "") + properties.delta,
-    );
+    // CRITICAL: compute next text ONCE — see the raw-field branch above for
+    // the full explanation. Using a functional updater twice across mirrored
+    // setStore calls reads the already-appended value on the second pass and
+    // doubles every delta.
+    const existingText = (message.parts[partIdx] as any).text || "";
+    const nextText = existingText + properties.delta;
+    setStore("messages", msgIdx, "parts", partIdx, "text", nextText);
+    if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, "text", nextText);
     return true;
   }
 
@@ -1104,6 +678,31 @@ function flushEvents() {
   });
 }
 
+/**
+ * Ingest a persisted real Message + parts the server returned synchronously
+ * from a POST (e.g. /task/:id/message). Replays the same `message.updated`
+ * + `message.part.updated` shapes the SSE bridge would deliver, so the
+ * subsequent SSE event for the same id idempotently no-ops via the by-id
+ * merge in applyMessageEvent. Single source: one ingestion path for the
+ * real backend message, no placeholder, no double-write.
+ */
+export function ingestPersistedMessage(input: { info: any; parts: any[] }): void {
+  if (!input?.info?.id) return;
+  batch(() => {
+    applyMessageEvent({
+      type: "message.updated",
+      properties: { info: input.info },
+    });
+    for (const part of input.parts ?? []) {
+      if (!part) continue;
+      applyMessageEvent({
+        type: "message.part.updated",
+        properties: { part },
+      });
+    }
+  });
+}
+
 export function clearEventQueue() {
   if (flushTimer) {
     clearTimeout(flushTimer);
@@ -1112,360 +711,6 @@ export function clearEventQueue() {
   eventQueue = [];
 }
 
-// ── Agent event helpers ──
-// Merge and animate agent SSE events for agent card status tracking.
-
-function displayString(value: any): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function deltaString(value: any): string {
-  return typeof value === "string" ? value : "";
-}
-
-function streamingAgentKind(kind: string): boolean {
-  return kind === "message_delta" || kind === "reasoning_delta" || kind === "tool_delta";
-}
-
-function agentEventRecord(value: any): boolean {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-interface AgentEvent {
-  id: string;
-  eventID: string;
-  taskID: string;
-  stage: string;
-  kind: string;
-  toolName: string;
-  text: string;
-  summary: string;
-  payload: Record<string, any>;
-  time: { created: number };
-  _targetText?: string;
-  _liveText?: string;
-  [key: string]: any;
-}
-
-const AGENT_LIVE_INTERVAL = 32;
-const MAX_AGENT_EVENTS_PER_STAGE = 12;
-const agentLiveTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-function agentEventKey(event: Pick<AgentEvent, "stage" | "id"> | null | undefined): string {
-  const stage = String(event?.stage || "").trim().toLowerCase();
-  const id = String(event?.id || "").trim();
-  return stage && id ? `${stage}:${id}` : "";
-}
-
-function stopAgentLiveTimer(key: string): void {
-  const timer = agentLiveTimers.get(key);
-  if (!timer) return;
-  clearTimeout(timer);
-  agentLiveTimers.delete(key);
-}
-
-function nextLiveLength(live: string, target: string): number {
-  if (!target) return 0;
-  if (!live) return Math.min(target.length, 1);
-  const remaining = target.length - live.length;
-  if (remaining <= 0) return target.length;
- // Avoid a long one-character tail when timers are slightly delayed.
-  if (remaining <= 4) return target.length;
-  return Math.min(target.length, live.length + Math.max(1, Math.ceil(remaining / 2)));
-}
-
-function advanceAgentLiveText(key: string): void {
-  const index = store.agentEvents.findIndex(
-    (item: any) => agentEventKey(item as AgentEvent) === key,
-  );
-  if (index < 0) {
-    stopAgentLiveTimer(key);
-    return;
-  }
-  const event = store.agentEvents[index] as AgentEvent;
-  const target = typeof event?._targetText === "string" ? event._targetText : "";
-  const live = typeof event?._liveText === "string" ? event._liveText : "";
-  if (!target) {
-    stopAgentLiveTimer(key);
-    return;
-  }
-  if (live.length >= target.length) {
-    if (live !== target) {
-      setStore("agentEvents", index, "_liveText", target);
-  
-    }
-    stopAgentLiveTimer(key);
-    return;
-  }
-  setStore("agentEvents", index, "_liveText", target.slice(0, nextLiveLength(live, target)));
-  agentLiveTimers.set(
-    key,
-    setTimeout(() => advanceAgentLiveText(key), AGENT_LIVE_INTERVAL),
-  );
-}
-
-function scheduleAgentLiveText(event: AgentEvent): void {
-  const key = agentEventKey(event);
-  if (!key) return;
-  const target = typeof event?._targetText === "string" ? event._targetText : "";
-  const live = typeof event?._liveText === "string" ? event._liveText : "";
-  if (!target || live.length >= target.length) {
-    stopAgentLiveTimer(key);
-    return;
-  }
-  if (agentLiveTimers.has(key)) return;
-  agentLiveTimers.set(
-    key,
-    setTimeout(() => advanceAgentLiveText(key), AGENT_LIVE_INTERVAL),
-  );
-}
-
-function agentEventTargetText(event: AgentEvent): string {
-  if (!event) return "";
-  const k = event.kind;
-  if (k === "message_delta" || k === "reasoning_delta" || k === "status") {
-    return deltaString(event.text ?? event.summary);
-  }
-  if (k === "tool_call" || k === "tool_delta") {
-    return deltaString(event.text ?? event.payload?.text ?? event.summary);
-  }
-  if (k === "tool_result") {
-    return displayString(
-      event.payload?.output || event.payload?.result || event.summary,
-    );
-  }
-  return displayString(event.summary);
-}
-
-function syncAgentText(event: AgentEvent): void {
-  if (!event) return;
-  const target = agentEventTargetText(event);
-  const live = typeof event._liveText === "string" ? event._liveText : "";
-  if (!target) {
-    stopAgentLiveTimer(agentEventKey(event));
-    delete event._targetText;
-    delete event._liveText;
-    return;
-  }
-  event._targetText = target;
-  event._liveText = live || target;
-}
-
-function agentEventEntry(raw: any): AgentEvent | null {
-  const payload = agentEventRecord(raw?.payload)
-    ? raw.payload
-    : agentEventRecord(raw?.properties)
-      ? raw.properties
-      : {};
-  const stage = String(payload.stage || "")
-    .trim()
-    .toLowerCase();
-  const taskID = String(payload.taskID || raw?.taskID || "")
-    .trim();
-  const kind = String(payload.kind || "status")
-    .trim()
-    .toLowerCase();
-  const created = Number(raw?.timestamp || payload.timestamp || Date.now());
-  const toolName =
-    typeof payload.toolName === "string" && payload.toolName.trim()
-      ? payload.toolName.trim()
-      : typeof payload.name === "string" && payload.name.trim()
-        ? payload.name.trim()
-        : "";
-  const text = streamingAgentKind(kind)
-    ? deltaString(payload.text)
-    : displayString(payload.text);
-  const summary = streamingAgentKind(kind)
-    ? deltaString(raw?.summary ?? payload.summary ?? text)
-    : displayString(raw?.summary || payload.summary || text);
-  const id =
-    typeof payload.id === "string" && payload.id
-      ? payload.id
-      : typeof raw?.event_id === "string" && raw.event_id
-        ? raw.event_id
-        : `${stage}:${kind}:${toolName || "event"}:${created}`;
-  if (!stage) return null;
-  if (!summary && !text && !toolName) return null;
-  return {
-    id,
-    eventID: typeof raw?.event_id === "string" ? raw.event_id : "",
-    taskID,
-    stage,
-    kind,
-    toolName,
-    text,
-    summary,
-    payload,
-    time: { created: Number.isFinite(created) ? created : Date.now() },
-  };
-}
-
-function pruneAgentEvents(events: AgentEvent[]): AgentEvent[] {
-  const byStage = new Map<string, AgentEvent[]>();
-  for (const event of events) {
-    const stageEvents = byStage.get(event.stage) || [];
-    stageEvents.push(event);
-    byStage.set(event.stage, stageEvents);
-  }
-  const kept = Array.from(byStage.values())
-    .flatMap((stageEvents) => stageEvents.slice(-MAX_AGENT_EVENTS_PER_STAGE))
-    .sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
-  const keys = new Set(kept.map((event) => agentEventKey(event)));
-  for (const key of [...agentLiveTimers.keys()]) {
-    if (!keys.has(key)) stopAgentLiveTimer(key);
-  }
-  return kept;
-}
-
-function mergeAgentEvent(existing: AgentEvent, next: AgentEvent): AgentEvent {
-  if (!existing) return next;
-  if (next.kind === "message_delta" || next.kind === "reasoning_delta") {
-    const merged = `${deltaString(existing._targetText ?? existing.text ?? existing.summary)}${deltaString(next.text ?? next.summary)}`;
-    return {
-      ...existing,
-      ...next,
-      text: merged,
-      summary: merged,
-      payload: {
-        ...(agentEventRecord(existing.payload) ? existing.payload : {}),
-        ...(agentEventRecord(next.payload) ? next.payload : {}),
-      },
-    };
-  }
-  if (next.kind === "tool_delta") {
-    const mergedText = `${deltaString(existing.text ?? existing.payload?.text ?? "")}${deltaString(next.text ?? next.payload?.text ?? next.summary)}`;
-    return {
-      ...existing,
-      ...next,
-      kind:
-        existing.kind === "tool_result" ? "tool_result" : "tool_call",
-      text: mergedText,
-      summary: displayString(existing.summary || next.summary),
-      payload: {
-        ...(agentEventRecord(existing.payload) ? existing.payload : {}),
-        ...(agentEventRecord(next.payload) ? next.payload : {}),
-        text: mergedText,
-      },
-    };
-  }
-  if (next.kind === "tool_result") {
-    return {
-      ...existing,
-      ...next,
-      payload: {
-        ...(agentEventRecord(existing.payload) ? existing.payload : {}),
-        ...(agentEventRecord(next.payload) ? next.payload : {}),
-        text: displayString(
-          existing.payload?.text || existing.text || next.payload?.text || "",
-        ),
-      },
-    };
-  }
-  return {
-    ...existing,
-    ...next,
-    payload: {
-      ...(agentEventRecord(existing.payload) ? existing.payload : {}),
-      ...(agentEventRecord(next.payload) ? next.payload : {}),
-    },
-  };
-}
-
-function mergeAgentEventList(events: AgentEvent[], raw: any): AgentEvent[] {
-  const event = agentEventEntry(raw);
-  if (!event) return events;
-  if (event.taskID && boardStore.selectedTaskID && event.taskID !== boardStore.selectedTaskID) {
-    return events;
-  }
-  const index = events.findIndex(
-    (item) => item.id === event.id && item.stage === event.stage,
-  );
-  const next: AgentEvent[] =
-    index >= 0
-      ? [
-          ...events.slice(0, index),
-          mergeAgentEvent(events[index], event),
-          ...events.slice(index + 1),
-        ]
-      : [...events, event];
-  const target = index >= 0 ? next[index] : next[next.length - 1];
-  syncAgentText(target);
-  return pruneAgentEvents(
-    next.sort(
-      (a, b) => (a.time?.created || 0) - (b.time?.created || 0),
-    ),
-  );
-}
-
-// ── 16ms agent event batching (mirrors message event batching) ──
-let agentEventQueue: any[] = [];
-let agentFlushTimer: any = null;
-let agentLastFlush = 0;
-const AGENT_FLUSH_INTERVAL = 16;
-
-function flushAgentEvents(): void {
-  if (agentEventQueue.length === 0) return;
-  const queued = agentEventQueue;
-  agentEventQueue = [];
-  agentFlushTimer = null;
-  agentLastFlush = Date.now();
-
-  let merged = [...store.agentEvents] as AgentEvent[];
-  for (const raw of queued) {
-    merged = mergeAgentEventList(merged, raw);
-  }
-  setStore("agentEvents", reconcile(merged));
-
-  // Schedule live text animation for each queued event
-  for (const raw of queued) {
-    const payload = agentEventRecord(raw?.payload)
-      ? raw.payload
-      : agentEventRecord(raw?.properties)
-        ? raw.properties
-        : {};
-    const key = agentEventKey({
-      stage: String(payload.stage || "").trim().toLowerCase(),
-      id:
-        typeof payload.id === "string" && payload.id
-          ? payload.id
-          : typeof raw?.event_id === "string"
-            ? raw.event_id
-            : "",
-    } as Pick<AgentEvent, "stage" | "id">);
-    const target = key
-      ? merged.find((item) => agentEventKey(item as AgentEvent) === key) || null
-      : null;
-    if (target) scheduleAgentLiveText(target as AgentEvent);
-  }
-}
-
-/** Incrementally merge a raw agent.updated SSE event into the agentEvents list. */
-export function appendAgentEvent(raw: any): void {
-  agentEventQueue.push(raw);
-  if (agentFlushTimer) return;
-  if (Date.now() - agentLastFlush < AGENT_FLUSH_INTERVAL) {
-    agentFlushTimer = setTimeout(flushAgentEvents, AGENT_FLUSH_INTERVAL);
-    return;
-  }
-  flushAgentEvents();
-}
-
-// ── Setters for ──
-
-export function setAgentEvents(events: any[]) {
-  for (const key of agentLiveTimers.keys()) {
-    stopAgentLiveTimer(key);
-  }
-  const normalized = pruneAgentEvents(Array.isArray(events) ? events as AgentEvent[] : []);
-  setStore("agentEvents", reconcile(normalized));
-}
-
-export function clearAgentEvents(): void {
-  for (const key of [...agentLiveTimers.keys()]) {
-    stopAgentLiveTimer(key);
-  }
-  setStore("agentEvents", []);
-}
 
 export function setMessages(messages: any[]) {
   const next = sortMessages(Array.isArray(messages) ? messages : []);
@@ -1512,21 +757,46 @@ export function setMessages(messages: any[]) {
     msgs.sort((a, b) => messageOrderTime(a) - messageOrderTime(b));
   }));
   rebuildMessageIndex();
+  // Rebuild the per-session view from scratch — bulk transcript loads are
+  // infrequent (task switch, resume) so the full rebuild is acceptable, and
+  // the alternative (incrementally reconciling every session bucket) is
+  // brittle. Same Message refs as `store.messages` so sub-path reactivity
+  // via either view stays consistent afterwards.
+  //
+  // IMPORTANT: `setStore("messagesBySession", newObj)` performs a STRUCTURAL
+  // MERGE in Solid, not a replace — keys that exist in the current value but
+  // not in `newObj` survive, so the naive assignment leaks stale buckets
+  // from a previous task. Use `produce` to delete old keys explicitly, then
+  // assign the new ones. Verified by test/store/messages-bucket-clear.test.ts.
+  const nextBySession: Record<string, Message[]> = {};
+  for (const m of store.messages) {
+    const sid = sessionKeyOf(m);
+    (nextBySession[sid] ??= []).push(m);
+  }
+  setStore(
+    "messagesBySession",
+    produce((current: Record<string, Message[]>) => {
+      for (const key of Object.keys(current)) {
+        if (!(key in nextBySession)) delete current[key];
+      }
+      for (const [key, value] of Object.entries(nextBySession)) {
+        current[key] = value;
+      }
+    }),
+  );
 }
 
 export function setSelectedTaskID(taskID: string) {
   if (store.selectedTaskID !== taskID) {
-    clearConversationUiState();
+    // Hand the new task to conversation-ui so it can swap the persisted
+    // collapse map — old behavior cleared, new behavior loads from
+    // localStorage so refresh / overlay restart preserves the operator's
+    // review state per task. Empty taskID still clears.
+    if (taskID) loadConversationUiStateForTask(taskID);
+    else clearConversationUiState();
+    clearKnownChildSessions();
   }
   setStore("selectedTaskID", taskID);
-}
-
-export function setShowTranscriptDetails(show: boolean) {
-  setStore("showTranscriptDetails", show);
-}
-
-export function setAgentStatus(status: any) {
-  setStore("agentStatus", status);
 }
 
 export function setSseConnected(connected: boolean) {
@@ -1534,8 +804,20 @@ export function setSseConnected(connected: boolean) {
 }
 
 export function clearMessages() {
-  setStore("messages", []);
+  // batch coalesces both setStore writes into a single reactivity round —
+  // without it, every effect that subscribes to either `messages` or
+  // `messagesBySession` runs twice on a clear.
+  batch(() => {
+    setStore("messages", []);
+    setStore(
+      "messagesBySession",
+      produce((current: Record<string, Message[]>) => {
+        for (const key of Object.keys(current)) delete current[key];
+      }),
+    );
+  });
   messageIndex.clear();
+  _pendingParts.clear();
 }
 
 // ── Chat request helpers ──
@@ -1564,17 +846,11 @@ export function setChatAttachments(attachments: any[]): void {
   setStore("chatAttachments", Array.isArray(attachments) ? attachments : []);
 }
 
-export function clearChatAttachments(): void {
-  setStore("chatAttachments", []);
-}
-
-// ── Session utilities ──
 // ── Session helpers ──
 
 /**
  * Returns the sessionID of the currently selected task, preferring the board
  * task's sessionID and falling back to the task list entry for selectedTaskID.
- * Returns the sessionID of the currently active task.
  */
 export function currentTaskSessionID(): string {
   const boardSession = boardStore.board?.task?.sessionID;
@@ -1587,14 +863,6 @@ export function currentTaskSessionID(): string {
   return typeof entry?.task?.sessionID === "string"
     ? entry.task.sessionID
     : "";
-}
-
-/**
- * Alias for currentTaskSessionID.
- * Alias for currentTaskSessionID.
- */
-export function currentSessionID(): string {
-  return currentTaskSessionID();
 }
 
 function messageEventSessionID(event: any): string {
@@ -1640,25 +908,6 @@ export function shouldReloadConversationForMessageEvent(event: any): boolean {
 let _knownChildSessions: Set<string> | null = null;
 
 /** Clear the known-child-sessions cache (call when task selection changes). */
-export function clearKnownChildSessions(): void {
+function clearKnownChildSessions(): void {
   _knownChildSessions = null;
-}
-
-/**
- * Returns true if the given sessionID belongs to the currently selected task
- * (including child/sub-agent sessions).
- * Check if a sessionID belongs to the current task's session tree.
- */
-export function matchesCurrentSession(sessionID: string): boolean {
-  if (!sessionID) return false;
- // SSE stream is task-scoped (backend filters by taskID). Any sessionID that
- // arrives belongs to this task — accept and remember it.
-  if (!store.selectedTaskID) return false;
-  const current = currentSessionID();
-  if (current && current === sessionID) return true;
-  if (_knownChildSessions && _knownChildSessions.has(sessionID)) return true;
- // Remember this session for fast O(1) lookups on subsequent events.
-  if (!_knownChildSessions) _knownChildSessions = new Set();
-  _knownChildSessions.add(sessionID);
-  return true;
 }

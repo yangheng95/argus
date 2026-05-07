@@ -5,7 +5,10 @@
 import { t } from "./i18n";
 import { apiJson } from "../services/api";
 import { appStore } from "../store/app";
-import { boardStore, activeDirectory } from "../store/board";
+import { boardStore } from "../store/board";
+import { showAppDialog } from "../services/app-dialog";
+import { activeDirectory, clearProjectScopeData } from "../services/workspace";
+import { reloadProjectScope } from "../services/config";
 
 // ── Internal helpers ──
 
@@ -81,14 +84,11 @@ export interface GitCheckpoint {
 
 /**
  * Extract and normalise all git checkpoint entries from a board object.
- * Sources checked (in order):
- * 1. `board.task.metadata.git.baseline` / `board.task.metadata.git.result`
- * 2. `board.snapshots[]` entries where `payload.kind === "git"`
+ * Source: `board.task.metadata.git.baseline` / `board.task.metadata.git.result`.
  * Returns checkpoints sorted by creation time (ascending).
  */
 export function boardGitCheckpoints(board: any): GitCheckpoint[] {
   const out: GitCheckpoint[] = [];
-  const seen = new Set<string>();
   const meta = record(board?.task?.metadata) ? board.task.metadata : null;
   const git = record(meta?.git) ? meta.git : null;
 
@@ -106,24 +106,6 @@ export function boardGitCheckpoints(board: any): GitCheckpoint[] {
       snapshot: typeof item.snapshot === "string" ? item.snapshot : "",
       time,
     });
-    seen.add(stage);
-  }
-
-  for (const snap of Array.isArray(board?.snapshots) ? board.snapshots : []) {
-    const payload = record(snap?.payload) ? snap.payload : null;
-    const stage = typeof payload?.stage === "string" ? payload.stage : "";
-    if (payload?.kind !== "git" || !stage || seen.has(stage)) continue;
-    const time = Number(snap?.time?.created);
-    if (!Number.isFinite(time)) continue;
-    out.push({
-      stage,
-      mode: typeof payload.mode === "string" ? payload.mode : "recorded_head",
-      branch: typeof payload.branch === "string" ? payload.branch : "",
-      commit: typeof payload.commit === "string" ? payload.commit : "",
-      message: typeof payload.message === "string" ? payload.message : "",
-      snapshot: typeof payload.snapshot === "string" ? payload.snapshot : "",
-      time,
-    });
   }
 
   return out.sort((a, b) => a.time - b.time);
@@ -136,7 +118,7 @@ export function boardGitCheckpoints(board: any): GitCheckpoint[] {
  * and the directory has no git VCS branch yet (i.e. git is not initialised).
  */
 export function canInitGit(): boolean {
-  return !!activeDirectory() && appStore.connected && !boardStore.vcs?.branch;
+  return !!activeDirectory() && appStore.connected && boardStore.vcs !== null && !boardStore.vcs?.initialized;
 }
 
 /**
@@ -150,27 +132,19 @@ export async function initGitCurrent(options: { notify?: boolean } = {}): Promis
   try {
     const result = await apiJson("project/current/init-git", { method: "POST" });
  // Reload project scope after git init (config, extensions, meta).
-    const { clearProjectScopeData } = await import("../services/workspace");
-    const { reloadProjectScope } = await import("../services/config");
     clearProjectScopeData();
     await reloadProjectScope({ restoreWorkspace: false });
     if (options.notify !== false) {
-      const showAppDialog = (window as any).showAppDialog;
-      if (typeof showAppDialog === "function") {
-        const msg = result?.created
-          ? t("git.init_done", { dir })
-          : t("git.init_exists", { dir });
-        await showAppDialog({ title: t("git.init"), message: msg, kind: "info" });
-      }
+      const msg = result?.created
+        ? t("git.init_done", { dir })
+        : t("git.init_exists", { dir });
+      await showAppDialog({ title: t("git.init"), message: msg, kind: "info" });
     }
     return true;
   } catch (e) {
     console.error("[git] Failed to initialize Git", e);
     if (options.notify !== false) {
-      const showAppDialog = (window as any).showAppDialog;
-      if (typeof showAppDialog === "function") {
-        await showAppDialog({ title: t("git.init"), message: String(e), kind: "error" });
-      }
+      await showAppDialog({ title: t("git.init"), message: String(e), kind: "error" });
     }
     return false;
   }

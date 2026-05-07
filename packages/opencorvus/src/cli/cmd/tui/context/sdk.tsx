@@ -1,4 +1,4 @@
-import { createOpenCorvusClient, type Event } from "@opencorvus-ai/sdk/v2"
+import { createOpenCorvusClient, type Event } from "@opencorvus-ai/sdk"
 import { createSimpleContext } from "./helper"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { batch, onCleanup, onMount } from "solid-js"

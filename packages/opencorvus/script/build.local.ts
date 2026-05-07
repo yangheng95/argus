@@ -147,18 +147,33 @@ const runtimeName = (item: (typeof allTargets)[number]) =>
     .join("-")
 type Target = (typeof allTargets)[number]
 
+let overlayBuildDir: string | undefined
+
+async function prepareOverlayBuild() {
+  if (overlayBuildDir) return overlayBuildDir
+
+  const overlayRoot = path.resolve(dir, "../overlay")
+  const distDir = path.join(overlayRoot, "dist-vite")
+
+  console.log("  overlay: building dist-vite")
+  await $`bun run build:vite`.cwd(overlayRoot)
+
+  overlayBuildDir = distDir
+  return overlayBuildDir
+}
+
 async function installOverlay(_item: Target, name: string) {
-  const overlayDir = path.resolve(dir, "../overlay/src")
+  const overlayDir = await prepareOverlayBuild()
   const destDir = path.join(dir, "dist", name, "bin", "ui")
-  const files = ["index.html", "app.js", "styles.css"]
-  const exists = files.every((f) => fs.existsSync(path.join(overlayDir, f)))
-  if (!exists) {
-    console.log(`  overlay: skipping (no frontend assets in ${overlayDir})`)
+  const indexPath = path.join(overlayDir, "index.html")
+  if (!fs.existsSync(indexPath)) {
+    console.log(`  overlay: skipping (missing built UI in ${overlayDir})`)
     return
   }
-  await fs.promises.mkdir(destDir, { recursive: true })
-  await Promise.all(files.map((f) => fs.promises.copyFile(path.join(overlayDir, f), path.join(destDir, f))))
-  console.log(`  overlay: installed ${files.length} UI files`)
+
+  await fs.promises.rm(destDir, { recursive: true, force: true })
+  await fs.promises.cp(overlayDir, destDir, { recursive: true, force: true })
+  console.log(`  overlay: installed built UI from ${path.relative(dir, overlayDir)}`)
 }
 
 // Dev and CI builds only need a native binary; full matrix is for release packaging.

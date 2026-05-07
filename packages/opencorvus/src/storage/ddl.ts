@@ -66,13 +66,14 @@ CREATE TABLE IF NOT EXISTS session (
   directory          text NOT NULL,
   title              text NOT NULL,
   version            text NOT NULL,
+  kind               text NOT NULL,
+  goal_id            text,
   share_url          text,
   summary_additions  integer,
   summary_deletions  integer,
   summary_files      integer,
-  summary_diffs      text,
-  revert             text,
   permission         text,
+  metadata           text,
   time_created       integer NOT NULL,
   time_updated       integer NOT NULL,
   time_compacting    integer,
@@ -81,6 +82,8 @@ CREATE TABLE IF NOT EXISTS session (
 );
 CREATE INDEX IF NOT EXISTS session_project_idx ON session (project_id);
 CREATE INDEX IF NOT EXISTS session_parent_idx  ON session (parent_id);
+CREATE INDEX IF NOT EXISTS session_kind_idx    ON session (kind);
+CREATE INDEX IF NOT EXISTS session_goal_idx    ON session (goal_id);
 
 -- ===== message =====
 
@@ -93,6 +96,7 @@ CREATE TABLE IF NOT EXISTS message (
   FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS message_session_idx ON message (session_id);
+CREATE INDEX IF NOT EXISTS message_session_time_idx ON message (session_id, time_created);
 
 -- ===== part =====
 
@@ -107,6 +111,7 @@ CREATE TABLE IF NOT EXISTS part (
 );
 CREATE INDEX IF NOT EXISTS part_message_idx ON part (message_id);
 CREATE INDEX IF NOT EXISTS part_session_idx ON part (session_id);
+CREATE INDEX IF NOT EXISTS part_session_time_idx ON part (session_id, time_created);
 
 -- ===== permission =====
 
@@ -340,37 +345,54 @@ CREATE INDEX IF NOT EXISTS a2a_queue_priority_idx ON a2a_task_queue (priority, s
 
 -- ===== orchestrator =====
 
-CREATE TABLE IF NOT EXISTS orchestrator_task (
+CREATE TABLE IF NOT EXISTS engine_task (
   id                     text PRIMARY KEY,
   project_id             text NOT NULL,
   session_id             text,
-  active_spec_version_id text,
-  active_plan_version_id text,
-  active_run_id          text,
+  -- Phase-6-f-5: active_spec_version_id cache column removed. Derive via
+  -- engine_spec_snapshot.status != 'superseded' (findActiveSpecForTask in store.ts).
+  -- Phase-6-f: active_plan_version_id cache column removed. Derive via
+  -- engine_plan_version.status = 'active' (findActivePlanForTask in store.ts).
+  -- Phase-6-f-3: active_run_id cache column removed. Derive via the newest
+  -- engine_artifact kind='run' per task (findActiveRunForTask in store.ts).
   request_id             text,
   source                 text NOT NULL DEFAULT 'api',
   title                  text NOT NULL,
   request                text NOT NULL,
-  status                 text NOT NULL DEFAULT 'queued',
+  attachments            text,
+  system_artifacts       text NOT NULL DEFAULT '[]',
+  design_specs           text NOT NULL DEFAULT '[]',
+  executor               text NOT NULL DEFAULT 'mirrorcode',
+  criteria_results       text NOT NULL DEFAULT '[]',
+  kind                   text NOT NULL DEFAULT 'workflow',
   priority               text NOT NULL DEFAULT 'normal',
-  blocking_reason        text,
+  queue_order            integer NOT NULL DEFAULT 0,
+  -- Phase-6-f-4: blocking_reason cache column removed. Blocking is a
+  -- run-scoped signal (run.blocking_reason + pending interactions).
   error                  text,
   budget                 text,
   metadata               text,
   time_started           integer,
   time_completed         integer,
-  time_status_changed    integer,
+  -- rewind_cursor_time: when set, UI-facing event queries filter out rows
+  -- with time_created > cursor. Append-only history stays intact; this is
+  -- a projection cursor, not a delete marker. Written by rewindTask API.
+  rewind_cursor_time     integer,
+  rewind_cursor_event_id text,
+  rewind_count           integer NOT NULL DEFAULT 0,
   time_created           integer NOT NULL,
   time_updated           integer NOT NULL,
   FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,
   FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS orchestrator_task_project_idx ON orchestrator_task (project_id);
-CREATE INDEX IF NOT EXISTS orchestrator_task_status_idx  ON orchestrator_task (status);
-CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_task_project_request_idx
-  ON orchestrator_task (project_id, request_id);
+CREATE INDEX IF NOT EXISTS engine_task_project_idx ON engine_task (project_id);
+CREATE INDEX IF NOT EXISTS engine_task_time_completed_idx ON engine_task (time_completed);
+CREATE INDEX IF NOT EXISTS engine_task_kind_idx    ON engine_task (kind);
+CREATE INDEX IF NOT EXISTS engine_task_queue_order_idx ON engine_task (queue_order);
+CREATE UNIQUE INDEX IF NOT EXISTS engine_task_project_request_idx
+  ON engine_task (project_id, request_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_spec_snapshot (
+CREATE TABLE IF NOT EXISTS engine_spec_snapshot (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,
   version      integer NOT NULL DEFAULT 1,
@@ -383,11 +405,11 @@ CREATE TABLE IF NOT EXISTS orchestrator_spec_snapshot (
   metadata     text,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS orchestrator_spec_snapshot_task_idx ON orchestrator_spec_snapshot (task_id);
+CREATE INDEX IF NOT EXISTS engine_spec_snapshot_task_idx ON engine_spec_snapshot (task_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_spec_item (
+CREATE TABLE IF NOT EXISTS engine_spec_item (
   id               text PRIMARY KEY,
   task_id          text NOT NULL,
   spec_snapshot_id text NOT NULL,
@@ -400,13 +422,13 @@ CREATE TABLE IF NOT EXISTS orchestrator_spec_item (
   metadata         text,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id)          REFERENCES engine_task(id)          ON DELETE CASCADE,
+  FOREIGN KEY (spec_snapshot_id) REFERENCES engine_spec_snapshot(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS orchestrator_spec_item_task_idx     ON orchestrator_spec_item (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_spec_item_snapshot_idx ON orchestrator_spec_item (spec_snapshot_id);
+CREATE INDEX IF NOT EXISTS engine_spec_item_task_idx     ON engine_spec_item (task_id);
+CREATE INDEX IF NOT EXISTS engine_spec_item_snapshot_idx ON engine_spec_item (spec_snapshot_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_plan_version (
+CREATE TABLE IF NOT EXISTS engine_plan_version (
   id               text PRIMARY KEY,
   task_id          text NOT NULL,
   spec_snapshot_id text,
@@ -417,12 +439,12 @@ CREATE TABLE IF NOT EXISTS orchestrator_plan_version (
   metadata         text,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE SET NULL
+  FOREIGN KEY (task_id)          REFERENCES engine_task(id)          ON DELETE CASCADE,
+  FOREIGN KEY (spec_snapshot_id) REFERENCES engine_spec_snapshot(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS orchestrator_plan_task_idx ON orchestrator_plan_version (task_id);
+CREATE INDEX IF NOT EXISTS engine_plan_task_idx ON engine_plan_version (task_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_milestone (
+CREATE TABLE IF NOT EXISTS engine_milestone (
   id               text PRIMARY KEY,
   task_id          text NOT NULL,
   plan_version_id  text NOT NULL,
@@ -433,21 +455,22 @@ CREATE TABLE IF NOT EXISTS orchestrator_milestone (
   metadata         text,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)         REFERENCES orchestrator_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES orchestrator_plan_version(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id)         REFERENCES engine_task(id)         ON DELETE CASCADE,
+  FOREIGN KEY (plan_version_id) REFERENCES engine_plan_version(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS orchestrator_milestone_task_idx ON orchestrator_milestone (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_milestone_plan_idx ON orchestrator_milestone (plan_version_id);
+CREATE INDEX IF NOT EXISTS engine_milestone_task_idx ON engine_milestone (task_id);
+CREATE INDEX IF NOT EXISTS engine_milestone_plan_idx ON engine_milestone (plan_version_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_goal (
+CREATE TABLE IF NOT EXISTS engine_goal (
   id               text PRIMARY KEY,
   task_id          text NOT NULL,
   plan_version_id  text,
   spec_snapshot_id text,
   milestone_id     text,
   title            text NOT NULL,
+  slug             text NOT NULL,
   objective        text NOT NULL,
-  done_definition  text NOT NULL,
+  acceptance_specs text NOT NULL DEFAULT '[]',
   owned_paths      text NOT NULL DEFAULT '[]',
   depends_on       text NOT NULL DEFAULT '[]',
   exports          text NOT NULL DEFAULT '[]',
@@ -456,21 +479,37 @@ CREATE TABLE IF NOT EXISTS orchestrator_goal (
   requirement_ids  text NOT NULL DEFAULT '[]',
   priority         text NOT NULL DEFAULT 'blocking',
   source           text NOT NULL DEFAULT 'spec',
-  status           text NOT NULL DEFAULT 'pending',
+  -- RETIRED columns (LLM-autonomous redesign): status, cascade_state.
+  -- Both were cached projections used as dispatch gates. Current state
+  -- is derived live from the goal_run chain via goalStatusByID /
+  -- describeGoal. Dep-failure propagation is an LLM decision, not a
+  -- schema column.
+  -- Phase E (2026-05-05): retry_count retired here too. Lived as a
+  -- denormalised cache of the latest goal_run_attempt artifact's
+  -- payload.retry_count; rule 8 (no dual source) forced the consolidation.
+  -- Read via engine/store.ts:getGoalRetryCount(goalID); writers in
+  -- openGoalImplementationVersion compute the bumped count from the
+  -- artifact tip and persist it on the new attempt's payload only.
+  -- Phase B (2026-05-05): workspace_dir / workspace_branch / workspace_base_ref
+  -- retired here. Persistent goal-scoped worktree pointer lives on
+  -- engine_artifact[kind='goal_run_attempt'].payload.workspace_*; callers
+  -- read via engine/store.ts:findGoalLatestWorkspace(goalID). Single
+  -- source eliminates the rejected-dispatch poisoning that left phantom
+  -- "in-flight" rows (bench gemini 2026-05-04 reproducer).
   order_index      integer NOT NULL DEFAULT 0,
   metadata         text,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id)  REFERENCES orchestrator_plan_version(id)  ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE,
-  FOREIGN KEY (milestone_id)     REFERENCES orchestrator_milestone(id)     ON DELETE SET NULL
+  FOREIGN KEY (task_id)          REFERENCES engine_task(id)          ON DELETE CASCADE,
+  FOREIGN KEY (plan_version_id)  REFERENCES engine_plan_version(id)  ON DELETE CASCADE,
+  FOREIGN KEY (spec_snapshot_id) REFERENCES engine_spec_snapshot(id) ON DELETE CASCADE,
+  FOREIGN KEY (milestone_id)     REFERENCES engine_milestone(id)     ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS orchestrator_goal_task_idx      ON orchestrator_goal (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_plan_idx      ON orchestrator_goal (plan_version_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_milestone_idx ON orchestrator_goal (milestone_id);
+CREATE INDEX IF NOT EXISTS engine_goal_task_idx      ON engine_goal (task_id);
+CREATE INDEX IF NOT EXISTS engine_goal_plan_idx      ON engine_goal (plan_version_id);
+CREATE INDEX IF NOT EXISTS engine_goal_milestone_idx ON engine_goal (milestone_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_requirement (
+CREATE TABLE IF NOT EXISTS engine_requirement (
   id               text PRIMARY KEY,
   task_id          text NOT NULL,
   spec_snapshot_id text NOT NULL,
@@ -485,28 +524,16 @@ CREATE TABLE IF NOT EXISTS orchestrator_requirement (
   order_index      integer NOT NULL DEFAULT 0,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id)          REFERENCES engine_task(id)          ON DELETE CASCADE,
+  FOREIGN KEY (spec_snapshot_id) REFERENCES engine_spec_snapshot(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS orchestrator_requirement_task_idx ON orchestrator_requirement (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_requirement_spec_idx ON orchestrator_requirement (spec_snapshot_id);
+CREATE INDEX IF NOT EXISTS engine_requirement_task_idx ON engine_requirement (task_id);
+CREATE INDEX IF NOT EXISTS engine_requirement_spec_idx ON engine_requirement (spec_snapshot_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_goal_snapshot (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  spec_snapshot_id text NOT NULL,
-  version          integer NOT NULL DEFAULT 1,
-  status           text NOT NULL DEFAULT 'ready',
-  summary          text NOT NULL,
-  metadata         text,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_snapshot_task_idx ON orchestrator_goal_snapshot (task_id);
+-- Phase-6-f-cleanup-3: engine_goal_snapshot was never written or read — a
+-- placeholder from the pre-artifact design. Deleted.
 
-CREATE TABLE IF NOT EXISTS orchestrator_plan_node (
+CREATE TABLE IF NOT EXISTS engine_plan_node (
   id              text PRIMARY KEY,
   task_id         text NOT NULL,
   plan_version_id text NOT NULL,
@@ -519,72 +546,39 @@ CREATE TABLE IF NOT EXISTS orchestrator_plan_node (
   metadata        text,
   time_created    integer NOT NULL,
   time_updated    integer NOT NULL,
-  FOREIGN KEY (task_id)         REFERENCES orchestrator_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES orchestrator_plan_version(id) ON DELETE CASCADE,
-  FOREIGN KEY (goal_id)         REFERENCES orchestrator_goal(id)         ON DELETE SET NULL
+  FOREIGN KEY (task_id)         REFERENCES engine_task(id)         ON DELETE CASCADE,
+  FOREIGN KEY (plan_version_id) REFERENCES engine_plan_version(id) ON DELETE CASCADE,
+  FOREIGN KEY (goal_id)         REFERENCES engine_goal(id)         ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS orchestrator_plan_node_task_idx ON orchestrator_plan_node (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_plan_node_plan_idx ON orchestrator_plan_node (plan_version_id);
-CREATE INDEX IF NOT EXISTS orchestrator_plan_node_goal_idx ON orchestrator_plan_node (goal_id);
+CREATE INDEX IF NOT EXISTS engine_plan_node_task_idx ON engine_plan_node (task_id);
+CREATE INDEX IF NOT EXISTS engine_plan_node_plan_idx ON engine_plan_node (plan_version_id);
+CREATE INDEX IF NOT EXISTS engine_plan_node_goal_idx ON engine_plan_node (goal_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_run (
-  id              text PRIMARY KEY,
-  task_id         text NOT NULL,
-  plan_version_id text,
-  session_id      text,
-  executor        text NOT NULL DEFAULT 'opencode',
-  status          text NOT NULL DEFAULT 'queued',
-  phase           text NOT NULL DEFAULT 'execute',
-  blocking_reason text,
-  error           text,
-  retry_count     integer NOT NULL DEFAULT 0,
-  executor_ref    text,
-  metadata        text,
-  time_started    integer,
-  time_completed  integer,
-  time_created    integer NOT NULL,
-  time_updated    integer NOT NULL,
-  FOREIGN KEY (task_id)         REFERENCES orchestrator_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES orchestrator_plan_version(id) ON DELETE SET NULL,
-  FOREIGN KEY (session_id)      REFERENCES session(id)                   ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_run_task_idx   ON orchestrator_run (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_run_status_idx ON orchestrator_run (status);
+-- Phase-6-e: engine_run was removed in favour of engine_artifact rows with
+-- kind='run'. See engine/writer.ts (createRun) + engine/state.ts (updateRun)
+-- for the writer and engine/store.ts (RunRow / artifactRowToRunRow /
+-- latestPerRun) for the read-model. Append-only — status transitions are new
+-- rows per logical run_id; findRun takes the newest via time_created desc +
+-- id desc tiebreak. Other tables (engine_artifact.run_id NOT NULL,
+-- engine_interaction_request.run_id, engine_executor_session.run_id NOT NULL,
+-- protocol_event.run_id, workbench_task_note.run_id, workbench_brief_snapshot.run_id)
+-- are plain text pointers now (no FK).
 
-CREATE TABLE IF NOT EXISTS orchestrator_goal_run (
-  id                  text PRIMARY KEY,
-  task_id             text NOT NULL,
-  goal_id             text NOT NULL,
-  plan_node_id        text,
-  coordinator_run_id  text NOT NULL,
-  session_id          text,
-  executor            text NOT NULL DEFAULT 'opencode',
-  status              text NOT NULL DEFAULT 'queued',
-  retry_count         integer NOT NULL DEFAULT 0,
-  blocking_reason     text,
-  error               text,
-  workspace_dir       text,
-  base_ref            text,
-  merge_ref           text,
-  metadata            text,
-  lease_until          integer,
-  time_started        integer,
-  time_completed      integer,
-  time_created        integer NOT NULL,
-  time_updated        integer NOT NULL,
-  FOREIGN KEY (task_id)            REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (goal_id)            REFERENCES orchestrator_goal(id) ON DELETE CASCADE,
-  FOREIGN KEY (coordinator_run_id) REFERENCES orchestrator_run(id)  ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_task_idx        ON orchestrator_goal_run (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_goal_idx        ON orchestrator_goal_run (goal_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_coordinator_idx ON orchestrator_goal_run (coordinator_run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_goal_run_status_idx      ON orchestrator_goal_run (status);
+-- Phase-6-d: engine_goal_run was removed in favour of engine_artifact rows
+-- with kind='goal_run_attempt'. See engine/persist.ts for the writer (first
+-- insert uses the logical goal_run_id as artifact row id; updates append
+-- new artifact rows with the same goal_run_id) and engine/store.ts
+-- (GoalRunRow / artifactRowToGoalRunRow / latestPerGoalRun) for the
+-- read-model. Append-only — status transitions + supersede marks are new
+-- rows per logical goal_run_id; queries take the newest via
+-- time_created desc. Other tables (engine_artifact.goal_run_id,
+-- engine_executor_session.goal_run_id, engine_metric_result.goal_run_id,
+-- protocol_event.goal_run_id) are plain text pointers now (no FK).
 
-CREATE TABLE IF NOT EXISTS orchestrator_interaction_request (
+CREATE TABLE IF NOT EXISTS engine_interaction_request (
   id            text PRIMARY KEY,
   task_id       text NOT NULL,
-  run_id        text NOT NULL,
+  run_id        text,
   session_id    text,
   external_id   text NOT NULL,
   request_type  text NOT NULL,
@@ -596,72 +590,46 @@ CREATE TABLE IF NOT EXISTS orchestrator_interaction_request (
   time_resolved integer,
   time_created  integer NOT NULL,
   time_updated  integer NOT NULL,
-  FOREIGN KEY (task_id)    REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)     REFERENCES orchestrator_run(id)  ON DELETE CASCADE,
+  FOREIGN KEY (task_id)    REFERENCES engine_task(id) ON DELETE CASCADE,
   FOREIGN KEY (session_id) REFERENCES session(id)           ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS orchestrator_interaction_run_idx      ON orchestrator_interaction_request (run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_interaction_external_idx ON orchestrator_interaction_request (external_id);
-CREATE INDEX IF NOT EXISTS orchestrator_interaction_status_idx   ON orchestrator_interaction_request (status);
+CREATE INDEX IF NOT EXISTS engine_interaction_run_idx      ON engine_interaction_request (run_id);
+CREATE INDEX IF NOT EXISTS engine_interaction_external_idx ON engine_interaction_request (external_id);
+CREATE INDEX IF NOT EXISTS engine_interaction_status_idx   ON engine_interaction_request (status);
 
-CREATE TABLE IF NOT EXISTS orchestrator_delivery (
+-- Phase-6-c: engine_delivery was removed in favour of engine_artifact rows
+-- with kind='delivery'. See engine/persist.ts for the writer and
+-- engine/store.ts (DeliveryRow) for the read-model. delivery_id below is
+-- now a plain text pointer (no FK) to the id of the latest delivery-kind
+-- artifact row for the logical delivery.
+
+CREATE TABLE IF NOT EXISTS engine_artifact (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,
-  run_id       text NOT NULL,
-  goal_run_id  text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  status       text NOT NULL DEFAULT 'ready',
-  summary      text NOT NULL,
-  result       text,
-  lease_until  integer,
-  time_started integer,
-  time_completed integer,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS orchestrator_delivery_run_idx ON orchestrator_delivery (run_id);
-
-CREATE TABLE IF NOT EXISTS orchestrator_artifact (
-  id           text PRIMARY KEY,
-  task_id      text NOT NULL,
-  run_id       text NOT NULL,
-  goal_run_id  text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
+  -- Phase-7+: nullable. Most artifacts still scope to a run (self-referencing
+  -- for kind='run': id === run_id), but task-level facts emitted before any
+  -- run exists (kind='orchestrator-stream-error' when runCount=0) have no run.
+  -- Per rule 23 the schema does not enforce a state-machine invariant the
+  -- orchestrator owns.
+  run_id       text,
+  goal_run_id  text,
   delivery_id  text,
   kind         text NOT NULL,
   label        text NOT NULL,
   payload      text,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
-  FOREIGN KEY (task_id)     REFERENCES orchestrator_task(id)     ON DELETE CASCADE,
-  FOREIGN KEY (run_id)      REFERENCES orchestrator_run(id)      ON DELETE CASCADE,
-  FOREIGN KEY (delivery_id) REFERENCES orchestrator_delivery(id) ON DELETE SET NULL
+  FOREIGN KEY (task_id)     REFERENCES engine_task(id)     ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS orchestrator_artifact_run_idx      ON orchestrator_artifact (run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_artifact_delivery_idx ON orchestrator_artifact (delivery_id);
+CREATE INDEX IF NOT EXISTS engine_artifact_run_idx      ON engine_artifact (run_id);
+CREATE INDEX IF NOT EXISTS engine_artifact_delivery_idx ON engine_artifact (delivery_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_evaluation (
-  id             text PRIMARY KEY,
-  task_id        text NOT NULL,
-  run_id         text NOT NULL,
-  goal_run_id    text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  delivery_id    text,
-  status         text NOT NULL DEFAULT 'pending',
-  verdict        text NOT NULL DEFAULT 'inconclusive',
-  summary        text NOT NULL,
-  checks         text,
-  lease_until    integer,
-  time_started   integer,
-  time_completed integer,
-  time_created   integer NOT NULL,
-  time_updated   integer NOT NULL,
-  FOREIGN KEY (task_id)     REFERENCES orchestrator_task(id)     ON DELETE CASCADE,
-  FOREIGN KEY (run_id)      REFERENCES orchestrator_run(id)      ON DELETE CASCADE,
-  FOREIGN KEY (delivery_id) REFERENCES orchestrator_delivery(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS orchestrator_evaluation_run_idx ON orchestrator_evaluation (run_id);
+-- Phase-6-b: engine_evaluation was removed in favour of engine_artifact rows
+-- with kind='verification-evidence'. See verification/persist.ts for the writer
+-- and engine/store.ts (EvaluationRow) for the read-model that reconstructs the
+-- historical shape from the artifact payload.
 
-CREATE TABLE IF NOT EXISTS orchestrator_progress_snapshot (
+CREATE TABLE IF NOT EXISTS engine_progress_snapshot (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,
   status       text NOT NULL,
@@ -669,15 +637,15 @@ CREATE TABLE IF NOT EXISTS orchestrator_progress_snapshot (
   payload      text,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS orchestrator_progress_task_idx ON orchestrator_progress_snapshot (task_id);
+CREATE INDEX IF NOT EXISTS engine_progress_task_idx ON engine_progress_snapshot (task_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_executor_session (
+CREATE TABLE IF NOT EXISTS engine_executor_session (
   id               text PRIMARY KEY,
   task_id          text NOT NULL,
   run_id           text NOT NULL,
-  goal_run_id      text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
+  goal_run_id      text,
   provider         text NOT NULL,
   protocol         text NOT NULL,
   protocol_version text NOT NULL,
@@ -692,15 +660,14 @@ CREATE TABLE IF NOT EXISTS orchestrator_executor_session (
   time_completed   integer,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_task_idx     ON orchestrator_executor_session (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_run_idx ON orchestrator_executor_session (run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_goal_run_idx ON orchestrator_executor_session (goal_run_id);
-CREATE INDEX IF NOT EXISTS orchestrator_executor_session_status_idx   ON orchestrator_executor_session (status);
+CREATE INDEX IF NOT EXISTS engine_executor_session_task_idx     ON engine_executor_session (task_id);
+CREATE INDEX IF NOT EXISTS engine_executor_session_run_idx ON engine_executor_session (run_id);
+CREATE INDEX IF NOT EXISTS engine_executor_session_goal_run_idx ON engine_executor_session (goal_run_id);
+CREATE INDEX IF NOT EXISTS engine_executor_session_status_idx   ON engine_executor_session (status);
 
-CREATE TABLE IF NOT EXISTS orchestrator_channel_binding (
+CREATE TABLE IF NOT EXISTS engine_channel_binding (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,
   platform     text NOT NULL,
@@ -709,16 +676,118 @@ CREATE TABLE IF NOT EXISTS orchestrator_channel_binding (
   payload      text,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
 );
-DELETE FROM orchestrator_channel_binding
+DELETE FROM engine_channel_binding
 WHERE rowid NOT IN (
   SELECT MIN(rowid)
-  FROM orchestrator_channel_binding
+  FROM engine_channel_binding
   GROUP BY platform, channel, thread
 );
-CREATE INDEX IF NOT EXISTS orchestrator_channel_task_idx ON orchestrator_channel_binding (task_id);
-CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_channel_binding_thread_idx ON orchestrator_channel_binding (platform, channel, thread);
+CREATE INDEX IF NOT EXISTS engine_channel_task_idx ON engine_channel_binding (task_id);
+CREATE UNIQUE INDEX IF NOT EXISTS engine_channel_binding_thread_idx ON engine_channel_binding (platform, channel, thread);
+
+-- ===== dynamic adversarial metrics =====
+
+CREATE TABLE IF NOT EXISTS engine_metric_spec (
+  id                     text PRIMARY KEY,
+  task_id                text NOT NULL,
+  scope                  text NOT NULL,                 -- 'goal' | 'global'
+  goal_id                text,                          -- NULL iff scope='global'
+  name                   text NOT NULL,
+  description            text NOT NULL,
+  unit                   text NOT NULL,
+  direction              text NOT NULL,                 -- 'higher_better' | 'lower_better'
+  target                 real NOT NULL,
+  floor                  real NOT NULL,
+  weight                 real NOT NULL,
+  gate_class             text NOT NULL,                 -- 'blocking' | 'diagnostic' | 'efficiency'
+  evaluator_kind         text NOT NULL,                 -- 'shell' | 'judge' | 'query' | 'aggregator'
+  evaluator_config       text NOT NULL,                 -- JSON
+  source_requirement_ids text NOT NULL DEFAULT '[]',
+  source                 text NOT NULL,                 -- 'baseline' | 'challenge'
+  frozen_at              integer NOT NULL,
+  created_by             text NOT NULL,                 -- 'architect' | 'prosecutor'
+  time_created           integer NOT NULL,
+  time_updated           integer NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE,
+  FOREIGN KEY (goal_id) REFERENCES engine_goal(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS engine_metric_spec_task_idx   ON engine_metric_spec (task_id);
+CREATE INDEX IF NOT EXISTS engine_metric_spec_scope_idx  ON engine_metric_spec (task_id, scope);
+CREATE INDEX IF NOT EXISTS engine_metric_spec_source_idx ON engine_metric_spec (task_id, source);
+CREATE INDEX IF NOT EXISTS engine_metric_spec_goal_idx   ON engine_metric_spec (goal_id);
+
+CREATE TABLE IF NOT EXISTS engine_metric_result (
+  id               text PRIMARY KEY,
+  metric_spec_id   text NOT NULL,
+  task_id          text NOT NULL,
+  iteration        integer NOT NULL,
+  goal_run_id      text,
+  raw_value        real NOT NULL,
+  normalized_value real NOT NULL,
+  met_target       integer NOT NULL,
+  met_floor        integer NOT NULL,
+  evidence_ref     text NOT NULL,
+  evidence_fresh   integer NOT NULL,
+  computed_at      integer NOT NULL,
+  time_created     integer NOT NULL,
+  time_updated     integer NOT NULL,
+  FOREIGN KEY (metric_spec_id) REFERENCES engine_metric_spec(id) ON DELETE CASCADE,
+  FOREIGN KEY (task_id)        REFERENCES engine_task(id)        ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS engine_metric_result_task_iter_idx ON engine_metric_result (task_id, iteration);
+CREATE INDEX IF NOT EXISTS engine_metric_result_spec_idx      ON engine_metric_result (metric_spec_id);
+
+CREATE TABLE IF NOT EXISTS engine_counterexample (
+  id                    text PRIMARY KEY,
+  task_id               text NOT NULL,
+  iteration_found       integer NOT NULL,
+  iteration_resolved    integer,
+  novelty_hash          text NOT NULL,
+  target_scope          text NOT NULL,                  -- 'goal' | 'global'
+  target_ref            text NOT NULL,
+  claim                 text NOT NULL,
+  reproducer            text NOT NULL,
+  severity              text NOT NULL,                  -- 'blocking' | 'diagnostic'
+  linked_metric_spec_id text,
+  time_created          integer NOT NULL,
+  time_updated          integer NOT NULL,
+  FOREIGN KEY (task_id)               REFERENCES engine_task(id)        ON DELETE CASCADE,
+  FOREIGN KEY (linked_metric_spec_id) REFERENCES engine_metric_spec(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS engine_counterexample_task_idx    ON engine_counterexample (task_id);
+CREATE INDEX IF NOT EXISTS engine_counterexample_open_idx    ON engine_counterexample (task_id, iteration_resolved);
+CREATE INDEX IF NOT EXISTS engine_counterexample_novelty_idx ON engine_counterexample (task_id, novelty_hash);
+
+CREATE TABLE IF NOT EXISTS engine_iteration (
+  task_id              text NOT NULL,
+  iteration            integer NOT NULL,
+  aggregate_score      real NOT NULL,
+  per_goal_score_json  text NOT NULL,
+  global_score         real NOT NULL,
+  delta_vs_prev        real NOT NULL,
+  novelty_score        real NOT NULL,
+  blocking_unmet_count integer NOT NULL,
+  open_counterexamples integer NOT NULL,
+  regressed_blocking   integer NOT NULL,
+  arbiter_verdict      text NOT NULL,                   -- 'continue' | 'accept' | 'stalled' | 'abort'
+  time_created         integer NOT NULL,
+  time_updated         integer NOT NULL,
+  PRIMARY KEY (task_id, iteration),
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
+);
+
+-- Frozen-ruler enforcement. Baseline metric specs are immutable once written;
+-- the Prosecutor may only INSERT new challenge rows. Raising at the SQL layer
+-- catches bugs that bypass src/metrics/store.ts.
+CREATE TRIGGER IF NOT EXISTS engine_metric_spec_baseline_no_update
+BEFORE UPDATE ON engine_metric_spec
+FOR EACH ROW
+WHEN OLD.source = 'baseline'
+BEGIN
+  SELECT RAISE(ABORT, 'engine_metric_spec: baseline row is frozen (no UPDATE)');
+END;
 
 -- ===== decision log =====
 
@@ -731,7 +800,7 @@ CREATE TABLE IF NOT EXISTS decision_log (
   value        text NOT NULL,
   reason       text NOT NULL,
   time_created integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS decision_log_task_idx ON decision_log (task_id);
 CREATE INDEX IF NOT EXISTS decision_log_task_key_idx ON decision_log (task_id, key);
@@ -749,8 +818,7 @@ CREATE TABLE IF NOT EXISTS workbench_task_note (
   metadata     text,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE SET NULL
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS workbench_task_note_task_idx ON workbench_task_note (task_id);
 CREATE INDEX IF NOT EXISTS workbench_task_note_run_idx  ON workbench_task_note (run_id);
@@ -765,12 +833,28 @@ CREATE TABLE IF NOT EXISTS workbench_brief_snapshot (
   inputs          text,
   time_created    integer NOT NULL,
   time_updated    integer NOT NULL,
-  FOREIGN KEY (task_id)         REFERENCES orchestrator_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES orchestrator_plan_version(id) ON DELETE SET NULL,
-  FOREIGN KEY (run_id)          REFERENCES orchestrator_run(id)          ON DELETE SET NULL
+  FOREIGN KEY (task_id)         REFERENCES engine_task(id)         ON DELETE CASCADE,
+  FOREIGN KEY (plan_version_id) REFERENCES engine_plan_version(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS workbench_brief_task_idx ON workbench_brief_snapshot (task_id);
 CREATE INDEX IF NOT EXISTS workbench_brief_run_idx  ON workbench_brief_snapshot (run_id);
+
+-- ===== quick note =====
+
+CREATE TABLE IF NOT EXISTS quick_note (
+  id           text PRIMARY KEY,
+  project_id   text,
+  content      text NOT NULL,
+  summary      text NOT NULL,
+  tags         text NOT NULL DEFAULT '[]',
+  status       text NOT NULL DEFAULT 'draft',
+  user_id      text,
+  time_created integer NOT NULL,
+  time_updated integer NOT NULL
+);
+CREATE INDEX IF NOT EXISTS quick_note_project_idx ON quick_note (project_id);
+CREATE INDEX IF NOT EXISTS quick_note_user_idx    ON quick_note (user_id);
+CREATE INDEX IF NOT EXISTS quick_note_status_idx  ON quick_note (status);
 
 -- ===== protocol event store =====
 
@@ -780,11 +864,11 @@ CREATE TABLE IF NOT EXISTS protocol_event (
   type            text NOT NULL,
   aggregate_type  text NOT NULL,
   aggregate_id    text NOT NULL,
-  task_id         text REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  run_id          text REFERENCES orchestrator_run(id) ON DELETE SET NULL,
-  goal_run_id     text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
+  task_id         text REFERENCES engine_task(id) ON DELETE CASCADE,
+  run_id          text,
+  goal_run_id     text,
   session_id      text REFERENCES session(id) ON DELETE SET NULL,
-  interaction_id  text REFERENCES orchestrator_interaction_request(id) ON DELETE SET NULL,
+  interaction_id  text REFERENCES engine_interaction_request(id) ON DELETE SET NULL,
   stream_id       text,
   source          text NOT NULL,
   target          text,
@@ -824,25 +908,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS protocol_inbox_envelope_actor_idx ON protocol_
 CREATE INDEX IF NOT EXISTS protocol_inbox_visible_idx              ON protocol_inbox (actor, status, visible_at);
 CREATE INDEX IF NOT EXISTS protocol_inbox_lease_idx                ON protocol_inbox (actor, lease_until);
 
-CREATE TABLE IF NOT EXISTS protocol_stream_chunk (
-  id          text PRIMARY KEY,
-  stream_id   text NOT NULL,
-  task_id     text REFERENCES orchestrator_task(id) ON DELETE CASCADE,
-  run_id      text REFERENCES orchestrator_run(id) ON DELETE SET NULL,
-  goal_run_id text REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
-  session_id  text REFERENCES session(id) ON DELETE SET NULL,
-  kind        text NOT NULL,
-  chunk_seq   integer NOT NULL,
-  text        text NOT NULL,
-  payload     text,
-  emitted_at  integer NOT NULL,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS protocol_stream_chunk_stream_seq_idx ON protocol_stream_chunk (stream_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_task_idx              ON protocol_stream_chunk (task_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_run_idx               ON protocol_stream_chunk (run_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_session_idx           ON protocol_stream_chunk (session_id, chunk_seq);
-
 `
-

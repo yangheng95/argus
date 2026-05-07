@@ -1,8 +1,14 @@
-Executes a given bash command in a persistent shell session with optional timeout, ensuring proper handling and security measures.
+Executes a terminal command with optional timeout, ensuring proper handling and security measures. The current shell is `${shell}`; write commands for that shell, not for an assumed POSIX bash environment.
 
 All commands run in ${directory} by default. Use the `workdir` parameter if you need to run a command in a different directory. AVOID using `cd <directory> && <command>` patterns - use `workdir` instead.
 
 IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.
+
+Missing tools: if a command fails with "command not found" / "not recognized" / similar, the required CLI is not installed. You are allowed to install it using the platform's package manager (e.g. `brew install`, `apt-get install`, `winget install`, `scoop install`, `npm i -g`, `pipx install`, `cargo install`) before retrying. Prefer the manager already used in the project/environment, pick the canonical package name, and proceed without asking — only pause if the install itself needs privileged access you do not have (e.g. `sudo` prompt) or touches system state the user should approve.
+
+CRITICAL: You share a process namespace with the orchestrator. NEVER kill processes by name (killall, pkill, taskkill /IM, ps|grep|xargs kill). To stop a server you started, use the PID from the start command (e.g. `kill $!`) or kill by port (e.g. `lsof -ti :3000 | xargs kill` or `fuser -k 3000/tcp`). Killing by process name will destroy the orchestrator and all sibling tasks. The orchestrator's PID is protected by a shell-level guard — attempts to `kill` the host process PID will be refused automatically.
+
+Foreground vs background: by default the spawned process is killed (process tree torn down) the moment this tool call returns. To run a long-lived server (dev/preview/serve) that must outlive a single tool call so delivery checks can probe it, pass `background: true`. The tool then returns a few hundred ms after start with `metadata.pid` set, while the process keeps running. You are responsible for stopping it later (`kill <pid>` or `lsof -ti :<port> | xargs kill`). Do not pass `background: true` for short commands — they will not wait for completion and you will not see their full output.
 
 Before executing the command, please follow these steps:
 
@@ -24,19 +30,19 @@ Usage notes:
   - The command argument is required.
   - You can specify an optional timeout in milliseconds. If not specified, commands will time out after 120000ms (2 minutes).
   - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
-  - If the output exceeds ${maxLines} lines or ${maxBytes} bytes, it will be truncated and the full output will be written to a file. You can use Read with offset/limit to read specific sections or Grep to search the full content. Because of this, you do NOT need to use `head`, `tail`, or other truncation commands to limit output - just run the command directly.
+  - If the output exceeds ${maxLines} lines or ${maxBytes} bytes, it will be truncated and the full output will be written to a file. You can use Read with offset/limit to read specific sections or `search_code` to search the full content. Because of this, you do NOT need to use `head`, `tail`, or other truncation commands to limit output - run the command directly or use the test runner's own concise reporter.
+  - For test runners, prefer the default or concise reporter first. Use verbose/full output only when the concise failure does not identify the failing test or stack.
 
-  - Avoid using Bash with the `find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
+  - Avoid using this terminal tool with the `find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
     - File search: Use Glob (NOT find or ls)
-    - Content search: Use Grep (NOT grep or rg)
+    - Content search: Use `search_code` (NOT grep or rg)
     - Read files: Use Read (NOT cat/head/tail)
     - Edit files: Use Edit (NOT sed/awk)
     - Write files: Use Write (NOT echo >/cat <<EOF)
     - Communication: Output text directly (NOT echo/printf)
   - When issuing multiple commands:
-    - If the commands are independent and can run in parallel, make multiple Bash tool calls in a single message. For example, if you need to run "git status" and "git diff", send a single message with two Bash tool calls in parallel.
-    - If the commands depend on each other and must run sequentially, use a single Bash call with '&&' to chain them together (e.g., `git add . && git commit -m "message" && git push`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before Bash for git operations, or git add before git commit), run these operations sequentially instead.
-    - Use ';' only when you need to run commands sequentially but don't care if earlier commands fail
+    - If the commands are independent and can run in parallel, make multiple terminal tool calls in a single message. For example, if you need to run "git status" and "git diff", send a single message with two tool calls in parallel.
+    - If the commands depend on each other and must run sequentially, prefer separate terminal tool calls so each result is observable and shell syntax cannot hide the failure point. Chain inside one command only when you are certain the current shell supports the separator you use.
     - DO NOT use newlines to separate commands (newlines are ok in quoted strings)
   - AVOID using `cd <directory> && <command>`. Use the `workdir` parameter to change directories instead.
     <good-example>

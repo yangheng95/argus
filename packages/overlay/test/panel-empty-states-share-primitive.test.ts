@@ -1,0 +1,98 @@
+// Regression for the right-panel empty-state design-language audit (iter3).
+//
+// Before this iter, every right-panel-adjacent component carried its own
+// "no data yet" CSS class:
+//   - ArchitectPanel    -> .arch-empty
+//   - RequirementsPanel -> .req-empty
+//   - IntegrityCard     -> .integrity__empty
+//   - AgentWorkflowPanel-> .agent-workflow-empty (also used for loading)
+//   - DeliveryPanel     -> .delivery-empty-hint
+//
+// Each rolled its own font, padding, color, italic-or-not, bordered-card-
+// or-bare, so a user staring at a fresh task saw four different visual
+// treatments for the same semantic state. There IS a shared primitive
+// already — `.empty-hint` plus a card-chrome shell at styles.css:2444 —
+// but only DiffView / FileViewPanel / LogViewer / MemoryPanel /
+// PromptCatalog used it. The right panel didn't.
+//
+// This test pins the contract:
+//   1. The five components above render their empty-state DOM with the
+//      shared `.empty-hint` class plus the `.empty-hint--card`
+//      modifier, never the legacy per-panel class.
+//   2. styles.css advertises `.empty-hint--card` on the same card-chrome
+//      selector group as the existing nested-`.empty-hint` cards
+//      (single source — rule 8). That way every empty card looks the
+//      same regardless of parent.
+//   3. The legacy per-panel CSS rules are gone (no dual source).
+
+import { describe, expect, test } from "bun:test"
+import { readFileSync, readdirSync, statSync } from "node:fs"
+import path from "node:path"
+
+const SRC = path.resolve(import.meta.dir, "..", "src")
+const STYLES_ROOT = path.join(SRC, "styles")
+
+function walkCss(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkCss(full))
+    else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+// Concatenate all surface + cascade + primitive CSS files (styles.css was
+// dissolved 2026-05-04 into this decomposed architecture).
+const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
+
+function readComponent(rel: string): string {
+  return readFileSync(path.join(SRC, "components", rel), "utf8")
+}
+
+describe("right-panel components emit the shared empty-hint primitive", () => {
+  const cases: Array<{ panel: string; file: string; legacyClass: string }> = [
+    { panel: "ArchitectPanel", file: "ArchitectPanel.tsx", legacyClass: "arch-empty" },
+    { panel: "RequirementsPanel", file: "RequirementsPanel.tsx", legacyClass: "req-empty" },
+    { panel: "IntegrityCard", file: "IntegrityCard.tsx", legacyClass: "integrity__empty" },
+    { panel: "AgentWorkflowPanel", file: "AgentWorkflowPanel.tsx", legacyClass: "agent-workflow-empty" },
+    { panel: "Board (DeliveryPanel)", file: "Board.tsx", legacyClass: "delivery-empty-hint" },
+  ]
+
+  for (const c of cases) {
+    test(`${c.panel} uses .empty-hint .empty-hint--card, not .${c.legacyClass}`, () => {
+      const src = readComponent(c.file)
+      expect(src).not.toContain(c.legacyClass)
+      // It is sufficient to assert the primitive class shows up at least
+      // once in the source — these components only render empty state in
+      // one or two places, so any match is the migrated empty state.
+      expect(src).toContain('class="empty-hint empty-hint--card"')
+    })
+  }
+})
+
+describe("surface CSS declares .empty-hint--card on the shared card-chrome group", () => {
+  test("the card-chrome selector list advertises .empty-hint--card", () => {
+    // Anchored at the canonical nested-card block (lines 2444+ before the
+    // refactor). We assert the modifier sits in the same selector group
+    // as `.section-body > .empty-hint`, so all card-chrome empties stay
+    // in lockstep.
+    const cardChromeBlock = STYLES.match(
+      /(\.section-body\s*>\s*\.empty-hint[^{]*\{[\s\S]*?border-radius[^}]*\})/,
+    )
+    expect(cardChromeBlock).not.toBeNull()
+    expect(cardChromeBlock![0]).toContain(".empty-hint--card")
+  })
+
+  test("legacy per-panel empty-state CSS rules are gone", () => {
+    expect(STYLES).not.toMatch(/^\s*\.arch-empty\s*\{/m)
+    expect(STYLES).not.toMatch(/^\s*\.req-empty\s*\{/m)
+    expect(STYLES).not.toMatch(/^\s*\.integrity__empty\s*\{/m)
+    // .agent-workflow-empty is allowed to remain ONLY if combined with
+    // .agent-workflow-warning (warning is a separate state we keep). But
+    // a standalone .agent-workflow-empty rule means the migration was
+    // incomplete.
+    expect(STYLES).not.toMatch(/^\s*\.agent-workflow-empty\s*\{/m)
+    expect(STYLES).not.toMatch(/^\s*\.delivery-empty-hint\s*\{/m)
+  })
+})

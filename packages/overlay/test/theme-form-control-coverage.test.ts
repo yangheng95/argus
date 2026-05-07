@@ -1,0 +1,104 @@
+/**
+ * Pins the three fixes that close the form-control theme leak observed
+ * 2026-05-06 — settings dialog rendering input fields with a bright UA
+ * widget on top of the dark surface tokens.
+ *
+ *   1. `.dialog` must declare `color-scheme: inherit`. Native
+ *      `<dialog showModal()>` is hoisted to the top layer; Chromium
+ *      historically dropped the body's `color-scheme` for top-layer
+ *      form controls, leaving inputs / scrollbars / autofill with the
+ *      light UA chrome regardless of theme.
+ *
+ *   2. `.field-input` must declare `appearance: none` (and the WebKit
+ *      prefix). Without it the UA control widget paints over the
+ *      `var(--surface-inset)` background and the input shows up white
+ *      on dark surfaces.
+ *
+ *   3. `accent-color: var(--accent)` must be declared exactly once at
+ *      `body{}` scope in `tokens/design-language.css` — surface CSS
+ *      used to copy the same declaration into half a dozen places
+ *      (rule 9 single source). Per-surface duplicates are forbidden:
+ *      if a future component needs a different accent the right move
+ *      is a token override, not another `accent-color: var(--accent)`.
+ */
+
+import { describe, expect, test } from "bun:test"
+import { readdirSync, readFileSync, statSync } from "node:fs"
+import { join } from "node:path"
+
+const STYLES_ROOT = join(import.meta.dir, "..", "src", "styles")
+
+function readCss(rel: string): string {
+  return readFileSync(join(STYLES_ROOT, rel), "utf8")
+}
+
+function stripComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, "")
+}
+
+function* walkCss(root: string): Iterable<string> {
+  for (const entry of readdirSync(root)) {
+    const abs = join(root, entry)
+    if (statSync(abs).isDirectory()) yield* walkCss(abs)
+    else if (entry.endsWith(".css")) yield abs
+  }
+}
+
+describe("dialog top-layer color-scheme inheritance", () => {
+  const dialogCss = stripComments(readCss(join("surfaces", "dialog.css")))
+
+  test(".dialog declares color-scheme: inherit", () => {
+    const block = dialogCss.match(/\.dialog\s*{[^}]*}/)?.[0] ?? ""
+    expect(block).toMatch(/color-scheme\s*:\s*inherit/)
+  })
+})
+
+describe(".field-input strips UA widget chrome", () => {
+  const fieldCss = stripComments(readCss(join("surfaces", "field.css")))
+
+  test(".field-input sets appearance: none", () => {
+    const block = fieldCss.match(/\.field-input\s*{[^}]*}/)?.[0] ?? ""
+    expect(block).toMatch(/(^|\s)appearance\s*:\s*none/)
+    expect(block).toMatch(/-webkit-appearance\s*:\s*none/)
+  })
+
+  test("autofill override pins the surface-inset background", () => {
+    expect(fieldCss).toMatch(/:-webkit-autofill[\s\S]*?box-shadow[^;]*var\(--surface-inset\)[^;]*inset[^;]*!important/)
+  })
+
+  test("search and number sub-controls also strip UA chrome", () => {
+    expect(fieldCss).toMatch(/-webkit-search-cancel-button[\s\S]*?appearance\s*:\s*none/)
+    expect(fieldCss).toMatch(/-webkit-(?:inner|outer)-spin-button[\s\S]*?-webkit-appearance\s*:\s*none/)
+  })
+})
+
+describe("accent-color is declared once globally", () => {
+  test("design-language body{} block carries the canonical accent-color", () => {
+    const css = stripComments(readCss(join("tokens", "design-language.css")))
+    const bodyBlock = css.match(/(^|\s)body\s*{[\s\S]*?}/)?.[0] ?? ""
+    expect(bodyBlock).toMatch(/accent-color\s*:\s*var\(--accent\)/)
+  })
+
+  test("no surface CSS re-declares accent-color: var(--accent)", () => {
+    const offenders: string[] = []
+    for (const file of walkCss(STYLES_ROOT)) {
+      if (file.endsWith(join("tokens", "design-language.css"))) continue
+      const body = stripComments(readFileSync(file, "utf8"))
+      if (/accent-color\s*:\s*var\(--accent\)/.test(body)) {
+        offenders.push(file.replace(STYLES_ROOT, "<styles>"))
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})
+
+describe("no inspector iframe frame is hard-coded white", () => {
+  test(".frontend-preview-frame routes background through a token", () => {
+    const css = stripComments(readCss(join("surfaces", "inspector.css")))
+    const block = css.match(/\.frontend-preview-frame\s*{[^}]*}/)?.[0] ?? ""
+    // The fix uses var(--surface-inset); fail closed if the literal
+    // `white` returns or any non-`var()` background sneaks back in.
+    expect(block).not.toMatch(/background\s*:\s*white\b/)
+    expect(block).toMatch(/background\s*:\s*var\(/)
+  })
+})

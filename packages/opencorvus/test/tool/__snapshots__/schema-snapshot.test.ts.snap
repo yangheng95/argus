@@ -1,0 +1,2375 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`tool parameter schemas keeps built-in tool schemas stable 1`] = `
+{
+  "analytics": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "anyOf": [
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "summary",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "search",
+            "type": "string",
+          },
+          "limit": {
+            "default": 20,
+            "description": "Max results",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "type": "integer",
+          },
+          "query": {
+            "description": "Text to search in task title or request",
+            "type": "string",
+          },
+          "status": {
+            "description": "Filter by task status",
+            "enum": [
+              "queued",
+              "active",
+              "completed",
+              "failed",
+              "cancelled",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "limit",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "goal_stats",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+    ],
+  },
+  "apply_patch": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "patchText": {
+        "description": "The full patch text that describes all changes to be made",
+        "type": "string",
+      },
+    },
+    "required": [
+      "patchText",
+    ],
+    "type": "object",
+  },
+  "bash": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "command": {
+        "description": "The command to execute",
+        "type": "string",
+      },
+      "description": {
+        "description": 
+"Clear, concise description of what this command does in 5-10 words. Examples:
+Input: ls
+Output: Lists files in current directory
+
+Input: git status
+Output: Shows working tree status
+
+Input: npm install
+Output: Installs package dependencies
+
+Input: mkdir foo
+Output: Creates directory 'foo'"
+,
+        "type": "string",
+      },
+      "timeout": {
+        "description": "Optional timeout in milliseconds",
+        "type": "number",
+      },
+      "workdir": {
+        "description": "The working directory to run the command in. Defaults to <instance-directory>. Use this instead of 'cd' commands.",
+        "type": "string",
+      },
+    },
+    "required": [
+      "command",
+      "description",
+    ],
+    "type": "object",
+  },
+  "edit": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "filePath": {
+        "description": "The absolute path to the file to modify",
+        "type": "string",
+      },
+      "newString": {
+        "description": "The text to replace it with (must be different from oldString)",
+        "type": "string",
+      },
+      "oldString": {
+        "description": "The text to replace",
+        "type": "string",
+      },
+      "replaceAll": {
+        "description": "Replace all occurrences of oldString (default false)",
+        "type": "boolean",
+      },
+    },
+    "required": [
+      "filePath",
+      "oldString",
+      "newString",
+    ],
+    "type": "object",
+  },
+  "glob": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "path": {
+        "description": "The directory to search in. If not specified, the current working directory will be used. IMPORTANT: Omit this field to use the default directory. DO NOT enter "undefined" or "null" - simply omit it for the default behavior. Must be a valid directory path if provided.",
+        "type": "string",
+      },
+      "pattern": {
+        "description": "The glob pattern to match files against",
+        "type": "string",
+      },
+    },
+    "required": [
+      "pattern",
+    ],
+    "type": "object",
+  },
+  "goal_report": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "blockers": {
+        "default": [],
+        "description": "Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.",
+        "items": {
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "checks_run": {
+        "default": [],
+        "description": "Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "minLength": 1,
+              "type": "string",
+            },
+            "exit_code": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer",
+            },
+            "name": {
+              "minLength": 1,
+              "type": "string",
+            },
+            "output_excerpt": {
+              "description": "Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green.",
+              "type": "string",
+            },
+          },
+          "required": [
+            "name",
+            "command",
+            "exit_code",
+          ],
+          "type": "object",
+        },
+        "type": "array",
+      },
+      "design_decisions": {
+        "default": [],
+        "description": "Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "alternatives": {
+              "default": [],
+              "description": "Alternatives that were considered and rejected. Empty array if none were weighed.",
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "choice": {
+              "description": "The decision made, stated as a concrete claim.",
+              "minLength": 1,
+              "type": "string",
+            },
+            "reason": {
+              "description": "Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice.",
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+          "required": [
+            "choice",
+            "alternatives",
+            "reason",
+          ],
+          "type": "object",
+        },
+        "type": "array",
+      },
+      "files_changed": {
+        "description": "Every file touched in this goal. A goal that produced zero file changes is invalid — do not call this tool without deliverables.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "minLength": 1,
+              "type": "string",
+            },
+            "summary": {
+              "description": "What changed in this file and why. One or two sentences, concrete — not 'updated foo'.",
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+          "required": [
+            "path",
+            "summary",
+          ],
+          "type": "object",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "implementation_approach": {
+        "description": "The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.",
+        "minLength": 40,
+        "type": "string",
+      },
+    },
+    "required": [
+      "files_changed",
+      "checks_run",
+      "implementation_approach",
+      "design_decisions",
+      "blockers",
+    ],
+    "type": "object",
+  },
+  "memory": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "anyOf": [
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "search",
+            "type": "string",
+          },
+          "maxResults": {
+            "description": "Max results",
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer",
+          },
+          "minScore": {
+            "description": "Min relevance score 0-1",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number",
+          },
+          "query": {
+            "description": "Search query — keywords, phrases, or a question about past knowledge",
+            "type": "string",
+          },
+          "scope": {
+            "description": "Which memory scope to search",
+            "enum": [
+              "all",
+              "global",
+              "session",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "query",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "get",
+            "type": "string",
+          },
+          "fileId": {
+            "description": "Memory file ID to retrieve",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "fileId",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "write",
+            "type": "string",
+          },
+          "content": {
+            "description": "Markdown content to save. Use ## headings to organize sections.",
+            "type": "string",
+          },
+          "key": {
+            "description": "Stable identifier for idempotent upserts (same key + scope + kind → overwrite existing entry). Use 'credential:<name>', 'tool:<name>', 'error:<short-id>' for the always-save categories.",
+            "type": "string",
+          },
+          "kind": {
+            "description": "Memory kind. Use lesson/fact/profile for atomic long-term memory and episode for summaries.",
+            "enum": [
+              "note",
+              "episode",
+              "fact",
+              "lesson",
+              "profile",
+            ],
+            "type": "string",
+          },
+          "scope": {
+            "description": "Storage scope",
+            "enum": [
+              "global",
+              "session",
+            ],
+            "type": "string",
+          },
+          "title": {
+            "description": "Short descriptive title (e.g. 'Project architecture decisions')",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "title",
+          "content",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "list",
+            "type": "string",
+          },
+          "scope": {
+            "description": "Which memory scope to list",
+            "enum": [
+              "all",
+              "global",
+              "session",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "delete",
+            "type": "string",
+          },
+          "fileId": {
+            "description": "Memory file ID to delete",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "fileId",
+        ],
+        "type": "object",
+      },
+    ],
+  },
+  "panel": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "anyOf": [
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "view_plan",
+            "type": "string",
+          },
+          "taskID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "taskID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "view_board",
+            "type": "string",
+          },
+          "taskID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "view_tasks",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "create_task",
+            "type": "string",
+          },
+          "allow_create": {
+            "type": "boolean",
+          },
+          "channel": {
+            "type": "string",
+          },
+          "checks": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact": {
+                "additionalProperties": false,
+                "properties": {
+                  "min_changed_files": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "require_changed_files": {
+                    "type": "boolean",
+                  },
+                  "require_diff": {
+                    "type": "boolean",
+                  },
+                  "require_summary": {
+                    "type": "boolean",
+                  },
+                },
+                "type": "object",
+              },
+              "build": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  {
+                    "const": false,
+                    "type": "boolean",
+                  },
+                ],
+              },
+              "code_quality": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                  },
+                  "max_diffs": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "code_review": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                  },
+                  "max_diffs": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "custom": {
+                "additionalProperties": {
+                  "additionalProperties": {},
+                  "propertyNames": {
+                    "type": "string",
+                  },
+                  "type": "object",
+                },
+                "propertyNames": {
+                  "type": "string",
+                },
+                "type": "object",
+              },
+              "dead_code_review": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                  },
+                  "max_diffs": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "judge": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "lint": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  {
+                    "const": false,
+                    "type": "boolean",
+                  },
+                ],
+              },
+              "named": {
+                "additionalProperties": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "commands": {
+                      "items": {
+                        "minLength": 1,
+                        "type": "string",
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                    "cwd": {
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "enabled": {
+                      "type": "boolean",
+                    },
+                    "family": {
+                      "enum": [
+                        "build",
+                        "test",
+                        "lint",
+                        "verify_cmd",
+                      ],
+                      "type": "string",
+                    },
+                    "label": {
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "commands",
+                  ],
+                  "type": "object",
+                },
+                "propertyNames": {
+                  "type": "string",
+                },
+                "type": "object",
+              },
+              "puppeteer": {
+                "additionalProperties": false,
+                "properties": {
+                  "browser": {
+                    "enum": [
+                      "chrome",
+                      "edge",
+                      "chromium",
+                    ],
+                    "type": "string",
+                  },
+                  "executable_path": {
+                    "type": "string",
+                  },
+                  "full_page": {
+                    "type": "boolean",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "require_text": {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  "require_title": {
+                    "type": "string",
+                  },
+                  "target": {
+                    "const": "web",
+                    "type": "string",
+                  },
+                  "timeout_ms": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string",
+                  },
+                  "viewport": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "height": {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer",
+                      },
+                      "width": {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer",
+                      },
+                    },
+                    "type": "object",
+                  },
+                  "wait_for_selector": {
+                    "type": "string",
+                  },
+                  "wait_for_text": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "target",
+                  "url",
+                ],
+                "type": "object",
+              },
+              "spec_check": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "startup": {
+                "additionalProperties": false,
+                "properties": {
+                  "command": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "ready_text": {
+                    "type": "string",
+                  },
+                  "ready_url": {
+                    "format": "uri",
+                    "type": "string",
+                  },
+                  "require_exit_zero": {
+                    "type": "boolean",
+                  },
+                  "timeout_ms": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "warmup_ms": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                },
+                "required": [
+                  "command",
+                ],
+                "type": "object",
+              },
+              "test": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  {
+                    "const": false,
+                    "type": "boolean",
+                  },
+                ],
+              },
+              "timeout_ms": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer",
+              },
+              "ui_review": {
+                "additionalProperties": false,
+                "properties": {
+                  "focus": {
+                    "items": {
+                      "enum": [
+                        "layout",
+                        "hierarchy",
+                        "clarity",
+                        "navigation",
+                        "feedback",
+                        "accessibility",
+                      ],
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                  "target": {
+                    "const": "web",
+                    "type": "string",
+                  },
+                  "timeout_ms": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "target",
+                ],
+                "type": "object",
+              },
+              "verify_cmd": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  {
+                    "const": false,
+                    "type": "boolean",
+                  },
+                ],
+              },
+              "visual": {
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "require_text": {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  "require_title": {
+                    "type": "string",
+                  },
+                  "target": {
+                    "const": "web",
+                    "type": "string",
+                  },
+                  "timeout_ms": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "target",
+                  "url",
+                ],
+                "type": "object",
+              },
+            },
+            "type": "object",
+          },
+          "executor": {
+            "enum": [
+              "mirrorcode",
+              "codex",
+              "claude-code",
+            ],
+            "type": "string",
+          },
+          "metadata": {
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string",
+            },
+            "type": "object",
+          },
+          "platform": {
+            "enum": [
+              "slack",
+              "telegram",
+              "discord",
+              "feishu",
+              "whatsapp",
+              "googlechat",
+              "msteams",
+              "line",
+              "matrix",
+              "mattermost",
+              "signal",
+              "wecom",
+              "dingtalk",
+              "qq",
+            ],
+            "type": "string",
+          },
+          "request": {
+            "type": "string",
+          },
+          "request_id": {
+            "type": "string",
+          },
+          "routing": {
+            "additionalProperties": false,
+            "properties": {
+              "evaluation": {
+                "enum": [
+                  "opencorvus",
+                  "hybrid",
+                ],
+                "type": "string",
+              },
+              "plan": {
+                "enum": [
+                  "opencorvus",
+                  "executor",
+                ],
+                "type": "string",
+              },
+              "spec": {
+                "enum": [
+                  "opencorvus",
+                  "executor",
+                ],
+                "type": "string",
+              },
+            },
+            "type": "object",
+          },
+          "source": {
+            "type": "string",
+          },
+          "thread": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "request",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "send_task_message",
+            "type": "string",
+          },
+          "source": {
+            "type": "string",
+          },
+          "taskID": {
+            "type": "string",
+          },
+          "text": {
+            "type": "string",
+          },
+          "user_id": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "taskID",
+          "text",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "reply_interaction",
+            "type": "string",
+          },
+          "interactionID": {
+            "type": "string",
+          },
+          "message": {
+            "type": "string",
+          },
+          "reply": {
+            "enum": [
+              "once",
+              "always",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "interactionID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "reject_interaction",
+            "type": "string",
+          },
+          "interactionID": {
+            "type": "string",
+          },
+          "message": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "interactionID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "retry_task",
+            "type": "string",
+          },
+          "taskID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "taskID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "replan_task",
+            "type": "string",
+          },
+          "taskID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "taskID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "cancel_task",
+            "type": "string",
+          },
+          "taskID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "taskID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "update_checks",
+            "type": "string",
+          },
+          "checks": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact": {
+                "additionalProperties": false,
+                "properties": {
+                  "min_changed_files": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "require_changed_files": {
+                    "type": "boolean",
+                  },
+                  "require_diff": {
+                    "type": "boolean",
+                  },
+                  "require_summary": {
+                    "type": "boolean",
+                  },
+                },
+                "type": "object",
+              },
+              "build": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  {
+                    "const": false,
+                    "type": "boolean",
+                  },
+                ],
+              },
+              "code_quality": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                  },
+                  "max_diffs": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "code_review": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                  },
+                  "max_diffs": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "custom": {
+                "additionalProperties": {
+                  "additionalProperties": {},
+                  "propertyNames": {
+                    "type": "string",
+                  },
+                  "type": "object",
+                },
+                "propertyNames": {
+                  "type": "string",
+                },
+                "type": "object",
+              },
+              "dead_code_review": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                  },
+                  "max_diffs": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "judge": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "lint": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  {
+                    "const": false,
+                    "type": "boolean",
+                  },
+                ],
+              },
+              "named": {
+                "additionalProperties": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "commands": {
+                      "items": {
+                        "minLength": 1,
+                        "type": "string",
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                    "cwd": {
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "enabled": {
+                      "type": "boolean",
+                    },
+                    "family": {
+                      "enum": [
+                        "build",
+                        "test",
+                        "lint",
+                        "verify_cmd",
+                      ],
+                      "type": "string",
+                    },
+                    "label": {
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "commands",
+                  ],
+                  "type": "object",
+                },
+                "propertyNames": {
+                  "type": "string",
+                },
+                "type": "object",
+              },
+              "puppeteer": {
+                "additionalProperties": false,
+                "properties": {
+                  "browser": {
+                    "enum": [
+                      "chrome",
+                      "edge",
+                      "chromium",
+                    ],
+                    "type": "string",
+                  },
+                  "executable_path": {
+                    "type": "string",
+                  },
+                  "full_page": {
+                    "type": "boolean",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "require_text": {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  "require_title": {
+                    "type": "string",
+                  },
+                  "target": {
+                    "const": "web",
+                    "type": "string",
+                  },
+                  "timeout_ms": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string",
+                  },
+                  "viewport": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "height": {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer",
+                      },
+                      "width": {
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer",
+                      },
+                    },
+                    "type": "object",
+                  },
+                  "wait_for_selector": {
+                    "type": "string",
+                  },
+                  "wait_for_text": {
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "target",
+                  "url",
+                ],
+                "type": "object",
+              },
+              "spec_check": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+              "startup": {
+                "additionalProperties": false,
+                "properties": {
+                  "command": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "ready_text": {
+                    "type": "string",
+                  },
+                  "ready_url": {
+                    "format": "uri",
+                    "type": "string",
+                  },
+                  "require_exit_zero": {
+                    "type": "boolean",
+                  },
+                  "timeout_ms": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "warmup_ms": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                },
+                "required": [
+                  "command",
+                ],
+                "type": "object",
+              },
+              "test": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  {
+                    "const": false,
+                    "type": "boolean",
+                  },
+                ],
+              },
+              "timeout_ms": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer",
+              },
+              "ui_review": {
+                "additionalProperties": false,
+                "properties": {
+                  "focus": {
+                    "items": {
+                      "enum": [
+                        "layout",
+                        "hierarchy",
+                        "clarity",
+                        "navigation",
+                        "feedback",
+                        "accessibility",
+                      ],
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "type": "string",
+                  },
+                  "target": {
+                    "const": "web",
+                    "type": "string",
+                  },
+                  "timeout_ms": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "target",
+                ],
+                "type": "object",
+              },
+              "verify_cmd": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  {
+                    "const": false,
+                    "type": "boolean",
+                  },
+                ],
+              },
+              "visual": {
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "soft",
+                      "strict",
+                    ],
+                    "type": "string",
+                  },
+                  "require_text": {
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                  "require_title": {
+                    "type": "string",
+                  },
+                  "target": {
+                    "const": "web",
+                    "type": "string",
+                  },
+                  "timeout_ms": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer",
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "target",
+                  "url",
+                ],
+                "type": "object",
+              },
+            },
+            "type": "object",
+          },
+          "selection": {
+            "additionalProperties": {
+              "type": "boolean",
+            },
+            "propertyNames": {
+              "type": "string",
+            },
+            "type": "object",
+          },
+          "taskID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "taskID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "capture_overlay_screenshot",
+            "type": "string",
+          },
+          "match": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "set_executor",
+            "type": "string",
+          },
+          "executor": {
+            "enum": [
+              "mirrorcode",
+              "codex",
+              "claude-code",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "executor",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "select_task",
+            "type": "string",
+          },
+          "taskID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "taskID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "select_session",
+            "type": "string",
+          },
+          "sessionID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "sessionID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "create_session",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "fork_session",
+            "type": "string",
+          },
+          "sessionID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "sessionID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "delete_session",
+            "type": "string",
+          },
+          "sessionID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "sessionID",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "acceptance_specs": {
+            "items": {},
+            "minItems": 1,
+            "type": "array",
+          },
+          "action": {
+            "const": "update_goal",
+            "type": "string",
+          },
+          "description": {
+            "type": "string",
+          },
+          "goalID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "goalID",
+          "description",
+          "acceptance_specs",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "delete_goal",
+            "type": "string",
+          },
+          "goalID": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "goalID",
+        ],
+        "type": "object",
+      },
+    ],
+  },
+  "planner": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "anyOf": [
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "add_task",
+            "type": "string",
+          },
+          "goal": {
+            "description": "What this task should accomplish",
+            "type": "string",
+          },
+          "parentId": {
+            "description": "Parent task ID for subtasks",
+            "type": "string",
+          },
+          "priority": {
+            "description": "Priority 0-10 (higher = more important)",
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer",
+          },
+        },
+        "required": [
+          "action",
+          "goal",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "update_task",
+            "type": "string",
+          },
+          "notes": {
+            "description": "Update task notes",
+            "type": "string",
+          },
+          "progressPct": {
+            "description": "Progress percentage 0-100",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "blocked",
+              "cancelled",
+            ],
+            "type": "string",
+          },
+          "taskId": {
+            "description": "Task ID to update",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "taskId",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "list_tasks",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "scratchpad_write",
+            "type": "string",
+          },
+          "content": {
+            "description": "Content to write (replaces existing)",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "content",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "scratchpad_append",
+            "type": "string",
+          },
+          "content": {
+            "description": "Content to append",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "content",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "scratchpad_read",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+    ],
+  },
+  "read": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "filePath": {
+        "description": "The absolute path to the file or directory to read",
+        "type": "string",
+      },
+      "limit": {
+        "description": "The maximum number of lines to read (defaults to 2000)",
+        "type": "number",
+      },
+      "offset": {
+        "description": "The line number to start reading from (1-indexed)",
+        "type": "number",
+      },
+    },
+    "required": [
+      "filePath",
+    ],
+    "type": "object",
+  },
+  "schedule": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "anyOf": [
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "create",
+            "type": "string",
+          },
+          "name": {
+            "description": "Short name for the task",
+            "type": "string",
+          },
+          "oneShot": {
+            "description": "Execute once (default: true for intervals, false for cron)",
+            "type": "boolean",
+          },
+          "prompt": {
+            "description": "The instruction to execute when triggered",
+            "type": "string",
+          },
+          "schedule": {
+            "description": "Cron expression ('0 9 * * *') or interval ('30m', '2h', '1d')",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "name",
+          "schedule",
+          "prompt",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "list",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "cancel",
+            "type": "string",
+          },
+          "jobId": {
+            "description": "The ID of the scheduled task to cancel",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "jobId",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "create_event",
+            "type": "string",
+          },
+          "cooldownMs": {
+            "description": "Minimum ms between runs for this job",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "eventType": {
+            "description": "Bus event type wildcard (for example: 'command.*' or 'session.updated')",
+            "type": "string",
+          },
+          "match": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                },
+                {
+                  "type": "number",
+                },
+                {
+                  "type": "boolean",
+                },
+              ],
+            },
+            "description": "Optional event property matcher, e.g. {'properties.name':'init'}",
+            "propertyNames": {
+              "type": "string",
+            },
+            "type": "object",
+          },
+          "name": {
+            "description": "Short name for the event task",
+            "type": "string",
+          },
+          "oneShot": {
+            "default": false,
+            "description": "Execute only once",
+            "type": "boolean",
+          },
+          "prompt": {
+            "description": "The instruction to execute when the event matches",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "name",
+          "eventType",
+          "prompt",
+          "oneShot",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "list_event",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "cancel_event",
+            "type": "string",
+          },
+          "jobId": {
+            "description": "The ID of the event task to cancel",
+            "type": "string",
+          },
+        },
+        "required": [
+          "action",
+          "jobId",
+        ],
+        "type": "object",
+      },
+    ],
+  },
+  "search_code": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "include": {
+        "description": "File pattern to include in the search (e.g. "*.js", "*.{ts,tsx}")",
+        "type": "string",
+      },
+      "path": {
+        "description": "The directory to search in. Defaults to the current working directory.",
+        "type": "string",
+      },
+      "pattern": {
+        "description": "The regex pattern to search for in file contents",
+        "type": "string",
+      },
+    },
+    "required": [
+      "pattern",
+    ],
+    "type": "object",
+  },
+  "skill": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "name": {
+        "description": "The name of the skill from available_skills (e.g., 'webpage-generate', 'image-generate', 'figma-generate', ...)",
+        "type": "string",
+      },
+    },
+    "required": [
+      "name",
+    ],
+    "type": "object",
+  },
+  "task": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "command": {
+        "description": "The command that triggered this task",
+        "type": "string",
+      },
+      "description": {
+        "description": "A short (3-5 words) description of the task",
+        "type": "string",
+      },
+      "prompt": {
+        "description": "The task for the agent to perform",
+        "type": "string",
+      },
+      "subagent_type": {
+        "description": "The type of specialized agent to use for this task",
+        "type": "string",
+      },
+      "task_id": {
+        "description": "This should only be set if you mean to resume a previous task (you can pass a prior task_id and the task will continue the same subagent session as before instead of creating a fresh one)",
+        "type": "string",
+      },
+    },
+    "required": [
+      "description",
+      "prompt",
+      "subagent_type",
+    ],
+    "type": "object",
+  },
+  "task_report": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "artifacts": {
+        "description": "Files created or modified (when status=done)",
+        "items": {
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "error": {
+        "description": "Error details (when status=failed)",
+        "type": "string",
+      },
+      "next_plan": {
+        "description": "What to do in the next turn (when status=progress)",
+        "type": "string",
+      },
+      "question": {
+        "description": "Question for the user (required when status=need_input)",
+        "type": "string",
+      },
+      "status": {
+        "description": "progress=more turns needed | need_input=waiting for user | done=complete | failed=error",
+        "enum": [
+          "progress",
+          "need_input",
+          "done",
+          "failed",
+        ],
+        "type": "string",
+      },
+      "summary": {
+        "description": "What happened this turn, or the final result",
+        "type": "string",
+      },
+    },
+    "required": [
+      "status",
+      "summary",
+    ],
+    "type": "object",
+  },
+  "todoread": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object",
+  },
+  "todowrite": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "todos": {
+        "description": "The updated todo list",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "description": "Brief description of the task",
+              "type": "string",
+            },
+            "priority": {
+              "description": "Priority level of the task: high, medium, low",
+              "type": "string",
+            },
+            "status": {
+              "description": "Current status of the task: pending, in_progress, completed, cancelled",
+              "type": "string",
+            },
+          },
+          "required": [
+            "content",
+            "status",
+            "priority",
+          ],
+          "type": "object",
+        },
+        "type": "array",
+      },
+    },
+    "required": [
+      "todos",
+    ],
+    "type": "object",
+  },
+  "webfetch": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "format": {
+        "default": "markdown",
+        "description": "The format to return the content in (text, markdown, or html). Defaults to markdown.",
+        "enum": [
+          "text",
+          "markdown",
+          "html",
+        ],
+        "type": "string",
+      },
+      "timeout": {
+        "description": "Optional timeout in seconds (max 120)",
+        "type": "number",
+      },
+      "url": {
+        "description": "The URL to fetch content from",
+        "type": "string",
+      },
+    },
+    "required": [
+      "url",
+      "format",
+    ],
+    "type": "object",
+  },
+  "websearch": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "contextMaxCharacters": {
+        "description": "Maximum characters for context string optimized for LLMs",
+        "type": "number",
+      },
+      "livecrawl": {
+        "default": "fallback",
+        "description": "Live crawl mode - 'fallback': use live crawling as backup if cached content unavailable, 'preferred': prioritize live crawling",
+        "enum": [
+          "fallback",
+          "preferred",
+        ],
+        "type": "string",
+      },
+      "numResults": {
+        "description": "Number of search results to return",
+        "type": "number",
+      },
+      "query": {
+        "description": "Websearch query",
+        "type": "string",
+      },
+      "type": {
+        "description": "Search type - 'auto': balanced search, 'fast': quick results, 'deep': comprehensive search",
+        "enum": [
+          "auto",
+          "fast",
+          "deep",
+        ],
+        "type": "string",
+      },
+    },
+    "required": [
+      "query",
+      "livecrawl",
+    ],
+    "type": "object",
+  },
+  "write": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "content": {
+        "description": "The content to write to the file",
+        "type": "string",
+      },
+      "filePath": {
+        "description": "The absolute path to the file to write (must be absolute, not relative)",
+        "type": "string",
+      },
+    },
+    "required": [
+      "content",
+      "filePath",
+    ],
+    "type": "object",
+  },
+}
+`;

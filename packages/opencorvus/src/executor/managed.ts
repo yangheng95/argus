@@ -1,10 +1,26 @@
 import { Identifier } from "@/id/id"
 import { Snapshot } from "@/snapshot"
 import { Log } from "@/util/log"
-import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingToolInfo, type ExecutorStatusInfo } from "./compat"
-import type { ExecutorAdapter } from "./compat"
+import { createEventQueue, type EventQueue } from "@/util/event-queue"
+import { EngineConfig } from "@/engine/config"
+import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingProviderOptions, type ExecutorStatusInfo } from "./contract"
+import type { ExecutorAdapter } from "./contract"
 
 const log = Log.create({ service: "managed-executor" })
+
+/**
+ * Render an Error as `name: message | caused by: name: message | …` so the
+ * inline state.error string preserves the upstream cause instead of
+ * collapsing to the wrapper's message. The full stack still goes to the
+ * file log via Log.formatError; this string is what overlay/status feeds
+ * surface in-line.
+ */
+function formatErrorChain(err: unknown, depth = 0): string {
+  if (!(err instanceof Error)) return String(err)
+  const head = err.message ? `${err.name}: ${err.message}` : err.name
+  if (!(err.cause instanceof Error) || depth >= 5) return head
+  return `${head} | caused by: ${formatErrorChain(err.cause, depth + 1)}`
+}
 
 type Status = Exclude<ExecutorStatusInfo, "blocked">
 type Notify = {
@@ -20,8 +36,12 @@ type State = {
   status: Status
   error: string | null
   output: string
+  /** Replay buffer (newest tail). Live consumers pull through `consumers`. */
   events: Notify[]
-  wake?: () => void
+  /** Active event-queue consumers. push() fans out to each; terminal status
+   *  broadcasts complete() to all. Single-source wait-loop lives in the
+   *  queues themselves (util/event-queue.ts) — no hand-rolled while/wake here. */
+  consumers: Set<EventQueue<Notify>>
   abort: AbortController
   startHash?: string
 }
@@ -29,24 +49,18 @@ type State = {
 export const ManagedCodingExecutor = {
   create(
     provider: CodingProvider,
-    options: {
-      model?: string | (() => string | undefined)
-      cwd?: string | (() => string | undefined)
-      system?: string | (() => string | undefined)
-      maxTurns?: number | (() => number | undefined)
-      tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
-    },
+    options: CodingProviderOptions,
   ): ExecutorAdapter {
     const tasks = new Map<string, State>()
     const latest = new Map<string, string>()
 
-    const start = (state: State, mode: "run" | "resume", prompt: string, cwdOverride?: string) => {
+    const start = (state: State, mode: "run" | "resume", prompt: string, cwdOverride?: string, systemOverride?: string) => {
       const resolvedCwd = cwdOverride ?? value(options.cwd)
       const input = {
         model: value(options.model),
         prompt,
         cwd: resolvedCwd,
-        system: value(options.system),
+        system: systemOverride ?? value(options.system),
         maxTurns: value(options.maxTurns),
         tools: value(options.tools),
         signal: state.abort.signal,
@@ -73,7 +87,16 @@ export const ManagedCodingExecutor = {
       consume(stream, state, latest).catch((err) => {
         if (state.status !== "failed" && state.status !== "completed" && !state.abort.signal.aborted) {
           state.status = "failed"
-          state.error = err instanceof Error ? err.message : String(err)
+          state.error = formatErrorChain(err)
+          // Log the raw Error so Log.formatError walks the .cause chain into
+          // the file log. The state.error string only carries message + first
+          // cause, which is what downstream consumers (overlay, status feeds)
+          // can render inline.
+          log.error("managed executor stream errored", {
+            sessionID: state.sessionID,
+            queueTaskID: state.id,
+            error: err,
+          })
           push(state, {
             type: "session.error",
             summary: state.error,
@@ -83,6 +106,14 @@ export const ManagedCodingExecutor = {
               error: state.error,
             },
           })
+          completeConsumers(state)
+        }
+      }).finally(() => {
+        // consume() may land in terminal status via its own "done" / "error"
+        // branches without going through the catch above; mirror the broadcast
+        // so consumer iterables always exit.
+        if (state.status === "completed" || state.status === "failed") {
+          completeConsumers(state)
         }
       })
     }
@@ -108,6 +139,7 @@ export const ManagedCodingExecutor = {
           error: null,
           output: "",
           events: [],
+          consumers: new Set(),
           abort: new AbortController(),
           startHash,
         }
@@ -122,7 +154,7 @@ export const ManagedCodingExecutor = {
             status: "queued",
           },
         })
-        start(state, "run", input.prompt, input.cwd)
+        start(state, "run", input.prompt, input.cwd, input.system)
         return {
           sessionID: input.sessionID,
           queueTaskID: id,
@@ -153,6 +185,7 @@ export const ManagedCodingExecutor = {
             error: "task cancelled",
           },
         })
+        completeConsumers(state)
         return true
       },
       async delivery(input) {
@@ -178,6 +211,7 @@ export const ManagedCodingExecutor = {
           error: null,
           output: "",
           events: [],
+          consumers: new Set(),
           abort: new AbortController(),
         }
         tasks.set(id, state)
@@ -210,36 +244,27 @@ export const ManagedCodingExecutor = {
         })
       },
       async *events(input) {
-        const MAX_IDLE_MS = 30 * 60 * 1000 // 30 minutes max idle before giving up
         const state = pick(tasks, latest, input)
         if (!state) return
-        let index = 0
-        const abort = () => {
-          state.wake?.()
+        const cfg = await EngineConfig.get()
+        const queue = createEventQueue<Notify>({
+          idleMs: cfg.activity.executor_events_idle_ms,
+          signal: input.signal,
+          label: `managed-executor:${state.id}`,
+        })
+        // Replay buffered history first. Terminal-status tasks never push
+        // again, so `complete()` after replay is correct.
+        for (const ev of state.events) queue.push(ev)
+        if (state.status === "completed" || state.status === "failed") {
+          queue.complete()
+        } else {
+          state.consumers.add(queue)
         }
-        input.signal?.addEventListener("abort", abort)
         try {
-          while (true) {
-            while (index < state.events.length) {
-              yield state.events[index]!
-              index += 1
-            }
-            if (input.signal?.aborted) return
-            if (state.status === "completed" || state.status === "failed") return
-            // Wait for new events with idle timeout protection
-            const idled = await Promise.race([
-              new Promise<false>((resolve) => {
-                state.wake = () => resolve(false)
-              }),
-              new Promise<true>((resolve) =>
-                setTimeout(() => resolve(true), MAX_IDLE_MS),
-              ),
-            ])
-            state.wake = undefined
-            if (idled) return // idle timeout — stop event stream
-          }
+          yield* queue.iterable
         } finally {
-          input.signal?.removeEventListener("abort", abort)
+          state.consumers.delete(queue)
+          queue.complete()
         }
       },
       planningCapabilities() {
@@ -372,7 +397,18 @@ function sync(state: State, event: CodingEventInfo) {
 
 function push(state: State, event: Notify) {
   state.events.push(event)
-  state.wake?.()
+  for (const consumer of state.consumers) consumer.push(event)
+}
+
+/**
+ * Finalize all active event-queue consumers. Call this after writing
+ * `state.status = "completed" | "failed"` so consumer iterables drain
+ * buffered events and exit cleanly — no hand-rolled wake dance here,
+ * the queue does it.
+ */
+function completeConsumers(state: State) {
+  for (const consumer of state.consumers) consumer.complete()
+  state.consumers.clear()
 }
 
 function map(state: State, event: CodingEventInfo): Notify {

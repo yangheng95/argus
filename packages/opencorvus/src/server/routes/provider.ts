@@ -4,10 +4,10 @@ import z from "zod"
 import { streamText } from "ai"
 import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
+import { Agent } from "../../agent/agent"
 import { ModelsDev } from "../../provider/models"
 import { ProviderAuth } from "../../provider/auth"
 import { Auth } from "../../auth"
-import { mapValues } from "remeda"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -41,7 +41,10 @@ export const ProviderRoutes = lazy(() =>
         const disabled = new Set(config.disabled_providers ?? [])
         const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 
-        const allProviders = await ModelsDev.get()
+        // Sourced from the augmented provider database so built-ins
+        // registered outside models.dev (hexin) are visible in the
+        // catalog even when the operator has not configured a key.
+        const allProviders = await Provider.database()
         const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
         for (const [key, value] of Object.entries(allProviders)) {
           if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) {
@@ -50,10 +53,7 @@ export const ProviderRoutes = lazy(() =>
         }
 
         const connected = await Provider.list()
-        const providers = Object.assign(
-          mapValues(filteredProviders, (x) => Provider.fromModelsDevProvider(x)),
-          connected,
-        )
+        const providers = Object.assign(filteredProviders, connected)
         return c.json({
           all: Object.values(providers),
           default: Object.fromEntries(
@@ -85,6 +85,80 @@ export const ProviderRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await ProviderAuth.methods())
+      },
+    )
+    .post(
+      "/refresh",
+      describeRoute({
+        summary: "Refresh the models.dev registry snapshot",
+        description:
+          "Pulls api.json from the configured registry URL and persists it to the per-instance cache; subsequent provider/model lookups use the new data. The CLI runtime never refreshes implicitly — UI button, `opencorvus models --refresh`, and this route are the three explicit entry points.",
+        operationId: "provider.refresh",
+        responses: {
+          200: {
+            description: "Refresh outcome",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.boolean(),
+                    fetchedAt: z.number().optional(),
+                    error: z.string().optional(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const result = await ModelsDev.refresh()
+        if (result.ok) {
+          // Provider/Agent caches captured the old catalog; reset so the
+          // refreshed list is visible to downstream callers immediately.
+          Provider.reset()
+          Agent.reset()
+        }
+        return c.json(result)
+      },
+    )
+    .post(
+      "/hexin/refresh",
+      describeRoute({
+        summary: "Refresh hexin gateway model list",
+        description:
+          "Force a re-fetch of the Hexin OpenAI Gateway /v1/models endpoint, bypassing the 24h cache, then reset provider state so downstream callers see the updated list.",
+        operationId: "provider.hexin.refresh",
+        responses: {
+          200: {
+            description: "Refresh result",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.boolean(),
+                    count: z.number(),
+                    ids: z.array(z.string()),
+                    error: z.string().optional(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        try {
+          const ids = await Provider.refreshHexin()
+          // Agent.state() captures the default haiku at construction — if the
+          // hexin model list changed, reset so the injected default picks up
+          // any renamed/removed haiku model on the next Agent.list() call.
+          Agent.reset()
+          return c.json({ ok: true, count: ids.length, ids })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return c.json({ ok: false, count: 0, ids: [], error: message })
+        }
       },
     )
     .post(

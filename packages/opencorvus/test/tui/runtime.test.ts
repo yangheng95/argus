@@ -26,7 +26,7 @@ describe("tui.runtime.submitTask", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const result = await TuiRuntime.submitTask({
           text: "queue from runtime",
           sessionID: session.id,

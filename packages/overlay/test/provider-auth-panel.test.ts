@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { launchBrowser } from "./launch"
+import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
 const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
@@ -11,6 +12,7 @@ type Calls = {
   authorize: Array<Record<string, unknown>>
   callback: Array<Record<string, unknown>>
   execute: Array<Record<string, unknown>>
+  configPatch: Array<Record<string, unknown>>
 }
 type HarnessData = {
   config: Record<string, unknown>
@@ -32,15 +34,7 @@ type HarnessData = {
   executors: unknown[]
 }
 
-const src = new URL("../src/", import.meta.url)
-const types = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-}
+await ensureOverlayDist()
 
 async function browser() {
   const list = [
@@ -83,6 +77,7 @@ async function withOverlay(data: HarnessData, handler: (input: {
     authorize: [],
     callback: [],
     execute: [],
+    configPatch: [],
   }
 
   const server = Bun.serve({
@@ -96,16 +91,8 @@ async function withOverlay(data: HarnessData, handler: (input: {
       if (path === "/ui" || path === "/ui/") {
         return Response.redirect(`${url.origin}/ui/index.html`, 302)
       }
-      if (path.startsWith("/ui/")) {
-        const name = decodeURIComponent(path.slice(4)) || "index.html"
-        if (name.includes("..")) return new Response("forbidden", { status: 403 })
-        const file = Bun.file(new URL(name, src))
-        if (!(await file.exists())) return new Response("not found", { status: 404 })
-        const type = types[name.slice(name.lastIndexOf(".")) as keyof typeof types] || "application/octet-stream"
-        return new Response(file, {
-          headers: { "content-type": type },
-        })
-      }
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks") return send({ tasks: [] })
       if (path === "/global/tasks") return send({ tasks: [] })
@@ -114,9 +101,23 @@ async function withOverlay(data: HarnessData, handler: (input: {
       if (path === "/vcs") return send(data.vcs)
       if (path === "/provider") return send(data.provider)
       if (path === "/provider/auth") return send(data.providerAuth)
+      if (path === "/agent") return send([])
+      if (path === "/config/providers") {
+        return send({
+          providers: data.provider.all.map((item: any) => ({
+            id: item.id,
+            name: item.name || item.id,
+            models: item.models || {},
+          })),
+          default: data.provider.default || {},
+        })
+      }
+      if (path === "/config/prompt") return send([])
       if (path === "/config" && req.method === "GET") return send(data.config)
       if (path === "/config" && req.method === "PATCH") {
-        data.config = await req.json()
+        const body = await req.json() as Record<string, unknown>
+        calls.configPatch.push(body)
+        data.config = body
         return send(data.config)
       }
       if (path === "/channel") return send(data.channels)
@@ -151,6 +152,7 @@ async function withOverlay(data: HarnessData, handler: (input: {
               return {
                 serverUrl,
                 autoServer: false,
+                directory: "D:/overlay/workspace/app",
               }
             }
             if (command === "overlay_settings_save") {
@@ -171,8 +173,6 @@ async function withOverlay(data: HarnessData, handler: (input: {
               close: async () => undefined,
               minimize: async () => undefined,
               startDragging: async () => undefined,
-              setAlwaysOnTop: async () => undefined,
-              isAlwaysOnTop: async () => false,
               isMaximized: async () => false,
               onResized: async () => ({ unlisten: async () => undefined }),
             }
@@ -191,12 +191,29 @@ async function withOverlay(data: HarnessData, handler: (input: {
 }
 
 async function openProviderSettings(tab: Page) {
-  await tab.click("#btnConfigToggle")
+  await tab.click('[data-menu-trigger="model"]')
+  await tab.waitForSelector('[data-testid="titlebar-open-providers"]')
+  await tab.click('[data-testid="titlebar-open-providers"]')
   await tab.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)
-  await tab.$eval("#llmAdvanced", (node) => {
-    ;(node as HTMLDetailsElement).open = true
-  })
-  await tab.waitForFunction(() => (document.querySelector("#llmAdvanced") as HTMLDetailsElement | null)?.open === true)
+  await tab.waitForSelector('[data-config-panel="providers"].active')
+}
+
+async function clickVisible(tab: Page, selector: string) {
+  await tab.waitForSelector(selector)
+  const point = await tab.evaluate((value) => {
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>(value))
+    const node = nodes.find((candidate) => {
+      const style = getComputedStyle(candidate)
+      const rect = candidate.getBoundingClientRect()
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
+    })
+    if (!node) return null
+    node.scrollIntoView({ block: "center", inline: "nearest" })
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }, selector)
+  if (!point) throw new Error(`No visible element for ${selector}`)
+  await tab.mouse.click(point.x, point.y)
 }
 
 async function dialogState(tab: Page) {
@@ -222,10 +239,21 @@ async function submitDialogInput(tab: Page, value: string) {
     (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true &&
     document.querySelector("#appDialogInputField")?.classList.contains("hidden") === false,
   )
+  const before = await tab.evaluate(() => ({
+    body: document.querySelector("#appDialogBody")?.textContent || "",
+    label: document.querySelector("#appDialogInputLabel")?.textContent || "",
+  }))
   await tab.click("#appDialogInput", { clickCount: 3 })
   await tab.type("#appDialogInput", value)
   await tab.click("#btnAppDialogOk")
-  await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open !== true)
+  await tab.waitForFunction((prev) => {
+    const dialog = document.querySelector("#appDialog") as HTMLDialogElement | null
+    if (dialog?.open !== true) return true
+    const inputVisible = document.querySelector("#appDialogInputField")?.classList.contains("hidden") === false
+    const body = document.querySelector("#appDialogBody")?.textContent || ""
+    const label = document.querySelector("#appDialogInputLabel")?.textContent || ""
+    return !inputVisible || body !== prev.body || label !== prev.label
+  }, {}, before)
 }
 
 async function submitDialogSelect(tab: Page, value: string) {
@@ -233,10 +261,141 @@ async function submitDialogSelect(tab: Page, value: string) {
     (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true &&
     document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === false,
   )
+  const before = await tab.evaluate(() => ({
+    body: document.querySelector("#appDialogBody")?.textContent || "",
+    label: document.querySelector("#appDialogSelectLabel")?.textContent || "",
+  }))
   await tab.select("#appDialogSelect", value)
   await tab.click("#btnAppDialogOk")
-  await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open !== true)
+  await tab.waitForFunction((prev) => {
+    const dialog = document.querySelector("#appDialog") as HTMLDialogElement | null
+    if (dialog?.open !== true) return true
+    const selectVisible = document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === false
+    const body = document.querySelector("#appDialogBody")?.textContent || ""
+    const label = document.querySelector("#appDialogSelectLabel")?.textContent || ""
+    return !selectVisible || body !== prev.body || label !== prev.label
+  }, {}, before)
 }
+
+test("provider settings search filters catalog and custom providers", async () => {
+  const data = {
+    config: {
+      model: "my-gateway/custom-fast",
+      provider: {
+        "my-gateway": {
+          name: "My Gateway",
+          api: "https://gateway.example.com/v1",
+          env: ["MY_GATEWAY_KEY"],
+          models: {
+            "custom-fast": { name: "Custom Fast", tool_call: true },
+          },
+        },
+      },
+    },
+    provider: {
+      all: [
+        {
+          id: "anthropic",
+          name: "Anthropic",
+          models: {
+            "claude-3-7-sonnet": {},
+          },
+          env: ["ANTHROPIC_API_KEY"],
+        },
+        {
+          id: "openai",
+          name: "OpenAI",
+          models: {
+            "gpt-4o-mini": {},
+          },
+          env: ["OPENAI_API_KEY"],
+        },
+      ],
+      connected: [] as string[],
+      default: {
+        anthropic: "claude-3-7-sonnet",
+        openai: "gpt-4o-mini",
+      },
+    },
+    providerAuth: {},
+    channels: [],
+    skills: [],
+    mcp: {},
+    memory: [],
+    preference: [],
+    path: {
+      directory: "D:/overlay/workspace/app",
+    },
+    vcs: {
+      branch: "dev",
+      clean: true,
+      dirty: false,
+      staged: 0,
+      modified: 0,
+      untracked: 0,
+      conflicts: 0,
+      ahead: 0,
+      behind: 0,
+    },
+    executors: [
+      {
+        id: "mirrorcode",
+        label: "OpenCorvus",
+        detail: "Bundled",
+        version: "0.0.1-alpha",
+        selectable: true,
+        discovered: true,
+      },
+    ],
+  }
+
+  await withOverlay(
+    data,
+    () => undefined,
+    async (tab) => {
+      await openProviderSettings(tab)
+      await tab.waitForSelector('[data-testid="provider-search-input"]')
+      await tab.waitForSelector('[data-testid="provider-custom-row-my-gateway"]')
+      await tab.waitForSelector('[data-testid="provider-catalog-row-anthropic"]')
+      await tab.waitForSelector('[data-testid="provider-catalog-row-openai"]')
+      const layout = await tab.evaluate(() => {
+        const content = document.querySelector("#configContent")!.getBoundingClientRect()
+        const toolbar = document.querySelector(".provider-toolbar")!.getBoundingClientRect()
+        const title = document.querySelector(".provider-toolbar-title")!.getBoundingClientRect()
+        const search = document.querySelector('[data-testid="provider-search-input"]')!.getBoundingClientRect()
+        const actions = document.querySelector(".provider-head-actions")!.getBoundingClientRect()
+        const save = document.querySelector('[data-testid="provider-api-key-save-anthropic"]')!.getBoundingClientRect()
+        return {
+          actionsRight: actions.right,
+          contentRight: content.right,
+          saveRight: save.right,
+          searchBottom: search.bottom,
+          searchRight: search.right,
+          searchTop: search.top,
+          titleBottom: title.bottom,
+          toolbarRight: toolbar.right,
+        }
+      })
+      expect(layout.actionsRight).toBeLessThanOrEqual(layout.toolbarRight + 1)
+      expect(layout.searchRight).toBeLessThanOrEqual(layout.contentRight + 1)
+      expect(layout.saveRight).toBeLessThanOrEqual(layout.contentRight + 1)
+      expect(layout.searchTop).toBeGreaterThanOrEqual(layout.titleBottom - 1)
+
+      await tab.type('[data-testid="provider-search-input"]', "claude")
+      await tab.waitForFunction(() =>
+        !!document.querySelector('[data-testid="provider-catalog-row-anthropic"]') &&
+        !document.querySelector('[data-testid="provider-catalog-row-openai"]') &&
+        !document.querySelector('[data-testid="provider-custom-row-my-gateway"]'),
+      )
+
+      await tab.click('[data-testid="provider-search-clear"]')
+      await tab.waitForFunction(() =>
+        !!document.querySelector('[data-testid="provider-catalog-row-openai"]') &&
+        !!document.querySelector('[data-testid="provider-custom-row-my-gateway"]'),
+      )
+    },
+  )
+}, { timeout: 60_000 })
 
 test("overlay oauth auth handles prompt-driven authorize flow and pasted redirect urls", async () => {
   const data = {
@@ -297,7 +456,7 @@ test("overlay oauth auth handles prompt-driven authorize flow and pasted redirec
     },
     executors: [
       {
-        id: "opencode",
+        id: "mirrorcode",
         label: "OpenCorvus",
         detail: "Bundled",
         version: "0.0.1-alpha",
@@ -384,40 +543,26 @@ test("overlay oauth auth handles prompt-driven authorize flow and pasted redirec
     },
     async (tab, state) => {
       await openProviderSettings(tab)
-      await tab.select("#llmProvider", "openai-codex")
-      // Auth dialog is not auto-triggered when configDialog is open (WebView2 modal stacking fix).
-      // Click the Connect button to initiate the auth flow.
-      await tab.waitForFunction(() => {
-        const button = document.querySelector("#btnLlmAuthAction") as HTMLButtonElement | null
-        return !!button && !button.disabled && !button.classList.contains("hidden")
-      })
-      await tab.$eval("#btnLlmAuthAction", (node) => { ;(node as HTMLButtonElement).click() })
+      await tab.waitForSelector('[data-testid="provider-auth-openai-codex"]')
+      await clickVisible(tab, '[data-testid="provider-auth-openai-codex"]')
       const firstDialog = await dialogState(tab)
       if (!firstDialog.inputVisible && !firstDialog.selectVisible) await acceptDialog(tab)
       await submitDialogSelect(tab, "manual")
       await submitDialogInput(tab, "overlay")
       await submitDialogInput(tab, "http://localhost:1455/auth/callback?code=oauth-code&state=overlay-state")
 
-      await tab.waitForFunction(() => {
-        const status = document.querySelector("#llmStatus")
-        return status?.getAttribute("data-status") === "active" && status?.getAttribute("title") === "Provider connected"
-      })
+      await acceptDialog(tab)
+      await tab.waitForFunction(() => document.body.textContent?.includes("Connected"))
 
       const result = await tab.evaluate(() => {
         const overlay = (window as typeof window & { __overlayTest: { open: string[] } }).__overlayTest
         return {
-          provider: (document.querySelector("#llmProvider") as HTMLSelectElement | null)?.value,
-          model: (document.querySelector("#llmModel") as HTMLSelectElement | null)?.value,
-          status: document.querySelector("#llmStatus")?.getAttribute("data-status"),
-          title: document.querySelector("#llmStatus")?.getAttribute("title"),
+          connectedText: document.body.textContent || "",
           opened: [...overlay.open],
         }
       })
 
-      expect(result.provider).toBe("openai-codex")
-      expect(result.model).toBe("gpt-5.4")
-      expect(result.status).toBe("active")
-      expect(result.title).toBe("Provider connected")
+      expect(result.connectedText).toContain("Connected")
       expect(result.opened).toContain("https://auth.openai.com/oauth/authorize?state=overlay-state")
       expect(state.calls.authorize).toEqual([
         {
@@ -497,7 +642,7 @@ test("overlay executes prompt-driven api auth methods without relying on tui", a
     },
     executors: [
       {
-        id: "opencode",
+        id: "mirrorcode",
         label: "OpenCorvus",
         detail: "Bundled",
         version: "0.0.1-alpha",
@@ -556,33 +701,19 @@ test("overlay executes prompt-driven api auth methods without relying on tui", a
     },
     async (tab, state) => {
       await openProviderSettings(tab)
-      await tab.select("#llmProvider", "custom-api")
-      await tab.waitForFunction(() => {
-        const button = document.querySelector("#btnLlmAuthAction") as HTMLButtonElement | null
-        return !!button && !button.disabled && !button.classList.contains("hidden")
-      })
-      await tab.$eval("#btnLlmAuthAction", (node) => {
-        ;(node as HTMLButtonElement).click()
-      })
+      await tab.waitForSelector('[data-testid="provider-auth-custom-api"]')
+      await clickVisible(tab, '[data-testid="provider-auth-custom-api"]')
       await submitDialogInput(tab, "team-a")
       await submitDialogSelect(tab, "eu")
 
-      await tab.waitForFunction(() => {
-        const status = document.querySelector("#llmStatus")
-        return status?.getAttribute("data-status") === "active" && status?.getAttribute("title") === "Provider connected"
-      })
+      await acceptDialog(tab)
+      await tab.waitForFunction(() => document.body.textContent?.includes("Connected"))
 
       const result = await tab.evaluate(() => ({
-        provider: (document.querySelector("#llmProvider") as HTMLSelectElement | null)?.value,
-        model: (document.querySelector("#llmModel") as HTMLSelectElement | null)?.value,
-        status: document.querySelector("#llmStatus")?.getAttribute("data-status"),
-        title: document.querySelector("#llmStatus")?.getAttribute("title"),
+        connectedText: document.body.textContent || "",
       }))
 
-      expect(result.provider).toBe("custom-api")
-      expect(result.model).toBe("model-1")
-      expect(result.status).toBe("active")
-      expect(result.title).toBe("Provider connected")
+      expect(result.connectedText).toContain("Connected")
       expect(state.calls.execute).toEqual([
         {
           method: 0,
@@ -592,6 +723,86 @@ test("overlay executes prompt-driven api auth methods without relying on tui", a
           },
         },
       ])
+    },
+  )
+}, { timeout: 60_000 })
+
+test("overlay saves provider API keys for catalog providers without auth plugins", async () => {
+  const data = {
+    config: {
+      model: "anthropic/claude-3-7-sonnet",
+    },
+    provider: {
+      all: [
+        {
+          id: "anthropic",
+          name: "Anthropic",
+          models: {
+            "claude-3-7-sonnet": {},
+          },
+          env: ["ANTHROPIC_API_KEY"],
+        },
+      ],
+      connected: [] as string[],
+      default: {
+        anthropic: "claude-3-7-sonnet",
+      },
+    },
+    providerAuth: {},
+    channels: [],
+    skills: [],
+    mcp: {},
+    memory: [],
+    preference: [],
+    path: {
+      directory: "D:/overlay/workspace/app",
+    },
+    vcs: {
+      branch: "dev",
+      clean: true,
+      dirty: false,
+      staged: 0,
+      modified: 0,
+      untracked: 0,
+      conflicts: 0,
+      ahead: 0,
+      behind: 0,
+    },
+    executors: [
+      {
+        id: "mirrorcode",
+        label: "OpenCorvus",
+        detail: "Bundled",
+        version: "0.0.1-alpha",
+        selectable: true,
+        discovered: true,
+      },
+    ],
+  }
+
+  await withOverlay(
+    data,
+    () => undefined,
+    async (tab, state) => {
+      await openProviderSettings(tab)
+      await tab.waitForSelector('[data-testid="provider-api-key-input-anthropic"]')
+      await tab.type('[data-testid="provider-api-key-input-anthropic"]', "sk-ant-test")
+      await clickVisible(tab, '[data-testid="provider-api-key-save-anthropic"]')
+      await tab.waitForFunction(() =>
+        (document.querySelector('[data-testid="provider-api-key-input-anthropic"]') as HTMLInputElement | null)?.value === "",
+      )
+      await tab.waitForSelector('[data-testid="provider-catalog-row-anthropic"]')
+
+      expect(state.calls.configPatch.at(-1)).toMatchObject({
+        provider: {
+          anthropic: {
+            options: {
+              apiKey: "sk-ant-test",
+            },
+          },
+        },
+      })
+      expect(await tab.$('[data-testid="provider-custom-row-anthropic"]')).toBeNull()
     },
   )
 }, { timeout: 60_000 })

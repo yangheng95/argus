@@ -1,36 +1,25 @@
 /**
- * Architect Agent types — cross-goal coordination contracts.
+ * Architect Agent types — authoritative goal decomposer.
  *
- * The Architect Agent sits between Decompose and Plan:
- * - Reads ALL GoalContracts (full set, not per-goal)
- * - Resolves abstract exports/imports into precise contracts
- * - Writes binding consensus to Decision Log
- * - Outputs ArchitectBlueprint for Planner context injection
+ * The Architect sits between Requirements and Dispatch. It reads the
+ * requirement list + foundational decisions, explores the codebase, and
+ * produces the final goal set along with traceability, fidelity coverage,
+ * assembly ownership, and cross-goal interface contracts. On a re-run (triggered
+ * by delivery/evaluation feedback) it also refines the existing goal set.
  */
-
-// ---------------------------------------------------------------------------
-// RecommendedNext — every sub-agent outputs call recommendations
-// ---------------------------------------------------------------------------
-
-/** A recommendation from a sub-agent for what the Task Agent should do next. */
-export interface RecommendedNext {
-  /** Target agent/tool name. */
-  agent: string
-  /** Arguments to pass (e.g., { goalID: "..." }). */
-  args?: Record<string, unknown>
-  /** Why this is recommended. */
-  reason: string
-  /** 0-1 confidence score. */
-  confidence: number
-  /** How strongly the agent recommends this action. */
-  priority: "required" | "suggested" | "optional"
-}
+import type { GoalContractFields } from "@/pipeline/types"
+import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
+import type {
+  AssemblyOwnerEntry,
+  ReferenceCoverageEntry,
+  SourceCoverageEntry,
+} from "./fidelity"
 
 // ---------------------------------------------------------------------------
 // Architect Decision Log key categories
 // ---------------------------------------------------------------------------
 
-/** The 6 key categories that Architect Agent writes to Decision Log. */
+/** The 6 key categories that Architect writes to the Decision Log. */
 export type ArchitectDecisionKey =
   | "directory_blueprint"
   | "interface_contract"
@@ -40,40 +29,77 @@ export type ArchitectDecisionKey =
   | "dependency_order"
 
 // ---------------------------------------------------------------------------
-// ArchitectBlueprint — structured summary injected into Planner context
+// ArchitectContract — one cross-goal consensus entry
 // ---------------------------------------------------------------------------
 
-/** A single contract entry resolved by the Architect Agent. */
 export interface ArchitectContract {
-  /** Which Decision Log key category this belongs to. */
   category: ArchitectDecisionKey
-  /** Human-readable title. */
   title: string
-  /** The precise specification (e.g., actual TypeScript interface code). */
   spec: string
-  /** Which goal IDs this contract relates to. */
   goalIDs: string[]
 }
 
+// ---------------------------------------------------------------------------
+// Traceability — REQ-N → goal mapping emitted by the Architect.
+// ---------------------------------------------------------------------------
+
+export interface TraceabilityEntry {
+  requirementID: string
+  goalIDs: string[]
+}
+
+export interface ArchitectFidelityCoverage {
+  sourceCoverage: SourceCoverageEntry[]
+  referenceCoverage: ReferenceCoverageEntry[]
+  assemblyOwners: AssemblyOwnerEntry[]
+}
+
+// ---------------------------------------------------------------------------
+// Re-run inputs — delivery/evaluation feedback that triggers refinement
+// ---------------------------------------------------------------------------
+
 /**
- * Structured output of the Architect Agent.
- * Injected into Planner context so each goal knows the precise cross-goal contracts.
+ * Context supplied by the Orchestrator when asking the Architect to refine
+ * an existing goal set after delivery rejection. The Architect may add,
+ * modify, split, or remove goals in response.
  */
-export interface ArchitectBlueprint {
-  /** All resolved contracts. */
+export interface ArchitectRetryContext {
+  previousGoals: Array<{
+    id: string
+    title: string
+    status: string
+    evidence: string
+  }>
+  failureAnalysis: {
+    classification: string
+    summary: string
+    rootCause: string
+    suggestedStrategy: string
+    avoidApproaches: string[]
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ArchitectResult — full return value
+// ---------------------------------------------------------------------------
+
+export interface ArchitectResult {
+  /** Final goal set produced by the architect agent. Architecture review is
+   *  advisory feedback recorded after Build; non-pass review routes rework to
+   *  affected goal IDs, but does not re-upsert or mutate this goal set by itself. */
+  goals: GoalContractFields[]
+  /** Goal IDs the Architect chose to drop during a re-run. */
+  removedGoalIDs: string[]
+  traceability: TraceabilityEntry[]
+  fidelity: ArchitectFidelityCoverage
+  /** Cross-goal interface contracts written to the Decision Log. */
   contracts: ArchitectContract[]
-  /** One-line summary of what was decided. */
+  /** One-line summary of what was decomposed and coordinated. */
   summary: string
 }
 
 // ---------------------------------------------------------------------------
-// ArchitectResult — full return value from Architect Agent
+// Re-export primitives the Architect receives from Requirements as input.
 // ---------------------------------------------------------------------------
 
-export interface ArchitectResult {
-  blueprint: ArchitectBlueprint
-  /** Number of Decision Log entries written. */
-  entriesWritten: number
-  /** Recommended next actions for Task Agent. */
-  recommendedNext: RecommendedNext[]
-}
+export type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"

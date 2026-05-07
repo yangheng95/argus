@@ -28,7 +28,7 @@ import {
   RGBA,
 } from "@opentui/core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@opencorvus-ai/sdk/v2"
+import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@opencorvus-ai/sdk"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
 import type { Tool } from "@/tool/tool"
@@ -37,7 +37,7 @@ import type { WriteTool } from "@/tool/write"
 import { BashTool } from "@/tool/bash"
 import type { GlobTool } from "@/tool/glob"
 import { TodoWriteTool } from "@/tool/todo"
-import type { GrepTool } from "@/tool/grep"
+import type { SearchCodeTool } from "@/tool/grep"
 import type { ListTool } from "@/tool/ls"
 import type { EditTool } from "@/tool/edit"
 import type { ApplyPatchTool } from "@/tool/apply_patch"
@@ -51,12 +51,10 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
 import { Header } from "./header"
-import { parsePatch } from "diff"
 import { useDialog } from "../../ui/dialog"
 import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
 import type { PromptInfo } from "../../component/prompt/history"
-import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
@@ -77,7 +75,6 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatMessage, formatTranscript } from "../../util/transcript"
-import { textForBoth, textForUI } from "@/session/part-visibility"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 
@@ -260,7 +257,7 @@ export function Session() {
         const parts = sync.data.part[message.id]
         if (!parts || !Array.isArray(parts)) return false
 
-        return parts.some((part) => part && part.type === "text" && textForBoth(part))
+        return parts.some((part) => part && part.type === "text")
       })
       .sort((a, b) => a.y - b.y)
 
@@ -429,24 +426,13 @@ export function Session() {
       onSelect: async (dialog) => {
         const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
-        const revert = session()?.revert?.messageID
-        const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
+        const message = messages().findLast((x) => x.role === "user")
         if (!message) return
-        sdk.client.session
-          .revert({
-            sessionID: route.sessionID,
-            messageID: message.id,
-          })
-          .then(() => {
-            toBottom()
-          })
         const parts = sync.data.part[message.id]
         prompt.set(
           parts.reduce(
             (agg, part) => {
-              if (part.type === "text") {
-                if (textForUI(part)) agg.input += part.text
-              }
+              if (part.type === "text") agg.input += part.text
               if (part.type === "file") agg.parts.push(part)
               return agg
             },
@@ -454,33 +440,6 @@ export function Session() {
           ),
         )
         dialog.clear()
-      },
-    },
-    {
-      title: "Redo",
-      value: "session.redo",
-      keybind: "messages_redo",
-      category: "Session",
-      enabled: !!session()?.revert?.messageID,
-      slash: {
-        name: "redo",
-      },
-      onSelect: (dialog) => {
-        dialog.clear()
-        const messageID = session()?.revert?.messageID
-        if (!messageID) return
-        const message = messages().find((x) => x.role === "user" && x.id > messageID)
-        if (!message) {
-          sdk.client.session.unrevert({
-            sessionID: route.sessionID,
-          })
-          prompt.set({ input: "", parts: [] })
-          return
-        }
-        sdk.client.session.revert({
-          sessionID: route.sessionID,
-          messageID: message.id,
-        })
       },
     },
     {
@@ -678,7 +637,7 @@ export function Session() {
           const parts = sync.data.part[message.id]
           if (!parts || !Array.isArray(parts)) continue
 
-          const hasValidTextPart = parts.some((part) => part && part.type === "text" && textForBoth(part))
+          const hasValidTextPart = parts.some((part) => part && part.type === "text")
 
           if (hasValidTextPart) {
             const child = scroll.getChildren().find((child) => {
@@ -712,10 +671,7 @@ export function Session() {
       keybind: "messages_copy",
       category: "Session",
       onSelect: (dialog) => {
-        const revertID = session()?.revert?.messageID
-        const lastAssistantMessage = messages().findLast(
-          (msg) => msg.role === "assistant" && (!revertID || msg.id < revertID),
-        )
+        const lastAssistantMessage = messages().findLast((msg) => msg.role === "assistant")
         if (!lastAssistantMessage) {
           toast.show({ message: "No assistant messages found", variant: "error" })
           dialog.clear()
@@ -872,53 +828,6 @@ export function Session() {
     },
   ])
 
-  const revertInfo = createMemo(() => session()?.revert)
-  const revertMessageID = createMemo(() => revertInfo()?.messageID)
-
-  const revertDiffFiles = createMemo(() => {
-    const diffText = revertInfo()?.diff ?? ""
-    if (!diffText) return []
-
-    try {
-      const patches = parsePatch(diffText)
-      return patches.map((patch) => {
-        const filename = patch.newFileName || patch.oldFileName || "unknown"
-        const cleanFilename = filename.replace(/^[ab]\//, "")
-        return {
-          filename: cleanFilename,
-          additions: patch.hunks.reduce(
-            (sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith("+")).length,
-            0,
-          ),
-          deletions: patch.hunks.reduce(
-            (sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith("-")).length,
-            0,
-          ),
-        }
-      })
-    } catch (error) {
-      return []
-    }
-  })
-
-  const revertRevertedMessages = createMemo(() => {
-    const messageID = revertMessageID()
-    if (!messageID) return []
-    return messages().filter((x) => x.id >= messageID && x.role === "user")
-  })
-
-  const revert = createMemo(() => {
-    const info = revertInfo()
-    if (!info) return
-    if (!info.messageID) return
-    return {
-      messageID: info.messageID,
-      reverted: revertRevertedMessages(),
-      diff: info.diff,
-      diffFiles: revertDiffFiles(),
-    }
-  })
-
   // snap to bottom when session changes
   createEffect(on(() => route.sessionID, toBottom))
 
@@ -967,70 +876,6 @@ export function Session() {
               <For each={messages()}>
                 {(message, index) => (
                   <Switch>
-                    <Match when={message.id === revert()?.messageID}>
-                      {(function () {
-                        const command = useCommandDialog()
-                        const [hover, setHover] = createSignal(false)
-                        const dialog = useDialog()
-
-                        const handleUnrevert = async () => {
-                          const confirmed = await DialogConfirm.show(
-                            dialog,
-                            "Confirm Redo",
-                            "Are you sure you want to restore the reverted messages?",
-                          )
-                          if (confirmed) {
-                            command.trigger("session.redo")
-                          }
-                        }
-
-                        return (
-                          <box
-                            onMouseOver={() => setHover(true)}
-                            onMouseOut={() => setHover(false)}
-                            onMouseUp={handleUnrevert}
-                            marginTop={1}
-                            flexShrink={0}
-                            border={["left"]}
-                            customBorderChars={SplitBorder.customBorderChars}
-                            borderColor={theme.backgroundPanel}
-                          >
-                            <box
-                              paddingTop={1}
-                              paddingBottom={1}
-                              paddingLeft={2}
-                              backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
-                            >
-                              <text fg={theme.textMuted}>{revert()!.reverted.length} message reverted</text>
-                              <text fg={theme.textMuted}>
-                                <span style={{ fg: theme.text }}>{keybind.print("messages_redo")}</span> or /redo to
-                                restore
-                              </text>
-                              <Show when={revert()!.diffFiles?.length}>
-                                <box marginTop={1}>
-                                  <For each={revert()!.diffFiles}>
-                                    {(file) => (
-                                      <text fg={theme.text}>
-                                        {file.filename}
-                                        <Show when={file.additions > 0}>
-                                          <span style={{ fg: theme.diffAdded }}> +{file.additions}</span>
-                                        </Show>
-                                        <Show when={file.deletions > 0}>
-                                          <span style={{ fg: theme.diffRemoved }}> -{file.deletions}</span>
-                                        </Show>
-                                      </text>
-                                    )}
-                                  </For>
-                                </box>
-                              </Show>
-                            </box>
-                          </box>
-                        )
-                      })()}
-                    </Match>
-                    <Match when={revert()?.messageID && message.id >= revert()!.messageID}>
-                      <></>
-                    </Match>
                     <Match when={message.role === "user"}>
                       <UserMessage
                         index={index()}
@@ -1202,7 +1047,7 @@ function UserMessage(props: {
 }) {
   const ctx = use()
   const local = useLocal()
-  const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" && textForUI(x) ? [x] : []))[0])
+  const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" ? [x] : []))[0])
   const files = createMemo(() => props.parts.flatMap((x) => (x.type === "file" ? [x] : [])))
   const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)
@@ -1359,7 +1204,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
               >
                 ▣{" "}
               </span>{" "}
-              <span style={{ fg: theme.text }}>{Locale.titlecase(props.message.mode)}</span>
+              <span style={{ fg: theme.text }}>{Locale.titlecase(props.message.agent || "assistant")}</span>
               <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
               <Show when={duration()}>
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
@@ -1495,8 +1340,8 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "read"}>
           <Read {...toolprops} />
         </Match>
-        <Match when={props.part.tool === "grep"}>
-          <Grep {...toolprops} />
+        <Match when={props.part.tool === "search_code"}>
+          <SearchCode {...toolprops} />
         </Match>
         <Match when={props.part.tool === "list"}>
           <List {...toolprops} />
@@ -1504,8 +1349,8 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "webfetch"}>
           <WebFetch {...toolprops} />
         </Match>
-        <Match when={props.part.tool === "codesearch"}>
-          <CodeSearch {...toolprops} />
+        <Match when={props.part.tool === "external_code_search"}>
+          <ExternalCodeSearch {...toolprops} />
         </Match>
         <Match when={props.part.tool === "websearch"}>
           <WebSearch {...toolprops} />
@@ -1842,10 +1687,10 @@ function Read(props: ToolProps<typeof ReadTool>) {
   )
 }
 
-function Grep(props: ToolProps<typeof GrepTool>) {
+function SearchCode(props: ToolProps<typeof SearchCodeTool>) {
   return (
     <InlineTool icon="✱" pending="Searching content..." complete={props.input.pattern} part={props.part}>
-      Grep "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
+      Search Code "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
       <Show when={props.metadata.matches}>
         ({props.metadata.matches} {props.metadata.matches === 1 ? "match" : "matches"})
       </Show>
@@ -1875,12 +1720,12 @@ function WebFetch(props: ToolProps<typeof WebFetchTool>) {
   )
 }
 
-function CodeSearch(props: ToolProps<any>) {
+function ExternalCodeSearch(props: ToolProps<any>) {
   const input = props.input as any
   const metadata = props.metadata as any
   return (
     <InlineTool icon="◇" pending="Searching code..." complete={input.query} part={props.part}>
-      Exa Code Search "{input.query}" <Show when={metadata.results}>({metadata.results} results)</Show>
+      External Code Search "{input.query}" <Show when={metadata.results}>({metadata.results} results)</Show>
     </InlineTool>
   )
 }

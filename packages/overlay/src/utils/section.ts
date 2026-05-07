@@ -116,7 +116,7 @@ export function syncSectionPhases(board: any, changesCount = 0): void {
   const live = liveConversationPhase(messages);
   if (!board?.task && !live) return;
 
-  const goals = (board?.lanes || []).find((lane: any) => lane.id === "goals")?.cards || [];
+  const goals = board?.goalWorkflows || [];
   const pending = (board?.interactions || []).some((item: any) => item.status === "pending");
   const taskStatus = board?.task?.status || "";
   const planning = board?.task

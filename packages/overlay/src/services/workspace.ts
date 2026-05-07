@@ -7,20 +7,49 @@
 // - Clear project-scope data (tasks, path, vcs, memory files)
 // - Directory pick / browse / create (Tauri-backed)
 // - Recent directories persistence (localStorage)
-// - Workspace memory (rememberWorkspace / workspaceRestoreDirectory)
 // This module operates on Solid stores (settingsStore, boardStore) and
 // delegates timers / loading to callers via callbacks.
 
 import { settingsStore, setSettingsStore } from "../store/settings";
-import { boardStore, setBoardStore } from "../store/board";
+import { applyTasks, boardStore, setBoardStore } from "../store/board";
 import { clearMessages } from "../store/messages";
+import { setAppStore } from "../store/app";
 import { AppLog } from "../utils/log";
 import { t } from "../utils/i18n";
 import { apiJson, configure as configureApi } from "./api";
+import { getHostTransport } from "./host-transport";
+import type { ProjectEditorID } from "./host-transport";
+import { nativeMessage } from "./app-dialog";
+import { nativeOpen, nativePrompt } from "../utils/native";
+import { checkConnection } from "./connection";
+import { reloadProjectScope } from "./config";
+import { initGitCurrent } from "../utils/git";
 
 // ── Types ──
 
 export type WorkspaceMode = "offline" | "task" | "empty";
+
+export interface ProjectEditor {
+  id: ProjectEditorID;
+  label: string;
+  shortLabel: string;
+}
+
+// IDE means Integrated Development Environment; these IDs are the public
+// choices surfaced by the workspace UI and handled by the native host.
+export const PROJECT_EDITORS: ProjectEditor[] = [
+  { id: "vscode", label: "VS Code", shortLabel: "VS" },
+  { id: "pycharm", label: "PyCharm", shortLabel: "Py" },
+  { id: "webstorm", label: "WebStorm", shortLabel: "WS" },
+  { id: "intellij", label: "IntelliJ IDEA", shortLabel: "IJ" },
+  { id: "cursor", label: "Cursor", shortLabel: "Cu" },
+];
+
+export const QUICK_PROJECT_EDITORS: ProjectEditor[] = PROJECT_EDITORS.slice(0, 2);
+
+export function isProjectEditorID(value: string): value is ProjectEditorID {
+  return PROJECT_EDITORS.some((item) => item.id === value);
+}
 
 export interface ClearWorkspaceRuntimeOptions {
   /** When true, the in-flight chat request is NOT cancelled. */
@@ -74,27 +103,44 @@ export function getTasksKickTimer(): ReturnType<typeof setTimeout> | null {
  * @param source How the directory was set: "manual" (user-driven) or
  * "task" (task-scoped) or "auto" (restored). Defaults to
  * "manual".
- * When source is "manual":
- * - Persists the directory as the saved directory.
- * - Clears the temp directory when a non-empty value is provided.
- * - Updates directoryMode to "custom" or "temp".
- * Mirrors workspace.js setWorkspaceDirectory.
+ *
+ * Source semantics:
+ * - "manual": caller is `applyDirectory`, which owns the full switch
+ *   lifecycle (epoch bump, persistence, clearProjectScopeData,
+ *   reloadProjectScope). Do nothing extra here.
+ * - "task": caller is `enterTaskWorkspace` — the user clicked a task in a
+ *   different workspace. `settingsStore.directory` changes and
+ *   `main.tsx`'s configureApi effect retargets the API client, but
+ *   project-scope stores (appStore.config, boardStore.vcs, boardStore.path,
+ *   appStore.providerCatalog / providerAuth / channels, tasks list) would
+ *   otherwise keep serving the previous workspace's data until another
+ *   full switch. Trigger a reload here so the config / git-status / task
+ *   list align with the new workspace immediately.
+ * - "auto": caller is `meta.ts` echoing the server's /path response; data
+ *   is already fresh on that request — no reload needed.
  */
 export function setWorkspaceDirectory(
   value: string,
   source: "manual" | "task" | "auto" = "manual",
 ): string {
   const next = typeof value === "string" ? value.trim() : "";
+  const prev = settingsStore.directory;
 
   if (source === "manual") {
     setSettingsStore({
       directory: next,
       savedDirectory: next,
-      tempDirectory: next ? "" : settingsStore.tempDirectory,
-      directoryMode: next ? "custom" : "temp",
     });
   } else {
     setSettingsStore("directory", next);
+  }
+
+  if (source === "task" && next && next !== prev) {
+    setSettingsStore("directoryEpoch", (n: number) => n + 1);
+    clearProjectScopeData();
+    void reloadProjectScope({ restoreWorkspace: false }).catch((e: unknown) =>
+      console.error("[setWorkspaceDirectory/task] reload failed", e),
+    );
   }
 
   return next;
@@ -114,25 +160,11 @@ export function restoreWorkspaceDirectory(): string {
     settingsStore.savedDirectory.trim()
       ? settingsStore.savedDirectory.trim()
       : "";
-  const temp =
-    typeof settingsStore.tempDirectory === "string" &&
-    settingsStore.tempDirectory.trim()
-      ? settingsStore.tempDirectory.trim()
-      : "";
-
- // Resolve: prefer the persisted baseline directory, then the temp directory,
- // then fall back to the current active directory.
   const next =
     saved ||
-    temp ||
     (settingsStore.directory ? settingsStore.directory.trim() : "");
   if (!next) return settingsStore.directory;
-
-  setSettingsStore({
-    directory: next,
-    directoryMode: saved ? "custom" : "temp",
-  });
-
+  setSettingsStore("directory", next);
   return next;
 }
 
@@ -238,7 +270,7 @@ export function clearWorkspaceRuntime(
  * fields are owned by for now.
  */
 export function clearProjectScopeData(): void {
-  setBoardStore("tasks", []);
+  applyTasks([]);
  // path, vcs, memoryFiles, memorySearchMode remain
  // state and are not yet migrated to a Solid store.
 }
@@ -300,59 +332,6 @@ export function getTasksSeq(): number {
   return tasksSeq;
 }
 
-// ── Tauri helpers (internal) ──
-
-async function tauriInvoke(command: string, args?: Record<string, unknown>): Promise<unknown> {
-  const globalInvoke = (window as any).__TAURI__?.core?.invoke;
-  if (typeof globalInvoke === "function") {
-    return globalInvoke(command, args);
-  }
-  throw new Error(`Tauri runtime unavailable for ${command}`);
-}
-
-function hasTauriRuntime(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof (window as any).__TAURI__?.core?.invoke === "function"
-  );
-}
-
-async function currentTauriWindow(): Promise<any | null> {
-  const getCurrent = (window as any).__TAURI__?.window?.getCurrentWindow;
-  if (typeof getCurrent === "function") {
-    try {
-      return getCurrent() as any;
-    } catch {
- // Not running inside Tauri
-    }
-  }
-  return null;
-}
-
-/**
- * Temporarily un-pin the always-on-top window, run `run()`, then restore the
- * pin state.
- */
-async function withUnpinned<T>(run: () => Promise<T>): Promise<T> {
-  const win = await currentTauriWindow();
-  if (
-    !win ||
-    typeof win.isAlwaysOnTop !== "function" ||
-    typeof win.setAlwaysOnTop !== "function"
-  ) {
-    return run();
-  }
-  const pinned = await win.isAlwaysOnTop().catch(() => false);
-  if (!pinned) return run();
-  await win.setAlwaysOnTop(false).catch(() => undefined);
-  try {
-    return await run();
-  } finally {
-    await win.setAlwaysOnTop(true).catch(() => undefined);
-    await win.setFocus?.().catch(() => undefined);
-  }
-}
-
 /** Produce a user-facing error message: translated key + error detail. */
 function errorText(key: string, error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error ?? "");
@@ -373,128 +352,21 @@ function joinPath(base: string, value: string): string {
   return `${base}${sep}${value}`;
 }
 
-// ── Native dialog helpers (internal) ──
-
-interface NativeMessageOptions {
-  title?: string;
-  kind?: "info" | "warning" | "error";
-  okLabel?: string;
-}
-
-interface NativePromptOptions {
-  title?: string;
-  kind?: "info" | "warning" | "error";
-  okLabel?: string;
-  cancelLabel?: string;
-  inputLabel?: string;
-  inputPlaceholder?: string;
-  inputValue?: string;
-}
-
-/**
- * Show an application-level notification dialog.
- * Delegates to `showAppDialog` via the `window` global to
- * avoid a circular import during the.
- */
-async function nativeMessage(message: string, options?: NativeMessageOptions): Promise<void> {
-  const showAppDialog = (window as any).showAppDialog;
-  if (typeof showAppDialog === "function") {
-    await showAppDialog({
-      title: options?.title || t("dialog.notice"),
-      message,
-      kind: options?.kind || "info",
-      okLabel: options?.okLabel || t("common.ok"),
-    });
-  }
-}
-
-/**
- * Show an input prompt dialog.
- * Returns the trimmed string entered by the user, or null if cancelled.
- * Uses showAppDialog window global.
- */
-async function nativePrompt(
-  message: string,
-  options?: NativePromptOptions,
-): Promise<string | null> {
-  const showAppDialog = (window as any).showAppDialog;
-  if (typeof showAppDialog !== "function") return null;
-  const result = await showAppDialog({
-    title: options?.title || t("dialog.input"),
-    message,
-    kind: options?.kind || "info",
-    okLabel: options?.okLabel || t("common.submit"),
-    cancelLabel: options?.cancelLabel || t("common.cancel"),
-    cancel: true,
-    input: true,
-    inputLabel: options?.inputLabel || t("dialog.value"),
-    inputPlaceholder: options?.inputPlaceholder || "",
-    inputValue: options?.inputValue || "",
-  });
-  return result?.confirmed ? result.value : null;
-}
-
-/**
- * Open a local path or URL using native OS facilities.
- */
-async function nativeOpen(target: string): Promise<boolean> {
-  if (!target) return false;
-  const url = /^https?:\/\//i.test(target);
-  try {
-    const opened = url
-      ? await tauriInvoke("overlay_open_url", { url: target })
-      : await tauriInvoke("overlay_open_path", { path: target });
-    if (opened) return true;
-  } catch { /* Tauri not available */ }
-  if (url) {
-    window.open(target, "_blank", "noopener");
-    return true;
-  }
-  try {
-    const result = await apiJson("path/open", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: target }),
-    });
-    return (result as any)?.opened === true;
-  } catch (openErr) {
-    AppLog.debug("ui", "path/open fallback failed", { target, error: String(openErr) });
-    return false;
-  }
-}
-
-// ── Temp directory ──
-
-/**
- * Ask the Tauri backend to create a new temporary directory.
- * Returns the path, or an empty string on failure.
- */
-export async function createTempDirectory(): Promise<string> {
-  const created = await tauriInvoke("overlay_create_temp_dir").catch(() => undefined);
-  return typeof created === "string" ? created.trim() : "";
-}
-
 // ── Tauri file / directory pickers ──
 
-/**
- * Open a native directory picker, temporarily un-pinning the window.
- * Returns the selected path, or an empty string when cancelled.
- */
+/** Open a native directory picker. Returns the selected path, or an empty string when cancelled. */
 export async function pickDirectory(start?: string): Promise<string> {
-  const selected = await withUnpinned(() =>
-    tauriInvoke("overlay_pick_dir", { start: start || undefined }) as Promise<unknown>,
-  );
+  const selected = await getHostTransport().native({ kind: "workspace.pickDir", start });
   return typeof selected === "string" ? selected : "";
 }
 
-/**
- * Open a native multi-file picker, temporarily un-pinning the window.
- * Returns the array of selected paths.
- */
+/** Open a native multi-file picker. Returns the array of selected paths. */
 export async function pickFiles(start?: string): Promise<string[]> {
-  const result = await withUnpinned(() =>
-    tauriInvoke("overlay_pick_files", { start: start || undefined }) as Promise<unknown>,
-  );
+  const result = await getHostTransport().native({
+    kind: "workspace.pickFiles",
+    start,
+    multiple: true,
+  });
   return Array.isArray(result) ? result : [];
 }
 
@@ -505,88 +377,6 @@ export async function pickFiles(start?: string): Promise<string[]> {
  */
 export function activeDirectory(): string {
   return settingsStore.directory;
-}
-
-/**
- * Returns "custom" when `directory` is non-empty, otherwise returns the
- * default directoryMode ("temp").
- */
-export function sanitizeDirectoryMode(
-  value: unknown,
-  directory: string,
-): "custom" | "temp" {
-  if (value === "custom") return "custom";
-  if (typeof value === "string" && value.trim() === "temp") return "temp";
-  return typeof directory === "string" && directory.trim() ? "custom" : "temp";
-}
-
-/**
- * Returns the "saved directory" value: non-empty only when the mode resolves
- * to "custom".
- */
-export function savedDirectoryValue(directory: string, mode: unknown): string {
-  const next = typeof directory === "string" ? directory.trim() : "";
-  if (!next) return "";
-  return sanitizeDirectoryMode(mode, next) === "custom" ? next : "";
-}
-
-/**
- * Extract and trim the `directory` field from a settings object.
- */
-export function settingsDirectory(settings: Record<string, unknown> | null | undefined): string {
-  return typeof settings?.directory === "string" ? settings.directory.trim() : "";
-}
-
-// ── Workspace memory (rememberWorkspace / workspaceRestoreDirectory) ──
-
-/**
- * Returns true when the path looks like a goal-workspace execution directory
- * (contains a "goal-workspace" path segment).
- */
-export function looksLikeExecutionWorkspace(value: unknown): boolean {
-  const text = String(value || "").trim();
-  if (!text) return false;
-  return /(^|[\\/])goal-workspace([\\/]|$)/i.test(text);
-}
-
-/**
- * Returns `value` unless it looks like a goal-workspace execution directory,
- * in which case returns an empty string.
- */
-export function workspaceRestoreDirectory(value: unknown): string {
-  const text = typeof value === "string" ? value.trim() : "";
-  if (!text) return "";
-  if (looksLikeExecutionWorkspace(text)) return "";
-  return text;
-}
-
-export interface RememberWorkspaceInput {
-  taskID?: string;
-  directory?: string;
-}
-
-/**
- * Persist the current task + directory as the "workspace memory" so it can be
- * restored after an overlay restart.
- */
-export function rememberWorkspace(input: RememberWorkspaceInput = {}): void {
-  const taskID =
-    typeof input.taskID === "string"
-      ? input.taskID.trim()
-      : boardStore.selectedTaskID || settingsStore.workspaceTaskID || "";
-
-  const rawDir =
-    typeof input.directory === "string"
-      ? input.directory.trim()
-      : settingsStore.savedDirectory || activeDirectory() || settingsStore.directory || "";
-
-  const directory =
-    workspaceRestoreDirectory(rawDir) ||
-    workspaceRestoreDirectory(settingsStore.savedDirectory || "") ||
-    "";
-
-  setSettingsStore("workspaceTaskID", taskID);
-  setSettingsStore("workspaceDirectory", taskID ? directory : "");
 }
 
 // ── Recent directories ──
@@ -651,26 +441,20 @@ export function removeRecentDirectory(dir: string): void {
 
 export interface ApplyDirectoryOptions {
   /**
- * When true, `next` is written as the saved directory.
- * When false, the saved directory is cleared.
- * When omitted (null/undefined), the saved directory is unchanged.
- */
+   * When true, `next` is written as the saved directory.
+   * When false, the saved directory is cleared.
+   * When omitted (null/undefined), the saved directory is unchanged.
+   */
   save?: boolean;
   /**
- * When true, `next` is written as the temp directory.
- * When false, the temp directory is cleared.
- * When omitted (null/undefined), the temp directory is unchanged.
- */
-  temp?: boolean;
-  /**
- * When false, skip persisting overlay settings after the switch.
- * Defaults to true.
- */
+   * When false, skip persisting overlay settings after the switch.
+   * Defaults to true.
+   */
   persist?: boolean;
   /**
- * When false, skip restoring the initial workspace after the reload.
- * Defaults to true.
- */
+   * When false, skip restoring the initial workspace after the reload.
+   * Defaults to true.
+   */
   restoreWorkspace?: boolean;
 }
 
@@ -684,45 +468,32 @@ export async function applyDirectory(
 ): Promise<void> {
   const save =
     options.save === true ? next : options.save === false ? "" : null;
-  const temp =
-    options.temp === true ? next : options.temp === false ? "" : null;
 
   const curDir = settingsStore.directory;
   const curSaved = settingsStore.savedDirectory;
-  const curTemp = settingsStore.tempDirectory;
 
-  if (
-    next === curDir &&
-    (save === null || save === curSaved) &&
-    (temp === null || temp === curTemp)
-  ) {
-    console.log("[applyDir] skipped (same)", {
-      next,
-      save,
-      temp,
-      dir: curDir,
-      saved: curSaved,
-      tempDir: curTemp,
-    });
+  if (next === curDir && (save === null || save === curSaved)) {
+    console.log("[applyDir] skipped (same)", { next, save, dir: curDir, saved: curSaved });
     return;
   }
 
-  console.log("[applyDir] switching", { from: curDir, to: next, save, temp });
+  console.log("[applyDir] switching", { from: curDir, to: next, save });
 
   setSettingsStore("directoryEpoch", (n: number) => n + 1);
   setSettingsStore("directory", next);
   if (save !== null) setSettingsStore("savedDirectory", save);
-  if (temp !== null) setSettingsStore("tempDirectory", temp);
-  setSettingsStore(
-    "directoryMode",
-    settingsStore.savedDirectory ? "custom" : "temp",
-  );
 
  // Sync the API client's directory context immediately so all subsequent
  // API calls (checkConnection, reloadProjectScope, etc.) target the new
  // directory on the backend.
   configureApi({ directory: next });
   setBoardStore("pendingTasks", []);
+
+ // Clear transient provider-test state so a result from the previous project
+ // does not linger in the Settings › Providers panel after the switch. The
+ // providerCatalog / providerAuth fields are reloaded by reloadProjectScope
+ // below; providerTest is user-triggered-only and otherwise never refreshed.
+  setAppStore("providerTest", null);
 
  // Clear stale workspace memory so restoreInitialWorkspace() won't revert the switch.
   setSettingsStore("workspaceTaskID", "");
@@ -732,7 +503,7 @@ export async function applyDirectory(
   clearProjectScopeData();
 
   if (options.persist !== false) {
- // Persist via to keep localStorage + Tauri store in sync.
+ // Persist through the active host settings source.
     const persistFn = (window as any).persistOverlaySettings;
     if (typeof persistFn === "function") await persistFn();
   }
@@ -744,14 +515,11 @@ export async function applyDirectory(
   const epoch = settingsStore.directoryEpoch;
 
  // Connection check + reload via .
-  const { checkConnection } = await import("./connection");
-  if (typeof checkConnection === "function") {
-    console.log("[applyDir] checking connection");
-    const ok = await checkConnection();
-    if (!ok) {
-      console.warn("[applyDir] connection failed, aborting");
-      return;
-    }
+  console.log("[applyDir] checking connection");
+  const ok = await checkConnection();
+  if (!ok) {
+    console.warn("[applyDir] connection failed, aborting");
+    return;
   }
 
   if (epoch !== settingsStore.directoryEpoch) {
@@ -759,7 +527,6 @@ export async function applyDirectory(
     return;
   }
 
-  const { reloadProjectScope } = await import("./config");
   console.log("[applyDir] reloading project scope");
   await reloadProjectScope(options);
 
@@ -821,13 +588,12 @@ export async function createDirectory(): Promise<void> {
     const value = name?.trim();
     if (!value) return;
     const target = joinPath(parent, value);
-    const created = await tauriInvoke("overlay_create_dir", { path: target }).catch(
-      () => undefined,
-    );
+    const created = await getHostTransport()
+      .native({ kind: "workspace.createDir", path: target })
+      .catch(() => undefined);
     if (!created) throw new Error(t("cwd.create_unavailable"));
     await setDirectory(target);
     if (settingsStore.initGit) {
-      const { initGitCurrent } = await import("../utils/git");
       await initGitCurrent({ notify: false });
     }
   } catch (e) {
@@ -839,7 +605,7 @@ export async function createDirectory(): Promise<void> {
   }
 }
 
-// ── openDirectory / resetDirectory ──
+// ── openDirectory ──
 
 /**
  * Open the given directory (or the current active directory) with the
@@ -847,14 +613,9 @@ export async function createDirectory(): Promise<void> {
  */
 export async function openDirectory(target?: string): Promise<void> {
   const dir = target ?? activeDirectory();
+  if (!dir) return;
   try {
-    if (!dir) return;
-    const opened = await nativeOpen(dir);
-    if (opened) return;
-    await nativeMessage(dir, {
-      title: t("cwd.title"),
-      kind: "info",
-    });
+    await nativeOpen(dir);
   } catch (e) {
     AppLog.error("ui", "Failed to open working directory", { error: String(e) });
     await nativeMessage(errorText("cwd.open_failed", e), {
@@ -864,142 +625,121 @@ export async function openDirectory(target?: string): Promise<void> {
   }
 }
 
+// ── openDirectoryInEditor ──
+
 /**
- * Reset the working directory to a fresh temp directory.
+ * Open the given directory (or the current active directory) with the selected
+ * project editor.
  */
-export async function resetDirectory(): Promise<void> {
+export async function openDirectoryInEditor(
+  editor: ProjectEditorID,
+  target?: string,
+): Promise<void> {
+  const dir = target ?? activeDirectory();
+  if (!dir) return;
   try {
-    await setTempDirectory();
+    await getHostTransport().native({
+      kind: "workspace.openProjectEditor",
+      editor,
+      path: dir,
+    });
   } catch (e) {
-    AppLog.error("ui", "Failed to reset working directory", { error: String(e) });
-    await nativeMessage(errorText("cwd.reset_failed", e), {
-      title: t("cwd.title"),
+    const label = PROJECT_EDITORS.find((item) => item.id === editor)?.label ?? editor;
+    AppLog.error("ui", "Failed to open working directory in editor", {
+      editor,
+      error: String(e),
+    });
+    await nativeMessage(errorText("cwd.open_editor_failed", e), {
+      title: t("cwd.open_in_editor", { name: label }),
       kind: "error",
     });
   }
 }
 
-// ── setDirectory / setTempDirectory ──
+// ── setDirectory ──
 
 /**
- * Set the working directory to `value`. When `value` is empty, falls back to
- * the existing temp directory or creates a new one.
+ * Set the working directory to `value`. `value` must be a non-empty path the
+ * user explicitly chose; passing an empty string throws rather than silently
+ * creating a temp workspace (that fallback was removed — see CHANGELOG for
+ * the temp-workspace deletion rationale).
  */
 export async function setDirectory(
   value: string,
   options: ApplyDirectoryOptions = {},
 ): Promise<void> {
   const next = typeof value === "string" ? value.trim() : "";
-  if (!next) {
-    if (settingsStore.tempDirectory) {
-      await applyDirectory(settingsStore.tempDirectory, { ...options, save: false });
-      return;
-    }
-    await setTempDirectory(options);
-    return;
-  }
-  await applyDirectory(next, { ...options, save: true, temp: false });
+  if (!next) throw new Error(t("cwd.path_required") || "Directory path required");
+  await applyDirectory(next, { ...options, save: true });
 }
 
-/**
- * Create a new temporary directory (via Tauri) and switch to it.
- */
-export async function setTempDirectory(
-  options: ApplyDirectoryOptions = {},
-): Promise<void> {
-  if (!hasTauriRuntime()) {
-    await applyDirectory("", { ...options, save: false, temp: false });
-    return;
-  }
-  const next = await createTempDirectory();
-  if (!next) throw new Error(t("cwd.create_unavailable"));
-  const { scaffoldProjectConfig } = await import("./config");
-  await scaffoldProjectConfig(next);
-  await applyDirectory(next, { ...options, save: false, temp: true });
-}
-
-// ── ensureDefaultDirectory / ensureWorkspaceDirectory ──
+// ── ensureDefaultDirectory ──
 
 /**
- * Ensure a default working directory is set, creating a temp directory if
- * neither a saved nor temp directory is available.
- * Returns true when a new temp directory was created.
+ * Restore the user's last saved working directory. Returns false when none is
+ * available — in which case `settingsStore.directory` stays empty and the UI
+ * must surface a "select directory" CTA.
  */
 export async function ensureDefaultDirectory(): Promise<boolean> {
   if (settingsStore.savedDirectory) {
     setSettingsStore("directory", settingsStore.savedDirectory);
-    setSettingsStore("directoryMode", "custom");
-    return false;
+    return true;
   }
-  if (settingsStore.tempDirectory) {
-    setSettingsStore("directory", settingsStore.tempDirectory);
-    setSettingsStore("directoryMode", "temp");
-    return false;
-  }
-  if (!hasTauriRuntime()) return false;
-  const next = await createTempDirectory();
-  if (!next) return false;
-  const scaffoldProjectConfig = (window as any).scaffoldProjectConfig;
-  if (typeof scaffoldProjectConfig === "function") {
-    await scaffoldProjectConfig(next);
-  }
-  setSettingsStore("tempDirectory", next);
-  setSettingsStore("directory", next);
-  setSettingsStore("savedDirectory", "");
-  setSettingsStore("directoryMode", "temp");
-  const persistFn = (window as any).persistOverlaySettings;
-  if (typeof persistFn === "function") await persistFn();
-  return true;
+  return false;
 }
 
 /**
- * Ensure the workspace directory is resolved. If the active directory is
- * already set, returns it immediately; otherwise loads meta from the server
- * and falls back to the `path.directory` value returned by the server.
+ * Ensure the workspace directory is resolved. Returns the active directory
+ * restored by `ensureDefaultDirectory()` (the user's last saved choice).
+ * When no saved directory exists, returns an empty string so the UI can
+ * surface a "select directory" CTA — we do NOT fall back to the server's
+ * cwd, because a sidecar-launched server inherits the overlay binary's
+ * launch directory (e.g. `target/release`), which is never a valid project
+ * root and silently cancels any task that is started against it.
  */
 export async function ensureWorkspaceDirectory(): Promise<string> {
-  if (activeDirectory()) return activeDirectory();
- // Load meta via (sets boardStore.path).
-  const { loadMeta } = await import("./meta");
-  if (typeof loadMeta === "function") await loadMeta();
-  if (!settingsStore.directory && (boardStore.path as any)?.directory) {
-    setSettingsStore("directory", (boardStore.path as any).directory);
-  }
   return activeDirectory();
 }
 
 // ── currentExecutionDirectory ──
 
-/**
- * Sort priority for goal-run status values used by currentExecutionDirectory.
- */
-function goalRunPriority(status: unknown): number {
+function goalStepPriority(status: unknown): number {
   if (status === "running") return 0;
-  if (status === "blocked") return 1;
-  if (status === "accepted") return 2;
-  if (status === "queued") return 3;
-  if (status === "completed") return 4;
-  if (status === "failed") return 5;
-  if (status === "aborted") return 6;
-  return 7;
+  if (status === "pending") return 1;
+  if (status === "completed") return 2;
+  if (status === "failed") return 3;
+  if (status === "skipped") return 4;
+  return 5;
 }
 
 /**
- * Return the workspace directory of the highest-priority active goal run.
+ * Return the workspace directory of the highest-priority goal build step.
  */
 export function currentExecutionDirectory(): string {
-  const goalRuns: unknown[] = Array.isArray(boardStore.board?.goalRuns)
-    ? boardStore.board.goalRuns
+  const goalWorkflows: unknown[] = Array.isArray(boardStore.board?.goalWorkflows)
+    ? boardStore.board.goalWorkflows
     : [];
-  const rows = goalRuns
+  const rows = goalWorkflows
+    .flatMap((workflow: any) =>
+      Array.isArray(workflow?.steps)
+        ? workflow.steps.map((step: any) => ({
+            status: step?.status,
+            workspaceDir: step?.payload?.workspaceDir,
+            updatedAt:
+              step?.completedAt ??
+              step?.startedAt ??
+              0,
+          }))
+        : [],
+    )
     .filter(
       (item: any) =>
         typeof item?.workspaceDir === "string" && item.workspaceDir.trim(),
     )
     .toSorted(
       (a: any, b: any) =>
-        goalRunPriority(a?.status) - goalRunPriority(b?.status) ||
-        (b?.time?.updated || 0) - (a?.time?.updated || 0),
+        goalStepPriority(a?.status) - goalStepPriority(b?.status) ||
+        (b?.updatedAt || 0) - (a?.updatedAt || 0),
     );
   return (rows[0] as any)?.workspaceDir?.trim() || "";
 }

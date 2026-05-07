@@ -8,6 +8,10 @@ import { Flag } from "@/flag/flag"
 import { Global } from "@/global"
 
 export namespace ConfigPaths {
+  function boundary(directory: string, worktree: string) {
+    return worktree === "/" ? directory : worktree
+  }
+
   export async function projectFiles(name: string, directory: string, worktree: string) {
     const files: string[] = []
     for (const file of [`${name}.jsonc`, `${name}.json`]) {
@@ -20,17 +24,19 @@ export namespace ConfigPaths {
   }
 
   export async function directories(directory: string, worktree: string) {
+    const projectDirectories = !Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
+      ? await Array.fromAsync(
+          Filesystem.up({
+            targets: [".opencorvus"],
+            start: directory,
+            stop: boundary(directory, worktree),
+          }),
+        )
+      : []
+
     return [
       Global.Path.config,
-      ...(!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
-        ? await Array.fromAsync(
-            Filesystem.up({
-              targets: [".opencorvus"],
-              start: directory,
-              stop: worktree,
-            }),
-          )
-        : []),
+      ...projectDirectories.toReversed(),
       ...(Flag.OPENCORVUS_CONFIG_DIR ? [Flag.OPENCORVUS_CONFIG_DIR] : []),
     ]
   }
@@ -76,8 +82,27 @@ export namespace ConfigPaths {
 
   /** Apply {env:VAR} and {file:path} substitutions to config text. */
   async function substitute(text: string, input: ParseSource, missing: "error" | "empty" = "error") {
-    text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
-      return process.env[varName] || ""
+    // audit-2026-04-29 W2-V23 — pre-fix the `{env:VAR}` branch
+    // ignored the `missing` parameter completely: an UNSET env var
+    // ALWAYS substituted to "" regardless of whether the caller
+    // asked for "error" mode. A config that referenced
+    // `{env:DATABASE_URL}` for a required field silently bound to
+    // empty string, slipped past zod's `.url()` validator (zod
+    // sees ""), and the sidecar tried to connect to a blank DSN.
+    //
+    // Distinguish UNSET from EXPLICITLY-EMPTY: setting an env var
+    // to "" is the operator saying "deliberately empty", which
+    // we honour. UNSET in "error" mode throws naming the variable.
+    const sourceLabel = source(input)
+    text = text.replace(/\{env:([^}]+)\}/g, (_, varName: string) => {
+      const value = process.env[varName]
+      if (value !== undefined) return value
+      if (missing === "error") {
+        throw new Error(
+          `Config substitution failed: env var ${varName} is unset (referenced from ${sourceLabel})`,
+        )
+      }
+      return ""
     })
 
     const fileMatches = Array.from(text.matchAll(/\{file:[^}]+\}/g))

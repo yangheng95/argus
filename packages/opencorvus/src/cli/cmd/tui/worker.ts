@@ -7,7 +7,7 @@ import { Rpc } from "@/util/rpc"
 import { upgrade } from "@/cli/upgrade"
 import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
-import { createOpenCorvusClient, type Event } from "@opencorvus-ai/sdk/v2"
+import { createOpenCorvusClient, type Event } from "@opencorvus-ai/sdk"
 import { IN_PROCESS_BASE_URL, createInProcessFetch, fetchInProcessServer } from "@/server/in-process-client"
 import { installRuntimeShims } from "@/runtime/shims"
 
@@ -99,7 +99,7 @@ export const rpc = {
   },
   async reload() {
     Config.global.reset()
-    const { hasActiveSessions } = await import("@/orchestrator/runtime")
+    const { hasActiveSessions } = await import("@/engine/runtime")
     if (hasActiveSessions()) {
       Log.Default.warn("skipping disposeAll during reload: active executor sessions")
       return

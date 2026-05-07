@@ -1,0 +1,171 @@
+/**
+ * Coverage guard for flat-redesign Step 2 (specs/overlay-flat-redesign/plan.md §2.2).
+ *
+ * Pins the three border-rule decisions that make the overlay "flat":
+ *
+ *   Rule A (surface 层差替代描边): high-traffic surface containers do NOT
+ *           declare a resting `border: <width> solid <color>`. Their
+ *           visible boundary comes from --surface / --surface-strong /
+ *           --surface-inset lightness steps.
+ *
+ *   Rule B (cross-context boundary only): titlebar carries one bottom-edge
+ *           border (cross-context: titlebar ↔ panel-body). The `::after`
+ *           decorative gradient line that used to double the bottom edge
+ *           is retired.
+ *
+ *   Rule C (no border-color flip on state changes): hover/active/status
+ *           state changes use background tint, not border-color. Active
+ *           emphasis is rendered via accent left-stripe (`::after`).
+ *
+ * The guard is targeted — it only inspects the specific selectors the
+ * 2026-05-04 user critique identified. Adding a `border:` rule to one of
+ * these selectors is the regression we're guarding against.
+ */
+
+import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+
+const STYLES_ROOT = join(import.meta.dir, "..", "src", "styles")
+
+function readSurface(name: string): string {
+  return readFileSync(join(STYLES_ROOT, "surfaces", name), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  )
+}
+
+/** Extract the body of the *first* solo rule whose selector head matches. */
+function ruleBody(text: string, selectorHead: string): string {
+  // Selectors with attribute filters or pseudos need exact-string match.
+  for (const chunk of text.split("}")) {
+    const openIdx = chunk.indexOf("{")
+    if (openIdx < 0) continue
+    const head = chunk.slice(0, openIdx).trim()
+    if (head !== selectorHead) continue
+    return chunk.slice(openIdx + 1)
+  }
+  throw new Error(`solo rule "${selectorHead}" not found`)
+}
+
+describe("flat-redesign Rule A — surface containers have no resting self-border", () => {
+  const workspace = readSurface("workspace.css")
+  const inspector = readSurface("inspector.css")
+  const composer = readSurface("composer.css")
+
+  test(".workspace shell carries no border", () => {
+    const body = ruleBody(workspace, ".workspace")
+    expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b/)
+    expect(body).not.toMatch(/border-radius\s*:/)
+    expect(body).not.toMatch(/box-shadow\s*:\s*var\(--shadow\)/)
+  })
+
+  test(".workspace-header carries no bottom-border", () => {
+    const body = ruleBody(workspace, ".workspace-header")
+    expect(body).not.toMatch(/border-bottom\s*:\s*[^;]*\bsolid\b/)
+  })
+
+  test(".workspace-tab carries no border-right (vertical separator)", () => {
+    const body = ruleBody(workspace, ".workspace-tab")
+    expect(body).not.toMatch(/border-right\s*:\s*[^;]*\bsolid\b\s+var\(--border\)/)
+    // The active accent underline IS allowed and required.
+    expect(body).toMatch(/border-bottom\s*:\s*[^;]*\bsolid\s+transparent/)
+  })
+
+  test(".workspace-close has no resting border", () => {
+    const body = ruleBody(workspace, ".workspace-close")
+    expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b\s+(?:var\(--border\)|transparent)/)
+  })
+
+  test(".section right-rail card has no self-border", () => {
+    const body = ruleBody(inspector, ".section")
+    expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b\s+var\(--border\)/)
+    // Stack divider re-assertion is also retired.
+    expect(inspector).not.toMatch(/\.section:last-child\s*\{/)
+  })
+
+  test(".executor-chip resting state has no border", () => {
+    const body = ruleBody(composer, ".executor-chip")
+    expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b/)
+  })
+
+  test(".chat-attachment-item has no border", () => {
+    const body = ruleBody(composer, ".chat-attachment-item")
+    expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b/)
+  })
+})
+
+describe("flat-redesign Rule B — only cross-context boundaries carry borders", () => {
+  const titlebar = readSurface("titlebar.css")
+
+  test(".titlebar carries one cross-context border (bottom only)", () => {
+    const body = ruleBody(titlebar, ".titlebar")
+    // Resting border must be 0 with explicit border-bottom.
+    expect(body).toMatch(/(?:^|\s)border\s*:\s*0\s*;/)
+    expect(body).toMatch(/border-bottom\s*:\s*var\(--oc-border-width\)\s+solid\s+var\(--border\)/)
+    expect(body).not.toMatch(/border-left\s*:/)
+    expect(body).not.toMatch(/border-right\s*:/)
+  })
+
+  test(".titlebar::after decorative gradient line is retired", () => {
+    expect(titlebar).not.toMatch(/\.titlebar::after\s*\{/)
+  })
+
+  test(".titlebar-status-chip has no self-border (Rule A applies to chips too)", () => {
+    // The shared rule is `.titlebar-status-chip,\n.titlebar-setup-cta,\n.titlebar-status-icon`.
+    // Find the combined head.
+    const combinedHead = ".titlebar-status-chip,\n.titlebar-setup-cta,\n.titlebar-status-icon"
+    const body = ruleBody(titlebar, combinedHead)
+    expect(body).toMatch(/(?:^|\s)border\s*:\s*0\s*;/)
+    expect(body).not.toMatch(/(?:^|\s)border\s*:\s*1px\s+solid/)
+  })
+})
+
+describe("flat-redesign Rule C — state changes use bg/stripe, not border-color flip", () => {
+  const titlebar = readSurface("titlebar.css")
+  const inspector = readSurface("inspector.css")
+  const workspace = readSurface("workspace.css")
+  const composer = readSurface("composer.css")
+
+  test(".titlebar-task-status[data-status] variants don't flip border-color", () => {
+    for (const status of ["active", "completed", "failed"]) {
+      const body = ruleBody(titlebar, `.titlebar-task-status[data-status="${status}"]`)
+      expect(body).not.toMatch(/border-color\s*:/)
+      // Bg tint must still be present.
+      expect(body).toMatch(/background\s*:/)
+    }
+  })
+
+  test(".titlebar-task-status:hover doesn't flip border-color", () => {
+    const body = ruleBody(titlebar, ".titlebar-task-status:hover")
+    expect(body).not.toMatch(/border-color\s*:/)
+  })
+
+  test(".titlebar-menubar-trigger:hover doesn't flip border-color", () => {
+    const combinedHead =
+      ".titlebar-menubar-trigger:hover,\n.titlebar-menubar-trigger:focus-visible,\n.titlebar-menubar-trigger[data-active=\"true\"]"
+    const body = ruleBody(titlebar, combinedHead)
+    expect(body).not.toMatch(/border-color\s*:/)
+  })
+
+  test(".section[data-phase-state=\"active\"] uses left-stripe via ::after, not border-color", () => {
+    const body = ruleBody(inspector, '.section[data-phase-state="active"]')
+    expect(body).not.toMatch(/border-color\s*:/)
+    // Outer drop-shadow chrome was the other half of the active state — also retired.
+    expect(body).not.toMatch(/box-shadow\s*:\s*[^;]*\binset\b/)
+    // The accent left-stripe `::after` rule must exist.
+    expect(inspector).toMatch(/\.section\[data-phase-state="active"\]::after\s*\{/)
+  })
+
+  test(".executor-selector[data-open=\"true\"] .executor-chip uses bg-tint, not border-color", () => {
+    const body = ruleBody(composer, '.executor-selector[data-open="true"] .executor-chip')
+    expect(body).not.toMatch(/border-color\s*:/)
+    expect(body).toMatch(/background\s*:/)
+  })
+
+  test(".workspace-close:hover uses bg-tint, not border-color", () => {
+    const body = ruleBody(workspace, ".workspace-close:hover")
+    expect(body).not.toMatch(/border-color\s*:/)
+    expect(body).toMatch(/background\s*:/)
+  })
+})

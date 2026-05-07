@@ -16,16 +16,16 @@ import {
   setChatAttachments,
   setMessages,
   mergeLoadedConversationMessages,
+  ingestPersistedMessage,
 } from "../store/messages";
-import { boardStore, setTasksData } from "../store/board";
+import { boardStore, setTasksData, loadBoard, loadTasks } from "../store/board";
 import { appStore, setConnectionStatus } from "../store/app";
 import { workspaceMode } from "./workspace";
 import {
   selectTask,
-  submitMessage,
   createTask,
 } from "./task";
-import { syntheticTextMessage } from "../utils/transcript";
+import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
 
 // ── Types ──
 
@@ -64,6 +64,50 @@ function currentTaskSessionID(): string {
     )?.task?.sessionID ||
     ""
   );
+}
+
+export function classifyPanelMessageTarget(input: {
+  selectedTaskID?: string;
+  boardTaskID?: string;
+  tasks?: any[];
+}): "create" | "task" | "reload" | "orphan" {
+  const selectedTaskID = String(input.selectedTaskID || "").trim();
+  if (!selectedTaskID) return "create";
+  if (selectedTaskID === String(input.boardTaskID || "").trim()) return "task";
+  const tasks = Array.isArray(input.tasks) ? input.tasks : [];
+  return tasks.some((item: any) => item?.task?.id === selectedTaskID)
+    ? "reload"
+    : "orphan";
+}
+
+async function resolvePanelMessageTaskID(): Promise<string> {
+  const selectedTaskID = String(boardStore.selectedTaskID || "").trim();
+  if (!selectedTaskID) return "";
+
+  let target = classifyPanelMessageTarget({
+    selectedTaskID,
+    boardTaskID: boardStore.board?.task?.id,
+    tasks: boardStore.tasks,
+  });
+
+  if (target === "orphan") {
+    await loadTasks();
+    target = classifyPanelMessageTarget({
+      selectedTaskID,
+      boardTaskID: boardStore.board?.task?.id,
+      tasks: boardStore.tasks,
+    });
+  }
+
+  if (target === "task") return selectedTaskID;
+
+  if (target === "reload") {
+    await selectTask(selectedTaskID);
+    return String(boardStore.selectedTaskID || "").trim();
+  }
+
+  await selectTask("");
+  return "";
 }
 
 // ── Public: conversationTarget ──
@@ -314,72 +358,20 @@ export function mergeMessages(left: any[], right: any[]): any[] {
   return mergeLoadedConversationMessages(left, right);
 }
 
-function appendPendingAssistantPart(
-  requestID: string,
-  type: "text" | "reasoning",
-  delta: string,
-): void {
-  const chunk = typeof delta === "string" ? delta : "";
-  if (!requestID || !chunk) return;
-  const messageID = `pending-assistant:${requestID}`;
-  const partID = `${messageID}:${type}`;
-  let found = false;
-  const next = messageStore.messages.map((message: any) => {
-    if (message?.info?.id !== messageID) return message;
-    found = true;
-    const parts = Array.isArray(message?.parts) ? [...message.parts] : [];
-    const index = parts.findIndex((part: any) => part?.id === partID);
-    if (index >= 0) {
-      const current = parts[index];
-      parts[index] = {
-        ...current,
-        type,
-        text: `${String(current?.text || "")}${chunk}`,
-      };
-    } else {
-      parts.push({
-        id: partID,
-        type,
-        text: chunk,
-        messageID,
-        sessionID: "",
-      });
-    }
-    return {
-      ...message,
-      parts,
-    };
+export function ingestPersistedConversationMessage(input: { info: any; parts: any[] }): void {
+  if (!input?.info?.id) return;
+  applyTreeWriterEvent({
+    type: "message.updated",
+    properties: { info: input.info },
   });
-  if (!found) {
-    next.push({
-      _synthetic: true,
-      info: {
-        id: messageID,
-        role: "assistant",
-        time: { created: Date.now() },
-      },
-      parts: [
-        {
-          id: partID,
-          type,
-          text: chunk,
-          messageID,
-          sessionID: "",
-        },
-      ],
+  for (const part of input.parts ?? []) {
+    if (!part) continue;
+    applyTreeWriterEvent({
+      type: "message.part.updated",
+      properties: { part },
     });
   }
-  setMessages(next);
-}
-
-function insertPendingUserMessage(requestID: string, text: string): void {
-  setMessages([
-    ...messageStore.messages,
-    {
-      info: { id: `pending-user:${requestID}`, role: "user", time: { created: Date.now() } },
-      parts: [{ type: "text", text }],
-    },
-  ]);
+  ingestPersistedMessage(input);
 }
 
 function ensureTaskListEntry(
@@ -429,32 +421,13 @@ async function applyPanelResult(result: any): Promise<void> {
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
     await selectTask(taskID);
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
-    if (result?.message) {
-      const text = String(result.message);
-      const alreadyVisible = messageStore.messages.some((item: any) =>
-        (Array.isArray(item?.parts) ? item.parts : []).some(
-          (part: any) => part?.type === "text" && String(part?.text || "") === text,
-        ),
-      );
-      if (alreadyVisible) return;
-      setMessages(
-        mergeMessages(messageStore.messages, [
-          syntheticTextMessage("assistant", Date.now(), text),
-        ]),
-      );
-    }
     return;
-  }
-  if (result?.message) {
-    setMessages(
-      mergeMessages(messageStore.messages, [
-        syntheticTextMessage("assistant", Date.now(), String(result.message)),
-      ]),
-    );
   }
 }
 
-export async function panelMessage(text: string, attachments: any[] = [], metadata: any = {}): Promise<any> {
+export async function panelMessage(text: string, attachmentsOrMeta: any[] | Record<string, any> = [], metadata: any = {}): Promise<any> {
+  const attachments = Array.isArray(attachmentsOrMeta) ? attachmentsOrMeta : [];
+  const meta = Array.isArray(attachmentsOrMeta) ? metadata : attachmentsOrMeta;
   const requestID = crypto.randomUUID();
   const controller = new AbortController();
   const request: any = {
@@ -464,41 +437,67 @@ export async function panelMessage(text: string, attachments: any[] = [], metada
     aborted: false,
     manualAbort: false,
   };
-  insertPendingUserMessage(requestID, text);
-  setConnectionStatus("online");
-  setChatRequest(request as any);
   try {
+    const taskID = await resolvePanelMessageTaskID();
+    setConnectionStatus("online");
+    setChatRequest(request as any);
     // If no task is selected, create a new task via direct API (no LLM round-trip)
-    if (!boardStore.selectedTaskID) {
-      const taskID = await createTask({
+    if (!taskID) {
+      const createdTaskID = await createTask({
         text,
         attachments,
-        metadata,
+        metadata: meta,
         signal: controller.signal,
       });
-      if (taskID) {
-        await selectTask(taskID);
-        return { task_id: taskID };
+      if (createdTaskID) {
+        await selectTask(createdTaskID);
+        return { task_id: createdTaskID };
       }
       throw new Error("Task creation returned no task_id");
     }
-    // If a task is selected, send a follow-up message via the panel stream
-    const result = await submitMessage(text, attachments, {
-      requestID,
-      metadata,
-      signal: controller.signal,
-      onEvent: async (event) => {
-        const type = String(event?.type || "");
-        if (type === "reasoning_delta") {
-          appendPendingAssistantPart(requestID, "reasoning", String(event?.delta || ""));
-          return;
-        }
-        if (type === "message_delta") {
-          appendPendingAssistantPart(requestID, "text", String(event?.delta || ""));
-        }
+    // Every status (active, queued, blocked, cancelled, completed, failed) →
+    // send message directly to the task. The backend's handleTaskMessage
+    // path unconditionally revives terminal tasks (status flips back to
+    // active, time_completed cleared, dispatchTaskLoop fires) — see
+    // memory feedback_task_terminal_state_revivable.md and
+    // engine/task-message-open.ts. The previous "completed → fork new task"
+    // branch contradicted that rule by severing conversation history at
+    // the task boundary; users sending a follow-up to a completed task
+    // expect the same conversation to continue, not a brand-new task.
+    const result = await apiJson(
+      `task/${encodeURIComponent(taskID)}/message`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          source: "panel",
+          ...(attachments.length > 0
+            ? {
+                attachments: attachments.map((att) => ({
+                  mime: att.mime,
+                  data: att.url.includes(",") ? att.url.split(",")[1] : att.url,
+                  ...(att.filename ? { filename: att.filename } : {}),
+                })),
+              }
+            : {}),
+        }),
+        signal: controller.signal,
       },
-    });
-    await applyPanelResult({ ...(result as any), _request: text, _requestID: requestID });
+    );
+    // Server returned the persisted user Message + parts — write them into
+    // the store immediately so the user sees their bubble before the SSE
+    // round-trip lands. Single source: same id space as the SSE events that
+    // follow, so the by-id merge in applyMessageEvent idempotently no-ops
+    // when the matching `message.updated` arrives over the bus.
+    if (result?.user_message?.info?.id) {
+      ingestPersistedConversationMessage(result.user_message);
+    }
+    await loadBoard();
+    // The server may return a control-plane acknowledgement here
+    // (e.g. operator note recorded). The real conversation already comes
+    // from board/transcript rehydration, so mirroring the ack locally only
+    // creates a fake assistant turn with mismatched chrome.
     return result;
   } catch (error) {
     if (request.manualAbort) throw error;

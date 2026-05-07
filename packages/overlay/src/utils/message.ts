@@ -9,17 +9,36 @@ import { t } from "./i18n";
 export type AgentRole =
   | "user"
   | "assistant"
+  | "orchestrator"
   | "spec"
+  | "requirements"
+  | "design-analyst"
   | "architect"
   | "planner"
   | "goal"
   | "executor"
   | "evaluator"
   | "delivery"
+  | "build"
+  | "integrity"
   | "system";
 
-/** Stages that get their own collapsible AgentCard in the conversation view. */
-export const AGENT_CARD_STAGES = new Set<AgentRole>(["assistant", "spec", "architect", "planner", "goal", "executor", "evaluator", "delivery"]);
+/** Stages that get their own collapsible agent card in the conversation view. */
+export const AGENT_CARD_STAGES = new Set<AgentRole>([
+  "assistant",
+  "orchestrator",
+  "spec",
+  "requirements",
+  "design-analyst",
+  "architect",
+  "planner",
+  "goal",
+  "executor",
+  "evaluator",
+  "delivery",
+  "build",
+  "integrity",
+]);
 
 /**
  * Map any backend agent name to a canonical AgentRole.
@@ -29,17 +48,21 @@ export function normalizeAgentRole(name: string): AgentRole {
   const text = String(name || "").trim().toLowerCase();
   if (!text) return "assistant";
   if (text === "user") return "user";
-  if (text === "orchestrator" || text === "task_agent") return "assistant";
+  if (text === "orchestrator") return "orchestrator";
   if (text === "spec") return "spec";
+  if (text === "requirements") return "requirements";
+  if (text === "design-analyst" || text === "design_analyst" || text === "design-analysis" || text === "design_analysis") return "design-analyst";
   if (text === "architect" || text === "architecture" || text === "coordination") return "architect";
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";
   if (text === "goal" || text === "goal_gate") return "goal";
-  if (text === "executor" || text === "build" || text === "coding" ||
+  if (text === "build") return "build";
+  if (text === "executor" || text === "coding" ||
       text === "general" || text === "explore" || text === "execute" ||
-      text === "opencode" || text === "codex" || text === "claude-code") return "executor";
+      text === "mirrorcode" || text === "codex" || text === "claude-code") return "executor";
   if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "eval" ||
       text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
   if (text === "delivery" || text === "deliver" || text === "files" || text === "publish") return "delivery";
+  if (text === "integrity") return "integrity";
   if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";
   return "assistant";
 }
@@ -50,6 +73,8 @@ export function normalizeAgentRole(name: string): AgentRole {
  */
 export function agentRoleToSectionPhase(role: AgentRole): string {
   if (role === "spec") return "spec";
+  if (role === "requirements") return "requirements";
+  if (role === "design-analyst") return "design";
   if (role === "architect") return "architect";
   if (role === "planner") return "plan";
   if (role === "goal") return "goals";
@@ -92,6 +117,9 @@ export function orderedMessageParts(message: any): any[] {
 export function roleLabel(role: string): string {
   if (role === "user") return t("chat.role.user");
   if (role === "assistant") return t("chat.role.assistant");
+  if (role === "orchestrator") return t("chat.role.orchestrator");
+  if (role === "requirements") return t("chat.role.requirements");
+  if (role === "design-analyst" || role === "design_analyst") return t("chat.role.design-analyst");
   if (role === "architect") return t("chat.role.architect");
   if (role === "planner") return t("chat.role.planner");
   if (role === "evaluator") return t("chat.role.evaluator");
@@ -100,6 +128,8 @@ export function roleLabel(role: string): string {
   if (role === "system") return t("chat.role.system");
   if (role === "goal" || role === "goal_gate") return t("chat.role.goal");
   if (role === "executor") return t("chat.role.executor");
+  if (role === "build") return t("chat.role.build");
+  if (role === "integrity") return t("chat.role.integrity");
   return t("chat.role.assistant");
 }
 
@@ -110,7 +140,7 @@ export function roleLabel(role: string): string {
  * Single classification function — replaces classifyAgentStage and classifyMessage.
  *
  * Returns:
- * - An AgentRole string (e.g. "spec", "planner") → message belongs to that AgentCard
+ * - An AgentRole string (e.g. "spec", "planner") → message belongs to that agent card
  * - "main" → message belongs to the main conversation
  */
 export function classifyMessage(msg: any, rootSessionID: string): string {
@@ -132,7 +162,7 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
   if (AGENT_CARD_STAGES.has(resolved as AgentRole)) return resolved;
 
   // The store may receive direct message objects before overlay stamping
-  // (tests, synthetic entries, or partial reloads). The agent field is still
+  // (tests or partial reloads). The agent field is still
   // first-party message metadata, so classify it canonically here.
   const agent = String(msg?.info?.agent || "").trim().toLowerCase();
   const normalized = normalizeAgentRole(agent);
@@ -147,12 +177,16 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
 export function agentStageLabel(stage: string): string {
   const role = normalizeAgentRole(stage);
   if (role === "spec") return t("chat.role.spec");
+  if (role === "requirements") return t("chat.role.requirements");
+  if (role === "design-analyst") return t("chat.role.design-analyst");
   if (role === "architect") return t("chat.role.architect");
   if (role === "planner") return t("chat.role.planner");
   if (role === "goal") return t("chat.role.goal");
   if (role === "evaluator") return t("chat.role.evaluator");
   if (role === "delivery") return t("chat.role.delivery");
   if (role === "executor") return t("chat.role.executor");
+  if (role === "build") return t("chat.role.build");
+  if (role === "integrity") return t("chat.role.integrity");
   return t("chat.role.assistant");
 }
 
@@ -172,5 +206,12 @@ export function effectiveRole(msg: any, _rootSessionID?: string): string {
     const normalized = normalizeAgentRole(agent);
     if (AGENT_CARD_STAGES.has(normalized)) return normalized;
   }
-  return msg.info?.role || "assistant";
+  // No assistant-fallback (一个萝卜一个坑). If we got here, the message has
+  // no resolvedRole AND no recognised agent AND no role — that's a server
+  // bridge bug; throw so it surfaces immediately.
+  const fallback = msg.info?.role;
+  if (typeof fallback !== "string" || fallback.length === 0) {
+    throw new Error(`effectiveRole: message ${msg.info?.id ?? "<unknown>"} has no resolvedRole/agent/role; bridge must enrich`);
+  }
+  return fallback;
 }

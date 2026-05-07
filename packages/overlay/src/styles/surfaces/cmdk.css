@@ -1,0 +1,147 @@
+/* ─────────────────────────────────────────────────────────────
+   Command Palette (cmdk-*)
+   The Cmd/Ctrl-K modal launcher used to invoke commands across
+   the overlay. The `.cmdk-backdrop` is a fixed-position fullscreen
+   overlay; the `.cmdk-panel` is the centered modal.
+   Component: src/components/CommandPalette.tsx.
+   ───────────────────────────────────────────────────────────── */
+
+.cmdk-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ui-z-toast);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  backdrop-filter: blur(calc(2px * var(--ui-scale)));
+  -webkit-backdrop-filter: blur(calc(2px * var(--ui-scale)));
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  animation: cmdk-fade 0.12s ease;
+}
+
+@keyframes cmdk-fade {
+  from {
+    opacity: var(--ui-opacity-hidden);
+  }
+  to {
+    opacity: var(--ui-opacity-full);
+  }
+}
+
+.cmdk-panel {
+  width: min(calc(640px * var(--ui-scale)), calc(100vw - calc(64px * var(--ui-scale))));
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--dialog-bg);
+  border: var(--oc-border-width) solid var(--border-strong);
+  border-radius: var(--oc-radius-large);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.cmdk-input {
+  appearance: none;
+  border: none;
+  border-bottom: var(--oc-border-width) solid var(--border);
+  background: transparent;
+  color: var(--text-strong);
+  font-size: var(--ui-font-body);
+  padding: var(--ui-gap-lg) calc(var(--ui-gap-lg) * 1.2);
+  outline: none;
+}
+
+.cmdk-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.cmdk-input::placeholder {
+  color: var(--text-muted);
+}
+
+.cmdk-input:focus-visible {
+  outline: none;
+  box-shadow: inset 0 calc(-2px * var(--ui-scale)) 0 color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.cmdk-item:focus-visible {
+  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: calc(-2px * var(--ui-scale));
+}
+
+.cmdk-list {
+  overflow-y: auto;
+  padding: var(--ui-gap-xs) 0;
+}
+
+.cmdk-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-gap-md);
+  padding: var(--ui-gap-sm) calc(var(--ui-gap-lg) * 1.2);
+  font-size: var(--ui-font-control);
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cmdk-item--active {
+  background: var(--accent-dim);
+  color: var(--text-strong);
+}
+
+.cmdk-item-group {
+  flex: none;
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+  min-width: calc(64px * var(--ui-scale));
+}
+
+.cmdk-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmdk-item-hint {
+  flex: none;
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+}
+
+.cmdk-empty {
+  padding: var(--ui-gap-lg);
+  color: var(--text-muted);
+  text-align: center;
+  font-size: var(--ui-font-control);
+}
+
+.cmdk-foot {
+  border-top: var(--oc-border-width) solid var(--border);
+  padding: var(--ui-gap-sm) calc(var(--ui-gap-lg) * 1.2);
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-md);
+}
+
+.cmdk-foot kbd {
+  display: inline-block;
+  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border-strong);
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-2);
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmdk-backdrop {
+    animation: none !important;
+  }
+}

@@ -52,16 +52,6 @@ export function env(...keys: string[]) {
   }
 }
 
-export function prepareDashscopeEnv() {
-  // Keys should be set directly in .env with the exact names models.dev expects:
-  //   ALIBABA_CODING_PLAN_API_KEY  (for alibaba-coding-plan / alibaba-coding-plan-cn)
-  //   DASHSCOPE_API_KEY            (for alibaba / alibaba-cn)
-  // No implicit copying between variable names — each provider reads its own env var.
-  // Legacy aliases are still checked for backward compatibility but no longer copied.
-  const url = env("DASHSCOPE_API_URL", "CODING_DASHSCOPE_API_URL")
-  if (url) process.env.DASHSCOPE_API_URL ??= url
-}
-
 /**
  * Write custom local provider configs into the benchmark's OPENCORVUS_CONFIG_DIR
  * so they are available during Instance.provide() calls.
@@ -81,6 +71,7 @@ export async function prepareLocalProviders() {
     const hexinUrl = env("HEXIN_OPENAI_URL")
     providers["hexin"] = {
       name: "Hexin OpenAI Gateway",
+      // api: hexinUrl ? `${hexinUrl.replace(/\/+$/, "")}/v1` : "https://aimemodeldev.myhexin.com/litellm/v1",
       api: hexinUrl ? `${hexinUrl.replace(/\/+$/, "")}/v1` : "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
       env: ["HEXIN_API_KEY"],
       models: {
@@ -109,13 +100,15 @@ export async function prepareLocalProviders() {
 }
 
 export function dashscopeCodingKey() {
-  const key = env("DASHSCOPE_API_KEY", "CODING_DASHSCOPE_API_KEY", "ALIBABA_CODING_PLAN_API_KEY", "OPENCORVUS_EMBEDDED_DASHSCOPE_KEY")
+  const key = env("DASHSCOPE_API_KEY", "OPENCORVUS_EMBEDDED_DASHSCOPE_KEY")
   return key?.startsWith("sk-sp-") ? key : undefined
 }
 
+// `alibaba-coding-plan` (international) deliberately excluded — bench keys are
+// 国内 sk-sp-*, the international endpoint coding-intl.dashscope.aliyuncs.com
+// rejects them with HTTP 401. Use `-cn` exclusively (rule 8: no double source).
 const preferredProviders = [
   "alibaba-coding-plan-cn",
-  "alibaba-coding-plan",
   "alibaba-cn",
   "hexin",
   "google",
@@ -124,7 +117,6 @@ const preferredProviders = [
   "moonshotai-cn",
   "moonshotai",
   "huggingface",
-  "github-copilot",
 ]
 
 async function providerList() {
@@ -141,18 +133,21 @@ async function resetBenchmarkState() {
   await Instance.disposeAll().catch(() => undefined)
 }
 
-function explicitModel(
+export function explicitModel(
   providers: Awaited<ReturnType<typeof providerList>>,
   explicit: string,
-  allowOpenAICodex = false,
 ) {
+  if (explicit.startsWith("alibaba-coding-plan/")) {
+    throw new Error(
+      `benchmark model "${explicit}" rejected: international alibaba-coding-plan endpoint does not accept 国内 sk-sp-* keys (rule 8). Use alibaba-coding-plan-cn/<model> instead.`,
+    )
+  }
   if (explicit.includes("/")) return explicit
   for (const providerID of preferredProviders) {
     const provider = providers[providerID]
     if (provider?.models[explicit]) return `${providerID}/${explicit}`
   }
   for (const provider of Object.values(providers)) {
-    if (!allowOpenAICodex && provider.id === "openai-codex") continue
     if (provider.models[explicit]) return `${provider.id}/${explicit}`
   }
   throw new Error(`benchmark model not found: ${explicit}`)
@@ -163,7 +158,6 @@ export async function resolveBenchmarkModel(
   options?: {
     cwd?: string
     explicitKeys?: string[]
-    allowOpenAICodex?: boolean
   },
 ) {
   await resetBenchmarkState()
@@ -177,9 +171,9 @@ export async function resolveBenchmarkModel(
     fn: async () => {
       const providers = await Provider.list()
       const explicit = env(...(options?.explicitKeys ?? ["OPENCORVUS_BENCHMARK_MODEL", "OPENCORVUS_E2E_MODEL"]))
-      if (explicit) return explicitModel(providers, explicit, options?.allowOpenAICodex)
-      if (providers["alibaba-coding-plan-cn"]?.models["glm-5"]) return "alibaba-coding-plan-cn/glm-5"
+      if (explicit) return explicitModel(providers, explicit)
       if (providers["alibaba-coding-plan-cn"]?.models["kimi-k2.5"]) return "alibaba-coding-plan-cn/kimi-k2.5"
+      if (providers["alibaba-coding-plan-cn"]?.models["glm-5"]) return "alibaba-coding-plan-cn/glm-5"
       if (providers["hexin"]?.models["gpt-5.4-mini"]) return "hexin/gpt-5.4-mini"
 
       for (const providerID of preferredProviders) {
@@ -190,17 +184,7 @@ export async function resolveBenchmarkModel(
       }
 
       const fallback = await Provider.defaultModel()
-      if (options?.allowOpenAICodex || !["openai-codex", "github-copilot"].includes(fallback.providerID)) {
-        return `${fallback.providerID}/${fallback.modelID}`
-      }
-
-      for (const provider of Object.values(providers)) {
-        if (provider.id === "openai-codex" || provider.id === "github-copilot") continue
-        const [model] = Provider.sort(Object.values(provider.models))
-        if (model) return `${provider.id}/${model.id}`
-      }
-
-      throw new Error("No live benchmark model available")
+      return `${fallback.providerID}/${fallback.modelID}`
     },
   })
 }

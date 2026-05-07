@@ -3,6 +3,7 @@ import { describeRoute, validator } from "hono-openapi"
 import { resolver } from "hono-openapi"
 import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
+import { Vcs } from "../../project/vcs"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
@@ -73,8 +74,16 @@ export const ProjectRoutes = lazy(() =>
       async (c) => {
         const result = await Project.initGit(Instance.directory)
         if (result.created) {
-          const { hasActiveSessions } = await import("@/orchestrator/runtime")
-          if (!hasActiveSessions()) {
+          const { hasActiveSessions } = await import("@/engine/runtime")
+          if (hasActiveSessions()) {
+            // Active sessions prevent a full dispose.  Refresh the cached
+            // project in-place so downstream reads see the new worktree/sandboxes,
+            // then discard the stale VCS state so the next GET /vcs re-initialises
+            // the branch tracker against the newly-created repo.
+            // (Project.isGitRepo probes disk directly — no cache to invalidate.)
+            await Instance.refresh()
+            Vcs.resetState()
+          } else {
             await Instance.dispose()
           }
         }

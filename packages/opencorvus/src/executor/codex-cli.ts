@@ -1,5 +1,6 @@
-import { record, text, type CodingEventInfo, type CodingProvider } from "./compat"
+import { record, text, type CodingEventInfo, type CodingProvider } from "./contract"
 import { jsonLines } from "./external-process"
+import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 
 export namespace CodexCLIExecutor {
   export function create(input: { command: string[] }): CodingProvider {
@@ -31,6 +32,10 @@ export namespace CodexCLIExecutor {
             "-",
           ],
           cwd: info.cwd,
+          env: {
+            ...process.env,
+            ...gitCeilingEnvForWorktree(info.cwd),
+          },
           stdin: prompt,
           signal: info.signal,
         })
@@ -55,6 +60,10 @@ export namespace CodexCLIExecutor {
             "-",
           ],
           cwd: info.cwd,
+          env: {
+            ...process.env,
+            ...gitCeilingEnvForWorktree(info.cwd),
+          },
           stdin: prompt,
           signal: info.signal,
         })

@@ -13,7 +13,7 @@ describe("session prompt_async route", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const app = Server.App()
         const response = await app.request(`/session/${session.id}/prompt_async`, {
           method: "POST",
@@ -50,7 +50,7 @@ describe("session prompt_async route", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const app = Server.App()
         const created = await app.request(`/session/${session.id}/prompt_async`, {
           method: "POST",
@@ -97,7 +97,7 @@ describe("session prompt_async route", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const app = Server.App()
         const response = await app.request(`/session/${session.id}/prompt_async/task_missing_123`, {
           method: "GET",
@@ -117,7 +117,7 @@ describe("session prompt_async route", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const taskID = TaskQueueService.enqueuePrompt({
           sessionID: session.id,
           prompt: {

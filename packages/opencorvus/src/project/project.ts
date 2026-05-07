@@ -4,10 +4,8 @@ import path from "path"
 import { createHash } from "crypto"
 import { Database, eq } from "../storage/db"
 import { ProjectTable } from "./project.sql"
-import { SessionTable } from "../session/session.sql"
 import { Log } from "../util/log"
 import { Flag } from "@/flag/flag"
-import { work } from "../util/queue"
 import { fn } from "@opencorvus-ai/util/fn"
 import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
@@ -74,11 +72,22 @@ export namespace Project {
     return next
   }
 
+  /**
+   * The single source of truth for "is this directory a git repository."
+   * Sync `.git` probe (file or directory — `.git` is a file in linked
+   * worktrees). No DB cache, no Instance cache: rule 22 forbids double-source,
+   * and the prior cached `Info.vcs` column silently lied whenever `.git` was
+   * deleted between Instance initializations, making auto-init never run and
+   * `Worktree.create` throw WorktreeCreateFailedError forever.
+   */
+  export function isGitRepo(directory: string): boolean {
+    return Filesystem.stat(path.join(directory, ".git")) !== undefined
+  }
+
   export const Info = z
     .object({
       id: z.string(),
       worktree: z.string(),
-      vcs: z.literal("git").optional(),
       name: z.string().optional(),
       icon: z
         .object({
@@ -126,7 +135,6 @@ export namespace Project {
     return {
       id: row.id,
       worktree: row.worktree,
-      vcs: row.vcs ? Info.shape.vcs.parse(row.vcs) : undefined,
       name: row.name ?? undefined,
       icon,
       time: {
@@ -153,7 +161,6 @@ export namespace Project {
             id: "global",
             worktree: "/",
             sandbox: "/",
-            vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
           }
         }
 
@@ -166,13 +173,19 @@ export namespace Project {
           id,
           sandbox: directory,
           worktree: directory,
-          vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
         }
       }
 
-      const inherited = local ? undefined : await text(["rev-parse", "--show-toplevel"], directory)
-      const root = inherited ? gitpath(directory, inherited) : undefined
-      const hasLocalGit = local || (!!root && root !== Filesystem.resolve(directory) && (await initRepo(directory)))
+      // Note (W2-V32): a previous version auto-ran `git init` here when the
+      // directory was a non-git subfolder of an existing parent repo (the old
+      // `(await initRepo(directory))` branch). That silently materialized a
+      // sub-repo as a side effect of *any* request reaching Project.fromDirectory
+      // — which violated rule 7 (no fallback) and made the darwin 500-storm
+      // possible (cwd-fallback sites would init repos in unintended locations).
+      // We now leave non-git subfolders as non-git: callers that need a
+      // working tree throw WorktreeNotGitError and the overlay drives an
+      // explicit user-confirmed init via POST /project/current/init-git.
+      const hasLocalGit = local
 
       if (hasLocalGit) {
         let sandbox = directory
@@ -190,7 +203,6 @@ export namespace Project {
           id,
           sandbox,
           worktree,
-          vcs: "git",
         }
       }
 
@@ -198,7 +210,6 @@ export namespace Project {
         id: "global",
         worktree: "/",
         sandbox: "/",
-        vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
       }
     })
 
@@ -208,15 +219,11 @@ export namespace Project {
       const fresh: Info = {
         id: data.id,
         worktree: data.worktree,
-        vcs: data.vcs as Info["vcs"],
         sandboxes: [],
         time: {
           created: Date.now(),
           updated: Date.now(),
         },
-      }
-      if (data.id !== "global") {
-        await migrateFromGlobal(data.id, data.worktree)
       }
       return fresh
     })
@@ -226,7 +233,6 @@ export namespace Project {
     const result: Info = {
       ...existing,
       worktree: data.worktree,
-      vcs: data.vcs as Info["vcs"],
       time: {
         ...existing.time,
         updated: Date.now(),
@@ -238,7 +244,6 @@ export namespace Project {
     const insert = {
       id: result.id,
       worktree: result.worktree,
-      vcs: result.vcs ?? null,
       name: result.name,
       icon_url: result.icon?.url,
       icon_color: result.icon?.color,
@@ -250,7 +255,6 @@ export namespace Project {
     }
     const updateSet = {
       worktree: result.worktree,
-      vcs: result.vcs ?? null,
       name: result.name,
       icon_url: result.icon?.url,
       icon_color: result.icon?.color,
@@ -272,7 +276,7 @@ export namespace Project {
   }
 
   export async function discover(input: Info) {
-    if (input.vcs !== "git") return
+    if (!isGitRepo(input.worktree)) return
     if (input.icon?.override) return
     if (input.icon?.url) return
     const matches = await Glob.scan("**/favicon.{ico,png,svg,jpg,jpeg,webp}", {
@@ -293,28 +297,6 @@ export namespace Project {
       },
     })
     return
-  }
-
-  async function migrateFromGlobal(id: string, worktree: string) {
-    const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, "global")).get())
-    if (!row) return
-
-    const sessions = Database.use((db) =>
-      db.select().from(SessionTable).where(eq(SessionTable.project_id, "global")).all(),
-    )
-    if (sessions.length === 0) return
-
-    log.info("migrating sessions from global", { newProjectID: id, worktree, count: sessions.length })
-
-    await work(10, sessions, async (row) => {
-      // Skip sessions that belong to a different directory
-      if (row.directory && row.directory !== worktree) return
-
-      log.info("migrating session", { sessionID: row.id, from: "global", to: id })
-      Database.use((db) => db.update(SessionTable).set({ project_id: id }).where(eq(SessionTable.id, row.id)).run())
-    }).catch((error) => {
-      log.error("failed to migrate sessions from global to project", { error, projectId: id })
-    })
   }
 
   export function setInitialized(id: string) {
@@ -346,8 +328,8 @@ export namespace Project {
   }
 
   export async function initGit(directory: string) {
-    const current = await fromDirectory(directory)
-    if (current.project.vcs === "git") {
+    if (isGitRepo(directory)) {
+      const current = await fromDirectory(directory)
       return InitGitResult.parse({
         created: false,
         project: current.project,
@@ -365,6 +347,14 @@ export namespace Project {
       throw new Error("git init completed without creating .git")
     }
     const next = await fromDirectory(directory)
+    // Cache refresh is the caller's responsibility. Doing it here would
+    // dual-source with task-api/prepareProject and server/routes/project,
+    // and — critically — when this path runs INSIDE Instance.provide's
+    // bootstrap iife (instance.ts:51), Instance.refresh() awaits the very
+    // same in-flight iife it was called from → self-deadlock. The
+    // bootstrap path re-reads via Project.fromDirectory at instance.ts:52
+    // immediately after this returns; both other callers already invoke
+    // Instance.refresh() right after this returns. Rule 8: single source.
     return InitGitResult.parse({
       created: true,
       project: next.project,

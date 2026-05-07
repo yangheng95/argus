@@ -1,0 +1,52 @@
+---
+title: 网络
+description: OpenCorvus 的 HTTP/HTTPS 代理配置。
+---
+
+OpenCorvus 直接读标准代理环境变量；`opencorvus.jsonc` 里没有单独的 proxy 字段。
+
+## 支持的变量
+
+| 变量 | 用途 |
+|---|---|
+| `HTTP_PROXY` / `http_proxy` | HTTP 流量代理 |
+| `HTTPS_PROXY` / `https_proxy` | HTTPS 流量代理 |
+| `NO_PROXY` / `no_proxy` | 逗号分隔的绕过域名 |
+
+检测辅助函数位于 `packages/opencorvus/src/util/proxied.ts`：
+
+```ts
+export function proxied() {
+  return !!(process.env.HTTP_PROXY || process.env.HTTPS_PROXY ||
+            process.env.http_proxy || process.env.https_proxy)
+}
+```
+
+Bun 运行时原生支持这些变量，因此所有 LLM provider、MCP 传输与 share 端点会自动走代理。
+
+## 使用
+
+```bash
+export HTTPS_PROXY=http://127.0.0.1:7890
+export HTTP_PROXY=http://127.0.0.1:7890
+export NO_PROXY=localhost,127.0.0.1,*.internal
+
+opencorvus serve
+```
+
+## TLS / 自定义 CA
+
+对于企业自签证书，使用 Bun 标准的 `NODE_EXTRA_CA_CERTS` 或系统信任库：
+
+```bash
+export SSL_CERT_FILE=/etc/ssl/certs/corp-ca.pem
+opencorvus serve
+```
+
+:::caution
+OpenCorvus **不**提供禁用 TLS 校验的内置选项。若必须如此，需在 Bun 层面 workaround，自担风险——这不属于受支持配置。
+:::
+
+## 启用代理后的行为
+
+只要任一代理变量被设置，部分适配器（如 share 端点、某些遥测 hook）会走另一条代码路径——可在源码中搜索 `proxied()` 查看具体使用点。

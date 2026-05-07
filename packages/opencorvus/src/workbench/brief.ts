@@ -1,11 +1,9 @@
 import { Identifier } from "@/id/id"
 import { Memory } from "@/memory"
+import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { Database, desc, eq } from "@/storage/db"
-import {
-  OrchestratorGoalTable,
-  OrchestratorPlanVersionTable,
-  OrchestratorTaskTable,
-} from "@/orchestrator/orchestrator.sql"
+import { EngineGoalTable, EnginePlanVersionTable, EngineTaskTable } from "@/engine"
+import { findActivePlanForTask } from "@/engine/store"
 import { WorkbenchBriefSnapshotTable, WorkbenchTaskNoteTable } from "./workbench.sql"
 
 const BRIEF_VERSION = "brief-v2"
@@ -16,19 +14,19 @@ export function compileBrief(input: {
   planVersionID?: string
   sessionID?: string
 }) {
-  const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
+  const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
-  const planID = input.planVersionID ?? task.active_plan_version_id ?? undefined
+  const planID = input.planVersionID ?? findActivePlanForTask(task.id)?.id
   const plan = planID
-    ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, planID)).get())
+    ? Database.use((db) => db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.id, planID)).get())
     : undefined
   const goals = planID
     ? Database.use((db) =>
         db
           .select()
-          .from(OrchestratorGoalTable)
-          .where(eq(OrchestratorGoalTable.plan_version_id, planID))
-          .orderBy(OrchestratorGoalTable.order_index)
+          .from(EngineGoalTable)
+          .where(eq(EngineGoalTable.plan_version_id, planID))
+          .orderBy(EngineGoalTable.order_index)
           .all(),
       )
     : []
@@ -82,14 +80,11 @@ export function compileBrief(input: {
       "- Do not create extra user-facing commits unless explicitly requested.",
       "- If you do create a commit, use a concise, meaningful message grounded in the task request and plan.",
     ].join("\n"),
-    planHints(plan?.metadata).length > 0
-      ? "Plan hints:\n" + planHints(plan?.metadata).map((item) => `- ${item}`).join("\n")
-      : "",
     goals.length > 0
       ? "Goals:\n" +
         goals
           .map((goal) =>
-            `- ${goal.title} (criteria: ${goal.done_definition}${
+            `- ${goal.title} (acceptance:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[])}${
               Array.isArray((goal.metadata as Record<string, unknown> | null | undefined)?.check_selector)
                 ? `; checks: ${(((goal.metadata as Record<string, unknown>).check_selector as unknown[]) ?? [])
                     .filter((item): item is string => typeof item === "string")
@@ -145,10 +140,10 @@ export function compileBrief(input: {
 }
 
 function briefSignature(input: {
-  task: typeof OrchestratorTaskTable.$inferSelect
-  plan?: typeof OrchestratorPlanVersionTable.$inferSelect
+  task: typeof EngineTaskTable.$inferSelect
+  plan?: typeof EnginePlanVersionTable.$inferSelect
   runID?: string
-  goals: Array<typeof OrchestratorGoalTable.$inferSelect>
+  goals: Array<typeof EngineGoalTable.$inferSelect>
   prefs: unknown[]
   notes: Array<{ time_updated: number }>
 }) {
@@ -167,7 +162,7 @@ function briefSignature(input: {
   ].join("|")
 }
 
-function recallMemory(task: typeof OrchestratorTaskTable.$inferSelect) {
+function recallMemory(task: typeof EngineTaskTable.$inferSelect) {
   const query = [task.title, task.request]
     .join(" ")
     .replace(/[^\p{L}\p{N}\s_-]+/gu, " ")
@@ -206,9 +201,3 @@ function recallMemory(task: typeof OrchestratorTaskTable.$inferSelect) {
   }
 }
 
-function planHints(metadata: unknown) {
-  if (!metadata || typeof metadata !== "object") return []
-  const hints = (metadata as Record<string, unknown>).operator_hints
-  if (!Array.isArray(hints)) return []
-  return hints.filter((item): item is string => typeof item === "string" && item.length > 0)
-}

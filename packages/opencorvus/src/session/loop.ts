@@ -1,10 +1,12 @@
 import z from "zod"
+import Ajv2020 from "ajv/dist/2020"
+import type { AnySchema, ErrorObject } from "ajv"
 import { Identifier } from "../id/id"
 import { Message } from "./message"
 import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
-import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema } from "ai"
+import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema, type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
@@ -15,6 +17,7 @@ import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
+import { Env } from "../env"
 import { MCP } from "../mcp"
 import { ulid } from "ulid"
 import { NamedError } from "@opencorvus-ai/util/error"
@@ -30,9 +33,8 @@ import { Truncate } from "@/tool/truncation"
 import { MemoryInjection } from "@/memory/injection"
 import { Scratchpad } from "@/memory/scratchpad"
 import { TaskPlan } from "@/memory/task-plan"
-import { messageControlOnly, textForBoth } from "./part-visibility"
 import { SessionSummary } from "./summary"
-import { SessionPromptState } from "./prompt-state"
+import { SessionPromptState } from "./prompt/state"
 import { muteAISdkWarnings } from "@/runtime/shims"
 
 muteAISdkWarnings()
@@ -47,8 +49,646 @@ IMPORTANT:
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
+// Terminal-call recovery runs through provider-level toolChoice where possible.
+// If the provider/model still stops in prose, the current assistant message is
+// stamped with a typed error and the caller sees the contract violation.
+
 export namespace SessionLoop {
   const { log, state, cancel, flushCallbacks, start, resume } = SessionPromptState
+
+  type StrictAITool = AITool & { strict?: boolean }
+
+  function strictTool(input: AITool): AITool {
+    return { ...(input as StrictAITool), strict: true } as AITool
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ephemeral per-session tools (phase 3-a-1 of specs/new-arch/16-unified-teardown.md)
+  //
+  // Some stage agents (intent-analysis, requirements, architect, delivery,
+  // integrity reviewer, ...) need to expose agent-scoped tool objects
+  // (`extract_slot`, `register_requirement`, `submit_verdict`, ...) for a
+  // single prompt invocation. These tools do not belong in the global Agent
+  // registry because their meaning is bounded to one agent's lifetime, and
+  // persisting them per-message would require serialising function bodies.
+  //
+  // The solution is a process-local Map keyed by sessionID. Callers register
+  // the tools before `SessionPrompt.prompt()` runs the loop and clear them
+  // when the prompt resolves. `resolveTools` merges the registered tools on
+  // top of the registry- and MCP-sourced ones.
+  //
+  // Scope rules:
+  //   - One entry per sessionID. Overwriting replaces the prior set.
+  //   - Tools survive only within a single agent invocation; callers MUST
+  //     clear on both success and failure paths.
+  //   - The registry is IN-MEMORY only. Crash recovery re-enters the child
+  //     session from DB-persisted messages; the extra tools would be gone,
+  //     and the matching stage-agent caller must either re-register or
+  //     abandon the session.
+  // ---------------------------------------------------------------------------
+  const ephemeralTools = new Map<string, Record<string, AITool>>()
+
+  /**
+   * Register a map of agent-scoped tool objects for the given session.
+   *
+   * Passing `undefined` clears any previously registered entry.
+   * Subsequent calls replace the map wholesale; there is no partial merge
+   * so callers can reason about the exact surface the LLM will see.
+   */
+  export function setExtraTools(sessionID: string, tools: Record<string, AITool> | undefined): void {
+    if (!tools || Object.keys(tools).length === 0) {
+      ephemeralTools.delete(sessionID)
+      return
+    }
+    ephemeralTools.set(sessionID, tools)
+  }
+
+  /** Read back the currently registered tools. Returns an empty record
+   *  when nothing is registered. Used by `resolveTools`. */
+  export function getExtraTools(sessionID: string): Record<string, AITool> {
+    return ephemeralTools.get(sessionID) ?? {}
+  }
+
+  /** Convenience wrapper: set the tools, run `fn`, always clear afterwards
+   *  regardless of whether `fn` resolved or threw. */
+  export async function withExtraTools<T>(
+    sessionID: string,
+    tools: Record<string, AITool>,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    setExtraTools(sessionID, tools)
+    try {
+      return await fn()
+    } finally {
+      setExtraTools(sessionID, undefined)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ephemeral per-session step-finish hook (phase 3-a-4 of specs/new-arch/16-unified-teardown.md)
+  //
+  // Agents that dispatch work via a tool and then want to stop the LLM
+  // generation once the tool has acknowledged the dispatch (the orchestrator
+  // pattern: `dispatch_goal` fires, the signal aborts the active turn) need
+  // a hook that runs after every LLM turn inside the session loop. AI SDK's
+  // `onStepFinish` gives this at the stream level; SessionLoop does not
+  // expose it natively, so callers register a process-local callback the
+  // loop fires after each `processTurn` returns.
+  //
+  // Scope rules mirror setExtraTools: in-memory only, one entry per
+  // sessionID, replaced wholesale on repeat calls, cleared on sentinel/
+  // callback completion, and NOT persisted across process restart.
+  // ---------------------------------------------------------------------------
+  export interface StepHookEvent {
+    /** 1-indexed turn number within this session's current prompt cycle. */
+    step: number
+    /** Outcome of the turn processTurn just completed. */
+    turn: "stop" | "continue"
+  }
+  export type StepHook = (event: StepHookEvent) => void | Promise<void>
+
+  const ephemeralStepHooks = new Map<string, StepHook>()
+
+  /** Register a step-finish hook for a session. Passing `undefined` clears. */
+  export function setStepHook(sessionID: string, hook: StepHook | undefined): void {
+    if (!hook) {
+      ephemeralStepHooks.delete(sessionID)
+      return
+    }
+    ephemeralStepHooks.set(sessionID, hook)
+  }
+
+  /** Internal: fire the registered step hook, swallowing errors. */
+  async function fireStepHook(sessionID: string, event: StepHookEvent): Promise<void> {
+    const hook = ephemeralStepHooks.get(sessionID)
+    if (!hook) return
+    try {
+      await hook(event)
+    } catch (err) {
+      log.warn("step-hook threw; loop continues", {
+        sessionID,
+        step: event.step,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  /** Convenience wrapper: set the hook, run `fn`, always clear afterwards
+   *  regardless of whether `fn` resolved or threw. */
+  export async function withStepHook<T>(
+    sessionID: string,
+    hook: StepHook,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    setStepHook(sessionID, hook)
+    try {
+      return await fn()
+    } finally {
+      setStepHook(sessionID, undefined)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ephemeral per-session StructuredOutput guard
+  //
+  // Some agents need semantic invariants that JSON Schema cannot express. The
+  // build agent is the concrete case: `status="passed"` is valid only after
+  // the in-session `merge_back` tool has completed successfully. This hook
+  // rejects the terminal StructuredOutput tool call before it is captured, so
+  // the same session can continue, call the missing work tool, and then close
+  // with StructuredOutput. It is process-local for the same reason as
+  // extraTools: validators can close over live tool state and are not
+  // serializable DB state.
+  // ---------------------------------------------------------------------------
+  export type StructuredOutputGuard = (output: unknown) => string | undefined | Promise<string | undefined>
+
+  const ephemeralStructuredOutputGuards = new Map<string, StructuredOutputGuard>()
+  export interface TerminalToolContract {
+    toolName: string
+    isSatisfied: () => boolean
+    shouldExposeOnlyTerminalTool: () => boolean
+  }
+
+  const ephemeralTerminalToolContracts = new Map<string, TerminalToolContract>()
+
+  export function setTerminalToolContract(
+    sessionID: string,
+    contract: TerminalToolContract | undefined,
+  ): void {
+    if (!contract) {
+      ephemeralTerminalToolContracts.delete(sessionID)
+      return
+    }
+    ephemeralTerminalToolContracts.set(sessionID, contract)
+  }
+
+  export async function withTerminalToolContract<T>(
+    sessionID: string,
+    contract: TerminalToolContract,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const previous = ephemeralTerminalToolContracts.get(sessionID)
+    ephemeralTerminalToolContracts.set(sessionID, contract)
+    try {
+      return await fn()
+    } finally {
+      if (previous) ephemeralTerminalToolContracts.set(sessionID, previous)
+      else ephemeralTerminalToolContracts.delete(sessionID)
+    }
+  }
+
+  const structuredOutputAjv = new Ajv2020({ allErrors: true, strict: false })
+
+  type StructuredOutputPayloadValidator = (
+    value: Record<string, unknown>,
+  ) => { success: true } | { success: false; error: string }
+
+  function isStructuredOutputPayload(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+  }
+
+  function structuredOutputPayloadType(value: unknown): string {
+    if (value === undefined) return "undefined"
+    if (value === null) return "null"
+    if (Array.isArray(value)) return "array"
+    return typeof value
+  }
+
+  function formatJsonSchemaErrors(errors: ErrorObject[] | null | undefined): string {
+    if (!errors?.length) return "schema validator rejected the payload"
+    return errors
+      .map((error) => `${error.instancePath || "<root>"} ${error.message ?? "is invalid"}`)
+      .join("; ")
+  }
+
+  function compileStructuredOutputPayloadValidator(schema: unknown): StructuredOutputPayloadValidator {
+    const validate = structuredOutputAjv.compile(schema as AnySchema)
+    return (value) => {
+      if (validate(value)) return { success: true }
+      return { success: false, error: formatJsonSchemaErrors(validate.errors) }
+    }
+  }
+
+  export function validateStructuredOutputPayload(
+    payload: unknown,
+    validator: StructuredOutputPayloadValidator,
+  ): { ok: true; value: Record<string, unknown> } | { ok: false; reason: string } {
+    if (!isStructuredOutputPayload(payload)) {
+      return {
+        ok: false,
+        reason: `StructuredOutput payload must be a JSON object; received ${structuredOutputPayloadType(payload)}`,
+      }
+    }
+
+    const validation = validator(payload)
+    if (!validation.success) {
+      return {
+        ok: false,
+        reason: `StructuredOutput payload did not match the registered JSON schema: ${validation.error}`,
+      }
+    }
+
+    return { ok: true, value: payload }
+  }
+
+  export async function withStructuredOutputGuard<T>(
+    sessionID: string,
+    guard: StructuredOutputGuard,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const previous = ephemeralStructuredOutputGuards.get(sessionID)
+    ephemeralStructuredOutputGuards.set(sessionID, guard)
+    try {
+      return await fn()
+    } finally {
+      if (previous) ephemeralStructuredOutputGuards.set(sessionID, previous)
+      else ephemeralStructuredOutputGuards.delete(sessionID)
+    }
+  }
+
+  /**
+   * Decide whether the just-finished assistant turn should enter the
+   * StructuredOutput recovery channel (stamp `StructuredOutputError` on the
+   * current assistant message and stop).
+   *
+   * Rules — see specs/new-arch/2026-04-28-structured-output-systemic-fix.md §D:
+   *
+   *   1. Only the json_schema output contract requires a terminal
+   *      StructuredOutput call; for `text` output we never stamp.
+   *   2. If the model already finalised by calling StructuredOutput
+   *      (validated args reached `onSuccess`), the contract is satisfied.
+   *   3. If a provider/runtime error is already recorded on this turn, do
+   *      NOT overwrite it with a structured-miss error — the retry layer
+   *      must see the original cause.
+   *   4. A turn that ends with `finish=tool-calls` is the model still
+   *      executing its tool flow (e.g. the integrity reviewer between two
+   *      `submit_<dim>_verdict` calls). It is NOT a structured miss; we
+   *      let the loop continue so the model can keep working toward
+   *      StructuredOutput.
+   *   5. A turn that ends with `finish=unknown` means the stream returned
+   *      without a recognised finish reason (typically a mid-stream cut /
+   *      provider-side hiccup). The loop already continues naturally on
+   *      that path; we do NOT escalate it to a structured miss. The
+   *      previous gate excluded this reason for the same reason; Phase D
+   *      preserves that behaviour.
+   *   6. Any other non-tool-call finish (`stop / length / content-filter /
+   *      error / etc.`) without a StructuredOutput call IS a miss →
+   *      enter recovery.
+   */
+  export type TurnFinishReason = string | undefined
+  export function shouldEnterStructuredOutputRecovery(input: {
+    finish: TurnFinishReason
+    structuredCalled: boolean
+    formatType: "text" | "json_schema" | undefined
+    hasExistingError: boolean
+  }): boolean {
+    if (input.formatType !== "json_schema") return false
+    if (input.structuredCalled) return false
+    if (input.hasExistingError) return false
+    if (!input.finish) return false
+    if (input.finish === "tool-calls") return false
+    if (input.finish === "unknown") return false
+    return true
+  }
+
+  export function shouldEnterTerminalToolRecovery(input: {
+    finish: TurnFinishReason
+    satisfied: boolean
+    hasExistingError: boolean
+  }): boolean {
+    if (input.satisfied) return false
+    if (input.hasExistingError) return false
+    if (!input.finish) return false
+    if (input.finish === "tool-calls") return false
+    if (input.finish === "unknown") return false
+    return true
+  }
+
+  export function shouldStopAfterTerminalTool(input: {
+    terminalToolPresent: boolean
+    satisfied: boolean
+  }): boolean {
+    return input.terminalToolPresent && input.satisfied
+  }
+
+  /**
+   * Compose a one-line context snippet describing what an assistant turn
+   * actually emitted. Appended onto recovery error messages so callers see
+   * concrete evidence of what the model did instead of the generic
+   * "model did not call X" placeholder.
+   *
+   * Snippet shape: `tools=[a,b,c]; text="first 200 chars…"; finish=stop`.
+   * Fields are omitted when they are empty so the snippet stays terse.
+   */
+  async function summarizeAssistantTurn(
+    messageID: string,
+    finish: TurnFinishReason,
+  ): Promise<string> {
+    const parts = await Message.parts(messageID).catch((err) => {
+      log.warn("recovery snippet: failed to load assistant parts", { messageID, error: err })
+      return [] as Message.Part[]
+    })
+    const toolNames: string[] = []
+    let textBody = ""
+    for (const part of parts) {
+      if (part.type === "tool") {
+        const name = (part as Message.ToolPart).tool
+        if (name) toolNames.push(name)
+        continue
+      }
+      if (part.type === "text") {
+        const text = (part as Message.TextPart).text ?? ""
+        if (text.trim() && !textBody) textBody = text.trim()
+      }
+    }
+    const segments: string[] = []
+    if (toolNames.length > 0) segments.push(`tools=[${toolNames.join(",")}]`)
+    if (textBody) {
+      const snippet = textBody.length > 200 ? `${textBody.slice(0, 200)}…` : textBody
+      segments.push(`text=${JSON.stringify(snippet)}`)
+    }
+    if (toolNames.length === 0 && !textBody) segments.push("turn produced no tool calls or text")
+    if (finish) segments.push(`finish=${finish}`)
+    return segments.join("; ")
+  }
+
+  /**
+   * Predictive-compaction decision constants (Phase C).
+   *
+   * `PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT` — fraction of the model's
+   * usable input budget at which we attempt compaction proactively. Late
+   * enough that the prompt-cache prefix stays stable for most of a session.
+   * Override via env `OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD`.
+   *
+   * `TOOL_SCHEMA_BUDGET_RATIO_DEFAULT` — fraction of usable budget that
+   * tool schemas alone must NOT exceed. Compaction never touches tool
+   * definitions, so this is a structural guard: when an agent's tool
+   * surface alone overruns the model, we fail fast rather than retry an
+   * impossible turn. Override via env `OPENCORVUS_TOOL_SCHEMA_BUDGET_RATIO`.
+   *
+   * `COMPACTION_MIN_RESIDUE_CHARS` — even after a perfect compaction the
+   * request still carries the active user message + a minimum-viable
+   * summary in the message body. We use ~6 KB as a conservative residue
+   * estimate (≈ 1.5 K tokens) for the post-compaction sizing check.
+   */
+  const PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT = 0.9
+  const TOOL_SCHEMA_BUDGET_RATIO_DEFAULT = 0.5
+  const COMPACTION_MIN_RESIDUE_CHARS = 6_000
+
+  function readEnvRatio(name: string, defaultValue: number): number {
+    const raw = Number(Env.get(name) ?? "")
+    return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : defaultValue
+  }
+
+  export type PredictiveCompactionDecision =
+    | { kind: "skip" }
+    | { kind: "compact" }
+    | { kind: "fail-tool-schema" }
+    | { kind: "fail-prompt-budget"; reason: "post-compaction-still-over" | "nothing-to-compress" }
+
+  /**
+   * Pure decision: given the budget metrics for the next turn, should we
+   * predictively compact, fail fast, or just send the request?
+   *
+   * Per specs/new-arch/2026-04-28-structured-output-systemic-fix.md §C the
+   * old behaviour ("totalTokens > limit → always compact") spun forever on
+   * context-cold sessions whose overflow came entirely from the
+   * non-compressible prompt face (system + tool schemas). The new logic:
+   *
+   *   1. tool schemas alone over `toolSchemaBudgetRatio` of budget →
+   *      `fail-tool-schema` (rule 22 — there is no recovery, raise).
+   *   2. estimate the residue after a perfect compaction: system + tool
+   *      schemas + a minimum-viable summary + last user message. If that
+   *      already exceeds the budget, compaction cannot rescue this call;
+   *      fail with `post-compaction-still-over`.
+   *   3. compute overflow vs the compressible message body. If the
+   *      compressible content is smaller than the overflow we need to
+   *      eject, compaction has nothing meaningful to fold up; fail with
+   *      `nothing-to-compress`.
+   *   4. otherwise → `compact`.
+   *
+   * `assistantMsgCount === 0` is NOT a hard fail-fast trigger on its own;
+   * a jumbo first user message can still be compactable. The decision is
+   * driven purely by whether compaction can reach the budget.
+   */
+  export function predictiveCompactionDecision(input: {
+    totalTokensEst: number
+    limit: number
+    usableBudget: number
+    systemChars: number
+    toolSchemaChars: number
+    messagePayloadChars: number
+    imageTokensEst: number
+    toolSchemaBudgetRatio: number
+    minResidueChars?: number
+    lastFinishedSummary: boolean
+  }): PredictiveCompactionDecision {
+    if (input.usableBudget === 0) return { kind: "skip" }
+    if (input.lastFinishedSummary) return { kind: "skip" }
+    if (input.totalTokensEst <= input.limit) return { kind: "skip" }
+
+    if (input.toolSchemaChars > input.usableBudget * input.toolSchemaBudgetRatio) {
+      return { kind: "fail-tool-schema" }
+    }
+
+    const minResidueChars = input.minResidueChars ?? COMPACTION_MIN_RESIDUE_CHARS
+    const nonCompressibleChars = input.systemChars + input.toolSchemaChars
+    const postCompactionMinTokens =
+      Math.round((nonCompressibleChars + minResidueChars) / 4) + input.imageTokensEst
+    if (postCompactionMinTokens > input.limit) {
+      return { kind: "fail-prompt-budget", reason: "post-compaction-still-over" }
+    }
+
+    const overflowTokens = input.totalTokensEst - input.limit
+    const compressibleTokens = Math.round(input.messagePayloadChars / 4)
+    const minResidueTokens = Math.round(minResidueChars / 4)
+    if (compressibleTokens < overflowTokens + minResidueTokens) {
+      return { kind: "fail-prompt-budget", reason: "nothing-to-compress" }
+    }
+
+    return { kind: "compact" }
+  }
+
+  /**
+   * Single source of truth for "transform a raw JSON Schema into the
+   * provider-bound JSON Schema we ship to streamText". Used by both the
+   * registry tool wrapper and the MCP tool wrapper below — there must NOT
+   * be two parallel `ProviderTransform.schema(...)` call sites that can
+   * drift, otherwise the estimator (which reads the wrapper after the
+   * fact) silently sees a different shape than what was wired into the
+   * tool. See specs/new-arch/2026-04-28-structured-output-systemic-fix.md
+   * §A — the helper is the only schema-normalisation entry point on the
+   * tool-payload side; the estimator never re-runs the transform.
+   */
+  export function normalizeToolSchemaForProvider<T>(
+    model: Provider.Model,
+    rawJsonSchema: T,
+  ): ReturnType<typeof ProviderTransform.schema> {
+    return ProviderTransform.schema(model, rawJsonSchema as never)
+  }
+
+  /**
+   * Provider-normalized estimate of the bytes a tool definition contributes
+   * to the streamText request payload. AI SDK serialises each tool as
+   * `{name, description, parameters: <jsonSchema>}` where the JSON Schema is
+   * obtained via `asSchema(tool.inputSchema).jsonSchema`. Earlier versions
+   * `JSON.stringify`'d the raw `tool.inputSchema` wrapper which, for Zod-
+   * backed tools, walks the Zod object's internal `_def` graph and produces
+   * char counts that bear no relation to the actual outgoing payload — that
+   * inflated count was triggering predictive compaction on context-cold
+   * sessions (see specs/new-arch/2026-04-28-structured-output-systemic-fix.md
+   * §A). Counting `name + description + jsonSchema` keeps the estimate tied
+   * to what the provider really receives. The estimator is read-only:
+   * `normalizeToolSchemaForProvider` is the only path that runs the
+   * provider transform; here we just unwrap the already-normalised schema
+   * via `asSchema(...)`.
+   */
+  export function estimateToolPayloadChars(tools: Record<string, AITool>): number {
+    let total = 0
+    for (const [name, item] of Object.entries(tools)) {
+      const description = typeof (item as { description?: unknown }).description === "string"
+        ? ((item as { description: string }).description).length
+        : 0
+      let schemaChars = 0
+      const inputSchema = (item as { inputSchema?: unknown }).inputSchema
+      if (inputSchema !== undefined && inputSchema !== null) {
+        try {
+          const jsonSchemaPayload = asSchema(inputSchema as never).jsonSchema
+          schemaChars = JSON.stringify(jsonSchemaPayload ?? {}).length
+        } catch {
+          schemaChars = 0
+        }
+      }
+      total += name.length + description + schemaChars
+    }
+    return total
+  }
+
+  export type ProviderToolSource = "registry" | "mcp" | "extra" | "structured"
+
+  export class ToolInputSchemaError extends Error {
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
+      this.name = "ToolInputSchemaError"
+    }
+  }
+
+  export function providerBoundInputSchema(input: {
+    name: string
+    source: ProviderToolSource
+    model: Provider.Model
+    inputSchema: unknown
+  }) {
+    if (input.inputSchema === undefined || input.inputSchema === null) {
+      throw new ToolInputSchemaError(
+        `tool ${input.name} from ${input.source} is missing inputSchema`,
+      )
+    }
+    try {
+      const rawJsonSchema = asSchema(input.inputSchema as never).jsonSchema
+      const normalized = normalizeToolSchemaForProvider(input.model, rawJsonSchema)
+      return jsonSchema(normalized as any)
+    } catch (err) {
+      throw new ToolInputSchemaError(
+        `tool ${input.name} from ${input.source} has invalid inputSchema: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        { cause: err instanceof Error ? err : undefined },
+      )
+    }
+  }
+
+  export function prepareProviderTool(input: {
+    name: string
+    source: ProviderToolSource
+    model: Provider.Model
+    tool: AITool
+  }): AITool {
+    const raw = input.tool as AITool & { inputSchema?: unknown }
+    const prepared = {
+      ...(input.tool as any),
+      inputSchema: providerBoundInputSchema({
+        name: input.name,
+        source: input.source,
+        model: input.model,
+        inputSchema: raw.inputSchema,
+      }),
+    } as AITool
+    const schemaPayload = asSchema((prepared as { inputSchema?: unknown }).inputSchema as never).jsonSchema
+    const rootType = schemaPayload && typeof schemaPayload === "object" && "type" in schemaPayload
+      ? (schemaPayload as { type?: unknown }).type
+      : undefined
+    log.info("prepared provider tool schema", {
+      source: input.source,
+      tool: input.name,
+      rootType,
+      schemaChars: JSON.stringify(schemaPayload ?? {}).length,
+    })
+    return prepared
+  }
+
+  export function summarizeModelMessagePayloads(messages: ModelMessage[], limit = 8) {
+    const rows: Array<{
+      messageIndex: number
+      partIndex: number
+      role: string
+      type: string
+      chars: number
+      toolName?: string
+      toolCallId?: string
+      mediaType?: string
+    }> = []
+    messages.forEach((message, messageIndex) => {
+      const content = Array.isArray(message.content)
+        ? message.content
+        : [{ type: "text", text: message.content }]
+      content.forEach((part, partIndex) => {
+        const p = part as Record<string, unknown>
+        rows.push({
+          messageIndex,
+          partIndex,
+          role: message.role,
+          type: typeof p.type === "string" ? p.type : "unknown",
+          chars: JSON.stringify(part).length,
+          toolName: typeof p.toolName === "string" ? p.toolName : undefined,
+          toolCallId: typeof p.toolCallId === "string" ? p.toolCallId : undefined,
+          mediaType: typeof p.mediaType === "string" ? p.mediaType : undefined,
+        })
+      })
+    })
+    return rows.sort((a, b) => b.chars - a.chars).slice(0, limit)
+  }
+
+  export function normalizeExtraToolResult(input: unknown): {
+    output: string
+    title: string
+    metadata: object
+    attachments?: unknown
+  } {
+    if (typeof input === "string") return { output: input, title: "", metadata: {} }
+
+    if (input && typeof input === "object") {
+      const r = input as Record<string, unknown>
+      const output = (() => {
+        if (typeof r.output === "string") return r.output
+        if (typeof r.text === "string") return r.text
+        if (r.output !== undefined) return JSON.stringify(r.output)
+        if (r.attachments !== undefined) {
+          throw new Error("Extra tool returned attachments without string output/text")
+        }
+        return JSON.stringify(r)
+      })()
+      return {
+        ...r,
+        output,
+        title: typeof r.title === "string" ? r.title : "",
+        metadata: r.metadata && typeof r.metadata === "object" ? r.metadata : {},
+        ...(r.attachments !== undefined ? { attachments: r.attachments } : {}),
+      }
+    }
+
+    return { output: String(input ?? ""), title: "", metadata: {} }
+  }
 
   function collectLoopState(msgs: Message.WithParts[]) {
     let lastUser: Message.User | undefined
@@ -73,7 +713,8 @@ export namespace SessionLoop {
   function shouldEnterStandby(input: { lastUser: Message.User; lastAssistant: Message.Assistant | undefined }) {
     return !!(
       input.lastAssistant?.finish &&
-      !["tool-calls", "unknown"].includes(input.lastAssistant.finish) &&
+      input.lastAssistant.summary !== true &&
+      input.lastAssistant.finish !== "tool-calls" &&
       input.lastUser.id < input.lastAssistant.id
     )
   }
@@ -103,7 +744,6 @@ export namespace SessionLoop {
       role: "assistant",
       parentID: input.lastUser.id,
       sessionID: input.sessionID,
-      mode: input.task.agent,
       agent: input.task.agent,
       variant: input.lastUser.variant,
       path: {
@@ -265,7 +905,6 @@ export namespace SessionLoop {
         sessionID: input.sessionID,
         type: "text",
         text: "Summarize the task tool output above and continue with your task.",
-        synthetic: true,
       } satisfies Message.TextPart)
     }
   }
@@ -289,7 +928,6 @@ export namespace SessionLoop {
         id: Identifier.ascending("message"),
         parentID: input.lastUser.id,
         role: "assistant",
-        mode: agent.name,
         agent: agent.name,
         variant: input.lastUser.variant,
         path: {
@@ -318,7 +956,9 @@ export namespace SessionLoop {
 
     const lastUserMsg = input.msgs.findLast((m) => m.info.role === "user")
     const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
-    const tools = await resolveTools({
+    const format = input.lastUser.format ?? { type: "text" }
+    const terminalToolContract = ephemeralTerminalToolContracts.get(input.sessionID)
+    let tools = await resolveTools({
       agent,
       session: input.session,
       model: input.model,
@@ -329,11 +969,23 @@ export namespace SessionLoop {
       messages: input.msgs,
     })
     if (input.lastUser.format?.type === "json_schema") {
-      tools["StructuredOutput"] = createStructuredOutputTool({
-        schema: input.lastUser.format.schema,
-        onSuccess(output) {
-          structured = output
-        },
+      tools["StructuredOutput"] = prepareProviderTool({
+        name: "StructuredOutput",
+        source: "structured",
+        model: input.model,
+        tool: createStructuredOutputTool({
+          schema: input.lastUser.format.schema,
+          validate: ephemeralStructuredOutputGuards.get(input.sessionID),
+          onSuccess(output) {
+            structured = output
+          },
+        }),
+      })
+    }
+    if (format.type !== "json_schema") {
+      tools = terminalToolScopedTools(terminalToolContract, tools, {
+        sessionID: input.sessionID,
+        agent: agent.name,
       })
     }
 
@@ -348,7 +1000,7 @@ export namespace SessionLoop {
       for (const msg of input.msgs) {
         if (msg.info.role !== "user" || msg.info.id <= input.lastFinished.id) continue
         for (const part of msg.parts) {
-          if (part.type !== "text" || !textForBoth(part)) continue
+          if (part.type !== "text") continue
           if (!part.text.trim()) continue
           part.text = [
             "<system-reminder>",
@@ -370,29 +1022,73 @@ export namespace SessionLoop {
       ...(skillsSection ? [skillsSection] : []),
       ...(await InstructionPrompt.system()),
     ]
-    const format = input.lastUser.format ?? { type: "text" }
     if (format.type === "json_schema") {
       system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
     }
 
     const memoryQuery = (lastUserMsg?.parts ?? [])
-      .filter((part): part is Message.TextPart => part.type === "text" && textForBoth(part))
+      .filter((part): part is Message.TextPart => part.type === "text")
       .map((part) => part.text)
       .join(" ")
       .trim()
+    // Live session-state blocks. These change between turns (memory hits depend
+    // on query, scratchpad mutates, taskplan tracks progress). Until 2026-04
+    // they were pushed onto `system` after the cached entries (env, TUI), but
+    // applyCaching only puts cache_control on the first 2 system messages —
+    // anything after lives inside the second cache breakpoint, which spans
+    // the rest of system + all messages. These blocks stay as runtime context
+    // for the current model turn; they are not persisted as conversation
+    // messages.
     const memoryInstruction = await MemoryInjection.systemPromptSection({
       projectID: Instance.project.id,
       sessionID: input.sessionID,
       query: memoryQuery || input.session.title || input.lastUser.id,
     })
-    if (memoryInstruction) system.push(memoryInstruction)
     const scratchpadSection = Scratchpad.systemPromptSection(input.sessionID)
-    if (scratchpadSection) system.push(scratchpadSection)
     const taskPlanSection = TaskPlan.toMarkdown(input.sessionID)
-    if (taskPlanSection) system.push(taskPlanSection)
+    const dynamicContextBlocks = [memoryInstruction, scratchpadSection, taskPlanSection]
+      .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    const dynamicContextText = dynamicContextBlocks.length > 0
+      ? [
+          "<session-state>",
+          "These blocks are runtime-injected views of long-lived session state",
+          "(retrieved memory, scratchpad notes, current task plan). They are",
+          "not new user instructions — treat them as background context.",
+          "",
+          dynamicContextBlocks.join("\n\n"),
+          "</session-state>",
+        ].join("\n")
+      : ""
+
+    const baseModelMessages = await Message.toModelMessages(input.msgs, input.model)
+    if (dynamicContextText) {
+      // Prepend to the LAST user message's text content so the live state sits
+      // adjacent to the request the model is responding to. This keeps the
+      // earlier conversation history (and its system prefix) byte-stable for
+      // the prefix cache; only the last user message — which is part of the
+      // 5m tail breakpoint anyway — absorbs the per-turn delta.
+      for (let i = baseModelMessages.length - 1; i >= 0; i--) {
+        const msg = baseModelMessages[i]
+        if (msg.role !== "user") continue
+        if (typeof msg.content === "string") {
+          msg.content = `${dynamicContextText}\n\n${msg.content}`
+        } else if (Array.isArray(msg.content)) {
+          const firstTextIdx = msg.content.findIndex(
+            (p): p is { type: "text"; text: string } => typeof p === "object" && p !== null && (p as any).type === "text",
+          )
+          if (firstTextIdx >= 0) {
+            const part = msg.content[firstTextIdx] as { type: "text"; text: string }
+            msg.content[firstTextIdx] = { ...part, text: `${dynamicContextText}\n\n${part.text}` }
+          } else {
+            msg.content = [{ type: "text", text: dynamicContextText }, ...msg.content]
+          }
+        }
+        break
+      }
+    }
 
     const modelMessages = [
-      ...Message.toModelMessages(input.msgs, input.model),
+      ...baseModelMessages,
       ...(isLastStep
         ? [
             {
@@ -403,51 +1099,190 @@ export namespace SessionLoop {
         : []),
     ]
 
-    {
-      const systemChars = system.reduce((sum, s) => sum + s.length, 0)
-      const systemTokensEst = Math.round(systemChars / 4)
-      const toolCount = Object.keys(tools).length
-      let userMsgCount = 0
-      let assistantMsgCount = 0
-      let totalContentChars = 0
-      let imageCount = 0
-      let toolCallCount = 0
+    const systemChars = system.reduce((sum, s) => sum + s.length, 0)
+    const systemTokensEst = Math.round(systemChars / 4)
+    const toolCount = Object.keys(tools).length
+    let userMsgCount = 0
+    let assistantMsgCount = 0
+    let imageCount = 0
+    let toolCallCount = 0
 
-      for (const msg of modelMessages) {
-        if (msg.role === "user") userMsgCount++
-        if (msg.role === "assistant") assistantMsgCount++
-
-        if (typeof msg.content === "string") {
-          totalContentChars += msg.content.length
-        } else if (Array.isArray(msg.content)) {
-          for (const part of msg.content) {
-            if ("text" in part && typeof part.text === "string") totalContentChars += part.text.length
-            if ("type" in part && part.type === "image") imageCount++
-            if ("type" in part && part.type === "tool-result") toolCallCount++
-          }
+    for (const msg of modelMessages) {
+      if (msg.role === "user") userMsgCount++
+      if (msg.role === "assistant") assistantMsgCount++
+      if (Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+          if ("type" in part && part.type === "image") imageCount++
+          if ("type" in part && (part.type === "tool-call" || part.type === "tool-result")) toolCallCount++
         }
       }
-
-      const contentTokensEst = Math.round(totalContentChars / 4)
-      const imageTokensEst = imageCount * 1600
-      log.info("context-diagnostics", {
-        step: input.step,
-        systemPromptParts: system.length,
-        systemChars,
-        systemTokensEst,
-        toolCount,
-        toolNames: Object.keys(tools).join(","),
-        messageCount: modelMessages.length,
-        userMsgCount,
-        assistantMsgCount,
-        totalContentChars,
-        contentTokensEst,
-        imageCount,
-        imageTokensEst,
-        toolCallCount,
-        totalTokensEst: systemTokensEst + contentTokensEst + imageTokensEst,
-      })
     }
+
+    // Estimate the size of the actual outgoing request. Tool-heavy agents
+    // can spend most of their input budget on tool descriptions and JSON
+    // schemas, so counting only messages makes autocompaction blind until
+    // the provider rejects the request. Keep this estimate aligned with the
+    // streamText payload shape: model messages and tool definitions are
+    // prompt input; system is estimated separately above.
+    let messagePayloadChars: number
+    try {
+      messagePayloadChars = JSON.stringify(modelMessages).length
+    } catch {
+      messagePayloadChars = 0
+    }
+    const toolSchemaChars = estimateToolPayloadChars(tools)
+    const totalContentChars = messagePayloadChars + toolSchemaChars
+    const contentTokensEst = Math.round(totalContentChars / 4)
+    const imageTokensEst = imageCount * 1600
+    const totalTokensEst = systemTokensEst + contentTokensEst + imageTokensEst
+    log.info("context-diagnostics", {
+      step: input.step,
+      systemPromptParts: system.length,
+      systemChars,
+      systemTokensEst,
+      toolCount,
+      toolNames: Object.keys(tools).join(","),
+      messageCount: modelMessages.length,
+      userMsgCount,
+      assistantMsgCount,
+      messagePayloadChars,
+      toolSchemaChars,
+      totalContentChars,
+      contentTokensEst,
+      imageCount,
+      imageTokensEst,
+      toolCallCount,
+      totalTokensEst,
+    })
+
+    // ── Predictive compaction ────────────────────────────────────────────────
+    // Decide whether the *next* LLM call would exceed the model's input budget
+    // BEFORE we issue it. The historical compaction trigger only inspected
+    // `lastFinished.tokens` *after* a turn returned, which means the offending
+    // call had already burned the context window. We instead skip this turn
+    // and queue a compaction message; the outer loop will pick it up on the
+    // next iteration and the post-compaction continuation re-enters with a
+    // shrunk history.
+    //
+    // Threshold defaults to 0.90 of the model's reported input budget — late
+    // enough that the prompt-cache prefix stays stable for most of a session
+    // (compacting earlier rewrites the prefix and forces cache_write at 12.5×
+    // the cache_read rate, which dominates any token-count savings). Claude
+    // Code uses 0.95; we leave a touch more headroom for tool-call burst.
+    // Override via env for benchmarks. `lastFinished.summary === true` means
+    // the previous turn was already a compaction summary — skip the predictive
+    // trigger so we don't loop forever compacting an already-compact session.
+    // If neither model.limit.input nor model.limit.context is reported, skip
+    // predictive compaction entirely — reactive post-turn compaction still
+    // runs, and guessing a budget only hides an incomplete model catalog.
+    const usableBudget = input.model.limit.input || input.model.limit.context
+    if (!usableBudget) {
+      log.warn("predictive-compaction-skipped-no-budget", {
+        step: input.step,
+        providerID: input.model.providerID,
+        modelID: input.model.id,
+      })
+    } else {
+      const threshold = readEnvRatio(
+        "OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD",
+        PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT,
+      )
+      const toolSchemaBudgetRatio = readEnvRatio(
+        "OPENCORVUS_TOOL_SCHEMA_BUDGET_RATIO",
+        TOOL_SCHEMA_BUDGET_RATIO_DEFAULT,
+      )
+      const limit = Math.floor(usableBudget * threshold)
+      const decision = predictiveCompactionDecision({
+        totalTokensEst,
+        limit,
+        usableBudget,
+        systemChars,
+        toolSchemaChars,
+        messagePayloadChars,
+        imageTokensEst,
+        toolSchemaBudgetRatio,
+        lastFinishedSummary: input.lastFinished?.summary === true,
+      })
+      const toolNames = Object.keys(tools).join(",")
+      if (decision.kind === "fail-tool-schema") {
+        log.error("predictive-compaction-fail-tool-schema", {
+          step: input.step,
+          toolSchemaChars,
+          usableBudget,
+          ratio: toolSchemaBudgetRatio,
+          toolNames,
+        })
+        throw new Message.ToolSchemaBudgetError({
+          message:
+            `Tool schema payload (${toolSchemaChars} chars) exceeds ` +
+            `${Math.round(toolSchemaBudgetRatio * 100)}% of model input ` +
+            `budget (${usableBudget}). Compaction does not shrink tool ` +
+            `definitions; reduce the agent's tool surface or pick a model ` +
+            `with a larger context window.`,
+          toolSchemaChars,
+          usableBudget,
+          ratio: toolSchemaBudgetRatio,
+          toolNames,
+        })
+      }
+      if (decision.kind === "fail-prompt-budget") {
+        const nonCompressiblePromptChars = systemChars + toolSchemaChars
+        const topPayloadParts = summarizeModelMessagePayloads(modelMessages)
+        log.error("predictive-compaction-fail-prompt-budget", {
+          step: input.step,
+          reason: decision.reason,
+          totalTokensEst,
+          limit,
+          usableBudget,
+          systemTokensEst,
+          toolSchemaChars,
+          messagePayloadChars,
+          topPayloadParts,
+          nonCompressiblePromptChars,
+          toolNames,
+        })
+        throw new Message.PromptBudgetOverflowError({
+          message:
+            `Predictive compaction cannot recover this turn ` +
+            `(reason=${decision.reason}). totalTokensEst=${totalTokensEst} ` +
+            `> limit=${limit}; system+tool schemas alone ` +
+            `=${nonCompressiblePromptChars} chars. Either drop tools or ` +
+            `pick a larger-context model.`,
+          systemTokensEst,
+          messagePayloadChars,
+          toolSchemaChars,
+          compressibleMessageChars: messagePayloadChars,
+          nonCompressiblePromptChars,
+          usableBudget,
+          limit,
+          toolNames,
+        })
+      }
+      if (decision.kind === "compact") {
+        const topPayloadParts = summarizeModelMessagePayloads(modelMessages)
+        log.warn("predictive-compaction-triggered", {
+          step: input.step,
+          totalTokensEst,
+          limit,
+          threshold,
+          usableBudget,
+          messagePayloadChars,
+          topPayloadParts,
+        })
+        await SessionCompaction.create({
+          sessionID: input.sessionID,
+          agent: input.lastUser.agent,
+          model: input.lastUser.model,
+          auto: true,
+          overflow: false,
+        })
+        return "continue" as const
+      }
+    }
+
+    const turnToolChoice =
+      structuredOutputToolChoice(format, input.model) ??
+      terminalToolChoice(terminalToolContract, tools, input.model)
 
     const result = await processor.process({
       user: input.lastUser,
@@ -458,7 +1293,7 @@ export namespace SessionLoop {
       messages: modelMessages,
       tools,
       model: input.model,
-      toolChoice: format.type === "json_schema" ? (input.model.capabilities.reasoning ? "auto" : "required") : undefined,
+      toolChoice: turnToolChoice,
     })
 
     if (structured !== undefined) {
@@ -468,10 +1303,48 @@ export namespace SessionLoop {
       return "stop" as const
     }
 
-    const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
-    if (modelFinished && !processor.message.error && format.type === "json_schema") {
+    if (
+      shouldStopAfterTerminalTool({
+        terminalToolPresent: !!terminalToolContract,
+        satisfied: terminalToolContract?.isSatisfied() ?? false,
+      })
+    ) {
+      return "stop" as const
+    }
+
+    if (
+      shouldEnterStructuredOutputRecovery({
+        finish: processor.message.finish,
+        structuredCalled: structured !== undefined,
+        formatType: format.type,
+        hasExistingError: !!processor.message.error,
+      })
+    ) {
+      const context = await summarizeAssistantTurn(processor.message.id, processor.message.finish)
       processor.message.error = new Message.StructuredOutputError({
-        message: "Model did not produce structured output",
+        message:
+          `Model did not produce structured output before the turn ended ` +
+          `(finish=${processor.message.finish ?? "unset"}); ${context}`,
+        retries: 0,
+      }).toObject()
+      await Session.updateMessage(processor.message)
+      return "stop" as const
+    }
+
+    if (
+      terminalToolContract &&
+      shouldEnterTerminalToolRecovery({
+        finish: processor.message.finish,
+        satisfied: terminalToolContract.isSatisfied(),
+        hasExistingError: !!processor.message.error,
+      })
+    ) {
+      const context = await summarizeAssistantTurn(processor.message.id, processor.message.finish)
+      processor.message.error = new Message.TerminalToolMissingError({
+        message:
+          `Model did not call terminal tool ${terminalToolContract.toolName} before the turn ended ` +
+          `(finish=${processor.message.finish ?? "unset"}); ${context}`,
+        toolName: terminalToolContract.toolName,
         retries: 0,
       }).toObject()
       await Session.updateMessage(processor.message)
@@ -485,6 +1358,7 @@ export namespace SessionLoop {
         agent: input.lastUser.agent,
         model: input.lastUser.model,
         auto: true,
+        overflow: true,
       })
     }
     return "continue" as const
@@ -494,6 +1368,78 @@ export namespace SessionLoop {
     sessionID: Identifier.schema("session"),
     resume_existing: z.boolean().optional(),
   })
+
+  /**
+   * Resolve the toolChoice to send the provider for a json-schema turn.
+   *
+   * StructuredOutput may be preceded by work tools, so this asks the
+   * provider for a tool call without naming a specific tool.
+   *
+   * Reasoning ("thinking") models reject `tool_choice: "required"` (e.g.
+   * deepseek-reasoner / deepseek-v4-flash returns HTTP 400 "deepseek-reasoner
+   * does not support this tool_choice"; alibaba-coding-plan-cn/glm-5 returns
+   * "tool_choice parameter does not support being set to required or object
+   * in thinking mode"). For these models we soft-pin the StructuredOutput
+   * tool via prompt (STRUCTURED_OUTPUT_SYSTEM_PROMPT) + the structured-output
+   * recovery channel (shouldEnterStructuredOutputRecovery), and let the
+   * provider pick "auto". Same strategy as `terminalToolChoice`.
+   */
+  export function structuredOutputToolChoice(
+    format: z.infer<typeof Message.Format>,
+    model?: { capabilities?: { reasoning?: boolean } },
+  ): "required" | "auto" | { type: "tool"; toolName: string } | undefined {
+    if (format.type !== "json_schema") return undefined
+    if (model?.capabilities?.reasoning) return "auto"
+    return "required"
+  }
+
+  export function terminalToolChoice(
+    contract: TerminalToolContract | undefined,
+    tools: Record<string, AITool>,
+    model?: { capabilities?: { reasoning?: boolean } },
+  ): "required" | { type: "tool"; toolName: string } | undefined {
+    if (!contract) return undefined
+    if (!(contract.toolName in tools)) return undefined
+    if (contract.isSatisfied()) return undefined
+    // Reasoning ("thinking") models reject both "required" and the
+    // {type:"tool",toolName} object form (e.g. alibaba-coding-plan-cn/glm-5
+    // returns HTTP 400 "tool_choice parameter does not support being set to
+    // required or object in thinking mode" — captured in r8 bench evidence
+    // 2026-04-30T16:00:13). The terminal-tool *scoping* (terminalToolScopedTools)
+    // still narrows the tool set to just the terminal tool, so "auto" picks
+    // it deterministically. Soft-pin via prompt + scoped tool set is the
+    // single path that works on both reasoning and non-reasoning models.
+    if (model?.capabilities?.reasoning) return undefined
+    if (contract.shouldExposeOnlyTerminalTool()) return { type: "tool", toolName: contract.toolName }
+    return "required"
+  }
+
+  export function terminalToolScopedTools(
+    contract: TerminalToolContract | undefined,
+    tools: Record<string, AITool>,
+    context?: {
+      sessionID?: string
+      agent?: string
+    },
+  ): Record<string, AITool> {
+    if (!contract) return tools
+    const terminalTool = tools[contract.toolName]
+    if (!terminalTool) return tools
+    if (contract.isSatisfied()) return tools
+    if (!contract.shouldExposeOnlyTerminalTool()) return tools
+    const originalToolNames = Object.keys(tools)
+    log.info("terminal tool scoping", {
+      sessionID: context?.sessionID,
+      agent: context?.agent,
+      terminalTool: contract.toolName,
+      originalToolCount: originalToolNames.length,
+      scopedToolCount: 1,
+      originalToolNames,
+      scopedToolNames: [contract.toolName],
+      predicateResult: true,
+    })
+    return { [contract.toolName]: strictTool(terminalTool) }
+  }
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input
 
@@ -513,7 +1459,7 @@ export namespace SessionLoop {
         let step = 0
         const session = await Session.get(sessionID)
         while (true) {
-          SessionStatus.set(sessionID, { type: "busy" })
+          SessionStatus.set(sessionID, { type: "streaming" })
           log.info("loop", { step, sessionID })
           if (abort.aborted) break
           const msgs = await Message.filterCompacted(Message.stream(sessionID))
@@ -584,6 +1530,7 @@ export namespace SessionLoop {
               agent: lastUser.agent,
               model: lastUser.model,
               auto: true,
+              overflow: false,
             })
             continue
           }
@@ -598,6 +1545,11 @@ export namespace SessionLoop {
             model,
             abort,
           })
+          // Fire the registered step hook (phase 3-a-4) — agents that
+          // dispatch via a tool and want to abort the active generation
+          // once the tool landed use this hook to fire their deferred-stop
+          // signal.
+          await fireStepHook(sessionID, { step, turn })
           if (turn === "stop") break
           continue
         }
@@ -673,7 +1625,7 @@ export namespace SessionLoop {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
 
-    const context = (args: any, options: ToolCallOptions): Tool.Context => ({
+    const context = (args: any, options: ToolExecutionOptions): Tool.Context => ({
       sessionID: input.session.id,
       abort: options.abortSignal!,
       messageID: input.processor.message.id,
@@ -712,12 +1664,15 @@ export namespace SessionLoop {
       { modelID: input.model.api.id, providerID: input.model.providerID },
       input.agent,
     )) {
-      if (input.tools !== undefined && !input.tools[item.id]) continue
-      const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
-      tools[item.id] = tool({
+      // Session-level deny rules take precedence (e.g. build fast-path denying "task")
+      if (input.session.permission?.length) {
+        const rule = PermissionNext.evaluate(item.id, "*", input.session.permission)
+        if (rule.action === "deny") continue
+      }
+      const registryTool = tool({
         id: item.id as any,
         description: item.description,
-        inputSchema: jsonSchema(schema as any),
+        inputSchema: item.parameters as any,
         async execute(args, options) {
           const ctx = context(args, options)
           await Plugin.trigger(
@@ -754,115 +1709,217 @@ export namespace SessionLoop {
           return output
         },
       })
+      tools[item.id] = prepareProviderTool({
+        name: item.id,
+        source: "registry",
+        model: input.model,
+        tool: registryTool,
+      })
     }
 
     for (const [key, item] of Object.entries(await MCP.tools())) {
       const execute = item.execute
       if (!execute) continue
 
-      const transformed = ProviderTransform.schema(input.model, asSchema(item.inputSchema).jsonSchema)
-      item.inputSchema = jsonSchema(transformed)
-      item.execute = async (args, opts) => {
-        const ctx = context(args, opts)
+      const mcpTool = {
+        ...(item as any),
+        async execute(args: any, opts: ToolExecutionOptions) {
+          const ctx = context(args, opts)
 
-        await Plugin.trigger(
-          "tool.execute.before",
-          {
-            tool: key,
-            sessionID: ctx.sessionID,
-            callID: opts.toolCallId,
-          },
-          {
-            args,
-          },
-        )
+          await Plugin.trigger(
+            "tool.execute.before",
+            {
+              tool: key,
+              sessionID: ctx.sessionID,
+              callID: opts.toolCallId,
+            },
+            {
+              args,
+            },
+          )
 
-        await ctx.ask({
-          permission: key,
-          metadata: {},
-          patterns: ["*"],
-          always: ["*"],
-        })
+          await ctx.ask({
+            permission: key,
+            metadata: {},
+            patterns: ["*"],
+            always: ["*"],
+          })
 
-        const result = await execute(args, opts)
+          const result = await execute(args, opts)
 
-        await Plugin.trigger(
-          "tool.execute.after",
-          {
-            tool: key,
-            sessionID: ctx.sessionID,
-            callID: opts.toolCallId,
-            args,
-          },
-          result,
-        )
+          await Plugin.trigger(
+            "tool.execute.after",
+            {
+              tool: key,
+              sessionID: ctx.sessionID,
+              callID: opts.toolCallId,
+              args,
+            },
+            result,
+          )
 
-        const textParts: string[] = []
-        const attachments: Omit<Message.FilePart, "id" | "sessionID" | "messageID">[] = []
+          const textParts: string[] = []
+          const attachments: Omit<Message.FilePart, "id" | "sessionID" | "messageID">[] = []
 
-        for (const contentItem of result.content) {
-          if (contentItem.type === "text") {
-            textParts.push(contentItem.text)
-          } else if (contentItem.type === "image") {
-            attachments.push({
-              type: "file",
-              mime: contentItem.mimeType,
-              url: `data:${contentItem.mimeType};base64,${contentItem.data}`,
-            })
-          } else if (contentItem.type === "resource") {
-            const { resource } = contentItem
-            if (resource.text) {
-              textParts.push(resource.text)
-            }
-            if (resource.blob) {
+          for (const contentItem of result.content) {
+            if (contentItem.type === "text") {
+              textParts.push(contentItem.text)
+            } else if (contentItem.type === "image") {
               attachments.push({
                 type: "file",
-                mime: resource.mimeType ?? "application/octet-stream",
-                url: `data:${resource.mimeType ?? "application/octet-stream"};base64,${resource.blob}`,
-                filename: resource.uri,
+                mime: contentItem.mimeType,
+                url: `data:${contentItem.mimeType};base64,${contentItem.data}`,
               })
+            } else if (contentItem.type === "resource") {
+              const { resource } = contentItem
+              if (resource.text) {
+                textParts.push(resource.text)
+              }
+              if (resource.blob) {
+                attachments.push({
+                  type: "file",
+                  mime: resource.mimeType ?? "application/octet-stream",
+                  url: `data:${resource.mimeType ?? "application/octet-stream"};base64,${resource.blob}`,
+                  filename: resource.uri,
+                })
+              }
             }
           }
-        }
 
-        const truncated = await Truncate.output(textParts.join("\n\n"), {}, input.agent)
-        const metadata = {
-          ...(result.metadata ?? {}),
-          truncated: truncated.truncated,
-          ...(truncated.truncated && { outputPath: truncated.outputPath }),
-        }
+          const truncated = await Truncate.output(textParts.join("\n\n"), {}, input.agent)
+          const metadata = {
+            ...(result.metadata ?? {}),
+            truncated: truncated.truncated,
+            ...(truncated.truncated && { outputPath: truncated.outputPath }),
+          }
 
-        return {
-          title: "",
-          metadata,
-          output: truncated.content,
-          attachments: attachments.map((attachment) => ({
-            ...attachment,
-            id: Identifier.ascending("part"),
-            sessionID: ctx.sessionID,
-            messageID: input.processor.message.id,
-          })),
-          content: result.content,
-        }
-      }
-      tools[key] = item
+          return {
+            title: "",
+            metadata,
+            output: truncated.content,
+            attachments: attachments.map((attachment) => ({
+              ...attachment,
+              id: Identifier.ascending("part"),
+              sessionID: ctx.sessionID,
+              messageID: input.processor.message.id,
+            })),
+            content: result.content,
+          }
+        },
+      } as AITool
+      tools[key] = prepareProviderTool({
+        name: key,
+        source: "mcp",
+        model: input.model,
+        tool: mcpTool,
+      })
+    }
+
+    // Merge per-session ephemeral tools last so agent-scoped callers can
+    // shadow a built-in name if they deliberately want to (e.g. a stage
+    // agent that replaces `read` with a sandboxed variant). Shadowing is
+    // bounded to the session's lifetime — see setExtraTools doc comment.
+    //
+    // Extras must return `{ output: string, title?: string, metadata?: object }`
+    // — SessionLoop's Message.ToolPart persistence layer validates that shape
+    // when the tool call finalises. Plain-string returns are auto-wrapped here
+    // so stage-agent callers can keep the simple `return "OK: ..."` idiom
+    // without silently landing a ZodError at tool-completion time.
+    const extras = getExtraTools(input.session.id)
+    const sessionIDForExtras = input.session.id
+    const messageIDForExtras = input.processor.message.id
+    for (const [name, extraTool] of Object.entries(extras)) {
+      const wrapped = wrapExtraTool(extraTool, {
+        sessionID: sessionIDForExtras,
+        messageID: messageIDForExtras,
+      })
+      tools[name] = prepareProviderTool({
+        name,
+        source: "extra",
+        model: input.model,
+        tool: wrapped,
+      })
     }
 
     return tools
   }
 
+  /**
+   * Normalise an extra tool's `execute` return so it conforms to the
+   * `{ output: string, title: string, metadata: object }` shape
+   * SessionLoop's tool-part persistence requires.
+   *
+   *   - Plain string  →  `{ output: string, title: "", metadata: {} }`
+   *   - Object result →  coerce missing fields to their minimal valid form
+   *
+   * Idempotent: already-conforming results round-trip unchanged.
+   */
+  function wrapExtraTool(
+    raw: AITool,
+    ctx: { sessionID: string; messageID: string },
+  ): AITool {
+    const original = raw as AITool & { execute?: (...args: any[]) => any }
+    if (!original.execute) return raw
+    const execute = original.execute
+    // Mirror the attachment stamping the registry-tools wrapper applies
+    // (loop.ts:967-987). Extras (e.g. delivery's screenshot,
+    // verify_page_integrity) build attachments via buildMultimodalToolResult
+    // which returns `{ type, mime, url, filename }` — missing the
+    // PartBase fields (id/sessionID/messageID) that ToolStateCompleted's
+    // FilePart schema requires. Without stamping here those attachments
+    // land in part.state.attachments unstamped and the next session
+    // processor tick rejects the message state with ZodError on
+    // `state.attachments[0].{id,sessionID,messageID}`.
+    const stampAttachments = (input: unknown): unknown => {
+      if (!input || !Array.isArray(input)) return input
+      return input.map((attachment: any) => ({
+        ...attachment,
+        id: typeof attachment?.id === "string" && attachment.id.length > 0
+          ? attachment.id
+          : Identifier.ascending("part"),
+        sessionID: ctx.sessionID,
+        messageID: ctx.messageID,
+      }))
+    }
+    return {
+      ...(raw as any),
+      async execute(args: unknown, options: unknown) {
+        const result = await execute(args, options)
+        const normalized = normalizeExtraToolResult(result)
+        return {
+          ...normalized,
+          ...(normalized.attachments !== undefined
+            ? { attachments: stampAttachments(normalized.attachments) }
+            : {}),
+        }
+      },
+    } as AITool
+  }
+
   export function createStructuredOutputTool(input: {
     schema: Record<string, any>
+    validate?: StructuredOutputGuard
     onSuccess: (output: unknown) => void
   }): AITool {
     const { $schema, ...toolSchema } = input.schema
+    const inputSchema = jsonSchema(toolSchema as any)
+    const payloadValidator = compileStructuredOutputPayloadValidator(toolSchema)
 
-    return tool({
+    return strictTool(tool({
       id: "StructuredOutput" as any,
       description: STRUCTURED_OUTPUT_DESCRIPTION,
-      inputSchema: jsonSchema(toolSchema as any),
+      inputSchema,
       async execute(args) {
-        input.onSuccess(args)
+        const payload = validateStructuredOutputPayload(args, payloadValidator)
+        if (!payload.ok) {
+          throw new Message.StructuredOutputPayloadError({
+            message: payload.reason,
+            reason: payload.reason,
+          })
+        }
+        const rejection = await input.validate?.(payload.value)
+        if (rejection) throw new Error(rejection)
+        input.onSuccess(payload.value)
         return {
           output: "Structured output captured successfully.",
           title: "Structured Output",
@@ -875,7 +1932,7 @@ export namespace SessionLoop {
           value: result.output,
         }
       },
-    })
+    }))
   }
 
   async function ensureTitle(input: {
@@ -887,10 +1944,10 @@ export namespace SessionLoop {
     if (input.session.parentID) return
     if (!Session.isDefaultTitle(input.session.title)) return
 
-    const firstRealUserIdx = input.history.findIndex((m) => m.info.role === "user" && !messageControlOnly(m.parts))
+    const firstRealUserIdx = input.history.findIndex((m) => m.info.role === "user")
     if (firstRealUserIdx === -1) return
 
-    const isFirst = input.history.filter((m) => m.info.role === "user" && !messageControlOnly(m.parts)).length === 1
+    const isFirst = input.history.filter((m) => m.info.role === "user").length === 1
     if (!isFirst) return
 
     const contextMessages = input.history.slice(0, firstRealUserIdx + 1)
@@ -924,10 +1981,10 @@ export namespace SessionLoop {
         },
         ...(hasOnlySubtaskParts
           ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
-          : Message.toModelMessages(contextMessages, model)),
+          : await Message.toModelMessages(contextMessages, model)),
       ],
     })
-    const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }))
+    const text = await Promise.resolve(result.text).catch((err) => log.error("failed to generate title", { error: err }))
     if (text) {
       const cleaned = text
         .replace(/<think>[\s\S]*?<\/think>\s*/g, "")

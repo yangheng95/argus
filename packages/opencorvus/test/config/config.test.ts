@@ -31,6 +31,7 @@ test("loads config with defaults when no files exist", async () => {
     fn: async () => {
       const config = await Config.get()
       expect(config.username).toBeDefined()
+      expect(config.experimental?.auto_question).toBe(true)
     },
   })
 })
@@ -51,28 +52,6 @@ test("loads JSON config file", async () => {
       const config = await Config.get()
       expect(config.model).toBe("test/model")
       expect(config.username).toBe("testuser")
-    },
-  })
-})
-
-test("ignores legacy tui keys in opencorvus config", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await writeConfig(dir, {
-        $schema: "https://opencorvus.ai/config.json",
-        model: "test/model",
-        theme: "legacy",
-        tui: { scroll_speed: 4 },
-      })
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.model).toBe("test/model")
-      expect((config as Record<string, unknown>).theme).toBeUndefined()
-      expect((config as Record<string, unknown>).tui).toBeUndefined()
     },
   })
 })
@@ -355,60 +334,6 @@ test("handles command configuration", async () => {
   })
 })
 
-test("migrates autoshare to share field", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          autoshare: true,
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.share).toBe("auto")
-      expect(config.autoshare).toBe(true)
-    },
-  })
-})
-
-test("migrates mode field to agent field", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          mode: {
-            test_mode: {
-              model: "test/model",
-              temperature: 0.5,
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.agent?.["test_mode"]).toEqual({
-        model: "test/model",
-        temperature: 0.5,
-        mode: "primary",
-        options: {},
-        permission: {},
-      })
-    },
-  })
-})
-
 test("loads config from .opencorvus directory", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -592,6 +517,32 @@ test("updates config and writes to file", async () => {
 
       const writtenConfig = await Filesystem.readJson(path.join(tmp.path, ".opencorvus", "opencorvus.jsonc"))
       expect(writtenConfig.model).toBe("updated/model")
+    },
+  })
+})
+
+// Regression: AgentModelsPanel sends one PATCH per row; if the user changes
+// two rows in fast succession the requests run in parallel and writeConfigFile's
+// read-modify-write would race without a per-file lock. Both overrides must
+// survive regardless of dispatch order.
+test("concurrent Config.update calls preserve all overrides", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Config.update({ model: "openai/gpt-4o-mini" } as any)
+
+      await Promise.all([
+        Config.update({ agent: { build: { model: "anthropic/claude-sonnet-4-6" } } } as any),
+        Config.update({ agent: { delivery: { model: "openai/gpt-4.1" } } } as any),
+        Config.update({ agent: { general: { model: "anthropic/claude-haiku-4-5" } } } as any),
+      ])
+
+      const written = await Filesystem.readJson(path.join(tmp.path, ".opencorvus", "opencorvus.jsonc"))
+      expect(written.model).toBe("openai/gpt-4o-mini")
+      expect(written.agent?.build?.model).toBe("anthropic/claude-sonnet-4-6")
+      expect(written.agent?.delivery?.model).toBe("openai/gpt-4.1")
+      expect(written.agent?.general?.model).toBe("anthropic/claude-haiku-4-5")
     },
   })
 })
@@ -931,99 +882,6 @@ test("deduplicates duplicate plugins from global and local configs", async () =>
   })
 })
 
-// Legacy tools migration tests
-
-test("migrates legacy tools config to permissions - allow", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          agent: {
-            test: {
-              tools: {
-                bash: true,
-                read: true,
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
-        bash: "allow",
-        read: "allow",
-      })
-    },
-  })
-})
-
-test("migrates legacy tools config to permissions - deny", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          agent: {
-            test: {
-              tools: {
-                bash: false,
-                webfetch: false,
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
-        bash: "deny",
-        webfetch: "deny",
-      })
-    },
-  })
-})
-
-test("migrates legacy write tool to edit permission", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          agent: {
-            test: {
-              tools: {
-                write: true,
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
-        edit: "allow",
-      })
-    },
-  })
-})
-
 // Managed settings tests
 // Note: preload.ts sets OPENCORVUS_TEST_MANAGED_CONFIG which Global.Path.managedConfig uses
 
@@ -1102,161 +960,6 @@ test("missing managed settings file is not an error", async () => {
   })
 })
 
-test("migrates legacy edit tool to edit permission", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          agent: {
-            test: {
-              tools: {
-                edit: false,
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
-        edit: "deny",
-      })
-    },
-  })
-})
-
-test("migrates legacy patch tool to edit permission", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          agent: {
-            test: {
-              tools: {
-                patch: true,
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
-        edit: "allow",
-      })
-    },
-  })
-})
-
-test("migrates legacy multiedit tool to edit permission", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          agent: {
-            test: {
-              tools: {
-                multiedit: false,
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
-        edit: "deny",
-      })
-    },
-  })
-})
-
-test("migrates mixed legacy tools config", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          agent: {
-            test: {
-              tools: {
-                bash: true,
-                write: true,
-                read: false,
-                webfetch: true,
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
-        bash: "allow",
-        edit: "allow",
-        read: "deny",
-        webfetch: "allow",
-      })
-    },
-  })
-})
-
-test("merges legacy tools with existing permission config", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          agent: {
-            test: {
-              permission: {
-                glob: "allow",
-              },
-              tools: {
-                bash: true,
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
-        glob: "allow",
-        bash: "allow",
-      })
-    },
-  })
-})
-
 test("permission config preserves key order", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -1287,20 +990,28 @@ test("permission config preserves key order", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      // Zod z.object().catchall() outputs known schema keys first (in definition order),
-      // then catchall keys in input order. "read", "edit", "external_directory",
-      // "todowrite", "todoread", "plan_enter", "plan_exit" are defined in the
-      // Permission schema; "*", "write", and wildcard keys fall through to catchall.
+      // audit-2026-04-29 W2-V25 — `plan_enter`/`plan_exit` were
+      // removed from the Permission schema (see config.ts:625-647);
+      // they now fall through to `.catchall()` in input order with
+      // the other custom rules. The test expectation hadn't been
+      // updated and silently failed across the suite.
+      //
+      // Zod z.object().catchall() outputs known schema keys first
+      // (in definition order), then catchall keys in input order.
+      // Schema-known here: "read", "edit", "external_directory",
+      // "todowrite", "todoread". Catchall in input order: "*",
+      // "write", "plan_enter", "plan_exit", and the wildcard
+      // entries.
       expect(Object.keys(config.permission!)).toEqual([
         "read",
         "edit",
         "external_directory",
         "todowrite",
         "todoread",
-        "plan_enter",
-        "plan_exit",
         "*",
         "write",
+        "plan_enter",
+        "plan_exit",
         "thoughts_*",
         "reasoning_model_*",
         "tools_*",

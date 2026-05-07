@@ -1,0 +1,87 @@
+/* ─────────────────────────────────────────────────────────────
+   Legacy .btn family
+   Pre-iter15 button class set still used widely across components
+   that haven't migrated to the .oc-button [data-variant]/[data-tone]
+   primitive. Lives as a surface (not a primitive) because the class-
+   chain pattern (`.btn-ghost` / `.btn.mini` / `.btn.danger` /
+   `.btn-primary`) doesn't follow the data-attribute variant rule
+   the new-primitive guard enforces.
+
+   Includes the legacy `.btn-primary` canonical guarded by "primary
+   action canonical reads palette tokens, not literals" — the rule
+   routes through --accent-gradient and --text-on-accent with no
+   literals.
+   ───────────────────────────────────────────────────────────── */
+
+.btn {
+  padding: var(--ui-btn-padding-y) var(--ui-btn-padding-x);
+  min-height: calc(32px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  cursor: pointer;
+  border: var(--oc-border-width) solid var(--border);
+  transition: all var(--ui-duration-fast);
+  box-shadow: var(--shadow);
+  background: var(--card-fill);
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
+}
+
+.btn-ghost {
+  color: var(--text-soft);
+}
+
+/* Flat-redesign 2026-05-04 (rule §2.2 C): hover affordance is bg
+ * tint + lift, not a border-color flip. */
+.btn:hover {
+  background: var(--card-fill-hover);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.btn-ghost:hover {
+  background: var(--card-fill-hover);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.btn.mini {
+  padding: var(--ui-btn-mini-padding-y) var(--ui-btn-mini-padding-x);
+  font-size: var(--ui-font-small);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  margin: 0;
+}
+
+.btn.danger {
+  color: var(--bad);
+}
+
+.btn-primary {
+  margin: 0;
+  border: 0;
+  background: var(--accent-gradient);
+  color: var(--text-on-accent);
+  box-shadow: none;
+}
+
+.btn-primary {
+  gap: calc(2px * var(--ui-scale));
+  padding-inline: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0;
+}
+
+.btn-primary:hover {
+  background: var(--accent-gradient-hover);
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-primary:disabled {
+  opacity: var(--ui-opacity-disabled);
+  cursor: default;
+}

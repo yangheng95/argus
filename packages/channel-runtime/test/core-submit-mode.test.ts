@@ -4,7 +4,7 @@ import { SessionCoordinator } from "../src/session-coordinator"
 import { sdkMock } from "./sdk-mock"
 
 mock.module("@opencorvus-ai/sdk", () => sdkMock)
-mock.module("@opencorvus-ai/sdk/v2", () => sdkMock)
+mock.module("@opencorvus-ai/sdk", () => sdkMock)
 
 const { ChannelRuntime } = await import("../src/core")
 

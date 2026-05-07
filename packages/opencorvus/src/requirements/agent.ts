@@ -1,0 +1,251 @@
+/**
+ * RequirementsAgent — parses a user task into REQ-N requirements +
+ * foundational technical decisions (runtime / framework / test strategy).
+ * Seeds the Decision Log with the decisions under phase="requirements"
+ * so downstream agents build on the same foundation.
+ *
+ * This agent deliberately does NOT produce goals, metric specs, challenge
+ * seeds, traceability, or cross-goal contracts — the Architect owns those.
+ * The narrow surface is enforced by the tool list (register_requirement +
+ * register_decision) and by the RequirementsResult type shape.
+ *
+ * Implementation: shell over `runAgentSession`. The runner owns model
+ * resolution, child-session creation, system-prompt composition, abort /
+ * stream-error handling. Agent-specific code is the user prompt builder
+ * (with prefetched repo context + clarification transcript + design
+ * specs + multimodal attachments) and the output tool kit.
+ */
+import { runAgentSession } from "@/agent/runner"
+import { createAgentContextTools, prefetchContext } from "@/agent/context-tools"
+import { filterAgentTools } from "@/agent/filter-tools"
+import { Log } from "@/util/log"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/engine"
+import { AttachmentStore } from "@/storage/attachment-store"
+import type { VisualSpec } from "@/design-analyst/types"
+import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
+import { Instance } from "@/project/instance"
+import type {
+  ParsedRequirement,
+  RequirementsDecision,
+  RequirementsOutput,
+} from "./types"
+import {
+  createRequirementsOutputTools,
+  type RequirementsCollector,
+} from "./output-tools"
+import type { DecisionLog } from "@/decision-log"
+
+import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
+
+const log = Log.create({ service: "requirements-agent" })
+
+// ---------------------------------------------------------------------------
+// Result type
+// ---------------------------------------------------------------------------
+
+export interface RequirementsResult {
+  summary: string
+  /** All requirements extracted from user input (explicit + implicit) */
+  requirements: ParsedRequirement[]
+  /** Foundational technical decisions (runtime, framework, test strategy, …). */
+  decisions: RequirementsDecision[]
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export namespace RequirementsAgent {
+  export interface RunInput {
+    title: string
+    request: string
+    /** Base64 image attachments — injected as vision content alongside the request text. */
+    attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+    /** Advisory visual contract produced by design_analysis. */
+    designSpecs?: VisualSpec[]
+    taskID?: string
+    parentSessionID?: string
+    model?: { providerID: string; modelID: string }
+    signal?: AbortSignal
+    onStatus?: (summary: string) => void | Promise<void>
+    /** Fires once the runner session is created so callers (orchestrator
+     *  dispatch tools) can capture the id for SSE event emission without
+     *  needing a wrapper session. Rule 22 — single session per sub-agent. */
+    onSessionCreated?: (sessionID: string) => void
+    /** Optional Decision Log — seeded with foundational decisions. */
+    decisionLog?: DecisionLog
+  }
+
+  /**
+   * Parse a task request into REQ-N requirements + foundational decisions.
+   * Goal decomposition happens downstream in the Architect, not here.
+   */
+  export async function run(input: RunInput): Promise<RequirementsResult & { sessionID: string }> {
+    // Rule 11 / rule 25: the working directory is a structural fact
+    // (`Instance.directory`), not something to keyword-regex out of the
+    // user's free-form request. `createAgentContextTools()` resolves to the
+    // correct root via Instance.directory by default.
+    const contextTools = await filterAgentTools(createAgentContextTools(), "requirements")
+    const outputToolKit = createRequirementsOutputTools()
+
+    const context = prefetchContext(input.title, input.request)
+
+    const out = await runAgentSession({
+      kind: "requirements",
+      core: REQUIREMENTS_CORE,
+      sessionTitle: `Requirements: ${input.title}`,
+      parentSessionID: input.parentSessionID,
+      taskID: input.taskID,
+      model: input.model,
+      signal: input.signal,
+      onStatus: input.onStatus,
+      onSessionCreated: input.onSessionCreated
+        ? (session) => { input.onSessionCreated!(session.id) }
+        : undefined,
+      toolKit: {
+        tools: { ...contextTools, ...outputToolKit.tools },
+        getCollector: () => outputToolKit.getCollector(),
+      },
+      buildUserPrompt: () => buildUserPrompt(input, context),
+      buildUserParts: () => buildPromptParts(buildUserPrompt(input, context), input.attachments),
+      skillsStage: "requirements",
+      terminalTool: {
+        toolName: "submit_requirements",
+        isSatisfied: (collector) => collector.finalized,
+        // Requirements has no host-side completeness signal: one registered
+        // requirement is not proof that all explicit/implicit requirements and
+        // decisions are done. Keep work tools visible and let terminal recovery
+        // surface prose-stop misses instead of prematurely hiding collectors.
+        shouldExposeOnlyTerminalTool: () => false,
+      },
+    })
+
+    const collector = out.collector as RequirementsCollector
+
+    // Collector tool-call output is the only supported path. If the LLM
+    // did not register any requirements via register_requirement, treat
+    // this as a hard contract failure — no text-parsing fallback (rule 1).
+    if (collector.requirements.length === 0) {
+      throw new Error(
+        `requirements agent produced no requirements via register_requirement ` +
+          `The orchestrator LLM must decide whether to re-invoke requirements, modify the ` +
+          `task prompt, or fail the task — no coded retry loop.`,
+      )
+    }
+    if (!collector.finalized) {
+      throw new Error(
+        `requirements agent did not call submit_requirements after registering ` +
+          `${collector.requirements.length} requirement(s).`,
+      )
+    }
+
+    const parsed = collectorToOutput(collector)
+    log.info("requirements agent output", {
+      requirements: parsed.requirements.length,
+      decisions: parsed.decisions.length,
+      finalized: collector.finalized,
+    })
+
+    const result: RequirementsResult = {
+      summary: parsed.summary || "Requirements parsed",
+      requirements: parsed.requirements,
+      decisions: parsed.decisions,
+    }
+
+    // Seed Decision Log with foundational decisions
+    if (input.decisionLog && result.decisions.length > 0) {
+      for (const decision of result.decisions) {
+        input.decisionLog.append({
+          phase: "requirements",
+          key: decision.key,
+          value: decision.value,
+          reason: decision.reason,
+        })
+      }
+    }
+
+    return { ...result, sessionID: out.session.id }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Collector → RequirementsOutput
+// ---------------------------------------------------------------------------
+
+function collectorToOutput(
+  collector: RequirementsCollector,
+): RequirementsOutput {
+  return {
+    summary: summarizeRequirements(collector),
+    requirements: collector.requirements.map((r) => ({
+      id: r.id,
+      type: r.type,
+      description: r.description,
+    })),
+    decisions: collector.decisions.map((d) => ({
+      key: d.key,
+      value: d.value,
+      reason: d.reason,
+    })),
+  }
+}
+
+function summarizeRequirements(collector: RequirementsCollector): string {
+  const explicit = collector.requirements.filter((r) => r.type === "explicit").length
+  const implicit = collector.requirements.length - explicit
+  return `Parsed ${collector.requirements.length} requirement(s): ${explicit} explicit, ${implicit} implicit.`
+}
+
+// ---------------------------------------------------------------------------
+// Prompt construction
+// ---------------------------------------------------------------------------
+
+async function buildPromptParts(
+  text: string,
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
+) {
+  const enrichedText = text + AttachmentStore.renderAttachmentInventory(attachments)
+  const inlineParts = await AttachmentStore.inlineFileParts(attachments)
+  return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
+}
+
+function buildUserPrompt(
+  input: {
+    title: string
+    request: string
+    designSpecs?: VisualSpec[]
+    taskID?: string
+  },
+  prefetched: string,
+): string {
+  const sections: string[] = []
+
+  sections.push("# Delegation\n\nOrchestrator is asking requirements to extract the task requirements and foundational decisions.")
+  sections.push(`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`)
+
+  if (input.taskID) {
+    const clarifications = clarificationTranscriptSection(input.taskID)
+    if (clarifications) {
+      sections.push([
+        clarifications,
+        "Concrete stack or deliverable answers from clarifications/operator notes outrank existing package.json dependencies.",
+        "If the user explicitly chose a framework-free implementation, record that choice directly instead of inferring a framework from scaffold files.",
+      ].join("\n\n"))
+    }
+    const operatorNotes = operatorNotesSection(input.taskID)
+    if (operatorNotes) sections.push(operatorNotes)
+  }
+
+  if (input.designSpecs && input.designSpecs.length > 0) {
+    sections.push(renderVisualContractPromptSection({ specs: input.designSpecs }))
+  }
+
+  if (prefetched?.trim()) {
+    sections.push(prefetched)
+  }
+
+  sections.push(buildMirrorToolsPromptSection({ cwd: Instance.directory }))
+
+  return sections.join("\n\n")
+}

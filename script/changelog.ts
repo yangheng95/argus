@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun"
-import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
 import { parseArgs } from "util"
 import { Script } from "@opencorvus-ai/script"
 

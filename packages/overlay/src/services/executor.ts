@@ -1,12 +1,10 @@
 // ── Executor Service ──
-// TypeScript port of executor-related functions
-// executorLabel, executorInfo, executorSelectable, executorSetupHint,
-// executorTitle, executorCurrentModel, executorProcessKindTag,
-// loadExecutors, setExecutorModel.
-// DOM-rendering functions (renderExecutorModelPanel, openExecutorModelPanel,
-// closeAllExecutorModelPanels, renderExecutor, syncExecutorWidth) are
-// intentionally NOT ported here — they are dead code in the Solid.js world
-// and are superseded by ExecutorModelPanel.tsx / ExecutorModelPanelController.
+// State + helpers for the ExecutorSelector Solid component (ChatComposer
+// bottom-left). The previous imperative engine-bar + #codexModelPanel /
+// #claudeCodeModelPanel + getElementById click delegation in main.tsx
+// has been replaced — the Solid component owns its own DOM, dropdown,
+// and dismissal handlers. This service supplies the data accessors and
+// the API setter only.
 
 import { appStore, setAppStore, setExecutors } from "../store/app";
 import { AppLog } from "../utils/log";
@@ -31,7 +29,8 @@ export interface ExecutorDescriptor {
 export function executorLabel(value: string): string {
   if (value === "codex") return "Codex";
   if (value === "claude-code") return "Claude Code";
-  return "MirrorCode";
+  if (value === "mirrorcode") return "MirrorCode";
+  return value;
 }
 
 /** Returns the full descriptor for an executor from the store, or undefined. */
@@ -41,12 +40,13 @@ export function executorInfo(value: string): ExecutorDescriptor | undefined {
 
 /**
  * Returns true when the executor can be selected (i.e. it was discovered and
- * is marked as selectable, or falls back to the "opencode" default).
+ * is marked as selectable, or falls back to the MirrorCode default
+ * executor id ("mirrorcode").
  */
 export function executorSelectable(value: string): boolean {
   const item = executorInfo(value);
   if (item) return !!item.selectable;
-  return value === "opencode";
+  return value === "mirrorcode";
 }
 
 /**
@@ -90,6 +90,37 @@ export function executorCurrentModel(executorID: string): string {
   return info?.model ?? "";
 }
 
+/** Maps executor ID → provider IDs whose models are relevant for that
+ *  executor. Drives the model picker; MirrorCode has no entry because its
+ *  model is not user-selectable in the overlay (it follows project config). */
+export const EXECUTOR_PROVIDER_MAP: Record<string, string[]> = {
+  codex: ["openai-codex", "openai"],
+  "claude-code": ["anthropic"],
+};
+
+/** Returns true when the executor has user-selectable models. MirrorCode
+ *  returns false (its model follows project config). */
+export function executorHasModelChoice(executorID: string): boolean {
+  return executorID in EXECUTOR_PROVIDER_MAP;
+}
+
+/** Derive the live model list for an executor from the provider catalog. */
+export function executorModels(executorID: string): string[] {
+  const catalog = appStore.providerCatalog as any;
+  if (!catalog?.all) return [];
+  const providerIDs = EXECUTOR_PROVIDER_MAP[executorID];
+  if (!providerIDs) return [];
+  const models: string[] = [];
+  for (const provider of catalog.all as any[]) {
+    if (!providerIDs.includes(provider.id)) continue;
+    if (!provider.models || typeof provider.models !== "object") continue;
+    for (const model of Object.values(provider.models) as any[]) {
+      if (model?.id) models.push(model.id);
+    }
+  }
+  return models;
+}
+
 /**
  * Maps a process kind string to its short tag label shown in the executor log.
  * Mirrors executorProcessKindTag.
@@ -108,7 +139,7 @@ export function executorProcessKindTag(kind: string): string {
 /**
  * Fetches the executor list from the server and updates the app store.
  * If the currently active executor is no longer selectable, falls back to
- * the first selectable executor or "opencode".
+ * the first selectable executor or the MirrorCode default id ("mirrorcode").
  * NOTE: `renderExecutor()` / `persistOverlaySettings()` calls are
  * omitted here because they belong to 's DOM world. Callers that need
  * to persist settings after loading should do so explicitly.

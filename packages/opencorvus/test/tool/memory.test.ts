@@ -144,7 +144,13 @@ describe("tool.memory", () => {
     })
   })
 
-  test("blocks mutating memory actions in plan mode", async () => {
+  // audit-2026-04-29 W2-V33 — same plan-mode removal as W2-V27
+  // (plan agent removed from agent.ts, plan_enter/plan_exit
+  // removed from Permission schema, plan_enter/plan_exit removed
+  // from ToolRegistry). The MemoryTool no longer special-cases
+  // plan mode; the test was authored against a removed feature.
+  // Skip with the spec preserved for review.
+  test.skip("blocks mutating memory actions in plan mode", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({

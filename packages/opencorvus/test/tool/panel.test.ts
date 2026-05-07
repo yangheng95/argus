@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Identifier } from "../../src/id/id"
-import { OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Database, eq } from "../../src/storage/db"
@@ -23,13 +23,13 @@ describe("panel tool", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ title: "bulk session" })
+        const session = await Session.create({ kind: "assistant", title: "bulk session" })
         const prefix = `bulk-${session.id}-`
         const now = Date.now()
 
         Database.use((db) =>
           db
-            .insert(OrchestratorTaskTable)
+            .insert(EngineTaskTable)
             .values(
               Array.from({ length: 101 }, (_, index) => ({
                 id: Identifier.ascending("task"),
@@ -38,7 +38,7 @@ describe("panel tool", () => {
                 source: "panel",
                 title: `${prefix}${index + 1}`,
                 request: `${prefix}${index + 1}`,
-                status: "running" as const,
+                status: "active" as const,
                 priority: "normal" as const,
                 time_created: now,
                 time_updated: now,
@@ -66,14 +66,21 @@ describe("panel tool", () => {
         )
         const output = JSON.parse(result.output)
 
+        // audit-2026-04-29 W2-V33 — `status` was removed from
+        // EngineTaskTable in Phase-6-f-2 (see engine.sql.ts:240-242:
+        // "Derive via engine/task-status.ts::deriveTaskStatus from
+        // time_started + time_completed + error + cancelled"). The
+        // pre-fix select referenced EngineTaskTable.status which is
+        // now undefined → drizzle's orderSelectedFields threw on
+        // the undefined column. Drop it; the test only filters by
+        // title prefix below, no need to project status.
         const tasks = Database.use((db) =>
           db
             .select({
-              title: OrchestratorTaskTable.title,
-              status: OrchestratorTaskTable.status,
-              session_id: OrchestratorTaskTable.session_id,
+              title: EngineTaskTable.title,
+              session_id: EngineTaskTable.session_id,
             })
-            .from(OrchestratorTaskTable)
+            .from(EngineTaskTable)
             .all(),
         )
         const current = tasks.filter((item) => item.title.startsWith(prefix))
@@ -99,7 +106,7 @@ describe("panel tool", () => {
 
         Database.use((db) =>
           db
-            .insert(OrchestratorTaskTable)
+            .insert(EngineTaskTable)
             .values({
               id: taskID,
               project_id: Instance.project.id,
@@ -160,10 +167,10 @@ describe("panel tool", () => {
         const row = Database.use((db) =>
           db
             .select({
-              metadata: OrchestratorTaskTable.metadata,
+              metadata: EngineTaskTable.metadata,
             })
-            .from(OrchestratorTaskTable)
-            .where(eq(OrchestratorTaskTable.id, taskID))
+            .from(EngineTaskTable)
+            .where(eq(EngineTaskTable.id, taskID))
             .get(),
         )
 

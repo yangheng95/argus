@@ -1,6 +1,5 @@
-import type { AssistantMessage, Part, UserMessage } from "@opencorvus-ai/sdk/v2"
+import type { AssistantMessage, Part, UserMessage } from "@opencorvus-ai/sdk"
 import { Locale } from "@/util/locale"
-import { textForUI } from "@/session/part-visibility"
 
 export type TranscriptOptions = {
   thinking: boolean
@@ -69,7 +68,7 @@ export function formatAssistantHeader(msg: AssistantMessage, includeMetadata: bo
 }
 
 export function formatPart(part: Part, options: TranscriptOptions): string {
-  if (part.type === "text" && textForUI(part)) {
+  if (part.type === "text") {
     return `${part.text}\n\n`
   }
 

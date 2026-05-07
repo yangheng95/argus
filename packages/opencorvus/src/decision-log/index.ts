@@ -8,7 +8,7 @@
  * - Carries WHY (reason), not just WHAT (value).
  *
  * Lifecycle:
- * 1. Decompose Agent seeds: runtime, stack, frontend, test framework.
+ * 1. Requirements Agent seeds: runtime, stack, frontend, test framework.
  * 2. Per-goal Eval Agent appends: discovered API contracts, DB paths, test commands.
  * 3. Subsequent goal Planners read: avoid re-discovering known decisions.
  */
@@ -45,17 +45,110 @@ export interface DecisionLogWriter {
 export interface DecisionLogReader {
   /** Read all decisions for this task, ordered by creation time. */
   read(): DecisionEntry[]
-  /** Read all decisions for a specific phase (e.g., "architect", "decompose"). */
+  /** Read all decisions for a specific phase (e.g., "architect", "requirements"). */
   readByPhase(phase: string): DecisionEntry[]
+  /**
+   * Read decisions for a specific phase that are either task-scoped
+   * (goalID null — applies to all goals) or scoped to the given goalID.
+   * This is the goal-scoped read used by per-goal sub-agents to avoid
+   * inheriting peer goals' private decisions.
+   */
+  readByPhaseAndGoal(phase: string, goalID: string): DecisionEntry[]
   /** Read the latest decision for a specific key. */
   readByKey(key: string): DecisionEntry | undefined
-  /** Format all decisions as a text block for LLM context injection. */
-  toPromptSection(): string
-  /** Format decisions for a specific phase as a prompt section. */
-  phasePromptSection(phase: string): string
+  /**
+   * Format all decisions as a text block for LLM context injection.
+   * When `options.limit` is given, keeps the latest N entries (by
+   * time_created, desc) and appends a short note about how many older
+   * entries were omitted. Callers on hot paths (orchestrator read_context)
+   * must pass a limit to avoid unbounded prompt growth as the log grows.
+   */
+  toPromptSection(options?: {
+    limit?: number
+    valueCap?: number
+    /** Phases to omit from the section. Useful when the caller renders
+     *  some phases in their own dedicated sections (e.g. `phase=review`
+     *  surfaces as "## Architecture review history") and wants the
+     *  general decision-log section to skip those — otherwise the
+     *  high-frequency phase eats the latest-N window and pushes
+     *  architect / requirements decisions out of prompt. */
+    excludePhases?: string[]
+  }): string
+  /**
+   * Format all decisions for a specific phase as a text block for prompt
+   * injection. Includes both task-scoped entries and goal-scoped entries
+   * under that phase so task-level reviewers can see the full contract
+   * surface without reimplementing decision-log formatting.
+   */
+  phasePromptSection(
+    phase: string,
+    heading: string,
+    options?: { limit?: number; valueCap?: number },
+  ): string
+  /**
+   * Format decisions for a specific phase, scoped to entries that are
+   * either task-wide (no goalID) or attached to `goalID`. Per-goal
+   * planners and executors use this so each prompt carries only the
+   * decisions relevant to that goal — not every peer goal's local notes.
+   * Returns "" when no entries match.
+   *
+   * `limit` caps entry count (latest-wins when exceeded); `valueCap`
+   * caps each entry's value body so a single long LLM-written decision
+   * cannot inflate the prompt. Both have conservative defaults so hot
+   * callers (per-goal planner / runner, hit every goal-run) stay
+   * bounded even without explicit tuning.
+   */
+  phasePromptSectionForGoal(
+    phase: string,
+    goalID: string,
+    heading: string,
+    options?: { limit?: number; valueCap?: number },
+  ): string
 }
 
 export type DecisionLog = DecisionLogWriter & DecisionLogReader
+
+/**
+ * Default per-entry `value` cap applied when rendering to prompt text. The
+ * decision_log row retains the full value — this cap governs prompt bytes
+ * only. Picked to fit a typical interface-contract paragraph; callers with
+ * a larger budget pass `valueCap` explicitly.
+ */
+const DEFAULT_ENTRY_VALUE_CAP = 600
+
+/**
+ * Default entry-count cap for `phasePromptSectionForGoal`. Architect
+ * sometimes writes one contract per interface — a busy multi-goal task
+ * can land 20+ architect entries for a single goal. We keep the latest
+ * 15 by default so planner / runner prompts stay bounded.
+ */
+const DEFAULT_PHASE_ENTRY_LIMIT = 15
+
+function capEntryValue(value: string, cap: number): string {
+  if (value.length <= cap) return value
+  const omitted = value.length - cap
+  return `${value.slice(0, cap)}… [+${omitted} chars truncated; full body in decision_log row]`
+}
+
+function formatPromptSectionEntries(
+  entries: DecisionEntry[],
+  heading: string,
+  options?: { limit?: number; valueCap?: number },
+): string {
+  if (entries.length === 0) return ""
+  const limit = options?.limit ?? DEFAULT_PHASE_ENTRY_LIMIT
+  const shown = entries.length > limit ? entries.slice(entries.length - limit) : entries
+  const omitted = entries.length - shown.length
+  const valueCap = options?.valueCap ?? DEFAULT_ENTRY_VALUE_CAP
+  const lines = shown.map((e) => {
+    const value = capEntryValue(e.value, valueCap)
+    return `### ${e.key}\n${value}${e.reason ? `\n_Why: ${e.reason}_` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`
+  })
+  const count = omitted > 0
+    ? `latest ${shown.length} of ${entries.length}; ${omitted} older omitted`
+    : `${shown.length} entries`
+  return `## ${heading} (${count})\n\n${lines.join("\n\n")}`
+}
 
 /**
  * Create a DecisionLog instance scoped to a specific task.
@@ -103,6 +196,20 @@ export function createDecisionLog(taskID: string): DecisionLog {
       ).map(rowToEntry)
     },
 
+    readByPhaseAndGoal(phase: string, goalID: string): DecisionEntry[] {
+      // SQL goal_id IS NULL covers task-scoped entries; equality covers
+      // entries owned by this specific goal. We deliberately exclude entries
+      // owned by peer goals so each per-goal prompt stays narrow.
+      return Database.use((db) =>
+        db.select().from(DecisionLogTable)
+          .where(and(eq(DecisionLogTable.task_id, taskID), eq(DecisionLogTable.phase, phase)))
+          .orderBy(DecisionLogTable.time_created)
+          .all(),
+      )
+        .filter((row) => row.goal_id === null || row.goal_id === goalID)
+        .map(rowToEntry)
+    },
+
     readByKey(key: string): DecisionEntry | undefined {
       const row = Database.use((db) =>
         db.select().from(DecisionLogTable)
@@ -113,22 +220,56 @@ export function createDecisionLog(taskID: string): DecisionLog {
       return row ? rowToEntry(row) : undefined
     },
 
-    toPromptSection(): string {
-      const entries = this.read()
-      if (entries.length === 0) return ""
-      const lines = entries.map((e) =>
-        `- **${e.key}**: ${e.value}${e.reason ? ` (${e.reason})` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`,
-      )
-      return `## Decision Log (${entries.length} entries)\n\n${lines.join("\n")}`
+    toPromptSection(options?: { limit?: number; valueCap?: number; excludePhases?: string[] }): string {
+      const allRaw = this.read()
+      if (allRaw.length === 0) return ""
+      // Filter excluded phases first so the latest-N slice is taken AFTER
+      // exclusion. Otherwise a high-frequency excluded phase would still
+      // push other entries out of the read() ascending window before the
+      // limit is applied.
+      const excludeSet = new Set(options?.excludePhases ?? [])
+      const all = excludeSet.size > 0
+        ? allRaw.filter((e) => !excludeSet.has(e.phase))
+        : allRaw
+      if (all.length === 0) return ""
+      const limit = options?.limit
+      // `read()` returns ascending by time_created. Keep the latest slice so
+      // recent decisions win when the log outgrows the budget.
+      const entries = typeof limit === "number" && all.length > limit
+        ? all.slice(all.length - limit)
+        : all
+      const omitted = all.length - entries.length
+      // Per-entry value cap. Without this, a single LLM-written architect
+      // decision of 20K chars would dominate the prompt even though entry
+      // count is bounded. 600 chars ≈ one interface contract paragraph —
+      // the full body lives in the decision_log row and is reachable via
+      // readByKey() when an agent genuinely needs it.
+      const valueCap = options?.valueCap ?? DEFAULT_ENTRY_VALUE_CAP
+      const lines = entries.map((e) => {
+        const value = capEntryValue(e.value, valueCap)
+        return `- **${e.key}**: ${value}${e.reason ? ` (${e.reason})` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`
+      })
+      const header = omitted > 0
+        ? `## Decision Log (latest ${entries.length} of ${all.length}; ${omitted} older omitted)`
+        : `## Decision Log (${entries.length} entries)`
+      return `${header}\n\n${lines.join("\n")}`
     },
 
-    phasePromptSection(phase: string): string {
-      const entries = this.readByPhase(phase)
-      if (entries.length === 0) return ""
-      const lines = entries.map((e) =>
-        `### ${e.key}\n${e.value}${e.reason ? `\n_Why: ${e.reason}_` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`,
-      )
-      return `## Architect Consensus (${entries.length} contracts)\n\n${lines.join("\n\n")}`
+    phasePromptSection(
+      phase: string,
+      heading: string,
+      options?: { limit?: number; valueCap?: number },
+    ): string {
+      return formatPromptSectionEntries(this.readByPhase(phase), heading, options)
+    },
+
+    phasePromptSectionForGoal(
+      phase: string,
+      goalID: string,
+      heading: string,
+      options?: { limit?: number; valueCap?: number },
+    ): string {
+      return formatPromptSectionEntries(this.readByPhaseAndGoal(phase, goalID), heading, options)
     },
   }
 }

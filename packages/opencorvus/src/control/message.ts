@@ -2,12 +2,11 @@ import z from "zod"
 import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
 import { Session } from "@/session"
-import { Message } from "@/session/message"
+import { Message } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
-import { Skill } from "@/skill"
 import { ToolRegistry } from "@/tool/registry"
 import { Database, eq } from "@/storage/db"
-import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
+import { EngineTaskTable } from "@/engine"
 import { panelCapabilityPrompt } from "@/panel/capability"
 import { ControlMessageInput, ControlMessageResult } from "./message-schema"
 import { ControlTimeline } from "./timeline"
@@ -104,6 +103,10 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       source: input.source ?? defaultSource(input.surface),
       ...(input.request_id ? { requestID: input.request_id } : {}),
       originalText: input.text,
+      // Pass raw attachments so panel tool handlers can decode them into the task request
+      attachments: input.attachments ?? [],
+      // Forward web_search flag so panel tool handlers can propagate it to task metadata
+      ...(input.metadata?.web_search === true ? { web_search: true } : {}),
     }
 
     const result = await SessionPrompt.prompt({
@@ -111,7 +114,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       agent,
       model,
       system,
-      parts,
+      parts: parts as any,
       tools,
       format: {
         type: "json_schema" as const,
@@ -170,7 +173,10 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
   } finally {
     for (const unsub of unsubs) unsub()
     if (shouldRemoveSession(control)) {
-      await Session.remove(control!.info.id).catch(() => undefined)
+      // Best-effort cleanup in finally — if the session was already removed
+      // (concurrent teardown) we move on; any real failure surfaces in the
+      // log but does not mask the main-branch result.
+      await Session.remove(control!.info.id).catch(err => log.warn("panel control session remove failed", { error: String(err) }))
       log.info("panel control session removed", {
         input: payload,
         panel_session_id: control!.info.id,
@@ -208,16 +214,22 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
 }
 
 async function resolveModel() {
-  const agentName = await Agent.defaultAgent().catch(() => undefined)
-  if (!agentName) return undefined
+  // Agent.defaultAgent throws on config issues (no visible agent, hidden
+  // default, etc.) — those should surface, not silently disable the model.
+  const agentName = await Agent.defaultAgent()
   const agent = await Agent.get(agentName)
   const target = agent?.model
   if (target) return target
-  return Provider.defaultModel().catch(() => undefined)
+  // No .catch here — Provider.defaultModel() now reads only cfg.model and
+  // throws MissingModelConfigError if unset. The control plane relies on
+  // that contract: when the operator hasn't declared a model in
+  // opencorvus.jsonc there is no safe "default" to pick, and silently
+  // returning undefined would push the missing-config into downstream
+  // prompts where it surfaces as a confusing "no agent found" error.
+  return Provider.defaultModel()
 }
 
 async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
-  const skill = await Skill.get("panel-control")
   const lines = [
     "You are the core OpenCorvus agent operating in control-plane mode.",
     "Always respond in the same language as the user's message. Default to Chinese (简体中文) when the language is ambiguous.",
@@ -238,9 +250,6 @@ async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
     "Available panel actions on this surface:",
     panelCapabilityPrompt(input.surface),
   ]
-  if (skill) {
-    lines.push("", skill.content.trim())
-  }
   return lines.join("\n")
 }
 
@@ -267,11 +276,6 @@ function buildUserParts(input: z.infer<typeof ControlMessageInput>) {
       }),
       kind: "control" as const,
       source: "system" as const,
-      audience: {
-        model: true,
-        ui: false,
-        acp: false,
-      },
     },
   ]
   if (input.attachments?.length) {
@@ -346,6 +350,7 @@ async function resolveSession(input: z.infer<typeof ControlMessageInput>) {
     } satisfies ControlSession
   }
   const info = await Session.create({
+    kind: "assistant",
     title: `Panel control (${input.surface})`,
   })
   return {
@@ -410,14 +415,8 @@ async function appendSummary(sessionID: string, message: Message.WithParts, text
     messageID: info.id,
     type: "text",
     text,
-    synthetic: true,
     kind: "control",
     source: "system",
-    audience: {
-      model: false,
-      ui: true,
-      acp: false,
-    },
   })
   await Session.touch(sessionID)
 }
@@ -435,9 +434,9 @@ function taskSession(taskID?: string) {
   if (!taskID) return
   const row = Database.use((db) =>
     db
-      .select({ sessionID: OrchestratorTaskTable.session_id })
-      .from(OrchestratorTaskTable)
-      .where(eq(OrchestratorTaskTable.id, taskID))
+      .select({ sessionID: EngineTaskTable.session_id })
+      .from(EngineTaskTable)
+      .where(eq(EngineTaskTable.id, taskID))
       .get(),
   )
   return row?.sessionID ?? undefined

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { Database as Sqlite } from "bun:sqlite"
-import { ProtocolEnvelope, ProtocolInboxMessage, ProtocolStreamChunk } from "../../src/protocol/schema"
+import { ProtocolEnvelope, ProtocolInboxMessage } from "../../src/protocol/schema"
 import { SCHEMA_DDL } from "../../src/storage/ddl"
 
 describe("protocol.v2", () => {
   test("parses protocol envelope and companion records", () => {
     const envelope = ProtocolEnvelope.parse({
-      id: "pte_000000000001abcdefghijklmn",
+      id: "pev_000000000001abcdefghijklmn",
       kind: "event",
       type: "run.started",
       aggregate: "run",
@@ -19,7 +19,7 @@ describe("protocol.v2", () => {
       payload: { hello: "world" },
     })
     const inbox = ProtocolInboxMessage.parse({
-      id: "pin_000000000001abcdefghijklmn",
+      id: "pib_000000000001abcdefghijklmn",
       envelope_id: envelope.id,
       actor: "run",
       actor_id: envelope.aggregate_id,
@@ -27,19 +27,7 @@ describe("protocol.v2", () => {
       attempt: 0,
       visible_at: Date.now(),
     })
-    const chunk = ProtocolStreamChunk.parse({
-      id: "psc_000000000001abcdefghijklmn",
-      stream_id: "stream_1",
-      task_id: envelope.task_id,
-      run_id: envelope.run_id,
-      kind: "text_delta",
-      chunk_seq: 0,
-      text: "hello",
-      emitted_at: Date.now(),
-    })
-
     expect(inbox.envelope_id).toBe(envelope.id)
-    expect(chunk.kind).toBe("text_delta")
   })
 
   test("schema ddl includes protocol v2 tables", () => {
@@ -53,7 +41,6 @@ describe("protocol.v2", () => {
 
     expect(names.some((item) => item.name === "protocol_event")).toBe(true)
     expect(names.some((item) => item.name === "protocol_inbox")).toBe(true)
-    expect(names.some((item) => item.name === "protocol_stream_chunk")).toBe(true)
 
     sqlite.close()
   })

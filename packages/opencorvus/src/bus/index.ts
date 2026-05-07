@@ -1,6 +1,6 @@
 import z from "zod"
 import { Log } from "../util/log"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { BusEvent } from "./bus-event"
 import { GlobalBus } from "./global"
 import { isBusTraceEnabled, traceBus } from "../util/debug-trace"
@@ -17,7 +17,51 @@ export namespace Bus {
     }),
   )
 
-  const state = Instance.state(
+  const SUBSCRIBER_TIMEOUT_MS = 15_000 // 15s per subscriber — short enough to avoid back-pressuring pipeline stages
+
+  function withTimeout(promise: unknown, timeoutMs: number, label: string): Promise<unknown> {
+    if (!promise || typeof (promise as any).then !== "function") return Promise.resolve(promise)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`Bus subscriber timeout (${timeoutMs}ms): ${label}`)), timeoutMs)
+    })
+    return Promise.race([
+      (promise as Promise<unknown>).finally(() => {
+        if (timer) clearTimeout(timer)
+      }),
+      timeout,
+    ])
+  }
+
+  async function dispatch(payload: { type: string; properties: any }) {
+    const pending: Array<Promise<unknown>> = []
+    let index = 0
+    for (const key of [payload.type, "*"]) {
+      const match = state().subscriptions.get(key)
+      for (const sub of match ?? []) {
+        if (isBusTraceEnabled()) {
+          index += 1
+          traceBus({
+            phase: "before-dispatch",
+            type: payload.type,
+            key,
+            index,
+            source: source.get(sub),
+          })
+        }
+        const result = sub(payload)
+        const label = `${payload.type}/${source.get(sub) ?? "unknown"}`
+        pending.push(
+          withTimeout(result, SUBSCRIBER_TIMEOUT_MS, label).catch((err) => {
+            log.warn("subscriber timed out or failed", { type: payload.type, label, error: String(err) })
+          }),
+        )
+      }
+    }
+    return Promise.allSettled(pending)
+  }
+
+  const state = lazyInstanceState(
     () => {
       const subscriptions = new Map<any, Subscription[]>()
 
@@ -25,32 +69,15 @@ export namespace Bus {
         subscriptions,
       }
     },
-    async (entry) => {
-      const wildcard = entry.subscriptions.get("*")
-      if (!wildcard) return
-      const event = {
+    async () => {
+      await dispatch({
         type: InstanceDisposed.type,
         properties: {
           directory: Instance.directory,
         },
-      }
-      for (const sub of [...wildcard]) {
-        sub(event)
-      }
+      })
     },
   )
-
-  const SUBSCRIBER_TIMEOUT_MS = 15_000 // 15s per subscriber — short enough to avoid back-pressuring pipeline stages
-
-  function withTimeout(promise: unknown, timeoutMs: number, label: string): Promise<unknown> {
-    if (!promise || typeof (promise as any).then !== "function") return Promise.resolve(promise)
-    return Promise.race([
-      promise as Promise<unknown>,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Bus subscriber timeout (${timeoutMs}ms): ${label}`)), timeoutMs),
-      ),
-    ])
-  }
 
   export async function publish<Definition extends BusEvent.Definition>(
     def: Definition,
@@ -60,37 +87,15 @@ export namespace Bus {
       type: def.type,
       properties,
     }
-    log.info("publishing", {
+    log.debug("publishing", {
       type: def.type,
     })
-    const pending: Array<Promise<unknown>> = []
-    let index = 0
-    for (const key of [def.type, "*"]) {
-      const match = state().subscriptions.get(key)
-      for (const sub of match ?? []) {
-        if (isBusTraceEnabled()) {
-          index += 1
-          traceBus({
-            phase: "before-dispatch",
-            type: def.type,
-            key,
-            index,
-            source: source.get(sub),
-          })
-        }
-        const result = sub(payload)
-        pending.push(
-          withTimeout(result, SUBSCRIBER_TIMEOUT_MS, `${def.type}/${source.get(sub) ?? "unknown"}`).catch((err) => {
-            log.warn("subscriber timed out or failed", { type: def.type, error: String(err) })
-          }),
-        )
-      }
-    }
+    const result = dispatch(payload)
     GlobalBus.emit("event", {
       directory: Instance.directory,
       payload,
     })
-    return Promise.allSettled(pending)
+    return result
   }
 
   export function subscribe<Definition extends BusEvent.Definition>(
@@ -100,29 +105,23 @@ export namespace Bus {
     return raw(def.type, callback)
   }
 
-  export function once<Definition extends BusEvent.Definition>(
-    def: Definition,
-    callback: (event: {
-      type: Definition["type"]
-      properties: z.infer<Definition["properties"]>
-    }) => "done" | undefined,
-  ) {
-    const unsub = subscribe(def, (event) => {
-      try {
-        if (callback(event)) unsub()
-      } catch (err) {
-        unsub()
-        throw err
-      }
-    })
-  }
-
   export function subscribeAll(callback: (event: any) => void) {
     return raw("*", callback)
   }
 
+  export function once<Definition extends BusEvent.Definition>(
+    def: Definition,
+    callback: (event: { type: Definition["type"]; properties: z.infer<Definition["properties"]> }) => unknown | Promise<unknown>,
+  ) {
+    const unsub = raw(def.type, async (event) => {
+      const result = await callback(event)
+      if (result === "done") unsub()
+    })
+    return unsub
+  }
+
   function raw(type: string, callback: (event: any) => void) {
-    log.info("subscribing", { type })
+    log.debug("subscribing", { type })
     if (isBusTraceEnabled()) {
       const stack = new Error().stack
         ?.split("\n")
@@ -139,12 +138,13 @@ export namespace Bus {
     }
     const subscriptions = state().subscriptions
     let match = subscriptions.get(type) ?? []
-    if (match.includes(callback)) return () => {}
-    match.push(callback)
-    subscriptions.set(type, match)
+    if (!match.includes(callback)) {
+      match.push(callback)
+      subscriptions.set(type, match)
+    }
 
     return () => {
-      log.info("unsubscribing", { type })
+      log.debug("unsubscribing", { type })
       const match = subscriptions.get(type)
       if (!match) return
       const index = match.indexOf(callback)

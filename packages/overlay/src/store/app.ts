@@ -33,6 +33,12 @@ export interface NdjsonEvent {
 export interface AppState {
   connectionStatus: ConnectionStatus;
   connected: boolean;
+  /** PID of the managed sidecar `bun` server process when overlay launched
+   *  it (Tauri overlay_server_info `pid` field). Surfaced in the title-bar
+   *  connection badge alongside the port so the operator can `kill <pid>` /
+   *  `lsof -p <pid>` without scanning netstat. Undefined when the overlay
+   *  is talking to an external server it didn't spawn. */
+  serverPid?: number;
   /** Resolved effective theme: "dark" | "light" | "vscode-dark" */
   theme: "dark" | "light" | "vscode-dark";
   locale: string;
@@ -54,6 +60,14 @@ export interface AppState {
  // ── App info ──
   /** Version string reported by the opencorvus core server */
   coreVersion: string;
+  /** Runtime-resolved on-disk paths the engine is using. Populated by
+   *  /global/health response so debug tooling (task debug blob, support
+   *  bundles) reads the actual DB location instead of guessing from a
+   *  static `<task.directory>/.opencorvus/opencorvus.db` template — that
+   *  guess is wrong whenever OPENCORVUS_HOME is set or the engine was
+   *  launched from a cwd different from the task's project directory
+   *  (e.g. the bundled overlay carrying its own .opencorvus/). */
+  enginePaths: { database: string; data: string; home: string } | null;
  // ── Server-side config (mirrors state.config) ──
   /** Full server-side config object as returned by the /config API */
   config: any;
@@ -64,6 +78,8 @@ export interface AppState {
   providerCatalog: any;
   /** Current provider authentication status */
   providerAuth: any;
+  /** Route-keyed errors from the latest config/provider bootstrap load. */
+  configLoadErrors: Record<string, string>;
   /** Map of provider IDs whose auth prompt has been dismissed this session */
   providerAuthDismissed: Record<string, boolean>;
   /** In-progress provider connectivity test state */
@@ -91,12 +107,8 @@ export interface AppState {
   promptEntries: any[];
   /** Map of prompt ID → draft text */
   promptDrafts: Record<string, string>;
- // ── Criteria / Budget (mirrors state.criteriaSpecs / state.budgetDirty / state.budgetSaving) ──
+ // ── Criteria ──
   criteriaSpecs: any[];
-  /** Whether the budget config form has unsaved changes */
-  budgetDirty: boolean;
-  /** Whether a budget-save request is in flight */
-  budgetSaving: boolean;
 }
 
 // ── Defaults ──
@@ -104,20 +116,23 @@ export interface AppState {
 const DEFAULT_APP_STATE: AppState = {
   connectionStatus: "offline",
   connected: false,
+  serverPid: undefined,
   theme: "dark",
   locale: "en-US",
   zoom: 1,
-  opacity: 0.8,
+  opacity: 0.99,
   logEntries: [],
   logFilterLevel: "debug",
   i18n: {},
   i18nReady: false,
   localeSeq: 0,
   coreVersion: "",
+  enginePaths: null,
   config: null,
   executors: [],
   providerCatalog: null,
   providerAuth: null,
+  configLoadErrors: {},
   providerAuthDismissed: {},
   providerTest: null,
   channels: [],
@@ -131,8 +146,6 @@ const DEFAULT_APP_STATE: AppState = {
   promptEntries: [],
   promptDrafts: {},
   criteriaSpecs: [],
-  budgetDirty: false,
-  budgetSaving: false,
 };
 
 // ── Store ──

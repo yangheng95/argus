@@ -1,0 +1,60 @@
+---
+title: 自定义工具
+description: 通过插件为 OpenCorvus 添加 agent 可调用的工具。
+---
+
+OpenCorvus 没有 YAML 风格的工具配置。要添加 agent 可调用的工具，写一个 [plugin](/docs/zh-cn/plugins/)，返回 `tool` map。
+
+## 最小示例
+
+```typescript
+// .opencorvus/plugin/my-tools.ts
+import { Plugin, tool } from "@opencorvus-ai/plugin"
+
+export const MyTools: Plugin = async () => ({
+  tool: {
+    sum: tool({
+      description: "两数相加",
+      args: {
+        a: tool.schema.number(),
+        b: tool.schema.number(),
+      },
+      async execute({ a, b }) {
+        return String(a + b)
+      },
+    }),
+  },
+})
+```
+
+`.opencorvus/plugin/` 下的文件启动时自动加载，或在 [config](/docs/zh-cn/config/) 的 `plugin` 中显式声明。
+
+## 工具拿到什么
+
+每个 `execute` 回调接收：
+
+- 校验过的 `args`
+- 含 `bus` / `permission` / `cwd` 等运行时 hook 的上下文
+- 用于增量输出的流式 channel
+
+完整类型见 `packages/plugin/src/index.ts`。
+
+## 权限
+
+自定义工具与内置走同一权限系统。需要审批时在 [permission](/docs/zh-cn/permissions/) 块里声明工具名：
+
+```jsonc
+{
+  "permission": {
+    "sum": "ask"
+  }
+}
+```
+
+## 覆盖内置工具
+
+若插件的 `tool` map 用了与内置同名（如 `bash`），**插件覆盖内置**。慎用——orchestrator 与 evaluator 依赖标准工具的语义。
+
+## 分发
+
+插件（以及其中的自定义工具）可作为 npm 包发布或以 `file://` 路径分发。声明、安装、禁用方式见 [Plugins](/docs/zh-cn/plugins/)。

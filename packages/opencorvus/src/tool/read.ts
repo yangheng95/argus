@@ -11,6 +11,7 @@ import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
 import { InstructionPrompt } from "../session/instruction"
 import { Filesystem } from "../util/filesystem"
+import { AttachmentStore } from "../storage/attachment-store"
 
 const DEFAULT_READ_LIMIT = 2000
 const MAX_LINE_LENGTH = 2000
@@ -30,7 +31,10 @@ export const ReadTool = Tool.define("read", {
       throw new Error("offset must be greater than or equal to 1")
     }
     let filepath = params.filePath
-    if (!path.isAbsolute(filepath)) {
+    const viaAttachment = resolveAttachmentPath(filepath)
+    if (viaAttachment !== undefined) {
+      filepath = viaAttachment
+    } else if (!path.isAbsolute(filepath)) {
       filepath = path.resolve(Instance.directory, filepath)
     }
     const title = path.relative(Instance.worktree, filepath)
@@ -111,6 +115,8 @@ export const ReadTool = Tool.define("read", {
           preview: sliced.slice(0, 20).join("\n"),
           truncated,
           loaded: [] as string[],
+          lines: sliced.length,
+          totalLines: entries.length,
         },
       }
     }
@@ -130,6 +136,8 @@ export const ReadTool = Tool.define("read", {
           preview: msg,
           truncated: false,
           loaded: instructions.map((i) => i.filepath),
+          lines: 0,
+          totalLines: 0,
         },
         attachments: [
           {
@@ -227,10 +235,47 @@ export const ReadTool = Tool.define("read", {
         preview,
         truncated,
         loaded: instructions.map((i) => i.filepath),
+        lines: raw.length,
+        totalLines,
       },
     }
   },
 })
+
+/**
+ * Map an attachment reference to its on-disk filesystem path so the read tool
+ * can serve files uploaded to the task (images, PDFs, spec documents, …).
+ *
+ * Accepted forms:
+ *   - `/attachment/<projectID>/<sha>.<ext>`  — canonical URL emitted by
+ *     AttachmentStore.write (served by AttachmentRoutes).
+ *   - `attachment://<sha>.<ext>` or `attachment:<sha>.<ext>` — shorthand that
+ *     resolves inside the current project, useful when agents synthesize URLs
+ *     from references without carrying the project ID.
+ *
+ * Returns undefined when the input is a plain file path.
+ */
+function resolveAttachmentPath(raw: string): string | undefined {
+  if (!raw) return undefined
+  const trimmed = raw.trim()
+  const located = AttachmentStore.nameFromUrl(trimmed)
+  if (located) {
+    const abs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
+    if (!abs) throw new Error(`attachment ${trimmed} not found in project ${located.projectID}`)
+    return abs
+  }
+  const schemeMatch = trimmed.match(/^attachment:(?:\/\/)?(.+)$/i)
+  if (schemeMatch) {
+    const name = schemeMatch[1].replace(/^\/+/, "")
+    if (!name || name.includes("/") || name.includes("\\")) {
+      throw new Error(`attachment shorthand must be 'attachment:<sha>.<ext>' without directory parts: ${trimmed}`)
+    }
+    const abs = AttachmentStore.resolveAbsolute(Instance.project.id, name)
+    if (!abs) throw new Error(`attachment ${name} not resolvable in current project`)
+    return abs
+  }
+  return undefined
+}
 
 async function isBinaryFile(filepath: string, fileSize: number): Promise<boolean> {
   const ext = path.extname(filepath).toLowerCase()

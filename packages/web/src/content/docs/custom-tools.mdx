@@ -1,0 +1,60 @@
+---
+title: Custom tools
+description: Define your own tools for OpenCorvus via plugins.
+---
+
+OpenCorvus does not ship a YAML-style tool config. To add a tool the agent can call, write a [plugin](/docs/plugins/) that returns a `tool` map.
+
+## Minimal example
+
+```typescript
+// .opencorvus/plugin/my-tools.ts
+import { Plugin, tool } from "@opencorvus-ai/plugin"
+
+export const MyTools: Plugin = async () => ({
+  tool: {
+    sum: tool({
+      description: "Add two numbers",
+      args: {
+        a: tool.schema.number(),
+        b: tool.schema.number(),
+      },
+      async execute({ a, b }) {
+        return String(a + b)
+      },
+    }),
+  },
+})
+```
+
+Files placed under `.opencorvus/plugin/` are auto-loaded at startup. Or declare the plugin explicitly in [config](/docs/config/) under `plugin`.
+
+## What a tool gets
+
+Each `execute` callback receives:
+
+- The validated `args`.
+- A context with `bus`, `permission`, `cwd`, and other runtime hooks.
+- A streaming output channel for incremental results.
+
+See `packages/plugin/src/index.ts` for the full type.
+
+## Permissions
+
+Custom tools route through the same permission system as built-ins. To require approval before running, declare the tool name in the [permission](/docs/permissions/) block:
+
+```jsonc
+{
+  "permission": {
+    "sum": "ask"
+  }
+}
+```
+
+## Replacing a built-in tool
+
+If your plugin's `tool` map uses the same key as a built-in (e.g. `bash`), the plugin override **wins**. Use this carefully; the orchestrator and evaluator rely on built-in semantics for the standard tools.
+
+## Distributing tools
+
+Plugins (and therefore custom tools) can be published as npm packages or shared as `file://` paths. See [Plugins](/docs/plugins/) for declaration, install, and disable patterns.

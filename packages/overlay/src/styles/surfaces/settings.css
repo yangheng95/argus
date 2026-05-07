@@ -1,0 +1,2533 @@
+/* Settings surface — owns the settings dialog tabs (Permissions,
+   Providers, AgentModels, Channels, Skills, Knowledge, etc.). Each
+   tab module's classes are added here as they get a token sweep
+   and clean extraction. The richer `.config-*` / `.extension-*` /
+   `.knowledge-*` / `.pref-*` / `.market-*` / `.channel-doc-*`
+   blocks still live in styles.css until each gets a token sweep. */
+
+/* ── PermissionsPanel.tsx ────────────────────────────────── */
+
+.perm-panel {
+  padding: var(--ui-gap-lg) calc(var(--ui-gap-lg) * 1.5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-lg);
+}
+
+.perm-panel-intro {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 var(--ui-gap-xs);
+}
+
+.perm-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+}
+
+.perm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-lg);
+  padding: var(--ui-gap-md) var(--ui-gap-lg);
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-1);
+  transition: background var(--ui-duration-base);
+}
+
+.perm-row:hover {
+  background: var(--subtle-2);
+}
+
+.perm-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  min-width: 0;
+  flex: 1;
+}
+
+.perm-row-label {
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+.perm-row-desc {
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.perm-row-actions {
+  display: flex;
+  gap: var(--ui-gap-xs);
+  flex-shrink: 0;
+}
+
+/* Permission action button: tri-state allow/ask/deny pill. The
+   active variant routes through `color-mix` on the matching
+   semantic token (`--good` / `--warn` / `--bad`). */
+.perm-action-btn {
+  padding: var(--ui-gap-xs) var(--ui-gap-md);
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+  cursor: pointer;
+  transition:
+    background var(--ui-duration-base),
+    color var(--ui-duration-base),
+    border-color var(--ui-duration-base);
+  white-space: nowrap;
+}
+
+.perm-action-btn:hover {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+}
+
+.perm-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.perm-action-btn[data-active="true"][data-action="allow"] {
+  background: color-mix(in srgb, var(--good) 24%, transparent);
+  border-color: color-mix(in srgb, var(--good) 60%, transparent);
+  color: var(--good);
+}
+
+.perm-action-btn[data-active="true"][data-action="ask"] {
+  background: color-mix(in srgb, var(--warn) 24%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 60%, transparent);
+  color: var(--warn);
+}
+
+.perm-action-btn[data-active="true"][data-action="deny"] {
+  background: color-mix(in srgb, var(--bad) 24%, transparent);
+  border-color: color-mix(in srgb, var(--bad) 60%, transparent);
+  color: var(--bad);
+}
+
+/* ── MemoryPanel.tsx (Knowledge tab) ─────────────────────── */
+
+/* Toolbar above the knowledge list — wraps the search input +
+   action buttons. The shared-card multi-class rule
+   `.goal-item, .market-card, .knowledge-item, .pref-item,
+   .criteria-check { border / bg / radius / padding }` and the
+   shared hover treatment that includes `.knowledge-item:hover`
+   stay in styles.css as cross-surface primitives — extracting
+   either would split the rule-9 abstraction across files. */
+.knowledge-toolbar {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  flex-wrap: wrap;
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-1);
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
+}
+
+.knowledge-toolbar:hover,
+.knowledge-toolbar:focus-within {
+  background: var(--hover-accent-wash);
+  border-color: var(--hover-accent-border);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    var(--hover-accent-shadow);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.knowledge-search {
+  flex: 1;
+  min-width: 0;
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  color: var(--text);
+  font-size: var(--ui-font-control);
+  font-family: var(--font);
+  outline: none;
+  box-shadow: none;
+}
+
+.knowledge-search:focus {
+  border-color: var(--accent);
+}
+
+.knowledge-search::placeholder {
+  color: var(--text-muted);
+}
+
+/* Knowledge list: scrollable column inside the panel body. The
+   layout properties (display/flex-direction/gap) and the
+   scroll-clamp (max-height/overflow-y) used to live in two
+   separate solo rules in styles.css; folded into one block here
+   per rule 8. */
+.knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+  max-height: calc(300px * var(--ui-scale));
+  overflow-y: auto;
+}
+
+/* Memory item row in the list. The original solo declared a
+   `border-bottom: 1px solid var(--divider-soft)` that a late
+   cross-surface rule (`.knowledge-item, .pref-item { border-
+   bottom: none }`) zeroed out — declaring the rendered value
+   directly here so the surface canonical does not lie. */
+.knowledge-item {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: none;
+  cursor: pointer;
+  transition: background var(--ui-duration-fast);
+}
+
+.knowledge-item:hover {
+  background: var(--subtle-3);
+}
+
+.knowledge-item:last-child {
+  border-bottom: none;
+}
+
+.knowledge-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.knowledge-item-title {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-item-meta {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+}
+
+.knowledge-item-actions {
+  display: flex;
+  gap: calc(4px * var(--ui-scale));
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.knowledge-delete {
+  white-space: nowrap;
+}
+
+/* Memory scope chip: "global" / "session" / "builtin_default"
+   tones. The pill-shape declaration (border-radius / padding /
+   font) lives in the cross-surface multi-class
+   `.section-badge, .task-flag, .extension-status, .knowledge-
+   scope, .mini-badge` block in styles.css — only the
+   surface-specific tone overrides live here. */
+.knowledge-scope {
+  padding: calc(1px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  background: var(--subtle-4);
+  color: var(--text-soft);
+}
+
+.knowledge-scope[data-scope="global"] {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.knowledge-scope[data-scope="session"] {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+.knowledge-scope[data-source="builtin_default"] {
+  background: var(--subtle-3);
+  color: var(--text-muted);
+}
+
+/* Memory detail dialog — opened when the operator clicks an item. */
+.memory-detail-meta {
+  display: flex;
+  gap: calc(8px * var(--ui-scale));
+  flex-wrap: wrap;
+  padding: calc(8px * var(--ui-scale)) 0;
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+}
+
+.memory-detail-content {
+  max-height: calc(400px * var(--ui-scale));
+  overflow-y: auto;
+  padding: calc(12px * var(--ui-scale));
+  background: var(--surface-inset);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  font-size: var(--ui-font-control);
+  font-family: var(--mono);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+
+/* Search-result highlight: when the panel is in search mode, the
+   meta line greens to indicate a match and the title gets a
+   trailing "(search)" marker. */
+.knowledge-item[data-mode="search"] .knowledge-item-meta {
+  color: var(--good);
+}
+
+.knowledge-item[data-mode="search"] .knowledge-item-title::after {
+  content: " (search)";
+  font-weight: var(--ui-font-weight-body);
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+}
+
+/* ── ExtensionsPanel.tsx (Skill / Channel sections) ─────── */
+
+/* Outer block + sibling spacing for stacked extension sections. */
+.extension-block {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.extension-block + .extension-block {
+  margin-top: calc(12px * var(--ui-scale));
+}
+
+/* Section head: card-shaped header that opens the section body
+   beneath. Hover/focus-within wash routed through the shared
+   `--hover-accent-*` tokens; the inset-highlight white wash
+   converted to color-mix. */
+.extension-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  flex-wrap: wrap;
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-1);
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
+}
+
+.extension-head:hover,
+.extension-head:focus-within {
+  background: var(--hover-accent-wash);
+  border-color: var(--hover-accent-border);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    var(--hover-accent-shadow);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.extension-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+}
+
+/* Extension row: one card per installed extension. The row's
+   `--surface-inset` background was moved into this canonical
+   directly during iter30 because the late `!important` reset
+   was forcing the rendered bg anyway (see styles.css note for
+   the iter30 audit). */
+.extension-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  border-radius: var(--oc-radius-soft);
+  border: 0;
+  background: var(--surface-inset);
+}
+
+.extension-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--ui-scale));
+}
+
+.extension-row strong {
+  font-size: var(--ui-font-control);
+  color: var(--text-strong);
+}
+
+.extension-row span,
+.extension-row small {
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+
+.extension-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(6px * var(--ui-scale));
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+/* Policy select control inside an extension row (allow / ask /
+   deny dropdown). Uses overlay control vocab (border + radius +
+   surface bg). */
+.extension-policy {
+  min-width: calc(88px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface-inset);
+  color: var(--text);
+  font-size: var(--ui-font-control);
+}
+
+/* ── ChannelsPanel.tsx (channel docs + actions) ──────────── */
+
+.channel-row-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#channelFields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-md);
+}
+
+/* Channel-doc card: borderless inset card carrying the channel's
+   docs link + credit + CTA button. The transition declaration
+   that previously lived in a late-tail dupe at the styles.css
+   tail is folded into the canonical here per rule 8. */
+.channel-doc-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-md);
+  flex-wrap: wrap;
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  border-radius: var(--oc-radius-soft);
+  border: 0;
+  background: var(--surface-inset);
+  box-shadow: none;
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
+}
+
+.channel-doc-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--ui-scale));
+}
+
+.channel-doc-title {
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+
+.channel-doc-credit {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+}
+
+.channel-doc-card .btn {
+  white-space: nowrap;
+}
+
+/* ── SkillMarketPanel.tsx ────────────────────────────────── */
+
+/* Market card layout: each registry entry renders as a card with
+   a copy block (title + meta) + actions cluster. The card chrome
+   (border / radius / background / padding) is owned by the
+   shared `.goal-item, .market-card, .knowledge-item, .pref-item,
+   .criteria-check` multi-class in styles.css; the surface here
+   only declares the unique layout properties to avoid a rule-8
+   double source on the shared chrome. */
+.market-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+}
+
+.market-card + .market-card {
+  margin-top: calc(8px * var(--ui-scale));
+}
+
+.market-card-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.market-card-main strong {
+  font-size: var(--ui-font-title);
+  color: var(--text-strong);
+}
+
+.market-card-main span,
+.market-card-main small {
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+
+.market-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: calc(6px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+/* ── LogViewer.tsx (Diagnostics tab) ─────────────────────── */
+
+/* Log level selector — small monospace dropdown above the viewer
+   that filters lines by severity. */
+.log-level-select {
+  background: var(--surface-inset);
+  color: var(--text);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  font-family: var(--mono);
+  cursor: pointer;
+  outline: none;
+}
+
+.log-level-select:focus {
+  border-color: var(--accent);
+}
+
+/* Log viewer container — scrollable mono-font region that holds
+   the log lines. The 520px max-height was already calc-wrapped
+   in styles.css; everything else converted here. */
+.log-viewer {
+  max-height: calc(520px * var(--ui-scale));
+  overflow-y: auto;
+  background: var(--surface-inset);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  padding: calc(8px * var(--ui-scale));
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-path {
+  margin-bottom: calc(10px * var(--ui-scale));
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+/* Log line: each row uses content-visibility: auto to skip layout
+   for off-screen rows, and contain-intrinsic-size reserves a
+   ~48px slot so the scrollbar stays accurate. The previous
+   border-bottom routed through a `--border-subtle` fallback hex
+   that has no canonical token; replaced with a direct
+   `color-mix` on white so the surface stays palette-clean. */
+.log-line {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) 0;
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, white 4%, transparent);
+  content-visibility: auto;
+  contain-intrinsic-size: 0 calc(48px * var(--ui-scale));
+}
+
+.log-line:last-child {
+  border-bottom: none;
+}
+
+.log-line-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+}
+
+/* Log level tone tokens — drop the dead `var(--good, #hex)` /
+   `var(--accent, #hex)` / `var(--warn, #hex)` / `var(--bad,
+   #hex)` fallback hexes (tokens are always defined at :root). */
+.log-level {
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.log-level-debug {
+  color: var(--text-soft);
+}
+
+.log-level-info {
+  color: var(--accent);
+}
+
+.log-level-warn {
+  color: var(--warn);
+}
+
+.log-level-error {
+  color: var(--bad);
+}
+
+.log-ts {
+  color: var(--text-muted);
+}
+
+.log-delta {
+  color: var(--text-muted);
+}
+
+.log-service {
+  color: var(--good);
+}
+
+.log-msg {
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--ui-scale));
+}
+
+/* Log field chip: pill-shaped tag carrying a key=value pair. */
+.log-chip {
+  display: inline-flex;
+  max-width: 100%;
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--subtle-2);
+  border: var(--oc-border-width) solid var(--subtle-4);
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Log detail collapsible: <details><summary> shell that expands
+   to show structured field blocks. */
+.log-detail {
+  margin: 0;
+}
+
+.log-detail > summary {
+  cursor: pointer;
+  color: var(--text-soft);
+}
+
+.log-detail-block + .log-detail-block {
+  margin-top: calc(8px * var(--ui-scale));
+}
+
+.log-detail-title {
+  margin-bottom: calc(4px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+}
+
+.log-detail-pre {
+  margin: 0;
+  padding: calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--subtle-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+}
+
+/* ── Settings dialog shell + sidebar nav ─────────────────── */
+
+.config-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  border: none;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
+}
+
+.config-close-btn:hover {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+}
+
+/* `.config-dialog-layout` only adds flex layout; the shared CSS-
+   var defaults (`--section-stack-gap`, `--section-control-
+   height`, etc.) on `.sections, .config-dialog-layout` stay in
+   styles.css because they cross the inspector / settings
+   surface boundary. */
+.config-dialog-layout {
+  display: flex;
+  /* Density refresh 2026-05-06: dropped `flex: 1` so the layout height
+   * is driven by the taller of (sidebar nav height) and (active tab
+   * content height) instead of stretching to fill the whole dialog
+   * frame. This fixes the "huge empty modal under a small Providers
+   * panel" symptom — when content is short, the modal shrinks to fit. */
+  min-height: 0;
+  overflow: hidden;
+  /* Cap with the dialog's own max-height (minus header / actions) so
+   * tabs with long lists still scroll inside instead of overflowing
+   * the modal. The 120px reservation covers the header + close button
+   * row plus the dialog's own padding. */
+  max-height: calc(min(calc(100vh - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale))) - calc(120px * var(--ui-scale)));
+}
+
+/* Sidebar nav rail: vertical list of tab buttons inside the
+   dialog shell. The width clamp's 176/220 raw bounds are wrapped
+   in calc so the rail scales with UI scale just like the
+   preferred 200px middle. */
+.config-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1px * var(--ui-scale));
+  width: clamp(calc(168px * var(--ui-scale)), calc(188px * var(--ui-scale)), calc(208px * var(--ui-scale)));
+  min-width: clamp(calc(168px * var(--ui-scale)), calc(188px * var(--ui-scale)), calc(208px * var(--ui-scale)));
+  /* Density refresh 2026-05-06: dropped from 12/10 → 8/6. The nav was
+   * the most visible source of "modal feels empty" — 8 short labels
+   * spread across ~600px of vertical space. Tighter padding lets the
+   * full nav read as one block instead of a sparse list. */
+  padding: calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-right: var(--oc-border-width) solid var(--divider-soft);
+  background: var(--subtle-1);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+/* Tab nav button. `.active` lift uses an accent-tinted
+   linear-gradient — raw `rgba(84, 138, 247, X)` (which is the
+   literal expansion of `--accent`) routed through `color-mix`
+   on the canonical token. */
+.config-nav-item {
+  display: flex;
+  align-items: center;
+  gap: calc(9px * var(--ui-scale));
+  width: 100%;
+  /* Density refresh 2026-05-06: dropped from 8/12 → 5/9. Combined with
+   * the tighter sidebar padding above, this brings the nav block from
+   * ~36px per row to ~28px — comparable to VSCode/Linear settings nav
+   * density. */
+  padding: calc(5px * var(--ui-scale)) calc(9px * var(--ui-scale));
+  border: none;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: var(--ui-font-body);
+  font-family: var(--font);
+  font-weight: var(--ui-font-weight-medium);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
+  position: relative;
+}
+
+.config-nav-item:hover {
+  background: var(--subtle-2);
+  color: var(--text-strong);
+}
+
+.config-nav-item.active {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent) 15%, transparent),
+      color-mix(in srgb, var(--accent) 6%, transparent)
+    );
+  color: var(--accent-hover);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.config-nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  /* Density refresh: shorter rail to match the new 5px row padding. */
+  top: calc(4px * var(--ui-scale));
+  bottom: calc(4px * var(--ui-scale));
+  width: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  background: var(--accent);
+}
+
+.config-nav-icon {
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  flex-shrink: 0;
+  opacity: var(--ui-opacity-dim);
+}
+
+.config-nav-item.active .config-nav-icon {
+  opacity: var(--ui-opacity-full);
+}
+
+/* Numeric badge that hangs off the right edge of nav rows. */
+.config-nav-badge {
+  margin-left: auto;
+  min-width: calc(20px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  padding: 0 calc(5px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-3);
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  line-height: calc(18px * var(--ui-scale));
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.config-nav-badge:empty {
+  display: none;
+}
+
+.config-nav-item.active .config-nav-badge {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent-hover);
+}
+
+/* ── Settings content panel + resizer ────────────────────── */
+
+/* Content panel: scrollable region to the right of the sidebar
+   nav. The clamp() bounds at 16/22 / 18/28 px wrapped in
+   `calc(N * --ui-scale)` so the panel padding scales uniformly. */
+.config-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  /* Density refresh 2026-05-06: padding dropped from 16-22 / 18-28 to
+   * 12-16 / 14-18. The dialog already gives us a 16px frame; keeping
+   * 28px on the inner panel meant card content sat ~50px from the
+   * dialog edge with no payoff. */
+  padding:
+    clamp(calc(12px * var(--ui-scale)), calc(14px * var(--ui-scale)), calc(16px * var(--ui-scale)))
+    clamp(calc(14px * var(--ui-scale)), calc(16px * var(--ui-scale)), calc(18px * var(--ui-scale)));
+}
+
+.config-tab-panel {
+  display: none;
+}
+
+.config-tab-panel.active {
+  display: block;
+}
+
+.config-tab-panel > .config-section-body {
+  display: flex;
+  flex-direction: column;
+  /* Density refresh: 14 → 10 between siblings inside a tab panel. */
+  gap: calc(10px * var(--ui-scale));
+}
+
+/* Subsection density inside the content panel — overrides the
+   bare `.config-subsection-*` defaults to fit within the dialog
+   padding. */
+.config-content .config-subsection {
+  overflow: hidden;
+  margin-bottom: calc(8px * var(--ui-scale));
+}
+
+.config-content .config-subsection-head {
+  min-height: calc(40px * var(--ui-scale));
+  padding: calc(9px * var(--ui-scale)) calc(14px * var(--ui-scale));
+}
+
+.config-content .config-subsection-body {
+  padding: 0 calc(14px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  gap: calc(12px * var(--ui-scale));
+}
+
+.config-content .extension-head,
+.config-content .knowledge-toolbar {
+  gap: calc(12px * var(--ui-scale));
+}
+
+/* Sidebar resizer: thin column-resize gutter between the nav
+   sidebar and the content panel. The 1px center hairline
+   converted to `var(--oc-border-width)`; the 999px pill rounding
+   on the hairline → `var(--oc-radius-pill)`. */
+.config-resizer {
+  flex: 0 0 calc(4px * var(--ui-scale));
+  min-width: calc(4px * var(--ui-scale));
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.config-resizer::before {
+  content: "";
+  position: absolute;
+  top: calc(14px * var(--ui-scale));
+  bottom: calc(14px * var(--ui-scale));
+  left: 50%;
+  width: var(--oc-border-width);
+  transform: translateX(-50%);
+  border-radius: var(--oc-radius-pill);
+  background: var(--subtle-3);
+  transition: background var(--ui-duration-fast);
+}
+
+.config-resizer:hover::before,
+.config-resizer[data-active="true"]::before {
+  background: var(--accent);
+}
+
+.config-nav-spacer {
+  flex: 1;
+}
+
+/* ── Settings collapsible section + subsection ───────────── */
+
+/* Outer collapsible card (one per top-level config tab body
+   group). Hover/focus-within wash uses raw rgba on `--accent`
+   (rgb(91,141,239) is the literal expansion of `--accent`,
+   `#548af7`) — routed through `color-mix(var(--accent) X%,
+   transparent)`. Inset white highlight at 4% alpha was
+   replaced with `color-mix(white X%, transparent)` direct. */
+.config-section {
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  overflow: hidden;
+  box-shadow: none;
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
+}
+
+.config-section[open] {
+  background: var(--subtle-2);
+}
+
+.config-section:hover,
+.config-section:focus-within {
+  border-color: var(--hover-accent-border);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
+      transparent
+    ),
+    var(--subtle-1);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    var(--hover-accent-shadow);
+}
+
+.config-section[open]:hover,
+.config-section[open]:focus-within {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
+      transparent
+    ),
+    var(--subtle-2);
+}
+
+/* Section head: clickable summary row. The early `::before`
+   Unicode-glyph chevron + its `[open]` rotate(90deg) sibling
+   that lived in styles.css were dead source — fully shadowed by
+   the late CSS-drawn chevron pair (`content: "" + border-right/
+   border-bottom + rotate(-45/45)`) that's now the canonical
+   below. Dropped per rule 8 (already known dead per iter29). */
+.config-section-head {
+  font-size: var(--ui-font-title);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  letter-spacing: 0;
+  line-height: 1.2;
+  box-sizing: border-box;
+  min-height: calc(32px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--section-field-gap);
+  border: var(--oc-border-width) solid transparent;
+  border-bottom-color: var(--divider-soft);
+  border-radius: var(--oc-radius-soft) var(--oc-radius-soft) 0 0;
+  background: var(--oc-header-bg);
+  box-shadow: none;
+  position: relative;
+  transition:
+    background var(--ui-duration-base),
+    border-color var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    color var(--ui-duration-base),
+    transform var(--ui-duration-base);
+}
+
+.config-section-head::-webkit-details-marker {
+  display: none;
+}
+
+.config-section-head::marker {
+  content: "";
+}
+
+/* CSS-drawn chevron — single source after iter29. The closed
+   state rotates -45deg (right-pointing arrow); `[open]` flips
+   to +45deg (down-pointing). */
+.config-section-head::before {
+  content: "";
+  width: calc(7px * var(--ui-scale));
+  height: calc(7px * var(--ui-scale));
+  flex-shrink: 0;
+  border-right: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
+  border-bottom: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
+  transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
+  transition:
+    transform var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.config-section[open] > .config-section-head::before {
+  transform: rotate(45deg) translateY(calc(-1px * var(--ui-scale)));
+}
+
+.config-section-head:hover {
+  color: var(--text-strong);
+  background: var(--hover-accent-wash);
+  border-top-color: var(--hover-accent-border);
+  border-right-color: var(--hover-accent-border);
+  border-bottom-color: var(--hover-accent-border);
+  border-left-color: var(--hover-accent-border);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    0 0 0 var(--oc-border-width) var(--hover-accent-border);
+}
+
+.config-section-body {
+  padding: var(--section-body-padding-y) var(--section-body-padding-x) calc(8px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-field-gap);
+  border: var(--oc-border-width) solid transparent;
+  border-top: none;
+  border-radius: 0 0 var(--oc-radius-soft) var(--oc-radius-soft);
+  transition:
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.config-section:hover > .config-section-body,
+.config-section:focus-within > .config-section-body {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 6%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 68%,
+      transparent
+    );
+  border-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-top-color: transparent;
+  box-shadow: inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 3%, transparent);
+}
+
+/* Inner collapsible (one per group inside Extensions). Mirrors
+   the outer .config-section chrome with the same accent wash +
+   inset highlight tokens. */
+.config-subsection {
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  box-shadow: none;
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
+}
+
+.config-subsection[open] {
+  background: var(--subtle-2);
+}
+
+.config-subsection:hover,
+.config-subsection:focus-within {
+  border-color: var(--hover-accent-border);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
+      transparent
+    ),
+    var(--surface-inset);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    var(--hover-accent-shadow);
+}
+
+.config-subsection[open]:hover,
+.config-subsection[open]:focus-within {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
+      transparent
+    ),
+    var(--subtle-2);
+}
+
+.config-subsection-head {
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--section-field-gap);
+  min-height: calc(32px * var(--ui-scale));
+  line-height: 1.2;
+  border: var(--oc-border-width) solid transparent;
+  border-radius: var(--oc-radius-soft) var(--oc-radius-soft) 0 0;
+  background: var(--oc-header-bg);
+  box-shadow: none;
+  transition:
+    background var(--ui-duration-base),
+    border-color var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    color var(--ui-duration-base),
+    transform var(--ui-duration-base);
+}
+
+.config-subsection-head::-webkit-details-marker {
+  display: none;
+}
+
+.config-subsection-head::marker {
+  content: "";
+}
+
+.config-subsection-head::before {
+  content: "";
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  flex-shrink: 0;
+  border-right: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
+  border-bottom: calc(1.5px * var(--ui-scale)) solid var(--text-muted);
+  transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
+  transition:
+    transform var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.config-subsection[open] > .config-subsection-head::before {
+  transform: rotate(45deg) translateY(calc(-1px * var(--ui-scale)));
+}
+
+.config-subsection-head:hover {
+  background: var(--hover-accent-wash);
+  border-top-color: var(--hover-accent-border);
+  border-right-color: var(--hover-accent-border);
+  border-bottom-color: var(--hover-accent-border);
+  border-left-color: var(--hover-accent-border);
+  box-shadow:
+    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    0 0 0 var(--oc-border-width) var(--hover-accent-border);
+}
+
+.config-subsection-body {
+  padding: 0 calc(9px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-row-gap);
+  border: var(--oc-border-width) solid transparent;
+  border-top: none;
+  border-radius: 0 0 var(--oc-radius-soft) var(--oc-radius-soft);
+  transition:
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.config-subsection:hover > .config-subsection-body,
+.config-subsection:focus-within > .config-subsection-body {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 6%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 68%,
+      transparent
+    );
+  border-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-top-color: transparent;
+  box-shadow: inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 3%, transparent);
+}
+
+/* Flat (non-collapsible) groups inside the Extensions tab —
+   replaces nested <details class="config-subsection"> that
+   produced redundant collapsible bars inside an already-
+   collapsible outer section. */
+.ext-group {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.ext-group + .ext-group {
+  margin-top: calc(10px * var(--ui-scale));
+  padding-top: calc(10px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid var(--border);
+}
+
+.ext-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+}
+
+/* ── Config status box (provider/auth diagnostic strip) ──── */
+
+.config-status-box {
+  min-height: var(--ui-input-min-height);
+  display: flex;
+  align-items: center;
+  white-space: normal;
+  line-height: 1.45;
+  background: var(--subtle-1);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  box-shadow: none;
+}
+
+.config-status-box[data-status="active"] {
+  color: var(--good);
+}
+
+.config-status-box[data-status="warn"] {
+  color: var(--warn);
+}
+
+.config-status-box[data-status="error"] {
+  color: var(--bad);
+}
+
+/* ── About panel (settings tab) ──────────────────────────── */
+
+.about-body {
+  gap: calc(20px * var(--ui-scale)) !important;
+}
+
+.about-section {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+}
+
+.about-section-title {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.about-author-card {
+  display: flex;
+  align-items: center;
+  gap: calc(14px * var(--ui-scale));
+  padding: calc(12px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-large);
+  background: var(--subtle-1);
+}
+
+.about-author-avatar {
+  flex-shrink: 0;
+  opacity: var(--ui-opacity-subtle);
+}
+
+.about-author-info {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.about-author-name {
+  font-size: var(--ui-font-body);
+  color: var(--text-strong);
+}
+
+.about-author-link {
+  font-size: var(--ui-font-small);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about-author-link:hover {
+  text-decoration: underline;
+}
+
+.about-info-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: calc(4px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  font-size: var(--ui-font-small);
+  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-large);
+  background: var(--subtle-1);
+}
+
+.about-info-label {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.about-info-value {
+  color: var(--text-soft);
+  word-break: break-all;
+  font-variant-numeric: tabular-nums;
+}
+
+.about-links {
+  display: flex;
+  gap: calc(10px * var(--ui-scale));
+  flex-wrap: wrap;
+}
+
+.about-link {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-1);
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  text-decoration: none;
+  transition:
+    background var(--ui-duration-base),
+    border-color var(--ui-duration-base),
+    color var(--ui-duration-base);
+}
+
+.about-link:hover {
+  background: var(--subtle-3);
+  border-color: var(--border-hover);
+  color: var(--text-strong);
+}
+
+.about-shortcut-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: calc(6px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  align-items: center;
+  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-large);
+  background: var(--subtle-1);
+}
+
+.about-shortcut-grid kbd {
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-tiny);
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface);
+  color: var(--text-soft);
+  white-space: nowrap;
+  text-align: center;
+}
+
+.about-shortcut-grid span {
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+}
+
+/* ── PromptCatalog.tsx (Prompts tab) ─────────────────────── */
+
+.prompt-grid {
+  display: grid;
+  gap: calc(12px * var(--ui-scale));
+}
+
+.prompt-card {
+  display: grid;
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(14px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
+  border: var(--oc-border-width) solid var(--border);
+  background: color-mix(in srgb, var(--subtle-1) 90%, transparent);
+  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.prompt-card-head,
+.prompt-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+  flex-wrap: wrap;
+}
+
+.prompt-card-copy {
+  min-width: 0;
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.prompt-card-copy strong {
+  font-size: var(--ui-font-control);
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
+}
+
+.prompt-card-copy span,
+.prompt-card-copy small,
+.prompt-preview-head {
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+
+.prompt-textarea {
+  min-height: calc(160px * var(--ui-scale));
+  font-family: "Iosevka Term", "JetBrains Mono", monospace;
+}
+
+/* Diff <details> shell. The Unicode-glyph chevron here is the
+   single source — no late CSS-drawn rewrite shadows it. */
+.prompt-diff-details {
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  overflow: hidden;
+}
+
+.prompt-diff-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  transition:
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
+}
+
+.prompt-diff-summary::-webkit-details-marker {
+  display: none;
+}
+
+.prompt-diff-summary::marker {
+  content: "";
+}
+
+.prompt-diff-summary::before {
+  content: "▸";
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+  transition: transform var(--ui-duration-base);
+}
+
+.prompt-diff-details[open] > .prompt-diff-summary::before {
+  transform: rotate(90deg);
+}
+
+.prompt-diff-summary:hover {
+  color: var(--text-strong);
+  background: var(--hover-accent-wash);
+}
+
+.prompt-preview-card {
+  display: grid;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
+  border: var(--oc-border-width) solid var(--border);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+
+.prompt-preview-body {
+  min-height: calc(72px * var(--ui-scale));
+}
+
+.prompt-preview-card--default {
+  margin-top: 0;
+  border-top: none;
+  opacity: var(--ui-opacity-dim);
+}
+
+.prompt-preview-card--attached {
+  border-top: none;
+  border-radius: 0 0 var(--oc-radius-soft) var(--oc-radius-soft);
+}
+
+.agent-models-info {
+  margin: var(--ui-gap-xs) 0 var(--ui-gap-lg) 0;
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+}
+.agent-models-refresh-msg {
+  margin-bottom: var(--ui-gap-md);
+  padding: var(--ui-gap-sm) var(--ui-gap-md);
+  font-size: var(--ui-font-meta);
+  color: var(--text-soft);
+}
+.agent-models-warning {
+  margin-top: var(--ui-gap-md);
+  padding: var(--ui-gap-sm) var(--ui-gap-md);
+  font-size: var(--ui-font-meta);
+  border-left: calc(3px * var(--ui-scale)) solid var(--bad);
+  color: var(--bad);
+}
+
+.provider-settings-flat {
+  gap: calc(14px * var(--ui-scale));
+}
+.provider-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--ui-gap-sm);
+  padding-bottom: var(--ui-gap-sm);
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+.provider-toolbar-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-gap-sm);
+}
+.provider-toolbar-count {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  white-space: nowrap;
+}
+.provider-search-field {
+  min-width: 0;
+  width: min(100%, calc(560px * var(--ui-scale)));
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.provider-search-icon {
+  position: absolute;
+  left: calc(10px * var(--ui-scale));
+  color: var(--text-muted);
+  pointer-events: none;
+  font-size: var(--ui-font-control);
+}
+.provider-search-input {
+  width: 100%;
+  padding-left: calc(28px * var(--ui-scale));
+  padding-right: calc(30px * var(--ui-scale));
+}
+.provider-search-field .oc-button[data-ui="provider-search-clear"] {
+  --oc-button-height: calc(22px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-bg: transparent;
+
+  position: absolute;
+  right: calc(6px * var(--ui-scale));
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  line-height: 1;
+}
+
+.provider-search-field .oc-button[data-ui="provider-search-clear"]:hover,
+.provider-search-field .oc-button[data-ui="provider-search-clear"]:focus-visible {
+  --oc-button-bg: var(--subtle-2);
+  --oc-button-color: var(--text-strong);
+}
+.provider-empty {
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+  padding: var(--ui-gap-lg) 0;
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.provider-flat-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+
+.provider-section-label {
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-strong);
+}
+.provider-flat-list {
+  display: flex;
+  flex-direction: column;
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 76%, transparent);
+}
+.provider-flat-row {
+  display: grid;
+  grid-template-columns: minmax(calc(220px * var(--ui-scale)), 1fr) auto;
+  gap: var(--ui-gap-md);
+  align-items: start;
+  padding: calc(12px * var(--ui-scale)) 0;
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 62%, transparent);
+}
+.provider-flat-row:hover {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 42%);
+}
+.provider-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+}
+.provider-row-title-line {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-gap-sm);
+}
+.provider-row-title {
+  min-width: 0;
+  color: var(--text-strong);
+  font-size: var(--ui-font-title);
+  font-weight: var(--ui-font-weight-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.provider-row-id {
+  flex: none;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--ui-font-meta);
+}
+.provider-row-meta,
+.provider-row-status,
+.provider-row-models {
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+  line-height: 1.35;
+}
+.provider-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(4px * var(--ui-scale)) var(--ui-gap-md);
+}
+.provider-row-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.provider-row-status[data-tone="active"],
+.provider-row-status[data-tone="ready"] {
+  color: var(--accent);
+}
+.provider-row-status[data-tone="error"] {
+  color: var(--bad);
+}
+.provider-row-status[data-tone="warn"] {
+  color: var(--warn);
+}
+.provider-row-actions {
+  grid-area: actions;
+  min-width: 0;
+  display: inline-flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  flex-wrap: wrap;
+}
+.provider-row-key,
+.provider-row-models,
+.provider-test-result {
+  grid-column: 1 / -1;
+}
+.provider-row-key .provider-api-key-row {
+  max-width: min(100%, calc(720px * var(--ui-scale)));
+}
+.provider-row-models {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+.provider-add-card {
+  margin-top: var(--ui-gap-md);
+  border: var(--oc-border-width) solid var(--border);
+}
+.provider-add-title {
+  font-size: var(--ui-font-title);
+  margin: 0 0 var(--ui-gap-md) 0;
+}
+.provider-models-textarea {
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  resize: vertical;
+}
+.provider-form-actions {
+  margin-top: var(--ui-gap-md);
+}
+.provider-api-key-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: end;
+  gap: var(--ui-gap-sm);
+  margin-top: var(--ui-gap-sm);
+  width: min(100%, calc(720px * var(--ui-scale)));
+}
+.provider-api-key-field {
+  margin: 0;
+  min-width: 0;
+}
+.provider-catalog-row {
+  align-items: start;
+  padding-block: var(--ui-gap-sm);
+}
+.provider-catalog-row .provider-api-key-row {
+  margin-top: 0;
+}
+.provider-catalog-hint {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  margin-bottom: var(--ui-gap-sm);
+}
+@media (max-width: 820px) {
+  .provider-search-field {
+    width: 100%;
+  }
+  .provider-head-actions,
+  .provider-row-actions {
+    justify-content: flex-start;
+  }
+  .provider-flat-row,
+  .provider-api-key-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.agent-models-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-md) var(--ui-gap-lg);
+  margin: var(--ui-gap-md) 0;
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-1);
+  border: var(--oc-border-width) solid var(--border);
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+}
+.agent-models-loading-spinner {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  border: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: agent-models-spin 0.7s linear infinite;
+}
+@keyframes agent-models-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.agent-models-error {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-md);
+  padding: var(--ui-gap-md) var(--ui-gap-lg);
+  margin: var(--ui-gap-md) 0;
+  border-radius: var(--oc-radius-soft);
+  background: var(--bad-dim);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 36%, transparent);
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+}
+.agent-models-error-msg {
+  flex: 1;
+  min-width: 0;
+}
+
+.provider-test-result {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ui-gap-sm);
+  margin-top: var(--ui-gap-sm);
+  padding: var(--ui-gap-xs) var(--ui-gap-md);
+  border-radius: var(--oc-radius-soft);
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  border: var(--oc-border-width) solid transparent;
+  background: var(--subtle-2);
+}
+.provider-test-result[data-ok="true"] {
+  background: var(--good-dim);
+  border-color: color-mix(in srgb, var(--good) 36%, transparent);
+  color: var(--good);
+}
+.provider-test-result[data-ok="false"] {
+  background: var(--bad-dim);
+  border-color: color-mix(in srgb, var(--bad) 36%, transparent);
+  color: var(--bad);
+}
+.provider-test-result-icon {
+  flex: none;
+  font-weight: var(--ui-font-weight-strong);
+}
+.provider-test-result-msg {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.provider-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ui-gap-sm);
+  flex-wrap: wrap;
+}
+.provider-refresh-meta {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.provider-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+}
+.provider-refresh-icon {
+  display: inline-block;
+  line-height: 1;
+  font-size: 1.05em;
+  transform-origin: center;
+  transition: transform var(--ui-duration-slow) var(--ui-timing-standard);
+}
+.provider-refresh-btn[data-spinning="true"] .provider-refresh-icon {
+  animation: provider-refresh-spin 1s linear infinite;
+}
+@keyframes provider-refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.provider-form-error {
+  margin-top: var(--ui-gap-sm);
+  padding: var(--ui-gap-xs) var(--ui-gap-md);
+  border-radius: var(--oc-radius-soft);
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 36%, transparent);
+  background: var(--bad-dim);
+  color: var(--bad);
+  overflow-wrap: break-word;
+}
+
+.config-panel-group {
+  display: flex;
+  flex-direction: column;
+  /* Density refresh: 10 → 6 between header and card inside a group. */
+  gap: calc(6px * var(--ui-scale));
+}
+
+.config-panel-group-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-muted);
+  margin: 0;
+  padding: 0 calc(2px * var(--ui-scale));
+}
+
+.config-panel-group-head {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--ui-scale));
+  min-width: 0;
+}
+
+.config-panel-card {
+  display: flex;
+  flex-direction: column;
+  /* Density refresh: gap 10 → 6, padding 14/16 → 10/12. Cards now
+   * read as a unit instead of a stack of separated rows. */
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-large);
+  background: var(--subtle-1);
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base);
+}
+
+.config-panel-card:hover {
+  border-color: var(--border-hover);
+}
+
+.config-panel-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(12px * var(--ui-scale));
+  min-width: 0;
+}
+
+.config-panel-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--ui-font-title);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.config-panel-card-actions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.config-panel-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.config-panel-list-row {
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) 0;
+  border-bottom: var(--oc-border-width) solid var(--border);
+  font-size: var(--ui-font-control);
+}
+
+.config-panel-list-row:last-child {
+  border-bottom: none;
+}
+
+.config-panel-list-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.config-panel-list-meta {
+  flex: none;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-align: right;
+}
+
+.config-panel-card .field-label {
+  text-transform: none;
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text-soft);
+  letter-spacing: normal;
+}
+
+.config-panel-card .dialog-actions {
+  padding-top: calc(4px * var(--ui-scale));
+}
+
+.config-content .btn.mini {
+  font-size: var(--ui-font-control);
+}
+
+.config-content .extension-head:hover,
+.config-content .extension-head:focus-within,
+.config-content .knowledge-toolbar:hover,
+.config-content .knowledge-toolbar:focus-within,
+.config-content .channel-doc-card:hover,
+.config-content .channel-doc-card:focus-within,
+.config-content .market-card:hover,
+.config-content .knowledge-item:hover,
+.config-content .pref-item:hover {
+  border-color: var(--guide-card-border);
+  background: var(--guide-card-bg);
+  box-shadow: var(--guide-card-shadow);
+  transform: none;
+}
+
+.config-content .config-subsection-head:hover,
+.config-content .config-subsection-head:focus-visible {
+  border-color: var(--hover-accent-border);
+  background: var(--hover-accent-wash);
+  box-shadow: var(--hover-accent-shadow);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.config-content .config-subsection:hover > .config-subsection-body,
+.config-content .config-subsection:focus-within > .config-subsection-body,
+.config-content .config-subsection[open]:hover > .config-subsection-body,
+.config-content .config-subsection[open]:focus-within > .config-subsection-body {
+  background: var(--hover-accent-wash);
+  border-color: var(--hover-accent-border);
+  border-top-color: transparent;
+  box-shadow: var(--hover-accent-shadow);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.agent-model-table {
+  display: flex;
+  flex-direction: column;
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-1);
+  overflow: hidden;
+}
+
+.agent-model-tier-label {
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  background: var(--subtle-2);
+}
+
+.agent-model-tier-label:not(:first-child) {
+  border-top: var(--oc-border-width) solid var(--divider-soft);
+  margin-top: calc(2px * var(--ui-scale));
+}
+
+.agent-model-row {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid var(--divider-soft);
+}
+
+.agent-model-row:hover {
+  background: var(--subtle-2);
+}
+
+.agent-model-tier-label + .agent-model-row {
+  border-top: none;
+}
+
+.agent-model-name {
+  flex: 0 0 calc(140px * var(--ui-scale));
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-model-select {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--ui-font-control);
+}
+
+.agent-model-status {
+  flex: 0 0 auto;
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+  min-width: calc(48px * var(--ui-scale));
+  text-align: right;
+}
+
+/* The .pref-item canonical previously appeared twice in styles.css —
+ * one rule cleared border-bottom (overriding the shared card baseline
+ * `border:1px solid var(--border)` in styles.css that also applied to
+ * .goal-item / .market-card / .knowledge-item / .criteria-check), and
+ * a second rule eight lines later set cursor:pointer. Rule 9 cleanup:
+ * merged into one canonical here. The .pref-item entry in those
+ * shared card multi-selectors stays in styles.css until the broader
+ * card-pattern abstraction lands. */
+.pref-item {
+  border-bottom: none;
+  cursor: pointer;
+}
+
+.pref-item-value {
+  font-size: var(--ui-font-control);
+}
+
+.config-toggle-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.config-toggle-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--divider-soft);
+  transition: background var(--ui-duration-fast);
+}
+.config-toggle-list-item:hover {
+  background: var(--subtle-2);
+}
+.config-toggle-list-item:last-child {
+  border-bottom: none;
+  padding-bottom: calc(2px * var(--ui-scale));
+}
+.config-toggle-list-item:first-child {
+  padding-top: calc(2px * var(--ui-scale));
+}
+
+.config-toggle-list-item .toggle-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text);
+  line-height: 1.3;
+  cursor: default;
+}
+.config-toggle-list-item .toggle-hint {
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-body);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.config-toggle-list-item input[type="checkbox"] {
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Extracted from styles.css 2026-05-04 (continuation slice).
+   Settings / channel-config / delivery / detail / opacity / llm
+   surface chrome.
+   ───────────────────────────────────────────────────────────── */
+
+.puppeteer-options {
+  margin-top: var(--ui-gap-sm);
+  padding: 0 var(--ui-gap-xs);
+}
+.puppeteer-options .field-compact {
+  margin-bottom: 0;
+}
+.puppeteer-options .field-compact .field-label {
+  font-size: var(--ui-font-control);
+}
+.puppeteer-options .field-compact .field-input {
+  font-size: var(--ui-font-control);
+  padding: calc(4px * var(--ui-scale)) var(--ui-input-padding-x);
+}
+
+.detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-md);
+}
+
+.detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-panel-padding-y) var(--ui-panel-padding-x);
+  border-radius: var(--oc-radius-soft);
+  border: 0;
+  background: var(--surface-inset);
+  box-shadow: none;
+}
+
+.detail-pre {
+  margin: 0;
+  padding: calc(10px * var(--ui-scale)) var(--ui-panel-padding-x);
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  max-height: calc(280px * var(--ui-scale));
+  overflow: auto;
+}
+
+.detail-pre-json {
+  max-height: calc(220px * var(--ui-scale));
+}
+
+@media (max-width: 760px) {
+  .detail-grid-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.channel-public-url-head .field {
+  flex: 1;
+}
+
+.delivery-panel-header {
+  display: flex;
+  min-height: calc(26px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  align-items: baseline;
+}
+
+.delivery-iteration {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.delivery-summary {
+  font-size: var(--ui-font-title);
+  color: var(--text);
+  line-height: 1.65;
+}
+.delivery-summary[data-clamped="true"] {
+  display: -webkit-box;
+  -webkit-line-clamp: 10;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.delivery-summary-toggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: calc(2px * var(--ui-scale)) 0;
+  font-size: var(--ui-font-tiny);
+  color: var(--accent);
+  cursor: pointer;
+}
+.delivery-summary-toggle:hover {
+  text-decoration: underline;
+}
+
+.delivery-files-link {
+  align-self: flex-start;
+  background: none;
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  font-family: var(--mono);
+  cursor: pointer;
+}
+.delivery-files-link:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+#channelConfigBody {
+  min-height: 0;
+}
+
+#channelList {
+  overflow-y: visible;
+  padding-right: calc(2px * var(--ui-scale));
+}
+
+.extension-head .field-label {
+  font-size: var(--ui-font-title);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.config-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-row-gap);
+}
+
+.config-field-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+
+.config-field-row .field {
+  min-width: 0;
+}
+
+.config-inline-popup {
+  position: absolute;
+  top: calc(10px * var(--ui-scale));
+  right: calc(10px * var(--ui-scale));
+  z-index: var(--ui-z-raised);
+  max-width: min(calc(280px * var(--ui-scale)), calc(100% - calc(20px * var(--ui-scale))));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--ui-font-body);
+  line-height: 1.45;
+  box-shadow: var(--shadow);
+  opacity: var(--ui-opacity-hidden);
+  pointer-events: none;
+  transform: translateY(calc(-6px * var(--ui-scale)));
+  transition:
+    opacity var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.config-inline-popup[data-open="true"] {
+  opacity: var(--ui-opacity-full);
+  transform: translateY(0);
+}
+
+.config-inline-popup[data-status="active"] {
+  border-color: color-mix(in srgb, var(--good) 30%, transparent);
+  background: var(--good-dim);
+  color: var(--good);
+}
+
+.config-inline-popup[data-status="warn"] {
+  border-color: color-mix(in srgb, var(--warn) 30%, transparent);
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+.config-inline-popup[data-status="error"] {
+  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
+  background: var(--bad-dim);
+  color: var(--bad);
+}
+
+@media (max-width: 760px) {
+  .config-field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .config-inline-popup {
+    left: calc(10px * var(--ui-scale));
+    right: calc(10px * var(--ui-scale));
+    max-width: none;
+  }
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  font-size: var(--ui-font-title);
+}
+.config-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.config-value {
+  color: var(--text);
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.config-value[data-status="ready"] {
+  color: var(--good);
+}
+.config-value[data-status="active"] {
+  color: var(--good);
+}
+.config-value[data-status="warn"] {
+  color: var(--warn);
+}
+.config-value[data-status="error"] {
+  color: var(--bad);
+}
+
+.general-panel,
+.llm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(20px * var(--ui-scale));
+}
+
+.llm-panel {
+  position: relative;
+}
+
+.opacity-field {
+  gap: calc(6px * var(--ui-scale));
+}
+
+.opacity-field .opacity-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.opacity-field .opacity-value {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  min-width: calc(32px * var(--ui-scale));
+  text-align: right;
+}
+
+.opacity-field input[type="range"] {
+  width: 100%;
+  height: calc(4px * var(--ui-scale));
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
+  cursor: pointer;
+  margin: calc(4px * var(--ui-scale)) 0;
+}
+
+.llm-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-large);
+  background: var(--subtle-1);
+  min-height: calc(40px * var(--ui-scale));
+  transition: border-color var(--ui-duration-base);
+}
+.llm-summary-row:hover {
+  border-color: var(--border-hover);
+}
+
+.llm-summary {
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.llm-api-key-summary {
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--accent);
+  padding: calc(2px * var(--ui-scale)) 0;
+}
+
+.llm-auth-row {
+  padding-top: calc(4px * var(--ui-scale));
+}
+
+.loading-hint {
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  text-align: center;
+  padding: calc(24px * var(--ui-scale));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Log source pill (.log-source / [data-source=...])
+   Color-codes the engine log stream by emitter (server / overlay /
+   pipeline). Lives in the developer settings / debug panel. The
+   pipeline tone preserves a deliberate violet hue distinct from
+   server-good and overlay-accent so eye-tracking sees three lanes.
+   ───────────────────────────────────────────────────────────── */
+
+.log-source {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  border: var(--oc-border-width) solid var(--border);
+  color: var(--text-soft);
+}
+
+.log-source[data-source="server"] {
+  color: var(--good);
+}
+
+.log-source[data-source="overlay"] {
+  color: var(--accent);
+}
+
+.log-source[data-source="pipeline"] {
+  color: color-mix(in srgb, var(--accent) 60%, var(--bad));
+}

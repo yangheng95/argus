@@ -92,6 +92,29 @@ describe("structured-output.StructuredOutputError", () => {
   })
 })
 
+describe("structured-output.StructuredOutputPayloadError", () => {
+  test("creates error with message and reason", () => {
+    const error = new Message.StructuredOutputPayloadError({
+      message: "StructuredOutput payload must be a JSON object; received undefined",
+      reason: "StructuredOutput payload must be a JSON object; received undefined",
+    })
+
+    expect(error.name).toBe("StructuredOutputPayloadError")
+    expect(error.data.message).toContain("received undefined")
+    expect(error.data.reason).toContain("received undefined")
+  })
+
+  test("isInstance correctly identifies error", () => {
+    const error = new Message.StructuredOutputPayloadError({
+      message: "bad payload",
+      reason: "bad payload",
+    })
+
+    expect(Message.StructuredOutputPayloadError.isInstance(error)).toBe(true)
+    expect(Message.StructuredOutputPayloadError.isInstance({ name: "other" })).toBe(false)
+  })
+})
+
 describe("structured-output.UserMessage", () => {
   test("user message accepts outputFormat", () => {
     const result = Message.User.safeParse({

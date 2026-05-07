@@ -1,0 +1,106 @@
+# Benchmark
+
+The benchmark harness provides **end-to-end quality regression**. It simulates a real request from creation to delivery and emits `qualityVerdict` (accepted / rejected) as the pass signal.
+
+## Main script
+
+`packages/opencorvus/script/benchmark/overlay-web-benchmark.ts`
+
+## Minimal run
+
+```bash
+cd packages/opencorvus
+
+OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 \
+CODING_DASHSCOPE_API_KEY=sk-sp-... \
+ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
+DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
+bun run script/benchmark/overlay-web-benchmark.ts \
+  "--request-file=/path/to/prd.txt" \
+  "--stall-timeout-ms=1200000" \
+  "--planning-stall-timeout-ms=7200000"
+```
+
+**Note**: flags require `=`, not space separation (parser specifics).
+
+## Key flags
+
+| flag | purpose |
+|---|---|
+| `--request-file=PATH` | task description file (PRD) |
+| `--model=MODEL` | model (auto-detect default) |
+| `--executor=mirrorcode\|codex\|claude-code` | executor: MirrorCode / Codex / Claude Code |
+| `--title=TITLE` | task title |
+| `--report=PATH` | output JSON report |
+| `--max-runs=N` | maximum runs |
+| `--stall-timeout-ms=MS` | execution/evaluation **inactivity timeout** |
+| `--planning-stall-timeout-ms=MS` | planning **inactivity timeout** (planning agents may go quiet for long) |
+| `--tool-timeout-ms=MS` | per tool-call **inactivity timeout** |
+| `--no-keep` | delete tmp directory on finish |
+| `--skip-local-verify` | skip local re-verification |
+
+## Env injection upfront
+
+`Env.state()` snapshots `process.env` on instance creation; late-loaded `.env` values are missed. That's why benchmark commands inject env explicitly.
+
+## Pass criteria
+
+Report JSON:
+```json
+{
+  "qualityVerdict": "accepted",
+  "localVerify": { "exitCode": 0 },
+  "required_check_pass_rate": 1.0
+}
+```
+
+Source: `packages/opencorvus/script/benchmark/quality-gates.ts`.
+
+## Timeout semantics
+
+All timeouts are **inactivity timeouts**. As long as stdout/stderr/SSE is flowing, the stall timer resets. Long build/test runs are fine; truly hung tasks surface quickly. **Do not** read them as wall-clock timeouts.
+
+## Baseline reference
+
+Historical baseline:
+
+- glm-5 (2026-03-09): 90% avg, 5/5 pass, 174-254s per task
+- E1:254s, E2:215s, E3:174s, E4:173s, E5:193s
+
+## Report structure
+
+`--report` JSON contains:
+- Task metadata (title, model, executor)
+- Per-stage duration (spec / goals / plan / execute / evaluate / deliver)
+- Per-goal check results
+- `qualityVerdict` and `localVerify`
+- Failure samples: stdout/stderr tails + artifact paths
+
+## CI usage
+
+```yaml
+- name: Benchmark
+  env:
+    CODING_DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_KEY }}
+    OPENCORVUS_DISABLE_DEFAULT_PLUGINS: 1
+  run: |
+    cd packages/opencorvus
+    bun run script/benchmark/overlay-web-benchmark.ts \
+      "--request-file=benchmarks/smoke.txt" \
+      "--report=report.json"
+```
+
+## E2E eval suite
+
+`packages/opencorvus/script/eval-e2e.ts` is a finer-grained eval suite for daily regression. Start the server first:
+
+```bash
+cd packages/opencorvus
+DASHSCOPE_API_KEY=sk-... OPENCORVUS_CHANNEL=local \
+  bun run --preload @opentui/solid/preload --conditions=browser \
+  src/index.ts serve --port 7878
+```
+
+Then `bun run script/eval-e2e.ts`.
+
+The server **must** have `DASHSCOPE_API_KEY`; without it, executor returns empty responses and every task fails in <10s.

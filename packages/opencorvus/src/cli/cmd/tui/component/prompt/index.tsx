@@ -21,7 +21,7 @@ import { useRenderer } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
-import type { FilePart } from "@opencorvus-ai/sdk/v2"
+import type { FilePart } from "@opencorvus-ai/sdk"
 import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
 import { Locale } from "@/util/locale"
@@ -99,8 +99,12 @@ export function Prompt(props: PromptProps) {
   sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
     if (!input || input.isDestroyed) return
     input.insertText(evt.properties.text)
+    // Defer layout/render to the next tick: insertText updates the buffer
+    // synchronously, but markDirty + gotoBufferEnd only take effect once the
+    // input's internal state has settled. Calling them in the same frame
+    // races with the SDK's own dirty-tracking and the cursor lands on the
+    // pre-insert position.
     setTimeout(() => {
-      // setTimeout is a workaround and needs to be addressed properly
       if (!input || input.isDestroyed) return
       input.getLayoutNode().markDirty()
       input.gotoBufferEnd()
@@ -647,7 +651,10 @@ export function Prompt(props: PromptProps) {
     setStore("extmarkToPartIndex", new Map())
     props.onSubmit?.()
 
-    // temporary hack to make sure the message is sent
+    // First-message-in-new-session navigation is delayed so onSubmit() above
+    // has time to flush its outbound POST /session/.../message before the
+    // route swap; navigating immediately drops the message because the
+    // session hasn't been registered server-side yet.
     if (!props.sessionID)
       setTimeout(() => {
         route.navigate({
@@ -971,9 +978,9 @@ export function Prompt(props: PromptProps) {
                   return
                 }
 
-                // Force layout update and render for the pasted content
+                // Defer to next tick: same dirty-tracking race as in
+                // PromptAppend above (see top of file).
                 setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
                   if (!input || input.isDestroyed) return
                   input.getLayoutNode().markDirty()
                   renderer.requestRender()
@@ -985,8 +992,10 @@ export function Prompt(props: PromptProps) {
                   promptPartTypeId = input.extmarks.registerType("prompt-part")
                 }
                 props.ref?.(ref)
+                // theme.text isn't available on the first synchronous frame
+                // after ref assignment — defer one tick so the cursor color
+                // settles after the theme context is wired up.
                 setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
                   if (!input || input.isDestroyed) return
                   input.cursorColor = theme.text
                 }, 0)

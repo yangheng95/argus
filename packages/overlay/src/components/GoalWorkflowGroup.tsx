@@ -1,22 +1,27 @@
 /**
- * GoalWorkflowGroup — per-goal collapsible card with step-level detail.
+ * GoalWorkflowGroup — per-goal collapsible summary card for the sidebar.
  *
- * Each goal shows its workflow steps (plan → execute → eval).
- * Each step is a mini-container that can show:
- *   - Status indicator (pending/running/completed/failed)
- *   - Agent card messages (when available, e.g., planner/executor/evaluator output)
- *   - Evaluation check details (for eval step)
- *
- * This bridges the workflow step tracking system and the live agent event system:
- *   - Step status comes from board.goalWorkflows[].steps[] (structured progress)
- *   - Step content comes from agentCards() (real-time message stream)
+ * The right-side goal panel should stay goal-scoped: title, objective,
+ * acceptance, and overall status. Step-by-step executor detail belongs in
+ * the conversation timeline, not duplicated here as a second Executor pane.
  */
-import { For, Show, createMemo, JSX } from "solid-js";
-import { MessageView } from "./MessageView";
+import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
+import { cardExpanded, toggleCard } from "../store/conversation-ui";
+import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
+import { StaticTextPart } from "./TextPart";
+import { Icon } from "./Icon";
 
 // ── Types ──
 
+/**
+ * Per-step structured payload — full content the StepRow renders.
+ *
+ * Replaces the legacy PlanPanel / ExecutorSummaryPanel / CriteriaPanel /
+ * EvaluationPanel reading separate top-level board fields. Each goal's
+ * step now carries its own data so the frontend never has to cross-
+ * reference task-level state.
+ */
 interface GoalStep {
   stepID: string;
   label: string;
@@ -27,57 +32,67 @@ interface GoalStep {
   summary?: string;
 }
 
-interface EvalCheck {
-  name: string;
-  status: string;
-  evidence?: string;
+interface AcceptanceScorerLike {
+  type?: string;
+  name?: string;
+  criteria?: string;
+  spec?: { kind?: string; cmd?: string; path?: string };
+}
+
+interface AcceptanceSpecLike {
+  id?: string;
+  title?: string;
+  severity?: string;
+  scorers?: AcceptanceScorerLike[];
 }
 
 interface GoalWorkflow {
   goalID: string;
   goalTitle: string;
+  orderIndex?: number;
+  retryCount?: number;
+  /** Architect-authored 1–2 sentence execution directive for this goal.
+   *  The real goal summary — acceptance_specs are the pass/fail contract,
+   *  objective is the prose description a human reads first. */
+  goalObjective?: string;
   goalStatus: string;
+  /** Typed acceptance specs from the backend (board.ts). */
+  acceptanceSpecs?: AcceptanceSpecLike[];
   priority: "blocking" | "advisory";
   steps: GoalStep[];
 }
 
+/** Reduce an AcceptanceSpec[] to a single short human-readable line for the
+ *  per-goal panel preview and the goal-edit textarea seed. We pick the first
+ *  scorer's criteria/command so operators see the most actionable signal. */
+function previewAcceptance(specs: AcceptanceSpecLike[] | undefined): string {
+  if (!Array.isArray(specs) || specs.length === 0) return "";
+  const first = specs[0];
+  const scorer = first.scorers?.[0];
+  if (!scorer) return first.title ?? "";
+  if (scorer.type === "llm_judge" && scorer.criteria) return scorer.criteria;
+  if (scorer.type === "heuristic" && scorer.spec?.kind === "shell" && scorer.spec.cmd) return scorer.spec.cmd;
+  if (scorer.type === "heuristic" && scorer.spec?.kind === "script_ref" && scorer.spec.path) return scorer.spec.path;
+  return first.title ?? "";
+}
+
 interface GoalWorkflowGroupProps {
   goal: GoalWorkflow;
-  /** Agent card messages grouped by step: { plan: msg[], execute: msg[], eval: msg[] } */
-  stepMessages?: Record<string, any[]>;
-  /** Evaluation checks for this goal (from board.evaluation or per-goal eval) */
-  evalChecks?: EvalCheck[];
   defaultOpen?: boolean;
+  /** Optional: edit the goal (title + detail). */
+  onEditGoal?: (goalID: string, title: string, detail: string) => void;
+  /** Optional: delete the goal. */
+  onDeleteGoal?: (goalID: string) => void;
 }
 
 // ── Helpers ──
 
-function stepIcon(status: string): string {
+function goalStatusIconName(status: string): "status-completed" | "status-failed" | "status-active" | "status-idle" {
   switch (status) {
-    case "completed": return "\u2713";
-    case "running": return "\u25CB";
-    case "failed": return "\u2717";
-    case "skipped": return "\u2014";
-    default: return "\u00B7";
-  }
-}
-
-function stepClass(status: string): string {
-  switch (status) {
-    case "completed": return "gwg-step--done";
-    case "running": return "gwg-step--running";
-    case "failed": return "gwg-step--failed";
-    case "skipped": return "gwg-step--skipped";
-    default: return "gwg-step--pending";
-  }
-}
-
-function goalStatusIcon(status: string): string {
-  switch (status) {
-    case "passed": return "\u2713";
-    case "failed": return "\u2717";
-    case "running": return "\u25CB";
-    default: return "\u00B7";
+    case "passed": return "status-completed";
+    case "failed": return "status-failed";
+    case "running": return "status-active";
+    default: return "status-idle";
   }
 }
 
@@ -90,130 +105,95 @@ function goalStatusClass(status: string): string {
   }
 }
 
-function checkStatusIcon(status: string): string {
-  if (status === "passed") return "\u2713";
-  if (status === "failed") return "\u2717";
-  return "\u00B7";
-}
-
-function checkStatusClass(status: string): string {
-  if (status === "passed") return "gwg-check--passed";
-  if (status === "failed") return "gwg-check--failed";
-  return "gwg-check--pending";
-}
-
-// ── Step Row (expandable when it has content) ──
-
-function StepRow(props: {
-  step: GoalStep;
-  messages?: any[];
-  checks?: EvalCheck[];
-}) {
-  const hasContent = createMemo(() => {
-    const msgs = props.messages;
-    const checks = props.checks;
-    return (msgs && msgs.length > 0) || (checks && checks.length > 0);
-  });
-
-  const isActive = () =>
-    props.step.status === "running" || props.step.status === "failed";
-
-  return (
-    <Show
-      when={hasContent()}
-      fallback={
-        <div class={`gwg-step ${stepClass(props.step.status)}`}>
-          <span class="gwg-step-icon">{stepIcon(props.step.status)}</span>
-          <span class="gwg-step-label">{props.step.label}</span>
-          <Show when={props.step.summary}>
-            <span class="gwg-step-summary">{props.step.summary}</span>
-          </Show>
-          <span class="gwg-step-status">{props.step.status}</span>
-        </div>
-      }
-    >
-      <details class={`gwg-step-detail ${stepClass(props.step.status)}`} open={isActive()}>
-        <summary class={`gwg-step ${stepClass(props.step.status)}`}>
-          <span class="gwg-step-icon">{stepIcon(props.step.status)}</span>
-          <span class="gwg-step-label">{props.step.label}</span>
-          <Show when={props.step.summary}>
-            <span class="gwg-step-summary">{props.step.summary}</span>
-          </Show>
-          <span class="gwg-step-status">{props.step.status}</span>
-          <Show when={props.messages && props.messages.length > 0}>
-            <span class="gwg-step-count">({props.messages!.length})</span>
-          </Show>
-        </summary>
-        <div class="gwg-step-body">
-          {/* Agent messages for this step */}
-          <Show when={props.messages && props.messages.length > 0}>
-            <div class="gwg-step-messages">
-              <For each={props.messages}>
-                {(msg) => <MessageView message={msg} />}
-              </For>
-            </div>
-          </Show>
-          {/* Evaluation checks (only for eval step) */}
-          <Show when={props.checks && props.checks.length > 0}>
-            <div class="gwg-checks">
-              <For each={props.checks}>
-                {(check) => (
-                  <div class={`gwg-check ${checkStatusClass(check.status)}`}>
-                    <span class="gwg-check-icon">{checkStatusIcon(check.status)}</span>
-                    <span class="gwg-check-name">{check.name}</span>
-                    <Show when={check.evidence}>
-                      <span class="gwg-check-evidence">{check.evidence}</span>
-                    </Show>
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
-        </div>
-      </details>
-    </Show>
-  );
-}
-
 // ── Main GoalWorkflowGroup ──
 
 export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
-  const shouldOpen = () =>
-    (props.defaultOpen ??
-    (props.goal.goalStatus === "running" ||
-    props.goal.goalStatus === "failed"));
+  // Default expanded when active (running/failed); manual overrides discarded
+  // on goalStatus transitions via the unified card-fold store.
+  // Key is namespaced with "gwg:" so it never collides with conversation-panel keys.
+  const cardKey = () => `gwg:${props.goal.goalID}`;
+  const status = () => props.goal.goalStatus;
+  const defaultOpen = () =>
+    props.defaultOpen ?? (status() === "running" || status() === "failed");
+  const expanded = () => cardExpanded(cardKey(), status(), defaultOpen());
+  const toggle = () => toggleCard(cardKey(), status(), defaultOpen());
+  const revisionLabel = () =>
+    goalRevisionLabelFromIndexes(props.goal.orderIndex, props.goal.retryCount);
 
   return (
-    <details class={`gwg ${goalStatusClass(props.goal.goalStatus)}`} open={shouldOpen()}>
-      <summary class="gwg-header">
-        <span class="gwg-status-icon">{goalStatusIcon(props.goal.goalStatus)}</span>
-        <span class="gwg-title">{props.goal.goalTitle}</span>
-        <Show when={props.goal.priority === "advisory"}>
-          <span class="gwg-priority-badge">advisory</span>
-        </Show>
-      </summary>
-      <div class="gwg-body">
-        <For each={props.goal.steps}>
-          {(step) => (
-            <StepRow
-              step={step}
-              messages={props.stepMessages?.[step.stepID]}
-              checks={step.stepID === "eval" ? props.evalChecks : undefined}
-            />
-          )}
-        </For>
+    <div
+      class={`gwg ${goalStatusClass(props.goal.goalStatus)}`}
+      classList={{ "gwg--expanded": expanded() }}
+    >
+      <div
+        class="gwg-header"
+        role="button"
+        tabindex="0"
+        aria-expanded={expanded()}
+        onClick={toggle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+        }}
+      >
+        <span class="gwg-status-icon" data-status={props.goal.goalStatus}>
+          <Icon name={goalStatusIconName(props.goal.goalStatus)} />
+        </span>
+        <div class="gwg-title-row">
+          <span class="gwg-title">{props.goal.goalTitle}</span>
+        </div>
+        <div class="gwg-header-meta">
+          <Show when={revisionLabel()}>
+            <span class="gwg-revision">{revisionLabel()}</span>
+          </Show>
+          <Show when={props.goal.priority === "advisory"}>
+            <span class="gwg-priority-badge">advisory</span>
+          </Show>
+        </div>
+        {/* iter44: edit + delete buttons removed per user feedback
+            (2026-05-03) \u2014 goal authoring lives elsewhere (the
+            requirements/architect flow owns goal definition; manual
+            edit/delete from the conversation surface was confusing
+            and rarely the right action). The chevron stays as the
+            collapse affordance. The `onEditGoal` / `onDeleteGoal`
+            props remain on the component so callers don't break;
+            they're just no-ops on this surface now. */}
+        <div class="gwg-header-actions">
+          <span class="gwg-chevron" aria-hidden="true">
+            <Icon name="caret-down" />
+          </span>
+        </div>
       </div>
-    </details>
+      <Show when={expanded()}>
+        <div class="gwg-body">
+          <Show when={props.goal.goalObjective}>
+            <div class="gwg-objective">
+              <div class="gwg-objective-label">{t("goal.field.objective")}</div>
+              <div class="gwg-objective-text">
+                <StaticTextPart text={props.goal.goalObjective!} />
+              </div>
+            </div>
+          </Show>
+          <Show when={previewAcceptance(props.goal.acceptanceSpecs)}>
+            <div class="gwg-done-definition">
+              <div class="gwg-done-definition-label">
+                {t("goal.field.acceptance")}
+              </div>
+              <div class="gwg-done-definition-text">
+                <StaticTextPart text={previewAcceptance(props.goal.acceptanceSpecs)} />
+              </div>
+            </div>
+          </Show>
+        </div>
+      </Show>
+    </div>
   );
 }
 
 /** Render a list of GoalWorkflowGroups */
 export function GoalWorkflowList(props: {
   goals: GoalWorkflow[];
-  /** Per-goal step messages: { [goalID]: { [stepID]: msg[] } } */
-  goalStepMessages?: Record<string, Record<string, any[]>>;
-  /** Per-goal eval checks: { [goalID]: EvalCheck[] } */
-  goalEvalChecks?: Record<string, EvalCheck[]>;
+  onEditGoal?: (goalID: string, title: string, detail: string) => void;
+  onDeleteGoal?: (goalID: string) => void;
 }) {
   return (
     <div class="gwg-list">
@@ -221,8 +201,8 @@ export function GoalWorkflowList(props: {
         {(goal) => (
           <GoalWorkflowGroup
             goal={goal}
-            stepMessages={props.goalStepMessages?.[goal.goalID]}
-            evalChecks={props.goalEvalChecks?.[goal.goalID]}
+            onEditGoal={props.onEditGoal}
+            onDeleteGoal={props.onDeleteGoal}
           />
         )}
       </For>

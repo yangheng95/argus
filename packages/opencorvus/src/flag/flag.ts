@@ -18,13 +18,11 @@ export namespace Flag {
   export const OPENCORVUS_DISABLE_LSP_DOWNLOAD = truthy("OPENCORVUS_DISABLE_LSP_DOWNLOAD")
   export const OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS = truthy("OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS")
   export const OPENCORVUS_DISABLE_AUTOCOMPACT = truthy("OPENCORVUS_DISABLE_AUTOCOMPACT")
-  export const OPENCORVUS_DISABLE_MODELS_FETCH = truthy("OPENCORVUS_DISABLE_MODELS_FETCH")
   export declare const OPENCORVUS_DISABLE_CLAUDE_CODE: boolean
   export declare const OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT: boolean
   export declare const OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS: boolean
   export declare const OPENCORVUS_DISABLE_EXTERNAL_SKILLS: boolean
   export declare const OPENCORVUS_DISABLE_PROJECT_CONFIG: boolean
-  export const OPENCORVUS_FAKE_VCS = process.env["OPENCORVUS_FAKE_VCS"]
   export declare const OPENCORVUS_CLIENT: string
   export const OPENCORVUS_SERVER_PASSWORD = process.env["OPENCORVUS_SERVER_PASSWORD"]
   export const OPENCORVUS_SERVER_USERNAME = process.env["OPENCORVUS_SERVER_USERNAME"]
@@ -44,6 +42,9 @@ export namespace Flag {
     "OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS",
   )
   export const OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX = number("OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX")
+  // Dynamic getter — value read on every access so tests can mutate the env
+  // between calls without forcing a module reload.
+  export declare const OPENCORVUS_TUI_CONTROL_TIMEOUT_MS: number
   export declare const OPENCORVUS_EXPERIMENTAL_OXFMT: boolean
   export const OPENCORVUS_EXPERIMENTAL_LSP_TY = truthy("OPENCORVUS_EXPERIMENTAL_LSP_TY")
   export declare const OPENCORVUS_EXPERIMENTAL_LSP_TOOL: boolean
@@ -166,6 +167,19 @@ Object.defineProperty(Flag, "OPENCORVUS_EXPERIMENTAL_OXFMT", {
 Object.defineProperty(Flag, "OPENCORVUS_EXPERIMENTAL_LSP_TOOL", {
   get() {
     return Flag.OPENCORVUS_EXPERIMENTAL || truthy("OPENCORVUS_EXPERIMENTAL_LSP_TOOL")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "OPENCORVUS_TUI_CONTROL_TIMEOUT_MS", {
+  get() {
+    const raw = process.env["OPENCORVUS_TUI_CONTROL_TIMEOUT_MS"]
+    if (!raw) return 60_000
+    const value = Number(raw)
+    if (!Number.isFinite(value)) return 60_000
+    if (value < 1000) return 1000
+    return Math.floor(value)
   },
   enumerable: true,
   configurable: false,

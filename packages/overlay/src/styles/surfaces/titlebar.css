@@ -1,0 +1,940 @@
+/* Flat-redesign Step 2 (2026-05-04): titlebar carries one cross-context
+ * boundary border (border-bottom) per rule §2.2 B. The top border that
+ * normally would have appeared (the user-OS chrome already provides one
+ * above on tauri windows) and the decorative `::after` linear-gradient
+ * line that doubled the bottom edge were retired — three dividers
+ * stacked on the same horizontal edge was the "莫名其妙的边框" symptom
+ * in the 2026-05-04 user critique. */
+.titlebar {
+  position: relative;
+  z-index: var(--ui-z-dialog);
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(calc(16px * var(--ui-scale)), 1fr) auto;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  margin: 0;
+  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  min-height: var(--ui-titlebar-height);
+  background: color-mix(in srgb, var(--chrome) 82%, var(--surface-strong));
+  border: 0;
+  border-bottom: var(--oc-border-width) solid var(--border);
+  flex-shrink: 0;
+  box-shadow: none;
+}
+
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--oc-titlebar-gap);
+  min-width: 0;
+  grid-column: 1;
+  justify-self: start;
+  -webkit-app-region: drag;
+}
+
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--oc-titlebar-gap);
+  flex: none;
+  min-width: calc(64px * var(--ui-scale));
+  justify-self: auto;
+  -webkit-app-region: drag;
+}
+
+.titlebar-spacer {
+  min-width: calc(20px * var(--ui-scale));
+  height: 100%;
+  grid-column: 2;
+  -webkit-app-region: drag;
+}
+
+.brand-logo {
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.titlebar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--oc-titlebar-gap);
+  flex: 1 1 auto;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-nav-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--oc-titlebar-gap);
+  min-width: 0;
+}
+
+/* Single source after iter23: grid placement + flex container live together.
+   The flex container layout is harmless when the parent is grid (icons flow
+   flex-end inside the grid cell), and inside the narrow-width @media the
+   parent flips back to flex where the flex container layout is the actual
+   behavior. */
+.titlebar-utility {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--oc-titlebar-gap);
+  flex: none;
+  min-width: 0;
+  grid-column: 3;
+  justify-self: end;
+  margin-left: 0;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--oc-titlebar-gap);
+  flex-shrink: 0;
+}
+
+.titlebar-status-cluster {
+  display: flex;
+  align-items: center;
+  gap: var(--oc-titlebar-gap);
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-window-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--oc-titlebar-gap);
+}
+
+/* Connection badge: a small dot-indicator that lives in the titlebar
+   utility area. Kept within this surface because no other column owns it. */
+.conn-badge {
+  --conn-badge-dot: var(--text-muted);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-medium);
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  letter-spacing: 0.02em;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+  transition:
+    background var(--ui-duration-base),
+    color var(--ui-duration-base);
+}
+
+.conn-badge::before {
+  content: "";
+  display: inline-block;
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  border-radius: 50%;
+  background: var(--conn-badge-dot);
+  flex-shrink: 0;
+}
+
+.conn-badge:hover,
+.conn-badge:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+
+.conn-badge[data-status="online"] {
+  --conn-badge-dot: var(--good);
+}
+
+.conn-badge[data-status="offline"] {
+  --conn-badge-dot: var(--bad);
+}
+
+.conn-badge[data-status="connecting"] {
+  --conn-badge-dot: var(--warn);
+}
+
+.conn-badge__label {
+  color: var(--text);
+  text-transform: none;
+}
+
+@media (max-width: 760px) {
+  .titlebar {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    height: auto;
+    gap: calc(8px * var(--ui-scale));
+  }
+
+  .titlebar-left,
+  .titlebar-brand,
+  .titlebar-utility {
+    grid-column: auto;
+    justify-self: auto;
+  }
+
+  .titlebar-spacer {
+    display: none;
+  }
+
+  .brand-guide-card {
+    left: calc(-8px * var(--ui-scale));
+    width: min(calc(320px * var(--ui-scale)), calc(100vw - calc(20px * var(--ui-scale))));
+  }
+
+  .brand-guide-label {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .brand-guide-copyblock {
+    display: none;
+  }
+}
+
+.titlebar-theme-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(4px * var(--ui-scale));
+  margin-left: calc(32px * var(--ui-scale));
+}
+
+.titlebar-theme-option {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  background: transparent;
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.titlebar-theme-option:hover {
+  background: var(--subtle-3);
+  border-color: var(--subtle-5);
+  color: var(--text-strong);
+}
+
+.titlebar-theme-option[data-active="true"] {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--text-strong);
+  box-shadow: 0 0 0 var(--oc-border-width) var(--accent-dim);
+}
+
+.titlebar-theme-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar-theme-option-swatch {
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.titlebar-theme-option-swatch[data-theme="dark"] {
+  background: var(--oc-theme-swatch-dark);
+}
+
+.titlebar-theme-option-swatch[data-theme="light"] {
+  background: var(--oc-theme-swatch-light);
+}
+
+.titlebar-theme-option-swatch[data-theme="vscode-dark"] {
+  background: var(--oc-theme-swatch-vscode-dark);
+}
+
+.titlebar-theme-option-swatch[data-theme="system"] {
+  background: var(--oc-theme-swatch-system);
+}
+
+.brand-guide {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7px * var(--ui-scale));
+  min-width: 0;
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: 0 solid transparent;
+  border-radius: var(--oc-radius-soft);
+  cursor: help;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base);
+  -webkit-app-region: no-drag;
+}
+
+.brand-guide:hover,
+.brand-guide:focus-visible,
+.brand-guide:focus-within {
+  border-color: var(--hover-accent-border);
+  background: var(--hover-accent-wash);
+  box-shadow: var(--hover-accent-shadow);
+}
+
+.brand-guide:focus-visible {
+  box-shadow:
+    0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 18%, transparent),
+    var(--hover-accent-shadow);
+}
+
+.brand-guide-copyblock {
+  display: inline-flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+  min-width: 0;
+}
+
+.brand-guide-wordmark {
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.brand-guide-label {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-medium);
+  line-height: 1;
+}
+
+.brand-guide-card {
+  position: absolute;
+  top: calc(100% + calc(8px * var(--ui-scale)));
+  left: 0;
+  width: min(calc(380px * var(--ui-scale)), calc(100vw - calc(32px * var(--ui-scale))));
+  display: grid;
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(14px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--guide-card-border);
+  border-radius: var(--oc-radius-large);
+  background: var(--guide-card-bg);
+  box-shadow: var(--guide-card-shadow);
+  opacity: var(--ui-opacity-hidden);
+  visibility: hidden;
+  transform: translateY(calc(8px * var(--ui-scale)));
+  pointer-events: none;
+  transition:
+    opacity var(--ui-duration-base),
+    transform var(--ui-duration-base),
+    visibility var(--ui-duration-fast) linear var(--ui-duration-base);
+  z-index: var(--ui-z-sticky);
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-app-region: no-drag;
+}
+
+.brand-guide-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: calc(12px * var(--ui-scale));
+}
+
+.brand-guide-card::after {
+  content: "";
+  position: absolute;
+  top: calc(-7px * var(--ui-scale));
+  left: calc(24px * var(--ui-scale));
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
+  background: var(--surface-strong);
+  border-left: var(--oc-border-width) solid var(--guide-card-border);
+  border-top: var(--oc-border-width) solid var(--guide-card-border);
+  transform: rotate(45deg);
+}
+
+.brand-guide:hover .brand-guide-card,
+.brand-guide:focus-visible .brand-guide-card,
+.brand-guide:focus-within .brand-guide-card {
+  opacity: var(--ui-opacity-full);
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition-delay: 0;
+}
+
+.brand-guide-kicker {
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-medium);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.brand-guide-section {
+  display: grid;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.brand-guide-title {
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+}
+
+.brand-guide-copy {
+  color: var(--text-soft);
+  line-height: 1.55;
+  /* zh-CN copy stretches ~2x the en-US length; min-width:0 keeps the inner
+     text from pushing the parent's flex/grid track. overflow-wrap
+     break-word handles long compound terms with no natural break. */
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.brand-guide-steps {
+  display: grid;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.brand-guide-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: calc(8px * var(--ui-scale));
+  align-items: start;
+}
+
+.brand-guide-step-index {
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--oc-radius-pill);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 22%, transparent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1;
+  margin-top: calc(1px * var(--ui-scale));
+}
+
+.brand-guide-step-copy {
+  color: var(--text-soft);
+  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"] {
+  --oc-button-height: var(--ui-titlebar-btn-height);
+  --oc-button-padding-x: calc(var(--oc-header-gap) * 0.75);
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--oc-titlebar-menu-text);
+
+  height: var(--ui-titlebar-btn-height);
+  white-space: nowrap;
+}
+
+.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"] {
+  --oc-button-bg: var(--subtle-3);
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--text-strong);
+}
+
+.titlebar-status-cluster .oc-button[data-ui="titlebar-status-icon"] {
+  --oc-button-height: var(--ui-titlebar-btn-height);
+  --oc-button-padding-x: 0;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-bg: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  --oc-button-color: var(--text);
+
+  height: var(--ui-titlebar-btn-height);
+  width: var(--ui-titlebar-btn-width);
+  min-width: var(--ui-titlebar-btn-width);
+}
+
+/* Window control buttons (minimize / maximize / close).
+   Sized to match the titlebar button family. Resting state stays
+   neutral and readable; the close button only escalates to the bad
+   palette on hover/focus, matching desktop window-control affordance
+   instead of painting a permanent red slab in the corner. */
+.titlebar-window-controls .oc-button {
+  --oc-button-height: var(--ui-titlebar-btn-height);
+  --oc-button-padding-x: 0;
+  --oc-button-border: 0 solid transparent;
+
+  height: var(--ui-titlebar-btn-height);
+  width: var(--ui-titlebar-btn-width);
+  min-width: var(--ui-titlebar-btn-width);
+}
+
+.titlebar-menu-trigger-compact {
+  display: none;
+}
+
+.titlebar-menubar {
+  display: flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-menubar-slot {
+  position: relative;
+  display: flex;
+}
+
+/* iter43: the menubar reads as a primary navigation surface with weight
+   600 and ui-font-body sizing; resting color stays --text-soft, hover /
+   active lifts to --text-strong. */
+.titlebar-menubar-trigger {
+  height: var(--ui-titlebar-btn-height);
+  padding: 0 calc(9px * var(--ui-scale));
+  border: var(--oc-border-width) solid transparent;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--oc-titlebar-menu-text);
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-medium);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Flat-redesign Step 2 (2026-05-04): hover/active no longer flips
+ * border-color (rule §2.2 C). Background tint carries the affordance. */
+.titlebar-menubar-trigger:hover,
+.titlebar-menubar-trigger:focus-visible,
+.titlebar-menubar-trigger[data-active="true"] {
+  color: var(--text-strong);
+  background: var(--subtle-3);
+  outline: none;
+}
+
+.titlebar-menubar-panel {
+  position: absolute;
+  top: calc(100% + calc(7px * var(--ui-scale)));
+  left: 0;
+  z-index: var(--ui-z-dialog);
+  width: min(calc(340px * var(--ui-scale)), calc(100vw - calc(24px * var(--ui-scale))));
+  box-sizing: border-box;
+  max-height: min(calc(620px * var(--ui-scale)), calc(100vh - calc(88px * var(--ui-scale))));
+  overflow: auto;
+  display: grid;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(7px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--menu-panel-bg);
+  box-shadow: var(--shadow-lg);
+  -webkit-app-region: no-drag;
+}
+
+@media (max-width: calc(520px * var(--ui-scale))) {
+  .titlebar-menubar-panel {
+    position: fixed;
+    top: calc(var(--ui-titlebar-height) + calc(8px * var(--ui-scale)));
+    left: calc(12px * var(--ui-scale));
+    right: calc(12px * var(--ui-scale));
+    width: auto;
+    max-height: calc(100vh - var(--ui-titlebar-height) - calc(24px * var(--ui-scale)));
+  }
+}
+
+.titlebar-menubar-group {
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.titlebar-menubar-group + .titlebar-menubar-group {
+  padding-top: calc(6px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid var(--divider-soft);
+}
+
+/* group title (e.g. "Theme", "Locale") — plain subheader, no pill chrome. */
+.titlebar-menubar-group-title {
+  padding: calc(3px * var(--ui-scale)) calc(7px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.titlebar-menubar-item,
+.titlebar-menubar-toggle,
+.titlebar-menubar-range {
+  width: 100%;
+  min-height: calc(32px * var(--ui-scale));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid transparent;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-soft);
+  text-align: left;
+}
+
+.titlebar-menubar-item:not(:disabled) {
+  cursor: pointer;
+}
+
+.titlebar-menubar-item:hover:not(:disabled),
+.titlebar-menubar-item:focus-visible,
+.titlebar-menubar-toggle:hover,
+.titlebar-menubar-range:hover {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+  outline: none;
+}
+
+.titlebar-menubar-item:disabled {
+  opacity: var(--ui-opacity-disabled);
+}
+
+.titlebar-menubar-item-title {
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  line-height: 1.2;
+}
+
+.titlebar-menubar-item-meta {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  line-height: 1.25;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.titlebar-menubar-note {
+  min-width: 0;
+  padding: calc(7px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-2);
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar-menubar-toggle > span,
+.titlebar-menubar-range-copy {
+  min-width: 0;
+  display: grid;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.titlebar-menubar-toggle input[type="checkbox"] {
+  flex: none;
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
+}
+
+.titlebar-menubar-range input[type="range"] {
+  width: calc(116px * var(--ui-scale));
+  flex: none;
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
+}
+
+.titlebar-theme-options-menubar {
+  margin-left: 0;
+  padding: calc(4px * var(--ui-scale));
+}
+
+@media (max-width: 760px) {
+  .titlebar-menubar {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: calc(1px * var(--ui-scale));
+  }
+
+  .titlebar-menubar-trigger {
+    width: calc(24px * var(--ui-scale));
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .titlebar-menubar-trigger::after {
+    content: attr(data-compact);
+    font-size: var(--ui-font-control);
+  }
+
+  .titlebar-menubar-panel {
+    position: fixed;
+    top: calc(var(--ui-titlebar-height) + calc(13px * var(--ui-scale)));
+    left: calc(12px * var(--ui-scale));
+    right: calc(12px * var(--ui-scale));
+    width: auto;
+    max-height: calc(100vh - calc(var(--ui-titlebar-height) + calc(28px * var(--ui-scale))));
+  }
+}
+
+.titlebar-status-chip,
+.titlebar-setup-cta,
+.titlebar-status-icon {
+  height: var(--ui-titlebar-btn-height);
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  padding: 0;
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-3);
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.titlebar-status-chip {
+  max-width: calc(180px * var(--ui-scale));
+  padding: 0 calc(7px * var(--ui-scale));
+}
+
+.titlebar-status-label {
+  color: var(--text-muted);
+  flex: none;
+}
+
+.titlebar-status-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-soft);
+}
+
+.titlebar-setup-cta {
+  padding: 0 calc(9px * var(--ui-scale));
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.titlebar-status-icon {
+  width: var(--ui-titlebar-btn-width);
+  justify-content: center;
+  padding: 0;
+}
+
+.titlebar-status-chip:hover,
+.titlebar-setup-cta:hover,
+.titlebar-status-icon:hover {
+  color: var(--text-strong);
+  background: var(--subtle-4);
+}
+
+.titlebar-task-status {
+  width: var(--ui-titlebar-btn-width);
+  min-width: var(--ui-titlebar-btn-width);
+  height: var(--ui-titlebar-btn-height);
+  min-height: var(--ui-titlebar-btn-height);
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  cursor: help;
+  transition:
+    border-color var(--ui-duration-fast),
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast),
+    box-shadow var(--ui-duration-fast);
+}
+
+.titlebar-task-status:hover {
+  background: var(--surface-hover);
+}
+
+.titlebar-task-status[data-status="queued"] {
+  background: var(--subtle-4);
+}
+
+/* Flat-redesign Step 2 (2026-05-04): per-status border-color flip retired
+ * (rule §2.2 C). Background tint alone carries the status. */
+.titlebar-task-status[data-status="active"] {
+  background: color-mix(in srgb, var(--info) 12%, transparent);
+}
+
+.titlebar-task-status[data-status="completed"] {
+  background: color-mix(in srgb, var(--good) 10%, transparent);
+}
+
+.titlebar-task-status[data-status="failed"] {
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+}
+
+.titlebar-task-status .status-label,
+.titlebar-task-status .elapsed {
+  display: none;
+}
+
+.status-icon {
+  width: var(--oc-titlebar-status-icon);
+  height: var(--oc-titlebar-status-icon);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* status-icon — the Icon primitive sets stroke="currentColor" +
+ * fill="none" on the svg root, so the legacy per-path
+ * `[data-stroke="true"]` / `[data-fill="true"]` selectors that the
+ * old Board.statusIcon() innerHTML strings carried have been retired
+ * (Step 8b, 2026-05-04). The `.status-icon[data-status="..."]` color
+ * rules below still drive `currentColor` through to the path. */
+.status-icon svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  vector-effect: non-scaling-stroke;
+}
+
+.status-icon[data-status="idle"] {
+  color: var(--text-muted);
+}
+
+.status-icon[data-status="queued"] {
+  color: var(--text-soft);
+}
+
+.status-icon[data-status="active"] {
+  color: var(--accent);
+}
+
+.status-icon[data-status="completed"] {
+  color: var(--good);
+}
+
+.status-icon[data-status="failed"] {
+  color: var(--bad);
+}
+
+.status-icon[data-status="cancelled"] {
+  color: var(--text-muted);
+}
+
+@media (max-width: 32.5em) {
+  .titlebar-status-cluster .oc-button[data-ui="titlebar-status-icon"] {
+    display: none;
+  }
+
+  .titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"] {
+    --oc-button-padding-x: 0;
+
+    width: var(--oc-density-icon-button);
+    min-width: var(--oc-density-icon-button);
+    overflow: hidden;
+  }
+
+  .titlebar-menu-trigger-label {
+    display: none;
+  }
+
+  .titlebar-menu-trigger-compact {
+    display: inline;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Titlebar responsive collapse (extracted 2026-05-04). At
+   max-width 760px, the titlebar reflows to two stacked rows.
+   ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  .titlebar-left,
+  .titlebar-utility {
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+
+  .titlebar-left {
+    width: 100%;
+  }
+
+  .titlebar-utility,
+  .titlebar-actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .titlebar-utility {
+    margin-left: 0;
+  }
+
+  .titlebar-actions {
+    flex: 1 1 auto;
+    width: auto;
+    justify-content: flex-end;
+    gap: calc(3px * var(--ui-scale));
+  }
+
+  .titlebar-status-chip,
+  .titlebar-status-icon {
+    display: none;
+  }
+
+  .titlebar-setup-cta {
+    flex-shrink: 0;
+    max-width: calc(56px * var(--ui-scale));
+    padding-inline: calc(7px * var(--ui-scale));
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .conn-badge__label {
+    display: none;
+  }
+
+  .brand-guide {
+    padding-inline: calc(4px * var(--ui-scale));
+    justify-content: center;
+  }
+
+  .titlebar-brand {
+    flex: 0 0 calc(32px * var(--ui-scale));
+    width: calc(32px * var(--ui-scale));
+    min-width: calc(32px * var(--ui-scale));
+  }
+
+  .engine-bar {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}

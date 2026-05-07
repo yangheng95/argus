@@ -1,5 +1,5 @@
 import z from "zod"
-import { ExecutorName } from "../compat"
+import { ExecutorName } from "../contract"
 
 export const ProtocolTransportKind = z.enum(["inproc", "stdio", "ws", "http"])
 export type ProtocolTransportKindInfo = z.infer<typeof ProtocolTransportKind>
@@ -137,31 +137,28 @@ export function protocolInfo(provider: z.infer<typeof ExecutorName>) {
     })
   }
   if (provider === "claude-code") {
-    const sdk = process.env.OPENCORVUS_EXECUTOR_CLAUDE_PROTOCOL !== "cli"
     return ProtocolInfo.parse({
       provider,
-      protocol: sdk ? "claude-agent-sdk" : "claude-cli-stream-json",
-      version: sdk ? "0.2" : "v1",
-      transport: { kind: sdk ? "inproc" : "stdio" },
+      protocol: "claude-agent-sdk",
+      version: "0.2",
+      transport: { kind: "inproc" },
       capabilities: {
         stream: true,
         resume: true,
-        interrupt: sdk,
+        interrupt: true,
         builtin_tools: true,
         custom_tools: false,
-        structured_output: sdk,
-        approvals: sdk ? ["permission", "elicitation"] : [],
-        reasoning: sdk,
+        structured_output: true,
+        approvals: ["permission", "elicitation"],
+        reasoning: true,
         plan_updates: false,
         diff_updates: false,
-        mcp: sdk,
+        mcp: true,
         usage: true,
         realtime: false,
         spec_generation: true,
         plan_generation: true,
-        tool_kinds: sdk
-          ? ["builtin", "approval", "input", "mcp", "shell", "patch", "read", "review", "structured_output", "unknown"]
-          : ["builtin", "shell", "patch", "read", "unknown"],
+        tool_kinds: ["builtin", "approval", "input", "mcp", "shell", "patch", "read", "review", "structured_output", "unknown"],
       },
     })
   }

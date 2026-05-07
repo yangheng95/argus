@@ -1,0 +1,1702 @@
+/* ─────────────────────────────────────────────────────────────
+   Unified Card Primitive
+   Single stylesheet for all conversation cards: agent stage,
+   goal groups, goal steps, promoted tool calls, message bubbles.
+   Applied via [data-kind], [data-stage], [data-role], [data-depth].
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* iter51: message-card redesign per docs/overlay-message-card-
+     redesign-2026-05-03.md spec direction A (ChatGPT-style flat).
+     Card corner-rounding is now driven by the global radius scale
+     (`--oc-radius-soft`); the local `--card-radius` alias was retired
+     2026-05-04 (flat-redesign Step 1). The 14-color --card-stage-*
+     palette is collapsed to 4 semantic tones (info / success / warn
+     / danger) folded into accent / good / warn / bad — every former
+     stage rail is one of these four. Stage-specific brand colors
+     (architect violet / planner teal / etc) are gone; agents are
+     differentiated by header icon + label, not by a hue. */
+  --card-gap: calc(8px * var(--ui-scale, 1));
+  --card-pad-x: calc(13px * var(--ui-scale, 1));
+  --card-pad-y: calc(10px * var(--ui-scale, 1));
+  --card-indent: calc(12px * var(--ui-scale, 1));
+  --card-title-size: var(--ui-font-title);
+  --card-sub-size: var(--ui-font-control);
+  --card-meta-size: var(--ui-font-meta);
+}
+
+/* Card surface + tone aliases — declared on `body` so the var()
+ * substitution for the underlying surface / accent / good / warn /
+ * bad tokens happens at body scope, where the active
+ * `body[data-theme="..."]` palette overrides are in effect. Putting
+ * these on `:root` resolves them once against :root's dark surface +
+ * accent tokens and the resolved value then inherits unchanged into
+ * the light theme — that is exactly the bug that made every
+ * conversation card render with a dark surface on the white theme,
+ * and the same freezing pattern that broke the cwd dropdown
+ * (discovered 2026-05-04, see styles/tokens/design-language.css). */
+body {
+  --card-bg-0: var(--surface-inset);
+  --card-bg-1: var(--surface);
+  --card-bg-hover: var(--surface-hover);
+  --card-border: var(--border);
+  --card-border-strong: var(--border-strong);
+  --card-line: color-mix(in srgb, var(--accent) 44%, transparent);
+  --card-line-dim: var(--border);
+
+  /* Semantic stage tones — info / success / warn / danger.
+     Used by status-layer overrides (rejected / failed) and as the
+     unknown-stage fallback for the rail rule (`var(--card-stage,
+     var(--card-stage-info))`). */
+  --card-stage-info: var(--accent);
+  --card-stage-success: var(--good);
+  --card-stage-warn: var(--warn);
+  --card-stage-danger: var(--bad);
+
+  /* Per-stage rail tokens. Each agent / phase has its own hue so
+     the conversation reads as a multi-actor stream; restored after
+     iter51's 4-tone fold left non-(delivery|evaluator|requirements)
+     stages without a rail because `card-color.ts` keeps emitting
+     `var(--card-stage-<name>)` for these 14 known stages.
+
+     Theme-adaptive: every value is derived from --accent / --good /
+     --warn / --bad (themed per light / dark / vscode-dark) via
+     color-mix, so swapping themes recolors the rails consistently
+     instead of hardcoded hex landing wrong on light/vscode-dark. */
+  --card-stage-user:           var(--accent);
+  --card-stage-assistant:      color-mix(in oklch, var(--good) 75%, var(--accent) 25%);
+  --card-stage-orchestrator:   color-mix(in oklch, var(--accent) 80%, var(--bad) 20%);
+  --card-stage-spec:           color-mix(in oklch, var(--good) 50%, var(--accent) 50%);
+  --card-stage-requirements:   var(--warn);
+  --card-stage-design-analyst: color-mix(in oklch, var(--bad) 55%, var(--accent) 45%);
+  --card-stage-architect:      color-mix(in oklch, var(--accent) 88%, var(--good) 12%);
+  --card-stage-planner:        color-mix(in oklch, var(--accent) 70%, var(--good) 30%);
+  --card-stage-goal:           color-mix(in oklch, var(--accent) 92%, var(--bad) 8%);
+  --card-stage-executor:       color-mix(in oklch, var(--warn) 80%, var(--bad) 20%);
+  --card-stage-build:          color-mix(in oklch, var(--warn) 55%, var(--bad) 45%);
+  --card-stage-evaluator:      color-mix(in oklch, var(--good) 70%, var(--accent) 30%);
+  --card-stage-delivery:       var(--good);
+  --card-stage-tool:           color-mix(in srgb, var(--text-soft) 70%, transparent);
+
+  /* System-message tint kept distinct (warn-toned) since system
+     messages are operational notices, not part of the agent
+     stream — the warn palette signals "operator should read". */
+  --card-system-rail: var(--warn);
+  --card-system-bg: var(--warn-dim);
+  --card-system-border: color-mix(in srgb, var(--warn) 28%, transparent);
+}
+
+/* ── Container ────────────────────────────────────────────── */
+
+/* iter51: flat card primitive. Pre-iter51 carried multi-layer
+   shadow (`0 1px 0 inset highlight + 0 10px 22px drop shadow`)
+   on every depth-0 card, plus hover transform + heavier shadow.
+   That was the loudest skeumorphic signal in the overlay — and
+   directly clashed with the calm/flat shells iter15-iter40
+   shipped (titlebar / sidebar / chat / sections / chat-input
+   / sections all flat). Drops:
+     - The depth-0 inset highlight + drop shadow.
+     - Per-theme shadow overrides (light + vscode-dark).
+     - Hover transform translateY(-1px) + lift shadow.
+   Kept: border (1px), radius (now 12px), bg, transition for
+   bg/border (no chrome to transition any more). */
+.card {
+  position: relative;
+  display: block;
+  min-width: max(var(--card-min-inline-size), min(100%, var(--card-sticky-inline-size)));
+  max-width: 100%;
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--card-border);
+  background: var(--card-bg-0);
+  margin: var(--card-gap) 0;
+  box-shadow: none;
+  overflow: hidden;
+  transform: none;
+  transition: background-color var(--ui-duration-base) var(--ui-timing-standard), border-color var(--ui-duration-base) var(--ui-timing-standard);
+  box-sizing: border-box;
+  /* Chat / coding containers are flex-column; keep cards at their natural
+     content height instead of being shrunk to fit. */
+  flex: none;
+}
+
+/* iter51: flat depth-0 head — drop the gradient shimmer that
+   previously highlighted the head as a separate strip from the
+   body. The 1px bottom border keeps the head/body relationship
+   visible without painting two backgrounds. */
+.card[data-depth="0"] > .card__head {
+  gap: calc(10px * var(--ui-scale, 1));
+  padding: calc(var(--card-pad-y) + 1px) calc(var(--card-pad-x) + 1px);
+  min-height: calc(42px * var(--ui-scale, 1));
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--card-line-dim) 84%, transparent);
+  background: transparent;
+}
+
+.card[data-depth="0"] > .card__body {
+  padding: calc(var(--card-pad-y) + calc(4px * var(--ui-scale))) calc(var(--card-pad-x) + calc(1px * var(--ui-scale))) calc(var(--card-pad-y) + calc(6px * var(--ui-scale)));
+  line-height: 1.62;
+}
+
+.card[data-depth="0"] > .card__body > .card__children {
+  gap: calc(8px * var(--ui-scale));
+  margin-top: calc(var(--card-pad-y) + calc(2px * var(--ui-scale)));
+}
+
+.card[data-depth="0"] {
+  box-shadow: none;
+}
+
+/* iter51: flat hover — only border-color tightens, no
+   transform/shadow lift. Skeumorphic "card lifts on hover"
+   was the loudest old visual; cards now stay flush with the
+   thread. */
+.card[data-depth="0"]:hover {
+  background: var(--card-bg-hover);
+  border-color: var(--card-border-strong);
+  box-shadow: none;
+  transform: none;
+}
+
+/* iter51: per-stage cards (agent / goal / step / tool) used a
+   gradient + accent-dim tint background + drop shadow that
+   shouted for attention. Replaced with a single 2px accent left
+   rail — the rail communicates "this is structured stage
+   content" without flooding the surface with color. The rail
+   color is the semantic --card-stage-info default; per-stage
+   overrides below pick a different semantic tone (success /
+   warn / danger) where appropriate. */
+.card[data-depth="0"][data-kind="agent"],
+.card[data-depth="0"][data-kind="goal"],
+.card[data-depth="0"][data-kind="phase"],
+.card[data-depth="0"][data-kind="step"],
+.card[data-depth="0"][data-kind="tool"] {
+  border-left: calc(3px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info));
+  background: var(--card-bg-0);
+}
+
+/* Stage tone overrides — folded from the prior 14-color stage
+   palette to 4 semantic tones. Delivery / evaluator are success
+   (green); requirements is warn (amber); failed / rejected
+   states surface via [data-status]. Everything else stays info
+   (accent). */
+.card[data-depth="0"][data-stage="delivery"],
+.card[data-depth="0"][data-stage="evaluator"] {
+  border-left-color: var(--card-stage-success);
+}
+.card[data-depth="0"][data-stage="requirements"] {
+  border-left-color: var(--card-stage-warn);
+}
+.card[data-depth="0"][data-status="failed"],
+.card[data-depth="0"][data-status="rejected"] {
+  border-left-color: var(--card-stage-danger);
+}
+
+.card[data-depth="0"][data-kind="agent"] > .card__head,
+.card[data-depth="0"][data-kind="goal"] > .card__head,
+.card[data-depth="0"][data-kind="step"] > .card__head,
+.card[data-depth="0"][data-kind="tool"] > .card__head {
+  background: transparent;
+}
+
+/* Nested cards: remove outer border, use a left accent rail instead.
+   Depth fades the rail colour so deep nesting stays readable. */
+.card:not([data-depth="0"]) {
+  border: 0;
+  border-left: calc(2px * var(--ui-scale)) solid var(--card-line-dim);
+  border-radius: 0;
+  margin: calc(6px * var(--ui-scale, 1)) 0;
+  background: transparent;
+  opacity: var(--ui-opacity-full);
+}
+.card:not([data-depth="0"]):hover {
+  background: transparent;
+}
+.card[data-depth="2"] { border-left-color: var(--card-line); }
+.card[data-depth="3"] { border-left-color: var(--card-line-dim); }
+.card[data-depth="4"],
+.card[data-depth="5"] { border-left-color: var(--card-line-dim); opacity: var(--ui-opacity-subtle); }
+
+/* ── Header ──────────────────────────────────────────────── */
+
+.card__head {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale, 1));
+  padding: var(--card-pad-y) var(--card-pad-x);
+  background: transparent;
+  border-bottom: var(--oc-border-width) solid transparent;
+  font-size: var(--card-title-size);
+  color: var(--text-strong);
+  user-select: none;
+  cursor: pointer;
+  line-height: 1.35;
+  min-height: calc(34px * var(--ui-scale, 1));
+  box-sizing: border-box;
+}
+.card--expanded > .card__head {
+  border-bottom-color: var(--card-line-dim);
+}
+.card__head--with-meta {
+  align-items: flex-start;
+}
+.card__head[role="button"]:hover {
+  background: color-mix(in srgb, var(--card-bg-hover) 68%, transparent);
+}
+.card:not([data-depth="0"]) .card__head {
+  min-height: calc(28px * var(--ui-scale, 1));
+  padding: calc(6px * var(--ui-scale, 1)) calc(9px * var(--ui-scale, 1));
+}
+
+.card__head[tabindex] {
+  outline: none;
+}
+.card__head[tabindex]:focus-visible {
+  box-shadow: inset 0 0 0 calc(2px * var(--ui-scale)) var(--accent-dim);
+}
+
+.card__main {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.card__title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(7px * var(--ui-scale, 1));
+  flex-wrap: nowrap;
+}
+
+.card__title-spacer {
+  flex: 1 1 auto;
+  min-width: calc(12px * var(--ui-scale));
+}
+
+.card__preview-row {
+  min-width: 0;
+  display: flex;
+  margin-top: calc(3px * var(--ui-scale));
+}
+
+.card__actions {
+  flex: none;
+  min-width: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.card__head--with-meta .card__actions {
+  padding-top: calc(1px * var(--ui-scale));
+}
+
+.card__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: none;
+}
+
+.card__icon {
+  font-size: calc(var(--card-title-size) + calc(1px * var(--ui-scale)));
+  opacity: var(--ui-opacity-subtle);
+  flex: none;
+  line-height: 1;
+}
+
+.card__round {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--card-meta-size);
+  color: var(--text-soft);
+  flex: none;
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  letter-spacing: 0;
+  /* --border carries enough contrast across all themes (≥10% in dark, ≥12%
+     in light, satisfies WCAG AA over the canonical surface). The previous
+     body[data-theme="light"] override is gone — palette token differs by
+     theme on its own. */
+  background: var(--border);
+  border-radius: var(--oc-radius-soft);
+}
+/* Goal index badge — pushed to the LEFT of the title so #G1V1 reads
+ * before the goal name. Slightly stronger contrast than the normal
+ * round chip because it acts as the goal's primary identifier. */
+.card__round--lead {
+  margin-right: calc(4px * var(--ui-scale));
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--card-stage) 90%, var(--text));
+  background: color-mix(in srgb, var(--card-stage) 18%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--card-stage) 28%, transparent);
+}
+
+.card__subtitle {
+  /* Now lives INLINE in the title row (not on its own meta row). Use a
+   * flexible width so a long subtitle doesn't shove the activity stats
+   * off-screen on narrow cards — title gets first dibs, subtitle ellipses. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  font-size: var(--card-sub-size);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--ui-font-weight-body);
+  position: relative;
+  padding-left: calc(10px * var(--ui-scale));
+  margin-left: calc(2px * var(--ui-scale));
+}
+.card__subtitle::before {
+  content: "·";
+  position: absolute;
+  left: calc(2px * var(--ui-scale));
+  color: color-mix(in srgb, var(--text-muted) 60%, transparent);
+}
+
+.card__collapsed-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  font-size: var(--card-sub-size);
+  color: color-mix(in srgb, var(--text-muted) 92%, transparent);
+  font-weight: var(--ui-font-weight-body);
+  /* Hard cap at 3 lines — pinboard with 10+ cards × 10 lines becomes a
+   * wall of text. Short messages render in full (line-clamp doesn't
+   * pad), longer ones truncate with built-in ellipsis. Full payload
+   * lives in the title attribute (hover to read). */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  word-break: break-word;
+  border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--card-stage-info)) 35%, transparent);
+  padding-left: calc(8px * var(--ui-scale));
+}
+
+.card__chevron {
+  flex: none;
+  font-size: calc(10px * var(--ui-scale));
+  color: var(--text-muted);
+  transition: transform var(--ui-duration-base) var(--ui-timing-standard);
+  padding-left: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+}
+
+/* Collapsed-only todo summary — bottom row under the preview line.
+ * Only emitted when the card subtree contains a TodoWrite tool call, so
+ * cards without a plan stay compact. Progress bar stretches to fill the
+ * row so wide cards aren't dominated by 56px of bar in 1000px of space. */
+.card__todo-summary {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--ui-scale));
+  margin-top: calc(4px * var(--ui-scale));
+  min-width: 0;
+  font-size: var(--card-sub-size);
+  color: color-mix(in srgb, var(--text-muted) 90%, transparent);
+  font-weight: var(--ui-font-weight-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.card__todo-progress {
+  flex: 1 1 auto;
+  min-width: calc(60px * var(--ui-scale));
+  max-width: calc(240px * var(--ui-scale));
+  position: relative;
+  height: calc(5px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--text-muted) 20%, transparent);
+  overflow: hidden;
+}
+.card__todo-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--pct, 0%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--text-soft) 70%, transparent),
+    color-mix(in srgb, var(--text) 75%, transparent)
+  );
+  border-radius: inherit;
+  transition: width var(--ui-duration-slow) var(--ui-timing-standard);
+}
+
+.card__todo-count {
+  flex: 0 0 auto;
+  font-size: calc(var(--card-sub-size) - calc(1px * var(--ui-scale)));
+  border-radius: var(--oc-radius-soft);
+  letter-spacing: 0;
+  opacity: var(--ui-opacity-subtle);
+}
+
+.card__todo-current {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-soft);
+}
+
+/* Activity stat foot — sits at the very BOTTOM of the card, below any
+ * body / preview / reply. Compact monochrome pills so the title and body
+ * remain the dominant elements. Per-kind subtle accent via data-kind. */
+.card__foot {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale, 1));
+  padding: calc(6px * var(--ui-scale, 1)) calc(10px * var(--ui-scale, 1));
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--card-border) 60%, transparent);
+  font-size: calc(var(--card-sub-size) - calc(1px * var(--ui-scale, 1)));
+  color: color-mix(in srgb, var(--text-muted) 92%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+.card__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(3px * var(--ui-scale));
+  min-height: calc(18px * var(--ui-scale, 1));
+  padding: 0 calc(5px * var(--ui-scale, 1));
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-2);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 18%, transparent);
+  color: var(--text-muted);
+  box-shadow: none;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+.card__stat[data-kind="messages"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.card__stat[data-kind="tools"] {
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 22%, transparent);
+}
+.card__stat[data-kind="agents"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.card__stat[data-kind="skills"] {
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+  border-color: color-mix(in srgb, var(--good) 24%, transparent);
+}
+
+.card__stat-icon {
+  font-size: calc(var(--card-sub-size) - calc(1px * var(--ui-scale)));
+  line-height: 1;
+  opacity: var(--ui-opacity-subtle);
+}
+
+.card__stat-value {
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--text) 90%, transparent);
+}
+
+.card__copy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(22px * var(--ui-scale, 1));
+  height: calc(22px * var(--ui-scale, 1));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--oc-radius-soft);
+  opacity: var(--ui-opacity-disabled);
+  transition: opacity var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard);
+}
+.card__head:hover .card__copy,
+.card__copy:focus-visible {
+  opacity: var(--ui-opacity-full);
+}
+.card__copy:hover {
+  color: var(--text-strong);
+  background: var(--surface-hover);
+}
+.card__copy--done {
+  color: var(--good);
+  opacity: var(--ui-opacity-full);
+}
+.card__copy + .card__chevron {
+  margin-left: 0;
+}
+
+.card__rewind {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(22px * var(--ui-scale, 1));
+  height: calc(22px * var(--ui-scale, 1));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--oc-radius-soft);
+  opacity: var(--ui-opacity-disabled);
+  font-size: calc(14px * var(--ui-scale));
+  line-height: 1;
+  transition: opacity var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard);
+}
+.card__head:hover .card__rewind,
+.card__rewind:focus-visible {
+  opacity: var(--ui-opacity-full);
+}
+.card__rewind:hover {
+  color: var(--warn);
+  background: var(--surface-hover);
+}
+.card__rewind--pending {
+  opacity: var(--ui-opacity-disabled);
+  pointer-events: none;
+}
+.card__rewind + .card__chevron {
+  margin-left: 0;
+}
+.card--expanded > .card__head .card__chevron {
+  transform: rotate(0deg);
+}
+.card--collapsed > .card__head .card__chevron {
+  transform: rotate(-90deg);
+}
+
+/* ── Badge ───────────────────────────────────────────────── */
+
+.card__badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(18px * var(--ui-scale, 1));
+  height: calc(18px * var(--ui-scale, 1));
+  min-width: calc(18px * var(--ui-scale, 1));
+  padding: 0;
+  border: var(--oc-border-width) solid var(--card-border);
+  border-radius: var(--oc-radius-soft);
+  font-size: calc(10px * var(--ui-scale, 1));
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1;
+  background: var(--surface);
+  color: var(--text-muted);
+  box-shadow: none;
+  letter-spacing: 0;
+}
+.card__badge--done { background: var(--good-dim); color: var(--good); border-color: color-mix(in srgb, var(--good) 28%, transparent); }
+.card__badge--error { background: var(--bad-dim); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
+/* "concerns" — completed but the integrity / fidelity verdict surfaced
+ * non-blocking issues. Distinct from `done` (clean pass) so the operator
+ * sees at a glance which finished cards still need attention. Amber. */
+.card__badge--concerns { background: var(--warn-dim); color: var(--warn); box-shadow: 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--warn) 40%, transparent) inset; }
+/* "cancelled" — finished without producing a result (operator stop, replan
+ * superseded, etc.). Distinct from `error` (real failure) so a red ✗ no
+ * longer collapses three different terminal reasons into one icon.
+ * Outline ⊘ on muted tone. */
+.card__badge--cancelled { background: var(--subtle-1); color: var(--text-muted); box-shadow: 0 0 0 calc(1px * var(--ui-scale)) var(--subtle-5) inset; }
+.card__badge--running { background: var(--accent-dim); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 34%, transparent); }
+.card__badge--pending { background: var(--subtle-3); color: var(--text-muted); box-shadow: 0 0 0 calc(1px * var(--ui-scale)) var(--subtle-4) inset; }
+.card__badge--skipped { background: var(--subtle-2); color: var(--text-muted); }
+.card__badge--neutral { background: transparent; color: transparent; width: calc(6px * var(--ui-scale)); height: calc(6px * var(--ui-scale)); }
+
+.card__spinner {
+  width: calc(10px * var(--ui-scale));
+  height: calc(10px * var(--ui-scale));
+  border-radius: 50%;
+  border: calc(1.6px * var(--ui-scale)) solid var(--warn-dim);
+  border-top-color: var(--warn);
+  animation: card-spin 0.8s linear infinite;
+}
+@keyframes card-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Stage accent (left border) ──────────────────────────── */
+/* Top-level cards: the accent colour is injected as an inline --card-stage
+   CSS variable by <Card> (see card-color.ts / card-tree.ts). Known stages
+   resolve to the palette below via `var(--card-stage-<name>)`; unknown
+   stages (custom subagents) get a deterministic HSL accent.
+   Nested cards inherit their parent container unless they have their own
+   --card-stage set. */
+
+/* iter51: stage rails fold from the prior 14-color palette to
+   the 4 semantic tones declared at :root. Per-stage
+   --card-stage CSS variable injection (set by `Card.tsx` via
+   inline style) still works as an override channel for the
+   rail; without it the rule falls back to --card-stage-info
+   (accent). The depth-0 left-rail thickness drops from 3px
+   to 2px to match the calm/flat trajectory. */
+
+.card[data-depth="0"][data-kind="agent"][data-stage] { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info)); }
+.card[data-depth="0"][data-kind="goal"]              { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-goal)); }
+.card[data-depth="0"][data-kind="step"][data-stage]  { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info)); }
+
+/* iter51: stage colour title tinting dropped — the per-stage
+   hue tints made the conversation a rainbow of agent identities.
+   Title now stays --text-strong; agents are identified by their
+   header label + icon, not by hue. */
+
+/* Nested step cards: use stage accent on the left rail */
+.card:not([data-depth="0"])[data-kind="step"][data-stage] { border-left-color: var(--card-stage); }
+
+/* Tool card: tools use the muted info accent (same as default
+   stage) — pre-iter51 they got their own grey #8f9b96 from
+   --card-stage-tool, which is now retired. */
+.card[data-kind="tool"] { border-left-color: var(--card-stage-info); }
+.card[data-kind="tool"] .card__title-row {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  column-gap: calc(6px * var(--ui-scale, 1));
+  row-gap: calc(2px * var(--ui-scale, 1));
+}
+.card[data-kind="tool"] .card__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  font-family: var(--mono);
+  font-weight: var(--ui-font-weight-medium);
+  font-size: var(--ui-font-small);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+.card[data-kind="tool"] .card__title-spacer {
+  display: none;
+}
+.card[data-kind="tool"] .card__meta-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: calc(4px * var(--ui-scale, 1));
+}
+.card[data-kind="tool"] .card__subtitle {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: none;
+  display: block;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: calc(var(--card-sub-size) - calc(0.2px * var(--ui-scale)));
+  line-height: 1.46;
+  padding-left: 0;
+  margin-left: 0;
+}
+.card[data-kind="tool"] .card__subtitle::before {
+  content: none;
+}
+.card[data-kind="tool"].card--expanded {
+  width: fit-content;
+  max-width: 100%;
+  align-self: flex-start;
+}
+.card[data-kind="tool"].card--expanded .card__main {
+  min-width: min(100%, max-content);
+}
+.card[data-kind="tool"].card--expanded .card__subtitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  display: block;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: calc(var(--card-sub-size) - calc(0.2px * var(--ui-scale)));
+  line-height: 1.46;
+  scrollbar-width: auto;
+}
+
+.card[data-kind="tool"].card--expanded .card__subtitle::-webkit-scrollbar {
+  display: initial;
+}
+
+/* ── Body ────────────────────────────────────────────────── */
+
+.card__body {
+  padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x);
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--card-line-dim) 88%, transparent);
+  background: transparent;
+  font-size: var(--card-sub-size);
+  color: var(--text-strong);
+  line-height: 1.55;
+  min-width: 0;
+}
+.card:not([data-depth="0"]) > .card__body {
+  padding: calc(6px * var(--ui-scale, 1)) calc(8px * var(--ui-scale, 1)) calc(8px * var(--ui-scale, 1)) calc(12px * var(--ui-scale, 1));
+  border-top: none;
+}
+
+.card__children {
+  margin-top: calc(8px * var(--ui-scale, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale, 1));
+  min-width: 0;
+}
+
+.card__body-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: calc(var(--card-pad-y) + calc(4px * var(--ui-scale)));
+  padding-top: calc(2px * var(--ui-scale));
+}
+
+.card__collapse-toggle {
+  width: min(calc(240px * var(--ui-scale)), 74%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: var(--card-meta-size);
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.card__collapse-toggle::before,
+.card__collapse-toggle::after {
+  content: "";
+  flex: 1 1 0;
+  height: calc(1px * var(--ui-scale));
+}
+
+.card__collapse-toggle::before {
+  background: linear-gradient(90deg, transparent, var(--card-line-dim));
+}
+
+.card__collapse-toggle::after {
+  background: linear-gradient(90deg, var(--card-line-dim), transparent);
+}
+
+.card__collapse-toggle:hover,
+.card__collapse-toggle:focus-visible {
+  color: var(--text-strong);
+}
+
+.card__collapse-toggle:focus-visible {
+  outline: none;
+}
+
+.card__collapse-toggle-icon {
+  --card-collapse-stage: var(--card-stage, var(--card-stage-info));
+
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  color: color-mix(in srgb, var(--card-collapse-stage) 86%, var(--text-strong));
+  background: color-mix(in srgb, var(--card-collapse-stage) 14%, var(--surface-hover));
+  box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-collapse-stage) 32%, var(--card-line));
+  transition: color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard), box-shadow var(--ui-duration-base) var(--ui-timing-standard), transform var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.card__collapse-toggle:hover .card__collapse-toggle-icon,
+.card__collapse-toggle:focus-visible .card__collapse-toggle-icon {
+  color: var(--card-collapse-stage);
+  background: color-mix(in srgb, var(--card-collapse-stage) 18%, transparent);
+  box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-collapse-stage) 42%, var(--card-line));
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.card__collapse-toggle svg {
+  flex: none;
+}
+
+.card__collapse-toggle-label {
+  flex: none;
+  color: var(--text-strong);
+  font-weight: var(--ui-font-weight-medium);
+  transition: color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.card__collapse-toggle:hover .card__collapse-toggle-label,
+.card__collapse-toggle:focus-visible .card__collapse-toggle-label {
+  color: var(--text-strong);
+}
+
+/* ── Goal preamble ───────────────────────────────────────── */
+
+.card__goal-desc {
+  margin: calc(6px * var(--ui-scale)) 0 calc(12px * var(--ui-scale)) 0;
+  padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--card-stage) 10%, transparent), transparent 72%),
+    color-mix(in srgb, var(--card-bg-1) 92%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--card-stage) 16%, var(--card-border));
+  border-radius: var(--oc-radius-large);
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--subtle-1);
+}
+
+.card__goal-desc-label {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: calc(7px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--card-stage) 16%, transparent);
+  color: color-mix(in srgb, var(--card-stage) 78%, var(--text-muted));
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-medium);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card__goal-desc-text,
+.card__goal-desc-text .msg-text {
+  color: var(--text);
+  font-size: var(--ui-font-small);
+  line-height: 1.7;
+}
+
+.card__goal-desc-text .msg-text,
+.card__goal-desc-text .md-frozen-block,
+.card__goal-desc-text .md-active-block {
+  margin: 0;
+}
+
+.card__goal-desc-text .msg-text > :first-child {
+  margin-top: 0;
+}
+
+.card__goal-desc-text .msg-text > :last-child {
+  margin-bottom: 0;
+}
+
+.card[data-kind="step"] > .card__body > .msg-text {
+  position: relative;
+  margin: calc(10px * var(--ui-scale)) 0 0;
+  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--card-stage) 8%, transparent), transparent 74%),
+    color-mix(in srgb, var(--card-bg-1) 94%, transparent);
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--subtle-1);
+}
+
+.card[data-kind="step"] > .card__body > .msg-text::before {
+  content: "";
+  position: absolute;
+  left: calc(10px * var(--ui-scale));
+  top: calc(14px * var(--ui-scale));
+  bottom: calc(14px * var(--ui-scale));
+  width: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--card-stage) 58%, transparent);
+}
+
+.card[data-kind="step"] > .card__body > .msg-text > :first-child {
+  margin-top: 0;
+}
+
+.card[data-kind="step"] > .card__body > .msg-text > :last-child {
+  margin-bottom: 0;
+}
+
+/* ── Boundary separator between flattened messages ──────── */
+
+.card-boundary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-gap-sm);
+  padding: calc(3px * var(--ui-scale)) 0 calc(2px * var(--ui-scale)) 0;
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.card-boundary:not(:first-child) {
+  margin-top: calc(6px * var(--ui-scale));
+  padding-top: calc(6px * var(--ui-scale));
+  border-top: var(--oc-border-width) dashed var(--card-line-dim);
+}
+.card-boundary-role {
+  font-weight: var(--ui-font-weight-strong);
+}
+.card-boundary-time {
+  font-variant-numeric: tabular-nums;
+  opacity: var(--ui-opacity-dim);
+}
+
+/* ── Message bubble variant (kind=message, role=user/system) ── */
+
+.card[data-kind="message"] {
+  border: var(--oc-border-width) solid var(--card-border);
+  border-color: var(--card-border);
+  background: var(--surface-inset);
+}
+
+.card[data-depth="0"][data-kind="message"] > .card__head {
+  min-height: calc(34px * var(--ui-scale, 1));
+  padding-bottom: 2px;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.card[data-depth="0"][data-kind="message"] > .card__body {
+  border-bottom: 0;
+  padding-top: 0;
+}
+
+/* User: accent bubble — solid left rail, stronger tint, accent title. */
+.card[data-kind="message"][data-role="user"] {
+  background: var(--accent-dim);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  border-left: calc(3px * var(--ui-scale)) solid var(--accent);
+  box-shadow: none;
+}
+.card[data-kind="message"][data-role="user"] > .card__head {
+  cursor: default;
+  padding-bottom: calc(2px * var(--ui-scale));
+}
+.card[data-kind="message"][data-role="user"] > .card__head .card__badge,
+.card[data-kind="message"][data-role="user"] > .card__head .card__chevron {
+  display: none;
+}
+.card[data-kind="message"][data-role="user"] > .card__head .card__title {
+  color: var(--text-strong);
+  font-weight: var(--ui-font-weight-strong);
+}
+.card[data-kind="message"][data-role="user"] > .card__body {
+  border-top: none;
+  padding-top: 0;
+  color: var(--text-strong);
+}
+
+/* System: muted meta-note — dashed left rail, faint amber tint, tiny uppercase title. */
+.card[data-kind="message"][data-role="system"] {
+  background: var(--card-system-bg);
+  border-color: var(--card-system-border);
+  border-left: calc(2px * var(--ui-scale)) solid var(--card-system-rail);
+  box-shadow: none;
+}
+.card[data-kind="message"][data-role="system"] > .card__head {
+  padding-bottom: calc(2px * var(--ui-scale));
+}
+.card[data-kind="message"][data-role="system"] > .card__head .card__title {
+  font-size: var(--ui-font-tiny);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--card-system-rail);
+  font-weight: var(--ui-font-weight-strong);
+}
+.card[data-kind="message"][data-role="system"] > .card__head .card__badge {
+  display: none;
+}
+.card[data-kind="message"][data-role="system"] > .card__body {
+  border-top: none;
+  padding-top: 0;
+  color: var(--text-soft);
+  font-style: italic;
+}
+
+/* ── Compatibility: make sure inline tool chips inside a card
+      still look okay (they were styled against .msg-bubble before).
+      Most rules are already in styles.css; only tweak spacing here. ── */
+
+.card__body .msg-tool {
+  margin: calc(2px * var(--ui-scale)) 0;
+}
+.card__body .msg-text {
+  margin: calc(2px * var(--ui-scale)) 0;
+}
+
+/* ── Context-token hint ──
+   Low-contrast metadata slot inside the card header, placed to the right
+   of the title before the copy / chevron controls. Earlier revisions
+   absolutely-positioned this to the card's bottom-right, which read as
+   floating debris against the card border; keeping it in the header flow
+   aligns it with the status/title row. */
+.card__token-hint {
+  padding: 0 calc(6px * var(--ui-scale));
+  font-size: calc(10px * var(--ui-scale));
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--oc-radius-soft);
+  letter-spacing: 0;
+  color: var(--text-soft);
+  opacity: var(--ui-opacity-faint);
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+.card__head:hover .card__token-hint {
+  opacity: var(--ui-opacity-dim);
+}
+
+/* card__usage-hint — sibling of card__token-hint that surfaces actual LLM
+   usage (input/output/total tokens + USD cost) emitted by the executor via
+   `usage.updated`. Sits to the right of the context-token estimate so the
+   operator gets both "what fits in the prompt window" and "what we
+   actually spent". Same low-contrast treatment so it doesn't fight the
+   title row. */
+.card__usage-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale));
+  font-size: calc(10px * var(--ui-scale));
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--text-soft);
+  opacity: var(--ui-opacity-disabled);
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+.card__head:hover .card__usage-hint {
+  opacity: var(--ui-opacity-subtle);
+}
+.card__usage-cost {
+  color: var(--accent);
+  opacity: var(--ui-opacity-subtle);
+}
+
+/* card__duration — running-or-finished elapsed time chip, rendered inline
+   right after the agent name in the title row. Subtle palette so the
+   title stays the dominant element; hover lifts opacity for legibility. */
+.card__duration {
+  flex: 0 0 auto;
+  padding: 0 calc(4px * var(--ui-scale));
+  font-size: calc(10px * var(--ui-scale));
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  opacity: var(--ui-opacity-dim);
+  white-space: nowrap;
+  user-select: none;
+}
+.card__head:hover .card__duration {
+  opacity: var(--ui-opacity-subtle);
+}
+
+/* card__error-reason — clickable button-styled chip on cards that flipped
+   to status="error". Lives in the title row so the operator sees WHY a
+   session failed without expanding the card. Truncates with ellipsis;
+   the full reason lives in the title tooltip and click copies it to the
+   clipboard for pasting into a bug report. data-copied flips to --good
+   for the 1.2s feedback window. */
+.card__error-reason {
+  display: inline-block;
+  max-width: clamp(calc(160px * var(--ui-scale)), 50%, calc(420px * var(--ui-scale)));
+  padding: 0 calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 32%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: var(--bad-dim);
+  color: var(--bad);
+  font: inherit;
+  font-size: var(--card-sub-size);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: text;
+  cursor: pointer;
+  transition: background var(--ui-duration-base), color var(--ui-duration-base), border-color var(--ui-duration-base);
+}
+.card__error-reason:hover {
+  background: color-mix(in srgb, var(--bad) 28%, transparent);
+}
+.card__error-reason:focus-visible {
+  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--bad) 60%, transparent);
+  outline-offset: calc(1px * var(--ui-scale));
+}
+.card__error-reason--copied {
+  background: var(--good-dim);
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 50%, transparent);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Interaction Card
+   Self-contained system-prompt card for pending permission /
+   question interactions. Rendered inline in the conversation
+   timeline (CardParts) and in the workflow sidebar (Board);
+   identical visual treatment in both surfaces, sharing the same
+   --card-* design vars as the agent / goal cards above so the
+   whole conversation reads as one design system.
+   ───────────────────────────────────────────────────────────── */
+
+.interaction-card {
+  display: block;
+  min-width: var(--card-min-inline-size);
+  max-width: 100%;
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 28%, var(--card-border));
+  border-left: calc(3px * var(--ui-scale, 1)) solid var(--card-stage, var(--card-stage-info));
+  padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x);
+  margin: var(--card-gap) 0;
+  font-size: var(--card-title-size);
+  color: var(--text);
+  box-sizing: border-box;
+  box-shadow: none;
+}
+.interaction-card[data-kind="interaction-permission"] {
+  --card-stage: var(--accent);
+}
+.interaction-card[data-kind="interaction-question"] {
+  --card-stage: var(--warn);
+}
+
+.interaction-card__title {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  font-size: var(--card-title-size);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--card-stage);
+  margin-bottom: calc(6px * var(--ui-scale));
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+.interaction-card__icon {
+  font-size: var(--card-title-size);
+  line-height: 1;
+}
+
+.interaction-card__body {
+  font-size: var(--card-sub-size);
+  color: var(--text);
+  margin-bottom: calc(8px * var(--ui-scale));
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.interaction-card__error {
+  font-size: var(--card-sub-size);
+  color: var(--bad);
+  margin-bottom: calc(6px * var(--ui-scale));
+}
+
+.interaction-card__questions {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+  margin-bottom: calc(8px * var(--ui-scale));
+}
+.interaction-card__question {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+}
+.interaction-card__question-text {
+  font-size: var(--card-sub-size);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text);
+}
+.interaction-card__options {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) 0;
+}
+.interaction-card__option {
+  display: flex;
+  align-items: baseline;
+  gap: calc(6px * var(--ui-scale));
+  font-size: var(--card-sub-size);
+  color: var(--text);
+  cursor: pointer;
+}
+.interaction-card__option input { cursor: pointer; }
+.interaction-card__option-label { font-weight: var(--ui-font-weight-medium); }
+.interaction-card__option-desc {
+  color: var(--text-muted);
+  font-size: var(--card-meta-size);
+}
+.interaction-card__custom-input {
+  width: 100%;
+  font-family: inherit;
+  font-size: var(--card-sub-size);
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--card-border);
+  background: var(--surface-inset);
+  color: var(--text);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.interaction-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--ui-scale));
+  margin-top: calc(4px * var(--ui-scale));
+}
+.interaction-card__actions .btn {
+  padding: calc(3px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  font-size: var(--card-sub-size);
+}
+.interaction-card__option:focus-within {
+  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 56%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+}
+.interaction-card__actions .btn:focus-visible {
+  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
+}
+
+/* Sidebar list wrapper used by Board's "interactions" section. */
+.interaction-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap);
+}
+
+
+/* ── AgentTrace surface (per-session 🔍 button + inline TracePanel) ── */
+
+.card__trace,
+.card__agent-cancel,
+.card__agent-reply-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(22px * var(--ui-scale, 1));
+  height: calc(22px * var(--ui-scale, 1));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--oc-radius-soft);
+  opacity: var(--ui-opacity-disabled);
+  transition: opacity var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard);
+}
+.card__head:hover .card__trace,
+.card__head:hover .card__agent-cancel,
+.card__head:hover .card__agent-reply-toggle,
+.card__trace:focus-visible,
+.card__agent-cancel:focus-visible,
+.card__agent-reply-toggle:focus-visible,
+.card__trace--open {
+  opacity: var(--ui-opacity-full);
+}
+.card__trace:hover {
+  color: var(--accent);
+  background: var(--surface-hover);
+}
+.card__agent-cancel:hover {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+}
+.card__agent-cancel:disabled {
+  cursor: default;
+  opacity: var(--ui-opacity-disabled);
+}
+.card__trace--open {
+  color: var(--accent);
+  background: var(--surface-hover);
+  opacity: var(--ui-opacity-full);
+}
+.card__trace + .card__chevron,
+.card__agent-cancel + .card__chevron {
+  margin-left: 0;
+}
+
+/* Inline reply box at the END of agent session card body. Renders via
+   <AgentSessionReplyBox/> in Card.tsx; spans full width of the card body. */
+.card__agent-reply {
+  display: flex;
+  flex-direction: column;
+  gap: calc(7px * var(--ui-scale));
+  margin-top: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  border: var(--oc-border-width) solid var(--border);
+  cursor: default;
+}
+
+.card__agent-reply-input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: calc(64px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  line-height: 1.45;
+  user-select: text;
+}
+
+.card__agent-reply-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.card__agent-reply-send {
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: var(--oc-radius-pill);
+  padding: calc(4px * var(--ui-scale)) calc(11px * var(--ui-scale));
+  font-size: var(--card-sub-size);
+  font-weight: var(--ui-font-weight-strong);
+  cursor: pointer;
+  color: var(--surface);
+  background: var(--accent);
+}
+
+.card__agent-reply-send:disabled {
+  cursor: default;
+  opacity: var(--ui-opacity-disabled);
+}
+
+/* Reply send-failure chip — sits above the action row so the operator's
+   eye lands on it before they retry. Dismissable so a stale error
+   message doesn't follow the next attempt. */
+.card__agent-reply-error {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(6px * var(--ui-scale));
+  margin-top: calc(6px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  background: var(--bad-dim);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 36%, transparent);
+  color: var(--bad);
+  font-size: var(--card-sub-size);
+  line-height: 1.4;
+}
+.card__agent-reply-error-msg {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.card__agent-reply-error-dismiss {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--bad);
+  cursor: pointer;
+  font-size: calc(14px * var(--ui-scale));
+  line-height: 1;
+  padding: 0 calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+}
+.card__agent-reply-error-dismiss:hover {
+  background: color-mix(in srgb, var(--bad) 18%, transparent);
+}
+
+.trace-panel {
+  margin: calc(8px * var(--ui-scale)) 0 calc(12px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  font-size: calc(12px * var(--ui-scale));
+  color: var(--text);
+  /* display:flex flex-direction:column removed — oc-panel provides those */
+  max-height: calc(480px * var(--ui-scale));
+  overflow: hidden;
+  box-shadow: none;
+}
+/* trace-panel-head replaced by oc-panel__header override */
+.trace-panel > .oc-panel__header {
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  background: var(--surface);
+}
+.trace-panel-title {
+  font-weight: var(--ui-font-weight-strong);
+  font-size: calc(12px * var(--ui-scale));
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+}
+.trace-panel-actions {
+  display: inline-flex;
+  gap: calc(4px * var(--ui-scale));
+}
+.trace-panel-refresh,
+.trace-panel-close,
+.trace-panel-copy {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  font-size: calc(12px * var(--ui-scale));
+  line-height: 1;
+}
+.trace-panel-refresh:hover,
+.trace-panel-close:hover,
+.trace-panel-copy:hover:not([disabled]) {
+  color: var(--text-strong);
+  background: var(--surface-hover);
+}
+.trace-panel-copy[disabled] {
+  opacity: var(--ui-opacity-faint);
+  cursor: not-allowed;
+}
+.trace-panel-copy[data-state="ok"] {
+  color: var(--good);
+}
+.trace-panel-copy[data-state="err"] {
+  color: var(--bad);
+}
+.trace-panel-empty {
+  padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  font-size: calc(12px * var(--ui-scale));
+  color: var(--text-muted);
+}
+.trace-panel-empty code {
+  font-family: var(--font-mono);
+  font-size: calc(11px * var(--ui-scale));
+  background: var(--subtle-2);
+  padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+}
+.trace-panel-body {
+  /* overflow-y:auto removed — oc-panel__body handles that */
+  padding: calc(4px * var(--ui-scale)) 0;
+}
+
+.trace-event {
+  border-bottom: var(--oc-border-width) solid var(--border);
+}
+.trace-event:last-child { border-bottom: 0; }
+.trace-event-head {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  width: 100%;
+  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: calc(11.5px * var(--ui-scale));
+  cursor: pointer;
+  text-align: left;
+}
+.trace-event-head:hover {
+  background: var(--surface-hover);
+}
+.trace-event-ts {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.trace-event-kind {
+  color: var(--text-strong);
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trace-event-sid {
+  color: var(--text-muted);
+  flex: none;
+  font-size: calc(11px * var(--ui-scale));
+}
+.trace-event[data-kind="llm_request"] .trace-event-kind { color: var(--accent); }
+.trace-event[data-kind="agent_report"] .trace-event-kind,
+.trace-event[data-kind="agent_report_retry_final"] .trace-event-kind,
+.trace-event[data-kind="orchestrator_wake"] .trace-event-kind { color: var(--good); }
+.trace-event[data-kind="agent_report_failure"] .trace-event-kind,
+.trace-event[data-kind="orchestrator_wake_failure"] .trace-event-kind { color: var(--bad); }
+.trace-event[data-kind="helper_llm_call"] .trace-event-kind { color: var(--accent); }
+.trace-event-chevron {
+  color: var(--text-muted);
+  flex: none;
+  font-size: calc(10px * var(--ui-scale));
+}
+.trace-event-body {
+  margin: 0;
+  padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale)) calc(28px * var(--ui-scale));
+  font-family: var(--font-mono);
+  font-size: calc(11px * var(--ui-scale));
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--subtle-1);
+  max-height: calc(360px * var(--ui-scale));
+  overflow-y: auto;
+}
+
+/* ==========================================================================
+   Overlay Workbench Card Redesign
+   Final card layer: compact timeline rows, explicit status rails, no lifted
+   decorative card stack. Conversation items should scan like an event log.
+   ========================================================================== */
+
+/* ── Task progress bar ───────────────────────────────────────
+ * Sticky one-row overview of every architect-emitted goal,
+ * including pending ones. Lives at the top of the conversation
+ * panel so the operator can see "where are we in the task" at
+ * a glance. Pills jump to the corresponding goal card on click.
+ */
+.task-progress {
+  position: sticky;
+  top: 0;
+  z-index: var(--ui-z-sticky);
+  margin: 0 0 var(--card-gap) 0;
+  padding: calc(8px * var(--ui-scale, 1)) calc(10px * var(--ui-scale, 1));
+  background: color-mix(in srgb, var(--card-bg-1) 92%, var(--bg));
+  border: var(--oc-border-width) solid var(--card-border);
+  border-radius: var(--oc-radius-soft);
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  font-size: var(--card-meta-size);
+  color: var(--text-soft);
+  backdrop-filter: blur(calc(6px * var(--ui-scale)));
+}
+
+.task-progress__header {
+  display: flex;
+  align-items: baseline;
+  gap: calc(8px * var(--ui-scale));
+}
+.task-progress__heading {
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
+}
+.task-progress__summary {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.task-progress__bar {
+  position: relative;
+  height: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  overflow: hidden;
+}
+.task-progress__bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--good) 80%, transparent),
+    color-mix(in srgb, var(--good) 100%, transparent)
+  );
+  transition: width var(--ui-duration-slow) var(--ui-timing-standard);
+}
+.task-progress__bar-fail {
+  position: absolute;
+  inset: 0 0 0 auto;
+  background: color-mix(in srgb, var(--bad) 80%, transparent);
+}
+
+.task-progress__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.task-progress__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  border: var(--oc-border-width) solid var(--card-border);
+  background: var(--card-bg-0);
+  color: var(--text-soft);
+  font-size: calc(var(--card-meta-size) - calc(0.5px * var(--ui-scale)));
+  cursor: pointer;
+  max-width: 18rem;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color var(--ui-duration-base) var(--ui-timing-standard), border-color var(--ui-duration-base) var(--ui-timing-standard), color var(--ui-duration-base) var(--ui-timing-standard);
+}
+.task-progress__pill:hover {
+  background: var(--card-bg-hover);
+  border-color: var(--card-border-strong);
+  color: var(--text-strong);
+}
+.task-progress__pill-id {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.02em;
+  font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
+  color: color-mix(in srgb, var(--text-muted) 92%, var(--text-soft));
+}
+.task-progress__pill-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* state colours echo the badge palette so the progress strip and
+ * the per-card badges stay visually consistent. */
+.task-progress__pill[data-state="passed"] {
+  background: color-mix(in srgb, var(--good) 18%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--good) 35%, var(--card-border));
+  color: color-mix(in srgb, var(--good) 80%, var(--text-strong));
+}
+.task-progress__pill[data-state="failed"] {
+  background: color-mix(in srgb, var(--bad) 16%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--bad) 32%, var(--card-border));
+  color: color-mix(in srgb, var(--bad) 75%, var(--text-strong));
+}
+.task-progress__pill[data-state="running"] {
+  background: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--warn) 36%, var(--card-border));
+  color: color-mix(in srgb, var(--warn) 70%, var(--text-strong));
+  animation: task-progress-pulse 1.6s ease-in-out infinite;
+}
+.task-progress__pill[data-state="blocked"] {
+  background: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--warn) 32%, var(--card-border));
+  color: color-mix(in srgb, var(--warn) 75%, var(--text-strong));
+}
+.task-progress__pill[data-state="pending"] {
+  opacity: var(--ui-opacity-dim);
+}
+
+@keyframes task-progress-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 30%, transparent); }
+  50% { box-shadow: 0 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--warn) 5%, transparent); }
+}

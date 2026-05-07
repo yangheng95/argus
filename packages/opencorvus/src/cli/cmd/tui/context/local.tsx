@@ -13,6 +13,9 @@ import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui-local" })
 
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
@@ -144,14 +147,18 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           if (Array.isArray(x.favorite)) setModelStore("favorite", x.favorite)
           if (typeof x.variant === "object" && x.variant !== null) setModelStore("variant", x.variant)
         })
-        .catch(() => {})
+        .catch((err: any) => {
+          if (err?.code !== "ENOENT") {
+            log.warn("failed to load model store", { path: filePath, error: err instanceof Error ? err.message : String(err) })
+          }
+        })
         .finally(() => {
           setModelStore("ready", true)
           if (state.pending) save()
         })
 
       const args = useArgs()
-      const fallbackModel = createMemo(() => {
+      const defaultModel = createMemo(() => {
         if (args.model) {
           const { providerID, modelID } = Provider.parseModel(args.model)
           if (isModelValid({ providerID, modelID })) {
@@ -172,22 +179,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
         }
 
-        for (const item of modelStore.recent) {
-          if (isModelValid(item)) {
-            return item
-          }
-        }
-
-        const provider = sync.data.provider[0]
-        if (!provider) return undefined
-        const defaultModel = sync.data.provider_default[provider.id]
-        const firstModel = Object.values(provider.models)[0]
-        const model = defaultModel ?? firstModel?.id
-        if (!model) return undefined
-        return {
-          providerID: provider.id,
-          modelID: model,
-        }
+        // Recent/favorite state is UI convenience only. Runtime defaults must
+        // come from explicit CLI/config model selection so switching models in
+        // the picker cannot silently change later turns.
       })
 
       const currentModel = createMemo(() => {
@@ -196,7 +190,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           getFirstValidModel(
             () => modelStore.model[a.name],
             () => a.model,
-            fallbackModel,
+            defaultModel,
           ) ?? undefined
         )
       })

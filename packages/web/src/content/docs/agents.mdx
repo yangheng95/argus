@@ -1,0 +1,95 @@
+---
+title: Agents
+description: Primary, sub, and stage agents in OpenCorvus, plus per-agent model and budget keys.
+---
+
+OpenCorvus's orchestration is built around **agents**. The agent registry — names, modes, default prompts, tool whitelists, permission rulesets — lives in `packages/opencorvus/src/agent/agent.ts` (`Agent.state()`).
+
+## Built-in agents
+
+The registry currently ships with the agents below. `mode` controls how the agent is invoked: `primary` runs as the top-of-stack agent in a session; `subagent` is dispatched by another agent via the `task` tool. Agents marked `hidden` are routing slots — not selectable from the picker, but their model / prompt can still be overridden in config.
+
+| Agent | Mode | Purpose |
+|---|---|---|
+| `build` | primary | Default agent. Executes tools (read / edit / bash / mirror toolchain) under the configured permission ruleset. |
+| `general` | subagent | General-purpose multi-step research / parallel-work agent. Dispatched via the `task` tool. |
+| `explore` | subagent | Codebase exploration — fast file / code search, read-only by default. |
+| `planner` | subagent | Per-goal implementation planner. Reads the GoalContract + Architect decisions, emits a stepwise plan that `build` then implements. |
+| `delivery` | primary (hidden) | Delivery verification agent. Checks runtime behavior and makes acceptance decisions; can dispatch per-goal review subagents. |
+| `orchestrator` | primary (hidden) | Master agent. Drives the end-to-end task lifecycle through one of the workflows (direct or pipeline) by calling dispatch tools (`build`, `requirements`, `architect`, `deliver`, etc.). |
+| `requirements` | primary (hidden) | Requirements stage. Decomposes the user request into typed `GoalContract`s with acceptance specs. |
+
+Other registered agents (`architect`, `design-analyst`, `intent-analysis`, `integrity`, `prosecutor`, `summary`, `title`, `compaction`) are stage / utility slots invoked internally by the orchestrator or session loop. They surface in config (model + prompt overrides) but are not user-selectable.
+
+See `packages/opencorvus/src/agent/agent.ts:144-463` for the canonical definitions.
+
+## Sub-agent dispatch
+
+Sub-agents are dispatched via the **`task`** tool (or a typed dispatch tool such as `build` / `requirements` / `architect` for the orchestrator's whitelisted list). Each sub-agent runs its own session; the orchestrator does not wrap a "next session" around an existing sub-agent's session.
+
+When the orchestrator runs a workflow that fans out per goal (the `pipeline` workflow), each goal is built in its own Goal worktree and merged back via fast-forward only.
+
+## Per-agent model
+
+Each agent's model is set under `agent.<name>.model` — see `packages/opencorvus/src/config/config.ts:1053-1067` (`agent` is `z.object({...}).catchall(Agent)`). The describe lines on the related `assistant.<name>` blocks call this out explicitly (e.g. `config.ts:1191`, `1232`, `1239`, `1246`).
+
+```jsonc
+{
+  "agent": {
+    "build":        { "model": "anthropic/claude-sonnet-4-6" },
+    "planner":      { "model": "anthropic/claude-sonnet-4-6" },
+    "design-analyst": { "model": "anthropic/claude-sonnet-4-6" }
+  }
+}
+```
+
+For agent names containing a hyphen (`design-analyst`, `intent-analysis`) the JSON key must be quoted: `"design-analyst"`.
+
+## Defining a custom agent
+
+You can define agents inline in your config or as markdown under `~/.config/opencorvus/agents/` or `.opencorvus/agents/`:
+
+```jsonc
+{
+  "agent": {
+    "code-reviewer": {
+      "description": "Reviews code for best practices and potential issues",
+      "model": "anthropic/claude-sonnet-4-6",
+      "prompt": "You are a code reviewer. Focus on security, performance, maintainability.",
+      "tools": { "write": false, "edit": false }
+    }
+  }
+}
+```
+
+Custom agents inherit the default permission ruleset (built up in `Agent.state()` from the `defaults` block at `agent.ts:77-140`).
+
+## Default agent
+
+Set `default_agent` to pick the agent used when none is specified explicitly. Must be a primary, non-hidden agent — `Agent.defaultAgent()` (`agent.ts:570-585`) rejects subagent / hidden choices.
+
+## Agent budgets
+
+Per-agent step budgets and skill paths live under `assistant.<name>` (config.ts:1176-1283):
+
+```jsonc
+{
+  "assistant": {
+    "requirements":   { "max_steps": 20 },
+    "architect":      { "max_steps": 40 },
+    "planner":        { "max_steps": 40 },
+    "delivery":       { "max_steps": 160, "max_retries": 3 },
+    "design_analyst": { "max_steps": 30 },
+    "intent_analysis": { "max_steps": 10 },
+    "build":          { "max_steps": 80 }
+  }
+}
+```
+
+Top-level orchestrator budgets sit directly on `assistant` (config.ts:1255-1257):
+
+- `assistant.max_runs` — maximum total task runs
+- `assistant.max_fix_runs` — maximum fix runs after failure
+- `assistant.max_executor_groups` — maximum parallel executor groups
+
+These are hard ceilings to prevent runaway loops. See [config](/docs/config/).

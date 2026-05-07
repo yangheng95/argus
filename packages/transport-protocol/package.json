@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@opencorvus-ai/transport-protocol",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "postMessage envelope schema shared by the VS Code extension host and the overlay webview",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "@types/node": "catalog:"
+  }
+}

@@ -1,0 +1,1965 @@
+import { Identifier } from "@/id/id"
+import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil } from "./lease"
+
+/** Input shape for persisting a requirement extracted by the Requirements agent into
+ *  engine_requirement. Mirrors the table columns plus an optional
+ *  check_selector stored inside metadata. */
+export interface Requirement {
+  id: string
+  title: string
+  description: string
+  acceptance: string[]
+  evidence_refs: string[]
+  non_goals?: string[]
+  priority?: "blocking" | "advisory"
+  check_selector?: string[]
+  metadata?: Record<string, unknown>
+}
+import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
+import { writeEvaluationSnapshot } from "@/engine/docs"
+import { Database, and, desc, eq, inArray, isNull, lte, or } from "@/storage/db"
+import { Log } from "@/util/log"
+import { Event } from "./model"
+import {
+  EngineArtifactTable,
+  EngineExecutorSessionTable,
+  EngineGoalTable,
+  EnginePlanNodeTable,
+  EnginePlanVersionTable,
+  EngineRequirementTable,
+  EngineTaskTable,
+  type EngineDeliveryStatus,
+  type EngineArtifactKind,
+} from "./engine.sql"
+import { persistEvidence } from "@/verification/persist"
+import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
+import { EngineProtocol } from "./protocol"
+import { findGoal, findGoalLatestWorkspace, findGoalRun, findLatestTipGoalRun, findPlan, listGoalRunsByGoal, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { syncGoalStatus } from "./goal-status"
+import { createDecisionLog } from "@/decision-log"
+
+const log = Log.create({ service: "engine-transition" })
+
+/**
+ * Derive a human-readable slug from a goal title. Display-only — goal_id
+ * remains the sole identity. Immutable once set.
+ */
+export function goalSlug(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "goal"
+}
+
+interface GoalRowInput {
+  goalID?: string
+  title: string
+  objective: string
+  acceptance_specs: import("@/acceptance/types").AcceptanceSpec[]
+  owned_paths?: string[]
+  depends_on?: string[]
+  exports?: string[]
+  imports?: string[]
+  kind?: string
+  requirement_ids?: string[]
+  priority?: "blocking" | "advisory"
+  source?: "spec" | "system"
+  metadata?: Record<string, unknown>
+}
+
+export function insertGoalRows(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    specSnapshotID: string
+    planVersionID?: string
+    goals: GoalRowInput[]
+    now: number
+  },
+) {
+  return input.goals.map((goal, index) => {
+    const goalID = goal.goalID ?? Identifier.ascending("goal")
+    const deps = goal.depends_on ?? []
+    const metadata =
+      goal.metadata && typeof goal.metadata === "object" && !Array.isArray(goal.metadata)
+        ? goal.metadata
+        : undefined
+    db.insert(EngineGoalTable)
+      .values({
+        id: goalID,
+        task_id: input.taskID,
+        plan_version_id: input.planVersionID ?? null,
+        spec_snapshot_id: input.specSnapshotID,
+        title: goal.title,
+        slug: goalSlug(goal.title),
+        objective: goal.objective,
+        acceptance_specs: goal.acceptance_specs,
+        owned_paths: goal.owned_paths ?? [],
+        depends_on: deps,
+        exports: goal.exports ?? [],
+        imports: goal.imports ?? [],
+        kind: goal.kind ?? "feature",
+        requirement_ids: goal.requirement_ids ?? [],
+        metadata: {
+          ...metadata,
+          depends_on_goal_ids: deps.length > 0 ? deps : undefined,
+        },
+        priority: goal.priority ?? "blocking",
+        source: goal.source ?? "spec",
+        order_index: index,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    return {
+      id: goalID,
+      title: goal.title,
+      objective: goal.objective,
+      acceptance_specs: goal.acceptance_specs,
+      priority: goal.priority,
+      metadata,
+    }
+  })
+}
+
+/**
+ * Architect-driven goal upsert.
+ *
+ * Sole persistence path from the Architect's goal set into engine_goal. Computes
+ * a diff against the existing rows for the task and applies INSERT / UPDATE /
+ * DELETE atomically:
+ *
+ *   • id matches an existing row                       → UPDATE contract fields
+ *   • id is not in DB and not in `removedLLMIDs`       → INSERT as new goal
+ *   • existing row whose id is in `removedLLMIDs`      → DELETE row
+ *   • existing row not referenced at all               → kept as-is
+ *
+ * The Architect emits a mix of DB ids (seeded from the current row set) and
+ * fresh LLM ids (for newly registered goals). `depends_on` may point at either,
+ * so we build an LLM-id → DB-id map once and rewrite deps before each write.
+ *
+ * Returns the final goal set as DB rows plus the id translation map (empty
+ * values for pure identity mappings).
+ */
+export function upsertGoalsFromArchitect(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    specSnapshotID: string
+    architectGoals: Array<GoalRowInput & { llmID: string }>
+    removedLLMIDs: string[]
+    now: number
+  },
+): {
+  persisted: Array<{ id: string; title: string; llmID: string }>
+  llmToDBID: Map<string, string>
+  deletedIDs: string[]
+} {
+  const existing = listGoals(input.taskID)
+  const existingByID = new Map(existing.map((g) => [g.id, g]))
+  const maxExistingOrderIndex = existing.reduce(
+    (max, goal) => Math.max(max, goal.order_index),
+    -1,
+  )
+  let nextNewOrderIndex = maxExistingOrderIndex + 1
+
+  // First pass: assign DB ids for every goal in the Architect output. Existing
+  // ids stay the same; fresh LLM ids get a new DB id. Builds the id map that
+  // the second pass consults when rewriting depends_on.
+  const llmToDBID = new Map<string, string>()
+  const plan: Array<{ llmID: string; dbID: string; isNew: boolean; goal: GoalRowInput }> = []
+  for (const goal of input.architectGoals) {
+    if (existingByID.has(goal.llmID)) {
+      llmToDBID.set(goal.llmID, goal.llmID)
+      plan.push({ llmID: goal.llmID, dbID: goal.llmID, isNew: false, goal })
+    } else {
+      const dbID = Identifier.ascending("goal")
+      llmToDBID.set(goal.llmID, dbID)
+      plan.push({ llmID: goal.llmID, dbID, isNew: true, goal })
+    }
+  }
+
+  // DELETE: rows whose ids the Architect explicitly removed.
+  const deletedIDs: string[] = []
+  for (const llmID of input.removedLLMIDs) {
+    const dbID = llmToDBID.get(llmID) ?? (existingByID.has(llmID) ? llmID : undefined)
+    if (!dbID) continue
+    db.delete(EngineGoalTable).where(eq(EngineGoalTable.id, dbID)).run()
+    deletedIDs.push(dbID)
+  }
+
+  const persisted: Array<{ id: string; title: string; llmID: string }> = []
+  for (let index = 0; index < plan.length; index++) {
+    const { llmID, dbID, isNew, goal } = plan[index]
+    const orderIndex = isNew
+      ? nextNewOrderIndex++
+      : existingByID.get(dbID)?.order_index ?? index
+    const deps = (goal.depends_on ?? []).flatMap((dep) => {
+      const mapped = llmToDBID.get(dep)
+      if (mapped) return [mapped]
+      if (existingByID.has(dep)) return [dep]
+      log.warn("upsertGoalsFromArchitect: depends_on references unknown id — dropping", {
+        goalID: dbID,
+        unknownDep: dep,
+      })
+      return []
+    })
+    const priorMetadata =
+      existingByID.get(dbID)?.metadata && typeof existingByID.get(dbID)!.metadata === "object"
+        ? (existingByID.get(dbID)!.metadata as Record<string, unknown>)
+        : {}
+    const metadata = {
+      ...priorMetadata,
+      ...(goal.metadata ?? {}),
+      architect_llm_id: llmID,
+      depends_on_goal_ids: deps.length > 0 ? deps : undefined,
+    }
+
+    if (isNew) {
+      db.insert(EngineGoalTable)
+        .values({
+          id: dbID,
+          task_id: input.taskID,
+          plan_version_id: null,
+          spec_snapshot_id: input.specSnapshotID,
+          title: goal.title,
+          slug: goalSlug(goal.title),
+          objective: goal.objective,
+          acceptance_specs: goal.acceptance_specs,
+          owned_paths: goal.owned_paths ?? [],
+          depends_on: deps,
+          exports: goal.exports ?? [],
+          imports: goal.imports ?? [],
+          kind: goal.kind ?? "feature",
+          requirement_ids: goal.requirement_ids ?? [],
+          metadata,
+          priority: goal.priority ?? "blocking",
+          source: goal.source ?? "spec",
+          order_index: orderIndex,
+          time_created: input.now,
+          time_updated: input.now,
+        })
+        .run()
+    } else {
+      db.update(EngineGoalTable)
+        .set({
+          spec_snapshot_id: input.specSnapshotID,
+          title: goal.title,
+          objective: goal.objective,
+          acceptance_specs: goal.acceptance_specs,
+          owned_paths: goal.owned_paths ?? [],
+          depends_on: deps,
+          exports: goal.exports ?? [],
+          imports: goal.imports ?? [],
+          kind: goal.kind ?? "feature",
+          requirement_ids: goal.requirement_ids ?? [],
+          metadata,
+          priority: goal.priority ?? "blocking",
+          order_index: orderIndex,
+          time_updated: input.now,
+        })
+        .where(eq(EngineGoalTable.id, dbID))
+        .run()
+    }
+    persisted.push({ id: dbID, title: goal.title, llmID })
+  }
+
+  return { persisted, llmToDBID, deletedIDs }
+}
+
+export function insertRequirements(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    specSnapshotID: string
+    requirements: Requirement[]
+    now: number
+  },
+) {
+  return input.requirements.map((requirement, index) => {
+    const requestedID = typeof requirement.id === "string" ? requirement.id.trim() : ""
+    const requirementID = Identifier.ascending("requirement")
+    db.insert(EngineRequirementTable)
+      .values({
+        id: requirementID,
+        task_id: input.taskID,
+        spec_snapshot_id: input.specSnapshotID,
+        title: requirement.title,
+        description: requirement.description,
+        status: "pending",
+        priority: requirement.priority === "advisory" ? "advisory" : "blocking",
+        acceptance: Array.isArray(requirement.acceptance) ? JSON.stringify(requirement.acceptance) : requirement.acceptance,
+        evidence_refs: requirement.evidence_refs.length > 0 ? requirement.evidence_refs : null,
+        non_goals: requirement.non_goals && requirement.non_goals.length > 0 ? requirement.non_goals : null,
+        metadata: {
+          ...(requirement.metadata ?? {}),
+          ...(requestedID ? { source_requirement_id: requestedID } : {}),
+        },
+        order_index: index,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    return {
+      id: requirementID,
+      sourceRequirementID: requestedID || requirementID,
+      title: requirement.title,
+      priority: requirement.priority === "advisory" ? "advisory" as const : "blocking" as const,
+    }
+  })
+}
+
+export function copyRequirementsToSpecSnapshot(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    fromSpecSnapshotID: string
+    toSpecSnapshotID: string
+    now: number
+  },
+) {
+  if (input.fromSpecSnapshotID === input.toSpecSnapshotID) {
+    throw new Error(`copyRequirementsToSpecSnapshot: source and target spec are identical (${input.fromSpecSnapshotID})`)
+  }
+
+  const existingTargetRows = db
+    .select({ id: EngineRequirementTable.id })
+    .from(EngineRequirementTable)
+    .where(eq(EngineRequirementTable.spec_snapshot_id, input.toSpecSnapshotID))
+    .all()
+  if (existingTargetRows.length > 0) {
+    throw new Error(
+      `copyRequirementsToSpecSnapshot: target spec ${input.toSpecSnapshotID} already has ` +
+        `${existingTargetRows.length} requirement row(s)`,
+    )
+  }
+
+  const sourceRows = db
+    .select()
+    .from(EngineRequirementTable)
+    .where(and(
+      eq(EngineRequirementTable.task_id, input.taskID),
+      eq(EngineRequirementTable.spec_snapshot_id, input.fromSpecSnapshotID),
+    ))
+    .orderBy(EngineRequirementTable.order_index)
+    .all()
+
+  for (const row of sourceRows) {
+    db.insert(EngineRequirementTable)
+      .values({
+        id: Identifier.ascending("requirement"),
+        task_id: input.taskID,
+        spec_snapshot_id: input.toSpecSnapshotID,
+        title: row.title,
+        description: row.description,
+        status: row.status,
+        priority: row.priority,
+        acceptance: row.acceptance,
+        evidence_refs: row.evidence_refs,
+        non_goals: row.non_goals,
+        metadata: row.metadata,
+        order_index: row.order_index,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  }
+
+  return sourceRows.length
+}
+
+export function createGoalRun(input: {
+  taskID: string
+  goalID: string
+  planNodeID?: string
+  coordinatorRunID: string
+  sessionID?: string
+  retryCount?: number
+  blockingReason?: string | null
+  error?: string | null
+  workspaceDir?: string
+  /** Phase B (2026-05-05): persistent worktree branch checked out in
+   *  workspaceDir. Was on engine_goal until the column-vs-payload duplicate
+   *  was retired; now lives only on the per-attempt artifact payload. */
+  workspaceBranch?: string
+  /** Phase B (2026-05-05): goal-scoped Snapshot baseRef captured before the
+   *  first attempt's executor ran. Reused across retries via
+   *  findGoalLatestWorkspace. */
+  workspaceBaseRef?: string
+  baseRef?: string
+  mergeRef?: string
+  metadata?: Record<string, unknown>
+  /** When set, this new goal_run supersedes the referenced prior row.
+   *  Used by retry flows to re-dispatch a goal whose prior run is in a
+   *  terminal (completed/failed/aborted) status without mutating the
+   *  goal_run FSM. Readiness / dispatch / satisfies-dep filters walk the
+   *  supersede chain and only honour the tip. */
+  supersedeOf?: string
+  now?: number
+}) {
+  // Phase-6-d: goal_run is an append-only `engine_artifact` row stream with
+  // kind="goal_run_attempt". First insert uses the same id for both the
+  // artifact row id and the logical goal_run_id so downstream pointers
+  // (evidence.goal_run_id, metric.goal_run_id, protocol_event.goal_run_id)
+  // resolve. Updates append new rows sharing the same logical goal_run_id.
+  //
+  // Live-run dedup: re-use any existing LIVE row for the same (coordinator,
+  // goal, plan_node) triple. Superseding a live row is invalid because the
+  // executor behind it can still report and merge; ignoring it here creates
+  // multiple live build sessions for one goal.
+  const liveTips = listGoalRunsByGoal(input.goalID).filter((r) =>
+    r.coordinator_run_id === input.coordinatorRunID &&
+    (input.planNodeID ? r.plan_node_id === input.planNodeID : r.plan_node_id === null) &&
+    (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status),
+  )
+  if (liveTips.length > 0) {
+    return liveTips[0]!
+  }
+  const id = Identifier.ascending("goal_run")
+  const now = input.now ?? Date.now()
+  const payload = {
+    goal_id: input.goalID,
+    plan_node_id: input.planNodeID ?? null,
+    session_id: input.sessionID ?? null,
+    status: "queued" as const,
+    retry_count: input.retryCount ?? 0,
+    blocking_reason: input.blockingReason ?? null,
+    error: input.error ?? null,
+    workspace_dir: input.workspaceDir ?? null,
+    workspace_branch: input.workspaceBranch ?? null,
+    workspace_base_ref: input.workspaceBaseRef ?? null,
+    base_ref: input.baseRef ?? null,
+    merge_ref: input.mergeRef ?? null,
+    supersede_of: input.supersedeOf ?? null,
+    superseded_reason: null,
+    superseded_at: null,
+    metadata:
+      input.metadata || input.sessionID
+        ? {
+            ...(input.metadata ?? {}),
+            ...(input.sessionID ? { local_session_id: input.sessionID } : {}),
+          }
+        : null,
+    time_started: null,
+    time_completed: null,
+  }
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id,
+        task_id: input.taskID,
+        run_id: input.coordinatorRunID,
+        goal_run_id: id,
+        kind: "goal_run_attempt",
+        label: "attempt-queued",
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  const row = findGoalRun(id)
+  if (!row) throw new Error(`createGoalRun: inserted goal run ${id} not found after insert`)
+  syncGoalStatus(input.goalID, "createGoalRun")
+  return row
+}
+
+/**
+ * Record that a prior terminal goal_run is being superseded by a retry.
+ * Returns the new goal_run id (the caller calls createGoalRun immediately
+ * after with supersedeOf set). Separated from createGoalRun so that callers
+ * which know the old run id can keep the intent explicit; the actual
+ * supersede link is set by createGoalRun via supersedeOf.
+ */
+// RETIRED in the LLM-autonomous redesign:
+//   - writeCascadeState()
+//   - updateGoalCascadeFailed()
+//   - updateGoalVerificationOutcome()
+//
+// These all wrote to engine_goal.cascade_state, a cached "deps permanently
+// failed / verification outcome" projection that was read by the dispatch
+// gate. Both the cache column and the dispatch gate are gone. Dep-failure
+// handling is the LLM's call (it reads each goal's depends_on + describe
+// layer flags and chooses build({ goalID }) / modify_goal / fail_task).
+// Verification-goal outcome is recorded on the goal's goal_run chain.
+
+/**
+ * Phase B (2026-05-05): rewrite to act on the per-attempt artifact payload
+ * exclusively. Pre-fix the function wrote engine_goal.workspace_dir / branch
+ * / base_ref as a sibling cache to the artifact payload; rejecting a
+ * dispatch left the column smeared while no attempt artifact existed —
+ * board view said "in flight", runtime said "pending forever". The columns
+ * are gone (rule 8: no dual source) so this writer now patches the latest
+ * goal_run_attempt artifact.
+ *
+ * Behaviour (no fallback, rule 7):
+ *   - When the goal has no attempts yet: record the workspace claim as a
+ *     `queued` attempt artifact. The next beginBuildAttempt finds it via
+ *     findLatestTipGoalRun and treats it as the parent tip.
+ *   - When the latest attempt is non-terminal (`queued` / `running` / etc.):
+ *     append a patch through updateGoalRun. The collapse step keeps
+ *     workspace_dir/branch/base_ref on the newest payload.
+ *   - When the latest attempt is terminal (`completed` / `failed` /
+ *     `aborted`): caller is recording a cleanup or recovery; append a
+ *     cleanup-labelled patch via updateGoalRun so findGoalLatestWorkspace
+ *     reflects the new pointer.
+ */
+export function updateGoalWorkspace(input: {
+  goalID: string
+  workspaceDir: string | null
+  workspaceBranch: string | null
+  /** Optional — only written when explicitly provided. Leave `undefined`
+   *  to preserve the existing baseRef across retries; pass `null` to
+   *  clear it at terminal cleanup. */
+  workspaceBaseRef?: string | null
+  now?: number
+}) {
+  const goal = findGoal(input.goalID)
+  if (!goal) {
+    throw new Error(`updateGoalWorkspace: goal ${input.goalID} not found`)
+  }
+  const tip = findLatestTipGoalRun(input.goalID)
+  if (!tip) {
+    // Phase G (2026-05-05): no fallback (rule 7). The pre-fix branch
+    // synthesised a queued artifact with coordinatorRunID="synthetic" —
+    // a fake run pointer that polluted the run reference graph. The only
+    // legitimate callers that reach this state are post-finalize cleanup
+    // (writer.ts:cleanupGoalWorkspaceForGoal already gates on
+    // findGoalLatestWorkspace, so a non-null directory implies a tip
+    // exists) and the post-build-success workspace patch (the attempt
+    // artifact created by beginBuildAttempt is the tip). If no tip exists
+    // here, an upstream caller is using the workspace writer as an
+    // attempt-creation backdoor — that's a contract violation, not a
+    // recoverable case.
+    throw new Error(
+      `updateGoalWorkspace: goal ${input.goalID} has no goal_run_attempt artifact; ` +
+      `workspace pointers ride the per-attempt payload — open an attempt via ` +
+      `beginBuildAttempt before recording the workspace.`,
+    )
+  }
+  const patch: Partial<import("./store").GoalRunRow> = {
+    workspace_dir: input.workspaceDir,
+    workspace_branch: input.workspaceBranch,
+  }
+  if (input.workspaceBaseRef !== undefined) {
+    patch.workspace_base_ref = input.workspaceBaseRef
+  }
+  updateGoalRun(tip.id, patch)
+}
+
+
+/**
+ * Batch reset every goal in a task back to the "pending" projection by:
+ *  1. clearing any explicit cascade_state marker
+ *  2. supersede-annotating any failed goal_run tip so deriveGoalStatus
+ *     projects `pending` via the retry marker
+ *  3. calling syncGoalStatus on each goal
+ *
+ * Caller (restart_from_stage) is responsible for having aborted live
+ * goal_runs first via abortLiveExecutionForTask — this function only
+ * handles the terminal-state remnants.
+ */
+export function resetTaskGoalsToPending(input: {
+  taskID: string
+  reason: string
+  now?: number
+}) {
+  const now = input.now ?? Date.now()
+  const goals = listGoals(input.taskID)
+  let supersededTips = 0
+  for (const goal of goals) {
+    const tip = findLatestTipGoalRun(goal.id)
+    // Any terminal tip (failed / aborted / completed) must be superseded so
+    // the goal is eligible for re-dispatch. `completed` was added when
+    // abortLiveExecutionForTask stopped flipping completed→aborted
+    // (catalog.ts resettable=false): restart_from_stage needs a way to
+    // invalidate prior success under a new run, and the supersede marker
+    // is now the sole mechanism.
+    const result = startNewAttempt({
+      goalID: goal.id,
+      reason: "restart_stage",
+      now,
+    })
+    if (result.supersededTipID) supersededTips++
+  }
+  log.info("reset task goals to pending", {
+    taskID: input.taskID, reason: input.reason,
+    total: goals.length, supersededTips,
+  })
+  return { total: goals.length, supersededTips }
+}
+
+/**
+ * Mark every active plan_version for a task as superseded and discard the
+ * plan_node rows that belonged to them. Single-source enforcement of the
+ * "at most one active plan per task" invariant — the read side
+ * (findActivePlanForTask) returns ORDER BY version DESC LIMIT 1, which
+ * silently picks an arbitrary row if two share the same version, so any
+ * code path that promotes a fresh plan must run this first to retire
+ * predecessors atomically.
+ *
+ * plan_node FK to plan_version is ON DELETE CASCADE, but we keep retired
+ * plan_version rows for history (status flip rather than physical DELETE),
+ * so the cascade never fires. Without an explicit DELETE the orphan
+ * plan_node rows survive supersede and the board's per-goal lookups
+ * (which only filter by goal_id, not plan) end up rendering every
+ * acceptance spec twice.
+ *
+ * Intended for use inside an existing Database.transaction so the
+ * supersede + plan_node delete + new plan insert land as one unit.
+ */
+export function supersedePriorActivePlansForTask(
+  db: Database.TxOrDb,
+  input: { taskID: string; now: number },
+): void {
+  const targets = db.select({ id: EnginePlanVersionTable.id })
+    .from(EnginePlanVersionTable)
+    .where(and(
+      eq(EnginePlanVersionTable.task_id, input.taskID),
+      eq(EnginePlanVersionTable.status, "active"),
+    ))
+    .all()
+  if (targets.length === 0) return
+  const ids = targets.map((t) => t.id)
+  db.delete(EnginePlanNodeTable)
+    .where(inArray(EnginePlanNodeTable.plan_version_id, ids))
+    .run()
+  db.update(EnginePlanVersionTable)
+    .set({ status: "superseded", time_updated: input.now })
+    .where(inArray(EnginePlanVersionTable.id, ids))
+    .run()
+}
+
+/**
+ * Internal helper: mark a terminal goal_run as superseded and trigger
+ * status re-derivation. EXTERNAL CALLERS MUST USE startNewAttempt — it
+ * unifies supersede + workspace reset + cascade clear + event emission
+ * into one atomic intent. Direct supersedeGoalRun calls bypass the
+ * GoalAttemptOpened event and skip the resetWorkspace/clearCascade
+ * options that several upstream sites used to inline.
+ *
+ * Sets superseded_reason / superseded_at as first-class columns on the
+ * old row. The FSM-status of the old row stays in its terminal state
+ * (history is immutable). deriveGoalStatus reads the column and projects
+ * the goal back to `pending` so the dispatch loop can pick it up.
+ */
+function supersedeGoalRun(input: {
+  oldGoalRunID: string
+  reason: string
+  now?: number
+}) {
+  const now = input.now ?? Date.now()
+  const existing = findGoalRun(input.oldGoalRunID)
+  if (!existing) {
+    throw new Error(`supersedeGoalRun: goal_run ${input.oldGoalRunID} not found`)
+  }
+  appendGoalRunArtifact({
+    goalRunID: input.oldGoalRunID,
+    existing,
+    patch: {
+      superseded_reason: input.reason,
+      superseded_at: now,
+    },
+    label: `attempt-${existing.status}`,
+    now,
+  })
+  syncGoalStatus(existing.goal_id, `supersedeGoalRun:${input.reason}`)
+  return existing
+}
+
+/** Phase-6-d shared writer: append a new `goal_run_attempt` artifact row
+ *  carrying the merged state. The logical goal_run_id stays stable; queries
+ *  collapse the stream to the newest row per id via `latestPerGoalRun`. */
+function appendGoalRunArtifact(input: {
+  goalRunID: string
+  existing: import("./store").GoalRunRow
+  patch: Partial<import("./store").GoalRunRow>
+  label: string
+  now: number
+}) {
+  const merged = { ...input.existing, ...input.patch }
+  const payload = {
+    goal_id: merged.goal_id,
+    plan_node_id: merged.plan_node_id,
+    session_id: merged.session_id,
+    status: merged.status,
+    retry_count: merged.retry_count,
+    blocking_reason: merged.blocking_reason,
+    error: merged.error,
+    workspace_dir: merged.workspace_dir,
+    workspace_branch: merged.workspace_branch,
+    workspace_base_ref: merged.workspace_base_ref,
+    base_ref: merged.base_ref,
+    merge_ref: merged.merge_ref,
+    supersede_of: merged.supersede_of,
+    superseded_reason: merged.superseded_reason,
+    superseded_at: merged.superseded_at,
+    metadata: merged.metadata,
+    time_started: merged.time_started,
+    time_completed: merged.time_completed,
+  }
+  // Guarantee strict wall-clock monotonicity across appends to the same
+  // logical goal_run. Without this, two appends that land in the same
+  // millisecond (e.g. double-supersede in tight sequence) would have
+  // identical time_created and no deterministic ordering; latest-wins
+  // selection then flips under load. Bumping to max(existing + 1, now)
+  // keeps each append strictly newer regardless of wall-clock resolution.
+  const effectiveNow = Math.max(input.existing.time_updated + 1, input.now)
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("goal_run"),
+        task_id: merged.task_id,
+        run_id: merged.coordinator_run_id,
+        goal_run_id: input.goalRunID,
+        kind: "goal_run_attempt",
+        label: input.label,
+        payload,
+        time_created: effectiveNow,
+        time_updated: effectiveNow,
+      })
+      .run(),
+  )
+}
+
+/**
+ * Open a new attempt for a goal — single entry-point for "this goal must
+ * re-dispatch under a fresh attempt." Replaces the four ad-hoc paths
+ * (build_retry / modify_goal / restart_from_stage / delivery_rework)
+ * that all expanded to the same supersede + sync sequence and drifted apart
+ * over time.
+ *
+ * Atomic intent:
+ *   1. Supersede the terminal tip (if any) with `reason` as a typed enum.
+ *      Idempotent — already-superseded tips are a no-op.
+ *   2. Optionally reset the goal's persistent workspace pointer
+ *      (engine_artifact[goal_run_attempt].payload.workspace_*; pre-Phase B
+ *      this lived on engine_goal columns) — clears when the new attempt
+ *      must not inherit the prior worktree, e.g. modify_contract on a
+ *      structurally different acceptance set.
+ *   3. syncGoalStatus → emits transition events via the in-memory
+ *      lastEmittedStatus map. No cache write; current state is live-
+ *      derived by every reader via goalStatusByID.
+ *
+ * No-op when the tip is non-terminal — supersede has no meaning on a
+ * live row.
+ */
+export function startNewAttempt(input: {
+  goalID: string
+  reason: string
+  now?: number
+  resetWorkspace?: boolean
+  /** Retry analysis to persist for the executor's next prompt. When supplied,
+   *  writes a `decision_log.phase="retry"` entry scoped to this goal; the
+   *  executor's `buildRetryFeedbackSection` reads those entries on the next
+   *  run and surfaces them above the goal contract. `value` is the concrete
+   *  directive (what to change); `reason` is the root cause. Omit only when
+   *  the caller genuinely has no actionable analysis — the executor will then
+   *  re-run with the original prompt (uninformed retry). */
+  feedback?: { value: string; reason: string }
+}): { supersededTipID?: string; resetWorkspace: boolean; retryCount: number } {
+  const now = input.now ?? Date.now()
+  const goal = findGoal(input.goalID)
+  if (!goal) {
+    throw new Error(`startNewAttempt: goal ${input.goalID} not found`)
+  }
+  const { supersededTipID, retryCount } = openGoalImplementationVersion({
+    goal,
+    reason: input.reason,
+    now,
+  })
+  let resetWorkspace = false
+  if (input.resetWorkspace) {
+    const latest = findGoalLatestWorkspace(input.goalID)
+    if (latest.directory) {
+      // Phase B + E (2026-05-05): both workspace pointer and retry_count
+      // live on the latest attempt artifact, not on engine_goal. Clearing
+      // the workspace appends a patch that nulls the workspace fields;
+      // findGoalLatestWorkspace then returns null and the next dispatch
+      // falls into the create-new-worktree branch. The retry counter is
+      // already bumped on the new artifact `openGoalImplementationVersion`
+      // produced (or, for non-supersede cases, stays at the prior tip's
+      // value); no engine_goal write is required either way.
+      const tip = findLatestTipGoalRun(input.goalID)
+      if (tip) {
+        updateGoalRun(tip.id, {
+          workspace_dir: null,
+          workspace_branch: null,
+          workspace_base_ref: null,
+        })
+      }
+      resetWorkspace = true
+    }
+  }
+  // Single writer of retry feedback into decision_log. Every path that opens
+  // a new attempt (delivery_rework / manual_retry / modify_contract) routes
+  // its per-goal analysis through this one write — `buildRetryFeedbackSection`
+  // reads `phase="retry"` filtered by goalID. Previously the `feedback`
+  // parameter existed on the signature but was dropped silently; only the
+  // manual retry paths duplicated a parallel decisionLog.append, so
+  // executors on delivery_rework/modify_contract rework cycles ran with no
+  // rejection context — i.e. blind retries.
+  if (input.feedback) {
+    createDecisionLog(goal.task_id).append({
+      goalID: input.goalID,
+      phase: "retry",
+      key: `retry_analysis_${input.goalID}`,
+      value: input.feedback.value,
+      reason: input.feedback.reason,
+    })
+  }
+  // Event sourcing: the goal_run row itself IS the event — tip's
+  // superseded_reason column + superseded_at timestamp is the persistent
+  // log of "a new attempt opened under reason X at time T." The orchestrator
+  // reads it on the next decision turn via describe; no Bus event needed.
+  syncGoalStatus(input.goalID, `startNewAttempt:${input.reason}`)
+  return { supersededTipID, resetWorkspace, retryCount }
+}
+
+function openGoalImplementationVersion(input: {
+  goal: GoalRow
+  reason: string
+  now: number
+}): { supersededTipID?: string; retryCount: number } {
+  const tip = findLatestTipGoalRun(input.goal.id)
+  // Phase E (2026-05-05): retry_count is no longer a goal column; derive
+  // from the artifact tip. The new attempt's payload carries the bumped
+  // value (beginBuildAttempt / createGoalRun take the returned retryCount
+  // and write it into payload.retry_count). No engine_goal write needed.
+  const currentCount = tip?.retry_count ?? 0
+
+  // Pre-supersede states never bump:
+  //   - no tip yet: retry_count starts at 0.
+  //   - tip is non-terminal: there's nothing to supersede, the live attempt
+  //     keeps its count.
+  if (
+    !tip ||
+    (tip.status !== "failed" && tip.status !== "aborted" && tip.status !== "completed")
+  ) {
+    return { retryCount: currentCount }
+  }
+
+  // Idempotent already-superseded path: a prior `startNewAttempt` (or
+  // earlier openGoalImplementationVersion call) marked this terminal tip
+  // with `superseded_reason`. The next attempt's V label is `currentCount
+  // + 1`. Returning `currentCount` here was the Phase E miss — the tip's
+  // retry_count is the SUPERSEDED attempt's count, never the upcoming one.
+  // Pre-Phase-E this lookup went through engine_goal.retry_count which
+  // startNewAttempt had bumped synchronously; the column is gone now, so
+  // the bump has to happen here.
+  if (tip.superseded_reason) {
+    return { retryCount: currentCount + 1 }
+  }
+
+  supersedeGoalRun({ oldGoalRunID: tip.id, reason: input.reason, now: input.now })
+  return { supersededTipID: tip.id, retryCount: currentCount + 1 }
+}
+
+// Phase-6-d-0: `stampGoalRunProgress` deleted with goal-run-watchdog. The
+// `last_progress_at` column's only reader was the watchdog — no caller now.
+// The column stays until 6-d-3 table deletion cleans it up in one sweep.
+
+export function updateGoalRun(
+  goalRunID: string,
+  values: Partial<import("./store").GoalRunRow>,
+) {
+  const row = findGoalRun(goalRunID)
+  if (!row) return undefined
+  const nextStatus = values.status ?? row.status
+  // Rule 23: no state-machine transition gate. LLM / orchestrator may drive
+  // goal_run.status to any value at any time; timestamp heuristics below are
+  // informational, not blocking.
+  const now = Date.now()
+  const statusChanged = nextStatus !== row.status
+  const patch: Partial<import("./store").GoalRunRow> = {
+    ...values,
+    ...(nextStatus !== "blocked" && values.blocking_reason === undefined ? { blocking_reason: null } : {}),
+    ...(!row.time_started && ["accepted", "planning", "running", "evaluating", "blocked", "completed"].includes(nextStatus) && values.time_started === undefined
+      ? { time_started: now }
+      : {}),
+    ...((nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") && values.time_completed === undefined
+      ? { time_completed: now }
+      : {}),
+  }
+  Database.transaction(() => {
+    appendGoalRunArtifact({
+      goalRunID,
+      existing: row,
+      patch,
+      label: `attempt-${nextStatus}`,
+      now,
+    })
+  })
+  if (statusChanged) {
+    syncGoalStatus(row.goal_id, `updateGoalRun ${row.status}→${nextStatus}`)
+    const taskID = row.task_id
+    const previousStatus = row.status
+    Database.effect(() =>
+      EngineProtocol.emit(
+        Event.GoalRunUpdated,
+        {
+          taskID,
+          goalRunID,
+          goalID: row.goal_id,
+          status: nextStatus,
+          previousStatus,
+          summary: `goal_run ${previousStatus}→${nextStatus}`,
+        },
+        { source: "persist.updateGoalRun" },
+      ),
+    )
+  }
+  return findGoalRun(goalRunID)
+}
+
+type EvaluationStatus = "passed" | "failed" | "pending"
+type EvaluationVerdict = "accepted" | "rejected"
+
+// `beginEvaluation` and `persistEvaluation` were part of the old `transition.ts`
+// pipeline. With per-goal dispatch + delivery/checks they have no callers; the
+// evaluation row is now created by `persistTaskDelivery()` (1:1 with the
+// task-level delivery) and updated by `updateEvaluationFromDeliveryVerdict()`.
+// Do not re-add conditional evaluation inserts — they break the
+// task-delivery↔evaluation invariant. Per-goal deliveries do NOT create an
+// evaluation row: goal_run status is driven by the executor directly, and the
+// delivery-agent's checks cover per-goal verdicts — a per-goal evaluation row
+// would be a dummy with no consumer.
+
+type DeliveryInput = {
+  summary: string
+  commitRef?: string
+  diffs: Array<{ file: string; [key: string]: unknown }>
+  report?: import("@/delivery/checks").GoalReportClaim
+}
+
+// Diff-stat reduction + artifact inserts for the task-level delivery path.
+// Per-goal deliveries are written inline by `finalizeBuildAttempt`; only
+// `persistTaskDelivery` calls this helper now.
+function writeDeliveryRow(
+  db: Parameters<Parameters<typeof Database.transaction>[0]>[0],
+  input: {
+    task: TaskRow
+    run: RunRow
+    goalRunID?: string
+    deliveryID: string
+    delivery: DeliveryInput
+    now: number
+  },
+) {
+  const stats = input.delivery.diffs.reduce(
+    (acc, d) => {
+      const a = typeof (d as any).additions === "number" ? (d as any).additions : 0
+      const r = typeof (d as any).deletions === "number" ? (d as any).deletions : 0
+      acc.additions += a
+      acc.deletions += r
+      return acc
+    },
+    { additions: 0, deletions: 0 },
+  )
+  // Phase-6-c: the delivery row itself is now an `engine_artifact` with
+  // kind="delivery" + label="delivery-<scope>" (task vs goal_run). Payload
+  // carries the full DeliveryRow shape so the read-model can reconstruct it
+  // without a JOIN. `deliveryID` is the artifact row id — consumers that
+  // reference `delivery_id` on other artifact rows still point at a valid id.
+  db.insert(EngineArtifactTable)
+    .values({
+      id: input.deliveryID,
+      task_id: input.task.id,
+      run_id: input.run.id,
+      goal_run_id: input.goalRunID,
+      delivery_id: input.deliveryID,
+      kind: "delivery",
+      label: input.goalRunID ? "delivery-goal_run" : "delivery-task",
+      payload: {
+        status: "candidate",
+        summary: input.delivery.summary,
+        result: {
+          summary: input.delivery.summary,
+          commit_ref: input.delivery.commitRef,
+          changed_files: input.delivery.diffs.map((item) => item.file),
+          diffs: input.delivery.diffs,
+          stats,
+          report: input.delivery.report,
+        },
+      },
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+  db.insert(EngineArtifactTable)
+    .values({
+      id: Identifier.ascending("artifact"),
+      task_id: input.task.id,
+      run_id: input.run.id,
+      goal_run_id: input.goalRunID,
+      delivery_id: input.deliveryID,
+      kind: "report",
+      label: "assistant-summary",
+      payload: { summary: input.delivery.summary },
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+  if (input.delivery.diffs.length > 0) {
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.task.id,
+        run_id: input.run.id,
+        goal_run_id: input.goalRunID,
+        delivery_id: input.deliveryID,
+        kind: "diff",
+        label: "workspace-diff",
+        payload: { diffs: input.delivery.diffs },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  }
+  if (input.delivery.commitRef) {
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.task.id,
+        run_id: input.run.id,
+        goal_run_id: input.goalRunID,
+        delivery_id: input.deliveryID,
+        kind: "git_ref",
+        label: "delivery-commit",
+        payload: { commit_ref: input.delivery.commitRef },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  }
+  for (const item of input.delivery.diffs) {
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.task.id,
+        run_id: input.run.id,
+        goal_run_id: input.goalRunID,
+        delivery_id: input.deliveryID,
+        kind: "changed_file",
+        label: item.file,
+        payload: item,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  }
+}
+
+// Per-goal deliveries are written inline by `finalizeBuildAttempt` (below) — it
+// owns the goal_run_id and binds the kind="delivery" artifact to it in the
+// same transaction as the goal_run_attempt insert. The standalone
+// persistGoalDelivery helper that previously sat here was retired with
+// pipeline/executor.ts in commit 54c382858 and replaced by the inline write,
+// keeping a single source of truth for goal-run delivery persistence.
+
+// Task-level delivery: produced by orchestrator's `deliver` tool after all
+// goal_runs complete. Writes the aggregated delivery row (goal_run_id=NULL) +
+// one pending scope='delivery' evidence artifact. The delivery-agent settles
+// it later by appending a new evidence artifact (append-only — queries take
+// the latest via time_created desc). Post-phase-6 evidence lives in
+// engine_artifact (kind="verification-evidence"); see verification/persist.ts.
+export function persistTaskDelivery(input: {
+  task: TaskRow
+  run: RunRow
+  deliveryID: string
+  delivery: DeliveryInput
+  now: number
+}) {
+  Database.transaction((db) => {
+    writeDeliveryRow(db, input)
+    Database.effect(() =>
+      EngineProtocol.emit(Event.DeliveryReady, { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary }, { source: "persist.delivery" }),
+    )
+  })
+  persistEvidence({
+    taskID: input.task.id,
+    runID: input.run.id,
+    deliveryID: input.deliveryID,
+    scope: "delivery",
+    status: "pending",
+    verdict: "inconclusive",
+    summary: input.delivery.summary,
+    checks: [],
+    now: input.now,
+  })
+}
+
+/**
+ * Settle the pending scope='delivery' evidence for a task-level delivery by
+ * appending a new evidence artifact row. Artifact rows are append-only so
+ * this function inserts a fresh row rather than mutating the pending one —
+ * `findLatestDeliveryEvidence(taskID)` naturally surfaces the newest row via
+ * `time_created desc`. Throws when the pending row never existed, because
+ * that implies `persistTaskDelivery()` was bypassed (or the caller passed a
+ * per-goal delivery id — per-goal deliveries carry no evidence by design).
+ *
+ * The `checks` parameter semantics match the pre-artifact behaviour: when
+ * supplied, replaces the previous check set wholesale; when OMITTED, the
+ * prior check set is preserved (used by `publish_delivery` which runs after
+ * `deliver` has already written the structured checks). Pass [] to clear.
+ */
+export function updateEvaluationFromDeliveryVerdict(input: {
+  deliveryID: string
+  verdict: "accepted" | "rejected" | "inconclusive"
+  summary: string
+  checks?: import("./engine.sql").EngineEvaluationCheck[]
+  now?: number
+}) {
+  const now = input.now ?? Date.now()
+  const status =
+    input.verdict === "accepted"
+      ? "passed"
+      : input.verdict === "rejected"
+        ? "failed"
+        : "inconclusive"
+  const existing = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.delivery_id, input.deliveryID),
+          eq(EngineArtifactTable.kind, "verification-evidence"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
+  )
+  if (!existing) {
+    throw new Error(
+      `updateEvaluationFromDeliveryVerdict: no evidence row found for delivery ${input.deliveryID}. ` +
+      `Either persistTaskDelivery() was bypassed, or the caller passed a per-goal delivery id ` +
+      `(per-goal deliveries have no evidence row — only task-level deliveries are 1:1 with evidence).`,
+    )
+  }
+  const existingPayload = (existing.payload ?? {}) as {
+    checks?: import("./engine.sql").EngineEvaluationCheck[]
+  }
+  const existingChecks = Array.isArray(existingPayload.checks) ? existingPayload.checks : []
+  const checks = input.checks ?? existingChecks
+  persistEvidence({
+    taskID: existing.task_id,
+    // delivery-kind artifacts always have run_id set by writeDeliveryRow.
+    // run_id is nullable on the table only for kind="orchestrator-stream-error".
+    runID: existing.run_id!,
+    deliveryID: input.deliveryID,
+    scope: "delivery",
+    status,
+    verdict: input.verdict,
+    summary: input.summary,
+    checks,
+    timeCompleted: now,
+    now,
+  })
+}
+
+export function persistFailedRunEvaluation(input: {
+  task: TaskRow
+  run: RunRow
+  goalRunID?: string
+  error: string
+  now: number
+}) {
+  // Post-phase-6: run-level failures no longer write a standalone evaluation row.
+  // `run.error` already carries the failure text (set by updateRun in runtime.ts),
+  // and the on-disk snapshot below preserves the structured view for operator
+  // drill-down. The pre-phase-6 evaluation insert was invariant-violating
+  // anyway (wrote scope='delivery' with delivery_id=null) — we don't resurrect
+  // that shape in artifact land. Goal-run-scoped failures remain handled at the
+  // goal-run site (the build tool persists evidence before failing).
+  const evaluationID = Identifier.ascending("evaluation")
+  writeEvaluationSnapshot({
+    task: input.task,
+    run: input.run,
+    goalRunID: input.goalRunID,
+    evaluation: {
+      id: evaluationID,
+      status: "failed",
+      verdict: "rejected",
+      summary: input.error,
+      checks: [
+        {
+          name: "executor_completion",
+          status: "failed",
+          evidence: input.error,
+        },
+      ],
+    },
+    goals: (() => {
+      const plan = input.run.plan_version_id ? findPlan(input.run.plan_version_id) : undefined
+      return plan ? listGoalsForPlan(plan) : []
+    })(),
+    createdAt: input.now,
+  })
+}
+
+function claimExecutorSessionLeaseWhere(id: string, now: number) {
+  const owner = executorLeaseOwner()
+  return and(
+    eq(EngineExecutorSessionTable.id, id),
+    eq(EngineExecutorSessionTable.status, "active"),
+    or(
+      eq(EngineExecutorSessionTable.lease_owner, owner),
+      isNull(EngineExecutorSessionTable.lease_owner),
+      lte(EngineExecutorSessionTable.lease_until, now),
+    ),
+  )
+}
+
+function leaseWindow(now: number) {
+  return {
+    lease_owner: executorLeaseOwner(),
+    lease_until: executorLeaseUntil(now),
+    time_updated: now,
+  }
+}
+
+function executorLeaseConflict(row: typeof EngineExecutorSessionTable.$inferSelect | undefined, now: number) {
+  if (!row) return ""
+  if (executorLeaseHeldByOther(row, now)) {
+    return `executor session ${row.id} is leased by ${row.lease_owner} until ${row.lease_until}`
+  }
+  if (row.status !== "active") {
+    return `executor session ${row.id} is not active (${row.status})`
+  }
+  if (!executorLeaseAvailable(row, now) && row.lease_owner !== executorLeaseOwner()) {
+    return `executor session ${row.id} lease is unavailable`
+  }
+  return `executor session ${row.id} could not be claimed`
+}
+
+export function ensureExecutorSession(input: {
+  taskID: string
+  runID: string
+  goalRunID?: string
+  provider: RunRow["executor"]
+  refs?: ProtocolRefsInfo
+  capabilities?: ProtocolCapabilitiesInfo
+  settings?: ProtocolSettingsInfo
+  started?: number
+}) {
+  const existing = Database.use((db) =>
+    db
+      .select()
+      .from(EngineExecutorSessionTable)
+      .where(
+        input.goalRunID
+          ? eq(EngineExecutorSessionTable.goal_run_id, input.goalRunID)
+          : and(eq(EngineExecutorSessionTable.run_id, input.runID), isNull(EngineExecutorSessionTable.goal_run_id)),
+      )
+      .orderBy(desc(EngineExecutorSessionTable.time_created))
+      .get(),
+  )
+  const info = protocolInfo(input.provider)
+  const now = Date.now()
+  const refs = mergeRefs(existing?.refs ?? undefined, input.refs)
+  const capabilities = input.capabilities ?? info.capabilities
+  const settings = {
+    ...(existing?.settings ?? {}),
+    ...(input.settings ?? {}),
+  }
+  if (existing) {
+    const updated = Database.use((db) =>
+      db
+        .update(EngineExecutorSessionTable)
+        .set({
+          provider: input.provider,
+          protocol: info.protocol,
+          protocol_version: info.version,
+          transport: ProtocolTransport.parse(info.transport).kind,
+          status: "active",
+          refs,
+          capabilities,
+          settings,
+          lease_owner: executorLeaseOwner(),
+          lease_until: executorLeaseUntil(now),
+          time_started: existing.time_started ?? input.started ?? now,
+          time_updated: now,
+        })
+        .where(claimExecutorSessionLeaseWhere(existing.id, now))
+        .returning()
+        .get(),
+    )
+    if (updated) return updated
+    const blocked = Database.use((db) =>
+      db
+        .select()
+        .from(EngineExecutorSessionTable)
+        .where(eq(EngineExecutorSessionTable.id, existing.id))
+        .get(),
+    )
+    throw new Error(`ensureExecutorSession: ${executorLeaseConflict(blocked, now)}`)
+  }
+  const id = Identifier.ascending("executor_session")
+  Database.use((db) =>
+    db
+      .insert(EngineExecutorSessionTable)
+      .values({
+        id,
+        task_id: input.taskID,
+        run_id: input.runID,
+        goal_run_id: input.goalRunID,
+        provider: input.provider,
+        protocol: info.protocol,
+        protocol_version: info.version,
+        transport: ProtocolTransport.parse(info.transport).kind,
+        status: "active",
+        refs,
+        capabilities,
+        settings,
+        lease_owner: executorLeaseOwner(),
+        lease_until: executorLeaseUntil(now),
+        time_started: input.started ?? now,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  const inserted = Database.use((db) =>
+    db
+      .select()
+      .from(EngineExecutorSessionTable)
+      .where(eq(EngineExecutorSessionTable.id, id))
+      .get(),
+  )
+  if (!inserted) throw new Error(`ensureExecutorSession: executor session ${id} not found after insert`)
+  return inserted
+}
+
+export function updateExecutorSessionStatus(runID: string, status: typeof EngineExecutorSessionTable.$inferInsert.status) {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineExecutorSessionTable)
+      .where(eq(EngineExecutorSessionTable.run_id, runID))
+      .orderBy(desc(EngineExecutorSessionTable.time_created))
+      .get(),
+  )
+  if (!row) return
+  return updateExecutorSessionStatusByID(row.id, status)
+}
+
+export function updateExecutorSessionStatusByID(
+  executorSessionID: string,
+  status: typeof EngineExecutorSessionTable.$inferInsert.status,
+) {
+  Database.use((db) =>
+    db
+      .update(EngineExecutorSessionTable)
+      .set({
+        status,
+        lease_owner: null,
+        lease_until: 0,
+        time_completed: Date.now(),
+        time_updated: Date.now(),
+      })
+      .where(eq(EngineExecutorSessionTable.id, executorSessionID))
+      .run(),
+  )
+}
+
+export function updateGoalRunExecutorSessionStatus(
+  goalRunID: string,
+  status: typeof EngineExecutorSessionTable.$inferInsert.status,
+) {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineExecutorSessionTable)
+      .where(eq(EngineExecutorSessionTable.goal_run_id, goalRunID))
+      .orderBy(desc(EngineExecutorSessionTable.time_created))
+      .get(),
+  )
+  if (!row) return
+  return updateExecutorSessionStatusByID(row.id, status)
+}
+
+/** Phase-6-c: delivery rows are append-only `engine_artifact` rows with
+ *  kind="delivery". `markDeliveryPublishing` / `finalizeDeliveryResult` now
+ *  insert a new artifact row carrying the updated payload; queries pick the
+ *  latest via `time_created desc`. The artifact row id stays stable across
+ *  a delivery's lifecycle by referencing `delivery_id` in the artifact
+ *  column (FK intentionally decoupled — see engine.sql.ts). */
+export function markDeliveryPublishing(deliveryId: string, now: number) {
+  const existing = findLatestDeliveryArtifact(deliveryId)
+  if (!existing) {
+    throw new Error(`markDeliveryPublishing: no delivery artifact found for ${deliveryId}`)
+  }
+  const payload = (existing.payload ?? {}) as Record<string, unknown>
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: existing.task_id,
+        run_id: existing.run_id,
+        goal_run_id: existing.goal_run_id ?? null,
+        delivery_id: deliveryId,
+        kind: "delivery",
+        label: existing.label,
+        payload: { ...payload, status: "publishing" },
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+}
+
+export function finalizeDeliveryResult(input: {
+  deliveryId: string
+  taskId: string
+  runId: string
+  delivery: { result?: Record<string, unknown> | null }
+  result: {
+    status: EngineDeliveryStatus
+    summary: string
+    artifacts: Array<{ kind: EngineArtifactKind; label: string; payload: Record<string, unknown> }>
+    publish: unknown
+  }
+  now: number
+}) {
+  const existing = findLatestDeliveryArtifact(input.deliveryId)
+  if (!existing) {
+    throw new Error(`finalizeDeliveryResult: no delivery artifact found for ${input.deliveryId}`)
+  }
+  const existingPayload = (existing.payload ?? {}) as Record<string, unknown>
+  const existingResult = (existingPayload.result ?? input.delivery.result ?? {}) as Record<string, unknown>
+  Database.transaction((db) => {
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskId,
+        run_id: input.runId,
+        goal_run_id: existing.goal_run_id ?? null,
+        delivery_id: input.deliveryId,
+        kind: "delivery",
+        label: existing.label,
+        payload: {
+          status: input.result.status,
+          summary: input.result.summary,
+          result: {
+            ...existingResult,
+            summary: input.result.summary,
+            artifacts: input.result.artifacts.map((item) => ({
+              kind: item.kind,
+              label: item.label,
+            })),
+            publish: input.result.publish,
+          },
+        },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    for (const artifact of input.result.artifacts) {
+      db.insert(EngineArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: input.taskId,
+          run_id: input.runId,
+          delivery_id: input.deliveryId,
+          kind: artifact.kind,
+          label: artifact.label,
+          payload: artifact.payload,
+          time_created: input.now,
+          time_updated: input.now,
+        })
+        .run()
+    }
+  })
+}
+
+/** Phase-6-c internal: find the latest delivery artifact row by delivery_id.
+ *  Newer rows supersede older ones (append-only semantics). */
+function findLatestDeliveryArtifact(deliveryId: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.delivery_id, deliveryId),
+          eq(EngineArtifactTable.kind, "delivery"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
+  )
+}
+
+
+function mergeRefs(current?: ProtocolRefsInfo, next?: ProtocolRefsInfo) {
+  if (!current && !next) return undefined
+  const result = {
+    ...(current ?? {}),
+    ...(next ?? {}),
+  }
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
+// ---------------------------------------------------------------------------
+// Goal mutations (operator-facing: update / delete)
+// ---------------------------------------------------------------------------
+
+export function updateGoal(input: {
+  goalID: string
+  title: string
+  acceptance_specs: import("@/acceptance/types").AcceptanceSpec[]
+}) {
+  return Database.use((db) =>
+    db
+      .update(EngineGoalTable)
+      .set({
+        title: input.title,
+        acceptance_specs: input.acceptance_specs,
+        time_updated: Date.now(),
+      })
+      .where(eq(EngineGoalTable.id, input.goalID))
+      .run(),
+  )
+}
+
+export function deleteGoal(goalID: string) {
+  return Database.use((db) =>
+    db.delete(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).run(),
+  )
+}
+
+/**
+ * Record a build agent attempt as a `goal_run_attempt` artifact so the
+ * derived goal status reflects the build outcome.
+ *
+ * Why this helper exists separately from `createGoalRun` / `updateGoalRun`:
+ * post-phase-5 the orchestrator's `build` tool dispatches `BuildAgent.run`
+ * directly without a coordinator Run row. The legacy createGoalRun path
+ * required `coordinatorRunID` and assumed a GoalPool dispatcher would
+ * later mark the run terminal. The new flow has neither, so we collapse
+ * the two-write protocol (queued → completed) into a single terminal
+ * artifact: `kind="goal_run_attempt"` carries the build outcome directly,
+ * `syncGoalStatus` re-derives `engine_goal.status` from the chain tip
+ * (per `goal-status.ts`), and the orchestrator's next describe sees the
+ * goal as `passed` / `failed` instead of stale `pending`.
+ *
+ * Without this, build agents return passed but no one writes the
+ * outcome — every subsequent orchestrator wake reads `goals: pending`
+ * and re-dispatches build, burning decision turns indefinitely.
+ *
+ * Per rule 23 the LLM still owns the *decision* on what to do with the
+ * outcome (call deliver, retry, fail_task). This helper only persists
+ * the *fact* that build ran and what it returned.
+ */
+/**
+ * Open a goal_run for a build that is about to run. Inserts the FIRST
+ * `goal_run_attempt` artifact for a fresh goal_run id with `status="running"`,
+ * `time_started=now`, `time_completed=null`. Emits `goal_run.updated` so the
+ * overlay invalidates the board and materializes the goal step card with a
+ * spinner immediately — instead of waiting for the build to terminate (the
+ * old `recordBuildAttempt` insert wrote a row with `time_started == time_completed`,
+ * so overlay's `startedAt > 0` gate was only met post-completion and the goal
+ * card "appeared" already-finished).
+ *
+ * The orchestrator's build tool calls this before `BuildAgent.run`; the same
+ * goal_run id is later threaded into `finalizeBuildAttempt` to write the
+ * terminal state via `updateGoalRun` (which appends a second artifact row
+ * collapsed by `latestPerGoalRun` to the newest per goal_run_id).
+ */
+export function beginBuildAttempt(input: {
+  taskID: string
+  goalID: string
+  /** Coordinator run id (may be undefined for synthetic / direct paths). */
+  runID?: string
+  /** The agent's child session id, when the orchestrator pre-allocated one.
+   *  Often undefined at begin-time because BuildAgent.run owns session creation;
+   *  the column stays null and is not required for overlay's goal-step routing
+   *  (which keys on goalID, not goal_run.session_id). */
+  sessionID?: string
+  /** Worktree directory if known at dispatch (per-goal worktree). Caller-owned
+   *  worktrees may know the path up-front; greenfield BuildAgent-managed
+   *  worktrees do not — leave undefined and let the row stay null. */
+  workspaceDir?: string
+  /** Phase B (2026-05-05): persistent worktree branch + baseRef. Pre-fix
+   *  these lived on engine_goal as a duplicate cache; now they ride along
+   *  on the per-attempt artifact payload so findGoalLatestWorkspace returns
+   *  the full triple from a single source. */
+  workspaceBranch?: string | null
+  workspaceBaseRef?: string | null
+  now?: number
+}): string {
+  const id = Identifier.ascending("goal_run")
+  const now = input.now ?? Date.now()
+  const goal = findGoal(input.goalID)
+  if (!goal) {
+    throw new Error(`beginBuildAttempt: goal ${input.goalID} not found`)
+  }
+  const priorTip = findLatestTipGoalRun(input.goalID)
+  if (priorTip && (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(priorTip.status)) {
+    throw new Error(
+      `beginBuildAttempt: goal ${input.goalID} already has live goal_run ${priorTip.id} ` +
+      `with status=${priorTip.status}; refusing to open a second live build attempt.`,
+    )
+  }
+
+  const version = openGoalImplementationVersion({
+    goal,
+    reason: "build_retry",
+    now,
+  })
+  // Resolve the parent tip the new attempt supersedes in the chain. Two retry
+  // shapes both reach here and BOTH must populate supersede_of correctly,
+  // otherwise findLatestTipGoalRun (engine/store.ts) projects the patched-old
+  // terminal row as the live tip and goal status stays `pending` while the
+  // build runs (audit §11.6, codex 3rd-pass).
+  //   1. beginBuildAttempt-only retry: openGoalImplementationVersion ran the
+  //      supersede here, returns supersededTipID directly.
+  //   2. startNewAttempt-then-beginBuildAttempt (delivery_rework /
+  //      modify_goal): startNewAttempt already patched superseded_reason on
+  //      the prior tip, so openGoalImplementationVersion short-circuits and
+  //      supersededTipID is undefined. The tip's id is still the right
+  //      parent — findLatestTipGoalRun returns the same row id (the
+  //      already-patched terminal); supersededIDs set is empty until WE
+  //      insert with supersede_of pointing at it.
+  //   3. First-ever attempt: no prior tip, parentTipID undefined → null.
+  //
+  // Never use a live tip as the fallback parent. `openGoalImplementationVersion`
+  // intentionally returns no supersededTipID for live rows; treating that as
+  // "link to whatever tip exists" was the bug that let a retry supersede a
+  // still-running executor and launch a duplicate build session.
+  const parentTipID = version.supersededTipID ?? (
+    priorTip?.superseded_reason &&
+    (priorTip.status === "failed" || priorTip.status === "aborted" || priorTip.status === "completed")
+      ? priorTip.id
+      : undefined
+  )
+  const payload = {
+    goal_id: input.goalID,
+    plan_node_id: null,
+    session_id: input.sessionID ?? null,
+    status: "running" as const,
+    retry_count: version.retryCount,
+    blocking_reason: null,
+    error: null,
+    workspace_dir: input.workspaceDir ?? null,
+    workspace_branch: input.workspaceBranch ?? null,
+    workspace_base_ref: input.workspaceBaseRef ?? null,
+    base_ref: null,
+    merge_ref: null,
+    supersede_of: parentTipID ?? null,
+    superseded_reason: null,
+    superseded_at: null,
+    metadata: null,
+    time_started: now,
+    time_completed: null,
+  }
+  Database.transaction((db) => {
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id,
+        task_id: input.taskID,
+        run_id: input.runID ?? null,
+        goal_run_id: id,
+        kind: "goal_run_attempt",
+        label: "attempt-running",
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+  })
+  syncGoalStatus(input.goalID, `beginBuildAttempt`)
+  // Emit goal_run.updated so the overlay's board-invalidating subscription
+  // refetches and `goalWorkflows[i].steps[build].startedAt` becomes > 0;
+  // tree-writer's lazy-materialization gate then renders the step card.
+  Database.effect(() =>
+    EngineProtocol.emit(
+      Event.GoalRunUpdated,
+      {
+        taskID: input.taskID,
+        goalRunID: id,
+        goalID: input.goalID,
+        status: "running",
+        previousStatus: "queued",
+        summary: "build attempt started",
+      },
+      { source: "persist.beginBuildAttempt" },
+    ),
+  )
+  return id
+}
+
+/**
+ * Finalize a goal_run opened by `beginBuildAttempt`. Updates the existing
+ * goal_run via the append-only `updateGoalRun` writer (which sets
+ * time_completed and emits goal_run.updated → terminal status), then writes
+ * the per-goal `delivery` artifact when the build passed with concrete diffs.
+ *
+ * Single source for the build → goal_run finalize path: the prior
+ * `recordBuildAttempt` insert-at-end design is gone (rule 22). External
+ * callers now do begin → BuildAgent.run → finalize.
+ */
+export function finalizeBuildAttempt(input: {
+  goalRunID: string
+  taskID: string
+  goalID: string
+  runID?: string
+  status: "completed" | "failed"
+  commitRef?: string
+  workspaceDir?: string
+  /** Phase B (2026-05-05): workspace branch + baseRef now ride along on the
+   *  goal_run_attempt artifact (single source, was duplicated on engine_goal).
+   *  The build tool path passes both back when BuildAgent.run produced a
+   *  managedWorktree result. */
+  workspaceBranch?: string
+  workspaceBaseRef?: string
+  error?: string
+  diffs?: Array<{ file: string; before: string; after: string; additions: number; deletions: number; status?: string }>
+  fileChanges?: Array<{ path: string; summary: string; reason: string }>
+  summary?: string
+  now?: number
+}): void {
+  const now = input.now ?? Date.now()
+  updateGoalRun(input.goalRunID, {
+    status: input.status,
+    error: input.error ?? null,
+    workspace_dir: input.workspaceDir ?? undefined,
+    workspace_branch: input.workspaceBranch ?? undefined,
+    workspace_base_ref: input.workspaceBaseRef ?? undefined,
+    metadata: input.commitRef ? { commit_ref: input.commitRef } : null,
+    time_completed: now,
+  })
+  const includeDelivery =
+    input.status === "completed" &&
+    !!input.commitRef &&
+    Array.isArray(input.diffs) &&
+    input.diffs.length > 0
+  if (!includeDelivery) return
+  const stats = input.diffs!.reduce(
+    (acc, d) => {
+      acc.additions += typeof d.additions === "number" ? d.additions : 0
+      acc.deletions += typeof d.deletions === "number" ? d.deletions : 0
+      return acc
+    },
+    { additions: 0, deletions: 0 },
+  )
+  const deliveryID = Identifier.ascending("delivery")
+  const summary = input.summary?.trim() || `Goal ${input.goalID} build delivered ${input.diffs!.length} file change(s).`
+  Database.transaction((db) => {
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: deliveryID,
+        task_id: input.taskID,
+        run_id: input.runID ?? null,
+        goal_run_id: input.goalRunID,
+        delivery_id: deliveryID,
+        kind: "delivery",
+        label: "delivery-goal_run",
+        payload: {
+          status: "candidate",
+          summary,
+          result: {
+            summary,
+            commit_ref: input.commitRef,
+            changed_files: input.diffs!.map((d) => d.file),
+            file_changes: input.fileChanges ?? [],
+            diffs: input.diffs,
+            stats,
+          },
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+  })
+}
+
+// `recordBuildAttempt` was a single-shot insert that wrote the goal_run row
+// AT BUILD COMPLETION with `time_started == time_completed`. Removed (rule 22:
+// no double source) in favour of begin → finalize: the overlay's goal step
+// card is gated on `startedAt > 0` and was therefore only materialized after
+// the build finished — making the card spawn already-passed/already-failed.
+// All callers route through `beginBuildAttempt` + `finalizeBuildAttempt` now.
+
+/**
+ * Record an integrity-review attempt as an append-only artifact so the
+ * orchestrator's read_context can surface "integrity already ran with verdict X
+ * for spec snapshot Y". Without this the LLM has no way to distinguish
+ * "integrity was never called" from "integrity ran and returned pass (no goal
+ * change)" — same death-loop shape rule 23 / commit 7acb5f17f addressed
+ * for build.
+ */
+export function recordIntegrityAttempt(input: {
+  taskID: string
+  /** The integrity child session id — surfaces in overlay nesting. */
+  sessionID: string
+  /** Spec snapshot the goal set was reviewed against. The orchestrator may
+   *  legitimately re-run integrity after architect lands a NEW snapshot, so
+   *  read_context must scope the latest-attempt lookup by snapshot id. */
+  specSnapshotID: string
+  verdict: "pass" | "concerns" | "needs_correction"
+  /** Per-dimension verdicts so read_context can surface "goal_fidelity passed
+   *  but solution_quality flagged 3 weak_acceptance specs" — losing this
+   *  granularity behind a single aggregate would defeat the redesign. */
+  perDimension: Array<{ id: string; verdict: "pass" | "concerns" | "needs_correction" }>
+  issuesCount: number
+  correctionsCount: number
+  missingCount: number
+  reason?: string
+  /** Full pre-rendered review markdown — every issue, every correction
+   *  proposal, every missing-goal proposal as text. Persisted alongside the
+   *  count summary so read_context / delivery upstream context can present
+   *  the orchestrator LLM the same evidence the integrity LLM produced,
+   *  rather than just counts. */
+  reviewMarkdown?: string
+  /** Structured copies of the LLM's correction / missing-goal proposals
+   *  preserved alongside the markdown so any future consumer that wants
+   *  field-level access (overlay verdict card, prosecutor seed) doesn't
+   *  have to re-parse markdown. */
+  corrections?: Array<{
+    action: "modify" | "split" | "remove"
+    goalID: string
+    reason: string
+    updates?: Record<string, unknown>
+  }>
+  missingGoals?: Array<{
+    title: string
+    objective: string
+    acceptance_spec_hints: string[]
+    owned_paths: string[]
+    kind: string
+    priority: "blocking" | "advisory"
+    reason: string
+  }>
+  now?: number
+}): string {
+  const id = Identifier.ascending("artifact")
+  const now = input.now ?? Date.now()
+  const payload = {
+    spec_snapshot_id: input.specSnapshotID,
+    session_id: input.sessionID,
+    verdict: input.verdict,
+    per_dimension: input.perDimension,
+    issues_count: input.issuesCount,
+    corrections_count: input.correctionsCount,
+    missing_count: input.missingCount,
+    reason: input.reason ?? null,
+    review_markdown: input.reviewMarkdown ?? null,
+    corrections: input.corrections ?? null,
+    missing_goals: input.missingGoals ?? null,
+    time_completed: now,
+  }
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id,
+        task_id: input.taskID,
+        run_id: null,
+        goal_run_id: null,
+        kind: "integrity_attempt",
+        label: `verdict-${input.verdict}`,
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  return id
+}
+
+/**
+ * Record a prosecutor-pass attempt as an append-only artifact. Counterexample
+ * rows (engine_counterexample) and challenge metric specs are already
+ * persisted by the prosecutor itself; this artifact records the FACT that the
+ * adversarial pass ran for a given (delivery, iteration) tuple so the
+ * orchestrator's read_context can show "prosecutor: ran for iteration N"
+ * versus the prior implicit gap where zero counterexamples filed was
+ * indistinguishable from "never called".
+ */
+export function recordProsecutorAttempt(input: {
+  taskID: string
+  /** Delivery row this adversarial pass targeted. Same id read by `prosecute`
+   *  to fetch the defender verdict (orchestrator/tools.ts). */
+  deliveryID: string
+  /** Prosecutor child session id — surfaces in overlay nesting. */
+  sessionID: string
+  /** Iteration index inside the delivery trajectory; matches readIterationHistory. */
+  iteration: number
+  counterexamplesFiled: number
+  challengesProposed: number
+  counterexamplesResolved: number
+  rationale?: string
+  now?: number
+}): string {
+  const id = Identifier.ascending("artifact")
+  const now = input.now ?? Date.now()
+  const payload = {
+    session_id: input.sessionID,
+    iteration: input.iteration,
+    counterexamples_filed: input.counterexamplesFiled,
+    challenges_proposed: input.challengesProposed,
+    counterexamples_resolved: input.counterexamplesResolved,
+    rationale: input.rationale ?? null,
+    time_completed: now,
+  }
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id,
+        task_id: input.taskID,
+        delivery_id: input.deliveryID,
+        run_id: null,
+        goal_run_id: null,
+        kind: "prosecutor_attempt",
+        label: `iter-${input.iteration}`,
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  return id
+}
+
+/**
+ * Record an orchestrator stream-error fact as an append-only artifact.
+ *
+ * Used when the orchestrator's own LLM stream aborts mid-decision (provider
+ * onError, stream-idle watchdog, mid-stream protocol violation). Per rule 23
+ * we do NOT transition the task to terminal `failed` on a transient stream
+ * error and we do NOT auto-rewake from this artifact — both would be
+ * state-machine reactions. The orchestrator reads the artifact via describe
+ * on its next external wake and decides for itself whether to retry,
+ * restart_from_stage, or fail_task.
+ */
+export function recordOrchestratorStreamError(input: {
+  taskID: string
+  reason: string
+  errorName?: string
+  sessionID?: string
+  now: number
+}) {
+  return Database.use((db) =>
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        run_id: null,
+        kind: "orchestrator-stream-error",
+        label: "orchestrator-stream-error",
+        payload: {
+          reason: input.reason,
+          errorName: input.errorName,
+          sessionID: input.sessionID,
+        },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run(),
+  )
+}

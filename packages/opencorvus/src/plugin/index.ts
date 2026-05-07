@@ -2,27 +2,27 @@ import type { Hooks, PluginInput, Plugin as PluginInstance } from "@opencorvus-a
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
-import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
-import { Server } from "../server/server"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
 import { BunProc } from "../bun"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Flag } from "../flag/flag"
-import { CodexAuthPlugin } from "./codex"
 import { Session } from "../session"
 import { NamedError } from "@opencorvus-ai/util/error"
-import { CopilotAuthPlugin } from "./copilot"
 import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
 import { IN_PROCESS_BASE_URL, createInProcessFetch } from "@/server/in-process-client"
+import { runHookIsolated } from "./isolate"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
-  const BUILTIN = ["opencorvus-anthropic-auth@0.0.13"]
+  const BUILTIN = ["opencode-anthropic-auth@0.0.13"]
 
   // Built-in plugins that are directly imported (not installed from npm)
-  const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin]
+  // GitlabAuthPlugin is compiled against an older @opencode-ai/plugin version whose
+  // OpencodeClient type is a strict subset of the current one — safe to cast.
+  const INTERNAL_PLUGINS: PluginInstance[] = [GitlabAuthPlugin as unknown as PluginInstance]
 
-  const state = Instance.state(async () => {
+  const state = lazyInstanceState(async () => {
     const client = createOpenCorvusClient({
       baseUrl: IN_PROCESS_BASE_URL,
       directory: Instance.directory,
@@ -35,7 +35,7 @@ export namespace Plugin {
       project: Instance.project,
       worktree: Instance.worktree,
       directory: Instance.directory,
-      serverUrl: Server.url(),
+      serverUrl: new URL(IN_PROCESS_BASE_URL),
       $: Bun.$,
     }
 
@@ -54,8 +54,6 @@ export namespace Plugin {
     }
 
     for (let plugin of plugins) {
-      // ignore old codex plugin since it is supported first party now
-      if (plugin.includes("opencorvus-openai-codex-auth") || plugin.includes("opencorvus-copilot-auth")) continue
       log.info("loading plugin", { path: plugin })
       if (!plugin.startsWith("file://")) {
         const lastAtIndex = plugin.lastIndexOf("@")
@@ -112,10 +110,13 @@ export namespace Plugin {
     for (const hook of await state().then((x) => x.hooks)) {
       const fn = hook[name]
       if (!fn) continue
-      // @ts-expect-error if you feel adventurous, please fix the typing, make sure to bump the try-counter if you
-      // give up.
-      // try-counter: 2
-      await fn(input, output)
+      // audit-2026-04-29 W2-V19 — runHookIsolated catches throws
+      // and rejecting promises so a 3rd-party plugin can't kill
+      // the session lifecycle that called us. The previous
+      // `@ts-expect-error` covered a generic-typing mismatch on
+      // the direct `fn(input, output)` call; the helper takes
+      // `args: any[]` so the cast lives at the boundary.
+      await runHookIsolated(name, fn as unknown as (...a: any[]) => any, [input, output])
     }
     return output
   }
@@ -128,14 +129,18 @@ export namespace Plugin {
     const hooks = await state().then((x) => x.hooks)
     const config = await Config.get()
     for (const hook of hooks) {
-      await hook.config?.(config)
+      // audit-2026-04-29 W2-V19 — pre-fix a plugin's `config` hook
+      // throwing here aborted Plugin.init, which is awaited from
+      // session bootstrap; the entire session became unreachable.
+      await runHookIsolated("config", hook.config, [config])
     }
     Bus.subscribeAll(async (input) => {
       const hooks = await state().then((x) => x.hooks)
       for (const hook of hooks) {
-        hook["event"]?.({
-          event: input,
-        })
+        // audit-2026-04-29 W2-V19 — pre-fix the optional-chained
+        // call could surface as an UNHANDLED PROMISE REJECTION when
+        // the plugin's event handler was async and rejected.
+        await runHookIsolated("event", hook["event"], [{ event: input }])
       }
     })
   }

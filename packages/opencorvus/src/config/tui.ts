@@ -3,9 +3,8 @@ import z from "zod"
 import { mergeDeep, unique } from "remeda"
 import { Config } from "./config"
 import { ConfigPaths } from "./paths"
-import { migrateTuiConfig } from "./migrate-tui-config"
 import { TuiInfo } from "./tui-schema"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { Global } from "@/global"
@@ -25,18 +24,13 @@ export namespace TuiConfig {
     return Flag.OPENCORVUS_TUI_CONFIG
   }
 
-  const state = Instance.state(async () => {
-    let projectFiles = Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
+  const state = lazyInstanceState(async () => {
+    const projectFiles = Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
       ? []
       : await ConfigPaths.projectFiles("tui", Instance.directory, Instance.worktree)
     const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
     const custom = customPath()
     const managed = Config.managedConfigDir()
-    await migrateTuiConfig({ directories, custom, managed })
-    // Re-compute after migration since migrateTuiConfig may have created new tui.json files
-    projectFiles = Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
-      ? []
-      : await ConfigPaths.projectFiles("tui", Instance.directory, Instance.worktree)
 
     let result: Info = {}
 
@@ -90,24 +84,7 @@ export namespace TuiConfig {
     const data = await ConfigPaths.parseText(text, configFilepath, "empty")
     if (!data || typeof data !== "object" || Array.isArray(data)) return {}
 
-    // Flatten a nested "tui" key so users who wrote `{ "tui": { ... } }` inside tui.json
-    // (mirroring the old opencorvus.json shape) still get their settings applied.
-    const normalized = (() => {
-      const copy = { ...(data as Record<string, unknown>) }
-      if (!("tui" in copy)) return copy
-      if (!copy.tui || typeof copy.tui !== "object" || Array.isArray(copy.tui)) {
-        delete copy.tui
-        return copy
-      }
-      const tui = copy.tui as Record<string, unknown>
-      delete copy.tui
-      return {
-        ...tui,
-        ...copy,
-      }
-    })()
-
-    const parsed = Info.safeParse(normalized)
+    const parsed = Info.safeParse(data)
     if (!parsed.success) {
       log.warn("invalid tui config", { path: configFilepath, issues: parsed.error.issues })
       return {}

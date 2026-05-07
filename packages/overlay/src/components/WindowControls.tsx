@@ -1,57 +1,34 @@
 // ── WindowControls Component ──
-// Tauri window management buttons: minimize, maximize/restore, close (hide),
-// and always-on-top pin toggle. Ports setupTauri()
-// plus maximizeLabel / maximizeIcon helpers and the CLOSE_HINT_KEY logic.
+// Tauri window management buttons: minimize, maximize/restore, close (hide).
+// Ports setupTauri() plus maximizeLabel + CLOSE_HINT_KEY logic.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
-import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
 import { t } from "../utils/i18n";
+import { nativeMessage } from "../services/app-dialog";
+import { Button } from "./ui/Button";
+import { Icon } from "./Icon";
 
 // ── Constants ──
 
 const CLOSE_HINT_KEY = "oc_close_hint_seen";
 
+import { getTauriWindowHandle } from "../services/tauri-transport";
+
 // ── Tauri window helpers ──
 
-/** Retrieve the Tauri current-window handle, or null in non-Tauri environments. */
+/** Retrieve the Tauri current-window handle, or null in non-Tauri environments.
+ *  Routes through services/tauri-transport.ts so this component does not
+ *  reach for `window.__TAURI__` directly (CLAUDE.md §二-8). The function is
+ *  async to preserve the pre-M3 call-site shape; the handle is resolved
+ *  synchronously inside tauri-transport. */
 async function currentTauriWindow(): Promise<any | null> {
-  const getCurrent = (window as any).__TAURI__?.window?.getCurrentWindow;
-  if (typeof getCurrent === "function") {
-    try {
-      return getCurrent() as any;
-    } catch {
- // Not running inside Tauri
-    }
-  }
-  return null;
+  return getTauriWindowHandle();
 }
 
-/** Show a native dialog via Tauri's dialog plugin (if available). */
-async function nativeMessage(message: string, options?: { title?: string }): Promise<void> {
-  const notify = (window as any).nativeMessage;
-  if (typeof notify !== "function") return;
-  await notify(message, options).catch(() => undefined);
-}
-
-// ── Label helpers (
+// ── Label helpers ──
 
 function maximizeLabel(isMaximized: boolean): string {
   return isMaximized ? t("titlebar.restore") : t("titlebar.maximize");
-}
-
-function maximizeIcon(isMaximized: boolean): string {
- // SVG icons matching the existing inline SVGs
-  if (isMaximized) {
- // Restore icon
-    return `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="3" y="0.5" width="7" height="7" rx="0.5" stroke="currentColor"/>
-      <path d="M1 3.5V10H7.5" stroke="currentColor" stroke-linecap="round"/>
-    </svg>`;
-  }
- // Maximize icon
-  return `<svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="0.5" y="0.5" width="10" height="10" rx="0.5" stroke="currentColor"/>
-  </svg>`;
 }
 
 // ── Component ──
@@ -66,14 +43,6 @@ export function WindowControls() {
     const maximized = await win.isMaximized?.().catch(() => false);
     setIsMaximized(!!maximized);
     return !!maximized;
-  };
-
- // ── Sync pin (always-on-top) state ──
-  const syncPin = async (win: any): Promise<void> => {
-    if (!win) return;
-    const pinned = await win.isAlwaysOnTop?.().catch(() => false);
-    setSettingsStore("alwaysOnTop", !!pinned);
-    saveSettings();
   };
 
  // ── Handle minimize ──
@@ -114,24 +83,12 @@ export function WindowControls() {
     }
   };
 
- // ── Handle pin toggle ──
-  const handlePin = async () => {
-    const win = tauriWin();
-    if (!win) return;
-    const next = !settingsStore.alwaysOnTop;
-    await win.setAlwaysOnTop?.(next).catch(() => undefined);
-    await syncPin(win);
-  };
-
  // ── Lifecycle: init Tauri and attach resize listener ──
   onMount(async () => {
     const win = await currentTauriWindow();
     if (!win) return;
     setTauriWin(win);
 
- // Apply persisted always-on-top value and sync actual state
-    await win.setAlwaysOnTop?.(settingsStore.alwaysOnTop).catch(() => undefined);
-    await syncPin(win);
     await syncMaximize(win);
 
  // Re-sync on window resize events (Tauri fires onResized when restored)
@@ -163,115 +120,60 @@ export function WindowControls() {
     onCleanup(() => titlebar?.removeEventListener("pointerdown", handleTitlebarPointerDown));
   });
 
-  const pinLabel = () =>
-    settingsStore.alwaysOnTop ? t("titlebar.pin.unpin") : t("titlebar.pin.pin");
-
   const maxLabel = () => maximizeLabel(isMaximized());
 
   return (
-    <div class="window-controls" data-no-drag="true">
-      {/* Always-on-top pin */}
-      <Show when={tauriWin() !== null}>
-        <button
-          type="button"
-          id="btnPin"
-          class="btn btn-ghost icon-btn titlebar-btn"
-          data-pinned={settingsStore.alwaysOnTop ? "true" : "false"}
-          title={pinLabel()}
-          aria-label={pinLabel()}
-          onClick={() => void handlePin()}
-        >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path
-              d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linejoin="round"
-            />
-            <line
-              x1="2"
-              y1="14"
-              x2="6"
-              y2="10"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linecap="round"
-            />
-          </svg>
-        </button>
-      </Show>
-
+    <div class="titlebar-window-controls" data-no-drag="true">
       {/* Minimize */}
       <Show when={tauriWin() !== null}>
-        <button
+        <Button
           type="button"
           id="btnMinimize"
-          class="btn btn-ghost icon-btn titlebar-btn"
+          variant="ghost"
+          size="icon"
+          tone="neutral"
+          data-chrome="window-control"
           title={t("titlebar.minimize")}
           aria-label={t("titlebar.minimize")}
           onClick={handleMinimize}
         >
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-            <line
-              x1="1"
-              y1="5.5"
-              x2="10"
-              y2="5.5"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linecap="round"
-            />
-          </svg>
-        </button>
+          <Icon name="minimize" />
+        </Button>
       </Show>
 
       {/* Maximize / Restore */}
       <Show when={tauriWin() !== null}>
-        <button
+        <Button
           type="button"
           id="btnMaximize"
-          class="btn btn-ghost icon-btn titlebar-btn"
+          variant="ghost"
+          size="icon"
+          tone="neutral"
+          data-chrome="window-control"
           data-maximized={isMaximized() ? "true" : "false"}
           title={maxLabel()}
           aria-label={maxLabel()}
           onClick={() => void handleMaximize()}
- // innerHTML is safest here because the SVG path differs for maximize vs
- // restore and we want a single reactive expression.
-          innerHTML={maximizeIcon(isMaximized())}
-        />
+        >
+          <Icon name={isMaximized() ? "restore" : "maximize"} />
+        </Button>
       </Show>
 
       {/* Close / hide */}
       <Show when={tauriWin() !== null}>
-        <button
+        <Button
           type="button"
           id="btnClose"
-          class="btn btn-ghost icon-btn titlebar-btn titlebar-btn-close"
+          variant="ghost"
+          size="icon"
+          tone="danger"
+          data-chrome="window-control"
           title={t("titlebar.close")}
           aria-label={t("titlebar.close")}
           onClick={() => void handleClose()}
         >
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-            <line
-              x1="1"
-              y1="1"
-              x2="10"
-              y2="10"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linecap="round"
-            />
-            <line
-              x1="10"
-              y1="1"
-              x2="1"
-              y2="10"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linecap="round"
-            />
-          </svg>
-        </button>
+          <Icon name="close" />
+        </Button>
       </Show>
     </div>
   );

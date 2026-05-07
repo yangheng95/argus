@@ -7,6 +7,7 @@ import * as github from "@actions/github"
 import type { Context as GitHubContext } from "@actions/github/lib/context"
 import type { IssueCommentEvent, PullRequestReviewCommentEvent } from "@octokit/webhooks-types"
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
+import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "@opencorvus-ai/sdk/defaults"
 import { spawn } from "node:child_process"
 
 type GitHubAuthor = {
@@ -228,8 +229,8 @@ try {
 process.exit(exitCode)
 
 function createOpenCorvus() {
-  const host = "127.0.0.1"
-  const port = 7878
+  const host = DEFAULT_SERVER_HOST
+  const port = DEFAULT_SERVER_PORT
   const url = `http://${host}:${port}`
   const proc = spawn(`opencorvus`, [`serve`, `--hostname=${host}`, `--port=${port}`])
   const client = createOpenCorvusClient({ baseUrl: url })

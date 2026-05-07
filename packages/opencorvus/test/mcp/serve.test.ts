@@ -9,40 +9,91 @@ describe("mcp.serve", () => {
     mock.restore()
   })
 
-  test("builds a re-entrant command for executor toolset", () => {
-    const spec = MCPServe.command("/repo")
-    expect(spec.name).toBe("opencorvus")
-    expect(spec.command.length).toBeGreaterThan(0)
-    expect(spec.args.slice(-6)).toEqual(["mcp", "serve", "--cwd", "/repo", "--toolset", "executor"])
+  test("builds a Bun source stdio command for the executor toolset", () => {
+    const config = MCPServe.command("/repo", {
+      execPath: "C:\\tools\\bun.exe",
+      moduleDir: "D:\\repo\\packages\\opencorvus\\src\\mcp",
+    })
+    expect(config.name).toBe("opencorvus")
+    expect(config.command).toBe("C:\\tools\\bun.exe")
+    expect(config.args[0]).toEndWith("stdio.ts")
+    expect(config.args.slice(-4)).toEqual(["--cwd", "/repo", "--toolset", "executor"])
+    expect("env" in config).toBe(false)
+  })
+
+  test("builds a packaged Windows command without Bun virtual source paths", () => {
+    const config = MCPServe.command("D:\\repo\\worktree", {
+      execPath: "C:\\Users\\me\\AppData\\Local\\OpenCorvus\\opencorvus.exe",
+      moduleDir: "B:\\~BUN\\root\\src\\mcp",
+    })
+    expect(config.name).toBe("opencorvus")
+    expect(config.command).toBe("C:\\Users\\me\\AppData\\Local\\OpenCorvus\\opencorvus.exe")
+    expect(config.args).toEqual(["mcp", "serve", "--cwd", "D:\\repo\\worktree", "--toolset", "executor"])
+    expect(config.args.join(" ")).not.toContain("B:\\~BUN")
+    expect("env" in config).toBe(false)
+  })
+
+  test("builds a packaged POSIX command without Bun virtual source paths", () => {
+    const config = MCPServe.command("/repo/worktree", {
+      execPath: "/usr/local/bin/opencorvus",
+      moduleDir: "/$bunfs/root/src/mcp",
+    })
+    expect(config.name).toBe("opencorvus")
+    expect(config.command).toBe("/usr/local/bin/opencorvus")
+    expect(config.args).toEqual(["mcp", "serve", "--cwd", "/repo/worktree", "--toolset", "executor"])
+    expect(config.args.join(" ")).not.toContain("$bunfs")
+    expect("env" in config).toBe(false)
   })
 
   test("exposes the executor MCP toolset", async () => {
-    await using tmp = await tmpdir({ git: true })
+    expect(MCPServe.executorToolNames().sort()).toEqual(
+      [
+        "figma_analyze",
+        "figma_compile",
+        "figma_extract",
+        "memory",
+        "task_report",
+        "webpage_analyze",
+        "webpage_compile",
+        "webpage_evaluate",
+        "webpage_extract",
+        "webpage_image_analyze",
+        "webpage_image_compile",
+        "webpage_image_extract",
+        "webpage_render",
+        "webpage_text_diff",
+        "webpage_vision_judge",
+      ].sort(),
+    )
+  })
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const defs = await MCPServe.toolDefinitions("executor")
-        expect(defs.map((item) => item.name).sort()).toEqual([
-          "apply_patch",
-          "fetch_url",
-          "find_files",
-          "memory",
-          "preference",
-          "read_file",
-          "search_code",
-          "shell_command",
-          "task_report",
-          "web_search",
-        ])
-        expect(defs.every((item) => item.metadata?.surface === "mcp")).toBe(true)
-      },
+  test("exports Claude-compatible object input schemas", async () => {
+    const defs = await MCPServe.toolDefinitions("executor", { includeProxied: false })
+    for (const def of defs) {
+      expect(def.inputSchema.type).toBe("object")
+      expect(def.inputSchema.anyOf).toBeUndefined()
+      expect(def.inputSchema.oneOf).toBeUndefined()
+      expect(def.inputSchema.allOf).toBeUndefined()
+    }
+    const memory = defs.find((item) => item.name === "memory")
+    expect(memory?.inputSchema.required).toEqual(["action"])
+    expect(memory?.inputSchema.properties?.action).toEqual({
+      type: "string",
+      enum: ["search", "get", "write", "list", "delete"],
     })
+  })
+
+  test("maps executor tools to coding executor MCP-prefixed names", () => {
+    expect(MCPServe.codingExecutorToolName("webpage_extract")).toBe("mcp__opencorvus__webpage_extract")
+    expect(MCPServe.normalizeCodingExecutorToolName("mcp__opencorvus__webpage_compile")).toBe("webpage_compile")
+    const prompt = MCPServe.codingExecutorPromptSection()
+    expect(prompt).toContain("webpage_extract => mcp__opencorvus__webpage_extract")
+    expect(prompt).toContain("Mirror extraction artifacts must come from the mirror MCP toolchain")
   })
 
   test("includes proxied external MCP tools in definitions", async () => {
     await using tmp = await tmpdir({ git: true })
-    spyOn(MCP, "serverTools").mockResolvedValue([
+    const proxiedTools = [
       {
         key: "docs_lookup",
         client: "docs",
@@ -55,12 +106,12 @@ describe("mcp.serve", () => {
           },
         },
       },
-    ])
+    ]
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const defs = await MCPServe.toolDefinitions("executor")
+        const defs = await MCPServe.toolDefinitions("executor", { includeRuntime: false, proxiedTools })
         const match = defs.find((item) => item.name === "docs_lookup")
         expect(match?.metadata?.proxied_client).toBe("docs")
         expect(match?.metadata?.proxied_tool).toBe("lookup")

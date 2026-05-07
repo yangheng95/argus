@@ -9,27 +9,29 @@
     "build": "bun ./script/build.ts"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./client": "./src/client.ts",
-    "./server": "./src/server.ts",
-    "./v2": {
-      "types": "./dist/v2/index.d.ts",
-      "import": "./src/v2/index.ts",
-      "default": "./src/v2/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     },
-    "./v2/client": {
-      "types": "./dist/v2/client.d.ts",
-      "import": "./src/v2/client.ts",
-      "default": "./src/v2/client.ts"
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./src/client.ts",
+      "default": "./src/client.ts"
     },
-    "./v2/gen/client": {
-      "types": "./dist/v2/gen/client/index.d.ts",
-      "default": "./src/v2/gen/client/index.ts"
+    "./gen/client": {
+      "types": "./dist/gen/client/index.d.ts",
+      "default": "./src/gen/client/index.ts"
     },
-    "./v2/server": {
-      "types": "./dist/v2/server.d.ts",
-      "import": "./src/v2/server.ts",
-      "default": "./src/v2/server.ts"
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./src/server.ts",
+      "default": "./src/server.ts"
+    },
+    "./defaults": {
+      "types": "./dist/defaults.d.ts",
+      "import": "./src/defaults.ts",
+      "default": "./src/defaults.ts"
     }
   },
   "files": [

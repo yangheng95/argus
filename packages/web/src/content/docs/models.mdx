@@ -1,0 +1,55 @@
+---
+title: Models
+description: Selecting LLM models in OpenCorvus, models.dev integration, and per-agent overrides.
+---
+
+OpenCorvus picks a model in three scenarios; configure each independently. See [Providers](/docs/providers/) for the underlying provider list.
+
+## Three knobs
+
+| Scenario | Where to set |
+|---|---|
+| Default execution model | `model` field in [config](/docs/config/) |
+| Per-agent model | `agent.<name>.model` (see `packages/opencorvus/src/config/config.ts:1053-1067`, `1191`, `1232`, `1239`, `1246`) |
+| Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL` env |
+
+Example splitting plan vs execute:
+
+```jsonc
+{
+  "model": "alibaba-cn/qwen3.5-plus",
+  "agent": {
+    "requirements":   { "model": "anthropic/claude-sonnet-4-6" },
+    "planner":        { "model": "anthropic/claude-sonnet-4-6" },
+    "design-analyst": { "model": "anthropic/claude-sonnet-4-6" }
+  }
+}
+```
+
+The `model` key per agent is read by `Agent.state()` in `packages/opencorvus/src/agent/agent.ts:480` (`Provider.parseModel(value.model)`). Step / skill knobs for the same agents live separately under `assistant.<name>` — see [Agents](/docs/agents/#agent-budgets).
+
+## models.dev
+
+OpenCorvus pulls a snapshot of [models.dev](https://models.dev) at build time (`packages/opencorvus/src/provider/models-snapshot.ts`) so it can resolve model names, capabilities, and pricing offline. The snapshot is refreshed as part of the CI release pipeline.
+
+You can override the snapshot location at build time via `MODELS_DEV_API_JSON` (see the build scripts in `packages/opencorvus/script/`).
+
+## Listing available models
+
+```bash
+opencorvus models --list
+```
+
+This filters models by which providers currently have credentials configured. Disabling a provider via env (or `disabled_providers` in config) removes its models from the list.
+
+## Model variants
+
+Some providers expose model variants (e.g. with/without extended context). The TUI's model picker and ACP's `unstable_setSessionModel` support variants directly.
+
+## Choosing a model
+
+Practical guidance:
+
+- **Reasoning models** (Claude reasoning, o-series, qwq) are great for planning but **must be invoked via `streamText` with `toolChoice: "auto"`**. See [Providers](/docs/providers/) for the constraints.
+- **Cheap fast models** are usually fine for execution; the evaluator will catch regressions.
+- **Vision** — set `OPENCORVUS_VISION_MODEL` to a multimodal model (e.g. `anthropic/claude-sonnet-4-6`). It is only invoked for screenshot / image inputs.

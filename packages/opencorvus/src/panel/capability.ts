@@ -1,5 +1,5 @@
 import z from "zod"
-import { CheckConfig, StageRouting } from "@/orchestrator/model"
+import { CheckConfig, StageRouting } from "@/engine"
 import { ChannelId, ChannelSurface as SharedChannelSurface } from "@/channel/catalog"
 
 export const PanelSurface = SharedChannelSurface
@@ -11,6 +11,7 @@ export const PanelCapabilityQuery = z.object({
 
 const all = PanelSurface.options
 const panel = ["panel"] as const
+const nonGateway = PanelSurface.options.filter((surface) => surface !== "gateway")
 const CheckSelection = z.record(z.string(), z.boolean())
 
 type Shape = z.ZodRawShape
@@ -90,7 +91,7 @@ export const PanelCapabilityRegistry = list(
     params: {
       request: z.string(),
       request_id: z.string().optional(),
-      executor: z.enum(["opencode", "codex", "claude-code"]).optional(),
+      executor: z.enum(["mirrorcode", "codex", "claude-code"]).optional(),
       checks: CheckConfig.optional(),
       routing: StageRouting.optional(),
       channel: z.string().optional(),
@@ -176,7 +177,7 @@ export const PanelCapabilityRegistry = list(
     action: "capture_overlay_screenshot",
     description: "Capture the current OpenCorvus GUI window and return it as an image attachment.",
     kind: "query",
-    surfaces: all,
+    surfaces: nonGateway,
     params: {
       match: z.string().optional(),
     },
@@ -187,7 +188,7 @@ export const PanelCapabilityRegistry = list(
     kind: "mutation",
     surfaces: panel,
     params: {
-      executor: z.enum(["opencode", "codex", "claude-code"]),
+      executor: z.enum(["mirrorcode", "codex", "claude-code"]),
     },
     local_action_types: ["set_executor"],
     local_action_surfaces: panel,
@@ -246,23 +247,14 @@ export const PanelCapabilityRegistry = list(
     local_action_surfaces: panel,
   }),
   item({
-    action: "export_session_html",
-    description: "Export a session transcript as HTML.",
-    kind: "mutation",
-    surfaces: all,
-    params: {
-      sessionID: z.string(),
-    },
-  }),
-  item({
     action: "update_goal",
-    description: "Update a goal description and criteria.",
+    description: "Update a goal description and acceptance specs.",
     kind: "mutation",
     surfaces: all,
     params: {
       goalID: z.string(),
       description: z.string(),
-      criteria: z.string(),
+      acceptance_specs: z.array(z.unknown()).min(1),
     },
   }),
   item({

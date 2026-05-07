@@ -1,5 +1,6 @@
-import { Database, sql } from "@/storage/db"
+import { Database, sql, eq } from "@/storage/db"
 import { Log } from "@/util/log"
+import { MemoryFileTable } from "./memory.sql"
 import type { Memory } from "./index"
 
 export namespace MemorySearch {
@@ -15,10 +16,32 @@ export namespace MemorySearch {
     episode: 0.8,
   }
 
+  /**
+   * Cold-start guard: when a project has zero memory entries, every
+   * `memory.search` call from every stage agent at task start ends up
+   * doing the full FTS pipeline only to return [], 4-6 times per agent,
+   * dozens of times per task. The benchmark caught the 14-48s loops on
+   * the first task in a fresh temp home. Short-circuit returns early
+   * when the project has no memory_file rows at all — once anything is
+   * written (compaction, reflection, user note) searches resume normally.
+   */
+  function projectHasMemory(projectId: string): boolean {
+    const row = Database.use((db) =>
+      db
+        .select({ id: MemoryFileTable.id })
+        .from(MemoryFileTable)
+        .where(eq(MemoryFileTable.project_id, projectId))
+        .limit(1)
+        .get(),
+    )
+    return row !== undefined
+  }
+
   export function search(input: {
     query: string
     projectId: string
     sessionID?: string
+    sessionIDs?: string[]
     scope?: Memory.QueryScope
     limit?: number
     minScore?: number
@@ -30,13 +53,20 @@ export namespace MemorySearch {
     const minScore = input.minScore ?? 0.1
     const query = buildFtsQuery(input.query)
     const scope = input.scope ?? "all"
+    const sessionSet = input.sessionIDs && input.sessionIDs.length > 0 ? new Set(input.sessionIDs) : null
 
     if (!query) {
       log.info("empty search query after tokenization")
       return []
     }
-    if (scope === "session" && !input.sessionID) {
+    if (scope === "session" && !input.sessionID && !sessionSet) {
       log.info("session-scoped memory search skipped without sessionID", { query })
+      return []
+    }
+    if (!projectHasMemory(input.projectId)) {
+      log.info("memory empty for project — skipping FTS pipeline", {
+        projectId: input.projectId,
+      })
       return []
     }
 
@@ -45,6 +75,7 @@ export namespace MemorySearch {
         query,
         projectId: input.projectId,
         sessionID: input.sessionID,
+        sessionSet,
         scope,
         limit,
         minScore,
@@ -58,6 +89,7 @@ export namespace MemorySearch {
         query: input.query,
         projectId: input.projectId,
         sessionID: input.sessionID,
+        sessionSet,
         scope,
         limit,
         kinds: input.kinds,
@@ -70,6 +102,7 @@ export namespace MemorySearch {
     query: string
     projectId: string
     sessionID?: string
+    sessionSet: Set<string> | null
     scope: Memory.QueryScope
     limit: number
     minScore: number
@@ -121,7 +154,7 @@ export namespace MemorySearch {
 
     const results: Memory.SearchResult[] = []
     for (const row of rows) {
-      if (!matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID)) continue
+      if (!matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID, input.sessionSet)) continue
       if (!matchesKinds(row.kind, input.kinds)) continue
       if (!matchesSources(row.source, input.sources)) continue
 
@@ -169,6 +202,7 @@ export namespace MemorySearch {
     query: string
     projectId: string
     sessionID?: string
+    sessionSet: Set<string> | null
     scope: Memory.QueryScope
     limit: number
     kinds?: Memory.Kind[]
@@ -213,7 +247,7 @@ export namespace MemorySearch {
     )
 
     return rows
-      .filter((row) => matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID))
+      .filter((row) => matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID, input.sessionSet))
       .filter((row) => matchesKinds(row.kind, input.kinds))
       .filter((row) => matchesSources(row.source, input.sources))
       .map((row, idx) => ({
@@ -271,8 +305,14 @@ export namespace MemorySearch {
     rowSessionID: string | undefined,
     queryScope: Memory.QueryScope,
     sessionID: string | undefined,
+    sessionSet: Set<string> | null,
   ) {
     if (queryScope === "global") return rowScope === "global"
+    if (sessionSet) {
+      if (queryScope === "session") return rowScope === "session" && !!rowSessionID && sessionSet.has(rowSessionID)
+      if (rowScope === "global") return true
+      return !!rowSessionID && sessionSet.has(rowSessionID)
+    }
     if (queryScope === "session") return rowScope === "session" && rowSessionID === sessionID
     if (rowScope === "global") return true
     return rowSessionID === sessionID

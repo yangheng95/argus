@@ -13,8 +13,9 @@ import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
-import { ProviderTransform } from "@/provider/transform"
 import { MemoryFlush } from "@/memory/flush"
+import { resolveModelRef } from "@/agent/model"
+import { ContextBudget } from "./context-budget"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -28,30 +29,208 @@ export namespace SessionCompaction {
     ),
   }
 
-  const COMPACTION_BUFFER = 20_000
+  const COMPACTION_TOOL_OUTPUT_MAX_CHARS = 2_000
+  const SUMMARY_TEMPLATE = `Output exactly the Markdown structure shown inside <template> and keep the section order unchanged. Do not include the <template> tags in your response.
+<template>
+## Goal
+- [single-sentence task summary]
+
+## Constraints & Preferences
+- [user constraints, preferences, specs, or "(none)"]
+
+## Progress
+### Done
+- [completed work or "(none)"]
+
+### In Progress
+- [current work or "(none)"]
+
+### Blocked
+- [blockers or "(none)"]
+
+## Key Decisions
+- [decision and why, or "(none)"]
+
+## Next Steps
+- [ordered next actions or "(none)"]
+
+## Critical Context
+- [important technical facts, errors, open questions, or "(none)"]
+
+## Relevant Files
+- [file or directory path: why it matters, or "(none)"]
+</template>
+
+Rules:
+- Keep every section, even when empty.
+- Use terse bullets, not prose paragraphs.
+- Preserve exact file paths, commands, error strings, and identifiers when known.
+- Do not mention the summary process or that context was compacted.`
+
+  type Turn = {
+    start: number
+    end: number
+    id: string
+  }
+
+  type Tail = {
+    start: number
+    id: string
+  }
+
+  type CompletedCompaction = {
+    userIndex: number
+    assistantIndex: number
+    summary: string | undefined
+  }
 
   export async function isOverflow(input: { tokens: Message.Assistant["tokens"]; model: Provider.Model }) {
     const config = await Config.get()
-    if (config.compaction?.auto === false) return false
-    const context = input.model.limit.context
-    if (context === 0) return false
-
-    const count =
-      input.tokens.total ||
-      input.tokens.input + input.tokens.output + input.tokens.cache.read + input.tokens.cache.write
-
-    const reserved =
-      config.compaction?.reserved ?? Math.min(COMPACTION_BUFFER, ProviderTransform.maxOutputTokens(input.model))
-    const usable = input.model.limit.input
-      ? input.model.limit.input - reserved
-      : context - ProviderTransform.maxOutputTokens(input.model)
-    return count >= usable
+    return ContextBudget.isUsageOverflow({ config, tokens: input.tokens, model: input.model })
   }
 
   export const PRUNE_MINIMUM = 20_000
   export const PRUNE_PROTECT = 40_000
 
   const PRUNE_PROTECTED_TOOLS = ["skill"]
+
+  function summaryText(message: Message.WithParts) {
+    const text = message.parts
+      .filter((part): part is Message.TextPart => part.type === "text")
+      .map((part) => part.text.trim())
+      .filter(Boolean)
+      .join("\n\n")
+      .trim()
+    return text || undefined
+  }
+
+  function completedCompactions(messages: Message.WithParts[]) {
+    const users = new Map<string, number>()
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (msg.info.role !== "user") continue
+      if (!msg.parts.some((part) => part.type === "compaction")) continue
+      users.set(msg.info.id, i)
+    }
+
+    return messages.flatMap((msg, assistantIndex): CompletedCompaction[] => {
+      if (msg.info.role !== "assistant") return []
+      if (!msg.info.summary || !msg.info.finish || msg.info.error) return []
+      const userIndex = users.get(msg.info.parentID)
+      if (userIndex === undefined) return []
+      return [{ userIndex, assistantIndex, summary: summaryText(msg) }]
+    })
+  }
+
+  function buildPrompt(input: { previousSummary?: string; context: string[] }) {
+    const anchor = input.previousSummary
+      ? [
+          "Update the anchored summary below using the conversation history above.",
+          "Preserve still-true details, remove stale details, and merge in the new facts.",
+          "<previous-summary>",
+          input.previousSummary,
+          "</previous-summary>",
+        ].join("\n")
+      : "Create a new anchored summary from the conversation history above."
+    return [anchor, SUMMARY_TEMPLATE, ...input.context].join("\n\n")
+  }
+
+  function turns(messages: Message.WithParts[]) {
+    const result: Turn[] = []
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (msg.info.role !== "user") continue
+      if (msg.parts.some((part) => part.type === "compaction")) continue
+      result.push({
+        start: i,
+        end: messages.length,
+        id: msg.info.id,
+      })
+    }
+    for (let i = 0; i < result.length - 1; i++) {
+      result[i].end = result[i + 1].start
+    }
+    return result
+  }
+
+  async function estimate(input: { messages: Message.WithParts[]; model: Provider.Model }) {
+    const msgs = await Message.toModelMessages(input.messages, input.model, {
+      stripMedia: true,
+      toolOutputMaxChars: COMPACTION_TOOL_OUTPUT_MAX_CHARS,
+    })
+    return Token.estimate(JSON.stringify(msgs))
+  }
+
+  async function splitTurn(input: {
+    messages: Message.WithParts[]
+    turn: Turn
+    model: Provider.Model
+    budget: number
+  }) {
+    if (input.budget <= 0) return undefined
+    if (input.turn.end - input.turn.start <= 1) return undefined
+    for (let start = input.turn.start + 1; start < input.turn.end; start++) {
+      const size = await estimate({
+        messages: input.messages.slice(start, input.turn.end),
+        model: input.model,
+      })
+      if (size > input.budget) continue
+      return {
+        start,
+        id: input.messages[start]!.info.id,
+      } satisfies Tail
+    }
+    return undefined
+  }
+
+  async function selectCompactionInput(input: {
+    messages: Message.WithParts[]
+    config: Config.Info
+    model: Provider.Model
+  }) {
+    const limit = input.config.compaction?.tail_turns ?? ContextBudget.DEFAULT_TAIL_TURNS
+    if (limit <= 0) return { head: input.messages, tail_start_id: undefined as string | undefined }
+    const budget = ContextBudget.preserveRecent({ config: input.config, model: input.model })
+    const all = turns(input.messages)
+    if (!all.length) return { head: input.messages, tail_start_id: undefined as string | undefined }
+    const recent = all.slice(-limit)
+    const sizes = [] as number[]
+    for (const turn of recent) {
+      sizes.push(
+        await estimate({
+          messages: input.messages.slice(turn.start, turn.end),
+          model: input.model,
+        }),
+      )
+    }
+
+    let total = 0
+    let keep: Tail | undefined
+    for (let i = recent.length - 1; i >= 0; i--) {
+      const turn = recent[i]!
+      const size = sizes[i]!
+      if (total + size <= budget) {
+        total += size
+        keep = { start: turn.start, id: turn.id }
+        continue
+      }
+      const split = await splitTurn({
+        messages: input.messages,
+        turn,
+        model: input.model,
+        budget: budget - total,
+      })
+      if (split) keep = split
+      else if (!keep) log.info("tail fallback", { budget, size, total })
+      break
+    }
+
+    if (!keep || keep.start === 0) return { head: input.messages, tail_start_id: undefined as string | undefined }
+    return {
+      head: input.messages.slice(0, keep.start),
+      tail_start_id: keep.id,
+    }
+  }
 
   // goes backwards through parts until there are 40_000 tokens worth of tool
   // calls. then erases output of previous tool calls. idea is to throw away old
@@ -106,17 +285,32 @@ export namespace SessionCompaction {
     abort: AbortSignal
     auto: boolean
   }) {
-    const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as Message.User
+    const parent = input.messages.findLast((m) => m.info.id === input.parentID)
+    if (!parent || parent.info.role !== "user") {
+      throw new Error(`Compaction parent must be a user message: ${input.parentID}`)
+    }
+    const userMessage = parent.info as Message.User
+    const compactionPart = parent.parts.find((part): part is Message.CompactionPart => part.type === "compaction")
     const agent = await Agent.get("compaction")
-    const model = agent.model
-      ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
-      : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
+    const userModel = await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
+    const model = await resolveModelRef(agent.model, userModel)
+    const config = await Config.get()
+    const history = compactionPart && input.messages.at(-1)?.info.id === input.parentID
+      ? input.messages.slice(0, -1)
+      : input.messages
+    const prior = completedCompactions(history)
+    const hidden = new Set(prior.flatMap((item) => [item.userIndex, item.assistantIndex]))
+    const selected = await selectCompactionInput({
+      messages: history.filter((_, index) => !hidden.has(index)),
+      config,
+      model,
+    })
+
     const msg = (await Session.updateMessage({
       id: Identifier.ascending("message"),
       role: "assistant",
       parentID: input.parentID,
       sessionID: input.sessionID,
-      mode: "compaction",
       agent: "compaction",
       variant: userMessage.variant,
       summary: true,
@@ -149,35 +343,8 @@ export namespace SessionCompaction {
       { sessionID: input.sessionID },
       { context: [], prompt: undefined },
     )
-    const defaultPrompt = `Provide a detailed prompt for continuing our conversation above.
-Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.
-The summary that you construct will be used so that another agent can read it and continue the work.
-
-When constructing the summary, try to stick to this template:
----
-## Goal
-
-[What goal(s) is the user trying to accomplish?]
-
-## Instructions
-
-- [What important instructions did the user give you that are relevant]
-- [If there is a plan or spec, include information about it so next agent can continue using it]
-
-## Discoveries
-
-[What notable things were learned during this conversation that would be useful for the next agent to know when continuing the work]
-
-## Accomplished
-
-[What work has been completed, what work is still in progress, and what work is left?]
-
-## Relevant files / directories
-
-[Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand. If all the files in a directory are relevant, include the path to the directory.]
----`
-
-    const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
+    const promptText =
+      compacting.prompt ?? buildPrompt({ previousSummary: prior.at(-1)?.summary, context: compacting.context })
     const result = await processor.process({
       user: userMessage,
       agent,
@@ -186,7 +353,10 @@ When constructing the summary, try to stick to this template:
       tools: {},
       system: [],
       messages: [
-        ...Message.toModelMessages(input.messages, model),
+        ...(await Message.toModelMessages(selected.head, model, {
+          stripMedia: true,
+          toolOutputMaxChars: COMPACTION_TOOL_OUTPUT_MAX_CHARS,
+        })),
         {
           role: "user",
           content: [
@@ -200,30 +370,23 @@ When constructing the summary, try to stick to this template:
       model,
     })
 
-    if (result === "continue" && input.auto) {
-      const continueMsg = await Session.updateMessage({
-        id: Identifier.ascending("message"),
-        role: "user",
-        sessionID: input.sessionID,
-        time: {
-          created: Date.now(),
-        },
-        agent: userMessage.agent,
-        model: userMessage.model,
-      })
+    if (result === "compact") {
+      processor.message.error = new Message.ContextOverflowError({
+        message:
+          "Session too large to compact: the compaction request exceeded the model context limit even after removing media attachments and truncating tool outputs.",
+      }).toObject()
+      processor.message.finish = "error"
+      await Session.updateMessage(processor.message)
+      return "stop"
+    }
+
+    if (compactionPart && selected.tail_start_id && compactionPart.tail_start_id !== selected.tail_start_id) {
       await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: continueMsg.id,
-        sessionID: input.sessionID,
-        type: "text",
-        synthetic: true,
-        text: "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.",
-        time: {
-          start: Date.now(),
-          end: Date.now(),
-        },
+        ...compactionPart,
+        tail_start_id: selected.tail_start_id,
       })
     }
+
     if (processor.message.error) return "stop"
     Bus.publish(Event.Compacted, { sessionID: input.sessionID })
 
@@ -244,6 +407,7 @@ When constructing the summary, try to stick to this template:
         modelID: z.string(),
       }),
       auto: z.boolean(),
+      overflow: z.boolean().optional(),
     }),
     async (input) => {
       const msg = await Session.updateMessage({
@@ -262,6 +426,7 @@ When constructing the summary, try to stick to this template:
         sessionID: msg.sessionID,
         type: "compaction",
         auto: input.auto,
+        overflow: input.overflow,
       })
     },
   )

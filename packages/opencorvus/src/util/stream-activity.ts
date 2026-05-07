@@ -1,0 +1,183 @@
+/**
+ * Single-source chunk-driven activity gate.
+ *
+ * Purpose: detect "no byte moved in N ms" on any streaming surface
+ * (LLM stream.fullStream, executor event queue, SSE bridge) without
+ * each layer inventing its own setTimeout/reset dance.
+ *
+ * Semantics (physical-liveness probe, NOT a state machine):
+ *   - Caller pulls `signal` and composes it into whatever `AbortSignal`
+ *     its producer already honours.
+ *   - Caller invokes `observe()` on every real chunk / event. Each call
+ *     resets the inactivity timer.
+ *   - If `idleMs` elapses with no `observe()` call AND the external
+ *     `signal` has not fired, the gate aborts its own controller with
+ *     an `AbortError` carrying a deterministic reason. The chain then
+ *     unwinds naturally through the existing `throwIfAborted()` / abort
+ *     listeners — no custom status codes, no separate error taxonomy.
+ *   - Disposal is idempotent; after `dispose()` the gate stops all
+ *     timers and stops observing.
+ *
+ * Rules: CLAUDE.md #1 (no fallback — we *abort*, the caller decides),
+ * #22 (single source for activity-gating), #24 (pattern is extracted,
+ * not copy-pasted into each consumer), #26 (no over-engineering —
+ * observe() / dispose() / signal / lastActivityAt and that's it).
+ */
+
+export interface StreamActivityGate {
+  /** Abort signal combined from external signal + internal idle controller. */
+  readonly signal: AbortSignal
+  /** Call on every chunk / event. Resets the inactivity timer. */
+  observe(): void
+  /**
+   * Suspend the inactivity timer until `resume()` is called. Use when the
+   * stream is legitimately paused waiting on a long synchronous tool call —
+   * the LLM provider holds the connection open but emits no chunks during
+   * tool execution, so the chunk-driven probe would false-positive trip.
+   * Per rule 23 we don't infer "tool running" from internal state; the
+   * caller explicitly pauses around the tool-call → tool-result boundary.
+   *
+   * Calls nest: each `pause()` requires a matching `resume()`. Excess
+   * `resume()` calls are a no-op so callers don't need pair-tracking.
+   */
+  pause(): void
+  /** Counterpart to pause(); reschedules the idle timer. */
+  resume(): void
+  /** Millisecond timestamp of the most recent observe() (or construction). */
+  lastActivityAt(): number
+  /** True once the gate's own controller has aborted due to inactivity. */
+  timedOut(): boolean
+  /** Idempotent. Clears all timers and detaches listeners. */
+  dispose(): void
+}
+
+export interface StreamActivityOptions {
+  /** Maximum idle window before the gate aborts itself. Must be > 0. */
+  idleMs: number
+  /** Caller-owned signal that the gate propagates alongside its own. */
+  signal?: AbortSignal
+  /**
+   * Human-readable tag appended to the AbortError reason (e.g.
+   * "session-llm", "executor-events"). Helps triage in logs; does NOT
+   * change control flow.
+   */
+  label?: string
+}
+
+/**
+ * Race every `next()` of an async iterable against an `AbortSignal` so the
+ * iterator throws as soon as the signal aborts — even when the underlying
+ * source has parked on a network read that doesn't honour signal abort
+ * (Bun fetch + AI SDK readers exhibit this: AbortController.abort() closes
+ * the connection but does not reject an already-pending reader.read()
+ * promise, so the consumer's `for await` hangs forever).
+ *
+ * Pairs with `withStreamActivity` — the gate's combined signal flips, this
+ * wrapper guarantees the consumer's loop actually exits with the
+ * AbortError. Cleans up the upstream iterator via `iter.return?.()` so
+ * provider-side resources (response body, fetch socket) get released.
+ */
+export async function* abortableIterable<T>(
+  source: AsyncIterable<T>,
+  signal: AbortSignal,
+): AsyncGenerator<T> {
+  const iter = source[Symbol.asyncIterator]()
+  try {
+    while (true) {
+      if (signal.aborted) throw signal.reason
+      let onAbort: (() => void) | null = null
+      const abortPromise = new Promise<never>((_, reject) => {
+        onAbort = () => reject(signal.reason)
+        signal.addEventListener("abort", onAbort, { once: true })
+      })
+      try {
+        const result = await Promise.race([iter.next(), abortPromise])
+        if (result.done) return
+        yield result.value
+      } finally {
+        if (onAbort) signal.removeEventListener("abort", onAbort)
+      }
+    }
+  } finally {
+    try { await iter.return?.() } catch { /* upstream already torn down */ }
+  }
+}
+
+export function withStreamActivity(options: StreamActivityOptions): StreamActivityGate {
+  if (!Number.isFinite(options.idleMs) || options.idleMs <= 0) {
+    throw new Error(`withStreamActivity: idleMs must be a positive finite number (got ${options.idleMs})`)
+  }
+  const label = options.label ?? "stream"
+  const inactivity = new AbortController()
+  const combined = options.signal
+    ? AbortSignal.any([options.signal, inactivity.signal])
+    : inactivity.signal
+
+  let last = Date.now()
+  let disposed = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+  /** Pause depth — `pause()` increments, `resume()` decrements. The timer is
+   *  scheduled only when depth === 0. Allows nested pause regions (e.g. one
+   *  tool dispatched inside another). */
+  let pauseDepth = 0
+
+  const trip = () => {
+    if (disposed) return
+    if (inactivity.signal.aborted) return
+    inactivity.abort(
+      new DOMException(`stream idle > ${options.idleMs}ms (${label})`, "AbortError"),
+    )
+  }
+
+  const clear = () => {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+
+  const schedule = () => {
+    if (disposed) return
+    clear()
+    if (pauseDepth > 0) return
+    timer = setTimeout(trip, options.idleMs)
+    // Timer is intentionally ref'd: unref would let Bun idle out while an
+    // async iterator is parked on `await new Promise`, defeating the gate.
+  }
+
+  schedule()
+
+  return {
+    signal: combined,
+    observe() {
+      if (disposed) return
+      last = Date.now()
+      schedule()
+    },
+    pause() {
+      if (disposed) return
+      pauseDepth++
+      clear()
+    },
+    resume() {
+      if (disposed) return
+      if (pauseDepth === 0) return
+      pauseDepth--
+      if (pauseDepth === 0) {
+        last = Date.now()
+        schedule()
+      }
+    },
+    lastActivityAt() {
+      return last
+    },
+    timedOut() {
+      return inactivity.signal.aborted
+    },
+    dispose() {
+      if (disposed) return
+      disposed = true
+      clear()
+    },
+  }
+}

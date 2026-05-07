@@ -1,16 +1,15 @@
-import { Installation } from "@/installation"
 import { Provider } from "@/provider/provider"
+import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
-import {
-  streamText,
-  wrapLanguageModel,
-  type ModelMessage,
-  type StreamTextResult,
-  type Tool,
-  type ToolSet,
-  tool,
-  jsonSchema,
-} from "ai"
+import type { ModelMessage, Tool, ToolSet } from "ai"
+// Use the wrapped streamText from @/llm/api — its Proxy returns
+// `abortableIterable(fullStream, composed)`, which is the only thing that
+// rescues a Bun-fetch-backed reader.read() from parking forever when the
+// LLM-activity gate fires its abort signal. Importing the raw "ai" form
+// bypassed the Proxy and silently parked sub-agents (architect, requirements,
+// build) for 14–25 min during alibaba-coding-plan-cn streams (audit §12,
+// 2026-04-30 r5/r6/r7 bench evidence). Rule 8 — single source.
+import { streamText } from "@/llm/api"
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
@@ -22,8 +21,7 @@ import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
-import { LLMTrace } from "./llm-trace"
-import { ulid } from "ulid"
+import { AgentTrace } from "@/trace"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -40,12 +38,25 @@ export namespace LLM {
     small?: boolean
     tools: Record<string, Tool>
     retries?: number
-    toolChoice?: "auto" | "required" | "none"
+    /**
+     * Tool-call enforcement passed straight through to streamText. The
+     * three string forms ('auto' / 'required' / 'none') are the soft
+     * controls; the object form pins the next call to a specific tool
+     * (e.g. {type:'tool', toolName:'StructuredOutput'}) and is the only
+     * structural guarantee the protocol gives us that the model cannot
+     * keep selecting a different work tool to dodge finalisation. Use
+     * the object form sparingly — once it is set, the model can ONLY
+     * call that one tool, so it must already be in a state where the
+     * work tools are no longer needed.
+     */
+    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string }
   }
 
-  export type StreamOutput = StreamTextResult<ToolSet, unknown>
+  export type StreamOutput = ReturnType<typeof streamText<ToolSet>>
 
-  export async function stream(input: StreamInput) {
+  export type StreamResult = ReturnType<typeof streamText<ToolSet>>
+
+  export async function stream(input: StreamInput): Promise<StreamResult> {
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
@@ -146,11 +157,14 @@ export namespace LLM {
       },
     )
 
-    const maxOutputTokens =
-      provider.id.includes("github-copilot") ? undefined : ProviderTransform.maxOutputTokens(input.model)
+    const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
     const tools = await resolveTools(input)
-    const providerOptions = ProviderTransform.providerOptions(input.model, params.options)
+    const toolChoice = input.toolChoice
+    const providerOptions = ProviderTransform.providerOptions(
+      input.model,
+      ProviderTransform.optionsForToolChoice(input.model, params.options, toolChoice),
+    )
     const requestHeaders = {
       ...(input.model.providerID.startsWith("opencorvus")
         ? {
@@ -159,12 +173,7 @@ export namespace LLM {
             "x-opencorvus-request": input.user.id,
             "x-opencorvus-client": Flag.OPENCORVUS_CLIENT,
           }
-        : input.model.providerID !== "anthropic"
-          ? {
-              "User-Agent": `opencorvus/${Installation.VERSION}`,
-            }
-          : undefined),
-      ...input.model.headers,
+        : ProviderLLM.baseHeaders(input.model, input.sessionID)),
       ...headers,
     }
     const requestMessages = [
@@ -177,100 +186,41 @@ export namespace LLM {
       ...input.messages,
     ]
 
-    // LiteLLM and some Anthropic proxies require the tools parameter to be present
-    // when message history contains tool calls, even if no tools are being used.
-    // Add a dummy tool that is never called to satisfy this validation.
-    // This is enabled for:
-    // 1. Providers with "litellm" in their ID or API ID (auto-detected)
-    // 2. Providers with explicit "litellmProxy: true" option (opt-in for custom gateways)
-    const isLiteLLMProxy =
-      provider.options?.["litellmProxy"] === true ||
-      input.model.providerID.toLowerCase().includes("litellm") ||
-      input.model.api.id.toLowerCase().includes("litellm")
-
-    if (isLiteLLMProxy && Object.keys(tools).length === 0 && hasToolCalls(input.messages)) {
-      tools["_noop"] = tool({
-        description:
-          "Placeholder for LiteLLM/Anthropic proxy compatibility - required when message history contains tool calls but no active tools are needed",
-        inputSchema: jsonSchema({ type: "object", properties: {} }),
-        execute: async () => ({ output: "", title: "", metadata: {} }),
+    if (AgentTrace.isEnabled()) {
+      AgentTrace.recordLLMRequest({
+        sessionID: input.sessionID,
+        agentName: input.agent.name,
+        agentMode: input.agent.mode,
+        model: { providerID: input.model.providerID, modelID: input.model.id },
+        small: input.small,
+        toolChoice,
+        system,
+        messages: requestMessages,
+        tools: Object.entries(tools).map(([name, t]) => ({
+          name,
+          description:
+            typeof (t as { description?: unknown }).description === "string"
+              ? (t as { description: string }).description
+              : undefined,
+        })),
       })
     }
 
-    const STREAM_INACTIVITY_MS = 2 * 60 * 1000
-
-    const inactivityAbort = new AbortController()
-    let inactivityTimer: ReturnType<typeof setTimeout> | undefined
-
-    const resetInactivityTimer = () => {
-      if (inactivityTimer !== undefined) clearTimeout(inactivityTimer)
-      inactivityTimer = setTimeout(() => {
-        l.warn("stream inactivity timeout", { inactivityMs: STREAM_INACTIVITY_MS, modelID: input.model.id, providerID: input.model.providerID })
-        inactivityAbort.abort(new Error(`LLM stream stalled: no tokens received for ${STREAM_INACTIVITY_MS / 1000}s`))
-      }, STREAM_INACTIVITY_MS)
-    }
-
-    const clearInactivityTimer = () => {
-      if (inactivityTimer !== undefined) {
-        clearTimeout(inactivityTimer)
-        inactivityTimer = undefined
-      }
-    }
-
-    resetInactivityTimer()
-    input.abort.addEventListener("abort", clearInactivityTimer, { once: true })
-
-    const trace = LLMTrace.begin({
-      callID: ulid(),
-      sessionID: input.sessionID,
-      userMessageID: input.user.id,
-      model: {
-        providerID: input.model.providerID,
-        modelID: input.model.id,
-      },
-      agent: {
-        name: input.agent.name,
-        mode: input.agent.mode,
-      },
-      small: input.small ?? false,
-      request: {
-        system,
-        messages: requestMessages,
-        tools: Object.keys(tools),
-        toolChoice: input.toolChoice ?? null,
-        maxRetries: input.retries ?? 0,
-        maxOutputTokens: maxOutputTokens ?? null,
-        temperature: params.temperature ?? null,
-        topP: params.topP ?? null,
-        topK: params.topK ?? null,
-        headers: requestHeaders,
-        providerOptions,
-      },
-    })
-
     const result = streamText({
-      onChunk() {
-        resetInactivityTimer()
-      },
       onError(event) {
-        clearInactivityTimer()
         l.error("stream error", {
           error: event.error,
         })
-        trace.error(event.error)
-      },
-      onStepFinish(step) {
-        trace.step(step)
-      },
-      onAbort(event) {
-        clearInactivityTimer()
-        trace.abort(event)
-      },
-      onFinish(event) {
-        clearInactivityTimer()
-        trace.finish(event)
       },
       async experimental_repairToolCall(failed) {
+        // Sole legitimate repair: case-normalize a model-emitted tool name
+        // (e.g. "Register_Traceability" → "register_traceability"). Anything
+        // else — unknown tool, malformed input, schema violation — must
+        // surface to the model as a real tool-error so it can retry with
+        // the corrected call. Rewriting to a sentinel "invalid" tool was a
+        // fallback (CLAUDE.md rule 1) that hid the real error and trapped
+        // the model in a "tool 'invalid' unavailable" dead end with no
+        // feedback path.
         const lower = failed.toolCall.toolName.toLowerCase()
         if (lower !== failed.toolCall.toolName && tools[lower]) {
           l.info("repairing tool call", {
@@ -282,41 +232,28 @@ export namespace LLM {
             toolName: lower,
           }
         }
-        return {
-          ...failed.toolCall,
-          input: JSON.stringify({
-            tool: failed.toolCall.toolName,
-            error: failed.error?.message ?? "unknown error",
-          }),
-          toolName: "invalid",
-        }
+        // Returning null tells AI SDK "I couldn't fix it" — the SDK then
+        // emits a tool-error part the model can read and retry against.
+        return null
       },
       temperature: params.temperature,
       topP: params.topP,
       topK: params.topK,
       providerOptions,
-      activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
+      activeTools: Object.keys(tools),
       tools,
-      toolChoice: input.toolChoice,
+      toolChoice,
       maxOutputTokens,
-      abortSignal: AbortSignal.any([input.abort, inactivityAbort.signal]),
+      abortSignal: input.abort,
+      // Disable the wrapper's 5 s default soft timeout — the LLM-activity
+      // gate (`withLLMActivity` in session/processor.ts) is the canonical
+      // idle/timeout authority and composes its own abort signal into
+      // `input.abort`. A second timeout here would race it.
+      timeoutMs: false,
       headers: requestHeaders,
       maxRetries: input.retries ?? 0,
       messages: requestMessages,
-      model: wrapLanguageModel({
-        model: language,
-        middleware: [
-          {
-            async transformParams(args) {
-              if (args.type === "stream") {
-                // @ts-expect-error
-                args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
-              }
-              return args.params
-            },
-          },
-        ],
-      }),
+      model: ProviderLLM.wrapModel(language, input.model, options),
       experimental_telemetry: {
         isEnabled: cfg.experimental?.openTelemetry,
         metadata: {
@@ -325,10 +262,6 @@ export namespace LLM {
         },
       },
     })
-    // Expose inactivity timer control so the processor can pause the timer
-    // during tool execution (tools like bash/bun test can run for minutes).
-    ;(result as any).pauseInactivityTimer = clearInactivityTimer
-    ;(result as any).resumeInactivityTimer = resetInactivityTimer
     return result
   }
 
@@ -340,17 +273,5 @@ export namespace LLM {
       }
     }
     return input.tools
-  }
-
-  // Check if messages contain any tool-call content
-  // Used to determine if a dummy tool should be added for LiteLLM proxy compatibility
-  export function hasToolCalls(messages: ModelMessage[]): boolean {
-    for (const msg of messages) {
-      if (!Array.isArray(msg.content)) continue
-      for (const part of msg.content) {
-        if (part.type === "tool-call" || part.type === "tool-result") return true
-      }
-    }
-    return false
   }
 }

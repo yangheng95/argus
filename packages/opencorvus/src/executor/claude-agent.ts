@@ -1,8 +1,22 @@
 import z from "zod"
-import { query, type ElicitationRequest, type ElicitationResult, type PermissionResult } from "@anthropic-ai/claude-agent-sdk"
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./compat"
-import { record, text } from "./compat"
+import {
+  query,
+  type ElicitationRequest,
+  type ElicitationResult,
+  type PermissionResult,
+} from "@anthropic-ai/claude-agent-sdk"
+import {
+  CodingCapabilities,
+  CodingRunInput,
+  CodingResumeInput,
+  type CodingEventInfo,
+  type CodingProvider,
+} from "./contract"
+import { record, text } from "./contract"
 import { ToolAdapterRegistry } from "./protocol"
+import { MCPServe } from "@/mcp/serve"
+import { assertExecutorModel } from "./runtime-env"
+import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 
 export type ClaudeAgentHandle = {
   stream: AsyncIterable<Record<string, unknown>>
@@ -18,8 +32,15 @@ export type ClaudeAgentClient = {
     system?: string
     maxTurns?: number
     sessionID?: string
+    /** The Claude-assigned UUID from a prior turn for the same logical
+     *  session. The SDK's `resume:` option requires a real Claude UUID
+     *  (or a session title); passing OpenCorvus's `ses_xxx` ID makes
+     *  Claude exit 1 with "is not a UUID and does not match any session
+     *  title". Undefined means "start a fresh Claude session". */
+    resumeID?: string
     toolMode?: z.infer<typeof CodingRunInput>["toolMode"]
     sandbox?: z.infer<typeof CodingRunInput>["sandbox"]
+    mcpServers?: Record<string, { type?: "stdio"; command: string; args?: string[]; env?: Record<string, string> }>
     signal?: AbortSignal
     onApproval?(input: {
       id: string
@@ -70,7 +91,7 @@ export namespace ClaudeAgentExecutor {
       capabilities,
       async *run(raw) {
         const input = CodingRunInput.parse(raw)
-        yield* execute(client, provisionalID(), input, raw.signal)
+        yield* execute(client, input.sessionID ?? provisionalID(), input, raw.signal)
       },
       async *resume(raw) {
         const input = CodingResumeInput.parse(raw)
@@ -104,10 +125,17 @@ export namespace ClaudeAgentExecutor {
   export function createSdk(executablePath?: string): CodingProvider {
     return create({
       run(input) {
-        const mode = permissionMode()
-        const allowed = input.toolMode === "none"
-          ? []
-          : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
+        if (input.model) assertExecutorModel("claude-code", input.model)
+        // Read-only planning runs (no tools, read-only sandbox) force "plan" mode
+        // regardless of OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE override.
+        const mode = input.toolMode === "none" && input.sandbox === "read-only" ? "plan" : permissionMode()
+        const allowed = input.toolMode === "none" ? [] : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
+        const systemAppend = [
+          input.system,
+          input.toolMode === "none" ? undefined : MCPServe.codingExecutorPromptSection(),
+        ]
+          .filter((item): item is string => Boolean(item))
+          .join("\n\n")
 
         const handle = query({
           prompt: input.prompt,
@@ -115,20 +143,31 @@ export namespace ClaudeAgentExecutor {
             ...(executablePath ? { pathToClaudeCodeExecutable: executablePath } : {}),
             cwd: input.cwd,
             model: input.model,
-            resume: input.sessionID,
-            systemPrompt: input.system
+            // Only pass `resume` when we actually have a Claude UUID from a
+            // prior turn for this logical session. Passing OpenCorvus's
+            // logical `ses_xxx` ID here makes the SDK reject the spawn with
+            // "is not a UUID and does not match any session title" — the
+            // logical ID is not a Claude session identifier.
+            ...(input.resumeID ? { resume: input.resumeID } : {}),
+            systemPrompt: systemAppend
               ? {
                   type: "preset",
                   preset: "claude_code",
-                  append: input.system,
+                  append: systemAppend,
                 }
               : undefined,
             maxTurns: input.maxTurns,
+            settingSources: ["user", "project", "local"],
             includePartialMessages: true,
             permissionMode: mode,
             allowDangerouslySkipPermissions: mode === "bypassPermissions",
             effort: effort(),
             maxBudgetUsd: maxBudget(),
+            env: {
+              ...claudeSdkEnv(),
+              ...gitCeilingEnvForWorktree(input.cwd),
+            },
+            mcpServers: input.toolMode === "none" ? undefined : opencorvusMcpServers(input.cwd),
             allowedTools: allowed,
             disallowedTools: split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_DISALLOWED_TOOLS),
             abortController: abortController(input.signal),
@@ -168,14 +207,16 @@ export namespace ClaudeAgentExecutor {
               }
               return input.onInput({
                 id: `elicitation:${request.elicitationId || crypto.randomUUID()}`,
-                questions: [{
-                  id: request.elicitationId || crypto.randomUUID(),
-                  header: request.serverName,
-                  question: request.message,
-                  mode: request.mode,
-                  url: request.url,
-                  requested_schema: request.requestedSchema,
-                }],
+                questions: [
+                  {
+                    id: request.elicitationId || crypto.randomUUID(),
+                    header: request.serverName,
+                    question: request.message,
+                    mode: request.mode,
+                    url: request.url,
+                    requested_schema: request.requestedSchema,
+                  },
+                ],
                 meta: {
                   adapter: "request_user_input",
                   tool_kind: "input",
@@ -197,6 +238,24 @@ export namespace ClaudeAgentExecutor {
       },
     })
   }
+}
+
+function opencorvusMcpServers(cwd?: string) {
+  const mcp = MCPServe.command(cwd ?? process.cwd())
+  return {
+    [mcp.name]: {
+      type: "stdio" as const,
+      command: mcp.command,
+      args: mcp.args,
+    },
+  }
+}
+
+export function claudeSdkEnv(source: NodeJS.ProcessEnv = process.env) {
+  const env = { ...source }
+  const baseURL = env.ANTHROPIC_BASE_URL?.trim()
+  if (baseURL) env.ANTHROPIC_BASE_URL = baseURL.replace(/\/v1\/?$/, "")
+  return env
 }
 
 async function* execute(
@@ -222,6 +281,12 @@ async function* execute(
     system: input.system,
     maxTurns: input.maxTurns,
     sessionID: "sessionID" in input ? input.sessionID : undefined,
+    // Claude's resume hint is the SDK-assigned UUID we captured from a
+    // previous turn (set by updateSession on the first `session_id` in
+    // the stream). Undefined on a fresh logical session so the SDK
+    // starts a new Claude session instead of trying to resume one that
+    // doesn't exist.
+    resumeID: current.actualID,
     toolMode: input.toolMode,
     sandbox: input.sandbox,
     signal,
@@ -251,7 +316,6 @@ async function* execute(
   })
 
   current.query = run
-
   ;(async () => {
     try {
       for await (const message of run.stream) {
@@ -288,7 +352,8 @@ async function* execute(
 
 function mapMessage(current: SessionState, message: Record<string, unknown>): CodingEventInfo[] {
   const type = typeof message.type === "string" ? message.type : ""
-  const sessionID = typeof message.session_id === "string" ? message.session_id : current.actualID ?? current.logicalID
+  const sessionID =
+    typeof message.session_id === "string" ? message.session_id : (current.actualID ?? current.logicalID)
 
   if (type === "assistant") {
     return fromAssistant(sessionID, record(message.message))
@@ -307,65 +372,82 @@ function mapMessage(current: SessionState, message: Record<string, unknown>): Co
       costUSD: number(message.total_cost_usd),
     }
     if (message.subtype === "success") {
-      return [{
+      return [
+        {
+          type: "usage",
+          ...usage,
+          meta: {
+            session_id: sessionID,
+          },
+        },
+        {
+          type: "done",
+          sessionID,
+          output: text(message.result),
+          costUSD: number(message.total_cost_usd),
+          turns: number(message.num_turns),
+          meta: {
+            usage: record(message.usage),
+            structured_output: message.structured_output,
+            stop_reason: message.stop_reason,
+            permission_denials: message.permission_denials,
+          },
+        },
+      ]
+    }
+    return [
+      {
         type: "usage",
         ...usage,
         meta: {
           session_id: sessionID,
         },
-      }, {
-        type: "done",
-        sessionID,
-        output: text(message.result),
-        costUSD: number(message.total_cost_usd),
-        turns: number(message.num_turns),
+      },
+      {
+        type: "error",
+        message: text(
+          (Array.isArray(message.errors) ? message.errors.join("\n") : "") || message.subtype || "Claude query failed",
+        ),
         meta: {
-          usage: record(message.usage),
-          structured_output: message.structured_output,
-          stop_reason: message.stop_reason,
-          permission_denials: message.permission_denials,
+          session_id: sessionID,
+          subtype: message.subtype,
         },
-      }]
-    }
-    return [{
-      type: "usage",
-      ...usage,
-      meta: {
-        session_id: sessionID,
       },
-    }, {
-      type: "error",
-      message: text((Array.isArray(message.errors) ? message.errors.join("\n") : "") || message.subtype || "Claude query failed"),
-      meta: {
-        session_id: sessionID,
-        subtype: message.subtype,
-      },
-    }]
+    ]
   }
   if (type === "system") {
     const subtype = typeof message.subtype === "string" ? message.subtype : "system"
-    return [{
-      type: "progress",
-      phase: subtype,
-      summary: subtype,
-      meta: {
-        session_id: sessionID,
-        ...message,
+    return [
+      {
+        type: "progress",
+        phase: subtype,
+        summary: subtype,
+        meta: {
+          session_id: sessionID,
+          ...message,
+        },
       },
-    }]
+    ]
   }
   if (type === "tool_progress") {
-    return [{
-      type: "progress",
-      phase: "tool_executing",
-      summary: "tool_progress",
-      meta: {
-        session_id: sessionID,
-        ...message,
+    return [
+      {
+        type: "progress",
+        phase: "tool_executing",
+        summary: "tool_progress",
+        meta: {
+          session_id: sessionID,
+          ...message,
+        },
       },
-    }]
+    ]
   }
-  if (type === "tool_use_summary" || type === "prompt_suggestion" || type === "rate_limit_event" || type === "auth_status") {
+  if (
+    type === "tool_use_summary" ||
+    type === "prompt_suggestion" ||
+    type === "rate_limit_event" ||
+    type === "auth_status"
+  ) {
     return []
   }
   return []
@@ -444,39 +526,31 @@ function fromStreamEvent(sessionID: string, event?: Record<string, unknown>): Co
     if (delta.type === "thinking_delta") {
       const value = text(delta.thinking)
       if (!value) return []
-      return [{
-        type: "reasoning_delta",
-        text: value,
-        meta: {
-          session_id: sessionID,
-          index: event.index,
+      return [
+        {
+          type: "reasoning_delta",
+          text: value,
+          meta: {
+            session_id: sessionID,
+            index: event.index,
+          },
         },
-      }]
+      ]
     }
   }
-  if (type === "content_block_start") {
-    const block = record(event.content_block)
-    if (!block) return []
-    if (block.type === "tool_use") {
-      const id = typeof block.id === "string" ? block.id : ""
-      const name = typeof block.name === "string" ? block.name : ""
-      if (!id || !name) return []
-      const adapter = ToolAdapterRegistry.classify(name)
-      return [{
-        type: "tool_call",
-        id,
-        name,
-        input: text(block.input),
-        meta: {
-          adapter: adapter?.id,
-          tool_kind: adapter?.kind,
-        },
-      }]
-    }
-  }
-  if (type === "message_start" || type === "message_stop" || type === "message_delta" || type === "content_block_stop") {
-    return []
-  }
+  // tool_use blocks are NOT emitted from stream events. Anthropic's streaming
+  // protocol seeds each tool_use's input as `{}` at content_block_start and
+  // streams the real input via input_json_delta until content_block_stop. If
+  // we emit on start, downstream sees a tool_call with input "{}" (the
+  // observed "empty bash invocation") and then a second tool_call with the
+  // full input from the assistant envelope — same id, two events, breaking
+  // any in-flight counter and (combined with the empty-env MCP regression)
+  // wedging the executor's done-detection loop forever. Single source: emit
+  // tool_call exclusively from the assistant envelope (fromAssistant), which
+  // arrives with the complete input. text_delta / thinking_delta still
+  // stream below for live rendering.
+  if (type === "content_block_start" || type === "content_block_stop") return []
+  if (type === "message_start" || type === "message_stop" || type === "message_delta") return []
   // Unknown stream events — protocol noise, do not yield
   return []
 }

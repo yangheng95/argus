@@ -16,7 +16,7 @@ The implementation follows a clean separation of concerns:
 
 - **`client.ts`** - Implements the `Client` interface for client-side capabilities
   - File operations (`readTextFile`, `writeTextFile`)
-  - Permission requests (auto-approves for now)
+  - Permission requests (forwarded to the ACP client)
   - Terminal support (stub implementation)
 
 - **`session.ts`** - Session state management

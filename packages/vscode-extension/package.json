@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@opencorvus-ai/vscode-extension",
+  "displayName": "OpenCorvus",
+  "description": "OpenCorvus AI coding agent for VS Code",
+  "version": "0.0.1",
+  "publisher": "yangheng95",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./dist/extension.cjs",
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=18"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onCommand:opencorvus.open",
+    "onCommand:opencorvus.attachFile"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "opencorvus.open",
+        "title": "OpenCorvus: Open Panel"
+      },
+      {
+        "command": "opencorvus.attachFile",
+        "title": "OpenCorvus: Attach Current File"
+      }
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node esbuild.mjs",
+    "package:vsix": "bun run script/package-vsix.ts",
+    "test:e2e:vscode": "bun run script/e2e-vscode.ts",
+    "test:e2e:visual": "bun run script/e2e-visual.ts",
+    "benchmark:100": "bun run script/benchmark-100-rounds.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@opencorvus-ai/transport-protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/vscode": "1.85.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "3.2.1",
+    "esbuild": "0.25.0",
+    "typescript": "catalog:"
+  }
+}

@@ -6,7 +6,7 @@ import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
 import { iife } from "@/util/iife"
 import { Flag } from "@/flag/flag"
-import { Filesystem } from "@/util/filesystem"
+import { normalizeVendorMessages } from "./vendor-messages"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -20,12 +20,11 @@ function mimeToModality(mime: string): Modality | undefined {
 
 export namespace ProviderTransform {
   export const OUTPUT_TOKEN_MAX = Flag.OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
+  export type ToolChoice = "auto" | "required" | "none" | { type: "tool"; toolName: string }
 
   // Maps npm package to the key the AI SDK expects for providerOptions
   function sdkKey(npm: string): string | undefined {
     switch (npm) {
-      case "@ai-sdk/github-copilot":
-        return "copilot"
       case "@ai-sdk/openai":
       case "@ai-sdk/azure":
         return "openai"
@@ -45,134 +44,55 @@ export namespace ProviderTransform {
     return undefined
   }
 
+  /**
+   * Apply vendor-specific message normalization. Implementation lives in
+   * provider/vendor-messages.ts — see that file for the per-vendor rules
+   * and the pre-vs-terminal staging model.
+   */
   function normalizeMessages(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
-    // Anthropic rejects messages with empty content - filter out empty string messages
-    // and remove empty text/reasoning parts from array content
-    if (model.api.npm === "@ai-sdk/anthropic") {
-      msgs = msgs
-        .map((msg) => {
-          if (typeof msg.content === "string") {
-            if (msg.content === "") return undefined
-            return msg
-          }
-          if (!Array.isArray(msg.content)) return msg
-          const filtered = msg.content.filter((part) => {
-            if (part.type === "text" || part.type === "reasoning") {
-              return part.text !== ""
-            }
-            return true
-          })
-          if (filtered.length === 0) return undefined
-          return { ...msg, content: filtered }
-        })
-        .filter((msg): msg is ModelMessage => msg !== undefined && msg.content !== "")
-    }
-
-    if (model.api.id.includes("claude")) {
-      return msgs.map((msg) => {
-        if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-          msg.content = msg.content.map((part) => {
-            if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-              return {
-                ...part,
-                toolCallId: part.toolCallId.replace(/[^a-zA-Z0-9_-]/g, "_"),
-              }
-            }
-            return part
-          })
-        }
-        return msg
-      })
-    }
-    if (
-      model.providerID === "mistral" ||
-      model.api.id.toLowerCase().includes("mistral") ||
-      model.api.id.toLocaleLowerCase().includes("devstral")
-    ) {
-      const result: ModelMessage[] = []
-      for (let i = 0; i < msgs.length; i++) {
-        const msg = msgs[i]
-        const nextMsg = msgs[i + 1]
-
-        if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-          msg.content = msg.content.map((part) => {
-            if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-              // Mistral requires alphanumeric tool call IDs with exactly 9 characters
-              const normalizedId = part.toolCallId
-                .replace(/[^a-zA-Z0-9]/g, "") // Remove non-alphanumeric characters
-                .substring(0, 9) // Take first 9 characters
-                .padEnd(9, "0") // Pad with zeros if less than 9 characters
-
-              return {
-                ...part,
-                toolCallId: normalizedId,
-              }
-            }
-            return part
-          })
-        }
-
-        result.push(msg)
-
-        // Fix message sequence: tool messages cannot be followed by user messages
-        if (msg.role === "tool" && nextMsg?.role === "user") {
-          result.push({
-            role: "assistant",
-            content: [
-              {
-                type: "text",
-                text: "Done.",
-              },
-            ],
-          })
-        }
-      }
-      return result
-    }
-
-    if (typeof model.capabilities.interleaved === "object" && model.capabilities.interleaved.field) {
-      const field = model.capabilities.interleaved.field
-      return msgs.map((msg) => {
-        if (msg.role === "assistant" && Array.isArray(msg.content)) {
-          const reasoningParts = msg.content.filter((part: any) => part.type === "reasoning")
-          const reasoningText = reasoningParts.map((part: any) => part.text).join("")
-
-          // Filter out reasoning parts from content
-          const filteredContent = msg.content.filter((part: any) => part.type !== "reasoning")
-
-          // Include reasoning_content | reasoning_details directly on the message for all assistant messages
-          if (reasoningText) {
-            return {
-              ...msg,
-              content: filteredContent,
-              providerOptions: {
-                ...msg.providerOptions,
-                openaiCompatible: {
-                  ...(msg.providerOptions as any)?.openaiCompatible,
-                  [field]: reasoningText,
-                },
-              },
-            }
-          }
-
-          return {
-            ...msg,
-            content: filteredContent,
-          }
-        }
-
-        return msg
-      })
-    }
-
-    return msgs
+    return normalizeVendorMessages(msgs, model)
   }
 
   function applyCaching(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
-    const system = msgs.filter((msg) => msg.role === "system").slice(0, 2)
+    // Anthropic allows up to 4 cache_control breakpoints per request. Layout:
+    //   1. system[0]        — env/model header (stable per session)
+    //   2. system[last]     — last system message; covers the WHOLE system
+    //                          tail (skills, instructions, structured-output
+    //                          rules) at 1h TTL. Without this breakpoint the
+    //                          stable middle of system would only get the
+    //                          5m TTL coverage from breakpoint #3.
+    //   3. messages[-2]     — second-to-last user/assistant message at 5m
+    //   4. messages[-1]     — last user/assistant message at 5m
+    // When system has only 1-2 entries, the system slice naturally collapses
+    // (deduped via a Set below) so we don't waste budget.
+    const allSystem = msgs.filter((msg) => msg.role === "system")
+    const systemEdges =
+      allSystem.length === 0
+        ? []
+        : allSystem.length === 1
+          ? [allSystem[0]]
+          : [allSystem[0], allSystem[allSystem.length - 1]]
     const final = msgs.filter((msg) => msg.role !== "system").slice(-2)
 
-    const providerOptions = {
+    // System messages use 1h TTL — they are stable across tool-loop steps and
+    // often across multiple invocations within the same task.  Non-system
+    // (conversation tail) messages use the default 5m TTL.
+    const systemOptions = {
+      anthropic: {
+        cacheControl: { type: "ephemeral", ttl: "1h" },
+      },
+      openrouter: {
+        cacheControl: { type: "ephemeral" },
+      },
+      bedrock: {
+        cachePoint: { type: "default" },
+      },
+      openaiCompatible: {
+        cache_control: { type: "ephemeral" },
+      },
+    }
+
+    const tailOptions = {
       anthropic: {
         cacheControl: { type: "ephemeral" },
       },
@@ -185,24 +105,24 @@ export namespace ProviderTransform {
       openaiCompatible: {
         cache_control: { type: "ephemeral" },
       },
-      copilot: {
-        copilot_cache_control: { type: "ephemeral" },
-      },
     }
 
-    for (const msg of unique([...system, ...final])) {
+    const systemSet: Set<ModelMessage> = new Set(systemEdges)
+
+    for (const msg of unique([...systemEdges, ...final])) {
+      const opts = systemSet.has(msg) ? systemOptions : tailOptions
       const useMessageLevelOptions = model.providerID === "anthropic" || model.providerID.includes("bedrock")
       const shouldUseContentOptions = !useMessageLevelOptions && Array.isArray(msg.content) && msg.content.length > 0
 
       if (shouldUseContentOptions) {
         const lastContent = msg.content[msg.content.length - 1]
-        if (lastContent && typeof lastContent === "object") {
-          lastContent.providerOptions = mergeDeep(lastContent.providerOptions ?? {}, providerOptions)
+        if (lastContent && typeof lastContent === "object" && "providerOptions" in lastContent) {
+          lastContent.providerOptions = mergeDeep(lastContent.providerOptions ?? {}, opts)
           continue
         }
       }
 
-      msg.providerOptions = mergeDeep(msg.providerOptions ?? {}, providerOptions)
+      msg.providerOptions = mergeDeep(msg.providerOptions ?? {}, opts)
     }
 
     return msgs
@@ -232,44 +152,7 @@ export namespace ProviderTransform {
         const mime = part.type === "image" ? part.image.toString().split(";")[0].replace("data:", "") : part.mediaType
         const filename = part.type === "file" ? part.filename : undefined
         const modality = mimeToModality(mime)
-        if (!modality) {
-          // Safety net: text-like MIME file parts (e.g. text/typescript, application/json)
-          // should have been converted to text parts in prompt.ts, but older persisted
-          // messages or tool result attachments may still carry these MIMEs.
-          if (Filesystem.isTextLikeMime(mime) && part.type === "file") {
-            try {
-              // part.data can be string (data URL or base64), Uint8Array, ArrayBuffer, or URL
-              const data = part.data
-              let text: string | undefined
-              if (data instanceof ArrayBuffer) {
-                text = Buffer.from(data).toString("utf-8")
-              } else if (data instanceof Uint8Array) {
-                text = Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf-8")
-              } else {
-                const str = data instanceof URL ? data.toString() : typeof data === "string" ? data : ""
-                if (str.startsWith("data:") && str.includes(",")) {
-                  const base64Data = str.slice(str.indexOf(",") + 1)
-                  text = Buffer.from(base64Data, "base64").toString("utf-8")
-                } else if (str.length > 0) {
-                  // Might be raw base64 or already text
-                  text = str
-                }
-              }
-              if (text) {
-                const label = filename ? `File: ${filename}\n` : ""
-                return { type: "text" as const, text: label + text }
-              }
-            } catch {
-              // fall through to error
-            }
-            const name = filename ? `"${filename}"` : "file"
-            return {
-              type: "text" as const,
-              text: `ERROR: Cannot inline ${name} (unsupported file type: ${mime}). Inform the user.`,
-            }
-          }
-          return part
-        }
+        if (!modality) return part
         if (model.capabilities.input[modality]) return part
 
         const name = filename ? `"${filename}"` : modality
@@ -315,7 +198,9 @@ export namespace ProviderTransform {
         return {
           ...msg,
           providerOptions: remap(msg.providerOptions),
-          content: msg.content.map((part) => ({ ...part, providerOptions: remap(part.providerOptions) })),
+          content: msg.content.map((part) =>
+            "providerOptions" in part ? { ...part, providerOptions: remap(part.providerOptions) } : part,
+          ),
         } as typeof msg
       })
     }
@@ -377,7 +262,10 @@ export namespace ProviderTransform {
       id.includes("glm") ||
       id.includes("mistral") ||
       id.includes("kimi") ||
-      // TODO: Remove this after models.dev data is fixed to use "kimi-k2.5" instead of "k2p5"
+      // models.dev currently ships the Kimi K2.5 release as "k2p5" (the
+      // dot is escaped because the registry uses dots as path separators).
+      // Match both forms so the family detection works regardless of which
+      // ID the upstream catalog returns this week.
       id.includes("k2p5")
     )
       return {}
@@ -460,32 +348,6 @@ export namespace ProviderTransform {
           )
         }
         return Object.fromEntries(OPENAI_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
-
-      case "@ai-sdk/github-copilot":
-        if (model.id.includes("gemini")) {
-          // currently github copilot only returns thinking
-          return {}
-        }
-        if (model.id.includes("claude")) {
-          return {
-            thinking: { thinking_budget: 4000 },
-          }
-        }
-        const copilotEfforts = iife(() => {
-          if (id.includes("5.1-codex-max") || id.includes("5.2") || id.includes("5.3"))
-            return [...WIDELY_SUPPORTED_EFFORTS, "xhigh"]
-          return WIDELY_SUPPORTED_EFFORTS
-        })
-        return Object.fromEntries(
-          copilotEfforts.map((effort) => [
-            effort,
-            {
-              reasoningEffort: effort,
-              reasoningSummary: "auto",
-              include: ["reasoning.encrypted_content"],
-            },
-          ]),
-        )
 
       case "@ai-sdk/cerebras":
       // https://v5.ai-sdk.dev/providers/ai-sdk-providers/cerebras
@@ -720,11 +582,7 @@ export namespace ProviderTransform {
     const result: Record<string, any> = {}
 
     // openai and providers using openai package should set store to false by default.
-    if (
-      input.model.providerID === "openai" ||
-      input.model.api.npm === "@ai-sdk/openai" ||
-      input.model.api.npm === "@ai-sdk/github-copilot"
-    ) {
+    if (input.model.providerID === "openai" || input.model.api.npm === "@ai-sdk/openai") {
       result["store"] = false
     }
 
@@ -813,8 +671,11 @@ export namespace ProviderTransform {
         result["textVerbosity"] = "low"
       }
 
-      if (input.model.providerID.startsWith("opencorvus")) {
+      if (input.model.providerID.startsWith("opencorvus") || input.model.api.npm === "@ai-sdk/azure") {
         result["promptCacheKey"] = input.sessionID
+      }
+
+      if (input.model.providerID.startsWith("opencorvus")) {
         result["include"] = ["reasoning.encrypted_content"]
         result["reasoningSummary"] = "auto"
       }
@@ -837,11 +698,7 @@ export namespace ProviderTransform {
   }
 
   export function smallOptions(model: Provider.Model) {
-    if (
-      model.providerID === "openai" ||
-      model.api.npm === "@ai-sdk/openai" ||
-      model.api.npm === "@ai-sdk/github-copilot"
-    ) {
+    if (model.providerID === "openai" || model.api.npm === "@ai-sdk/openai") {
       if (model.api.id.includes("gpt-5")) {
         if (model.api.id.includes("5.")) {
           return { store: false, reasoningEffort: "low" }
@@ -908,8 +765,44 @@ export namespace ProviderTransform {
       return result
     }
 
-    const key = sdkKey(model.api.npm) ?? model.providerID
+    // Some Artificial Intelligence Software Development Kit providers derive
+    // providerOptionsName by splitting the configured provider name on ".".
+    // Mirror that only for packages known to use this convention; other
+    // providers use fixed names or their exact provider id.
+    const usesDotSplitOptions =
+      model.api.npm === "@ai-sdk/openai-compatible" ||
+      model.api.npm === "@ai-sdk/openai" ||
+      model.api.npm === "@ai-sdk/anthropic"
+    const key =
+      sdkKey(model.api.npm) ?? (usesDotSplitOptions ? model.providerID.split(".")[0] : model.providerID)
+    if (model.api.npm === "@ai-sdk/azure") {
+      return { [key]: options, azure: options }
+    }
     return { [key]: options }
+  }
+
+  export function optionsForToolChoice(
+    model: Provider.Model,
+    options: { [x: string]: any },
+    toolChoice: ToolChoice | undefined,
+  ) {
+    if (!toolChoiceForcesToolCall(toolChoice)) return options
+    if (!hasKimiDashScopeThinkingToolChoiceConflict(model)) return options
+    if (options.enable_thinking !== true) return options
+    return { ...options, enable_thinking: false }
+  }
+
+  function toolChoiceForcesToolCall(toolChoice: ToolChoice | undefined) {
+    return toolChoice === "required" || (typeof toolChoice === "object" && toolChoice.type === "tool")
+  }
+
+  function hasKimiDashScopeThinkingToolChoiceConflict(model: Provider.Model) {
+    const modelID = `${model.id} ${model.api.id}`.toLowerCase()
+    return (
+      model.api.npm === "@ai-sdk/openai-compatible" &&
+      model.api.url?.includes("dashscope") === true &&
+      (modelID.includes("kimi-k2.5") || modelID.includes("kimi-k2p5") || modelID.includes("k2p5"))
+    )
   }
 
   export function maxOutputTokens(model: Provider.Model): number {
@@ -1002,13 +895,22 @@ export namespace ProviderTransform {
                   merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
                 } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
                   const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-                  merged[k] = { type: merged[k].type ?? v.type ?? "string", enum: [...new Set([...existing, ...v.enum].map(String))] }
+                  merged[k] = {
+                    type: merged[k].type ?? v.type ?? "string",
+                    enum: [...new Set([...existing, ...v.enum].map(String))],
+                  }
                 }
                 // else: keep first definition (properties with same name across variants)
               }
               const req = new Set<string>(variant.required ?? [])
-              if (first) { for (const r of req) allRequired.add(r); first = false }
-              else { for (const r of allRequired) { if (!req.has(r)) allRequired.delete(r) } }
+              if (first) {
+                for (const r of req) allRequired.add(r)
+                first = false
+              } else {
+                for (const r of allRequired) {
+                  if (!req.has(r)) allRequired.delete(r)
+                }
+              }
             }
             return { type: "object", properties: merged, required: [...allRequired] }
           }
@@ -1038,12 +940,21 @@ export namespace ProviderTransform {
               merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
             } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
               const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-              merged[k] = { type: merged[k].type ?? v.type ?? "string", enum: [...new Set([...existing, ...v.enum].map(String))] }
+              merged[k] = {
+                type: merged[k].type ?? v.type ?? "string",
+                enum: [...new Set([...existing, ...v.enum].map(String))],
+              }
             }
           }
           const req = new Set<string>(variant.required ?? [])
-          if (first) { for (const r of req) allRequired.add(r); first = false }
-          else { for (const r of allRequired) { if (!req.has(r)) allRequired.delete(r) } }
+          if (first) {
+            for (const r of req) allRequired.add(r)
+            first = false
+          } else {
+            for (const r of allRequired) {
+              if (!req.has(r)) allRequired.delete(r)
+            }
+          }
         }
         return { type: "object", properties: merged, required: [...allRequired] } as JSONSchema7
       }

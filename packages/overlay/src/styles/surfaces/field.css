@@ -1,0 +1,294 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  border: none;
+  padding: 0;
+}
+
+.field-inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-lg);
+}
+
+.field-inline input[type="checkbox"] {
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  /* `accent-color` is now declared once at body scope
+   * (tokens/design-language.css). */
+}
+
+.field-label {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-soft);
+}
+.field-label em {
+  color: var(--bad);
+  font-style: normal;
+}
+
+.field-input {
+  /* `appearance: none` strips the UA control chrome so our `background`
+   * actually wins. Without this, Chromium renders inputs with the
+   * platform light-scheme widget on top of our `var(--surface-inset)`
+   * — the symptom showing up most clearly inside `<dialog showModal>`,
+   * because top-layer form controls sometimes drop the body's
+   * inherited `color-scheme: dark` and fall back to a bright
+   * UA widget that the page CSS cannot recolour.
+   *
+   * Search and number inputs also carry UA-only sub-elements (the
+   * search cancel button, the number spinner) that survive `appearance:
+   * none` on the input itself; the rules below kill them too so dark
+   * themes do not get rogue light glyphs poking through. */
+  appearance: none;
+  -webkit-appearance: none;
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  color: var(--text-strong);
+  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
+  box-shadow: none;
+}
+.field-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* `<input type="search">` ships a UA cancel button rendered with the
+ * platform colour scheme; on dark themes it shows up as a light-grey
+ * glyph that ignores token colors. Strip it so the search field looks
+ * like any other `.field-input`. */
+.field-input[type="search"]::-webkit-search-cancel-button,
+.field-input[type="search"]::-webkit-search-decoration {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* `<input type="number">` spinner buttons are also UA chrome; identical
+ * theme leak and identical fix. The form fields that need a numeric
+ * stepper render their own +/- via the surrounding component. */
+.field-input[type="number"]::-webkit-outer-spin-button,
+.field-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.field-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Chromium's autofill burns a `background-color: rgb(232, 240, 254)`
+ * onto credential fields with `!important` priority that ordinary
+ * declarations cannot override. The canonical workaround is an inset
+ * `box-shadow` thick enough to repaint the entire field; the long
+ * transition keeps Chromium from animating back to the autofill colour
+ * a few hundred milliseconds after focus.
+ *
+ * Without this the password / API-key inputs in the settings dialog
+ * sit as white blocks on top of the dark surface even when the rest
+ * of the dialog is correctly dark. */
+.field-input:-webkit-autofill,
+.field-input:-webkit-autofill:hover,
+.field-input:-webkit-autofill:focus,
+.field-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-inset) inset !important;
+  -webkit-text-fill-color: var(--text-strong) !important;
+  caret-color: var(--text-strong);
+  transition: background-color 9999s ease-in-out 0s;
+}
+textarea.field-input {
+  resize: vertical;
+  min-height: calc(60px * var(--ui-scale));
+  line-height: 1.5;
+}
+
+.field-input-group {
+  display: flex;
+  align-items: stretch;
+  min-height: var(--ui-input-min-height);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.field-input-group:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.field-input-group .field-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.field-input-actions {
+  display: flex;
+  align-items: stretch;
+  padding-right: calc(6px * var(--ui-scale));
+}
+
+.field-input-icon {
+  width: calc(36px * var(--ui-scale));
+  min-width: calc(36px * var(--ui-scale));
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+}
+
+.field-input-icon:hover:not(:disabled) {
+  background: var(--subtle-4);
+  color: var(--text-strong);
+}
+
+.field-input-icon:disabled {
+  opacity: var(--ui-opacity-faint);
+  cursor: default;
+}
+
+.field-input-icon:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+/* The select chevron SVG is rendered as a data URL with the
+ * stroke colour baked in. The `%23717a88` URL-encoded hex is the
+ * single hardcoded literal in this primitive — it survives the
+ * surface guard's `/#[0-9a-f]{3,8}\b/i` regex because the `#` is
+ * URL-encoded. The hue is the dark-theme `--text-muted` value
+ * frozen at extraction time; selects across all themes share this
+ * fixed chevron tint until a mask-image rewrite that lets the
+ * background-color carry the palette token. */
+select.field-input {
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23717a88' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right calc(14px * var(--ui-scale)) center;
+  padding-right: calc(40px * var(--ui-scale));
+}
+
+.custom-select {
+  padding-left: calc(14px * var(--ui-scale));
+  padding-right: calc(40px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  box-shadow: none;
+}
+select.field-input option {
+  color: var(--text-strong);
+  background: var(--surface);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ui-gap-md);
+}
+
+/* Inspector ("sections" context) tightens the field family for the
+ * right-rail's denser layout. The right rail uses the global
+ * `--oc-radius-soft` corner + tighter padding tokens so a field
+ * sitting inside <section.sections> matches the rail's density. */
+.sections .field {
+  gap: var(--section-field-gap);
+}
+
+.sections .field-inline {
+  gap: var(--section-row-gap);
+}
+
+.sections .field-label {
+  line-height: 1.2;
+}
+
+.sections .field-input,
+.sections .config-status-box {
+  padding: var(--section-input-padding-y) var(--section-input-padding-x);
+  border-radius: var(--oc-radius-soft);
+}
+
+.sections textarea.field-input {
+  min-height: calc(52px * var(--ui-scale));
+}
+
+.sections .field-input-group {
+  min-height: calc(32px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+}
+
+.sections .field-input-actions {
+  padding-right: calc(4px * var(--ui-scale));
+}
+
+.sections .field-input-icon {
+  width: calc(32px * var(--ui-scale));
+  min-width: calc(32px * var(--ui-scale));
+}
+
+.sections .field-row,
+.sections .config-field-row {
+  gap: var(--section-row-gap);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Field-input group + scrollable-shell baseline (extracted 2026-05-04).
+   ───────────────────────────────────────────────────────────── */
+
+.sidebar,
+.chat,
+.sections,
+.oc-section,
+.oc-section__body,
+#evalBody,
+.goals-list,
+.criteria-list,
+.config-section,
+.config-section-body,
+.config-subsection,
+.config-subsection-body,
+.sidebar-body,
+.chat-scroll,
+.dialog-form,
+.extension-row-main,
+.channel-doc-copy,
+.knowledge-item-main,
+.pref-item-head,
+.field-input-group {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Field-input + custom-select + status-box + dir-panel + engine-
+   model-panel chrome reset (extracted 2026-05-04). All five share
+   the same surface-inset background + border-color + shadow:none
+   contract.
+   ───────────────────────────────────────────────────────────── */
+
+.field-input,
+.custom-select,
+.config-status-box,
+.recent-dir-panel,
+.engine-model-panel {
+  background: var(--surface-inset);
+  border-color: var(--border);
+  box-shadow: none;
+}

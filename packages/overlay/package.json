@@ -1,25 +1,29 @@
 {
   "name": "@opencorvus-ai/overlay",
-  "version": "0.0.1-alpha",
+  "version": "0.0.1",
   "private": true,
   "scripts": {
     "check:i18n": "bun run script/check-panel-i18n.ts",
     "dev": "tauri dev",
     "dev:vite": "vite --config vite.config.ts",
     "build": "bun run check:i18n && bun run script/build.ts",
-    "build:mainjs": "bun run script/build-main-js.ts",
     "build:vite": "vite build --config vite.config.ts",
+    "build:overlay": "bun run script/build-overlay.ts",
     "build:docker": "bun run script/build-docker.ts",
     "test": "bun test --timeout 120000",
     "tauri": "tauri"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "puppeteer-core": "^24.42.0",
     "vite": "^6",
     "vite-plugin-solid": "^2"
   },
   "dependencies": {
-    "@opencorvus-ai/plugin": "0.0.1-alpha",
+    "@opencorvus-ai/plugin": "workspace:*",
+    "@opencorvus-ai/transport-protocol": "workspace:*",
+    "highlight.js": "^11.11.1",
+    "marked": "^17.0.1",
     "solid-js": "^1"
   }
 }

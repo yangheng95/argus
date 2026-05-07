@@ -1,0 +1,98 @@
+/**
+ * `webpage_render` tool — wraps `mirror/visual/render::renderFiles`.
+ *
+ * Loads an explicit URL in a visible browser and captures a PNG screenshot.
+ * Output is written to
+ * `<outputDir>/rendered.png` (or a user-supplied name).
+ */
+
+import fs from "node:fs/promises"
+import path from "node:path"
+import z from "zod"
+
+import { Tool } from "../../tool/tool"
+import { renderFiles } from "../visual/render"
+import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
+
+export const WebpageRenderTool = Tool.define("webpage_render", {
+  description: `Render an explicit webpage URL in a visible browser and write a PNG screenshot.
+
+Returns the screenshot path + render time. Use as step 5 of the webpage-generate workflow. Follow with \`webpage_vision_judge\`; \`webpage_evaluate\` is diagnostic only.`,
+  parameters: z.object({
+    url: z
+      .string()
+      .url()
+      .describe(
+        "The exact browser URL to capture. Use http:// or https:// for an already running app, or file:// for a self-contained local HTML file.",
+      ),
+    outputDir: z
+      .string()
+      .describe(
+        `Directory to write the screenshot into. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree so artifacts stay out of the project source tree. Override with an absolute path or a worktree-relative path.`,
+      )
+      .optional(),
+    viewport_width: z.number().int().positive().describe("Viewport width. Default 1440.").optional(),
+    viewport_height: z.number().int().positive().describe("Viewport height. Default 900.").optional(),
+    full_page: z.boolean().describe("Capture full scrollable page. Default false (viewport only).").optional(),
+    output_name: z
+      .string()
+      .describe("Filename for the screenshot (relative to outputDir). Default rendered.png.")
+      .optional(),
+    timeout_ms: z
+      .number()
+      .int()
+      .positive()
+      .describe("Max time for launch + navigation + screenshot. Default 30000.")
+      .optional(),
+  }),
+  async execute(params, ctx) {
+    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+
+    await ctx.ask({
+      permission: "webpage_render",
+      patterns: [params.url],
+      always: ["*"],
+      metadata: { url: params.url, outputDir },
+    })
+
+    const viewport = {
+      width: params.viewport_width ?? 1440,
+      height: params.viewport_height ?? 900,
+    }
+    const outputName = params.output_name ?? "rendered.png"
+
+    const render = await renderFiles({
+      url: params.url,
+      viewport,
+      fullPage: params.full_page ?? false,
+      timeout: params.timeout_ms ?? 30_000,
+    })
+
+    const pngPath = path.join(outputDir, outputName)
+    await fs.writeFile(pngPath, render.screenshotBuffer)
+
+    return {
+      title: `Rendered ${outputName} (${render.renderTimeMs}ms)`,
+      output: [
+        `# Rendered screenshot`,
+        "",
+        `- Input: \`${params.url}\``,
+        `- Output: \`${pngPath}\``,
+        `- Viewport: ${viewport.width}×${viewport.height}${params.full_page ? " (full page)" : ""}`,
+        `- Render time: ${render.renderTimeMs}ms`,
+        render.consoleErrors && render.consoleErrors.length > 0
+          ? `- Console errors (${render.consoleErrors.length}): ${render.consoleErrors.slice(0, 3).join(" | ")}`
+          : "",
+        "",
+        "Next: call `webpage_vision_judge` with `rendered` pointing at the screenshot above. Use `webpage_evaluate` only as a diagnostic signal.",
+      ].filter(Boolean).join("\n"),
+      metadata: {
+        renderedPath: pngPath,
+        renderTimeMs: render.renderTimeMs,
+        viewport,
+        consoleErrors: render.consoleErrors,
+        url: params.url,
+      },
+    }
+  },
+})

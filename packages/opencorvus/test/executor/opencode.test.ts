@@ -25,7 +25,7 @@ describe("executor.opencode", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ title: "executor test" })
+        const session = await Session.create({ kind: "assistant", title: "executor test" })
         const result = await OpencodeExecutor.resume({
           sessionID: session.id,
           message: "continue with the latest operator note",
@@ -33,7 +33,7 @@ describe("executor.opencode", () => {
         expect(result.sessionID).toBe(session.id)
         const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, result.queueTaskID)).get())
         expect(row?.session_id).toBe(session.id)
-        expect(row?.source).toBe("orchestrator.task")
+        expect(row?.source).toBe("engine.task")
       },
     })
   })
@@ -44,7 +44,7 @@ describe("executor.opencode", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ title: "executor events" })
+        const session = await Session.create({ kind: "assistant", title: "executor events" })
         const stream = OpencodeExecutor.events({ sessionID: session.id })
         const next = stream.next()
         await Bus.publish(Message.Event.PartDelta, {
@@ -69,8 +69,8 @@ describe("executor.opencode", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ title: "executor permissions" })
-        const other = await Session.create({ title: "other session" })
+        const session = await Session.create({ kind: "assistant", title: "executor permissions" })
+        const other = await Session.create({ kind: "assistant", title: "other session" })
         const stream = OpencodeExecutor.events({ sessionID: session.id })
         const next = stream.next()
         await Bus.publish(PermissionNext.Event.Asked, {
@@ -101,6 +101,40 @@ describe("executor.opencode", () => {
         expect(item.done).toBe(false)
         expect(item.value?.type).toBe("permission.asked")
         expect(item.value?.summary).toContain("bash")
+        await stream.return?.(undefined)
+      },
+    })
+  })
+
+  test("events streams child-session activity when scoped by goalID", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const root = await Session.create({ kind: "assistant", goalID: "gol_shared", title: "root session" })
+        const child = await Session.create({ kind: "assistant", goalID: "gol_shared", parentID: root.id, title: "child session" })
+        const other = await Session.create({ kind: "assistant", goalID: "gol_other", title: "other goal" })
+        const stream = OpencodeExecutor.events({ goalID: "gol_shared", sessionID: root.id })
+        const next = stream.next()
+        await Bus.publish(Message.Event.PartDelta, {
+          sessionID: other.id,
+          messageID: "msg_other",
+          partID: "prt_other",
+          field: "text",
+          delta: "ignore me",
+        })
+        await Bus.publish(Message.Event.PartDelta, {
+          sessionID: child.id,
+          messageID: "msg_child",
+          partID: "prt_child",
+          field: "text",
+          delta: "hello from child",
+        })
+        const item = await next
+        expect(item.done).toBe(false)
+        expect(item.value?.type).toBe("message.part.delta")
+        expect(item.value?.payload?.sessionID).toBe(child.id)
         await stream.return?.(undefined)
       },
     })

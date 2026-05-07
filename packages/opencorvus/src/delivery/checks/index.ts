@@ -1,0 +1,44 @@
+/**
+ * Public API barrel for the `delivery/checks` module.
+ *
+ * External callers import from "@/delivery/checks" — never from sub-modules.
+ * Internal sibling files use relative imports (./types, ./discovery, ...).
+ *
+ * Per-goal evaluator (`evaluateGoal` + `runRubric`) was removed on 2026-04-20:
+ * acceptance_specs are now passed to the delivery agent as INFORMATION and
+ * verified via LLM judgment + run_command, not deterministic scorer runs.
+ * `discovery.ts` retains the project-shape helpers (build/test/lint command
+ * sniffing) because the delivery agent prompt still cites them for sanity
+ * checks; `visual.ts` keeps the rendered-vs-reference diff because that is
+ * a delivery-time concern driven by the LLM comparing attachments.
+ */
+
+export * from "./types"
+export {
+  resolveConfig,
+  resolvedChecks,
+  discoverChecks,
+  commandGroups,
+  autoSpecCheck,
+  autoJudge,
+  autoCodeReview,
+  autoArtifact,
+} from "./discovery"
+export {
+  findBrowserExecutable,
+  runVisualDiff,
+  summarizeVisualReport,
+  type VisualDiffOptions,
+  type VisualDiffReport,
+} from "./visual"
+export {
+  computeRuntimeEvidence,
+  summarizeRuntimeViolations,
+  RUNTIME_EVIDENCE_THRESHOLDS,
+  type RuntimeEvidenceReport,
+  type RuntimeEvidenceViolation,
+  type RuntimeEvidenceViolationKind,
+} from "./runtime-evidence"
+export {
+  buildDeliveryEvidenceManifest,
+} from "./project-gate"

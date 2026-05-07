@@ -12,7 +12,7 @@ interface Context {
   project: Project.Info
 }
 
-type StateFactory = <S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) => () => S
+type StateFactory = <S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) => (() => S) & { reset(): void }
 
 type InstanceApi = {
   provide<R>(input: { directory: string; init?: () => Promise<unknown>; fn: () => R }): Promise<R>
@@ -42,12 +42,27 @@ export const Instance: InstanceApi = {
       Log.Default.info("creating instance", { directory })
       existing = iife(async () => {
         const { project, sandbox } = await Project.fromDirectory(directory)
+        // Note (W2-V32): the previous bootstrap auto-ran `Project.initGit` for
+        // any non-git directory. That violated rule 7 (silent fallback) and
+        // was the root cause of the darwin 500-storm: when `process.cwd()`
+        // ended up as the directory (Tauri sidecar launched from Finder has
+        // cwd="/"), the auto-init tried `git init /`, hit permission denied,
+        // and turned every project-scoped HTTP request into a 500. Worktree
+        // operations that *require* a `.git` now throw `WorktreeNotGitError`
+        // explicitly (mapped to 412), which the overlay surfaces as an
+        // explicit "init this directory?" prompt — gated by a real user
+        // gesture, not a side effect of any GET request.
         const ctx = {
           directory,
           worktree: sandbox,
           project,
         }
         await context.provide(ctx, async () => {
+          // .gitignore upkeep runs INSIDE context.provide because
+          // ensureGitignore() reads `Instance.directory` from the active
+          // context. Lazy import breaks the engine/git ↔ instance cycle.
+          const { ensureGitignore } = await import("@/engine/git")
+          await ensureGitignore()
           await input.init?.()
         })
         return ctx
@@ -104,7 +119,7 @@ export const Instance: InstanceApi = {
     if (Instance.worktree === "/") return false
     return Filesystem.contains(Instance.worktree, filepath)
   },
-  state<S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>): () => S {
+  state<S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>): (() => S) & { reset(): void } {
     return State.create(() => Instance.directory, init, dispose)
   },
   async dispose() {
@@ -152,4 +167,38 @@ export const Instance: InstanceApi = {
 
     return disposal.all
   },
+}
+
+/**
+ * Defer the underlying `Instance.state(...)` call until the returned getter
+ * is first invoked.
+ *
+ * Why a top-level `function` declaration (instead of a method on `Instance`):
+ * function declarations are hoisted to the top of the module body, so their
+ * binding is available to consumers from the very start of module evaluation —
+ * unlike `Instance` itself, which is `export const` and therefore in TDZ
+ * until its assignment line runs.
+ *
+ * When a module needs to declare instance-scoped state at top level
+ * (`const state = lazyInstanceState(initFn, disposeFn)`) but is loaded
+ * BEFORE Instance's own module body has finished — typically via cycles
+ * introduced by barrel re-exports such as engine/index.ts's
+ * `export * from "./helpers"` — the original `Instance.state(...)` form
+ * throws TDZ on the `Instance` binding at the call site. Wrapping via
+ * `lazyInstanceState` defers that access until first runtime call, by
+ * which point all module bodies have settled.
+ */
+export function lazyInstanceState<S>(
+  init: () => S,
+  dispose?: (state: Awaited<S>) => Promise<void>,
+): (() => S) & { reset(): void } {
+  let cached: ((() => S) & { reset(): void }) | undefined
+  const get = ((): S => {
+    if (!cached) cached = Instance.state(init, dispose)
+    return cached()
+  }) as (() => S) & { reset(): void }
+  get.reset = () => {
+    cached?.reset()
+  }
+  return get
 }

@@ -3,89 +3,226 @@
 // Events are dispatched through routeSSEEvent() first (message/agent/executor).
 // Unhandled events are forwarded to handleEventStreamEvent for board/task
 // lifecycle processing.
+//
+// Streams flow through `HostTransport.openStream` (services/host-transport.ts)
+// so the same business logic runs identically under the Tauri overlay
+// window and the VS Code webview. The transport owns transient
+// reconnect behaviour (browser-native EventSource auto-reconnect under
+// Tauri; the postMessage bridge under VS Code in M4); this module owns
+// the *business* reconnect policy — re-hydrate conversation, then
+// resume from the last persisted sequence (plan §5.5).
 
-import { apiUrl, apiHeaders } from "./api";
-import { clearEventQueue, syncTask, setSseConnected } from "../store/messages";
-import { boardStore, loadBoard } from "../store/board";
-import { routeSSEEvent, handleEventStreamEvent } from "./events";
+import { clearEventQueue, setSseConnected } from "../store/messages"
+import { boardStore } from "../store/board"
+import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events"
+import { hydrateTaskConversation } from "./conversation"
+import { getHostTransport, type StreamHandle } from "./host-transport"
+import { settingsStore } from "../store/settings"
 
-let sseController: AbortController | null = null;
-let sseRetryTimer: any = null;
+let sseHandle: StreamHandle | null = null
+let sseRetryTimer: any = null
 
-export function startSSE(taskID: string) {
-  stopSSE();
-  const controller = new AbortController();
-  sseController = controller;
-  setSseConnected(false);
+// audit-2026-04-29 W2-V10 — reconnect tick extracted so the regression
+// test can exercise the (a) hydrate-throw path and (b) post-await
+// task-switch race directly, without standing up the real
+// HostTransport + 3 s timers. Production path: onClose sets a
+// 3 s timer that calls this with the live deps below.
+export interface SseReconnectDeps {
+  taskID: string
+  after: number
+  currentTaskID: () => string
+  hydrate: (taskID: string) => Promise<number>
+  restart: (taskID: string, after: number) => void
+  scheduleRetry: (fn: () => void, ms: number) => void
+  retryDelayMs: number
+}
 
-  (async () => {
-    try {
-      const after = Number(boardStore.taskSequence || 0);
-      const path = after > 0
-        ? `task/${encodeURIComponent(taskID)}/events?after=${after}`
-        : `task/${encodeURIComponent(taskID)}/events`;
-      const res = await fetch(apiUrl(path), {
-        headers: apiHeaders(),
-        signal: controller.signal,
-      });
-      if (!res.ok || !res.body) throw new Error(`SSE ${res.status}`);
-      setSseConnected(true);
+export async function performSseReconnect(deps: SseReconnectDeps): Promise<void> {
+  if (deps.currentTaskID() !== deps.taskID) return
+  let nextSequence: number
+  try {
+    nextSequence = await deps.hydrate(deps.taskID)
+  } catch (err) {
+    console.error("[sse] reconnect hydrate failed for task", deps.taskID, err)
+    if (deps.currentTaskID() !== deps.taskID) return
+    deps.scheduleRetry(() => {
+      if (deps.currentTaskID() !== deps.taskID) return
+      deps.restart(deps.taskID, deps.after)
+    }, deps.retryDelayMs)
+    return
+  }
+  // Post-await re-check: user may have task-switched while hydrate
+  // was in flight. Restarting the OLD task's SSE would stomp the
+  // NEW task's handle (startSSE calls stopSSE first), silently
+  // killing the user-visible stream.
+  if (deps.currentTaskID() !== deps.taskID) return
+  deps.restart(deps.taskID, nextSequence)
+}
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+const RECONNECT_DELAY_MS = 3000
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          try {
-            const event = JSON.parse(line.slice(5).trim());
-            if (
-              event.type === "task.heartbeat" ||
-              event.type === "task.connected"
-            )
-              continue;
-            const handled = routeSSEEvent(event);
-            if (!handled) {
- // Forward unhandled events (board/task lifecycle) to handleEventStreamEvent.
-              handleEventStreamEvent(event);
-            }
-          } catch {
- // malformed JSON — skip
-          }
+export function startSSE(taskID: string, after = 0) {
+  stopSSE()
+  setSseConnected(false)
+
+  // Initial task restore now hydrates board + messages + persisted task events
+  // through /task/:id/conversation before opening SSE. That means this stream
+  // can safely resume from the last persisted protocol_event sequence instead
+  // of replaying from zero on every reconnect.
+  const transport = getHostTransport()
+  const handle = transport.openStream(
+    {
+      path: `task/${encodeURIComponent(taskID)}/events`,
+      query: after > 0 ? { after: String(after) } : undefined,
+    },
+    {
+      onOpen: () => setSseConnected(true),
+      onEvent: (data) => {
+        // Per 07-panel-reactivity.md constraint 1 and root CLAUDE.md rule 1:
+        // tree-writer's `let it crash` is meaningless if onEvent silently
+        // swallows the throw. Split: JSON.parse error → benign skip;
+        // dispatch error → console.error so the operator can find why
+        // the conversation panel is empty.
+        let event: any
+        try {
+          event = JSON.parse(data)
+        } catch {
+          return
         }
-      }
-    } catch (e: any) {
-      if (e.name === "AbortError") return;
-      console.warn("SSE disconnected", e.message);
-    }
-    setSseConnected(false);
- // Reconnect after 3s with a full transcript reload
-    if (sseRetryTimer) clearTimeout(sseRetryTimer);
-    sseRetryTimer = setTimeout(async () => {
-      sseRetryTimer = null;
-      if (boardStore.selectedTaskID !== taskID) return;
-      await syncTask(taskID);
-      await loadBoard();
-      startSSE(taskID);
-    }, 3000);
-  })();
+        if (event.type === "task.heartbeat" || event.type === "task.connected") return
+        try {
+          const handled = routeSSEEvent(event)
+          if (!handled) {
+            handleEventStreamEvent(event)
+          }
+        } catch (err) {
+          console.error("[sse] dispatch error for event", event?.type, err, event)
+        }
+      },
+      onError: () => {
+        // SSE (Server-Sent Events) errors can happen after the browser
+        // transport has already dropped live-only message deltas. Close the
+        // handle so onClose runs the business reconnect policy: hydrate the
+        // conversation snapshot, then resume from the latest persisted
+        // sequence. Relying on native EventSource auto-reconnect skips that
+        // recovery step and leaves the visible conversation stale.
+        if (handle !== sseHandle) return
+        setSseConnected(false)
+        handle.close()
+      },
+      onClose: (_reason) => {
+        // Permanent close: re-hydrate then re-open from the hydrated
+        // sequence so we avoid a full replay after crashes. See
+        // performSseReconnect (audit W2-V10) for the full retry +
+        // task-switch race contract.
+        if (handle !== sseHandle) return
+        setSseConnected(false)
+        sseHandle = null
+        if (sseRetryTimer) clearTimeout(sseRetryTimer)
+        sseRetryTimer = setTimeout(() => {
+          sseRetryTimer = null
+          void performSseReconnect({
+            taskID,
+            after,
+            currentTaskID: () => boardStore.selectedTaskID,
+            hydrate: hydrateTaskConversation,
+            restart: startSSE,
+            scheduleRetry: (fn, ms) => {
+              sseRetryTimer = setTimeout(() => {
+                sseRetryTimer = null
+                fn()
+              }, ms)
+            },
+            retryDelayMs: RECONNECT_DELAY_MS,
+          })
+        }, RECONNECT_DELAY_MS)
+      },
+    },
+  )
+  sseHandle = handle
 }
 
 export function stopSSE() {
   if (sseRetryTimer) {
-    clearTimeout(sseRetryTimer);
-    sseRetryTimer = null;
+    clearTimeout(sseRetryTimer)
+    sseRetryTimer = null
   }
-  if (sseController) {
-    sseController.abort();
+  if (sseHandle) {
+    sseHandle.close()
   }
-  sseController = null;
-  setSseConnected(false);
-  clearEventQueue();
+  sseHandle = null
+  setSseConnected(false)
+  clearEventQueue()
+}
+
+// ── Global task-list change stream ──
+// One long-lived stream connected to GET /task/events. On every persisted
+// task aggregate event the server emits a tiny {type, taskID, sequence}
+// notification; we translate that into a debounced loadTasks(). This
+// closes the gap where status changes on non-selected tasks (or new
+// tasks created by other clients) would otherwise only arrive via
+// manual refresh.
+
+let taskListHandle: StreamHandle | null = null
+let taskListRetryTimer: any = null
+
+export function startTaskListSSE() {
+  stopTaskListSSE()
+  if (!settingsStore.directory.trim()) return
+  const transport = getHostTransport()
+  const handle = transport.openStream(
+    { path: "task/events" },
+    {
+      onEvent: (data) => {
+        // Same split as startSSE above: parse errors silent, dispatch
+        // errors surfaced.
+        let event: any
+        try {
+          event = JSON.parse(data)
+        } catch {
+          return
+        }
+        if (event.type === "task-list.heartbeat" || event.type === "task-list.connected") return
+        try {
+          // Task-list stream emits only `{type, taskID, sequence}` — not
+          // the full task-scope event shape. Route to the notification
+          // handler, NOT handleEventStreamEvent (which feeds tree-writer
+          // and would throw on every missing payload).
+          handleTaskListNotification(event)
+        } catch (err) {
+          console.error("[task-list-sse] dispatch error for event", event?.type, err, event)
+        }
+      },
+      onClose: (_reason) => {
+        if (handle !== taskListHandle) return
+        taskListHandle = null
+        if (taskListRetryTimer) clearTimeout(taskListRetryTimer)
+        taskListRetryTimer = setTimeout(() => {
+          taskListRetryTimer = null
+          startTaskListSSE()
+        }, 3000)
+      },
+      onError: () => {
+        // Keep the global task-list stream on the same business reconnect
+        // contract as the selected-task stream. If the transport surfaces an
+        // error without a close, the sidebar refresh stream would otherwise
+        // stay pinned to a dead handle and non-selected task changes would
+        // only appear after a manual reload.
+        if (handle !== taskListHandle) return
+        handle.close()
+      },
+    },
+  )
+  taskListHandle = handle
+}
+
+export function stopTaskListSSE() {
+  if (taskListRetryTimer) {
+    clearTimeout(taskListRetryTimer)
+    taskListRetryTimer = null
+  }
+  if (taskListHandle) {
+    taskListHandle.close()
+  }
+  taskListHandle = null
 }

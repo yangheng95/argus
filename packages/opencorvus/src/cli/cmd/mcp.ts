@@ -7,8 +7,10 @@ import { UI } from "../ui"
 import { MCP } from "../../mcp"
 import { McpAuth } from "../../mcp/auth"
 import { McpOAuthProvider } from "../../mcp/oauth-provider"
+import { MCPServe } from "../../mcp/serve"
 import { Config } from "../../config/config"
 import { Instance } from "../../project/instance"
+import { Project } from "../../project/project"
 import { Installation } from "../../installation"
 import path from "path"
 import { Global } from "../../global"
@@ -55,6 +57,7 @@ export const McpCommand = cmd({
   describe: "manage MCP (Model Context Protocol) servers",
   builder: (yargs) =>
     yargs
+      .command(McpServeCommand)
       .command(McpAddCommand)
       .command(McpListCommand)
       .command(McpAuthCommand)
@@ -62,6 +65,29 @@ export const McpCommand = cmd({
       .command(McpDebugCommand)
       .demandCommand(),
   async handler() {},
+})
+
+export const McpServeCommand = cmd({
+  command: "serve",
+  describe: false,
+  builder: (yargs) =>
+    yargs
+      .option("cwd", {
+        describe: "working directory for the MCP server",
+        type: "string",
+        demandOption: true,
+      })
+      .option("toolset", {
+        describe: "toolset to expose",
+        choices: ["executor"] as const,
+        default: "executor" as const,
+      }),
+  async handler(args) {
+    await MCPServe.serve({
+      cwd: args.cwd,
+      toolset: args.toolset,
+    })
+  },
 })
 
 export const McpListCommand = cmd({
@@ -427,8 +453,6 @@ export const McpAddCommand = cmd({
         UI.empty()
         prompts.intro("Add MCP server")
 
-        const project = Instance.project
-
         // Resolve config paths eagerly for hints
         const [projectConfigPath, globalConfigPath] = await Promise.all([
           resolveConfigPath(Instance.worktree),
@@ -437,7 +461,7 @@ export const McpAddCommand = cmd({
 
         // Determine scope
         let configPath = globalConfigPath
-        if (project.vcs === "git") {
+        if (Project.isGitRepo(Instance.directory)) {
           const scopeResult = await prompts.select({
             message: "Location",
             options: [

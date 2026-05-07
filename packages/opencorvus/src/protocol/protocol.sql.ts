@@ -1,9 +1,9 @@
 import { integer, index, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { Identifier } from "@/id/id"
-import { OrchestratorGoalRunTable, OrchestratorInteractionRequestTable, OrchestratorRunTable, OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
+import { EngineInteractionRequestTable, EngineTaskTable } from "@/engine"
 import { SessionTable } from "@/session/session.sql"
 import { Timestamps } from "@/storage/schema.sql"
-import type { ProtocolAggregate, ProtocolInboxStatus, ProtocolKind, ProtocolStreamKind } from "./schema"
+import type { ProtocolAggregate, ProtocolInboxStatus, ProtocolKind } from "./schema"
 
 type ProtocolPayload = Record<string, unknown>
 
@@ -15,11 +15,13 @@ export const ProtocolEventTable = sqliteTable(
     type: text().notNull(),
     aggregate_type: text().notNull().$type<ProtocolAggregate>(),
     aggregate_id: text().notNull(),
-    task_id: text().references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
-    run_id: text().references(() => OrchestratorRunTable.id, { onDelete: "set null" }),
-    goal_run_id: text().references(() => OrchestratorGoalRunTable.id, { onDelete: "set null" }),
+    task_id: text().references(() => EngineTaskTable.id, { onDelete: "cascade" }),
+    /** Phase-6-e: plain text pointer to logical run id (was FK). */
+    run_id: text(),
+    /** Phase-6-d: plain text pointer to the logical goal_run id (was FK). */
+    goal_run_id: text(),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
-    interaction_id: text().references(() => OrchestratorInteractionRequestTable.id, { onDelete: "set null" }),
+    interaction_id: text().references(() => EngineInteractionRequestTable.id, { onDelete: "set null" }),
     stream_id: text(),
     source: text().notNull(),
     target: text(),
@@ -67,26 +69,3 @@ export const ProtocolInboxTable = sqliteTable(
   ],
 )
 
-export const ProtocolStreamChunkTable = sqliteTable(
-  "protocol_stream_chunk",
-  {
-    id: text().primaryKey().$default(() => Identifier.ascending("protocol_stream_chunk")),
-    stream_id: text().notNull(),
-    task_id: text().references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
-    run_id: text().references(() => OrchestratorRunTable.id, { onDelete: "set null" }),
-    goal_run_id: text().references(() => OrchestratorGoalRunTable.id, { onDelete: "set null" }),
-    session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
-    kind: text().notNull().$type<ProtocolStreamKind>(),
-    chunk_seq: integer().notNull(),
-    text: text().notNull(),
-    payload: text({ mode: "json" }).$type<ProtocolPayload>(),
-    emitted_at: integer().notNull(),
-    ...Timestamps,
-  },
-  (table) => [
-    uniqueIndex("protocol_stream_chunk_stream_seq_idx").on(table.stream_id, table.chunk_seq),
-    index("protocol_stream_chunk_task_idx").on(table.task_id, table.chunk_seq),
-    index("protocol_stream_chunk_run_idx").on(table.run_id, table.chunk_seq),
-    index("protocol_stream_chunk_session_idx").on(table.session_id, table.chunk_seq),
-  ],
-)

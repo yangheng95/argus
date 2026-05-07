@@ -1,8 +1,7 @@
 import { App } from "@slack/bolt"
 import { Bus } from "@/bus"
 import { ChannelIngress } from "@/channel/ingress"
-import { Event as OrchestratorEvent } from "@/orchestrator/model"
-import { OrchestratorChannelBindingTable } from "@/orchestrator/orchestrator.sql"
+import { Event as EngineEvent, EngineChannelBindingTable } from "@/engine"
 import { Instance } from "@/project/instance"
 import { InstanceBootstrap } from "@/project/bootstrap"
 import { Database, and, eq } from "@/storage/db"
@@ -49,16 +48,16 @@ export class SlackGateway {
 
   private subscribeEvents() {
     this.unsub?.()
-    this.unsub = Bus.subscribe(OrchestratorEvent.EvaluationCompleted, async (event) => {
+    this.unsub = Bus.subscribe(EngineEvent.EvaluationCompleted, async (event) => {
       await this.withInstance(async () => {
         const binding = Database.use((db) =>
           db
             .select()
-            .from(OrchestratorChannelBindingTable)
+            .from(EngineChannelBindingTable)
             .where(
               and(
-                eq(OrchestratorChannelBindingTable.task_id, event.properties.taskID),
-                eq(OrchestratorChannelBindingTable.platform, "slack"),
+                eq(EngineChannelBindingTable.task_id, event.properties.taskID),
+                eq(EngineChannelBindingTable.platform, "slack"),
               ),
             )
             .get(),

@@ -4,6 +4,7 @@ import { createWriteStream } from "fs"
 import { Global } from "../global"
 import z from "zod"
 import { Glob } from "./glob"
+import { safeStringify, sanitizeMessage } from "./log-safety"
 
 export namespace Log {
   export const Level = z.enum(["DEBUG", "INFO", "WARN", "ERROR"]).meta({ ref: "LogLevel", description: "Log level" })
@@ -50,9 +51,8 @@ export namespace Log {
   export function file() {
     return logpath
   }
-  let write = (msg: any) => {
+  let write = (msg: string) => {
     process.stderr.write(msg)
-    return msg.length
   }
 
   export async function init(options: Options) {
@@ -65,56 +65,59 @@ export namespace Log {
     )
     await fs.truncate(logpath).catch(() => {})
     const stream = createWriteStream(logpath, { flags: "a" })
-    write = async (msg: any) => {
-      return new Promise((resolve, reject) => {
-        stream.write(msg, (err) => {
-          if (err) reject(err)
-          else resolve(msg.length)
-        })
-      })
+    stream.on("error", (err) => {
+      process.stderr.write(`log stream error: ${err.message}\n`)
+    })
+    write = (msg: string) => {
+      stream.write(msg)
     }
   }
 
+  const KEEP_RECENT = 10
   async function cleanup(dir: string) {
     const files = await Glob.scan("????-??-??T??????.log", {
       cwd: dir,
       absolute: true,
       include: "file",
     })
-    if (files.length <= 5) return
-
-    const filesToDelete = files.slice(0, -10)
+    if (files.length <= KEEP_RECENT) return
+    const filesToDelete = files.slice(0, -KEEP_RECENT)
     await Promise.all(filesToDelete.map((file) => fs.unlink(file).catch(() => {})))
   }
 
   function formatError(error: Error, depth = 0): string {
-    const result = error.message
+    const head = error.stack ?? `${error.name}: ${error.message}`
     return error.cause instanceof Error && depth < 10
-      ? result + " Caused by: " + formatError(error.cause, depth + 1)
-      : result
+      ? head + "\nCaused by: " + formatError(error.cause, depth + 1)
+      : head
   }
 
-  let last = Date.now()
+  // safeStringify / sanitizeMessage moved to ./log-safety so the
+  // pure-function contract is unit-testable without spying on
+  // process.stderr (audit-2026-04-29 W2-V17).
+
   export function create(tags?: Record<string, any>) {
-    tags = tags || {}
+    const ownTags: Record<string, any> = { ...(tags ?? {}) }
+    let last = Date.now()
 
     function build(message: any, extra?: Record<string, any>) {
       const prefix = Object.entries({
-        ...tags,
+        ...ownTags,
         ...extra,
       })
         .filter(([_, value]) => value !== undefined && value !== null)
         .map(([key, value]) => {
           const prefix = `${key}=`
-          if (value instanceof Error) return prefix + formatError(value)
-          if (typeof value === "object") return prefix + JSON.stringify(value)
-          return prefix + value
+          if (value instanceof Error) return prefix + sanitizeMessage(formatError(value))
+          if (typeof value === "object") return prefix + sanitizeMessage(safeStringify(value))
+          return prefix + sanitizeMessage(value)
         })
         .join(" ")
       const next = new Date()
       const diff = next.getTime() - last
       last = next.getTime()
-      return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, message].filter(Boolean).join(" ") + "\n"
+      const safeMessage = message === undefined || message === null ? message : sanitizeMessage(message)
+      return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, safeMessage].filter(Boolean).join(" ") + "\n"
     }
     const result: Logger = {
       debug(message?: any, extra?: Record<string, any>) {
@@ -138,11 +141,10 @@ export namespace Log {
         }
       },
       tag(key: string, value: string) {
-        if (tags) tags[key] = value
-        return result
+        return Log.create({ ...ownTags, [key]: value })
       },
       clone() {
-        return Log.create({ ...tags })
+        return Log.create({ ...ownTags })
       },
       time(message: string, extra?: Record<string, any>) {
         const now = Date.now()

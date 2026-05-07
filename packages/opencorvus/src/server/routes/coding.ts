@@ -6,8 +6,7 @@ import { Agent } from "@/agent/agent"
 import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
-import { SessionStatus } from "@/session/status"
-import { Message } from "@/session/message"
+import { SessionStatus, Message } from "@/session"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "coding" })
@@ -39,7 +38,7 @@ export function CodingRoutes() {
             description: "Streaming coding assistant events",
             content: {
               "text/event-stream": {
-                schema: resolver(z.any()),
+                schema: resolver(z.unknown()),
               },
             },
           },
@@ -56,7 +55,7 @@ export function CodingRoutes() {
 
           // Create or reuse session
           if (!sessionID) {
-            const session = await Session.create({ title: "Coding assistant" })
+            const session = await Session.create({ kind: "assistant", title: "Coding assistant" })
             sessionID = session.id
           }
 
@@ -176,7 +175,7 @@ export function CodingRoutes() {
             description: "Session messages",
             content: {
               "application/json": {
-                schema: resolver(z.any()),
+                schema: resolver(z.unknown()),
               },
             },
           },

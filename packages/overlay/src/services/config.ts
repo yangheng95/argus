@@ -6,23 +6,13 @@ import { appStore, setAppStore } from "../store/app";
 import { settingsStore } from "../store/settings";
 import { AppLog } from "../utils/log";
 import { t } from "../utils/i18n";
-
-// ── Helpers ──
-
-function hasTauriRuntime(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof (window as any).__TAURI__?.core?.invoke === "function"
-  );
-}
-
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const globalInvoke = (window as any).__TAURI__?.core?.invoke;
-  if (typeof globalInvoke === "function") {
-    return globalInvoke(command, args) as Promise<T>;
-  }
-  throw new Error(`Tauri runtime unavailable for ${command}`);
-}
+import { loadConfigInfo } from "./init";
+import { loadExtensions } from "./extensions";
+import { loadMeta } from "./meta";
+import { loadExecutors } from "./executor";
+import { restoreWorkspaceDirectory } from "./workspace";
+import { loadTasks, clearTasksForMissingDirectory } from "../store/board";
+import { getHostTransport } from "./host-transport";
 
 // ── Check Config Accessors ──
 
@@ -146,9 +136,44 @@ export async function patchConfig(diff: Record<string, any>): Promise<any> {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function mergePatchDiff(before: unknown, after: unknown): unknown {
+  if (!isRecord(before) || !isRecord(after)) {
+    return sameJsonValue(before, after) ? undefined : after;
+  }
+
+  const patch: Record<string, unknown> = {};
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  for (const key of keys) {
+    if (!Object.hasOwn(after, key)) {
+      patch[key] = null;
+      continue;
+    }
+    const nextValue = after[key];
+    if (nextValue === undefined) {
+      patch[key] = null;
+      continue;
+    }
+    if (!Object.hasOwn(before, key)) {
+      patch[key] = nextValue;
+      continue;
+    }
+    const child = mergePatchDiff(before[key], nextValue);
+    if (child !== undefined) patch[key] = child;
+  }
+  return Object.keys(patch).length > 0 ? patch : undefined;
+}
+
 /**
  * Fetch the current server config, apply `mutator` to a clone, then PATCH the
- * result back. Returns the saved config.
+ * resulting JSON Merge Patch back. Returns the saved config.
  * Use patchConfig() for simple field updates; use this for complex mutations
  * that need the current state (e.g., conditional delete of nested keys).
  */
@@ -156,11 +181,18 @@ export async function updateConfig(mutator: (config: Record<string, any>) => voi
   const current = await apiJson("config");
   const next = structuredClone(current || {});
   mutator(next);
-  return apiJson("config", {
+  const diff = mergePatchDiff(current || {}, next);
+  if (diff === undefined) {
+    setAppStore("config", current);
+    return current;
+  }
+  const saved = await apiJson("config", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(next),
+    body: JSON.stringify(diff),
   });
+  setAppStore("config", saved);
+  return saved;
 }
 
 // ── Project Config Scaffold ──
@@ -174,29 +206,19 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
   const base = dir.replace(/[\\/]+$/, "");
   const configFile = base + "/.opencorvus/opencorvus.jsonc";
   const username = settingsStore.username || "";
-  const unattended = appStore.config?.experimental?.unattended !== false;
-  // Default values aligned with OrchestratorConfig.defaults on the server.
-  // Keep in sync with packages/opencorvus/src/orchestrator/config.ts DEFAULTS.
+  // Scaffold intentionally leaves `assistant` empty so the server's
+  // EngineConfig.DEFAULTS is the single source of truth. Writing explicit
+  // values here would shadow DEFAULTS via the `??` merge in
+  // packages/opencorvus/src/orchestrator/config.ts and silently drift over time.
+  // Project authors who want to customize agent behavior should add fields
+  // explicitly — the empty `{}` is just a discoverability hint.
   const config = {
     $schema: "https://opencorvus.ai/config.json",
-    experimental: {
-      unattended,
-    },
     lsp: {
       biome: { disabled: true },
       eslint: { disabled: true },
     },
-    assistant: {
-      decompose: { max_steps: 30, timeout_ms: 300000, quality_threshold: 0.5, max_attempts: 3 },
-      architect: { max_steps: 20, timeout_ms: 180000 },
-      planner: { max_steps: 30, timeout_ms: 300000, quality_threshold: 0.5, max_attempts: 3 },
-      evaluator: { max_steps: 25, timeout_ms: 240000 },
-      delivery: { max_steps: 40, timeout_ms: 600000, max_retries: 2 },
-      max_runs: 10,
-      max_fix_runs: 5,
-      max_executor_groups: 1,
-      default_workflow: "standard",
-    },
+    assistant: {},
     compaction: {
       auto: true,
       prune: true,
@@ -207,7 +229,11 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
     username,
   };
   try {
-    await tauriInvoke("overlay_write_file", { path: configFile, content: JSON.stringify(config, null, 2) });
+    await getHostTransport().native({
+      kind: "config.write-file",
+      path: configFile,
+      content: JSON.stringify(config, null, 2),
+    });
   } catch (e) {
     console.warn("[scaffold] Failed to scaffold project config", e);
   }
@@ -221,13 +247,12 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
  * port available for post-migration use.
  */
 export async function reloadProjectScope(options: { restoreWorkspace?: boolean } = {}): Promise<void> {
+  if (!settingsStore.directory.trim()) {
+    clearTasksForMissingDirectory();
+    return;
+  }
  // Mirrors loadInitialData's parallel reload — must load all project-scope
  // data including tasks and executors so the UI fully reflects the new directory.
-  const { loadConfigInfo } = await import("./init");
-  const { loadExtensions } = await import("./extensions");
-  const { loadMeta } = await import("./meta");
-  const { loadTasks } = await import("../store/board");
-  const { loadExecutors } = await import("./executor");
   await Promise.all([
     loadConfigInfo().catch((e: unknown) => console.error("[reloadProjectScope] loadConfigInfo", e)),
     loadExtensions().catch((e: unknown) => console.error("[reloadProjectScope] loadExtensions", e)),
@@ -236,10 +261,11 @@ export async function reloadProjectScope(options: { restoreWorkspace?: boolean }
     loadExecutors().catch((e: unknown) => console.error("[reloadProjectScope] loadExecutors", e)),
   ]);
   if (options.restoreWorkspace) {
-    const { restoreWorkspaceDirectory } = await import("./workspace");
-    await restoreWorkspaceDirectory().catch((e: unknown) =>
-      console.error("[reloadProjectScope] restoreWorkspaceDirectory", e),
-    );
+    try {
+      restoreWorkspaceDirectory();
+    } catch (e: unknown) {
+      console.error("[reloadProjectScope] restoreWorkspaceDirectory", e);
+    }
   }
 }
 

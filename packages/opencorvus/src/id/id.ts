@@ -23,6 +23,7 @@ export namespace Identifier {
     artifact: "art",
     attachment: "att",
     delivery: "dlv",
+    delivery_round: "dlr",
     evaluation: "evl",
     binding: "bnd",
     progress: "prg",
@@ -40,9 +41,14 @@ export namespace Identifier {
     call: "cal",
     protocol_event: "pev",
     protocol_inbox: "pib",
-    protocol_stream_chunk: "psc",
     goal_group: "glg",
     decision_log: "dlog",
+    metric_spec: "mts",
+    metric_result: "mtr",
+    counterexample: "cex",
+    /** LLM provider call lifecycle (one logical request, including its
+     *  internal retries / heartbeats). See packages/opencorvus/src/llm/activity.ts. */
+    activity: "act",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

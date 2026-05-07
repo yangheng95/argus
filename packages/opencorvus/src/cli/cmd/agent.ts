@@ -9,6 +9,7 @@ import fs from "fs/promises"
 import { Filesystem } from "../../util/filesystem"
 import matter from "gray-matter"
 import { Instance } from "../../project/instance"
+import { Project } from "../../project/project"
 import { EOL } from "os"
 import type { Argv } from "yargs"
 
@@ -21,7 +22,7 @@ const AVAILABLE_TOOLS = [
   "edit",
   "list",
   "glob",
-  "grep",
+  "search_code",
   "webfetch",
   "task",
   "todowrite",
@@ -71,15 +72,13 @@ const AgentCreateCommand = cmd({
           prompts.intro("Create agent")
         }
 
-        const project = Instance.project
-
         // Determine scope/path
         let targetPath: string
         if (cliPath) {
           targetPath = path.join(cliPath, "agent")
         } else {
           let scope: "global" | "project" = "global"
-          if (project.vcs === "git") {
+          if (Project.isGitRepo(Instance.directory)) {
             const scopeResult = await prompts.select({
               message: "Location",
               options: [
@@ -176,25 +175,20 @@ const AgentCreateCommand = cmd({
           mode = modeResult
         }
 
-        // Build tools config
-        const tools: Record<string, boolean> = {}
-        for (const tool of AVAILABLE_TOOLS) {
-          if (!selectedTools.includes(tool)) {
-            tools[tool] = false
-          }
-        }
+        // Build tools config — exclude tools not selected
+        const excluded = AVAILABLE_TOOLS.filter((t) => !selectedTools.includes(t))
 
         // Build frontmatter
         const frontmatter: {
           description: string
           mode: AgentMode
-          tools?: Record<string, boolean>
+          tools?: { exclude: string[] }
         } = {
           description: generated.whenToUse,
           mode,
         }
-        if (Object.keys(tools).length > 0) {
-          frontmatter.tools = tools
+        if (excluded.length > 0) {
+          frontmatter.tools = { exclude: excluded }
         }
 
         // Write file

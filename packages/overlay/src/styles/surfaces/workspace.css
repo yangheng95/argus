@@ -1,0 +1,577 @@
+/* ── Workspace Panel Surface ──
+ * Owns: workspace-toggle button, workspace-mount shell,
+ * pane-resizer (row variant), workspace panel + tabs + body,
+ * diff-preview panel, file-view panel, code .file-link inline.
+ * Loaded in index.html before styles.css.
+ * Do not add solo rules for these classes anywhere else. */
+
+/* ── Workspace Toggle (show/hide workspace panel button) ── */
+.workspace-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--oc-density-control-height);
+  padding: 0 calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid transparent;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-soft);
+  transition:
+    background var(--ui-duration-fast),
+    border-color var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+}
+.workspace-toggle:hover {
+  background: var(--oc-control-bg-hover);
+  border-color: var(--oc-control-border-hover);
+  color: var(--text-strong);
+}
+.workspace-toggle[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+/* ── Workspace Mount Shell ── */
+.workspace-mount {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 0;
+  width: 100%;
+  height: clamp(calc(200px * var(--ui-scale)), 40vh, calc(560px * var(--ui-scale)));
+  background: var(--surface-inset);
+}
+.workspace-mount[hidden] {
+  display: none;
+}
+
+/* ── Row-resize pane handle (workspace variant) ──
+ * Double-class (.pane-resizer.pane-resizer-workspace) bumps specificity
+ * above the generic .pane-resizer col-resize rule in styles.css. */
+.pane-resizer.pane-resizer-workspace {
+  flex: 0 0 var(--ui-resizer-width);
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  cursor: row-resize;
+  background: transparent;
+  position: relative;
+}
+.pane-resizer.pane-resizer-workspace[hidden] {
+  display: none;
+}
+.pane-resizer.pane-resizer-workspace::before {
+  content: "";
+  position: absolute;
+  left: calc(14px * var(--ui-scale));
+  right: calc(14px * var(--ui-scale));
+  top: 50%;
+  bottom: auto;
+  width: auto;
+  transform: translateY(-50%);
+  height: calc(1px * var(--ui-scale));
+  background: color-mix(in srgb, var(--border) 42%, transparent);
+  border-radius: var(--oc-radius-pill);
+  transition:
+    background var(--ui-duration-fast) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-fast) var(--ui-timing-standard);
+}
+.pane-resizer.pane-resizer-workspace:hover::before,
+.pane-resizer.pane-resizer-workspace[data-active="true"]::before {
+  background: var(--accent);
+  height: calc(2px * var(--ui-scale));
+  box-shadow: none;
+}
+
+/* ── Workspace Panel ──
+ * Flat-redesign Step 2 (2026-05-04): the panel-self border + drop-shadow +
+ * border-radius were retired. Visual edge with the panel-body sibling is
+ * carried by the --surface ↔ --bg lightness step alone (rule §2.2 A:
+ * surface 层差替代 border). The header keeps no bottom-border either —
+ * `--surface-strong` on the header against `--surface` on the body
+ * delivers the divider. */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  background: var(--surface-strong);
+  flex-shrink: 0;
+  padding-right: calc(8px * var(--ui-scale));
+}
+
+.workspace-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.workspace-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* Sub-tab strip inside the workspace body — subordinate to the parent
+ * Tabs primitive (Workflow / Workspace / Preview). Smaller font, tighter
+ * padding, accent underline-only on active tab.
+ *
+ * Flat-redesign Step 2 (2026-05-04): the right-side `border-right` between
+ * tabs was retired (rule §2.2 C: active state via accent stripe, not
+ * vertical separators). Tabs are now disambiguated by spacing + the
+ * `data-active` accent underline only. */
+.workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  min-height: var(--ui-panel-header-height);
+  padding: 0 calc(12px * var(--ui-scale));
+  background: transparent;
+  border: none;
+  border-bottom: calc(2px * var(--ui-scale)) solid transparent;
+  color: var(--text-muted);
+  font-size: var(--ui-font-title);
+  cursor: pointer;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: calc(280px * var(--ui-scale));
+  transition:
+    color var(--ui-duration-base),
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base);
+}
+.workspace-tab:hover {
+  color: var(--text-strong);
+  background: color-mix(in srgb, white 4%, transparent);
+}
+.workspace-tab[data-active="true"] {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 3%, transparent);
+}
+.workspace-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.workspace-tab-file {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+}
+
+/* Flat-redesign Step 2 (2026-05-04): close-button border retired
+ * (rule §2.2 A). Hover affordance is a pure background tint. */
+.workspace-close {
+  align-self: center;
+  width: var(--oc-density-icon-button);
+  height: var(--oc-density-icon-button);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  color: var(--text-muted);
+  font-size: var(--ui-font-heading);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color var(--ui-duration-base),
+    background var(--ui-duration-base);
+}
+.workspace-close:hover {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+
+.workspace-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+}
+
+.workspace-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* Both views stay mounted (resource-cache survives tab toggle);
+ * data-active=false collapses the inactive one out of layout. */
+.workspace-view[data-active="false"] {
+  display: none;
+}
+
+/* ── Diff Preview Panel ── */
+.diff-preview-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* diff-preview-head replaced by oc-panel__header override below */
+.diff-preview-panel > .oc-panel__header {
+  align-items: flex-start;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  background: var(--subtle-1);
+}
+
+.diff-preview-panel > .oc-panel__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-preview-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+/* File-scope context label inside the diff preview header. */
+.diff-preview-scope {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+}
+
+.diff-preview-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: var(--ui-font-code);
+  color: var(--text-strong);
+}
+
+.diff-preview-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+.diff-preview-body {
+  /* flex:1 and overflow:auto removed — oc-panel__body handles those */
+  padding: calc(6px * var(--ui-scale));
+}
+
+.diff-preview-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px * var(--ui-scale));
+  background: radial-gradient(
+    circle at 50% 0%,
+    color-mix(in srgb, var(--accent) 5%, transparent),
+    transparent 58%
+  );
+}
+
+/* ── File View Panel ── */
+.file-view-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* file-view-head replaced by oc-panel__header override below */
+.file-view-panel > .oc-panel__header {
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  background: var(--subtle-1);
+}
+
+.file-view-panel > .oc-panel__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-view-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: var(--ui-font-code);
+  color: var(--text-strong);
+}
+
+.file-view-body {
+  /* flex:1 and overflow:auto removed — oc-panel__body handles those */
+  padding: calc(6px * var(--ui-scale));
+}
+
+.file-view-body pre {
+  margin: 0;
+}
+
+.file-view-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px * var(--ui-scale));
+  background: radial-gradient(
+    circle at 50% 0%,
+    color-mix(in srgb, var(--accent) 5%, transparent),
+    transparent 58%
+  );
+}
+
+/* ── File Link (inline code → workspace file opener) ── */
+code .file-link {
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+code .file-link:hover {
+  text-decoration: underline;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Extracted from styles.css 2026-05-04: workspace shell flex
+   layout, pane resizer, body row/col resize cursor pinning.
+   ───────────────────────────────────────────────────────────── */
+
+.workspace-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.pane-resizer {
+  position: relative;
+  flex: 0 0 var(--ui-resizer-width);
+  min-width: var(--ui-resizer-width);
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  pointer-events: auto;
+  z-index: var(--ui-z-sticky);
+}
+
+.pane-resizer::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  top: calc(8px * var(--ui-scale));
+  bottom: calc(8px * var(--ui-scale));
+  left: 50%;
+  width: var(--oc-border-width);
+  transform: translateX(-50%);
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--border) 42%, transparent);
+  transition:
+    background var(--ui-duration-fast) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-fast) var(--ui-timing-standard),
+    width var(--ui-duration-fast) var(--ui-timing-standard);
+}
+
+.pane-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-5px * var(--ui-scale));
+  right: calc(-5px * var(--ui-scale));
+  cursor: col-resize;
+}
+
+.pane-resizer:hover::before,
+.pane-resizer[data-active="true"]::before {
+  background: var(--accent);
+  width: calc(2px * var(--ui-scale));
+  box-shadow: none;
+}
+
+body[data-resizing="row"] {
+  cursor: row-resize;
+  user-select: none;
+}
+body[data-resizing="row"] * {
+  cursor: row-resize !important;
+}
+
+body[data-resizing="true"] {
+  cursor: col-resize;
+  user-select: none;
+}
+body[data-resizing="true"] * {
+  cursor: col-resize !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Task-overlay error pill (.task-overlay-error)
+   Displayed on the workspace shell when a task fails to dispatch
+   or hit a transport error. Shows the error msg + a retry button.
+   ───────────────────────────────────────────────────────────── */
+
+.task-overlay-error {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: calc(2px * var(--ui-scale)) var(--ui-gap-md);
+  border-radius: var(--oc-radius-pill);
+  background: var(--bad-dim);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 36%, transparent);
+  color: var(--bad);
+  font-size: var(--ui-font-meta);
+  max-width: 60vw;
+}
+.task-overlay-error-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-overlay-error-retry {
+  appearance: none;
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 50%, transparent);
+  background: transparent;
+  color: var(--bad);
+  border-radius: var(--oc-radius-pill);
+  padding: calc(1px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  font-size: var(--ui-font-meta);
+  cursor: pointer;
+}
+.task-overlay-error-retry:hover {
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+}
+.task-overlay-error-retry:focus-visible {
+  outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--bad) 60%, transparent);
+  outline-offset: calc(1px * var(--ui-scale));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Workspace shell layout (.panel / .panel-body / .sections /
+   .config-dialog-layout / #solidFrontendPreviewMount)
+   The outer flex chain that fills the viewport between the
+   titlebar and the chat composer.
+   ───────────────────────────────────────────────────────────── */
+
+.panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+}
+
+.panel-body {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+  padding: 0;
+}
+
+.sections,
+.config-dialog-layout {
+  --section-stack-gap: calc(6px * var(--ui-scale));
+  --section-field-gap: calc(4px * var(--ui-scale));
+  --section-row-gap: calc(6px * var(--ui-scale));
+  --section-control-height: calc(34px * var(--ui-scale));
+  --section-badge-height: calc(20px * var(--ui-scale));
+  --section-head-padding-y: calc(6px * var(--ui-scale));
+  --section-head-padding-x: calc(12px * var(--ui-scale));
+  --section-body-padding-x: calc(12px * var(--ui-scale));
+  --section-body-padding-y: calc(10px * var(--ui-scale));
+  --section-input-padding-y: calc(7px * var(--ui-scale));
+  --section-input-padding-x: calc(11px * var(--ui-scale));
+}
+
+#solidFrontendPreviewMount {
+  height: 100%;
+  min-height: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Workspace shell zero-overrides (extracted 2026-05-04): kill any
+   inherited gap / margin / padding / border on .panel-body and
+   .workspace-main, plus the responsive @media (max-width: 1120px)
+   stack-collapse for the panel-body, sidebar, and sections.
+   ───────────────────────────────────────────────────────────── */
+
+.panel-body {
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-top: 0;
+  border-radius: 0;
+  background: var(--panel-body-bg);
+  backdrop-filter: var(--panel-body-blur);
+  box-shadow: none;
+}
+
+.workspace-main {
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.oc-section[open] > .oc-section__head,
+.config-section[open] > .config-section-head,
+.config-subsection[open] > .config-subsection-head {
+  border-bottom: 0;
+}
+
+@media (max-width: 1120px) {
+  .panel-body {
+    flex-direction: column;
+  }
+
+  .workspace-main {
+    flex-direction: column;
+  }
+
+  .sidebar,
+  .sidebar[data-collapsed="true"],
+  .sections {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex-basis: auto;
+  }
+
+  .sidebar {
+    max-height: min(36vh, calc(320px * var(--ui-scale)));
+  }
+
+  .sections {
+    max-height: min(42vh, calc(420px * var(--ui-scale)));
+  }
+
+  .pane-resizer-left,
+  .pane-resizer-right {
+    display: none;
+  }
+}

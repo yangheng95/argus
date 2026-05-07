@@ -12,6 +12,7 @@ import { lazy } from "../util/lazy"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Flag } from "../flag/flag"
 import { Auth } from "../auth"
+import { parseEnvJson } from "./parse-env-json"
 import {
   type ParseError as JsoncParseError,
   applyEdits,
@@ -19,7 +20,7 @@ import {
   parse as parseJsonc,
   printParseErrorCode,
 } from "jsonc-parser"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { LSPServer } from "../lsp/server"
 import { BunProc } from "@/bun"
 import { Installation } from "@/installation"
@@ -35,6 +36,7 @@ import { iife } from "@/util/iife"
 import { ConfigPaths } from "./paths"
 import { Filesystem } from "@/util/filesystem"
 import { buildChannelSchema } from "@/channel/catalog"
+import { withKeyedLock } from "@/util/lock"
 
 export namespace Config {
   const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
@@ -86,7 +88,7 @@ export namespace Config {
     return merged
   }
 
-  export const state = Instance.state(async () => {
+  export const state = lazyInstanceState(async () => {
     const auth = await Auth.all()
 
     // Config loading order (low -> high precedence): https://opencorvus.ai/docs/config#precedence-order
@@ -138,8 +140,11 @@ export namespace Config {
     }
 
     result.agent = result.agent || {}
-    result.mode = result.mode || {}
     result.plugin = result.plugin || []
+    result.experimental = {
+      auto_question: true,
+      ...(result.experimental ?? {}),
+    }
 
     const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
 
@@ -151,23 +156,35 @@ export namespace Config {
     const deps: Promise<void>[] = []
 
     for (const dir of unique(directories)) {
-      if (dir.endsWith(".opencorvus") || dir === Flag.OPENCORVUS_CONFIG_DIR) {
+      const isOpencorvusDir = dir.endsWith(".opencorvus") || dir === Flag.OPENCORVUS_CONFIG_DIR || dir === Global.Path.config
+      if (isOpencorvusDir) {
         for (const file of ["opencorvus.jsonc", "opencorvus.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
           // to satisfy the type checker
           result.agent ??= {}
-          result.mode ??= {}
           result.plugin ??= []
         }
       }
 
-      deps.push(
-        iife(async () => {
-          const shouldInstall = await needsInstall(dir)
-          if (shouldInstall) await installDependencies(dir)
-        }),
-      )
+      // The plugin manifest install (`@opencorvus-ai/plugin` written as
+      // `package.json` + node_modules) MUST stay inside opencorvus-owned
+      // directories: the global config root, the project's `.opencorvus/`,
+      // or an explicit `OPENCORVUS_CONFIG_DIR`. Writing it into a directory
+      // walked-to from `Instance.directory` (e.g. the project root itself,
+      // when a `.opencorvus/` sibling sits one level up) would drop an
+      // untracked `package.json` into the user's primary worktree — which
+      // then collides with build-agent commits at `git merge --ff-only`
+      // time. Those collisions were the root cause of the 2026-04-29
+      // gemini-task scaffold merge failure.
+      if (isOpencorvusDir) {
+        deps.push(
+          iife(async () => {
+            const shouldInstall = await needsInstall(dir)
+            if (shouldInstall) await installDependencies(dir)
+          }),
+        )
+      }
 
       result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
       result.agent = mergeDeep(result.agent, await loadAgent(dir))
@@ -208,43 +225,19 @@ export namespace Config {
       log.warn("managed config directory exists but cannot be accessed", { path: managedDir })
     }
 
-    // Migrate deprecated mode field to agent field
-    for (const [name, mode] of Object.entries(result.mode ?? {})) {
-      result.agent = mergeDeep(result.agent ?? {}, {
-        [name]: {
-          ...mode,
-          mode: "primary" as const,
-        },
-      })
-    }
-
     if (Flag.OPENCORVUS_PERMISSION) {
+      // audit-2026-04-29 W2-V22 — descriptive parse error helper
+      // (see parseEnvJson) replaces the bare `JSON.parse` so a typo
+      // in OPENCORVUS_PERMISSION surfaces as an actionable line
+      // instead of "Unexpected token in JSON at position N".
+      const parsed = parseEnvJson("OPENCORVUS_PERMISSION", Flag.OPENCORVUS_PERMISSION)
       result.permission = mergeDeep(
         (result.permission ?? {}) as object,
-        JSON.parse(Flag.OPENCORVUS_PERMISSION),
+        parsed as object,
       ) as Config.Permission
     }
 
-    // Backwards compatibility: legacy top-level `tools` config
-    if (result.tools) {
-      const perms: Record<string, Config.PermissionAction> = {}
-      for (const [tool, enabled] of Object.entries(result.tools)) {
-        const action: Config.PermissionAction = enabled ? "allow" : "deny"
-        if (tool === "write" || tool === "edit" || tool === "patch" || tool === "multiedit") {
-          perms.edit = action
-          continue
-        }
-        perms[tool] = action
-      }
-      result.permission = mergeDeep(perms as object, (result.permission ?? {}) as object) as Config.Permission
-    }
-
     if (!result.username) result.username = os.userInfo().username
-
-    // Handle migration from autoshare to share field
-    if (result.autoshare === true && !result.share) {
-      result.share = "auto"
-    }
 
     // Apply flag overrides for compaction settings
     if (Flag.OPENCORVUS_DISABLE_AUTOCOMPACT) {
@@ -283,6 +276,14 @@ export namespace Config {
   }
 
   export async function installDependencies(dir: string) {
+    // Skip plugin installation when plugins are disabled (e.g. benchmark, CI).
+    // The @opencorvus-ai/plugin package is only used for type definitions and
+    // fetching it requires a private registry that may be unreachable.
+    if (process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS === "1") {
+      log.debug("plugins disabled, skipping dependency install", { dir })
+      return
+    }
+
     const pkg = path.join(dir, "package.json")
     const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
 
@@ -324,6 +325,8 @@ export namespace Config {
   }
 
   export async function needsInstall(dir: string) {
+    if (process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS === "1") return false
+
     // Some config dirs may be read-only.
     // Installing deps there will fail; skip installation in that case.
     const writable = await isWritable(dir)
@@ -339,7 +342,10 @@ export namespace Config {
     const pkgExists = await Filesystem.exists(pkg)
     if (!pkgExists) return true
 
-    const parsed = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => null)
+    // File exists — let malformed JSON propagate rather than treat it the
+    // same as missing. If package.json is corrupt the operator needs to see
+    // the parse error, not a silent "plugin needs reinstall" loop.
+    const parsed = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg)
     const dependencies = parsed?.dependencies ?? {}
     const depVersion = dependencies["@opencorvus-ai/plugin"]
     if (!depVersion) return true
@@ -636,7 +642,7 @@ export namespace Config {
           read: PermissionRule.optional(),
           edit: PermissionRule.optional(),
           glob: PermissionRule.optional(),
-          grep: PermissionRule.optional(),
+          search_code: PermissionRule.optional(),
           list: PermissionRule.optional(),
           bash: PermissionRule.optional(),
           task: PermissionRule.optional(),
@@ -644,13 +650,9 @@ export namespace Config {
           todowrite: PermissionAction.optional(),
           todoread: PermissionAction.optional(),
           question: PermissionAction.optional(),
-          plan_enter: PermissionAction.optional(),
-          plan_exit: PermissionAction.optional(),
-          spec_enter: PermissionAction.optional(),
-          spec_exit: PermissionAction.optional(),
           webfetch: PermissionAction.optional(),
           websearch: PermissionAction.optional(),
-          codesearch: PermissionAction.optional(),
+          external_code_search: PermissionAction.optional(),
           lsp: PermissionRule.optional(),
           doom_loop: PermissionAction.optional(),
           skill: PermissionRule.optional(),
@@ -691,14 +693,13 @@ export namespace Config {
       temperature: z.number().optional(),
       top_p: z.number().optional(),
       prompt: z.string().optional(),
-      tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
       disable: z.boolean().optional(),
       description: z.string().optional().describe("Description of when to use the agent"),
       mode: z.enum(["subagent", "primary", "all"]).optional(),
       hidden: z
         .boolean()
         .optional()
-        .describe("Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)"),
+        .describe("Hide this subagent from the @ autocomplete menu (only applies to mode: subagent)"),
       options: z.record(z.string(), z.any()).optional(),
       color: z
         .union([
@@ -713,8 +714,14 @@ export namespace Config {
         .positive()
         .optional()
         .describe("Maximum number of agentic iterations before forcing text-only response"),
-      maxSteps: z.number().int().positive().optional().describe("@deprecated Use 'steps' field instead."),
       permission: Permission.optional(),
+      tools: z
+        .object({
+          include: z.array(z.string()).optional(),
+          exclude: z.array(z.string()).optional(),
+        })
+        .optional()
+        .describe("Tool adapter: whitelist (include) or blacklist (exclude) of tool IDs visible to this agent"),
     })
     .catchall(z.any())
     .transform((agent) => {
@@ -730,7 +737,6 @@ export namespace Config {
         "hidden",
         "color",
         "steps",
-        "maxSteps",
         "options",
         "permission",
         "disable",
@@ -743,26 +749,11 @@ export namespace Config {
         if (!knownKeys.has(key)) options[key] = value
       }
 
-      // Convert legacy tools config to permissions
-      const permission: Permission = {}
-      for (const [tool, enabled] of Object.entries(agent.tools ?? {})) {
-        const action = enabled ? "allow" : "deny"
-        // write, edit, patch, multiedit all map to edit permission
-        if (tool === "write" || tool === "edit" || tool === "patch" || tool === "multiedit") {
-          permission.edit = action
-        } else {
-          permission[tool] = action
-        }
-      }
-      Object.assign(permission, agent.permission)
-
-      // Convert legacy maxSteps to steps
-      const steps = agent.steps ?? agent.maxSteps
-
-      return { ...agent, options, permission, steps } as typeof agent & {
+      return { ...agent, options } as typeof agent & {
         options?: Record<string, unknown>
         permission?: Permission
         steps?: number
+        tools?: { include?: string[]; exclude?: string[] }
       }
     })
     .meta({
@@ -935,7 +926,7 @@ export namespace Config {
       hostname: z.string().optional().describe("Hostname to listen on"),
       publicUrl: z.string().optional().describe("Public base URL used for externally visible attachment links"),
       mdns: z.boolean().optional().describe("Enable mDNS service discovery"),
-      mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service (default: opencorvus.local)"),
+      mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service"),
       cors: z.array(z.string()).optional().describe("Additional domains to allow for CORS"),
     })
     .strict()
@@ -1008,7 +999,6 @@ export namespace Config {
         .object({
           apiKey: z.string().optional(),
           baseURL: z.string().optional(),
-          enterpriseUrl: z.string().optional().describe("GitHub Enterprise URL for copilot authentication"),
           setCacheKey: z.boolean().optional().describe("Enable promptCacheKey for this provider (default false)"),
           timeout: z
             .union([
@@ -1059,10 +1049,6 @@ export namespace Config {
         .describe(
           "Control sharing behavior:'manual' allows manual sharing via commands, 'auto' enables automatic sharing, 'disabled' disables all sharing",
         ),
-      autoshare: z
-        .boolean()
-        .optional()
-        .describe("@deprecated Use 'share' field instead. Share newly created sessions automatically"),
       autoupdate: z
         .union([z.boolean(), z.literal("notify")])
         .optional()
@@ -1088,18 +1074,9 @@ export namespace Config {
         .string()
         .optional()
         .describe("Custom username to display in conversations instead of system username"),
-      mode: z
-        .object({
-          build: Agent.optional(),
-          plan: Agent.optional(),
-        })
-        .catchall(Agent)
-        .optional()
-        .describe("@deprecated Use `agent` field instead."),
       agent: z
         .object({
           // primary
-          plan: Agent.optional(),
           build: Agent.optional(),
           // subagent
           general: Agent.optional(),
@@ -1186,80 +1163,138 @@ export namespace Config {
         .describe("System-scope prompt overrides keyed by prompt identifier (e.g. core_header)"),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
       permission: Permission.optional(),
-      tools: z.record(z.string(), z.boolean()).optional(),
+      tool_permissions: z
+        .object({
+          websearch:          PermissionAction.optional(),
+          webfetch:           PermissionAction.optional(),
+          skill:              PermissionAction.optional(),
+          external_directory: PermissionAction.optional(),
+          task:               PermissionAction.optional(),
+          schedule:           PermissionAction.optional(),
+        })
+        .optional()
+        .describe(
+          "Default tool permission actions for new tasks. When not set, defaults to 'allow'. " +
+          "Set a tool to 'ask' for confirmation, or 'deny' to block it entirely.",
+        ),
+      preview: z
+        .object({
+          ports: z
+            .array(z.number().int().min(1).max(65_535))
+            .max(64)
+            .optional()
+            .describe("Loopback ports to probe when resolving the embedded live frontend preview."),
+        })
+        .optional()
+        .describe("Frontend preview configuration."),
       compaction: z
         .object({
-          auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),
-          prune: z.boolean().optional().describe("Enable pruning of old tool outputs (default: true)"),
+          auto: z.boolean().optional().describe("Enable automatic compaction when context is full"),
+          prune: z.boolean().optional().describe("Enable pruning of old tool outputs"),
           reserved: z
             .number()
             .int()
             .min(0)
             .optional()
             .describe("Token buffer for compaction. Leaves enough window to avoid overflow during compaction."),
+          threshold: z
+            .number()
+            .min(0.1)
+            .max(1)
+            .optional()
+            .describe(
+              "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.7 — start compacting at 70% so the agent has room to land its next reply without overflowing.",
+            ),
+          tail_turns: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe("Number of most recent real user turns to preserve verbatim after compaction. Defaults to 2."),
+          preserve_recent_tokens: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe("Token budget for the verbatim recent-tail retained after compaction."),
         })
         .optional(),
       assistant: z
         .object({
-          decompose: z
+          requirements: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for requirements agent (default: 30)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Requirements agent timeout in milliseconds (default: 300000)"),
-              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0, default: 0.5)"),
-              max_attempts: z.number().int().min(1).optional().describe("Maximum requirements analysis attempts (default: 3)"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for requirements agent"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for requirements agent"),
             })
             .optional()
             .describe("Requirements agent configuration — analyzes input, extracts requirements, decomposes into goal contracts"),
           architect: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for architect agent (default: 20)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Architect agent timeout in milliseconds (default: 180000)"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for architect agent"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for architect agent"),
-              model: z.string().optional().describe("Model override for architect agent"),
             })
             .optional()
-            .describe("Architect agent configuration — cross-goal coordination, interface contracts"),
-          planner: z
-            .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for planner agent (default: 30)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Planner agent timeout in milliseconds (default: 300000)"),
-              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0, default: 0.5)"),
-              max_attempts: z.number().int().min(1).optional().describe("Maximum plan generation attempts (default: 3)"),
-              skills: z.array(z.string()).optional().describe("Additional skill paths for planner agent"),
-            })
-            .optional()
-            .describe("Planner agent configuration"),
-          evaluator: z
-            .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for evaluator agent (default: 25)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Evaluator agent timeout in milliseconds (default: 240000)"),
-              model: z.string().optional().describe("Model to use for evaluator agent (e.g. 'github-copilot/claude-haiku-4-5'). Defaults to the project default model."),
-              tier: z.enum(["core", "standard", "full"]).optional().describe("Evaluation tier: 'core' (build/test/lint only), 'standard' (+ judge/spec_check), 'full' (all checks). Default: 'standard'."),
-              skills: z.array(z.string()).optional().describe("Additional skill paths for evaluator agent"),
-            })
-            .optional()
-            .describe("Evaluator agent configuration"),
+            .describe("Architect agent configuration — cross-goal coordination, interface contracts. Model is configured via agent.architect.model."),
           delivery: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent (default: 40)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Delivery agent timeout in milliseconds (default: 600000). Also overridable via OPENCORVUS_DELIVERY_AGENT_TIMEOUT_MS env var"),
-              max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries (default: 2)"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent"),
+              max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for delivery agent"),
             })
             .optional()
             .describe("Delivery agent configuration"),
-          adaptive: z
+          delivery_visual: z
             .object({
-              enabled: z.boolean().optional().describe("Enable adaptive pipeline shortcuts (default: true)"),
-              planner_shortcut_max_steps: z.number().int().min(1).optional().describe("Max planner steps when goals are pre-provided (default: 15)"),
+              phash_hamming_max: z.number().int().min(0).max(64).optional().describe("P0-B hard gate: pHash Hamming distance upper bound (structure)"),
+              ssim_min: z.number().min(0).max(1).optional().describe("P0-B hard gate: mean SSIM lower bound (texture/detail)"),
+              chart_region_density_min_ratio: z.number().min(0).max(1).optional().describe("P0-B hard gate: chart-region non-white density ratio lower bound (anti empty-skeleton)"),
+              unique_color_ratio_min: z.number().min(0).max(1).optional().describe("P0-B hard gate: unique-color ratio lower bound (anti monochrome placeholder)"),
+              text_hit_ratio_min: z.number().min(0).max(1).optional().describe("P0-B hard gate: reference_strings hit ratio lower bound (anti placeholder copy)"),
+              score_weights: z
+                .object({
+                  phash: z.number().min(0).max(1).optional(),
+                  ssim: z.number().min(0).max(1).optional(),
+                  density: z.number().min(0).max(1).optional(),
+                  text_hit: z.number().min(0).max(1).optional(),
+                })
+                .optional()
+                .describe("Composite score weights; four values must sum to 1 (runtime-enforced)"),
             })
             .optional()
-            .describe("Adaptive pipeline configuration"),
-          max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
-          max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure (default: 5)"),
-          max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups (default: 1)"),
-          default_workflow: z.string().optional().describe("Default workflow for new tasks: 'standard', 'quick-fix', 'plan-only', or custom ID (default: 'standard')"),
+            .describe("P0-B delivery visual numeric hard-gate thresholds."),
+          design_analyst: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent"),
+              skills: z.array(z.string()).optional().describe("Additional skill paths for design analyst agent"),
+            })
+            .optional()
+            .describe("Design analyst agent configuration — analyzes visual references (images, URLs). Model is configured via agent.\"design-analyst\".model."),
+          intent_analysis: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for intent-analysis agent"),
+              skills: z.array(z.string()).optional().describe("Additional skill paths for intent-analysis agent"),
+            })
+            .optional()
+            .describe("Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent.\"intent-analysis\".model."),
+          build: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for build agent"),
+              skills: z.array(z.string()).optional().describe("Operator-forced build skills. Leave empty for auto_detect-driven skill routing."),
+            })
+            .optional()
+            .describe("Build agent configuration — per-goal build session. Model is configured via agent.\"build\".model."),
+          activity: z
+            .object({
+              session_llm_idle_ms: z.number().int().min(1000).optional().describe("Max idle (no stream chunk) window for session LLM streams, ms"),
+              executor_events_idle_ms: z.number().int().min(1000).optional().describe("Max idle window for the executor event queue, ms"),
+              task_queue_run_timeout_ms: z.number().int().min(1000).optional().describe("Total wall-clock cap for a single queued task run, ms"),
+            })
+            .optional()
+            .describe("Chunk-driven inactivity gates. Single source of truth for streaming layers (session LLM, executor events, task queue)."),
+          max_runs: z.number().int().min(1).optional().describe("Maximum total task runs"),
+          max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure"),
+          max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups"),
+          default_workflow: z.string().optional().describe("Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID"),
           workflows: z
             .array(
               z.object({
@@ -1269,11 +1304,11 @@ export namespace Config {
                 steps: z.array(
                   z.object({
                     id: z.string().describe("Step unique ID within workflow"),
-                    tool: z.string().describe("Task Agent tool name this step maps to"),
+                    tool: z.string().describe("Orchestrator tool name this step maps to"),
                     label: z.string().describe("UI display label"),
                     hint: z.string().optional().describe("Brief guidance injected into system prompt"),
                     scope: z.enum(["task", "goal"]).describe("task = once per task, goal = once per goal"),
-                    skippable: z.boolean().optional().describe("Whether Task Agent can skip this step"),
+                    skippable: z.boolean().optional().describe("Whether Orchestrator can skip this step"),
                     after: z.array(z.string()).optional().describe("Prerequisite step IDs"),
                   }),
                 ),
@@ -1284,7 +1319,7 @@ export namespace Config {
             .describe("Custom workflow definitions. Override built-in workflows by matching ID."),
         })
         .optional()
-        .describe("Assistant agent configuration — controls decompose, planner, evaluator, and delivery agent behavior"),
+        .describe("Assistant agent configuration — controls requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior"),
       experimental: z
         .object({
           disable_paste_summary: z.boolean().optional(),
@@ -1298,18 +1333,13 @@ export namespace Config {
             .optional()
             .describe("Tools that should only be available to primary agents."),
           continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
-          unattended: z
-            .boolean()
-            .optional()
-            .describe("Enable unattended mode — auto-approve permissions and auto-reject stale interactions"),
-          auto_permission: z
-            .boolean()
-            .optional()
-            .describe("Auto-approve permission requests in unattended mode (default: false)"),
           auto_question: z
             .boolean()
             .optional()
-            .describe("Auto-answer clarification questions in unattended mode (default: false)"),
+            .default(true)
+            .describe(
+              "Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
+            ),
           mcp_timeout: z
             .number()
             .int()
@@ -1318,17 +1348,17 @@ export namespace Config {
             .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
           memory: z
             .object({
-              enabled: z.boolean().optional().describe("Enable persistent memory store (default: true)"),
+              enabled: z.boolean().optional().describe("Enable persistent memory store"),
               auto_inject: z
                 .boolean()
                 .optional()
-                .describe("Auto-inject relevant memories into system prompt (default: true)"),
+                .describe("Auto-inject relevant memories into system prompt"),
               token_budget: z
                 .number()
                 .int()
                 .min(100)
                 .optional()
-                .describe("Max tokens for auto-injected memory context (default: 2000)"),
+                .describe("Max tokens for auto-injected memory context"),
             })
             .optional()
             .describe("Persistent memory configuration"),
@@ -1349,23 +1379,6 @@ export namespace Config {
       mergeDeep(await loadFile(path.join(Global.Path.config, "opencorvus.json"))),
       mergeDeep(await loadFile(path.join(Global.Path.config, "opencorvus.jsonc"))),
     )
-
-    const legacy = path.join(Global.Path.config, "config")
-    if (existsSync(legacy)) {
-      await import(pathToFileURL(legacy).href, {
-        with: {
-          type: "toml",
-        },
-      })
-        .then(async (mod) => {
-          const { provider, model, ...rest } = mod.default
-          if (provider && model) result.model = `${provider}/${model}`
-          result["$schema"] = "https://opencorvus.ai/config.json"
-          result = mergeDeep(result, rest)
-          await Filesystem.writeJson(path.join(Global.Path.config, "config.json"), result)
-          await fs.unlink(legacy)
-        })
-    }
 
     return result
   })
@@ -1388,19 +1401,7 @@ export namespace Config {
       "path" in options ? options.path : { source: options.source, dir: options.dir },
     )
 
-    const normalized = (() => {
-      if (!data || typeof data !== "object" || Array.isArray(data)) return data
-      const copy = { ...(data as Record<string, unknown>) }
-      const hadLegacy = "theme" in copy || "keybinds" in copy || "tui" in copy
-      if (!hadLegacy) return copy
-      delete copy.theme
-      delete copy.keybinds
-      delete copy.tui
-      log.warn("tui keys in opencorvus config are deprecated; move them to tui.json", { path: source })
-      return copy
-    })()
-
-    const parsed = Info.safeParse(normalized)
+    const parsed = Info.safeParse(data)
     if (parsed.success) {
       if (!parsed.data.$schema && isFile) {
         parsed.data.$schema = "https://opencorvus.ai/config.json"
@@ -1500,7 +1501,10 @@ export namespace Config {
 
   function patchJsonc(input: string, patch: unknown, path: string[] = []): string {
     if (!isRecord(patch)) {
-      const edits = modify(input, path, patch, {
+      // RFC 7396: a null value in the patch signals deletion of that key.
+      // jsonc-parser's modify() removes the key when the value is undefined.
+      const valueToWrite = patch === null ? undefined : patch
+      const edits = modify(input, path, valueToWrite, {
         formattingOptions: {
           insertSpaces: true,
           tabSize: 2,
@@ -1549,25 +1553,49 @@ export namespace Config {
     })
   }
 
-  async function writeConfigFile(filepath: string, config: Info) {
-    const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
-      if (err.code === "ENOENT") return "{}"
-      throw new JsonError({ path: filepath }, { cause: err })
-    })
+  // RFC 7396-compatible deep merge: null values in the source delete the
+  // corresponding key from the target, matching patchJsonc's behavior.
+  function mergeWithNullDelete(target: any, source: any): any {
+    if (!isRecord(target) || !isRecord(source)) return source
+    const result: Record<string, unknown> = { ...target }
+    for (const [k, v] of Object.entries(source)) {
+      if (v === null) {
+        delete result[k]
+      } else if (isRecord(v) && isRecord(result[k])) {
+        result[k] = mergeWithNullDelete(result[k], v)
+      } else {
+        result[k] = v
+      }
+    }
+    return result
+  }
 
-    return filepath.endsWith(".jsonc")
-      ? (async () => {
-          const updated = patchJsonc(before, config)
-          const merged = parseConfig(updated, filepath)
-          await Filesystem.write(filepath, updated)
-          return merged
-        })()
-      : (async () => {
-          const existing = parseConfig(before, filepath)
-          const merged = mergeDeep(existing, config)
-          await Filesystem.writeJson(filepath, merged)
-          return merged
-        })()
+  // Serializes read-modify-write of each config file. Two concurrent
+  // PATCH /config requests (e.g. user picks build=A then delivery=B in the
+  // overlay panel before the first save returns) would otherwise both
+  // readText() against the same "before" snapshot and the second write would
+  // clobber the first agent's override. Keyed by absolute filepath so the
+  // project file and the global file get independent locks.
+  const writeConfigLocks = new Map<string, Promise<unknown>>()
+
+  async function writeConfigFile(filepath: string, config: Info) {
+    return withKeyedLock(writeConfigLocks, filepath, async () => {
+      const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+
+      if (filepath.endsWith(".jsonc")) {
+        const updated = patchJsonc(before, config)
+        const merged = parseConfig(updated, filepath)
+        await Filesystem.write(filepath, updated)
+        return merged
+      }
+      const existing = parseConfig(before, filepath)
+      const merged = mergeWithNullDelete(existing, config)
+      await Filesystem.writeJson(filepath, merged)
+      return merged
+    })
   }
 
   export async function updateGlobal(config: Info) {

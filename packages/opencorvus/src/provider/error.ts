@@ -9,17 +9,33 @@ export namespace ProviderError {
     /prompt is too long/i, // Anthropic
     /input is too long for requested model/i, // Amazon Bedrock
     /exceeds the context window/i, // OpenAI (Completions + Responses API message text)
+    /maximum context length/i, // OpenAI-compatible gateways
+    /context length exceeded/i, // OpenAI-compatible gateways
     /input token count.*exceeds the maximum/i, // Google (Gemini)
+    /input length.*exceed/i, // Generic provider wording
     /maximum prompt length is \d+/i, // xAI (Grok)
+    /prompt.*exceed.*limit/i, // OpenAI-compatible gateways
     /reduce the length of the messages/i, // Groq
     /maximum context length is \d+ tokens/i, // OpenRouter, DeepSeek
-    /exceeds the limit of \d+/i, // GitHub Copilot
+    /too many tokens/i, // Mistral and OpenAI-compatible gateways
+    /request too large/i, // 413 bodies with text
     /exceeds the available context size/i, // llama.cpp server
     /greater than the context length/i, // LM Studio
     /context window exceeds limit/i, // MiniMax
     /exceeded model token limit/i, // Kimi For Coding, Moonshot
+    /range of input length should be \[\d+,\s*\d+\]/i, // Alibaba Coding Plan
     /context[_ ]length[_ ]exceeded/i, // Generic fallback
   ]
+
+  const OVERFLOW_CODES = new Set([
+    "context_length_exceeded",
+    "context_overflow",
+    "prompt_too_long",
+    "input_too_long",
+    "request_too_large",
+    "tokens_exceeded",
+    "max_tokens_exceeded",
+  ])
 
   function isOpenAiErrorRetryable(e: APICallError) {
     const status = e.statusCode
@@ -39,15 +55,35 @@ export namespace ProviderError {
     return /^4(00|13)\s*(status code)?\s*\(no body\)/i.test(message)
   }
 
-  function error(providerID: string, error: APICallError) {
-    if (providerID.includes("github-copilot") && error.statusCode === 403) {
-      return "Please reauthenticate with the copilot provider to ensure your credentials work properly with OpenCorvus."
-    }
-
-    return error.message
+  function stringValue(input: unknown) {
+    return typeof input === "string" ? input : undefined
   }
 
-  function message(providerID: string, e: APICallError) {
+  function errorObject(input: unknown) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return undefined
+    return input as Record<string, unknown>
+  }
+
+  function overflowSignal(body: unknown) {
+    const root = errorObject(body)
+    if (!root) return undefined
+    const nested = errorObject(root.error)
+    const sources = nested ? [nested, root] : [root]
+    for (const source of sources) {
+      const code = stringValue(source.code)?.toLowerCase()
+      const type = stringValue(source.type)?.toLowerCase()
+      if ((code && OVERFLOW_CODES.has(code)) || (type && OVERFLOW_CODES.has(type))) {
+        return stringValue(source.message) ?? "Input exceeds context window of this model"
+      }
+    }
+    for (const source of sources) {
+      const message = stringValue(source.message) ?? stringValue(source.error)
+      if (message && isOverflow(message)) return message
+    }
+    return undefined
+  }
+
+  function message(e: APICallError) {
     return iife(() => {
       const msg = e.message
       if (msg === "") {
@@ -59,19 +95,15 @@ export namespace ProviderError {
         return "Unknown error"
       }
 
-      const transformed = error(providerID, e)
-      if (transformed !== msg) {
-        return transformed
-      }
       if (!e.responseBody || (e.statusCode && msg !== STATUS_CODES[e.statusCode])) {
         return msg
       }
 
       try {
         const body = JSON.parse(e.responseBody)
-        // try to extract common error message fields
-        const errMsg = body.message || body.error || body.error?.message
-        if (errMsg && typeof errMsg === "string") {
+        const error = errorObject(body.error)
+        const errMsg = stringValue(body.message) ?? stringValue(error?.message) ?? stringValue(body.error)
+        if (errMsg) {
           return `${msg}: ${errMsg}`
         }
       } catch {}
@@ -116,13 +148,16 @@ export namespace ProviderError {
     const responseBody = JSON.stringify(body)
     if (body.type !== "error") return
 
+    const overflow = overflowSignal(body)
+    if (overflow) {
+      return {
+        type: "context_overflow",
+        message: overflow,
+        responseBody,
+      }
+    }
+
     switch (body?.error?.code) {
-      case "context_length_exceeded":
-        return {
-          type: "context_overflow",
-          message: "Input exceeds context window of this model",
-          responseBody,
-        }
       case "insufficient_quota":
         return {
           type: "api_error",
@@ -164,7 +199,17 @@ export namespace ProviderError {
       }
 
   export function parseAPICallError(input: { providerID: string; error: APICallError }): ParsedAPICallError {
-    const m = message(input.providerID, input.error)
+    const body = json(input.error.responseBody)
+    const overflow = overflowSignal(body)
+    if (overflow) {
+      return {
+        type: "context_overflow",
+        message: overflow,
+        responseBody: input.error.responseBody,
+      }
+    }
+
+    const m = message(input.error)
     if (isOverflow(m)) {
       return {
         type: "context_overflow",

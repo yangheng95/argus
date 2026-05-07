@@ -20,6 +20,7 @@ import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { ModelsDev } from "../../provider/models"
 import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
 import { bootstrap } from "../bootstrap"
 import { Session } from "../../session"
 import { Identifier } from "../../id/id"
@@ -206,11 +207,7 @@ export const GithubInstallCommand = cmd({
           const app = await getAppInfo()
           await installGitHubApp()
 
-          const providers = await ModelsDev.get().then((p) => {
-            // TODO: add guide for copilot, for now just hide it
-            delete p["github-copilot"]
-            return p
-          })
+          const providers = await ModelsDev.get()
 
           const provider = await promptProvider()
           const model = await promptModel()
@@ -247,8 +244,7 @@ export const GithubInstallCommand = cmd({
           }
 
           async function getAppInfo() {
-            const project = Instance.project
-            if (project.vcs !== "git") {
+            if (!Project.isGitRepo(Instance.directory)) {
               prompts.log.error(`Could not find git repository. Please run this command from a git repository.`)
               throw new UI.CancelledError()
             }
@@ -521,6 +517,7 @@ export const GithubRunCommand = cmd({
         // Setup opencorvus session
         const repoData = await fetchRepo()
         session = await Session.create({
+          kind: "assistant",
           permission: [
             {
               permission: "question",
@@ -839,7 +836,7 @@ export const GithubRunCommand = cmd({
           bash: ["Bash", UI.Style.TEXT_DANGER_BOLD],
           edit: ["Edit", UI.Style.TEXT_SUCCESS_BOLD],
           glob: ["Glob", UI.Style.TEXT_INFO_BOLD],
-          grep: ["Grep", UI.Style.TEXT_INFO_BOLD],
+          search_code: ["Search Code", UI.Style.TEXT_INFO_BOLD],
           list: ["List", UI.Style.TEXT_INFO_BOLD],
           read: ["Read", UI.Style.TEXT_HIGHLIGHT_BOLD],
           write: ["Write", UI.Style.TEXT_SUCCESS_BOLD],

@@ -3,7 +3,7 @@ import path from "path"
 const root = path.resolve(import.meta.dir, "..")
 const exts = [".ts", ".tsx", ".mts", ".cts"]
 const bad = "@opencorvus-ai/sdk"
-const good = "@opencorvus-ai/sdk/v2"
+const good = "@opencorvus-ai/sdk"
 const issues = []
 
 for (const pattern of exts.map((x) => `packages/**/*${x}`)) {

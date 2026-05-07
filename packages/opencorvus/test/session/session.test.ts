@@ -4,6 +4,8 @@ import { Session } from "../../src/session"
 import { Bus } from "../../src/bus"
 import { Log } from "../../src/util/log"
 import { Instance } from "../../src/project/instance"
+import { Identifier } from "../../src/id/id"
+import type { Message } from "../../src/session/message"
 
 const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -21,7 +23,7 @@ describe("session.started event", () => {
           receivedInfo = event.properties.info as Session.Info
         })
 
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
 
         await new Promise((resolve) => setTimeout(resolve, 100))
 
@@ -53,7 +55,7 @@ describe("session.started event", () => {
           events.push("updated")
         })
 
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
 
         await new Promise((resolve) => setTimeout(resolve, 100))
 
@@ -75,7 +77,7 @@ describe("Session.fork", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const root = await Session.create({ title: "root-session" })
+        const root = await Session.create({ kind: "assistant", title: "root-session" })
         const child = await Session.fork({ sessionID: root.id })
 
         expect(child.parentID).toBe(root.id)
@@ -92,13 +94,111 @@ describe("Session.fork", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const root = await Session.create({ title: "root-session" })
+        const root = await Session.create({ kind: "assistant", title: "root-session" })
         const child = await Session.fork({ sessionID: root.id })
 
         await Session.remove(root.id)
 
         await expect(Session.get(root.id)).rejects.toThrow()
         await expect(Session.get(child.id)).rejects.toThrow()
+      },
+    })
+  })
+
+  test("clones compaction summary parent links inside the forked session", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const root = await Session.create({ kind: "assistant", title: "root-session" })
+        const model = { providerID: "test", modelID: "test-model" }
+        const user = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: root.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "user",
+          model,
+        })
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: root.id,
+          messageID: user.id,
+          type: "compaction",
+          auto: true,
+        })
+        const summary = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: root.id,
+          role: "assistant",
+          time: { created: Date.now(), completed: Date.now() },
+          parentID: user.id,
+          modelID: model.modelID,
+          providerID: model.providerID,
+          agent: "compaction",
+          path: { cwd: projectRoot, root: projectRoot },
+          summary: true,
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          finish: "stop",
+        })
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: root.id,
+          messageID: summary.id,
+          type: "text",
+          text: "summary",
+        })
+        const recentUser = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: root.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "user",
+          model,
+        })
+        await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: root.id,
+          role: "assistant",
+          time: { created: Date.now(), completed: Date.now() },
+          parentID: recentUser.id,
+          modelID: model.modelID,
+          providerID: model.providerID,
+          agent: "agent",
+          path: { cwd: projectRoot, root: projectRoot },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          finish: "stop",
+        })
+
+        const child = await Session.fork({ sessionID: root.id })
+        const childMessages = await Session.messages({ sessionID: child.id })
+        const childUsers = new Set(
+          childMessages.filter((message) => message.info.role === "user").map((message) => message.info.id),
+        )
+        const childAssistants = childMessages.filter(
+          (message): message is Message.WithParts & { info: Message.Assistant } => message.info.role === "assistant",
+        )
+
+        expect(childAssistants).toHaveLength(2)
+        for (const message of childAssistants) {
+          expect(childUsers.has(message.info.parentID)).toBe(true)
+          expect(message.info.parentID).not.toBe(user.id)
+          expect(message.info.parentID).not.toBe(recentUser.id)
+        }
+        expect(childAssistants.map((message) => message.info.summary ?? false)).toEqual([true, false])
+
+        await Session.remove(root.id)
       },
     })
   })

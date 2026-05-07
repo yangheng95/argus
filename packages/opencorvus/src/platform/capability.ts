@@ -84,9 +84,54 @@ export namespace Capability {
     }
   }
 
+  async function bunPty() {
+    await import("bun-pty")
+    return line("bun_pty", "PTY native module", "ok", "bun-pty")
+  }
+
+  async function screenCapture() {
+    try {
+      await import("node-screenshots" as any)
+      return line("screen_capture", "Screen capture module", "ok", "node-screenshots")
+    } catch (err) {
+      return line(
+        "screen_capture",
+        "Screen capture module",
+        "warn",
+        `node-screenshots unavailable: ${text(err)}`,
+        "Screen tool will fail. Reinstall dependencies or platform may not be supported.",
+      )
+    }
+  }
+
+  async function gitBash() {
+    if (process.platform !== "win32")
+      return line("git_bash", "Git Bash (Windows only)", "ok", "n/a")
+    try {
+      const { Shell } = await import("@/shell/shell")
+      const shellPath = Shell.acceptable()
+      const base = shellPath.toLowerCase()
+      if (base.endsWith("bash.exe")) {
+        return line("git_bash", "Git Bash (Windows)", "ok", shellPath)
+      }
+      return line(
+        "git_bash",
+        "Git Bash (Windows)",
+        "warn",
+        `Falling back to ${shellPath}`,
+        "Install Git for Windows to enable full bash/PID-guard support. Without it, cmd.exe is used.",
+      )
+    } catch (err) {
+      return line("git_bash", "Git Bash (Windows)", "warn", text(err))
+    }
+  }
+
   async function collectFresh() {
     const checks = [
       winFfi(),
+      bunPty(),
+      screenCapture(),
+      gitBash(),
       Promise.resolve(watcher()),
       executors(),
     ]
@@ -111,9 +156,9 @@ export namespace Capability {
   async function executors() {
     const found = await ExecutorDiscovery.scan()
     return [
-      found.opencode.available
-        ? line("executor_opencode", "Executor opencode", "ok", found.opencode.detail)
-        : line("executor_opencode", "Executor opencode", "fail", found.opencode.detail),
+      found.mirrorcode.available
+        ? line("executor_mirrorcode", "Executor MirrorCode", "ok", found.mirrorcode.detail)
+        : line("executor_mirrorcode", "Executor MirrorCode", "fail", found.mirrorcode.detail),
       found.codex.available
         ? line("executor_codex", "Executor codex", "ok", found.codex.version ? `${found.codex.detail} (${found.codex.version})` : found.codex.detail)
         : line(

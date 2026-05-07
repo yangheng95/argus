@@ -1,0 +1,158 @@
+/**
+ * AcceptanceSpec — typed, rubric-first representation of a goal's acceptance
+ * criteria. Emitted by the Requirements Agent via `register_acceptance_spec`,
+ * translated to executable checks + rubric evaluations by
+ * `src/spec/translator.ts`, and executed by the per-goal evaluator.
+ *
+ * Shape follows the cross-framework convergence documented in
+ * `docs/spec-acceptance-eval-protocol.md` (Inspect AI, Braintrust autoevals,
+ * MLflow make_judge, Ragas rubric metrics, DeepEval G-Eval, AutoUAT). Three
+ * scorer families — heuristic / llm_judge / prebuilt — cover every case
+ * without inventing a new DSL.
+ */
+import z from "zod"
+
+export const AcceptanceSeverity = z.enum(["essential", "important", "optional", "pitfall"])
+export const AcceptanceTrigger = z.enum(["on_goal", "on_delivery"])
+
+const GherkinScenarioSchema = z
+  .object({
+    given: z.array(z.string().min(1)).min(1),
+    when: z.array(z.string().min(1)).min(1),
+    then: z.array(z.string().min(1)).min(1),
+  })
+  .describe("Gherkin Given/When/Then scenario. Optional — omit for pure code checks.")
+
+export const RubricLevelSchema = z.object({
+  score: z.number().int().min(0).describe("Integer score for this level."),
+  label: z.string().min(1).describe("Short level label, e.g. 'fully met'."),
+  anchor: z.string().min(1).describe("Behavioral description: what earns this score."),
+  passes: z.boolean().describe("Does this level count as pass for binary verdict?"),
+})
+
+const HeuristicScorerSchema = z.object({
+  type: z.literal("heuristic"),
+  name: z.string().min(1),
+  spec: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("shell"),
+      cmd: z.string().min(1).describe("Shell command. Exit 0 = pass unless expect.exit_code set."),
+      cwd: z.string().optional(),
+    }),
+    z.object({
+      kind: z.literal("script_ref"),
+      path: z.string().min(1).describe("Repo-relative script path."),
+      args: z.array(z.string()).optional(),
+    }),
+  ]),
+  expect: z
+    .object({
+      exit_code: z.number().int().optional(),
+    })
+    .optional(),
+})
+
+const LlmJudgeScorerSchema = z.object({
+  type: z.literal("llm_judge"),
+  name: z.string().min(1),
+  criteria: z
+    .string()
+    .min(10)
+    .describe("Single-criterion evaluation question in natural language."),
+  rubric: z
+    .array(RubricLevelSchema)
+    .min(2)
+    .max(5)
+    .optional()
+    .describe("Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET."),
+  inputs: z
+    .array(z.enum(["delivery_summary", "changed_files", "requirement_text"]))
+    .optional()
+    .describe("Which parts of the delivery to feed the judge. Default: delivery_summary."),
+})
+
+const PREBUILT_SCORER_NAMES = [
+  "factuality",
+  "relevance",
+  "contains",
+  "exact_match",
+  "length_within",
+  "json_schema",
+] as const
+
+const PrebuiltScorerSchema = z.object({
+  type: z.literal("prebuilt"),
+  name: z.enum(PREBUILT_SCORER_NAMES),
+  config: z.record(z.string(), z.unknown()).default({}),
+})
+
+export const ScorerSchema = z.discriminatedUnion("type", [
+  HeuristicScorerSchema,
+  LlmJudgeScorerSchema,
+  PrebuiltScorerSchema,
+])
+
+export const AcceptanceSpecSchema = z.object({
+  id: z.string().min(1).describe("Stable spec ID, e.g. 'acc-login-3s'."),
+  source_requirement_id: z
+    .string()
+    .min(1)
+    .describe("Requirement ID this spec was derived from (REQ-N)."),
+  goal_id: z
+    .string()
+    .min(1)
+    .describe("Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal."),
+  title: z.string().min(1),
+  scenario: GherkinScenarioSchema.optional(),
+  scorers: z.array(ScorerSchema).min(1).describe("At least one scorer — a spec without a scorer is untestable."),
+  severity: AcceptanceSeverity,
+  trigger: AcceptanceTrigger.optional().describe(
+    "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.",
+  ),
+})
+
+export type AcceptanceSpec = z.infer<typeof AcceptanceSpecSchema>
+export type AcceptanceScorer = z.infer<typeof ScorerSchema>
+export type HeuristicScorer = Extract<AcceptanceScorer, { type: "heuristic" }>
+export type LlmJudgeScorer = Extract<AcceptanceScorer, { type: "llm_judge" }>
+export type PrebuiltScorer = Extract<AcceptanceScorer, { type: "prebuilt" }>
+export type RubricLevel = z.infer<typeof RubricLevelSchema>
+
+/**
+ * Resolve the effective trigger for a scorer given its spec's severity.
+ * Centralizes the default rules so evaluator/architect/tests agree.
+ */
+export function resolveTrigger(spec: AcceptanceSpec, scorer: AcceptanceScorer): "on_goal" | "on_delivery" {
+  if (spec.trigger) return spec.trigger
+  if (scorer.type === "heuristic" || scorer.type === "prebuilt") return "on_goal"
+  // llm_judge: essential runs per-goal so failures fail fast; others batch at delivery.
+  return spec.severity === "essential" ? "on_goal" : "on_delivery"
+}
+
+/**
+ * Render a spec list as a single human-readable block for prompts, logs and
+ * operator-facing docs. Deterministic, stable ordering.
+ */
+export function renderSpecsAsText(specs: readonly AcceptanceSpec[]): string {
+  if (specs.length === 0) return "(no acceptance specs)"
+  const lines: string[] = []
+  for (const spec of specs) {
+    lines.push(`• [${spec.severity}] ${spec.title} (${spec.id} ← ${spec.source_requirement_id})`)
+    if (spec.scenario) {
+      for (const g of spec.scenario.given) lines.push(`    Given ${g}`)
+      for (const w of spec.scenario.when) lines.push(`    When  ${w}`)
+      for (const t of spec.scenario.then) lines.push(`    Then  ${t}`)
+    }
+    for (const sc of spec.scorers) {
+      if (sc.type === "heuristic") {
+        const desc = sc.spec.kind === "shell" ? `shell: ${sc.spec.cmd}` : `script: ${sc.spec.path}`
+        lines.push(`    - [heuristic] ${sc.name} — ${desc}`)
+      } else if (sc.type === "llm_judge") {
+        lines.push(`    - [judge] ${sc.name} — ${sc.criteria}`)
+      } else {
+        lines.push(`    - [prebuilt:${sc.name}] ${JSON.stringify(sc.config)}`)
+      }
+    }
+  }
+  return lines.join("\n")
+}

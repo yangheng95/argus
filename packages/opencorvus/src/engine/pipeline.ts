@@ -1,0 +1,145 @@
+/**
+ * Pipeline persistence — fast-path task creation and abort registry.
+ *
+ * Stage functions (spec, goal, plan, dispatch) have been migrated to
+ * task-tools.ts and are now driven by the Orchestrator instead of a
+ * fixed state machine.
+ */
+import z from "zod"
+import { Identifier } from "@/id/id"
+import { Database } from "@/storage/db"
+import { Log } from "@/util/log"
+import { budgetRow } from "./helpers"
+import { CreateTaskInput, Event } from "./model"
+import {
+  EngineChannelBindingTable,
+  EngineProgressSnapshotTable,
+  EngineTaskTable,
+} from "./engine.sql"
+import { EngineProtocol } from "./protocol"
+import type { RunRow } from "./store"
+
+const log = Log.create({ service: "engine-pipeline" })
+
+// ---------------------------------------------------------------------------
+// Task-level abort registry — allows cancelTask to abort in-progress stages
+// ---------------------------------------------------------------------------
+
+const taskAborts = new Map<string, AbortController>()
+
+/**
+ * Abort the stage currently running for the given task.
+ * Called by cancelTask() to ensure immediate interruption.
+ */
+export function abortTaskPipeline(taskID: string): void {
+  const ctrl = taskAborts.get(taskID)
+  if (ctrl) ctrl.abort("task cancelled")
+}
+
+/**
+ * Wait for a running stage to settle (resolve or reject).
+ * Called by deleteTask() to ensure cleanup is safe.
+ */
+export async function awaitPipelineSettled(taskID: string): Promise<void> {
+  const ctrl = taskAborts.get(taskID)
+  if (!ctrl) return
+  // Wait for the abort signal to propagate — no fixed delay, just yield once.
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type BudgetInput = z.infer<typeof CreateTaskInput>["budget"]
+type PriorityInput = z.infer<typeof CreateTaskInput>["priority"]
+type ChannelBindingInput = z.infer<typeof CreateTaskInput>["channelBinding"]
+
+const QUEUE_PRIORITY_BUCKET = {
+  critical: 0,
+  high: 1_000_000_000_000_000,
+  normal: 2_000_000_000_000_000,
+  low: 3_000_000_000_000_000,
+} satisfies Record<NonNullable<PriorityInput>, number>
+
+function initialQueueOrder(priority: PriorityInput | undefined, now: number) {
+  return QUEUE_PRIORITY_BUCKET[priority ?? "normal"] + now
+}
+
+// ---------------------------------------------------------------------------
+// persistQueuedTask — fast-path for POST /task (<10ms)
+// ---------------------------------------------------------------------------
+
+export function persistQueuedTask(input: {
+  taskID: string
+  sessionID: string
+  now: number
+  executor: RunRow["executor"]
+  title: string
+  request: string
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+  requestID?: string
+  source?: z.infer<typeof CreateTaskInput>["source"]
+  priority?: PriorityInput
+  /** "workflow" runs the full pipeline; "build" bypasses to the build agent. */
+  kind?: "workflow" | "build"
+  budget?: BudgetInput
+  metadata: Record<string, unknown>
+  channelBinding?: ChannelBindingInput
+  projectID: string
+}) {
+  Database.transaction((db) => {
+    db.insert(EngineTaskTable)
+      .values({
+        id: input.taskID,
+        project_id: input.projectID,
+        session_id: input.sessionID,
+        request_id: input.requestID,
+        source: input.source ?? "api",
+        title: input.title,
+        request: input.request,
+        attachments: input.attachments?.length ? input.attachments : undefined,
+        executor: input.executor,
+        kind: input.kind ?? "workflow",
+        priority: input.priority ?? "normal",
+        queue_order: initialQueueOrder(input.priority, input.now),
+        budget: budgetRow(input.budget),
+        metadata: input.metadata,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    if (input.channelBinding) {
+      db.insert(EngineChannelBindingTable)
+        .values({
+          id: Identifier.ascending("binding"),
+          task_id: input.taskID,
+          platform: input.channelBinding.platform,
+          channel: input.channelBinding.channel,
+          thread: input.channelBinding.thread,
+          payload: input.channelBinding.payload ?? {},
+          time_created: input.now,
+          time_updated: input.now,
+        })
+        .run()
+    }
+    db.insert(EngineProgressSnapshotTable)
+      .values({
+        id: Identifier.ascending("progress"),
+        task_id: input.taskID,
+        status: "created",
+        summary: "Task queued",
+        payload: { sessionID: input.sessionID },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    Database.effect(() =>
+      EngineProtocol.emit(Event.TaskCreated, {
+        taskID: input.taskID,
+        status: "queued",
+        summary: "Task queued",
+      }, { source: "pipeline.queued" }),
+    )
+  })
+}

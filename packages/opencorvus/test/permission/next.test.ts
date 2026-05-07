@@ -243,28 +243,31 @@ test("evaluate - order matters for specificity", () => {
   expect(result.action).toBe("deny")
 })
 
-test("evaluate - unknown permission returns ask", () => {
+// Hierarchical permission redesign (rule 23): default for unmatched
+// permissions is `allow`. Built-in tools never block on a hidden ask.
+// Operators explicitly deny / ask via tool_permissions config.
+test("evaluate - unknown permission defaults to allow", () => {
   const result = PermissionNext.evaluate("unknown_tool", "anything", [
     { permission: "bash", pattern: "*", action: "allow" },
   ])
-  expect(result.action).toBe("ask")
+  expect(result.action).toBe("allow")
 })
 
-test("evaluate - empty ruleset returns ask", () => {
+test("evaluate - empty ruleset defaults to allow", () => {
   const result = PermissionNext.evaluate("bash", "rm", [])
-  expect(result.action).toBe("ask")
+  expect(result.action).toBe("allow")
 })
 
-test("evaluate - no matching pattern returns ask", () => {
+test("evaluate - no matching pattern defaults to allow", () => {
   const result = PermissionNext.evaluate("edit", "etc/passwd", [
     { permission: "edit", pattern: "src/*", action: "allow" },
   ])
-  expect(result.action).toBe("ask")
+  expect(result.action).toBe("allow")
 })
 
-test("evaluate - empty rules array returns ask", () => {
+test("evaluate - empty rules array defaults to allow", () => {
   const result = PermissionNext.evaluate("bash", "rm", [])
-  expect(result.action).toBe("ask")
+  expect(result.action).toBe("allow")
 })
 
 test("evaluate - multiple matching patterns, last wins", () => {
@@ -559,6 +562,7 @@ test("reply - once resolves the pending ask", async () => {
       await PermissionNext.reply({
         requestID: "permission_test1",
         reply: "once",
+        autoReply: false,
       })
 
       await expect(askPromise).resolves.toBeUndefined()
@@ -578,15 +582,40 @@ test("reply - reject throws RejectedError", async () => {
         patterns: ["ls"],
         metadata: {},
         always: [],
-        ruleset: [],
+        // Hierarchical-permission redesign: empty ruleset → allow by default,
+        // so opt explicitly into ask to exercise the rejection path.
+        ruleset: [{ permission: "bash", pattern: "*", action: "ask" }],
       })
 
       await PermissionNext.reply({
         requestID: "permission_test2",
         reply: "reject",
+        autoReply: false,
       })
 
       await expect(askPromise).rejects.toBeInstanceOf(PermissionNext.RejectedError)
+    },
+  })
+})
+
+test("ask - timeout rejects pending permission", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = PermissionNext.ask({
+        id: "permission_timeout",
+        sessionID: "session_timeout",
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: [],
+        ruleset: [{ permission: "bash", pattern: "*", action: "ask" }],
+        timeoutMs: 5,
+      })
+
+      await expect(askPromise).rejects.toBeInstanceOf(PermissionNext.RejectedError)
+      expect(await PermissionNext.list()).toHaveLength(0)
     },
   })
 })
@@ -609,6 +638,7 @@ test("reply - always persists approval and resolves", async () => {
       await PermissionNext.reply({
         requestID: "permission_test3",
         reply: "always",
+        autoReply: false,
       })
 
       await expect(askPromise).resolves.toBeUndefined()
@@ -644,7 +674,7 @@ test("reply - reject cancels all pending for same session", async () => {
         patterns: ["ls"],
         metadata: {},
         always: [],
-        ruleset: [],
+        ruleset: [{ permission: "bash", pattern: "*", action: "ask" }],
       })
 
       const askPromise2 = PermissionNext.ask({
@@ -654,7 +684,7 @@ test("reply - reject cancels all pending for same session", async () => {
         patterns: ["foo.ts"],
         metadata: {},
         always: [],
-        ruleset: [],
+        ruleset: [{ permission: "edit", pattern: "*", action: "ask" }],
       })
 
       // Catch rejections before they become unhandled
@@ -665,6 +695,7 @@ test("reply - reject cancels all pending for same session", async () => {
       await PermissionNext.reply({
         requestID: "permission_test4a",
         reply: "reject",
+        autoReply: false,
       })
 
       // Both should be rejected

@@ -1,10 +1,13 @@
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
+import { Config } from "@/config/config"
 import { Identifier } from "@/id/id"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Log } from "@/util/log"
 import z from "zod"
 import { values as objectValues } from "@/util/object"
+import { Answer as _Answer } from "./types"
+import type { Answer as _AnswerType } from "./types"
 
 export namespace Question {
   const log = Log.create({ service: "question" })
@@ -25,7 +28,7 @@ export namespace Question {
       header: z.string().describe("Very short label (max 30 chars)"),
       options: z.array(Option).describe("Available choices"),
       multiple: z.boolean().optional().describe("Allow selecting multiple choices"),
-      custom: z.boolean().optional().describe("Allow typing a custom answer (default: true)"),
+      custom: z.boolean().optional().describe("Allow typing a custom answer"),
     })
     .meta({
       ref: "QuestionInfo",
@@ -49,10 +52,11 @@ export namespace Question {
     })
   export type Request = z.infer<typeof Request>
 
-  export const Answer = z.array(z.string()).meta({
-    ref: "QuestionAnswer",
-  })
-  export type Answer = z.infer<typeof Answer>
+  // Re-exported from ./types so schema-only consumers (engine/model) can
+  // import directly without pulling in Bus/Instance. External callers using
+  // the `Question.Answer` namespace form keep working unchanged.
+  export const Answer = _Answer
+  export type Answer = _AnswerType
 
   export const Reply = z.object({
     answers: z
@@ -80,24 +84,38 @@ export namespace Question {
     ),
   }
 
-  const state = Instance.state(async () => {
-    const pending: Record<
-      string,
-      {
-        info: Request
-        resolve: (answers: Answer[]) => void
-        reject: (e: any) => void
-      }
-    > = {}
+  const state = lazyInstanceState(
+    async () => {
+      const pending: Record<
+        string,
+        {
+          info: Request
+          resolve: (answers: Answer[]) => void
+          reject: (e: any) => void
+          timer: ReturnType<typeof setTimeout> | undefined
+        }
+      > = {}
 
-    return {
-      pending,
-    }
-  })
+      return {
+        pending,
+      }
+    },
+    async (s) => {
+      // Cancel any pending question timers when the instance is disposed so that
+      // late-firing auto-reject timeouts cannot bleed into the next test/run.
+      // We deliberately do NOT call entry.reject — by the time dispose runs, callers
+      // have abandoned their await, and rejecting would surface as an unhandled rejection.
+      for (const id of Object.keys(s.pending)) {
+        const entry = s.pending[id]
+        clearTimeout(entry.timer)
+        delete s.pending[id]
+      }
+    },
+  )
 
   const QUESTION_MIN_TIMEOUT_MS = 1000
   const QUESTION_AUTO_REJECT_MS = Math.max(
-    parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "10000", 10),
+    parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "300000", 10),
     QUESTION_MIN_TIMEOUT_MS,
   )
 
@@ -105,11 +123,13 @@ export namespace Question {
     sessionID: string
     questions: Info[]
     tool?: { messageID: string; callID: string }
+    /** Override auto-reject timeout in ms. Defaults to OPENCORVUS_QUESTION_TIMEOUT_MS (5min). */
+    timeoutMs?: number
   }): Promise<Answer[]> {
     const s = await state()
     const id = Identifier.ascending("question")
-
-    log.info("asking", { id, questions: input.questions.length })
+    const timeout = Math.max(input.timeoutMs ?? QUESTION_AUTO_REJECT_MS, QUESTION_MIN_TIMEOUT_MS)
+    log.info("asking", { id, questions: input.questions.length, timeoutMs: timeout })
 
     return new Promise<Answer[]>((resolve, reject) => {
       const info: Request = {
@@ -122,20 +142,31 @@ export namespace Question {
         info,
         resolve,
         reject,
+        timer: undefined,
       }
       Bus.publish(Event.Asked, info)
-      // Auto-reject questions after timeout so executor proceeds without blocking (always ≥ 1s)
-      setTimeout(() => {
-        if (s.pending[id]) {
-          log.info("auto-reject timeout", { id, questions: input.questions.length })
+      void Config.get()
+        .then((cfg) => {
+          const autoRejectOnTimeout = cfg.experimental?.auto_question === true
+          log.info("question timeout configured", { id, autoReject: autoRejectOnTimeout })
+          if (!autoRejectOnTimeout || !s.pending[id]) return
+          s.pending[id].timer = setTimeout(() => {
+            if (s.pending[id]) {
+              log.info("auto-reject timeout", { id, questions: input.questions.length })
+              delete s.pending[id]
+              Bus.publish(Event.Rejected, {
+                sessionID: input.sessionID,
+                requestID: id,
+              })
+              reject(new RejectedError())
+            }
+          }, timeout)
+        })
+        .catch((error) => {
+          if (!s.pending[id]) return
           delete s.pending[id]
-          Bus.publish(Event.Rejected, {
-            sessionID: input.sessionID,
-            requestID: id,
-          })
-          reject(new RejectedError())
-        }
-      }, QUESTION_AUTO_REJECT_MS)
+          reject(error)
+        })
     })
   }
 
@@ -146,6 +177,7 @@ export namespace Question {
       log.warn("reply for unknown request", { requestID: input.requestID })
       return
     }
+    clearTimeout(existing.timer)
     delete s.pending[input.requestID]
 
     log.info("replied", { requestID: input.requestID, answers: input.answers })
@@ -186,5 +218,37 @@ export namespace Question {
 
   export async function list() {
     return state().then((x) => objectValues(x.pending).map((item) => item.info))
+  }
+
+  /**
+   * Ask the user and return both the formatted LLM-facing summary and the raw
+   * answers. Shared by the executor-side QuestionTool and the orchestrator's
+   * `question` tool so both code paths render the same final string; the raw
+   * `answers` are used by the TUI/overlay to re-render the tool card.
+   *
+   * When the user dismisses the dialog, `answers` is null and `output` carries
+   * a user-dismissed message the LLM can act on.
+   */
+  export async function askAndFormat(input: {
+    sessionID: string
+    questions: Info[]
+    tool?: { messageID: string; callID: string }
+    timeoutMs?: number
+  }): Promise<{ output: string; answers: Answer[] | null }> {
+    try {
+      const answers = await ask(input)
+      const lines = input.questions
+        .map((q, i) => `"${q.question}" → ${(answers[i] ?? []).join(", ") || "(no answer)"}`)
+        .join("\n")
+      return { output: `User answered:\n${lines}`, answers }
+    } catch (err) {
+      if (err instanceof RejectedError) {
+        return {
+          output: "User dismissed the questions without answering. Decide how to proceed based on available context.",
+          answers: null,
+        }
+      }
+      throw err
+    }
   }
 }

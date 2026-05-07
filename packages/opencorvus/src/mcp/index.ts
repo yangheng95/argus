@@ -13,7 +13,7 @@ import { Config } from "../config/config"
 import { Log } from "../util/log"
 import { NamedError } from "@opencorvus-ai/util/error"
 import z from "zod/v4"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Installation } from "../installation"
 import { withTimeout } from "@/util/timeout"
 import { McpOAuthProvider } from "./oauth-provider"
@@ -161,7 +161,7 @@ export namespace MCP {
     return typeof entry === "object" && entry !== null && "type" in entry
   }
 
-  const state = Instance.state(
+  const state = lazyInstanceState(
     async () => {
       const cfg = await Config.get()
       const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
@@ -805,7 +805,10 @@ export namespace MCP {
 
     // Register the callback BEFORE opening the browser to avoid race condition
     // when the IdP has an active SSO session and redirects immediately
-    const callbackPromise = McpOAuthCallback.waitForCallback(oauthState)
+    // audit-2026-04-29 W2-V21 — pass mcpName so cancelPending(mcpName)
+    // can resolve through the parallel index instead of looking up the
+    // state-keyed map with the wrong key.
+    const callbackPromise = McpOAuthCallback.waitForCallback(oauthState, mcpName)
 
     try {
       const subprocess = await open(authorizationUrl)

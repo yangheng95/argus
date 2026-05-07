@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dist-vsix/
+*.vsix
+.vscode-test/
+bin/
+media/ui/

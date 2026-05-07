@@ -5,7 +5,6 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { Clipboard } from "@tui/util/clipboard"
 import type { PromptInfo } from "@tui/component/prompt/history"
-import { textForUI } from "@/session/part-visibility"
 import { useKV } from "../../context/kv.tsx"
 import { useToast } from "../../ui/toast"
 import { formatMessage } from "../../util/transcript"
@@ -29,37 +28,6 @@ export function DialogMessage(props: {
     <DialogSelect
       title="Message Actions"
       options={[
-        {
-          title: "Revert",
-          value: "session.revert",
-          description: "undo messages and file changes",
-          onSelect: (dialog) => {
-            const msg = message()
-            if (!msg) return
-
-            sdk.client.session.revert({
-              sessionID: props.sessionID,
-              messageID: msg.id,
-            })
-
-            if (props.setPrompt) {
-              const parts = sync.data.part[msg.id]
-              const promptInfo = parts.reduce(
-                (agg, part) => {
-                  if (part.type === "text") {
-                    if (textForUI(part)) agg.input += part.text
-                  }
-                  if (part.type === "file") agg.parts.push(part)
-                  return agg
-                },
-                { input: "", parts: [] as PromptInfo["parts"] },
-              )
-              props.setPrompt(promptInfo)
-            }
-
-            dialog.clear()
-          },
-        },
         {
           title: "Copy",
           value: "message.copy",
@@ -105,9 +73,7 @@ export function DialogMessage(props: {
               const parts = sync.data.part[msg.id]
               return parts.reduce(
                 (agg, part) => {
-                  if (part.type === "text") {
-                    if (textForUI(part)) agg.input += part.text
-                  }
+                  if (part.type === "text") agg.input += part.text
                   if (part.type === "file") agg.parts.push(part)
                   return agg
                 },

@@ -1,0 +1,111 @@
+# 配置
+
+OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` 文件**。后者优先级最低，但最稳定。
+
+## 配置文件位置
+
+| 位置 | 用途 |
+|---|---|
+| `~/.opencorvus/config/opencorvus.json` | 全局默认 |
+| `<repo>/.opencorvus/opencorvus.jsonc` | 项目级覆盖（支持 JSONC 注释） |
+| `OPENCORVUS_CONFIG_CONTENT` env | 运行时注入（CI/容器推荐） |
+
+同名字段，后者覆盖前者。
+
+## 最小配置
+
+```jsonc
+{
+  "$schema": "https://opencorvus.ai/config.json",
+  "model": "alibaba-cn/qwen3.5-plus"
+}
+```
+
+## 完整示例
+
+参考仓库中的真实配置 `packages/opencorvus/.opencorvus/opencorvus.jsonc`：
+
+```jsonc
+{
+  "$schema": "https://opencorvus.ai/config.json",
+  "model": "github-copilot/claude-haiku-4.5",
+
+  "skills": {
+    "paths": [
+      "D:/myhexin-local/argus-opencode/packages/opencorvus/skills-market/github.com-openai-skills",
+      "D:/myhexin-local/argus-opencode/packages/opencorvus/skills-market/github.com-anthropics-skills"
+    ],
+    "urls": []
+  },
+
+  "plugin": [],
+
+  "permission": {
+    "skill": {
+      "local-note": "deny",
+      "sora": "ask",
+      "figma": "ask",
+      "doc-coauthoring": "ask"
+    }
+  },
+
+  "experimental": {
+    "auto_question": true
+  }
+}
+```
+
+## 关键字段
+
+### `model`
+
+默认 LLM。格式 `<providerId>/<modelId>`，provider 需在 `provider` 块或内置列表里注册。
+
+### `skills.paths` / `skills.urls`
+
+本地 skill 市场路径与远程 skill URL。OpenCorvus 启动时加载全部 skill，供 Task Agent 按需调用。
+
+### `permission`
+
+每个 skill/tool 的 `allow / ask / deny`。**规则顺序 matters，后声明的覆盖前声明的**（last-match-wins）。
+
+详见 [Permissions](./permissions.md)。
+
+### `experimental.auto_question`
+
+悬置澄清提问的细粒度开关。权限提示不由这里控制；内置 agent 权限默认 `allow`，显式 `ask` 规则会等待操作员回复，直到拒绝超时触发。
+
+### `assistant` 子块
+
+各 agent 的精细调优（在 `OrchestratorConfig.get()` 里合并，见 `src/orchestrator/config.ts:67`）：
+
+```jsonc
+{
+  "assistant": {
+    "requirements": { "max_steps": 20 },
+    "evaluator": { "tier": "standard" },  // core | standard | full
+    "max_runs": 3,
+    "max_goal_retries": 2
+  }
+}
+```
+
+## 配置加载顺序
+
+1. 读 `~/.opencorvus/config/opencorvus.json`
+2. 读 `$OPENCORVUS_CONFIG_DIR/opencorvus.json`（若设置）
+3. 读 `<repo>/.opencorvus/opencorvus.jsonc`
+4. 合并 `OPENCORVUS_CONFIG_CONTENT` 环境变量（JSON 字符串）
+5. CLI flag 覆盖
+
+Env 快照时机：`Env.state()` 在实例创建时快照 `process.env`，因此 `.env` 文件必须在进程启动**前**加载。这是 benchmark 里要显式注入 env 的原因，详见 [Benchmark](../operations/benchmark.md)。
+
+## 热重载
+
+目前 OpenCorvus **不支持** config 热重载。修改配置后需重启 `opencorvus serve`。
+
+## 你接下来要看的
+
+- [Providers](./providers.md)
+- [Permissions](./permissions.md)
+- [Evaluator](./evaluator.md)

@@ -2,20 +2,20 @@ import z from "zod"
 import fuzzysort from "fuzzysort"
 import { Config } from "../config/config"
 import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
-import { NoSuchModelError, type Provider as SDK } from "ai"
+import { APICallError, NoSuchModelError, type LanguageModel } from "ai"
 import { Log } from "../util/log"
 import { Plugin } from "../plugin"
 import { ModelsDev } from "./models"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Auth } from "../auth"
 import { Env } from "../env"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
 import { Global } from "../global"
 import path from "path"
 import { Filesystem } from "../util/filesystem"
-import { entries, values as objectValues } from "@/util/object"
+import { entries } from "@/util/object"
 
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
@@ -25,8 +25,7 @@ import { createVertex } from "@ai-sdk/google-vertex"
 import { createVertexAnthropic } from "@ai-sdk/google-vertex/anthropic"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
-import { createOpenRouter, type LanguageModelV2 } from "@openrouter/ai-sdk-provider"
-import { createOpenaiCompatible as createGitHubCopilotOpenAICompatible } from "./sdk/copilot"
+import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createXai } from "@ai-sdk/xai"
 import { createMistral } from "@ai-sdk/mistral"
 import { createGroq } from "@ai-sdk/groq"
@@ -42,9 +41,14 @@ import { ProviderTransform } from "./transform"
 import { applyProviderPolicy } from "./policy"
 import { CUSTOM_LOADERS, smallModelPriority, type CustomModelLoader } from "./vendor"
 import { installProvider, loadProviderModule } from "./install"
+import { discoverHexinModels } from "./hexin-discovery"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
+
+  type LanguageModelProvider = {
+    languageModel(modelId: string): LanguageModel
+  }
 
   function googleVertexVars(options: Record<string, any>) {
     const project =
@@ -110,7 +114,7 @@ export namespace Provider {
     return key
   }
 
-  const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
+  const BUNDLED_PROVIDERS: Record<string, (options: any) => LanguageModelProvider> = {
     "@ai-sdk/amazon-bedrock": createAmazonBedrock,
     "@ai-sdk/anthropic": createAnthropic,
     "@ai-sdk/azure": createAzure,
@@ -131,8 +135,6 @@ export namespace Provider {
     "@ai-sdk/perplexity": createPerplexity,
     "@ai-sdk/vercel": createVercel,
     "@gitlab/gitlab-ai-provider": createGitLab,
-    // @ts-ignore (TODO: kill this code so we dont have to maintain it)
-    "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible,
   }
 
   export const Model = z
@@ -299,7 +301,7 @@ export namespace Provider {
     }
   }
 
-  const state = Instance.state(async () => {
+  const state = lazyInstanceState(async () => {
     using _ = log.time("state")
     const config = await Config.get()
     const modelsDev = await ModelsDev.get()
@@ -315,65 +317,32 @@ export namespace Provider {
     }
 
     const providers: { [providerID: string]: Info } = {}
-    const languages = new Map<string, LanguageModelV2>()
+    const languages = new Map<string, LanguageModel>()
     const modelLoaders: {
       [providerID: string]: CustomModelLoader
     } = {}
-    const sdk = new Map<number, SDK>()
+    const sdk = new Map<number, LanguageModelProvider>()
 
     log.info("init")
 
     const configProviders = entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>)
 
-    // Add GitHub Copilot Enterprise provider that inherits from GitHub Copilot
-    if (database["github-copilot"]) {
-      const githubCopilot = database["github-copilot"]
-      database["github-copilot-enterprise"] = {
-        ...githubCopilot,
-        id: "github-copilot-enterprise",
-        name: "GitHub Copilot Enterprise",
-        models: mapValues(githubCopilot.models, (model) => ({
-          ...model,
-          providerID: "github-copilot-enterprise",
-        })),
-      }
-    }
-
-    // Built-in: Hexin OpenAI Gateway
-    if (!database["hexin"]) {
-      const hexinModel = (id: string, name: string): Model => ({
-        id,
-        api: { id, npm: "@ai-sdk/openai-compatible", url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1" },
-        status: "active",
-        name,
-        providerID: "hexin",
-        capabilities: {
-          temperature: true,
-          reasoning: false,
-          attachment: false,
-          toolcall: true,
-          input: { text: true, audio: false, image: false, video: false, pdf: false },
-          output: { text: true, audio: false, image: false, video: false, pdf: false },
-          interleaved: false,
-        },
-        cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
-        options: {},
-        limit: { context: 128000, output: 16384 },
-        headers: {},
-        family: "gpt-5",
-        release_date: "",
-        variants: {},
-      })
-      database["hexin"] = {
-        id: "hexin",
-        name: "Hexin OpenAI Gateway",
-        env: ["HEXIN_API_KEY"],
-        options: {},
-        source: "custom",
-        models: {
-          "gpt-5.4-mini": hexinModel("gpt-5.4-mini", "GPT-5.4 Mini"),
-          "gpt-5.4": hexinModel("gpt-5.4", "GPT-5.4"),
-        },
+    // Built-in: Hexin OpenAI Gateway — models discovered dynamically from /v1/models
+    if (!database["hexin"] && !disabled.has("hexin")) {
+      try {
+        const models = await discoverHexinModels()
+        database["hexin"] = {
+          id: "hexin",
+          name: "Hexin OpenAI Gateway",
+          env: ["HEXIN_API_KEY"],
+          options: {},
+          source: "custom",
+          models,
+        }
+      } catch (err) {
+        log.error("hexin provider unavailable — /v1/models fetch failed and no cache present", {
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
 
@@ -456,6 +425,7 @@ export namespace Provider {
           options: mergeDeep(existingModel?.options ?? {}, model.options ?? {}),
           limit: {
             context: model.limit?.context ?? existingModel?.limit?.context ?? 0,
+            input: model.limit?.input ?? existingModel?.limit?.input,
             output: model.limit?.output ?? existingModel?.limit?.output ?? 0,
           },
           headers: mergeDeep(existingModel?.headers ?? {}, model.headers ?? {}),
@@ -479,27 +449,40 @@ export namespace Provider {
     // load env
     const env = Env.all()
     // DashScope providers share keys via fallback: try provider-specific env vars first,
-    // then common CODING_DASHSCOPE_API_KEY / DASHSCOPE_API_KEY.
-    const dashscopeCommonKeys = ["CODING_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY"]
+    // then the shared DASHSCOPE_API_KEY.
+    const dashscopeCommonKeys = ["DASHSCOPE_API_KEY"]
     for (const [providerID, provider] of entries(database)) {
       if (disabled.has(providerID)) continue
-      const isDashScope = provider.api?.includes("dashscope")
+      // DashScope detection: any model in this provider uses a dashscope API URL.
+      // Previously checked provider.api?.includes("dashscope") but Provider.Info
+      // has no top-level .api field — api.url lives per-model.
+      const isDashScope = Object.values(provider.models).some(
+        (m) => m.api?.url?.includes("dashscope"),
+      )
       // alibaba-cn has special embedded-key logic below
       if (providerID === "alibaba-cn" || providerID === "alibaba") continue
       const candidates = isDashScope ? [...provider.env, ...dashscopeCommonKeys] : provider.env
       const apiKey = candidates.map((item) => env[item]?.trim()).find(Boolean)
       if (!apiKey) continue
+      // When the provider declares more than one env candidate (e.g. ["AZURE_KEY", "OPENAI_KEY"]),
+      // we cannot guess which one carries the active credential. Leave key unset and let the SDK pick.
+      if (!isDashScope && provider.env.length > 1) continue
       mergeProvider(providerID, {
         source: "env",
         key: apiKey,
       })
     }
 
-    // hexin: always available with embedded key; env HEXIN_API_KEY overrides
-    if (!disabled.has("hexin") && !providers["hexin"]) {
-      mergeProvider("hexin", {
+    // hexin: HEXIN_API_KEY env var or saved auth key wires up an actual
+    // credential via the env loop above / Auth.all() loop below. If
+    // neither is present, still register the provider (no key) so the
+    // UI can display it and let the operator paste a key at runtime.
+
+    // alibaba-coding-plan-cn: always available with embedded key; env overrides
+    if (!disabled.has("alibaba-coding-plan-cn") && !providers["alibaba-coding-plan-cn"]) {
+      mergeProvider("alibaba-coding-plan-cn", {
         source: "custom",
-        key: "sk-eq7WQu0ylelH6uyedbf6PA",
+        key: "sk-sp-40eeacbb1d2848a4829dca771f2ed51a",
       })
     }
 
@@ -530,46 +513,14 @@ export namespace Provider {
       const providerID = plugin.auth.provider
       if (disabled.has(providerID)) continue
 
-      // For github-copilot plugin, check if auth exists for either github-copilot or github-copilot-enterprise
-      let hasAuth = false
       const auth = await Auth.get(providerID)
-      if (auth) hasAuth = true
-
-      // Special handling for github-copilot: also check for enterprise auth
-      if (providerID === "github-copilot" && !hasAuth) {
-        const enterpriseAuth = await Auth.get("github-copilot-enterprise")
-        if (enterpriseAuth) hasAuth = true
-      }
-
-      if (!hasAuth) continue
+      if (!auth) continue
       if (!plugin.auth.loader) continue
 
-      // Load for the main provider if auth exists
-      if (auth) {
-        const options = await plugin.auth.loader(() => Auth.get(providerID) as any, database[plugin.auth.provider])
-        const opts = options ?? {}
-        const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
-        mergeProvider(providerID, patch)
-      }
-
-      // If this is github-copilot plugin, also register for github-copilot-enterprise if auth exists
-      if (providerID === "github-copilot") {
-        const enterpriseProviderID = "github-copilot-enterprise"
-        if (!disabled.has(enterpriseProviderID)) {
-          const enterpriseAuth = await Auth.get(enterpriseProviderID)
-          if (enterpriseAuth) {
-            const enterpriseOptions = await plugin.auth.loader(
-              () => Auth.get(enterpriseProviderID) as any,
-              database[enterpriseProviderID],
-            )
-            const opts = enterpriseOptions ?? {}
-            const patch: Partial<Info> = providers[enterpriseProviderID]
-              ? { options: opts }
-              : { source: "custom", options: opts }
-            mergeProvider(enterpriseProviderID, patch)
-          }
-        }
-      }
+      const options = await plugin.auth.loader(() => Auth.get(providerID) as any, database[plugin.auth.provider])
+      const opts = options ?? {}
+      const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
+      mergeProvider(providerID, patch)
     }
 
     for (const [providerID, fn] of Object.entries(CUSTOM_LOADERS)) {
@@ -644,6 +595,7 @@ export namespace Provider {
     return {
       models: languages,
       providers,
+      database,
       sdk,
       modelLoaders,
     }
@@ -653,8 +605,34 @@ export namespace Provider {
     ;(state as any).reset()
   }
 
+  /** Re-fetch the hexin /v1/models list bypassing cache, then reset provider state. */
+  export async function refreshHexin(): Promise<string[]> {
+    const { refreshHexinCache } = await import("./hexin-discovery")
+    const cfg = await Config.get()
+    const configKey = cfg.provider?.hexin?.options?.apiKey
+    const auth = await Auth.get("hexin")
+    const apiKey =
+      Env.get("HEXIN_API_KEY")?.trim() ||
+      (auth?.type === "api" ? auth.key.trim() : "") ||
+      (typeof configKey === "string" ? configKey.trim() : "")
+    const models = await refreshHexinCache(apiKey)
+    reset()
+    return Object.keys(models)
+  }
+
   export async function list() {
     return state().then((state) => state.providers)
+  }
+
+  /**
+   * Returns the augmented provider database — modelsDev entries plus any
+   * built-in providers we register (e.g. hexin). Use this when you need the
+   * full discoverable provider catalog (e.g. UI selectors that show
+   * "API key required" for unconfigured providers); use list() when you only
+   * want providers with actual credentials.
+   */
+  export async function database() {
+    return state().then((state) => state.database)
   }
 
   async function getSDK(model: Model) {
@@ -702,8 +680,8 @@ export namespace Provider {
         const configuredTimeout = (options["timeout"] !== undefined && options["timeout"] !== null)
           ? options["timeout"]
           : DEFAULT_INACTIVITY_TIMEOUT_MS
-        // Enforce a minimum inactivity timeout: upstream SDKs (e.g., copilot) may
-        // set very short timeouts (30s) which abort during model thinking.
+        // Enforce a minimum inactivity timeout: upstream SDKs may set very
+        // short timeouts (30s) which abort during model thinking.
         // 5 minutes minimum covers extended thinking models (sonnet, opus).
         const MIN_INACTIVITY_TIMEOUT_MS = 300_000
         const inactivityMs = configuredTimeout !== false && typeof configuredTimeout === "number" && configuredTimeout > 0
@@ -771,6 +749,19 @@ export namespace Provider {
         // errors from streaming responses — they silently consume the body
         // and later throw a generic "No output generated" error.  Extract
         // the upstream error here so callers get actionable messages.
+        //
+        // We throw an APICallError (not a plain Error) so:
+        //   1. Message.fromError takes the APICallError branch and produces a
+        //      Message.APIError with statusCode/isRetryable preserved
+        //      (instead of falling through to NamedError.Unknown which loses
+        //      the status and is treated as fatal).
+        //   2. SessionRetry.retryable / llm/api.ts retryable() classify
+        //      transient 408/429/5xx as retryable via the standard AI SDK
+        //      contract, so the session loop backs off and retries instead
+        //      of bubbling the failure up to the orchestrator stream-error
+        //      path. Without this, an alibaba 429 rate-limit blew up the
+        //      orchestrator into an "unknown session error" wake loop —
+        //      see _session-20260428-130617.out incident.
         if (!response.ok) {
           if (inactivityTimer) clearTimeout(inactivityTimer)
           const text = await response.text().catch(() => "")
@@ -781,9 +772,33 @@ export namespace Provider {
           } catch {
             detail = text
           }
-          throw new Error(
-            `Provider ${model.providerID} returned HTTP ${response.status}: ${detail || response.statusText}`,
-          )
+          const responseHeaders: Record<string, string> = {}
+          response.headers.forEach((value, key) => {
+            responseHeaders[key] = value
+          })
+          let requestBodyValues: unknown = undefined
+          if (typeof opts.body === "string") {
+            try {
+              requestBodyValues = JSON.parse(opts.body)
+            } catch {
+              requestBodyValues = opts.body
+            }
+          }
+          // fetch accepts string | URL | Request; URL has .href, Request has .url
+          const url =
+            typeof input === "string"
+              ? input
+              : input instanceof URL
+                ? input.href
+                : input?.url ?? ""
+          throw new APICallError({
+            message: `Provider ${model.providerID} returned HTTP ${response.status}: ${detail || response.statusText}`,
+            url,
+            requestBodyValues,
+            statusCode: response.status,
+            responseHeaders,
+            responseBody: text,
+          })
         }
 
         // For streaming responses, wrap the body so each chunk resets the timer.
@@ -822,7 +837,7 @@ export namespace Provider {
           ...options,
         })
         s.sdk.set(key, loaded)
-        return loaded as SDK
+        return loaded as LanguageModelProvider
       }
 
       let installedPath: string
@@ -838,7 +853,7 @@ export namespace Provider {
         ...options,
       })
       s.sdk.set(key, loaded)
-      return loaded as SDK
+      return loaded as LanguageModelProvider
     } catch (e) {
       throw new InitError({ providerID: model.providerID }, { cause: e })
     }
@@ -868,7 +883,7 @@ export namespace Provider {
     return info
   }
 
-  export async function getLanguage(model: Model): Promise<LanguageModelV2> {
+  export async function getLanguage(model: Model): Promise<LanguageModel> {
     const s = await state()
     const key = `${model.providerID}/${model.id}`
     if (s.models.has(key)) return s.models.get(key)!
@@ -977,41 +992,29 @@ export namespace Provider {
     )
   }
 
-  export async function defaultModel() {
+  /**
+   * Project default model, strict. Reads only `cfg.model` from opencorvus.jsonc.
+   *
+   * Previous versions walked a mutable fallback chain — `model.json`'s
+   * `recent` list (updated every time the operator clicked a model in the
+   * overlay), then the first model of the first registered provider. That
+   * chain caused goal retries to silently switch provider/model between runs
+   * whenever the operator changed the selected model in between, collapsing
+   * prompt cache across retries (Anthropic/GLM caches are physically
+   * isolated, so cross-provider continuity is impossible regardless of byte
+   * equality).
+   *
+   * Throws `MissingModelConfigError` if `cfg.model` is absent. Callers must
+   * not catch-and-default — the remediation is for the operator to set
+   * `model` in opencorvus.jsonc.
+   */
+  export async function defaultModel(): Promise<{ providerID: string; modelID: string }> {
     const cfg = await Config.get()
     if (cfg.model) return parseModel(cfg.model)
-
-    const providers = await list()
-    const recent = (await Filesystem.readJson<{ recent?: { providerID: string; modelID: string }[] }>(
-      path.join(Global.Path.state, "model.json"),
-    )
-      .then((x) => (Array.isArray(x.recent) ? x.recent : []))
-      .catch(() => [])) as { providerID: string; modelID: string }[]
-    for (const entry of recent) {
-      const provider = providers[entry.providerID]
-      if (!provider) continue
-      if (!provider.models[entry.modelID]) continue
-      return { providerID: entry.providerID, modelID: entry.modelID }
-    }
-
-    const provider = objectValues(providers).find((p) => !cfg.provider || Object.keys(cfg.provider).includes(p.id))
-    if (!provider)
-      throw new ModelNotFoundError({
-        providerID: "",
-        modelID: "",
-        suggestions: Object.keys(providers),
-      })
-    const [model] = sort(objectValues(provider.models))
-    if (!model)
-      throw new ModelNotFoundError({
-        providerID: provider.id,
-        modelID: "",
-        suggestions: [],
-      })
-    return {
-      providerID: provider.id,
-      modelID: model.id,
-    }
+    throw new MissingModelConfigError({
+      scope: "default",
+      hint: "Set top-level `model` in opencorvus.jsonc, e.g. \"model\": \"anthropic/claude-sonnet-4-6\".",
+    })
   }
 
   export function parseModel(model: string) {
@@ -1028,6 +1031,22 @@ export namespace Provider {
       providerID: z.string(),
       modelID: z.string(),
       suggestions: z.array(z.string()).optional(),
+    }),
+  )
+
+  /**
+   * Distinct from `ModelNotFoundError`. Thrown when NO model was selected at
+   * all (operator never set `model` / no per-agent override), not when a
+   * specific id failed registry lookup. Keeping the two separate prevents the
+   * old trick of throwing `ProviderModelNotFoundError({providerID:"",modelID:""})`
+   * which made every "config missing" bug look like a provider-registry miss.
+   */
+  export const MissingModelConfigError = NamedError.create(
+    "MissingModelConfigError",
+    z.object({
+      scope: z.enum(["default", "agent"]),
+      agent: z.string().optional(),
+      hint: z.string(),
     }),
   )
 

@@ -1,4 +1,4 @@
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Log } from "../util/log"
 import { Message } from "./message"
 import { SessionStatus } from "./status"
@@ -25,7 +25,7 @@ export namespace SessionActor {
     closing?: Error
   }
 
-  const actors = Instance.state(
+  const actors = lazyInstanceState(
     () => {
       const data: Record<string, Info> = {}
       return data
@@ -37,8 +37,8 @@ export namespace SessionActor {
     },
   )
 
-  function error(input: unknown, fallback: string) {
-    return input instanceof Error ? input : new Error(fallback)
+  function error(input: unknown, message: string) {
+    return input instanceof Error ? input : new Error(message)
   }
 
   function busy(sessionID: string) {
@@ -82,7 +82,14 @@ export namespace SessionActor {
     settle(actor.waiters, { type: "error", error: actor.closing ?? new Error("Session closed") })
     if (actors()[sessionID] === actor) {
       delete actors()[sessionID]
-      SessionStatus.set(sessionID, { type: "idle" })
+      // Actor's serve() loop ran to natural completion. closing field reflects
+      // whether an external close() injected an error before exit; if so the
+      // session terminated with that error, otherwise it's a clean exit.
+      const closing = actor.closing
+      SessionStatus.set(sessionID, closing
+        ? { type: "terminal", reason: "error", error: closing.message }
+        : { type: "terminal", reason: "completed" },
+      )
     }
   }
 
@@ -93,11 +100,17 @@ export namespace SessionActor {
     actor.inbox.send({ type: "close", error: reason })
     actor.inbox.close()
     delete actors()[sessionID]
-    SessionStatus.set(sessionID, { type: "idle" })
+    // Cancel sets reason to "Session cancelled" (see `cancel` below); other
+    // close paths carry a real error.
+    const aborted = reason.message === "Session cancelled"
+    SessionStatus.set(sessionID, aborted
+      ? { type: "terminal", reason: "aborted" }
+      : { type: "terminal", reason: "error", error: reason.message },
+    )
   }
 
   export function assertNotBusy(sessionID: string) {
-    if (SessionStatus.get(sessionID).type === "busy") throw busy(sessionID)
+    if (SessionStatus.get(sessionID).type === "streaming") throw busy(sessionID)
   }
 
   export function start(sessionID: string) {
@@ -150,7 +163,9 @@ export namespace SessionActor {
     log.info("cancel", { sessionID })
     const actor = actors()[sessionID]
     if (!actor) {
-      SessionStatus.set(sessionID, { type: "idle" })
+      // No live actor — emit terminal aborted so overlay flips the card off
+      // its spinner regardless of whether the actor ever started.
+      SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" })
       return
     }
     close(sessionID, actor, new Error("Session cancelled"))
@@ -160,11 +175,4 @@ export namespace SessionActor {
     return actors()[sessionID]?.abort.signal === signal
   }
 
-  export async function lastModel(sessionID: string) {
-    for await (const item of Message.stream(sessionID)) {
-      if (item.info.role === "user" && item.info.model) return item.info.model
-    }
-    const { Provider } = await import("../provider/provider")
-    return Provider.defaultModel()
-  }
 }

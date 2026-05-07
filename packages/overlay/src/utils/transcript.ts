@@ -3,7 +3,6 @@
 // Exported surface:
 // formatConversationTranscript – plain-text conversation export
 // boardArtifact – find a named artifact in board.artifacts
-// syntheticTextMessage – build a synthetic message object
 // specContextText – spec → plain text
 // planContextText – plan + goals → plain text
 // goalContextText – goals[] → plain text
@@ -18,8 +17,9 @@ import { t, tc, localeTag } from "./i18n";
 import { joinBullet, stripAssistantBrief } from "./string";
 import { roleLabel } from "./message";
 import { displayToolDetail, toolStatusLabel } from "./tool";
-import { conversationMessages } from "./conversation";
+import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { AppLog } from "./log";
+import { nativeMessage } from "../services/app-dialog";
 
 // ── Internal helpers ──
 
@@ -28,7 +28,7 @@ function record(value: any): boolean {
 }
 
 /** FNV-1a 32-bit hash (mirrors app.js hashText). */
-function hashText(value: string): string {
+export function hashText(value: string): string {
   const text = String(value || "");
   let hash = 2166136261;
   for (let i = 0; i < text.length; i += 1) {
@@ -66,8 +66,6 @@ function transcriptTime(value: number | undefined): string {
 function formatTranscriptText(part: any, role: string): string {
   let text: string = part?.text || "";
   if (!text.trim()) return "";
-  if (part.audience && part.audience.ui === false) return "";
-  if (part.kind === "trace" && !part.audience?.ui) return "";
   const briefRoles = ["user", "planner", "evaluator", "system"];
   if (briefRoles.includes(role) && text.includes("<assistant-brief>")) {
     text = stripAssistantBrief(text);
@@ -77,8 +75,6 @@ function formatTranscriptText(part: any, role: string): string {
 
 function formatTranscriptTool(part: any): string {
   const toolName: string = part?.tool || "unknown";
-  const hiddenTools = ["planner", "todowrite", "todoupdate", "task_report"];
-  if (hiddenTools.includes(toolName.toLowerCase())) return "";
   const st = part?.state || {};
   const detail = displayToolDetail(toolName, st.input || {}, st);
   const status: string = st.status || "pending";
@@ -141,14 +137,6 @@ async function copyText(text: string): Promise<boolean> {
   return ok;
 }
 
-/** Bridge to app.js nativeMessage — only available when app.js is loaded. */
-async function nativeMessage(message: string, options: { title?: string; kind?: string }): Promise<void> {
-  const fn = (window as any).nativeMessage;
-  if (typeof fn === "function") {
-    await fn(message, options);
-  }
-}
-
 function errorText(key: string, error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error || "");
   return `${t(key)}: ${detail}`;
@@ -163,40 +151,19 @@ export function boardArtifact(board: any, label: string): any {
 }
 
 /**
- * Build a synthetic message object.
- * Returns null if text is empty.
- * Results are cached by ID to maintain referential stability for Solid's
- * `<For>`, which tracks items by reference.
- */
-const _syntheticCache = new Map<string, any>();
-
-export function syntheticTextMessage(
-  role: string,
-  time: number,
-  text: string,
-): any | null {
-  if (typeof text !== "string" || !text.trim()) return null;
-  const created = Number.isFinite(time) ? time : Date.now();
-  const id = `synthetic:${role}:${created}:${hashText(text)}`;
-  const cached = _syntheticCache.get(id);
-  if (cached) return cached;
-  const msg = {
-    _synthetic: true,
-    info: { id, role, resolvedRole: role, channel: "main", time: { created } },
-    parts: [{ type: "text", text }],
-  };
-  _syntheticCache.set(id, msg);
-  return msg;
-}
-
-/**
  * Format an array of conversation messages as a plain-text transcript
  * (
  */
 export function formatConversationTranscript(messages: any[]): string {
   return (Array.isArray(messages) ? messages : [])
     .map((item) => {
-      const role: string = item?.info?.role || "assistant";
+      // No assistant-fallback (一个萝卜一个坑). Each message must carry an
+      // explicit role; mis-attributing role-less items to "assistant" hides
+      // bugs in the upstream emitter.
+      const role: string = item?.info?.role;
+      if (typeof role !== "string" || role.length === 0) {
+        throw new Error(`transcript: message ${item?.info?.id ?? "<unknown>"} missing info.role`);
+      }
       const header = joinBullet([
         transcriptRole(role),
         transcriptTime(item?.info?.time?.created),
@@ -552,9 +519,45 @@ export function interactionResponseText(interaction: any): string {
  * Copy the current chat conversation transcript to the clipboard.
  * Shows a native error dialog on failure.
  */
+/** Flatten a `cardTreeStore` card plus its descendants into a flat array
+ *  of transcript-compatible pseudo-messages. Each session / goal card
+ *  emits one entry with `role` = the card's role/stage and `parts` =
+ *  its rendered leaf parts; children are walked recursively via
+ *  `childIDs`. Callers pass this to `formatConversationTranscript`. */
+function flattenCardToMessages(node: CardNode | undefined, out: any[]): void {
+  if (!node) return;
+  // No assistant-fallback (一个萝卜一个坑). A card without role AND without
+  // stage has no business in the transcript — surface the gap.
+  const role = node.role || node.stage;
+  if (typeof role !== "string" || role.length === 0) {
+    throw new Error(`transcript flatten: card ${node.id ?? "<unknown>"} has no role/stage attribution`);
+  }
+  const time = { created: node.time };
+  const parts: any[] = [];
+  if (node.kind === "step" && node.goalDescription) {
+    parts.push({ type: "text", text: node.goalDescription });
+  }
+  if (Array.isArray(node.parts)) {
+    for (const p of node.parts) parts.push(p);
+  }
+  out.push({ info: { role, time }, parts });
+  const childIDs = node.childIDs ?? [];
+  for (const cid of childIDs) {
+    flattenCardToMessages(cardTreeStore.cards[cid], out);
+  }
+  // Transient cards (tool promotion) use the inline `children` field.
+  for (const child of node.children ?? []) {
+    flattenCardToMessages(child, out);
+  }
+}
+
 export async function copyChatConversation(): Promise<void> {
   try {
-    const transcript = formatConversationTranscript(conversationMessages());
+    const items: any[] = [];
+    for (const id of cardTreeStore.order) {
+      flattenCardToMessages(cardTreeStore.cards[id], items);
+    }
+    const transcript = formatConversationTranscript(items);
     if (!transcript) return;
     const ok = await copyText(transcript);
     if (!ok) throw new Error(t("chat.copy_failed"));

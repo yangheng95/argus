@@ -1,100 +1,310 @@
 #!/usr/bin/env bun
 
+// ── Crash Diagnostics ──
+// Capture the exact reason and call stack when the process exits unexpectedly.
+// Use os.tmpdir() for cross-platform compatibility (avoids /tmp failure on Windows).
+const DIAG_LOG = require("node:path").join(require("node:os").tmpdir(), "benchmark-crash-diag.log")
+function diagWrite(msg: string) {
+  const ts = new Date().toISOString()
+  const line = `[${ts}] ${msg}\n`
+  try { require("node:fs").appendFileSync(DIAG_LOG, line) } catch {}
+  process.stderr.write(line)
+}
+diagWrite(`benchmark PID=${process.pid} started`)
+diagWrite(`diag_log=${DIAG_LOG}`)
+
+// Emergency partial report path — set once reportFile is known, used in exit handler.
+// Captures in-flight state when process is killed (OOM, SIGKILL, exit 127, etc.)
+// before the normal finally block can run.
+let _emergencyReportPath = ""
+let _emergencyWritten = false
+
+process.on("exit", (code) => {
+  diagWrite(`process.exit event — code=${code}`)
+  diagWrite(`stack:\n${new Error("exit-trace").stack}`)
+  // Write emergency partial report if the task was running but never completed normally.
+  if (_emergencyReportPath && !_emergencyWritten) {
+    try {
+      require("node:fs").writeFileSync(
+        _emergencyReportPath,
+        JSON.stringify({
+          generated_at: new Date().toISOString(),
+          type: "emergency_exit",
+          exit_code: code,
+          taskID,
+          elapsed_ms: Date.now() - marks.startedAt,
+          marks,
+          last_progress_signature: lastProgressSignature,
+          events_captured: events.length,
+          last_event_at: lastEventAt,
+          last_activity_at: lastActivityLogAt,
+        }, null, 2),
+      )
+    } catch {}
+  }
+})
+// Signal-driven cleanup. Without this, SIGTERM / SIGINT only logged a
+// stack trace before bun went through default abrupt-exit handling — the
+// main `finally { cleanup ... }` block never ran, so orphan processes
+// (puppeteer chrome, claude-code SDK, vite preview, ripgrep) survived
+// every interrupted bench. A flag prevents double cleanup when the OS
+// signals us during natural shutdown.
+let _shuttingDown = false
+const shutdown = (signal: string) => {
+  if (_shuttingDown) return
+  _shuttingDown = true
+  diagWrite(`${signal} received PID=${process.pid}`)
+  diagWrite(`stack:\n${new Error(signal.toLowerCase() + "-trace").stack}`)
+  // Surface as an unhandled rejection so the main try/catch/finally block
+  // unwinds through its cleanup() chain. Default Node behavior on SIGTERM
+  // is exit-without-finally; we override here. Exit code follows
+  // shell convention (130 for SIGINT, 143 for SIGTERM, 129 for SIGHUP).
+  const code = signal === "SIGINT" ? 130 : signal === "SIGHUP" ? 129 : 143
+  process.exitCode = code
+  // Give the running async chain ~3s to settle through finally; if it
+  // still hasn't exited (stuck git subprocess, hung LLM stream), force-
+  // exit so we don't dangle indefinitely.
+  setTimeout(() => process.exit(code), 3_000).unref()
+  // Trigger an AbortError up the chain by throwing an unhandled rejection.
+  // Many awaited paths catch and absorb; the main try/catch will catch
+  // the throw and run finally with cleanup.
+  Promise.reject(new Error(`shutdown: ${signal}`))
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"))
+process.on("SIGINT", () => shutdown("SIGINT"))
+process.on("SIGHUP", () => shutdown("SIGHUP"))
+process.on("uncaughtException", (err) => {
+  diagWrite(`uncaughtException: ${err.message}\n${err.stack}`)
+})
+process.on("unhandledRejection", (reason) => {
+  diagWrite(`unhandledRejection: ${reason instanceof Error ? reason.message + "\n" + reason.stack : String(reason)}`)
+})
+
 import { mkdtempSync } from "node:fs"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
-import { parseSSE } from "../../src/control-plane/sse"
-import { inactivityAgeMs } from "../../src/util/activity-timeout"
+import { parseSSE } from "../../src/util/sse"
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
 
+// Accept either `--name=value` or `--name value`. The old version quietly
+// returned undefined for the space form, which masked typos and mis-quoted
+// paths in benchmark invocations — by the time the task ran with a wrong
+// default you had no idea a flag was dropped. Any unrecognised top-level
+// --flag is surfaced as a hard error at startup (see validateFlags below).
 function flag(name: string) {
-  return process.argv.find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1)
+  const eq = process.argv.find((item) => item.startsWith(`${name}=`))
+  if (eq) return eq.slice(name.length + 1)
+  const idx = process.argv.indexOf(name)
+  if (idx !== -1 && idx + 1 < process.argv.length) return process.argv[idx + 1]
+  return undefined
 }
 
-// No overall hard timeout. The only execution gate is stall: if there is no
-// event/progress/log activity for stallTimeoutMs, the benchmark aborts.
-// All stage timeouts (spec, planner, standby) default to effectively unlimited
-// so that slow models are never killed mid-thought.
-//
-// --planning-stall-timeout-ms: separate (usually longer) stall timeout applied
-// while the task is in early pipeline statuses (queued/active before execution
-// begins). The Task Agent may be making tool calls (decompose, plan_goal, etc.)
-// without visible progress changes — using the normal stallTimeoutMs causes
-// false stalls.
-const stallTimeoutMs = Number(flag("--stall-timeout-ms")) || 20 * 60 * 1000
-const planningStallTimeoutMs = Number(flag("--planning-stall-timeout-ms")) || stallTimeoutMs
-const requestTimeoutMs = Number(flag("--request-timeout-ms")) || 30_000
-// Legacy: spec/planner timeouts from the old fixed-pipeline architecture.
-// Kept for backward compatibility — config may still read these env vars.
-const specTimeoutMs = Number(flag("--spec-timeout-ms")) || 24 * 60 * 60 * 1000
-const plannerTimeoutMs = Number(flag("--planner-timeout-ms")) || 24 * 60 * 60 * 1000
-const toolTimeoutMs = Number(flag("--tool-timeout-ms")) || 10 * 60 * 1000
-const standbyTimeoutMs = Number(flag("--standby-timeout-ms")) || 24 * 60 * 60 * 1000
-const completionHardTimeoutMs = Number(flag("--completion-hard-timeout-ms")) || 0
-// --timeout-ms accepted for backwards compat but no longer drives other timeouts
-// Legacy: spec/planner max steps from the old fixed-pipeline architecture.
-const specMaxSteps = Number(flag("--spec-max-steps")) || 80
-const plannerMaxSteps = Number(flag("--planner-max-steps")) || 96
+function stripWrappingQuotes(value: string | undefined): string | undefined {
+  if (!value) return value
+  const trimmed = value.trim()
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1)
+  }
+  return value
+}
+
+// Authoritative list of every CLI flag the benchmark recognises. Anything
+// else on the command line is a typo or a dropped/quoted value (e.g.
+// `--reference-images "C:/path with space.png"` getting split). We refuse
+// to start in that case rather than silently using defaults.
+const KNOWN_FLAGS = new Set<string>([
+  "--delivery-verify-cmd",
+  "--executor",
+  "--max-executor-groups",
+  "--max-fix-runs",
+  "--max-runs",
+  "--project-dir",
+  "--reference-images",
+  "--report",
+  "--request-attachment",
+  "--request-file",
+  "--resume-home-dir",
+  "--resume-message",
+  "--resume-task-id",
+  "--max-auto-resumes",
+  "--title",
+  "--figma-url",
+  // boolean (no value) switches
+  "--no-keep",
+  "--skip-local-verify",
+  "--no-browser",
+])
+
+function validateFlags(): void {
+  // process.argv layout: [bun, scriptPath, ...userArgs]
+  const userArgs = process.argv.slice(2)
+  const unknown: string[] = []
+  for (let i = 0; i < userArgs.length; i++) {
+    const arg = userArgs[i]
+    if (!arg.startsWith("--")) continue
+    const key = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg
+    if (KNOWN_FLAGS.has(key)) {
+      // Skip the value slot for `--name value` form so we don't mistake the
+      // value for an unknown flag if it happens to start with "--".
+      if (!arg.includes("=") && i + 1 < userArgs.length && !userArgs[i + 1].startsWith("--")) {
+        i += 1
+      }
+      continue
+    }
+    unknown.push(arg)
+  }
+  if (unknown.length > 0) {
+    const known = [...KNOWN_FLAGS].sort().join("\n  ")
+    process.stderr.write(
+      `[overlay-benchmark] unknown flag(s): ${unknown.join(" ")}\n` +
+      `Known flags:\n  ${known}\n` +
+      `Hint: use either --name=value or --name value; quote paths that contain spaces.\n`,
+    )
+    process.exit(2)
+  }
+}
+validateFlags()
+
 const maxRuns = Number(flag("--max-runs")) || 20
 const maxFixRuns = Number(flag("--max-fix-runs")) || 8
-const maxEvaluations = Number(flag("--max-evaluations")) || 200
-const report = flag("--report")
+const report = stripWrappingQuotes(flag("--report"))
 const keep = !process.argv.includes("--no-keep")
-const headless = process.argv.includes("--headless")
-const executor = (flag("--executor") || "opencode") as
-  | "opencode"
+// Resume mode: re-attach to an existing task rather than creating a new one.
+// --resume-task-id  : ID of the task to resume (e.g. tsk_xxx)
+// --resume-home-dir : opencorvus home directory from the original run (contains the database)
+// --resume-message  : user message injected to wake up the failed task
+const resumeTaskID = flag("--resume-task-id")
+const resumeHomeDir = flag("--resume-home-dir")
+const resumeMessage = flag("--resume-message") || "请继续完成项目，修复所有失败的goals并重试，直到全部通过。"
+// Auto-resume drill: when waitForFinal returns with task.status = failed
+// or cancelled, the bench cancels the active run and injects the resume
+// wake-up message instead of giving up. Bounded so a permanently broken
+// task does not loop forever. Set to 0 to disable.
+const maxAutoResumes = Number(flag("--max-auto-resumes") ?? "3")
+const executor = (flag("--executor") || "mirrorcode") as
+  | "mirrorcode"
   | "codex"
   | "claude-code"
 const requestFile = flag("--request-file")
+const requestAttachment = flag("--request-attachment")
+const rawReferenceImages = flag("--reference-images")?.split(",").map(s => s.trim()).filter(Boolean) ?? []
+if (requestFile && requestAttachment) {
+  process.stderr.write("[overlay-benchmark] cannot pass both --request-file and --request-attachment\n")
+  process.exit(2)
+}
+const figmaUrl = flag("--figma-url")?.trim() || undefined
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
+// `--no-browser` bypasses the puppeteer-driven overlay UI and drives the
+// benchmark entirely through HTTP API polling. The downstream code already
+// guards every puppeteer call with `if (page)` — this flag activates those
+// branches. Useful when the overlay UI is under refactor (07-panel-reactivity.md)
+// and we only want to exercise the opencorvus server pipeline end-to-end.
 const noBrowser = process.argv.includes("--no-browser")
-const maxExecutorGroups = Number(flag("--max-executor-groups")) || 3
+// Only set task-level budget when explicitly provided via CLI flag.
+// Otherwise leave undefined so the task inherits the config-level default (opencorvus.jsonc).
+const maxExecutorGroups = flag("--max-executor-groups") ? Number(flag("--max-executor-groups")) : undefined
 
-const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
-const DEFAULT_TASK_REQUEST = `
-Implement a minimal NoteStore.
+const DEFAULT_TASK_TITLE = "Overlay Web Benchmark"
+// The default brief is a text-only chat-app spec — there is no canonical
+// visual reference for it. Visual-diff gating only activates when the caller
+// passes `--reference-images <path>`; otherwise the run completes without an
+// SSIM gate.
+const referenceImages = rawReferenceImages
+const DEFAULT_TASK_REQUEST = `帮我做一个生产级的多模型 AI Chat Web 应用（Vite + React + TypeScript），整体定位对标 ChatGPT / Claude.ai / Poe，UI/UX 现代专业，深色/浅色主题切换，可在 Chrome 桌面端正常运行，本地启动后即可进入。
 
-Only create or modify these files:
-- src/note-store.ts
-- src/note-store.test.ts
+【账户与权限】
+1. 启动页支持 "Google 一键登录"（mock 异步延迟 800-1200ms 后登录成功）和 "邮箱+密码" 登录两种入口，登录态持久化到 localStorage，刷新后自动恢复。
+2. 顶部右上角头像菜单包含：账户设置、API Keys、订阅信息（mock 显示"免费版 / 已用 X / Y 次"）、深浅色主题、语言（中/英）、退出登录。
+3. API Keys 页面分别支持 Deepseek、OpenAI、Anthropic 三家 Key 的填写、保存（加密存储到 IndexedDB）、连通性测试按钮（实际打 /v1/models 或同等端点验证可用性）。
 
-Do not add package.json, tsconfig.json, README files, docs, or any other files unless they are strictly required.
-The Bun runtime and bun:test are already available, and the project scaffold is ready.
+【模型与对话】
+4. 顶部模型选择器是分组下拉，按 provider 分组展示：Deepseek（deepseek-chat / deepseek-reasoner）、OpenAI（gpt-4o-mini mock 占位）、Anthropic（claude-3-5-sonnet mock 占位）。仅 Deepseek 走真实 SSE，其他在未配置 Key 时按 mock 流返回。
+5. 流式对话使用 SSE，必须支持：发送中可中断（停止生成）、生成失败可一键 Retry、对任意助手消息可 "Regenerate"、对任意用户消息可 Edit 后从该点重新分支（保留旧分支可切换）。
+6. 会话级断点续传：用户在生成中刷新页面，重新打开后能从最后一条增量继续渲染，不丢字（通过保存增量到 IndexedDB + 重连同一 SSE 通道实现）。
+7. 推理类模型（如 deepseek-reasoner）需在助手气泡内显示可折叠的"思考过程"块，与最终回答分离。
 
-Requirements for src/note-store.ts:
-- export interface Note { id: string; title: string; done: boolean; created_at: number }
-- export class NoteStore backed by an in-memory Map<string, Note>
-- create(title: string): trim the title, throw on empty input, use crypto.randomUUID(), set done=false and created_at=Date.now()
-- get(id: string): return Note | undefined
-- list(): return all notes sorted by created_at ascending
-- toggle(id: string): flip done and return the updated note or undefined
-- remove(id: string): delete the note and return boolean
+【输入与多模态】
+8. 输入框支持：粘贴/拖拽上传图片、PDF、txt、md、代码文件，附件展示为缩略卡片可删除；图片附件随消息发送，PDF/文本类附件提取纯文本拼接到 prompt 末尾。
+9. 输入框支持斜杠命令：/clear 清空当前会话，/system 编辑系统提示词，/temp 调整 temperature，/model 快速切换模型，输入即弹出补全列表。
+10. 支持 @ 引用历史消息：在输入框内 @ 可弹出当前会话消息列表，选中后将该消息作为上下文片段附加。
 
-Requirements for src/note-store.test.ts:
-- use bun:test
-- cover these cases:
-  1. create returns a complete Note
-  2. empty title throws
-  3. list preserves creation order
-  4. toggle flips done
-  5. remove deletes successfully and get then returns undefined
+【消息渲染】
+11. 助手消息渲染需支持：GitHub Flavored Markdown、代码块语法高亮（多语言）、行内 / 块级数学公式（KaTeX）、Mermaid 图表、表格、任务列表、链接预览。
+12. 代码块右上角提供 复制 / 下载 / "Run in Sandbox"（mock 弹窗显示 stdout）按钮。
+13. 每条消息底部展示 token 用量、生成耗时、模型标签；可复制全文、点赞/点踩反馈、分享单条（生成只读分享链接，路由 /s/:id）。
 
-Acceptance:
-- run bun test ./src/note-store.test.ts
-- that command must pass
-`.trim()
-const TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
-const TASK_TITLE = flag("--title")?.trim() || (requestFile ? path.parse(requestFile).name : DEFAULT_TASK_TITLE)
-// DELIVERY_VERIFY_CMD: runs only at final quality gate (buildBenchmarkReport).
-// Never passed to the orchestrator as per-goal checks — per-goal evaluation uses the LLM judge only.
-// For the default NoteStore task, use bun test as the acceptance command.
-const DELIVERY_VERIFY_CMD = skipLocalVerify ? "" : (deliveryVerifyCmd?.trim() || (requestFile ? "" : "bun test ./src/note-store.test.ts"))
-// Legacy: TASK_GOALS used the old { description, criteria, priority } format
-// to hint the Goal Agent. In the new agent-driven architecture, the Decompose
-// Agent infers goals entirely from the request text — no hints needed.
+【会话管理】
+14. 左侧会话列表分组：Pinned / Today / Yesterday / Last 7 days / Older，支持新建文件夹、拖拽分组、重命名、删除（带确认）、置顶、搜索（标题+内容全文）、导出（Markdown / JSON）。
+15. 支持会话标签（多色），列表可按标签过滤；空状态有插图与 New chat 引导。
+16. 全局搜索（Cmd/Ctrl+K）：跨会话搜索消息，结果可点击跳转并高亮匹配。
+
+【New Chat 起始页】
+17. 未发起对话时展示 "示例 Prompt 卡片网格"（写作 / 代码 / 数学 / 角色扮演 / 数据分析 5 类，每类 2-3 张卡），点击直接预填到输入框。
+18. 起始页底部展示当日 Tips 与最近 3 条会话快捷入口。
+
+【设置与高级】
+19. 设置面板支持：默认模型 / temperature / max_tokens / top_p / 系统提示词模板（支持多套切换）、自定义快捷键、上下文窗口截断策略。
+20. 提供 keyboard shortcut 浮层（按 ?）说明所有快捷键。
+
+【数据与存储】
+21. 所有会话与设置以 IndexedDB 持久化（schema 含 conversations / messages / settings / api_keys 四个 store），刷新无损；提供"清空所有数据"按钮（带二次确认）。
+
+【非功能要求】
+22. 整体响应：移动端宽度 360px 以上可用，桌面端居中最大宽度 1280px。
+23. 真实可跑：使用真实 Deepseek API 完成至少一次端到端 streaming 对话；UI 完成度对标 chatgpt.com/claude.ai 视觉水平（无占位文字、无 lorem ipsum）。
+24. 代码质量：TypeScript strict、组件分层清晰（features / components / hooks / lib / store）、无 console.error 红字、初次加载 < 5s。`
+let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
+// Build base64 attachments from reference images (sent as multimodal vision content)
+const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
+
+// --request-attachment: upload the file as a real task attachment instead of
+// inlining its text into request. Exercises the read-tool attachment-URL path
+// so sub-agents (planner, architect, executor) can re-read the source via
+// AttachmentStore. The request itself just points the agent at the attachment.
+if (requestAttachment) {
+  const src = path.resolve(requestAttachment)
+  const bytes = await Bun.file(src).arrayBuffer()
+  const ext = path.extname(src).toLowerCase().replace(".", "") || "txt"
+  const filename = path.basename(src)
+  const mime =
+    ext === "txt" || ext === "md" || ext === "log" ? "text/plain" :
+    ext === "json" ? "application/json" :
+    ext === "pdf"  ? "application/pdf"  :
+    ext === "html" || ext === "htm" ? "text/html" :
+    ext === "csv" ? "text/csv" :
+    "application/octet-stream"
+  TASK_ATTACHMENTS.push({
+    mime,
+    data: Buffer.from(bytes).toString("base64"),
+    filename,
+  })
+  console.log(`[overlay-benchmark] request-attachment ${filename} ${mime} ${Math.round(bytes.byteLength / 1024)}KB`)
+  TASK_REQUEST =
+    `The full task brief is attached as the file "${filename}" (${mime}, ${Math.round(bytes.byteLength / 1024)} KB). ` +
+    `It contains the complete requirements, scope, and acceptance criteria — treat it as the authoritative source of truth. ` +
+    `Run the standard pipeline (requirements → architect → planner → executor → delivery); the attachment is ` +
+    `forwarded automatically to each sub-agent and they will read it via their \`read\` tool when needed.`
+}
+// Reference images are NOT injected as task attachments — the agent owns its
+// visual capture path (e.g. url_screenshot tool against the URL in the
+// request). When `--reference-images` is supplied, each file is copied into
+// the worktree's references/ dir and feeds the visual-diff gate below.
+const TASK_TITLE = flag("--title")?.trim()
+  || (requestFile ? path.parse(requestFile).name : undefined)
+  || (requestAttachment ? path.parse(requestAttachment).name : undefined)
+  || DEFAULT_TASK_TITLE
+// DELIVERY_VERIFY_CMD is assigned after temp.dir is initialized (see below).
+// Auto-registration rules when no explicit --delivery-verify-cmd is supplied:
+//   1. --reference-images provided → visual-diff SSIM gate against that file
+//   2. no reference images (default chat-app brief, or external --request-file) → no auto-verify
+// Fig2code SSIM thresholds (mean 0.85, worst-5% 0.55) come from visual-diff defaults.
+let DELIVERY_VERIFY_CMD = ""
 
 const AUTO_REPLY =
   "Complete the task autonomously end-to-end. Choose reasonable defaults consistent with the request, keep scope minimal, continue execution, and do not ask again unless the request is contradictory or unsafe."
@@ -107,11 +317,6 @@ const DIAG_TYPES = new Set([
   "orchestrator.run.updated",
   "orchestrator.task.created",
   "orchestrator.task.updated",
-  // Legacy spec/plan events — kept for backward compatibility with older traces
-  "orchestrator.spec.created",
-  "orchestrator.spec.updated",
-  "orchestrator.plan.created",
-  "orchestrator.plan.activated",
   "orchestrator.interaction.requested",
   "orchestrator.interaction.resolved",
   // Executor events flow through Message — tool calls and text arrive
@@ -125,10 +330,21 @@ const DIAG_TYPES = new Set([
   // Task Agent tool invocations in the new agent-driven architecture
   "orchestrator.goal.created",
   "orchestrator.goal.updated",
+  // Integrity reviewer lifecycle + verdict. `chunk` is throttled reasoning-delta
+  // forwarded by the LLM stream; `completed` carries the structured per-dimension
+  // verdict that buildBenchmarkReport's `integrity` section renders.
+  "orchestrator.integrity.review.started",
+  "orchestrator.integrity.review.progress",
+  "orchestrator.integrity.review.chunk",
+  "orchestrator.integrity.review.completed",
+  // Session lifecycle (single source). Replaces the per-phase *.completed
+  // events the benchmark used to track for stage-terminal heartbeat — the
+  // formatEventLine handler above filters streaming/idle and surfaces only
+  // terminal + retry transitions in the digest.
+  "orchestrator.session.status",
+  "orchestrator.delivery.ready",
+  "orchestrator.evaluation.completed",
 ])
-const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || 2 * 60 * 1000
-const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || 5 * 60 * 1000
-const TASK_RESUME_TIMEOUT_MS = Number(flag("--task-resume-timeout-ms")) || 10 * 60 * 1000
 const projectDir = flag("--project-dir")
 const temp = {
   dir: "",
@@ -136,7 +352,10 @@ const temp = {
   config: "",
 }
 
-temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-home-"))
+temp.home = resumeHomeDir
+  ? path.resolve(resumeHomeDir)
+  : await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-home-"))
+if (resumeTaskID && !projectDir) throw new Error("--resume-task-id requires --project-dir")
 temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-project-"))
 temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
@@ -144,6 +363,16 @@ process.env.OPENCORVUS_HOME = temp.home
 if (requestFile) {
   const dest = path.join(temp.dir, path.basename(requestFile))
   await fs.copyFile(path.resolve(requestFile), dest).catch(() => undefined)
+}
+// Copy reference images into the project directory under references/
+if (referenceImages.length > 0) {
+  const refDir = path.join(temp.dir, "references")
+  await fs.mkdir(refDir, { recursive: true })
+  for (const img of referenceImages) {
+    const src = path.resolve(img)
+    const dest = path.join(refDir, path.basename(src))
+    await fs.copyFile(src, dest).catch((e) => console.warn(`[overlay-benchmark] failed to copy reference image ${src}: ${e}`))
+  }
 }
 // Copy real auth.json into temp home so OAuth providers (e.g. github-copilot) work in isolated home
 {
@@ -156,7 +385,7 @@ if (requestFile) {
   await fs.mkdir(tempDataDir, { recursive: true })
   await fs.copyFile(realAuth, path.join(tempDataDir, "auth.json")).catch(() => undefined)
 }
-const { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, prepareLocalProviders, resolveBenchmarkModel } = await import("./env")
+const { ensureBenchmarkModel, loadBenchmarkEnv, prepareLocalProviders, resolveBenchmarkModel } = await import("./env")
 const { Log } = await import("../../src/util/log")
 Log.init({ print: true })
 const { ExecutorBootstrap } = await import("../../src/executor/bootstrap")
@@ -165,8 +394,14 @@ const { InstanceBootstrap } = await import("../../src/project/bootstrap")
 const { Server } = await import("../../src/server/server")
 const { resetDatabase } = await import("../../test/fixture/db")
 
+// Start the HTTP server before anything calls Instance.provide.
+// resolveBenchmarkModel / ensureBenchmarkModel / InstanceBootstrap all go
+// through Plugin.state, whose initializer reads Server.url(). If the server
+// hasn't called listen() yet, Server.url() throws and the provider init
+// silently half-completes (missing plugin hooks).
+const server = Server.listen({ port: 0, hostname: "127.0.0.1" })
+
 await loadBenchmarkEnv(import.meta.dir)
-prepareDashscopeEnv()
 process.env.OPENCORVUS_CONFIG_DIR = temp.config
 await prepareLocalProviders()
 const model = await resolveBenchmarkModel(import.meta.dir, {
@@ -177,21 +412,12 @@ await ensureBenchmarkModel(import.meta.dir, model)
 
 process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS = "1"
 process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "bypassPermissions"
-process.env.OPENCORVUS_GOAL_RUN_TIMEOUT_MS = String(standbyTimeoutMs)
-// Legacy env vars from old fixed-pipeline architecture — kept for backward
-// compatibility as config may still read them during transition.
-process.env.OPENCORVUS_SPEC_TIMEOUT_MS = String(specTimeoutMs)
-process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = String(plannerTimeoutMs)
-process.env.OPENCORVUS_SPEC_AGENT_TIMEOUT_MS = String(specTimeoutMs)
-process.env.OPENCORVUS_PLANNER_AGENT_TIMEOUT_MS = String(plannerTimeoutMs)
-process.env.OPENCORVUS_TOOL_TIMEOUT_MS = String(toolTimeoutMs)
-process.env.OPENCORVUS_STANDBY_TIMEOUT_MS = String(standbyTimeoutMs)
-// Legacy env vars from old fixed-pipeline architecture
-process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
-process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
+// Complex replication tasks legitimately need >3 delivery iterations to converge.
+// Schema allows up to 10. 6 balances convergence room against total wall time.
+process.env.OPENCORVUS_MAX_DELIVERY_ITERATIONS = "6"
 
 console.log(
-  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups} stall=${stallTimeoutMs / 1000}s planning-stall=${planningStallTimeoutMs / 1000}s tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
+  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} (no benchmark-side timeouts)`,
 )
 
 // Force-remove SQLite WAL/SHM before reset — prevents previous benchmark's
@@ -200,17 +426,41 @@ const dbPath = path.join(os.homedir(), ".local", "share", "opencorvus", "opencor
 await fs.rm(`${dbPath}-wal`, { force: true }).catch(() => {})
 await fs.rm(`${dbPath}-shm`, { force: true }).catch(() => {})
 
-await resetDatabase()
-if (!projectDir) {
-  await scaffoldProject(temp.dir, model)
-} else {
-  // Strip project-level opencorvus state to prevent old task IDs from bleeding into new runs
-  await fs.rm(path.join(temp.dir, "opencorvus.json"), { force: true })
-  await fs.rm(path.join(temp.dir, ".opencorvus"), { recursive: true, force: true })
+if (resumeTaskID) {
+  // Resume mode: keep existing database and project state intact.
+  // Only ensure the config-override directory exists (server bootstrap needs it).
   await fs.mkdir(temp.config, { recursive: true })
+} else {
+  await resetDatabase()
+  if (!projectDir) {
+    await scaffoldProject(temp.dir, model)
+  } else {
+    // Strip project-level opencorvus state to prevent old task IDs from bleeding into new runs
+    await fs.rm(path.join(temp.dir, "opencorvus.json"), { force: true })
+    await fs.rm(path.join(temp.dir, ".opencorvus"), { recursive: true, force: true })
+    await fs.mkdir(temp.config, { recursive: true })
+    await fs.mkdir(path.join(temp.dir, ".opencorvus"), { recursive: true })
+    // Re-register the benchmark model. scaffoldProject does this for fresh
+    // projects; here we just write the model config (no scaffolding) so the
+    // existing source tree is preserved and the orchestrator boots with an
+    // LLM available — without this it crashes with MissingModelConfigError.
+    await writeBenchmarkModelConfig(temp.dir, model)
+  }
 }
 // Re-inject local provider configs after scaffoldProject (which overwrites config-override)
 await prepareLocalProviders()
+
+// AgentTrace dir: keep the canonical default `<Instance.directory>/.opencorvus/trace/`
+// so every agent (orchestrator + every per-goal sub-agent in any worktree under
+// `.opencorvus-worktrees/`) writes into the same well-known place the user can
+// inspect. The post-run temp.dir cleanup is patched below to preserve this dir
+// (move it out before rm -rf), so traces survive regardless of --keep. Caller
+// can still pin a different absolute location via OPENCORVUS_AGENT_TRACE_DIR.
+if (!process.env.OPENCORVUS_AGENT_TRACE_DIR) {
+  process.env.OPENCORVUS_AGENT_TRACE_DIR = path.join(temp.dir, ".opencorvus", "trace")
+}
+await fs.mkdir(process.env.OPENCORVUS_AGENT_TRACE_DIR, { recursive: true }).catch(() => undefined)
+process.stderr.write(`[trace] OPENCORVUS_AGENT_TRACE_DIR=${process.env.OPENCORVUS_AGENT_TRACE_DIR}\n`)
 
 await Instance.provide({
   directory: temp.dir,
@@ -219,11 +469,26 @@ await Instance.provide({
     await ExecutorBootstrap.autoRegister(true)
   },
 })
-
-const server = Server.listen({ port: 0, hostname: "127.0.0.1" })
-const browser = noBrowser ? undefined : await launchBrowser(headless)
-let page = noBrowser ? undefined : await browser!.newPage()
+const browser = noBrowser ? null : await launchBrowser()
+let page = browser ? await browser.newPage() : null
 if (page) await page.setViewport({ width: 1600, height: 1200 })
+// Forward overlay browser console + pageerror events to benchmark stdout.
+// Without this the overlay's own `console.error(...)` (including the
+// `[sse] dispatch error for event X` introduced to surface tree-writer
+// throws that were previously silently swallowed) is invisible to the
+// benchmark driver, making every UI-side regression appear as a generic
+// `Overlay did not render streamed task output within 120000ms` timeout.
+if (page) {
+  page.on("console", (msg) => {
+    const type = msg.type()
+    // Only forward warning+ to avoid log noise from info/debug.
+    if (type === "log" || type === "info" || type === "debug") return
+    process.stderr.write(`[overlay-console:${type}] ${msg.text()}\n`)
+  })
+  page.on("pageerror", (err) => {
+    process.stderr.write(`[overlay-pageerror] ${err.message}\n${err.stack ?? ""}\n`)
+  })
+}
 
 const marks = {
   startedAt: Date.now(),
@@ -239,28 +504,67 @@ const marks = {
 }
 let taskID = ""
 const reportFile = report ? path.resolve(report) : path.join(process.cwd(), `overlay-web-benchmark-report-${Date.now()}.json`)
+
+// Now that temp.dir and reportFile are known, resolve DELIVERY_VERIFY_CMD.
+{
+  const visualDiffScript = path.join(import.meta.dir, "visual-diff.ts")
+  // The verify command is executed through `cmd /c <string>` on Windows or
+  // `bash -lc <string>` on POSIX (see runLocalVerify). On Windows, cmd.exe
+  // round-trips paths wrapped in `"…"` correctly — including paths with
+  // spaces and non-ASCII characters (CJK, accented chars) — because Node /
+  // bun spawn passes the argv as wide-string via CreateProcessW. The ONLY
+  // thing cmd /c cannot escape inside the outer quoted string is a literal
+  // `"` character in the path itself, which is essentially never present in
+  // real filesystem paths. On POSIX, single-quoting with the standard
+  // `'\''` escape handles every printable char.
+  const SHELL_SAFE = /^[A-Za-z0-9_.:/\\-]+$/
+  const safe = (s: string): string => {
+    if (SHELL_SAFE.test(s)) return s
+    if (process.platform === "win32") {
+      if (s.includes('"')) {
+        throw new Error(
+          `[overlay-benchmark] cannot embed path containing literal '"' in cmd /c command line: ${s}\n` +
+            `Rename the file to remove the embedded double-quote character.`,
+        )
+      }
+      return `"${s}"`
+    }
+    return `'${s.replace(/'/g, "'\\''")}'`
+  }
+  const buildVisualDiffCmd = (ref: string) => {
+    const visualOut = path.join(path.dirname(reportFile), path.basename(reportFile, ".json") + ".visual-diff-out")
+    return `bun run ${safe(visualDiffScript)} --rendered-dir=${safe(temp.dir)} --reference=${safe(path.resolve(ref))} --out=${safe(visualOut)}`
+  }
+  DELIVERY_VERIFY_CMD = skipLocalVerify
+    ? ""
+    : (deliveryVerifyCmd?.trim()
+      || (referenceImages.length > 0 ? buildVisualDiffCmd(referenceImages[0]) : ""))
+  if (DELIVERY_VERIFY_CMD) {
+    console.log(`[overlay-benchmark] delivery_verify_cmd=${DELIVERY_VERIFY_CMD}`)
+  }
+}
+_emergencyReportPath = reportFile.endsWith(".json")
+  ? reportFile.slice(0, -".json".length) + ".emergency.json"
+  : `${reportFile}.emergency.json`
 const eventFile = reportFile.endsWith(".json")
   ? reportFile.slice(0, -".json".length) + ".events.json"
   : `${reportFile}.events.json`
 const eventLogFile = reportFile.endsWith(".json")
   ? reportFile.slice(0, -".json".length) + ".events.ndjson"
   : `${reportFile}.events.ndjson`
-const agentTraceDir = reportFile.endsWith(".json")
-  ? reportFile.slice(0, -".json".length) + ".agent-trace"
-  : `${reportFile}.agent-trace`
-// Enable agent-level IO tracing — captures each agent's full system prompt,
-// user messages, and complete output text to agentTraceDir/<seq>-<agent>.md
-process.env.OPENCORVUS_AGENT_TRACE_DIR = agentTraceDir
-console.log(`[overlay-benchmark] agent_trace_dir=${agentTraceDir}`)
 const events: Array<Record<string, unknown>> = []
 let flushed = Promise.resolve()
 let lastEventAt = Date.now()
-let lastProgressAt = Date.now()
 let lastProgressSignature = ""
 let lastLogAt = Date.now()
 let lastActivityLogAt = Date.now()
 let lastHeartbeatAt = 0
 let lastActivityLine = ""
+// Terminal signal — resolved by onEvent when orchestrator.task.updated carries
+// a FINAL status (completed/failed/cancelled). waitForFinal races its poll sleep
+// against this promise so the loop exits immediately on terminal SSE.
+let terminalSignalResolver: (() => void) | null = null
+let terminalReached = false
 let planning: any = null
 let streaming: any = null
 let board: any = null
@@ -269,6 +573,13 @@ let finalBoard: any = null
 let transcript: any = null
 let timeline: any = null
 let runs: any = null
+// Latest IntegrityReviewCompleted payload (full properties retained — the events
+// array stores only flattened fixed fields). buildBenchmarkReport reads this for
+// the `integrity` section. Each completed emission overwrites; benchmark records
+// the final verdict the orchestrator settled on, not interim ones.
+let latestIntegrity: Record<string, unknown> | null = null
+let integrityAttemptCount = 0
+let lastIntegrityProgressLogAt = 0
 
 function logLine(value: string) {
   lastLogAt = Date.now()
@@ -286,20 +597,95 @@ function errorLine(value: string) {
   console.error(value)
 }
 
-function formatEventLine(entry: {
-  type: string
-  stage: string
-  status: string
-  progressType: string
-  summary: string
-  text: string
-  toolName: string
-  goalRunID: string
-}) {
+function formatEventLine(
+  entry: {
+    type: string
+    kind: string
+    stage: string
+    status: string
+    progressType: string
+    summary: string
+    text: string
+    toolName: string
+    goalRunID: string
+  },
+  props: Record<string, unknown> = {},
+) {
+  // message.part.updated / message.updated fire on every token chunk during
+  // streaming — printing each one floods stdout and obscures real milestones.
+  // Drop them entirely; the SSE counters + per-stage logs already capture
+  // progress at a higher signal level. A tool call kicking off shows up via
+  // the dedicated "tool=" path below.
   if (entry.type === "orchestrator.message.part.updated" || entry.type === "orchestrator.message.updated") {
-    const detail = entry.toolName || entry.summary || entry.kind || entry.status
-    if (!detail || STREAM_PLACEHOLDERS.has(detail)) return ""
-    return `[overlay-benchmark] message-event=${entry.toolName ? `tool=${entry.toolName}` : ""}${entry.kind ? ` kind=${entry.kind}` : ""} ${clipText(detail, 200)}`
+    return ""
+  }
+  // Architect contracts: show category + spec excerpt for tool_result
+  if (entry.stage === "architect" && entry.kind === "tool_result" && entry.toolName === "register_contract") {
+    const content = entry.text || entry.summary
+    return `[overlay-benchmark] architect contract registered: ${clipText(content, 300)}`
+  }
+  if (entry.stage === "architect" && entry.kind === "status") {
+    return `[overlay-benchmark] architect ${clipText(entry.summary || entry.status, 120)}`
+  }
+  // Integrity reviewer events. `chunk` is reasoning-delta — too noisy to print
+  // line-per-event; the alive-stall timer is what we care about. `progress` is
+  // throttled to ~once per 20s by the reviewer but still gets gated here to one
+  // log line per 10s to keep stdout readable. `started` and `completed` always
+  // print — they're the lifecycle bookends a human reading the log needs.
+  if (entry.type === "orchestrator.integrity.review.chunk") return ""
+  if (entry.type === "orchestrator.integrity.review.progress") {
+    const now = Date.now()
+    if (now - lastIntegrityProgressLogAt < 10_000) return ""
+    lastIntegrityProgressLogAt = now
+    return `[overlay-benchmark] integrity.review.progress (still working)`
+  }
+  if (entry.type === "orchestrator.integrity.review.started") {
+    return `[overlay-benchmark] integrity.review.started`
+  }
+  if (entry.type === "orchestrator.integrity.review.completed") {
+    const data = latestIntegrity ?? {}
+    const verdict = String((data as any).verdict ?? "")
+    const summary = clipText(String((data as any).summary ?? ""), 200)
+    const dims = Array.isArray((data as any).dimensions) ? (data as any).dimensions : []
+    const dimText = dims
+      .map((d: any) => `${String(d.id ?? "")}=${String(d.verdict ?? "")}(i${d.issueCount ?? 0}/c${d.correctionCount ?? 0}/m${d.missingGoalCount ?? 0})`)
+      .join(" ")
+    const issueCount = Array.isArray((data as any).issues) ? (data as any).issues.length : 0
+    const correctionCount = Array.isArray((data as any).corrections) ? (data as any).corrections.length : 0
+    const missingCount = Array.isArray((data as any).missingGoals) ? (data as any).missingGoals.length : 0
+    return `[overlay-benchmark] integrity.review.completed verdict=${verdict || "?"} ` +
+      `dims=[${dimText}] totals=i${issueCount}/c${correctionCount}/m${missingCount} ` +
+      `summary="${summary}"`
+  }
+  // Session lifecycle milestones (single source — see
+  // packages/opencorvus/src/session/status.ts). Replaces the per-phase
+  // *.completed events the benchmark used to enumerate; counts that used
+  // to surface here are derived from boardStore in the live overlay.
+  if (entry.type === "orchestrator.session.status") {
+    const status = props.status as { type?: string; reason?: string; error?: string; attempt?: number } | undefined
+    if (!status) return ""
+    const sessionID = String(props.sessionID ?? "")
+    const t = String(status.type ?? "")
+    if (t === "terminal") {
+      const reason = String(status.reason ?? "")
+      const errPart = status.error ? ` error="${clipText(String(status.error), 200)}"` : ""
+      return `[overlay-benchmark] session.terminal session=${sessionID} reason=${reason}${errPart}`
+    }
+    if (t === "retry") {
+      return `[overlay-benchmark] session.retry session=${sessionID} attempt=${status.attempt ?? "?"}`
+    }
+    // streaming / idle: too noisy to surface line-by-line in the log digest.
+    return ""
+  }
+  if (entry.type === "orchestrator.delivery.ready") {
+    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
+    return `[overlay-benchmark] delivery.ready summary="${summary}"`
+  }
+  if (entry.type === "orchestrator.evaluation.completed") {
+    const status = String(props.status ?? entry.status ?? "")
+    const verdict = String(props.verdict ?? "")
+    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
+    return `[overlay-benchmark] evaluation.completed status=${status} verdict=${verdict} summary="${summary}"`
   }
   const summary = entry.summary || entry.text
   const parts = [
@@ -346,14 +732,22 @@ function topLevelText(item: Record<string, unknown>, key: string) {
 }
 
 const onEvent = ({ payload }: { payload: unknown }) => {
+  // Any parsed SSE frame advances the alive-stall timer. "Alive" means bytes
+  // are flowing from the server; whether we log/diagnose the event is a
+  // separate concern handled below via DIAG_TYPES. Without this
+  // unconditional reset, long-running backend steps that emit only
+  // non-diag events (e.g. fidelity.review.started / .progress) would trip
+  // the 120s alive cap even while the server is actively working and
+  // streaming them over the wire.
+  if (payload && typeof payload === "object") {
+    lastEventAt = Date.now()
+  }
   // LLM delta events (message.part.delta) are ephemeral and high-frequency.
-  // They don't produce a log line, but they DO count as activity — prevents
-  // false stall detection while a reasoning model is generating tokens.
+  // They don't produce a log line, but they DO count as progress activity —
   if (payload && typeof payload === "object" && "type" in payload) {
     const rawType = String((payload as any).type ?? "")
     if (rawType === "message.part.delta" || rawType.endsWith(".part.delta") ||
         rawType === "message.part.updated" || rawType.endsWith(".part.updated")) {
-      lastEventAt = Date.now()
       lastActivityLogAt = Date.now()
       lastLogAt = Date.now()
       // message.part.updated carries tool calls — let it through to normalizeEvent
@@ -380,7 +774,26 @@ const onEvent = ({ payload }: { payload: unknown }) => {
     goalRunID: eventValue(normalized.payload, normalized.props, "goalRunID"),
   }
   events.push(entry)
-  const line = formatEventLine(entry)
+  // Retain the full IntegrityReviewCompleted payload — the flattened entry
+  // above keeps only fixed text fields, but the verdict / per-dimension
+  // breakdown / issues / corrections / missingGoals live in `props`. The
+  // benchmark report's `integrity` section reads from latestIntegrity; each
+  // emission overwrites so the final state is whatever the orchestrator
+  // settled on.
+  if (entry.type === "orchestrator.integrity.review.completed") {
+    integrityAttemptCount += 1
+    latestIntegrity = { ...normalized.props, sessionID: eventValue(normalized.payload, normalized.props, "sessionID") }
+  }
+  if (entry.type === "orchestrator.task.updated" && FINAL.has(entry.status)) {
+    if (!terminalReached) {
+      terminalReached = true
+      activityLine(`[overlay-benchmark] terminal-signal status=${entry.status}`)
+    }
+    const resolver = terminalSignalResolver
+    terminalSignalResolver = null
+    if (resolver) resolver()
+  }
+  const line = formatEventLine(entry, normalized.props)
   if (line && line !== lastActivityLine) {
     lastActivityLine = line
     activityLine(line)
@@ -400,12 +813,7 @@ const onEvent = ({ payload }: { payload: unknown }) => {
 const api = async (pathname: string, init?: RequestInit) => {
   const url = new URL(pathname, server.url)
   url.searchParams.set("directory", temp.dir)
-  const timeoutSignal = AbortSignal.timeout(requestTimeoutMs)
-  const signal = init?.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal
-  const res = await fetch(url, {
-    ...init,
-    signal,
-  })
+  const res = await fetch(url, init)
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url.pathname}`)
   return res
 }
@@ -449,13 +857,11 @@ try {
       localStorage.setItem("oc_directory", directory)
       localStorage.setItem("oc_directory_mode", "custom")
       localStorage.setItem("oc_workspace_directory", directory)
-      localStorage.setItem("oc_unattended", "true")
-      localStorage.setItem("oc_auto_permission", "true")
       localStorage.setItem("oc_auto_question", "true")
     }, server.url.origin, temp.dir)
 
     await page.goto(new URL("/ui/index.html", server.url).toString(), { waitUntil: "load" })
-    await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 60_000 })
+    await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 0 })
   }
   marks.onlineAt = Date.now()
   if (page) {
@@ -463,111 +869,204 @@ try {
     logLine(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
   }
   marks.submittedAt = Date.now()
-  taskID = await api("/task", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify({
-      title: TASK_TITLE,
-      request: TASK_REQUEST,
-      executor,
-      budget: {
-        maxWallTimeMs: undefined,
-        maxRuns,
-        maxFixRuns,
-        maxEvaluations,
-        ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
-      },
-      // routing, checks, goals: removed — the new agent-driven architecture
-      // handles decomposition, planning, and evaluation autonomously via the
-      // Task Agent. The request text is sufficient.
-      ...(DELIVERY_VERIFY_CMD ? { metadata: { delivery_verify_cmd: DELIVERY_VERIFY_CMD } } : {}),
-    }),
-  })
-    .then((res) => res.json())
-    .then((body) => String(body.task_id || ""))
-  if (!taskID) throw new Error("Task creation did not return task_id")
-  eventStream = subscribeTaskEvents(taskID)
 
-  if (page) {
-    planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
-  } else {
-    // no-browser: poll API until task leaves "queued" (becomes active or terminal)
-    const waitStart = Date.now()
-    while (Date.now() - waitStart < TASK_CREATE_TIMEOUT_MS) {
-      const prog = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
-      if (prog?.task?.status && prog.task.status !== "queued") {
-        planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
-        break
-      }
-      await Bun.sleep(1000)
+  if (resumeTaskID) {
+    // ── Resume mode ──────────────────────────────────────────────────────────
+    // Attach to an existing task without creating a new one.
+    taskID = resumeTaskID
+    eventStream = subscribeTaskEvents(taskID)
+
+    // Navigate browser to the overlay and select the existing task
+    if (page) {
+      await page.evaluate(async (id) => {
+        await window.eval("loadTasks")()
+        await window.eval("selectTask")(id)
+      }, taskID)
+      await page.waitForFunction((id) => {
+        try {
+          return window.eval("state").selectedTaskID === id
+        } catch {
+          return false
+        }
+      }, { timeout: 0 }, taskID)
     }
-    if (!planning) planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
-  }
-  marks.planningAt = Date.now()
 
-  if (page) {
-    taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
-  }
-  marks.createdAt = Date.now()
-  // Budget is already set during task creation; PATCH /budget is optional
-  await api(`/task/${taskID}/budget`, {
-    method: "PATCH",
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify({
-      budget: {
-        maxWallTimeMs: undefined,
-        maxRuns,
-        maxFixRuns,
-        maxEvaluations,
-        ...(maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
-      },
-    }),
-  }).catch(() => undefined)
+    // Synthesize planning/streaming snapshots from current board state
+    const currentProg = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
+    planning = {
+      pendingCount: 0,
+      taskList: currentProg?.task?.title ?? TASK_TITLE,
+      reasoning: "",
+      assistantText: "",
+      taskIDs: [taskID],
+      selectedTaskID: taskID,
+    }
+    marks.planningAt = Date.now()
+    marks.createdAt = Date.now()
+    marks.selectedAt = Date.now()
 
-  if (page) {
-    await page.evaluate(async (id) => {
-      const state = window.eval("state")
-      if (state.selectedTaskID === id) return
-      await window.eval("loadTasks")()
-      await window.eval("selectTask")(id)
-    }, taskID)
-    await page.waitForFunction((id) => {
-      try {
-        return window.eval("state").selectedTaskID === id
-      } catch {
-        return false
-      }
-    }, { timeout: 120_000 }, taskID)
-  }
-  marks.selectedAt = Date.now()
+    if (page) {
+      await page.waitForFunction(() => {
+        try { return !!window.eval("state").board?.task?.id } catch { return false }
+      }, { timeout: 0 })
+    }
+    marks.boardAt = Date.now()
 
-  if (page) {
-    await page.waitForFunction(() => {
-      try {
-        return !!window.eval("state").board?.task?.id
-      } catch {
-        return false
-      }
-    }, { timeout: 120_000 })
-  }
-  marks.boardAt = Date.now()
-  if (page) {
-    streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
+    // Inject user message to wake up a failed/cancelled task, or to add guidance to a running one.
+    logLine(`[overlay-benchmark] resume taskID=${taskID} injecting message: ${resumeMessage}`)
+    await api(`/task/${taskID}/message`, {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ text: resumeMessage, source: "user_message" }),
+    }).catch((err) => logLine(`[overlay-benchmark] resume message inject failed: ${err}`))
+
+    if (page) {
+      streaming = await waitForStreamingVisible(page).catch(() => ({
+        reasoning: "", assistantText: "", liveRole: "", liveText: "",
+      }))
+    } else {
+      streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
+    }
+    marks.streamingAt = Date.now()
+    // ─────────────────────────────────────────────────────────────────────────
   } else {
-    streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
+    // ── Normal mode: create a new task ────────────────────────────────────────
+    taskID = await api("/task", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify({
+        title: TASK_TITLE,
+        request: TASK_REQUEST,
+        ...(TASK_ATTACHMENTS.length > 0 ? { attachments: TASK_ATTACHMENTS } : {}),
+        executor,
+        budget: {
+          maxRuns,
+          maxFixRuns,
+          ...(maxExecutorGroups != null ? { maxExecutorGroups } : {}),
+        },
+        ...(DELIVERY_VERIFY_CMD || figmaUrl
+          ? {
+              metadata: {
+                ...(DELIVERY_VERIFY_CMD ? { delivery_verify_cmd: DELIVERY_VERIFY_CMD } : {}),
+                ...(figmaUrl ? { figma_url: figmaUrl } : {}),
+              },
+            }
+          : {}),
+      }),
+    })
+      .then((res) => res.json())
+      .then((body) => String(body.task_id || ""))
+    if (!taskID) throw new Error("Task creation did not return task_id")
+    eventStream = subscribeTaskEvents(taskID)
+    // Resume hint: print everything needed to re-attach with --resume-* flags
+    // after a kill. Without this the user has to dig the tempdir paths out of
+    // earlier log lines (or guess), which makes resume effectively unusable.
+    logLine(`[overlay-benchmark] RESUME-INFO taskID=${taskID}`)
+    logLine(`[overlay-benchmark] RESUME-INFO home=${temp.home}`)
+    logLine(`[overlay-benchmark] RESUME-INFO project=${temp.dir}`)
+    logLine(
+      `[overlay-benchmark] RESUME-CMD bun run script/benchmark/overlay-web-benchmark.ts ` +
+        `--resume-task-id=${taskID} --resume-home-dir="${temp.home}" --project-dir="${temp.dir}" --executor=${executor}`,
+    )
+
+    if (page) {
+      planning = await waitForPlanningVisible(page, api)
+    } else {
+      while (true) {
+        const prog = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
+        if (prog?.task?.status && prog.task.status !== "queued") {
+          planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
+          break
+        }
+        await Bun.sleep(1000)
+      }
+    }
+    marks.planningAt = Date.now()
+
+    if (page) {
+      taskID = await waitForTaskCreated(page, api)
+    }
+    marks.createdAt = Date.now()
+    await api(`/task/${taskID}/budget`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        budget: {
+          maxRuns,
+          maxFixRuns,
+          ...(maxExecutorGroups != null ? { maxExecutorGroups } : {}),
+        },
+      }),
+    }).catch(() => undefined)
+
+    if (page) {
+      await page.evaluate(async (id) => {
+        const state = window.eval("state")
+        if (state.selectedTaskID === id) return
+        await window.eval("loadTasks")()
+        await window.eval("selectTask")(id)
+      }, taskID)
+      await page.waitForFunction((id) => {
+        try {
+          return window.eval("state").selectedTaskID === id
+        } catch {
+          return false
+        }
+      }, { timeout: 0 }, taskID)
+    }
+    marks.selectedAt = Date.now()
+
+    if (page) {
+      await page.waitForFunction(() => {
+        try {
+          return !!window.eval("state").board?.task?.id
+        } catch {
+          return false
+        }
+      }, { timeout: 0 })
+    }
+    marks.boardAt = Date.now()
+    if (page) {
+      streaming = await waitForStreamingVisible(page)
+    } else {
+      streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
+    }
+    marks.streamingAt = Date.now()
+    // ─────────────────────────────────────────────────────────────────────────
   }
-  marks.streamingAt = Date.now()
   if (page && browser) {
     page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api)
   }
   marks.resumedAt = Date.now()
   board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
-  progress = await waitForFinal(taskID, stallTimeoutMs, api, completionHardTimeoutMs)
+  // The bench is allowed to break — orchestrator stalls, LLM aborts,
+  // sub-agent gives up. When waitForFinal returns a non-completed
+  // terminal state (failed / cancelled), cancel the dead run and inject
+  // the resume wake-up message. The orchestrator's describe-snapshot
+  // logic figures out what to redo from where it stopped. Bounded so
+  // a permanently broken task does not loop forever.
+  let autoResumes = 0
+  while (true) {
+    progress = await waitForFinal(taskID, api)
+    const status = String(progress?.task?.status ?? "")
+    if (status === "completed") break
+    if (autoResumes >= maxAutoResumes) {
+      logLine(`[overlay-benchmark] task ended status=${status} after ${autoResumes} auto-resumes — giving up`)
+      break
+    }
+    autoResumes += 1
+    logLine(`[overlay-benchmark] task ended status=${status} — auto-resume ${autoResumes}/${maxAutoResumes}, injecting wake-up`)
+    await api(`/task/${taskID}/cancel`, { method: "POST" }).catch(() => undefined)
+    await Bun.sleep(1500)
+    await api(`/task/${taskID}/message`, {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ text: resumeMessage, source: "user_message" }),
+    }).catch((err) => logLine(`[overlay-benchmark] auto-resume message inject failed: ${err}`))
+  }
   marks.completedAt = Date.now()
   finalBoard = taskID ? await api(`/task/${taskID}/board?sync=1`).then((res) => res.json()).catch(() => board) : board
 
@@ -586,35 +1085,63 @@ try {
     events,
   }, null, 2))
   await Bun.write(reportFile, JSON.stringify(out, null, 2))
+  _emergencyWritten = true
   logLine(JSON.stringify(out, null, 2))
   logLine(`report: ${reportFile}`)
   logLine(`events: ${eventFile}`)
   logLine(`events_ndjson: ${eventLogFile}`)
-  logLine(`agent_trace: ${agentTraceDir}`)
 
   const pass = out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
   if (!pass) {
     process.exit(1)
   }
 } catch (error) {
+  process.exitCode = 1
   if (!marks.completedAt) marks.completedAt = Date.now()
-  const out = await buildBenchmarkReport(error)
-  await flushed
-  await Bun.write(eventFile, JSON.stringify({
+  let out: unknown
+  try {
+    out = await buildBenchmarkReport(error)
+  } catch (reportErr) {
+    out = {
+      generated_at: new Date().toISOString(),
+      type: "benchmark_report_failed",
+      taskID,
+      error: String(error),
+      report_error: reportErr instanceof Error ? reportErr.message : String(reportErr),
+      elapsed_ms: Date.now() - marks.startedAt,
+      marks,
+      last_progress_signature: lastProgressSignature,
+      events_captured: events.length,
+      last_event_at: lastEventAt,
+      last_activity_at: lastActivityLogAt,
+    }
+  }
+  await flushed.catch(() => undefined)
+  const eventPayload = {
     generated_at: new Date().toISOString(),
     taskID,
     error: String(error),
     event_count: events.length,
     stage_summary: summarizeEvents(events, taskID),
     events,
-  }, null, 2))
-  await Bun.write(reportFile, JSON.stringify(out, null, 2))
+  }
+  let wroteReport = false
+  try {
+    await Bun.write(eventFile, JSON.stringify(eventPayload, null, 2))
+  } catch (writeErr) {
+    errorLine(`[overlay-benchmark] failed to write events report ${eventFile}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`)
+  }
+  try {
+    await Bun.write(reportFile, JSON.stringify(out, null, 2))
+    wroteReport = true
+  } catch (writeErr) {
+    errorLine(`[overlay-benchmark] failed to write benchmark report ${reportFile}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`)
+  }
+  _emergencyWritten = wroteReport
   errorLine(JSON.stringify(out, null, 2))
   errorLine(`report: ${reportFile}`)
   errorLine(`events: ${eventFile}`)
   errorLine(`events_ndjson: ${eventLogFile}`)
-  errorLine(`agent_trace: ${agentTraceDir}`)
-  process.exitCode = 1
 } finally {
   await cleanup("events.stop", () => eventStream.stop())
   await flushed.catch(() => undefined)
@@ -629,7 +1156,28 @@ try {
   if (browser) await cleanup("browser.close", () => browser!.close().catch(() => undefined), () => browser!.process()?.kill("SIGKILL"))
   await cleanup("server.stop", () => server.stop(true))
   await cleanup("instance.disposeAll", () => Instance.disposeAll().catch(() => undefined))
-  if (!keep && temp.dir) await cleanup("temp.dir", () => fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined))
+  // Kill any orphaned processes that executors left behind in the workspace
+  // (e.g. test scripts with setInterval that never exit on their own).
+  if (temp.dir) {
+    await cleanup("orphan.kill", async () => {
+      try {
+        await Bun.spawn(["pkill", "-9", "-f", temp.dir], { stdout: "pipe", stderr: "pipe" }).exited
+      } catch { /* best effort — pkill not available on all platforms */ }
+    })
+  }
+  if (!keep && temp.dir) {
+    // Rescue the trace dir before wiping the workspace. Default trace dir is
+    // `<temp.dir>/.opencorvus/trace`, which would otherwise die with the
+    // workspace and make every benchmark run lose its agent traces.
+    const traceDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
+    if (traceDir && traceDir.startsWith(temp.dir)) {
+      const stamp = Date.now()
+      const survivor = path.join(process.cwd(), `overlay-web-benchmark-trace-${stamp}`)
+      await cleanup("trace.preserve", () => fs.rename(traceDir, survivor).catch(() => undefined))
+      logLine(`[overlay-benchmark] trace preserved at ${survivor}`)
+    }
+    await cleanup("temp.dir", () => fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined))
+  }
   if (!keep && temp.home) await cleanup("temp.home", () => fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined))
   process.exit(process.exitCode ?? 0)
 }
@@ -637,8 +1185,24 @@ try {
 async function scaffoldProject(dir: string, model: string) {
   await fs.mkdir(path.join(dir, "src"), { recursive: true })
   await fs.mkdir(path.join(dir, "data"), { recursive: true })
+  // .gitkeep ensures data/ is tracked by git and survives git clean / executor git ops.
+  // Without this, executors that run git init or git clean can remove the directory,
+  // causing db.ts to fail at runtime when it opens data/trading.db.
+  await Bun.write(path.join(dir, "data", ".gitkeep"), "")
   await fs.mkdir(path.join(dir, ".opencorvus"), { recursive: true })
   await fs.mkdir(temp.config, { recursive: true })
+  // W2-V32: the server no longer auto-runs git init for non-git directories
+  // (task-api/index.ts:289 throws WorktreeNotGitError). The benchmark is
+  // unattended and creates its own scratch dir, so it must init git itself
+  // — there is no overlay user gesture to prompt for.
+  {
+    const proc = Bun.spawn(["git", "init"], { cwd: dir, stdout: "pipe", stderr: "pipe" })
+    const code = await proc.exited
+    if (code !== 0) {
+      const err = (await proc.stderr.text()).trim() || "git init failed"
+      throw new Error(`scaffoldProject: git init failed in ${dir}: ${err}`)
+    }
+  }
   // Generate .gitignore only if one doesn't already exist
   const gitignorePath = path.join(dir, ".gitignore")
   if (!(await Bun.file(gitignorePath).exists())) {
@@ -672,13 +1236,17 @@ async function scaffoldProject(dir: string, model: string) {
       2,
     ),
   )
+  await writeBenchmarkModelConfig(dir, model)
+}
+
+async function writeBenchmarkModelConfig(dir: string, model: string) {
   const providerID = model.split("/")[0] || "openai"
   const config = JSON.stringify(
     {
       $schema: "https://opencorvus.ai/config.json",
       model,
       experimental: {
-        unattended: true,
+        auto_question: true,
       },
       lsp: {
         biome: {
@@ -690,9 +1258,7 @@ async function scaffoldProject(dir: string, model: string) {
       },
       provider: {
         [providerID]: {
-          options: {
-            timeout: requestTimeoutMs,
-          },
+          options: {},
         },
       },
     },
@@ -800,6 +1366,52 @@ async function runLocalVerify(cwd: string, cmd: string) {
   }
 }
 
+// Format the latest IntegrityReviewCompleted payload into a stable shape for
+// the benchmark report. Returns null when no integrity review fired (e.g. the
+// task failed before architect reached the integrity stage). Field names match
+// the IntegrityReviewCompleted Zod schema in engine/model.ts so the report
+// stays readable next to source-of-truth definitions.
+function formatIntegritySection(
+  payload: Record<string, unknown> | null,
+  attemptCount: number,
+): Record<string, unknown> | null {
+  if (!payload) return null
+  const dims = Array.isArray(payload.dimensions) ? (payload.dimensions as Array<Record<string, unknown>>) : []
+  const issues = Array.isArray(payload.issues) ? (payload.issues as Array<Record<string, unknown>>) : []
+  const corrections = Array.isArray(payload.corrections) ? (payload.corrections as Array<Record<string, unknown>>) : []
+  const missingGoals = Array.isArray(payload.missingGoals) ? (payload.missingGoals as Array<Record<string, unknown>>) : []
+  return {
+    sessionID: typeof payload.sessionID === "string" ? payload.sessionID : null,
+    verdict: typeof payload.verdict === "string" ? payload.verdict : null,
+    summary: typeof payload.summary === "string" ? payload.summary : null,
+    attempts_observed: attemptCount,
+    attempts_reported: typeof payload.attempts === "number" ? payload.attempts : null,
+    dimensions: dims.map((d) => ({
+      id: typeof d.id === "string" ? d.id : null,
+      verdict: typeof d.verdict === "string" ? d.verdict : null,
+      issueCount: typeof d.issueCount === "number" ? d.issueCount : 0,
+      correctionCount: typeof d.correctionCount === "number" ? d.correctionCount : 0,
+      missingGoalCount: typeof d.missingGoalCount === "number" ? d.missingGoalCount : 0,
+    })),
+    issues: issues.map((i) => ({
+      type: typeof i.type === "string" ? i.type : null,
+      description: typeof i.description === "string" ? i.description : null,
+    })),
+    corrections: corrections.map((c) => ({
+      action: typeof c.action === "string" ? c.action : null,
+      goalID: typeof c.goalID === "string" ? c.goalID : null,
+      reason: typeof c.reason === "string" ? c.reason : null,
+      updatesTitle: typeof c.updatesTitle === "string" ? c.updatesTitle : null,
+      updatesObjective: typeof c.updatesObjective === "string" ? c.updatesObjective : null,
+    })),
+    missingGoals: missingGoals.map((g) => ({
+      title: typeof g.title === "string" ? g.title : null,
+      objective: typeof g.objective === "string" ? g.objective : null,
+      reason: typeof g.reason === "string" ? g.reason : null,
+    })),
+  }
+}
+
 async function buildBenchmarkReport(error?: unknown) {
   const reportError = error ? String(error) : undefined
   const completedAt = marks.completedAt || Date.now()
@@ -851,23 +1463,6 @@ async function buildBenchmarkReport(error?: unknown) {
     server: server.url.toString(),
     taskID,
     error: reportError,
-    stage_timeout_ms: {
-      // Legacy spec/planner timeouts kept for backward compatibility
-      spec: specTimeoutMs,
-      planner: plannerTimeoutMs,
-      tool: toolTimeoutMs,
-      standby: standbyTimeoutMs,
-      stall: stallTimeoutMs,
-      request: requestTimeoutMs,
-    },
-    stage_max_steps: {
-      // Legacy spec/planner max steps kept for backward compatibility
-      spec: specMaxSteps,
-      planner: plannerMaxSteps,
-    },
-    stall_timeout_ms: stallTimeoutMs,
-    completion_hard_timeout_ms: completionHardTimeoutMs || null,
-    request_timeout_ms: requestTimeoutMs,
     taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
     evaluation: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
     changedFiles,
@@ -897,20 +1492,36 @@ async function buildBenchmarkReport(error?: unknown) {
       boardTaskID: currentBoard?.task?.id || "",
       boardStatus: currentBoard?.task?.status || "",
       specVersion: currentBoard?.spec?.version ?? null,
-      goalCount: (() => {
-        const lane = Array.isArray(currentBoard?.lanes) ? currentBoard.lanes.find((l: any) => l.id === "goals") : undefined
-        return Array.isArray(lane?.cards) ? lane.cards.length : 0
-      })(),
+      goalCount: Array.isArray(currentBoard?.goalWorkflows) ? currentBoard.goalWorkflows.length : 0,
       goalRunCount: Array.isArray(currentBoard?.goalRuns) ? currentBoard.goalRuns.length : 0,
       criteriaCount: (() => {
         const evalChecks = currentBoard?.evaluation?.checks
         return Array.isArray(evalChecks) ? evalChecks.length : 0
       })(),
     },
+    architect: currentFinalBoard?.architect
+      ? {
+          summary: currentFinalBoard.architect.summary ?? null,
+          contractCount: currentFinalBoard.architect.contractCount ?? null,
+          categories: currentFinalBoard.architect.categories ?? null,
+        }
+      : null,
+    plan: currentFinalBoard?.plan
+      ? {
+          id: currentFinalBoard.plan.id ?? null,
+          version: currentFinalBoard.plan.version ?? null,
+          status: currentFinalBoard.plan.status ?? null,
+          summary: currentFinalBoard.plan.summary ?? null,
+        }
+      : null,
+    integrity: formatIntegritySection(latestIntegrity, integrityAttemptCount),
     screenshot,
     resume: {
       restored: marks.resumedAt > 0,
       selectedAt: elapsedOrNull(marks.resumedAt),
+      // resume mode metadata
+      resumeTaskID: resumeTaskID ?? null,
+      resumeHomeDir: resumeHomeDir ?? null,
     },
     timings_ms: {
       online: elapsedOrNull(marks.onlineAt),
@@ -1078,13 +1689,24 @@ function resolveModuleBlocks(progress: any, board: any, request: string) {
   return moduleBlocksFromRequest(request)
 }
 
-async function launchBrowser(headless: boolean) {
+async function launchBrowser() {
   const executablePath = await findBrowser()
   return puppeteer.launch({
     executablePath,
-    headless: headless ? "new" : false,
+    headless: false,
     userDataDir: mkdtempSync(path.join(os.tmpdir(), "pptr-overlay-web-benchmark-")),
-    args: ["--no-sandbox", "--no-first-run", "--no-default-browser-check"],
+    args: [
+      "--no-sandbox",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
+      "--disable-setuid-sandbox",
+      "--disable-extensions",
+      // Without these, Windows under DPI scaling drops the window in the bottom-right corner.
+      "--window-position=0,0",
+      "--window-size=1600,1200",
+    ],
   })
 }
 
@@ -1123,19 +1745,21 @@ async function cleanup(
 
 async function waitForFinal(
   taskID: string,
-  stallTimeoutMs: number,
   api: (pathname: string, init?: RequestInit) => Promise<Response>,
-  completionHardTimeoutMs = 0,
 ) {
-  const startedAt = Date.now()
   let lastStatus = ""
+  lastProgressSignature = ""
+  lastHeartbeatAt = 0
+  terminalReached = false
+  const terminalPromise = new Promise<void>((resolve) => {
+    terminalSignalResolver = () => resolve()
+  })
+  try {
   while (true) {
     let progress: any
     try {
       progress = await api(`/task/${taskID}/progress`).then((res) => res.json())
     } catch (e) {
-      // Bun-specific: AbortSignal fires during body read → empty body → SyntaxError instead of AbortError
-      // Also handle transient network/abort errors to avoid crashing on single failed poll
       const isTransient = e instanceof SyntaxError
         || (e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError"))
         || (e instanceof TypeError && typeof (e as any).message === "string" && /fetch|network|abort/i.test((e as any).message))
@@ -1151,7 +1775,6 @@ async function waitForFinal(
     const signature = progressSignature(progress)
     if (signature !== lastProgressSignature) {
       lastProgressSignature = signature
-      lastProgressAt = Date.now()
       activityLine(`[overlay-benchmark] progress=${signature}`)
     }
     if (progress.task.status !== lastStatus) {
@@ -1159,30 +1782,23 @@ async function waitForFinal(
       activityLine(`[overlay-benchmark] status=${lastStatus}`)
     }
     const now = Date.now()
-    const silentFor = inactivityAgeMs(now, lastEventAt, lastProgressAt)
-    const logSilentFor = inactivityAgeMs(now, lastActivityLogAt)
-    // Use a separate (usually longer) stall timeout while the Task Agent is in
-    // early stages (queued/active). During "active" the Task Agent may be invoking
-    // tools (decompose, plan_goal, etc.) without visible progress changes, so the
-    // normal stallTimeoutMs causes false stalls.
     const taskStatus = progress?.task?.status || ""
-    const pipelineStatuses = ["queued", "active"]
-    const effectiveStallMs = pipelineStatuses.includes(taskStatus) ? planningStallTimeoutMs : stallTimeoutMs
     if (now - lastHeartbeatAt >= 60_000) {
       lastHeartbeatAt = now
+      const retryCount = progress?.run?.retryCount ?? progress?.activeRun?.retryCount ?? 0
+      const maxFixRuns = (progress?.task as any)?.budget?.maxFixRuns ?? "?"
       logLine(
-        `[overlay-benchmark] heartbeat status=${taskStatus} signal_age_ms=${silentFor} activity_log_age_ms=${logSilentFor} log_age_ms=${now - lastLogAt} effective_stall_ms=${effectiveStallMs} last_progress=${lastProgressSignature || "none"}`,
+        `[overlay-benchmark] heartbeat status=${taskStatus} retry=${retryCount}/${maxFixRuns} last_progress=${lastProgressSignature || "none"}`,
       )
     }
-    if (silentFor >= effectiveStallMs || logSilentFor >= effectiveStallMs) {
-      throw new Error(
-        `Task stalled: no event/progress change for ${effectiveStallMs}ms or no activity log output for ${effectiveStallMs}ms (status: ${taskStatus}, last progress: ${lastProgressSignature || "none"}, activity log age: ${logSilentFor}ms, last log age: ${now - lastLogAt}ms)`,
-      )
+    if (terminalReached) {
+      await Bun.sleep(250)
+    } else {
+      await Promise.race([Bun.sleep(2_000), terminalPromise])
     }
-    if (completionHardTimeoutMs > 0 && (now - startedAt) >= completionHardTimeoutMs) {
-      throw new Error(`Task exceeded optional hard completion timeout of ${completionHardTimeoutMs}ms`)
-    }
-    await Bun.sleep(2_000)
+  }
+  } finally {
+    terminalSignalResolver = null
   }
 }
 
@@ -1191,6 +1807,7 @@ function progressSignature(progress: any) {
     task: progress?.task?.status || "",
     run: progress?.run?.status || progress?.activeRun?.status || "",
     phase: progress?.run?.phase || progress?.activeRun?.phase || "",
+    retry_count: progress?.run?.retryCount ?? progress?.activeRun?.retryCount ?? 0,
     verdict: progress?.evaluation?.verdict || "",
     delivery: progress?.delivery?.status || "",
     goals: Array.isArray(progress?.goals)
@@ -1199,16 +1816,20 @@ function progressSignature(progress: any) {
     pending: Array.isArray(progress?.pendingInteractions)
       ? progress.pendingInteractions.map((item: any) => `${item.id || "interaction"}:${item.type || ""}:${item.status || ""}`)
       : [],
+    // Pre-plan sessions (requirements / architect / fidelity / design-analyst)
+    // surface here so the signature evolves while goals is still empty —
+    // keeps progress_age_ms moving during the architect phase.
+    sessions: Array.isArray(progress?.activeSessions)
+      ? progress.activeSessions.map((item: any) => `${item.kind || "?"}:${item.sessionID || ""}`)
+      : [],
   })
 }
 
 async function waitForPlanningVisible(
   page: Page,
   api: (pathname: string, init?: RequestInit) => Promise<Response>,
-  timeoutMs: number,
 ) {
-  const startedAt = Date.now()
-  while (Date.now() - startedAt < timeoutMs) {
+  while (true) {
     const overlay = await overlaySnapshot(page)
     if (overlay.pendingCount > 0 || overlay.selectedTaskID || overlay.taskIDs[0]) return overlay
     const board = await api("/tasks").then((res) => res.json()).catch(() => null)
@@ -1216,24 +1837,20 @@ async function waitForPlanningVisible(
     if (taskID) return { ...overlay, taskIDs: [taskID, ...overlay.taskIDs].filter(Boolean).slice(0, 5) }
     await Bun.sleep(250)
   }
-  throw new Error(`Overlay did not expose planning state within ${timeoutMs}ms: ${JSON.stringify(await debugSnapshot(page, api))}`)
 }
 
-async function waitForStreamingVisible(page: Page, timeoutMs: number) {
-  const startedAt = Date.now()
-  while (Date.now() - startedAt < timeoutMs) {
+async function waitForStreamingVisible(page: Page) {
+  while (true) {
     const overlay = await overlaySnapshot(page)
     if (meaningfulLiveText(overlay.reasoning)) return overlay
     if (meaningfulLiveText(overlay.assistantText)) return overlay
     if (meaningfulLiveText(overlay.liveText)) return overlay
     await Bun.sleep(250)
   }
-  throw new Error(`Overlay did not render streamed task output within ${timeoutMs}ms`)
 }
 
-async function waitForTaskCreated(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>, timeoutMs: number) {
-  const startedAt = Date.now()
-  while (Date.now() - startedAt < timeoutMs) {
+async function waitForTaskCreated(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
+  while (true) {
     const overlay = await overlaySnapshot(page)
     if (overlay.selectedTaskID) return overlay.selectedTaskID
     if (overlay.taskIDs[0]) return overlay.taskIDs[0]
@@ -1242,7 +1859,6 @@ async function waitForTaskCreated(page: Page, api: (pathname: string, init?: Req
     if (taskID) return taskID
     await Bun.sleep(1_000)
   }
-  throw new Error(`Overlay did not create a task within ${timeoutMs}ms: ${JSON.stringify(await debugSnapshot(page, api))}`)
 }
 
 async function verifyResume(
@@ -1262,14 +1878,12 @@ async function verifyResume(
     localStorage.setItem("oc_directory_mode", "custom")
     localStorage.setItem("oc_workspace_directory", dir)
     localStorage.setItem("oc_workspace_task", id)
-    localStorage.setItem("oc_unattended", "true")
-    localStorage.setItem("oc_auto_permission", "true")
     localStorage.setItem("oc_auto_question", "true")
   }, serverUrl, directory, taskID)
   await next.goto(new URL("/ui/index.html", serverUrl).toString(), { waitUntil: "load" })
-  await next.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 60_000 })
+  await next.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 0 })
   await syncDirectory(next, directory)
-  await waitForTaskCreated(next, api, TASK_RESUME_TIMEOUT_MS)
+  await waitForTaskCreated(next, api)
   await next.evaluate(async (id) => {
     const state = window.eval("state")
     if (state.selectedTaskID === id && state.board?.task?.id === id) return
@@ -1282,7 +1896,7 @@ async function verifyResume(
     } catch {
       return false
     }
-  }, { timeout: TASK_RESUME_TIMEOUT_MS }, taskID, directory)
+  }, { timeout: 0 }, taskID, directory)
   await next.evaluate(async () => {
     try {
       await window.eval("persistOverlaySettings")()
@@ -1296,23 +1910,94 @@ async function verifyResume(
   return next
 }
 
+// Pick a non-cancel option label, preferring the longest-living approval
+// ("Allow for this session") so subsequent same-tool calls don't re-prompt.
+// Mirrors codex's mcp_tool_call_approval option set
+// {Allow, Allow for this session, Cancel} — confirmed via
+// `codex app-server generate-ts` output (v2/ToolRequestUserInputOption).
+function pickOptionLabel(options: Array<{ label?: unknown }>): string | undefined {
+  const labels = options
+    .map((opt) => (typeof opt?.label === "string" ? opt.label.trim() : ""))
+    .filter((label): label is string => label.length > 0)
+  if (labels.length === 0) return undefined
+  const allowed = labels.filter((label) => !/^(cancel|reject|deny|no|stop|abort|decline)$/i.test(label))
+  if (allowed.length === 0) return labels[0]
+  const session = allowed.find((label) => /for this session|always/i.test(label))
+  return session ?? allowed[0]
+}
+
+// Build a positional answers array for a question interaction whose questions
+// carry inline options (codex 0.125 elicitations like mcp_tool_call_approval).
+// Returns undefined when ANY question is free-text — caller falls back to
+// AUTO_REPLY in that case.
+//
+// Server schema (engine/model.ts ReplyInteractionInput): `answers: string[][]`
+// where outer index is the question position and inner is the answer list for
+// that question. The server then hands `answers[i]` to the host's
+// externalAnswerContent which keys it on `event.questions[i].id` before
+// re-wrapping into codex's ToolRequestUserInputResponse shape — so the
+// benchmark MUST send the positional array, NOT a record.
+//
+// Earlier bench logs showed HTTP 400 from `/interaction/.../reply` because we
+// posted `{ answers: { [id]: ["label"] } }` which violated the `z.array(...)`
+// schema check (caught on _session-20260429-005130.out at 17:06:49).
+function pickOptionAnswers(item: { payload?: unknown }): string[][] | undefined {
+  const payload = item.payload && typeof item.payload === "object" ? (item.payload as { questions?: unknown }) : undefined
+  const questions = Array.isArray(payload?.questions) ? payload.questions : []
+  if (questions.length === 0) return undefined
+  const out: string[][] = []
+  for (const raw of questions) {
+    if (!raw || typeof raw !== "object") return undefined
+    const q = raw as { options?: unknown }
+    const options = Array.isArray(q.options) ? (q.options as Array<{ label?: unknown }>) : []
+    if (options.length === 0) return undefined  // free-text — caller falls back to AUTO_REPLY
+    const label = pickOptionLabel(options)
+    if (!label) return undefined
+    out.push([label])
+  }
+  return out.length > 0 ? out : undefined
+}
+
 async function settle(progress: any, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
   const pending = Array.isArray(progress?.pendingInteractions)
     ? progress.pendingInteractions.filter((item: { status: string }) => item.status === "pending")
     : []
   for (const item of pending) {
     if (item.type === "permission") {
+      // ReplyInteractionInput.autoReply is non-optional per engine/model.ts;
+      // omitting it was the silent cause of HTTP 400 on benchmark reply that
+      // turned every clarification gate into an abort.
       await api(`/interaction/${item.id}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reply: "always" }),
+        body: JSON.stringify({ autoReply: true, reply: "always" }),
       })
       continue
     }
+    // Question interactions with fixed options (e.g. codex 0.125 emits
+    // `mcp_tool_call_approval` elicitations with
+    // `options: [{label:"Allow"},{label:"Allow for this session"},{label:"Cancel"}]`).
+    // Free-text AUTO_REPLY falls outside the option set — codex treats
+    // unrecognized text as Cancel and the MCP tool never produces a
+    // tool_result, surfacing as `tool_call ... ended without a matching
+    // tool_result` in the build agent. Caught on _session-20260429-002531.out.
+    // Send a structured answers map so the server's interaction reply path
+    // forwards a real label back to codex.
+    const answers = pickOptionAnswers(item)
+    if (answers) {
+      await api(`/interaction/${item.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoReply: true, answers }),
+      })
+      continue
+    }
+    // Free-text question: server falls back to `answersFromMessage(message)`
+    // when `answers` isn't provided.
     await api(`/interaction/${item.id}/reply`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: AUTO_REPLY }),
+      body: JSON.stringify({ autoReply: true, message: AUTO_REPLY }),
     })
   }
   if (pending.length === 0) return progress
@@ -1339,14 +2024,20 @@ async function overlaySnapshot(page: Page) {
   return page.evaluate(() => {
     try {
       const state = window.eval("state")
-      const visibleTurns = [...document.querySelectorAll(".turn[data-role]")]
-        .map((node) => {
-          const element = node as HTMLElement
-          const role = element.dataset.role || ""
-          const text = element.querySelector(".msg-body")?.textContent?.trim()
-            || element.querySelector(".agent-card-label")?.textContent?.trim()
-            || element.querySelector(".executor-goal-label")?.textContent?.trim()
-            || element.textContent?.trim().slice(0, 200)
+      // Overlay conversation cards are rendered as `<article class="card" data-kind=...
+      // data-role=... data-stage=... data-depth="N">` via components/Card.tsx. Top-level
+      // items live at data-depth="0". Text for assistant/agent/goal/tool streams lives
+      // inside `.card__body` using `.msg-text` / `.reasoning-text` classes from CardParts
+      // and ReasoningPart. User-message cards carry data-role="user" and are excluded.
+      const visibleTurns = [...document.querySelectorAll<HTMLElement>('.card[data-depth="0"]')]
+        .map((element) => {
+          const role = element.dataset.role || element.dataset.kind || ""
+          const body = element.querySelector(".card__body")
+          const text = body?.querySelector(".msg-text")?.textContent?.trim()
+            || body?.querySelector(".reasoning-text")?.textContent?.trim()
+            || element.querySelector(".card__goal-desc")?.textContent?.trim()
+            || body?.textContent?.trim().slice(0, 200)
+            || element.querySelector(".card__title")?.textContent?.trim()
             || ""
           return { role, text }
         })
@@ -1358,6 +2049,8 @@ async function overlaySnapshot(page: Page) {
         workspaceDirectory: localStorage.getItem("oc_workspace_directory") || "",
         workspaceTaskID: localStorage.getItem("oc_workspace_task") || "",
       }
+      const firstText = (sel: string) =>
+        document.querySelector(sel)?.textContent?.trim() || ""
       return {
         directory: state.directory || "",
         savedDirectory: state.savedDirectory || "",
@@ -1368,12 +2061,15 @@ async function overlaySnapshot(page: Page) {
           ? state.tasks.map((item: { task?: { id?: string } }) => item?.task?.id || "").filter(Boolean).slice(0, 5)
           : [],
         taskList: document.querySelector("#taskListPanel")?.textContent?.trim() || "",
-        reasoning: document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent?.trim()
-          || document.querySelector('.turn[data-role="agent-card"] .reasoning-text')?.textContent?.trim() || "",
-        assistantText: document.querySelector('.turn[data-role="assistant"] .msg-text')?.textContent?.trim()
-          || document.querySelector('.turn[data-role="agent-card"] .msg-text')?.textContent?.trim()
-          || document.querySelector('.turn[data-role="agent-card"]')?.textContent?.trim()
-          || document.querySelector('.turn[data-role="executor-goal-group"]')?.textContent?.trim() || "",
+        reasoning: firstText('.card[data-role="assistant"] .reasoning-text')
+          || firstText('.card[data-kind="agent"] .reasoning-text')
+          || firstText('.card[data-kind="goal"] .reasoning-text')
+          || firstText('.card[data-depth="0"] .reasoning-text'),
+        assistantText: firstText('.card[data-role="assistant"] .msg-text')
+          || firstText('.card[data-kind="agent"] .msg-text')
+          || firstText('.card[data-kind="goal"] .msg-text')
+          || firstText('.card[data-kind="tool"] .msg-text')
+          || firstText('.card[data-depth="0"]:not([data-role="user"]) .card__body'),
         liveRole: liveTurn.role,
         liveText: liveTurn.text,
         visibleTurns: visibleTurns.slice(-5),
@@ -1424,8 +2120,8 @@ function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string)
     map[type] = (map[type] ?? 0) + 1
     return map
   }, {})
-  // Include both legacy stage names (spec, planner) and new agent names (task, decompose, eval)
-  const stages = ["spec", "planner", "evaluator", "task", "decompose", "eval"].flatMap((stage) => {
+  // Include both legacy stage names (spec, planner) and new agent names (task, decompose, eval, architect)
+  const stages = ["spec", "planner", "evaluator", "task", "decompose", "eval", "architect"].flatMap((stage) => {
     const list = agents.filter((item) => item.stage === stage)
     if (list.length === 0) return []
     const toolCalls = list

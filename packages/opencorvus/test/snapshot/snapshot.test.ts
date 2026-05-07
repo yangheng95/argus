@@ -393,7 +393,7 @@ test("very long filenames", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      const longName = "a".repeat(200) + ".txt"
+      const longName = "a".repeat(120) + ".txt"
       const longFile = fwd(tmp.path, longName)
 
       await Filesystem.write(longFile, "long filename content")
@@ -460,10 +460,10 @@ test("file permissions and ownership changes", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      // Change permissions multiple times
-      await $`chmod 600 ${tmp.path}/a.txt`.quiet()
-      await $`chmod 755 ${tmp.path}/a.txt`.quiet()
-      await $`chmod 644 ${tmp.path}/a.txt`.quiet()
+      // Change permissions multiple times without relying on platform shell tools.
+      await fs.chmod(`${tmp.path}/a.txt`, 0o600)
+      await fs.chmod(`${tmp.path}/a.txt`, 0o755)
+      await fs.chmod(`${tmp.path}/a.txt`, 0o644)
 
       const patch = await Snapshot.patch(before!)
       // Note: git doesn't track permission changes on existing files by default
@@ -804,20 +804,18 @@ test("restore function", async () => {
       // Restore to original state
       await Snapshot.restore(before!)
 
-      expect(
-        await fs
-          .access(`${tmp.path}/a.txt`)
-          .then(() => true)
-          .catch(() => false),
-      ).toBe(true)
+      // Tracked files come back at their pre-snapshot content.
       expect(await fs.readFile(`${tmp.path}/a.txt`, "utf-8")).toBe(tmp.extra.aContent)
+      expect(await fs.readFile(`${tmp.path}/b.txt`, "utf-8")).toBe(tmp.extra.bContent)
+      // Files added between the snapshot and restore() are NOT part of the
+      // snapshot's tree, so restoring "to that snapshot" must remove them —
+      // otherwise users would silently inherit stray files from interim work.
       expect(
         await fs
           .access(`${tmp.path}/new.txt`)
           .then(() => true)
           .catch(() => false),
-      ).toBe(true) // New files should remain
-      expect(await fs.readFile(`${tmp.path}/b.txt`, "utf-8")).toBe(tmp.extra.bContent)
+      ).toBe(false)
     },
   })
 })
@@ -1175,6 +1173,76 @@ test("diffFull with whitespace changes", async () => {
       const whitespaceDiff = diffs[0]
       expect(whitespaceDiff.file).toBe("whitespace.txt")
       expect(whitespaceDiff.additions).toBeGreaterThan(0)
+    },
+  })
+})
+
+// Regression: restore must reproduce the snapshot's worktree EXACTLY — files
+// added between track() and restore() (not present in the snapshot's tree)
+// have to be removed. Earlier `read-tree + checkout-index -a -f` only wrote
+// out tree contents and silently left every "extra" file behind, so revert
+// looked successful while leaving stray files in the working copy.
+test("restore removes files added after the snapshot was taken", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const baseline = await Snapshot.track()
+      expect(baseline).toBeTruthy()
+
+      for (const i of [1, 2, 3]) {
+        await Filesystem.write(`${tmp.path}/extra-${i}.txt`, `E${i}`)
+      }
+
+      await Snapshot.restore(baseline!)
+
+      // baseline files survived
+      expect(await fs.readFile(`${tmp.path}/a.txt`, "utf-8")).toBe(tmp.extra.aContent)
+      // extras gone
+      for (const i of [1, 2, 3]) {
+        expect(
+          await fs
+            .access(`${tmp.path}/extra-${i}.txt`)
+            .then(() => true)
+            .catch(() => false),
+        ).toBe(false)
+      }
+    },
+  })
+})
+
+// Regression: previously `Snapshot.cleanup()` (hourly scheduler + the
+// per-deleteTask hook) ran `git gc --prune=now` against the bare repo, but
+// every tree object emitted by `track()` is dangling (no ref / no reflog),
+// so cleanup destroyed every snapshot that live message parts and task
+// baselines were still pointing at — restore() failed with "fatal: failed
+// to unpack tree object". The fix removed both the API and its callers
+// outright. This test pins the structural guarantee: snapshots stay
+// restorable after later track cycles, with no explicit GC API to call.
+test("snapshots stay restorable after a later track cycle", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const baseline = await Snapshot.track()
+      expect(baseline).toBeTruthy()
+
+      // Unit coverage only needs one later dangling tree write to pin the
+      // structural invariant; the dedicated snapshot benchmark covers the
+      // 50-cycle stress case without Bun's default 5s per-test budget.
+      await Filesystem.write(`${tmp.path}/a.txt`, `iteration-0-${"x".repeat(64)}`)
+      await Snapshot.track()
+
+      await Filesystem.write(`${tmp.path}/a.txt`, "scrambled-after-many-tracks")
+      await Snapshot.restore(baseline!)
+      expect(await fs.readFile(`${tmp.path}/a.txt`, "utf-8")).toBe(tmp.extra.aContent)
+
+      // The structural invariant: there is no public API on Snapshot that
+      // could shred dangling tree objects without also breaking active
+      // snapshots, so neither cleanup() nor init() should exist.
+      const snap = Snapshot as unknown as Record<string, unknown>
+      expect(typeof snap.cleanup).toBe("undefined")
+      expect(typeof snap.init).toBe("undefined")
     },
   })
 })

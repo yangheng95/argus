@@ -1,0 +1,53 @@
+---
+title: 模型
+description: 在 OpenCorvus 中选择 LLM 模型、models.dev 集成与按 agent 覆盖。
+---
+
+OpenCorvus 在三种场景选模型，三者可独立配置。底层 provider 列表见 [Providers](/docs/zh-cn/providers/)。
+
+## 三个旋钮
+
+| 场景 | 配置位置 |
+|---|---|
+| 默认执行模型 | [config](/docs/zh-cn/config/) 的 `model` 字段 |
+| 按 agent 模型 | `agent.<name>.model`（见 `packages/opencorvus/src/config/config.ts:1053-1067`、`1191`、`1232`、`1239`、`1246`） |
+| Vision / 截图理解 | `OPENCORVUS_VISION_MODEL` 环境变量 |
+
+规划/执行分模型示例：
+
+```jsonc
+{
+  "model": "alibaba-cn/qwen3.5-plus",
+  "agent": {
+    "requirements":   { "model": "anthropic/claude-sonnet-4-6" },
+    "planner":        { "model": "anthropic/claude-sonnet-4-6" },
+    "design-analyst": { "model": "anthropic/claude-sonnet-4-6" }
+  }
+}
+```
+
+按 agent 的 `model` 由 `Agent.state()` 读取（`packages/opencorvus/src/agent/agent.ts:480`，`Provider.parseModel(value.model)`）。同名 agent 的 step / skill 旋钮另在 `assistant.<name>` 下——见 [Agents](/docs/zh-cn/agents/#agent-预算)。
+
+## models.dev
+
+OpenCorvus 在打包时拉取 [models.dev](https://models.dev) 快照（`packages/opencorvus/src/provider/models-snapshot.ts`），离线即可解析模型名、能力、价格。CI release 管线会刷新该快照。
+
+构建时可通过 `MODELS_DEV_API_JSON` 覆盖快照路径（见 `packages/opencorvus/script/`）。
+
+## 列出可用模型
+
+```bash
+opencorvus models --list
+```
+
+只列出当前已配置 provider 凭证的模型。env 中禁用某 provider（或 config 的 `disabled_providers`）会从列表移除其模型。
+
+## 模型变体
+
+部分 provider 暴露模型变体（如长上下文 / 标准）。TUI 模型选择器与 ACP 的 `unstable_setSessionModel` 直接支持变体。
+
+## 选型建议
+
+- **Reasoning 模型**（Claude reasoning、o-系列、qwq）适合规划，但**必须用 `streamText` + `toolChoice: "auto"`**，详见 [Providers](/docs/zh-cn/providers/)。
+- **便宜的快模型**通常足以执行；evaluator 会捕获回归。
+- **Vision** — 把 `OPENCORVUS_VISION_MODEL` 设为多模态模型（如 `anthropic/claude-sonnet-4-6`），仅在有截图/图像输入时触发。

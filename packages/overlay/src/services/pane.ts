@@ -31,7 +31,7 @@ export interface PaneCallbacks {
   /**
  * Called whenever the user finishes a drag or widths are applied
  * programmatically. Persist the new widths here (e.g. save to store /
- * localStorage).
+ * the active host settings source).
  */
   onWidthsChanged: (
     sidebarWidth: number | null,
@@ -83,7 +83,7 @@ export function defaultRailWidth(): number {
     window.visualViewport?.width ??
     window.innerWidth ??
     900;
-  return clampNumber(panelWidth * 0.24, 240 * scale, 420 * scale);
+  return clampNumber(panelWidth * 0.22, 220 * scale, 380 * scale);
 }
 
 /**
@@ -95,6 +95,20 @@ export function currentUIScale(): number {
     Number.parseFloat(
       getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"),
     ) || 1
+  );
+}
+
+function paneWidthStyleScope(): HTMLElement {
+  return document.body || document.documentElement;
+}
+
+function setPaneWidthProperty(name: string, value: number): void {
+  paneWidthStyleScope().style.setProperty(name, `${value}px`);
+}
+
+function readPaneWidthProperty(name: string): number {
+  return Number.parseFloat(
+    getComputedStyle(paneWidthStyleScope()).getPropertyValue(name),
   );
 }
 
@@ -111,10 +125,9 @@ export function resolvedPaneWidths(state: PaneState): {
     window.visualViewport?.width ??
     window.innerWidth ??
     900;
-  const railMin = 180 * scale;
-  const railMax = 520 * scale;
-  const chatPreferred = 520 * scale;
-  const chatMin = 420 * scale;
+  const railMin = 120 * scale;
+  const chatPreferred = 500 * scale;
+  const chatMin = 300 * scale;
   const collapsedSidebar = 62 * scale;
 
   const leftHandle = state.sidebarCollapsed
@@ -124,6 +137,8 @@ export function resolvedPaneWidths(state: PaneState): {
     document.getElementById("rightPaneResizer"),
   );
 
+  const total = panelWidth - leftHandle - rightHandle;
+  const railMax = Math.max(railMin, total - chatMin - railMin);
   let sidebar = clampNumber(
     state.sidebarWidth ?? defaultRailWidth(),
     railMin,
@@ -134,7 +149,6 @@ export function resolvedPaneWidths(state: PaneState): {
     railMin,
     railMax,
   );
-  const total = panelWidth - leftHandle - rightHandle;
   let actualSidebar = state.sidebarCollapsed ? collapsedSidebar : sidebar;
   const sidebarFloor = state.sidebarCollapsed ? collapsedSidebar : railMin;
 
@@ -193,14 +207,8 @@ export function resolvedPaneWidths(state: PaneState): {
 export function renderPaneLayout(state: PaneState): void {
   if (typeof document === "undefined") return;
   const widths = resolvedPaneWidths(state);
-  document.documentElement.style.setProperty(
-    "--ui-sidebar-width",
-    `${widths.sidebar}px`,
-  );
-  document.documentElement.style.setProperty(
-    "--ui-sections-width",
-    `${widths.sections}px`,
-  );
+  setPaneWidthProperty("--ui-sidebar-width", widths.sidebar);
+  setPaneWidthProperty("--ui-sections-width", widths.sections);
 }
 
 /**
@@ -237,9 +245,8 @@ function resizePane(
   callbacks: PaneCallbacks,
 ): void {
   const scale = currentUIScale();
-  const railMin = 180 * scale;
-  const railMax = 520 * scale;
-  const chatMin = 420 * scale;
+  const railMin = 120 * scale;
+  const chatMin = 300 * scale;
   const state = callbacks.getState();
 
   if (side === "left") {
@@ -258,7 +265,7 @@ function resizePane(
       rect.width - sections - leftHandle - rightHandle - chatMin,
     );
     const newSidebarWidth = Math.round(
-      clampNumber(clientX - rect.left, railMin, Math.min(railMax, max)),
+      clampNumber(clientX - rect.left, railMin, max),
     );
     renderPaneLayout({ ...state, sidebarWidth: newSidebarWidth });
     return;
@@ -273,7 +280,7 @@ function resizePane(
   );
   const max = Math.max(railMin, rect.width - rightHandle - chatMin);
   const newSectionsWidth = Math.round(
-    clampNumber(rect.right - clientX, railMin, Math.min(railMax, max)),
+    clampNumber(rect.right - clientX, railMin, max),
   );
   renderPaneLayout({ ...state, sectionsWidth: newSectionsWidth });
 }
@@ -297,16 +304,8 @@ async function stopPaneResize(callbacks: PaneCallbacks): Promise<void> {
   delete document.body.dataset.resizing;
 
  // Compute the final persisted values from the current CSS
-  const sidebarPx = Number.parseFloat(
-    getComputedStyle(document.documentElement).getPropertyValue(
-      "--ui-sidebar-width",
-    ),
-  );
-  const sectionsPx = Number.parseFloat(
-    getComputedStyle(document.documentElement).getPropertyValue(
-      "--ui-sections-width",
-    ),
-  );
+  const sidebarPx = readPaneWidthProperty("--ui-sidebar-width");
+  const sectionsPx = readPaneWidthProperty("--ui-sections-width");
 
   await callbacks.onWidthsChanged(
     Number.isFinite(sidebarPx) ? Math.round(sidebarPx) : null,

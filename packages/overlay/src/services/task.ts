@@ -8,22 +8,39 @@
 // This module owns no render-side effects. Callers are responsible for
 // driving UI updates through reactive Solid stores.
 
-import { apiJson, apiUrl, apiHeaders } from "./api";
+import { apiJson, ApiError } from "./api";
+import { getHostTransport } from "./host-transport";
 import { startSSE, stopSSE } from "./sse";
+import { showAppDialog } from "./app-dialog";
+import { initGitCurrent } from "../utils/git";
+import { t } from "../utils/i18n";
 import {
-  syncTask,
   clearMessages,
-  clearAgentEvents,
   setSelectedTaskID,
+  abortChatRequest,
+  setChatAttachments,
 } from "../store/messages";
 import {
-  loadBoard,
   loadTasks,
+  loadBoard,
+  clearBoard,
   boardStore,
   setBoardStore,
+  setOrphanedSelectionHandler,
+  taskByID,
 } from "../store/board";
-import { settingsStore } from "../store/settings";
+import {
+  settingsStore,
+  setSettingsStore,
+  saveSettings,
+  sanitizeExecutor,
+  workspaceRestoreDirectory,
+} from "../store/settings";
 import { appStore, setAppStore } from "../store/app";
+import { taskScopedPath } from "./task-path";
+import { applyDirectory } from "./workspace";
+import { resetWriter } from "./tree-writer";
+import { cancelConversationReplay, hydrateTaskConversation } from "./conversation";
 
 // ── Types ──
 
@@ -53,12 +70,23 @@ export interface CreateTaskOptions {
   attachments?: Attachment[];
   metadata?: Record<string, unknown>;
   signal?: AbortSignal;
+  budget?: {
+    maxRuns?: number;
+    maxExecutorGroups?: number;
+  };
 }
 
 export interface SelectTaskOptions {
 }
 
 // ── Helpers ──
+
+function taskPath(taskID: string, suffix = ""): string {
+  const item = taskByID(taskID);
+  const directory =
+    typeof item?.task?.directory === "string" ? item.task.directory : "";
+  return taskScopedPath(taskID, directory, suffix);
+}
 
 /**
  * Default chat request timeout: 10 minutes.
@@ -105,34 +133,6 @@ function relayAbort(
   return () => source.removeEventListener("abort", abort);
 }
 
-async function readWithAbort(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  signal: AbortSignal,
-): Promise<ReadableStreamReadResult<Uint8Array>> {
-  if (signal.aborted) {
-    await reader.cancel(signal.reason).catch(() => undefined);
-    throw signal.reason ?? new DOMException("Aborted", "AbortError");
-  }
-  return new Promise((resolve, reject) => {
-    const abort = () => {
-      signal.removeEventListener("abort", abort);
-      void reader.cancel(signal.reason).catch(() => undefined);
-      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    reader.read().then(
-      (value) => {
-        signal.removeEventListener("abort", abort);
-        resolve(value);
-      },
-      (error) => {
-        signal.removeEventListener("abort", abort);
-        reject(error);
-      },
-    );
-  });
-}
-
 // ── Panel message request body builder ──
 
 export function panelRequestBody(
@@ -140,7 +140,7 @@ export function panelRequestBody(
   metadata: Record<string, unknown> = {},
   requestID: string = "",
   attachments: Attachment[] = [],
-  executor: string = "opencode",
+  executor: string = "mirrorcode",
 ): Record<string, unknown> {
   const taskID = boardStore.selectedTaskID || undefined;
   const body: Record<string, unknown> = {
@@ -148,7 +148,7 @@ export function panelRequestBody(
     text,
     time_created: Date.now(),
     taskID,
-    executor,
+    executor: sanitizeExecutor(executor),
     request_id: requestID || undefined,
     allow_create: true,
     allow_session_mutation: false,
@@ -175,50 +175,110 @@ export function panelRequestBody(
  * start SSE for the new task.
  * Pass an empty string to deselect all tasks.
  */
+// Task IDs are opencorvus identifiers: a lowercase prefix, an underscore, and
+// a ULID/base32 body, optionally with hyphens (requestIDs). Anything outside
+// [A-Za-z0-9_-] (path separators, whitespace, colons, etc.) indicates the
+// caller passed a corrupted value — for example a gateway message metadata
+// field polluted with a filesystem path. Fail loudly so the call stack points
+// directly at the source instead of triggering silent 400-request floods.
+const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
 export async function selectTask(
   taskID: string,
   options: SelectTaskOptions = {},
 ): Promise<void> {
   const nextTaskID = taskID || "";
 
- // Guard: skip if already on this task and board is loaded
-  if (nextTaskID === boardStore.selectedTaskID && boardStore.board) {
+  if (nextTaskID && !TASK_ID_PATTERN.test(nextTaskID)) {
+    throw new Error(
+      `selectTask: invalid taskID ${JSON.stringify(nextTaskID)} — expected [A-Za-z0-9_-]{1,128}`,
+    );
+  }
+
+  // Guard: skip if already on this task. Board-loaded OR switch-in-flight
+  // both count as "nothing to do" — without the taskSwitching check a user
+  // clicking the same task before the first load finishes would interrupt
+  // and restart their own load.
+  if (
+    nextTaskID === boardStore.selectedTaskID &&
+    (boardStore.board || boardStore.taskSwitching)
+  ) {
     return;
   }
 
- // Stop any running SSE stream
+  // ── Synchronous phase ────────────────────────────────────────────────
+  // Everything the UI needs to feel "switched instantly" happens here:
+  // cancel in-flight work, wipe task-scoped stores, flip the selected ID,
+  // flip taskSwitching=true so the top progress bar appears. Any async work
+  // is deferred to the next phase under epoch guard so rapid-fire clicks
+  // don't trample each other.
+  abortChatRequest();
+  cancelConversationReplay();
+  setChatAttachments([]);
   stopSSE();
-
- // Clear board and message state immediately
-  setBoardStore("board", null);
+  clearBoard();
   clearMessages();
-  clearAgentEvents();
-  // Reset budget dirty flag so the new task's budget values populate correctly.
-  // Without this, stale budgetDirty=true from a previous task edit would
-  // prevent setBudgetInputs from running inside renderBudget.
-  if (appStore.budgetDirty) {
-    setAppStore("budgetDirty", false);
-  }
+  // Drop cardTreeStore + the writer's internal session/message/integrity
+  // indices so the conversation panel doesn't carry stale cards into the
+  // next task. resetWriter() was documented for task-switch use but had no
+  // production call site — the old pipeline's derivation from messageStore
+  // masked the leak until the new writer became source-of-truth.
+  resetWriter();
   setSelectedTaskID(nextTaskID);
   setBoardStore("selectedTaskID", nextTaskID);
 
   if (!nextTaskID) {
- // Deselecting — nothing further to load
+    // Deselection has no async work; make sure any lingering progress UI
+    // from a superseded switch is cleared.
+    setBoardStore("taskSwitching", false);
+    // Clear persisted workspace identity so next launch does not resume a
+    // task the user just deselected.
+    setSettingsStore("workspaceTaskID", "");
+    setSettingsStore("workspaceDirectory", "");
+    saveSettings();
     return;
   }
 
- // Load board + transcript in parallel (best-effort; failures are logged)
-  await Promise.all([
-    loadBoard({ sync: true }).catch((e) =>
-      console.error("[selectTask] loadBoard failed:", e),
-    ),
-    syncTask(nextTaskID).catch((e) =>
-      console.error("[selectTask] syncTask failed:", e),
-    ),
-  ]);
+  const epoch = boardStore.selectEpoch + 1;
+  setBoardStore("selectEpoch", epoch);
+  setBoardStore("taskSwitching", true);
 
- // Start SSE for the newly selected task
-  startSSE(nextTaskID);
+  // ── Async phase ──────────────────────────────────────────────────────
+  const stale = () => boardStore.selectEpoch !== epoch;
+
+  try {
+    // Cross-project switch: apply the new directory so every project-scoped
+    // API (config, permissions, meta, executors) targets the correct
+    // backend Instance before we load the new task's board.
+    const taskItem = taskByID(nextTaskID);
+    const taskDirectory =
+      typeof taskItem?.task?.directory === "string" ? taskItem.task.directory : "";
+    if (taskDirectory && taskDirectory !== settingsStore.directory) {
+      await applyDirectory(taskDirectory, { save: true });
+      if (stale()) return;
+    }
+
+    const lastSequence = await hydrateTaskConversation(nextTaskID);
+    if (stale()) return;
+
+    startSSE(nextTaskID, lastSequence);
+
+    // Persist the active task so initApp -> restoreInitialWorkspace() can
+    // resume it on the next launch. Without this write the localStorage key
+    // stays empty and the overlay always boots into an empty workspace.
+    const restoreDir = workspaceRestoreDirectory(
+      taskDirectory || settingsStore.directory || "",
+    );
+    setSettingsStore("workspaceTaskID", nextTaskID);
+    setSettingsStore("workspaceDirectory", restoreDir);
+    saveSettings();
+  } finally {
+    // Only clear the progress flag if we are still the active selection.
+    // A newer selectTask() call has taken over and will manage its own flag.
+    if (boardStore.selectEpoch === epoch) {
+      setBoardStore("taskSwitching", false);
+    }
+  }
 }
 
 // ── Public: deleteTask ──
@@ -231,7 +291,7 @@ export async function selectTask(
 export async function deleteTask(taskID: string): Promise<boolean> {
   if (!taskID) return false;
   try {
-    await apiJson(`task/${encodeURIComponent(taskID)}`, {
+    await apiJson(taskPath(taskID), {
       method: "DELETE",
     });
     if (boardStore.selectedTaskID === taskID) {
@@ -263,8 +323,7 @@ export async function submitMessage(
   const timeoutMs = chatRequestTimeoutMs();
   const controller = new AbortController();
   const cleanupRelay = relayAbort(options.signal, controller);
-  const executor =
-    settingsStore.executor ?? "opencode";
+  const executor = sanitizeExecutor(settingsStore.executor);
   let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
 
   const markActivity = () => {
@@ -274,119 +333,153 @@ export async function submitMessage(
     }, timeoutMs);
   };
 
-  const body = JSON.stringify(
-    panelRequestBody(
-      text,
-      options.metadata ?? {},
-      requestID,
-      attachments,
-      executor,
-    ),
+  const requestPayload = panelRequestBody(
+    text,
+    options.metadata ?? {},
+    requestID,
+    attachments,
+    executor,
   );
 
   markActivity();
 
-  try {
-    const res = await fetch(apiUrl("panel/message/stream"), {
-      method: "POST",
-      headers: { ...apiHeaders(), "Content-Type": "application/json" },
-      body,
-      signal: controller.signal,
-    });
-
-    markActivity();
-
-    if (!res.ok || !res.body) {
-      throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
-    }
-    await options.onOpen?.();
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
+  // Route through HostTransport.openStream so this POST-stream pattern
+  // works identically under Tauri (fetch + ReadableStream + manual
+  // SSE block parsing in tauri-transport) and under VS Code (M4
+  // postMessage bridge with sidecar-side SSE forwarding). Per-event
+  // activity tracking replaces the historical per-chunk tracking;
+  // events arrive frequently enough that the granularity loss is
+  // imperceptible while removing reader-level abort plumbing.
+  return new Promise<unknown>((resolve, reject) => {
     let result: unknown = null;
+    let settled = false;
 
-    const consume = async (chunk: string, flush = false) => {
-      buf += chunk;
-      const blocks = buf.split(/\r?\n\r?\n/);
-      if (!flush) {
-        buf = blocks.pop() || "";
-      } else {
-        buf = "";
-      }
-      for (const block of blocks) {
-        const data = block
-          .split(/\r?\n/)
-          .filter((line) => line.startsWith("data:"))
-          .map((line) => line.slice(5).trim())
-          .join("\n");
-        if (!data) continue;
-        try {
-          const ev = JSON.parse(data);
+    const handle = getHostTransport().openStream(
+      {
+        path: "panel/message/stream",
+        method: "POST",
+        body: { kind: "json", value: requestPayload },
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+      },
+      {
+        onOpen: () => {
           markActivity();
-          await options.onEvent?.(ev);
-          if (ev.type === "done") {
-            result = ev.result;
+          void options.onOpen?.();
+        },
+        onEvent: (data) => {
+          let ev: any;
+          try {
+            ev = JSON.parse(data);
+          } catch {
+            return; // malformed SSE event — skip
           }
-        } catch {
- // malformed SSE event — skip
-        }
-      }
-    };
+          markActivity();
+          void options.onEvent?.(ev);
+          if (ev?.type === "done") result = ev.result;
+        },
+        onError: (err) => {
+          if (settled) return;
+          settled = true;
+          if (inactivityTimer) clearTimeout(inactivityTimer);
+          cleanupRelay();
+          reject(err);
+        },
+        onClose: (_reason) => {
+          if (settled) return;
+          settled = true;
+          if (inactivityTimer) clearTimeout(inactivityTimer);
+          cleanupRelay();
+          if (result !== null && result !== undefined) {
+            resolve(result);
+          } else {
+            reject(new Error("Panel stream ended without a final result"));
+          }
+        },
+      },
+    );
 
-    while (true) {
-      const { done, value } = await readWithAbort(reader, controller.signal);
-      if (done) {
-        await consume(decoder.decode(), true);
-        break;
-      }
-      markActivity();
-      await consume(decoder.decode(value, { stream: true }));
+    // Mirror prior abort behaviour: caller-side abort closes the stream.
+    const abortListener = () => handle.close();
+    if (controller.signal.aborted) {
+      handle.close();
+    } else {
+      controller.signal.addEventListener("abort", abortListener, { once: true });
     }
-
-    if (!result) {
-      throw new Error("Panel stream ended without a final result");
-    }
-
-    return result;
-  } finally {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    cleanupRelay();
-  }
+  });
 }
 
 // ── Public: createTask ──
+
+/**
+ * Server-side: W2-V32 (commit aa14f20e7) removed every auto git-init in the
+ * project bootstrap, so task creation throws WorktreeNotGitError when the
+ * active directory is not a git repo. Detect that single error and offer the
+ * user the explicit init gesture, then retry once. Any other failure (or a
+ * declined prompt) propagates to the caller so the existing handlers in
+ * panelMessage / submitChat surface it normally.
+ */
+function isWorktreeNotGitError(err: unknown): err is ApiError {
+  if (!(err instanceof ApiError)) return false;
+  if (err.status !== 412) return false;
+  const body = err.body as { name?: unknown } | null;
+  return !!body && typeof body === "object" && body.name === "WorktreeNotGitError";
+}
+
+async function offerInitGitAndRetry(): Promise<boolean> {
+  const result = await showAppDialog({
+    title: t("git.init"),
+    message: t("git.init_required"),
+    cancel: true,
+    okLabel: t("common.ok"),
+  });
+  if (!result.confirmed) return false;
+  return await initGitCurrent({ notify: false });
+}
 
 /**
  * Create a new task via direct API. Returns the task_id immediately.
  * No LLM round-trip — the backend persists the task in ~10ms.
  */
 export async function createTask(options: CreateTaskOptions): Promise<string> {
-  const { text, attachments = [], metadata = {}, signal } = options;
+  const { text, attachments = [], metadata = {}, signal, budget } = options;
   if (!text) throw new Error("createTask: text is required");
   const requestID = crypto.randomUUID();
-  const executor = settingsStore.executor ?? "opencode";
-  const result = (await apiJson("task", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      request: text,
-      executor,
-      requestID,
-      metadata,
-      source: "panel",
-      ...(attachments.length > 0
-        ? {
-            attachments: attachments.map((att) => ({
-              mime: att.mime,
-              url: att.url,
-              ...(att.filename ? { filename: att.filename } : {}),
-            })),
-          }
-        : {}),
-    }),
-    signal,
-  })) as any;
+  const executor = sanitizeExecutor(settingsStore.executor);
+  const body = JSON.stringify({
+    request: text,
+    executor,
+    requestID,
+    metadata,
+    source: "panel",
+    ...(budget ? { budget } : {}),
+    ...(attachments.length > 0
+      ? {
+          attachments: attachments.map((att) => ({
+            mime: att.mime,
+            // TaskAttachment schema expects pure base64 (no data URL prefix)
+            data: att.url.includes(",") ? att.url.split(",")[1] : att.url,
+            ...(att.filename ? { filename: att.filename } : {}),
+          })),
+        }
+      : {}),
+  });
+  const post = () =>
+    apiJson("task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      signal,
+    });
+  let result: any;
+  try {
+    result = await post();
+  } catch (err) {
+    if (!isWorktreeNotGitError(err)) throw err;
+    const initialized = await offerInitGitAndRetry();
+    if (!initialized) throw err;
+    result = await post();
+  }
   return typeof result?.task_id === "string" ? result.task_id : "";
 }
 
@@ -397,7 +490,7 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
  */
 export async function retryTask(taskID: string): Promise<void> {
   if (!taskID) return;
-  await apiJson(`task/${encodeURIComponent(taskID)}/retry`, {
+  await apiJson(taskPath(taskID, "/retry"), {
     method: "POST",
   });
   await loadBoard();
@@ -410,10 +503,52 @@ export async function retryTask(taskID: string): Promise<void> {
  */
 export async function replanTask(taskID: string): Promise<void> {
   if (!taskID) return;
-  await apiJson(`task/${encodeURIComponent(taskID)}/replan`, {
+  await apiJson(taskPath(taskID, "/replan"), {
     method: "POST",
   });
   await loadBoard();
+}
+
+// ── Public: replyToAgentSession ──
+
+/**
+ * Append scoped human input directly to a task child-agent session. This does
+ * not route through the task-level panel message endpoint.
+ */
+export async function replyToAgentSession(
+  taskID: string,
+  sessionID: string,
+  message: string,
+): Promise<void> {
+  const text = message.trim();
+  if (!taskID || !sessionID || !text) return;
+  await apiJson(
+    taskPath(taskID, `/session/${encodeURIComponent(sessionID)}/reply`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text }),
+    },
+  );
+}
+
+// ── Public: cancelAgentSession ──
+
+/**
+ * Cancel a task child-agent session without changing global orchestration.
+ * Running tool chips call this too because tools execute inside the session.
+ */
+export async function cancelAgentSession(
+  taskID: string,
+  sessionID: string,
+): Promise<void> {
+  if (!taskID || !sessionID) return;
+  await apiJson(
+    taskPath(taskID, `/session/${encodeURIComponent(sessionID)}/cancel`),
+    {
+      method: "POST",
+    },
+  );
 }
 
 // ── Public: cancelTask ──
@@ -423,7 +558,7 @@ export async function replanTask(taskID: string): Promise<void> {
  */
 export async function cancelTask(taskID: string): Promise<void> {
   if (!taskID) return;
-  await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+  await apiJson(taskPath(taskID, "/cancel"), {
     method: "POST",
   });
   await loadBoard();
@@ -438,7 +573,7 @@ export async function cancelTask(taskID: string): Promise<void> {
 export async function interruptTask(taskID: string): Promise<boolean> {
   if (!taskID) return false;
   try {
-    await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+    await apiJson(taskPath(taskID, "/cancel"), {
       method: "POST",
     });
     await loadBoard();
@@ -449,3 +584,13 @@ export async function interruptTask(taskID: string): Promise<boolean> {
   }
 }
 
+// ── Orphan-selection reconciliation ──
+// board.ts's applyTasks() is the single choke point for tasks-list writes.
+// When it detects that `selectedTaskID` points to a task no longer present in
+// the list (and not in pendingTasks), it calls this handler to fully reset
+// the selection — driving the same cleanup path (clearBoard / clearMessages /
+// stopSSE) that every intentional deselect uses. Registered at module load so
+// it's in place before any tasks fetch completes.
+setOrphanedSelectionHandler(() => {
+  void selectTask("");
+});

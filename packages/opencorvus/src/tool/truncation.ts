@@ -42,21 +42,53 @@ export namespace Truncate {
     }
   }
 
-  function hasTaskTool(agent?: Agent.Info): boolean {
+  function hasTool(agent: Agent.Info | undefined, tool: string): boolean {
     if (!agent?.permission) return false
-    const rule = PermissionNext.evaluate("task", "*", agent.permission)
+    const rule = PermissionNext.evaluate(tool, "*", agent.permission)
     return rule.action !== "deny"
   }
 
+  function hasRecoveryPath(agent?: Agent.Info): { ok: true; via: "task" | "read+search_code" } | { ok: false } {
+    if (!agent) return { ok: false }
+    if (hasTool(agent, "task")) return { ok: true, via: "task" }
+    if (hasTool(agent, "read") && hasTool(agent, "search_code")) return { ok: true, via: "read+search_code" }
+    return { ok: false }
+  }
+
+  /**
+   * Tool output too large for the prompt is shipped to disk and replaced with
+   * a preview + recovery hint. The recovery hint is an active contract: the
+   * receiving agent MUST be able to read the saved file (via task delegation
+  * or read+search_code). When the agent has neither path we throw rather than
+   * silently truncate — silent truncation here is a CLAUDE.md rule #1
+   * violation (information loss with no recovery).
+   *
+   * `direction` defaults to "tail" because the most useful piece of a long
+   * tool output (build log, test failure, error trace) is almost always at
+   * the END. Callers that genuinely want the head can override.
+   */
   export async function output(text: string, options: Options = {}, agent?: Agent.Info): Promise<Result> {
     const maxLines = options.maxLines ?? MAX_LINES
     const maxBytes = options.maxBytes ?? MAX_BYTES
-    const direction = options.direction ?? "head"
+    const direction = options.direction ?? "tail"
     const lines = text.split("\n")
     const totalBytes = Buffer.byteLength(text, "utf-8")
 
     if (lines.length <= maxLines && totalBytes <= maxBytes) {
       return { content: text, truncated: false }
+    }
+
+    const recovery = hasRecoveryPath(agent)
+    if (!recovery.ok) {
+      // No recovery path → truncating would lose information silently.
+      // Surface the failure so the caller can react (split the request,
+      // route through an agent that owns read/search_code, or fail the task).
+      throw new Error(
+        `Truncate.output: tool result is ${totalBytes} bytes / ${lines.length} lines ` +
+        `(limit ${maxBytes}/${maxLines}) and the calling agent ` +
+        `${agent?.name ?? "(unknown)"} has neither the 'task' nor 'read'+'search_code' tools to ` +
+        `re-read a saved copy. Truncating here would silently lose data — denying the call instead.`,
+      )
     }
 
     const out: string[] = []
@@ -94,9 +126,9 @@ export namespace Truncate {
     const filepath = path.join(DIR, id)
     await Filesystem.write(filepath, text)
 
-    const hint = hasTaskTool(agent)
-      ? `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse the Task tool to have explore agent process this file with Grep and Read (with offset/limit). Do NOT read the full file yourself - delegate to save context.`
-      : `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse Grep to search the full content or Read with offset/limit to view specific sections.`
+    const hint = recovery.via === "task"
+      ? `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse the Task tool to have explore agent process this file with search_code and Read (with offset/limit). Do NOT read the full file yourself - delegate to save context.`
+      : `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse search_code to search the full content or Read with offset/limit to view specific sections.`
     const message =
       direction === "head"
         ? `${preview}\n\n...${removed} ${unit} truncated...\n\n${hint}`

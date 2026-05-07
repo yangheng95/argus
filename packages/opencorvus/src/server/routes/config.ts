@@ -2,9 +2,10 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Config } from "../../config/config"
-import { OrchestratorConfig } from "../../orchestrator/config"
+import { EngineConfig } from "../../engine/config"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
+import { Agent } from "../../agent/agent"
 import { PromptCatalog } from "../../config/prompt-catalog"
 import { mapValues } from "remeda"
 import { errors } from "../error"
@@ -33,14 +34,15 @@ export const ConfigRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const [raw, orch] = await Promise.all([Config.get(), OrchestratorConfig.get()])
+        const [raw, orch] = await Promise.all([Config.get(), EngineConfig.get()])
         // Merge effective scalar assistant values so the frontend can display correct defaults.
+        // Spread userAsst first so that the explicitly-computed ?? fallbacks always win.
         const userAsst = raw.assistant || {}
         const assistant = {
+          ...userAsst,
           max_runs: userAsst.max_runs ?? orch.max_runs,
           max_fix_runs: userAsst.max_fix_runs ?? orch.max_fix_runs,
           max_executor_groups: userAsst.max_executor_groups ?? orch.max_executor_groups,
-          ...userAsst,
         }
         return c.json({ ...raw, assistant })
       },
@@ -49,7 +51,8 @@ export const ConfigRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Update configuration (JSON Merge Patch)",
-        description: "Partially update OpenCorvus configuration. Accepts a partial config object (RFC 7396 JSON Merge Patch) — only include fields to change.",
+        description:
+          "Partially update OpenCorvus configuration per RFC 7396. Only include fields to change; set a field to null to delete it.",
         operationId: "config.update",
         responses: {
           200: {
@@ -63,13 +66,42 @@ export const ConfigRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator("json", Config.Info.partial()),
+      // Accept arbitrary object shape — RFC 7396 merge patches legitimately
+      // contain null sentinels at any depth to signal deletion, which the
+      // strict Config.Info.partial() validator would reject. Semantic
+      // correctness for sub-shapes that callers actually fail to format
+      // (most often `provider[id]` from the overlay form) is enforced
+      // explicitly below so users see the validation error on the PATCH
+      // round-trip rather than silently shipping a broken config that
+      // breaks the next parseConfig pass.
+      validator("json", z.record(z.string(), z.unknown())),
       async (c) => {
-        const partial = c.req.valid("json")
+        const partial = c.req.valid("json") as Record<string, unknown>
+        // Provider sub-shape: each non-null entry must satisfy Config.Provider
+        // schema. RFC 7396 still allows `null` to signal deletion.
+        if (partial.provider != null) {
+          if (typeof partial.provider !== "object" || Array.isArray(partial.provider)) {
+            return c.json(
+              { error: "config.provider must be a record of providerID -> ProviderConfig" },
+              400,
+            )
+          }
+          for (const [pid, value] of Object.entries(partial.provider as Record<string, unknown>)) {
+            if (value === null) continue
+            const parsed = Config.Provider.safeParse(value)
+            if (!parsed.success) {
+              const issues = parsed.error.issues
+                .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
+                .join("; ")
+              return c.json({ error: `config.provider.${pid}: ${issues}` }, 400)
+            }
+          }
+        }
         // Config.update() internally reads current config and deep-merges
         await Config.update(partial as Config.Info)
         const updated = await Config.get()
         Provider.reset()
+        Agent.reset()
         await ChannelSupervisor.sync(updated).catch((error) => {
           log.warn("channel runtime sync failed", { error: String(error) })
         })
@@ -88,7 +120,7 @@ export const ConfigRoutes = lazy(() =>
             description: "Prompt catalog entries",
             content: {
               "application/json": {
-                schema: resolver(z.array(z.any())),
+                schema: resolver(z.array(z.unknown())),
               },
             },
           },

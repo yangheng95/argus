@@ -578,7 +578,7 @@ export namespace Memory {
         source: input.source,
       })
     } else {
-      // Legacy path: derive atomics as facts with flat importance
+      // Heuristic path: caller didn't supply structured atomics, derive from text as facts with flat importance
       derived = deriveAtomicMemories({
         title: input.title,
         content: input.content,
@@ -613,6 +613,7 @@ export namespace Memory {
     query: string
     projectId: string
     sessionID?: string
+    sessionIDs?: string[]
     scope?: QueryScope
     limit?: number
     minScore?: number
@@ -692,8 +693,21 @@ export namespace Memory {
     return lines.join("\n")
   }
 
-  export function listFiles(input: { projectId: string; sessionID?: string; scope?: QueryScope; kinds?: Kind[] }) {
+  // sessionIDs: when provided, treats the set as the "in-scope" sessions —
+  // typically resolved from a taskID by the caller (recursive walk of the
+  // session tree under engine_task.session_id). The panel route uses this to
+  // surface memory written by any agent under a task tree, plus any global
+  // (project-wide) rows. sessionID is the legacy single-session filter and
+  // remains for callers that operate on one session.
+  export function listFiles(input: {
+    projectId: string
+    sessionID?: string
+    sessionIDs?: string[]
+    scope?: QueryScope
+    kinds?: Kind[]
+  }) {
     const scope = input.scope ?? "all"
+    const sessionSet = input.sessionIDs && input.sessionIDs.length > 0 ? new Set(input.sessionIDs) : null
     const rows = Database.use((db) =>
       db
         .select()
@@ -707,6 +721,11 @@ export namespace Memory {
       .filter((row) => {
         if (input.kinds && input.kinds.length > 0 && !input.kinds.includes(row.kind)) return false
         if (scope === "global") return row.scope === "global"
+        if (sessionSet) {
+          if (scope === "session") return row.scope === "session" && !!row.sessionID && sessionSet.has(row.sessionID)
+          if (row.scope === "global") return true
+          return !!row.sessionID && sessionSet.has(row.sessionID)
+        }
         if (scope === "session") return row.scope === "session" && row.sessionID === input.sessionID
         if (row.scope === "global") return true
         return row.sessionID === input.sessionID

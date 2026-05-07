@@ -1,4 +1,147 @@
-// ── Lightweight Markdown Renderer ──
+// ── Markdown Renderer (powered by marked + highlight.js) ──
+
+import { marked } from "marked";
+import hljs from "highlight.js/lib/core";
+import langTS from "highlight.js/lib/languages/typescript";
+import langJS from "highlight.js/lib/languages/javascript";
+import langPy from "highlight.js/lib/languages/python";
+import langRust from "highlight.js/lib/languages/rust";
+import langGo from "highlight.js/lib/languages/go";
+import langJava from "highlight.js/lib/languages/java";
+import langCpp from "highlight.js/lib/languages/cpp";
+import langCSS from "highlight.js/lib/languages/css";
+import langXML from "highlight.js/lib/languages/xml";
+import langJSON from "highlight.js/lib/languages/json";
+import langYAML from "highlight.js/lib/languages/yaml";
+import langBash from "highlight.js/lib/languages/bash";
+import langSQL from "highlight.js/lib/languages/sql";
+import langMD from "highlight.js/lib/languages/markdown";
+import langDiff from "highlight.js/lib/languages/diff";
+
+// Register languages (selective import keeps bundle small)
+const LANGUAGES: [string, any][] = [
+  ["typescript", langTS], ["javascript", langJS], ["python", langPy],
+  ["rust", langRust], ["go", langGo], ["java", langJava], ["cpp", langCpp],
+  ["css", langCSS], ["xml", langXML], ["json", langJSON], ["yaml", langYAML],
+  ["bash", langBash], ["sql", langSQL], ["markdown", langMD], ["diff", langDiff],
+];
+for (const [name, lang] of LANGUAGES) hljs.registerLanguage(name, lang);
+
+// ── Extension → language mapping ──
+
+const EXT_LANG: Record<string, string> = {
+  ts: "typescript", tsx: "typescript", mts: "typescript", cts: "typescript",
+  js: "javascript", jsx: "javascript", mjs: "javascript", cjs: "javascript",
+  py: "python", pyi: "python",
+  rs: "rust",
+  go: "go",
+  java: "java",
+  c: "cpp", h: "cpp", cpp: "cpp", cc: "cpp", cxx: "cpp", hpp: "cpp",
+  css: "css", scss: "css", less: "css",
+  html: "xml", htm: "xml", xml: "xml", svg: "xml",
+  json: "json", jsonc: "json",
+  yaml: "yaml", yml: "yaml", toml: "yaml",
+  sh: "bash", bash: "bash", zsh: "bash",
+  sql: "sql",
+  md: "markdown", mdx: "markdown",
+  diff: "diff", patch: "diff",
+};
+
+export function extToLang(filePath: string): string {
+  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+  return EXT_LANG[ext] ?? "plaintext";
+}
+
+// ── Configure marked with hljs code renderer ──
+
+marked.setOptions({ async: false, gfm: true, breaks: false });
+
+// Wrap a fenced code block with the language tag + copy affordance the
+// overlay shows on hover. Raw source goes into a data-attribute so the
+// global click listener (installed in main.tsx) can write it to the
+// clipboard without needing to re-decode the highlighted HTML.
+function wrapCodeBlock(rawText: string, language: string, highlightedHtml: string): string {
+  const langAttr = language ? `language-${language}` : "";
+  const langLabel = language || "code";
+  const dataSource = escapeAttr(rawText);
+  return [
+    `<div class="md-code" data-lang="${escapeAttr(language)}">`,
+    `<div class="md-code-toolbar">`,
+    `<span class="md-code-lang">${escapeHtml(langLabel)}</span>`,
+    `<button type="button" class="md-code-copy" data-md-copy="${dataSource}" title="Copy code" aria-label="Copy code">`,
+    `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">`,
+    `<rect x="5" y="3" width="8" height="10" rx="1.3" stroke="currentColor" stroke-width="1.3"/>`,
+    `<path d="M3.5 5.5V12a1.5 1.5 0 0 0 1.5 1.5h5.5" stroke="currentColor" stroke-width="1.3" fill="none"/>`,
+    `</svg>`,
+    `</button>`,
+    `</div>`,
+    `<pre><code class="${language ? `hljs ${langAttr}` : ""}">${highlightedHtml}</code></pre>`,
+    `</div>`,
+  ].join("");
+}
+
+marked.use({
+  renderer: {
+    code({ text, lang }: { text: string; lang?: string }) {
+      const language = lang && hljs.getLanguage(lang) ? lang : "";
+      if (!language) return wrapCodeBlock(text, "", escapeHtml(text));
+      const highlighted = hljs.highlight(text, { language }).value;
+      return wrapCodeBlock(text, language, highlighted);
+    },
+    codespan({ text }: { text: string }) {
+      // `text` is the raw codespan content (before HTML escaping). Always
+      // escape before emitting — the default renderer does the same.
+      const path = extractFilePath(text);
+      if (path) {
+        const { display, target } = path;
+        return `<code><a class="file-link" href="#" data-file-path="${escapeAttr(target)}">${escapeHtml(display)}</a></code>`;
+      }
+      return `<code>${escapeHtml(text)}</code>`;
+    },
+  },
+});
+
+function escapeAttr(s: string): string {
+  return escapeHtml(s).replace(/'/g, "&#39;");
+}
+
+// File-ish extensions we treat as path indicators when no slash is present.
+const FILE_EXT_RE =
+  /\.(?:ts|tsx|js|jsx|mts|cts|mjs|cjs|json|jsonc|md|mdx|css|scss|less|html|htm|xml|svg|yaml|yml|toml|py|pyi|rs|go|java|c|h|cpp|cc|cxx|hpp|sh|bash|zsh|sql|rb|php|lua|kt|swift|dart|vue|astro|conf|ini|env|lock|txt)$/i;
+
+/**
+ * Decide whether a codespan's text is a file path reference. Returns the
+ * path to open (stripped of trailing ":line[:col]") and the display label
+ * (original text). Returns null for non-path content (commands, identifiers,
+ * URLs, etc.).
+ */
+function extractFilePath(
+  text: string,
+): { display: string; target: string } | null {
+  const s = text.trim();
+  if (!s) return null;
+  // Reject URLs and protocol-ish strings.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return null;
+  // Reject whitespace (multi-word commands) and shell flags.
+  if (/\s/.test(s)) return null;
+  if (s.startsWith("-")) return null;
+  // Strip trailing :line[:col] for the target path.
+  const locMatch = s.match(/^(.+?)(:\d+(?::\d+)?)$/);
+  const pathPart = locMatch ? locMatch[1] : s;
+  // Must look like a valid file token (letters/digits/underscore/dot/dash
+  // plus path separators and optional './' or '../' prefix).
+  if (!/^[\w./\\@~-]+$/.test(pathPart)) return null;
+  const hasSlash = /[\/\\]/.test(pathPart);
+  const hasFileExt = FILE_EXT_RE.test(pathPart);
+  // Require either a path separator OR a recognisable file extension —
+  // this filters out bare identifiers like `foo` or `useState`.
+  if (!hasSlash && !hasFileExt) return null;
+  // Reject isolated extensions like ".ts".
+  if (/^\.\w+$/.test(pathPart)) return null;
+  return { display: s, target: pathPart };
+}
+
+// ── Core rendering functions ──
 
 export function escapeHtml(str: string): string {
   if (!str) return "";
@@ -9,133 +152,33 @@ export function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** Render inline markdown only (no block-level elements). */
 export function inlineMarkdown(text: string): string {
-  let s = escapeHtml(text);
-  function unescapeUrl(url: string): string {
-    return url
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"');
-  }
-  function safeUrl(url: string, image = false): string | null {
-    const value = unescapeUrl(url).trim();
-    if (!value) return null;
-    const lower = value.toLowerCase();
-    if (lower.startsWith("javascript:") || lower.startsWith("vbscript:")) return null;
-    if (lower.startsWith("data:"))
-      return image && lower.startsWith("data:image/") ? value : null;
-    if (
-      lower.startsWith("https://") ||
-      lower.startsWith("http://") ||
-      lower.startsWith("mailto:") ||
-      value.startsWith("/") ||
-      value.startsWith("./") ||
-      value.startsWith("../") ||
-      value.startsWith("#")
-    )
-      return value;
-    return null;
-  }
- // Images: ![alt](url)
-  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
-    const value = safeUrl(url, true);
-    return value ? `<img class="md-img" src="${value}" alt="${alt}" loading="lazy">` : alt;
-  });
- // Links: [text](url)
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
-    const value = safeUrl(url);
-    return value
-      ? `<a class="md-link" href="${value}" target="_blank" rel="noopener">${label}</a>`
-      : label;
-  });
- // Bold: **text**
-  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
- // Italic: *text*
-  s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
- // Inline code: `code`
-  s = s.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
-  return s;
+  return marked.parseInline(text) as string;
 }
 
-export function renderMarkdownBlock(text: string): string {
-  const lines = text.split("\n");
-  let html = "";
-  let inList = false;
-  let listTag = "ul";
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
- // Headers
-    const hMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
-    if (hMatch) {
-      if (inList) {
-        html += `</${listTag}>`;
-        inList = false;
-      }
-      const level = hMatch[1].length;
-      html += `<div class="md-h${level}">${inlineMarkdown(hMatch[2])}</div>`;
-      continue;
-    }
-
- // Unordered list
-    if (/^[-*]\s/.test(trimmed)) {
-      if (!inList || listTag !== "ul") {
-        if (inList) html += `</${listTag}>`;
-        html += '<ul class="md-list">';
-        inList = true;
-        listTag = "ul";
-      }
-      html += `<li>${inlineMarkdown(trimmed.slice(2))}</li>`;
-      continue;
-    }
-
- // Ordered list
-    const olMatch = trimmed.match(/^(\d+)\.\s(.+)$/);
-    if (olMatch) {
-      if (!inList || listTag !== "ol") {
-        if (inList) html += `</${listTag}>`;
-        html += '<ol class="md-list">';
-        inList = true;
-        listTag = "ol";
-      }
-      html += `<li>${inlineMarkdown(olMatch[2])}</li>`;
-      continue;
-    }
-
- // End list on blank line or non-list content
-    if (inList) {
-      html += `</${listTag}>`;
-      inList = false;
-    }
-
- // Blank line
-    if (!trimmed) {
-      html += '<div class="md-break"></div>';
-      continue;
-    }
-
- // Regular paragraph
-    html += `<div class="md-p">${inlineMarkdown(trimmed)}</div>`;
-  }
-
-  if (inList) html += `</${listTag}>`;
-  return html;
-}
-
+/** Render full markdown (block + inline). */
 export function renderMarkdown(text: string): string {
- // Split by fenced code blocks
-  const segments = text.split(/(```[\s\S]*?```)/g);
-  let html = "";
-  for (const seg of segments) {
-    if (seg.startsWith("```")) {
-      const match = seg.match(/^```(\w*)\n?([\s\S]*?)```$/);
-      const code = match ? match[2] : seg.slice(3, -3);
-      html += `<pre class="md-code-block"><code>${escapeHtml(code.replace(/\n$/, ""))}</code></pre>`;
-    } else {
-      html += renderMarkdownBlock(seg);
-    }
-  }
-  return html;
+  return marked.parse(text) as string;
+}
+
+/** Alias for renderMarkdown — used by some callers. */
+export function renderMarkdownBlock(text: string): string {
+  return renderMarkdown(text);
+}
+
+// ── Code block rendering for tool outputs ──
+
+const CODE_TRUNCATE_LINES = 100;
+
+export function renderCodeBlock(
+  content: string,
+  lang: string,
+  maxLines = CODE_TRUNCATE_LINES,
+): { html: string; truncated: boolean; totalLines: number } {
+  const lines = content.split("\n");
+  const truncated = lines.length > maxLines;
+  const display = truncated ? lines.slice(0, maxLines).join("\n") : content;
+  const html = renderMarkdown("```" + lang + "\n" + display + "\n```");
+  return { html, truncated, totalLines: lines.length };
 }

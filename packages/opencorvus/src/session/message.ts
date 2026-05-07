@@ -12,8 +12,21 @@ import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
-import { textForModel } from "./part-visibility"
 import { isDecodableText } from "./text-mime"
+import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/orchestrator/stateful-tool-names"
+import { normalizeToolInput } from "./tool-input-norm"
+
+/** Coerce a persisted tool_use.input into a dict for outbound AI-SDK messages.
+ *  Downstream gateways (notably hexin → litellm → Bedrock) reject tool_use
+ *  whose input is not a JSON object with HTTP 400 — so any legacy row that
+ *  somehow stored a string / null / partial payload must be flattened to `{}`
+ *  before it re-enters the LLM conversation. `normalizeToolInput` is the same
+ *  boundary used on the ingress side (session-hooks), so the invariant is
+ *  enforced symmetrically. */
+function safeToolInput(raw: unknown): Record<string, unknown> {
+  const norm = normalizeToolInput(raw)
+  return norm.ok ? norm.value : {}
+}
 
 export namespace Message {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -22,6 +35,21 @@ export namespace Message {
     "StructuredOutputError",
     z.object({
       message: z.string(),
+      retries: z.number(),
+    }),
+  )
+  export const StructuredOutputPayloadError = NamedError.create(
+    "StructuredOutputPayloadError",
+    z.object({
+      message: z.string(),
+      reason: z.string(),
+    }),
+  )
+  export const TerminalToolMissingError = NamedError.create(
+    "TerminalToolMissingError",
+    z.object({
+      message: z.string(),
+      toolName: z.string(),
       retries: z.number(),
     }),
   )
@@ -47,6 +75,46 @@ export namespace Message {
   export const ContextOverflowError = NamedError.create(
     "ContextOverflowError",
     z.object({ message: z.string(), responseBody: z.string().optional() }),
+  )
+  /**
+   * Predictive-compaction fired but compaction cannot rescue this turn —
+   * either there is no message history to summarise (`assistantMsgCount=0`
+   * and the user message itself fits) or the non-compressible prompt
+   * (system prompt + tool schemas) is already at/over budget. Carries the
+   * full breakdown so the operator can identify whether to drop tools, raise
+   * the budget, or change the agent design (rule 26: surface the actual
+   * cause, do not loop a useless action).
+   * See specs/new-arch/2026-04-28-structured-output-systemic-fix.md §C.
+   */
+  export const PromptBudgetOverflowError = NamedError.create(
+    "PromptBudgetOverflowError",
+    z.object({
+      message: z.string(),
+      systemTokensEst: z.number(),
+      messagePayloadChars: z.number(),
+      toolSchemaChars: z.number(),
+      compressibleMessageChars: z.number(),
+      nonCompressiblePromptChars: z.number(),
+      usableBudget: z.number(),
+      limit: z.number(),
+      toolNames: z.string(),
+    }),
+  )
+  /**
+   * Tool schemas alone overrun a configurable share of the model's input
+   * budget. Compaction never touches tool definitions, so this is a
+   * structural problem with the agent's tool surface (often Zod-rich
+   * register/submit tools); fail-fast and refuse to retry.
+   */
+  export const ToolSchemaBudgetError = NamedError.create(
+    "ToolSchemaBudgetError",
+    z.object({
+      message: z.string(),
+      toolSchemaChars: z.number(),
+      usableBudget: z.number(),
+      ratio: z.number(),
+      toolNames: z.string(),
+    }),
   )
 
   export const OutputFormatText = z
@@ -98,17 +166,8 @@ export namespace Message {
   export const TextPart = PartBase.extend({
     type: z.literal("text"),
     text: z.string(),
-    synthetic: z.boolean().optional(),
-    ignored: z.boolean().optional(),
-    kind: z.enum(["user_content", "control", "context", "trace"]).optional(),
-    source: z.enum(["user", "system", "evaluator", "planner", "goal_gate", "task_tool"]).optional(),
-    audience: z
-      .object({
-        model: z.boolean().optional(),
-        ui: z.boolean().optional(),
-        acp: z.boolean().optional(),
-      })
-      .optional(),
+    kind: z.enum(["user_content", "control", "context"]).optional(),
+    source: z.enum(["user", "system", "evaluator", "goal_gate", "task_tool"]).optional(),
     time: z
       .object({
         start: z.number(),
@@ -116,9 +175,11 @@ export namespace Message {
       })
       .optional(),
     metadata: z.record(z.string(), z.any()).optional(),
-  }).meta({
-    ref: "TextPart",
   })
+    .strict()
+    .meta({
+      ref: "TextPart",
+    })
   export type TextPart = z.infer<typeof TextPart>
 
   export const ReasoningPart = PartBase.extend({
@@ -204,6 +265,8 @@ export namespace Message {
   export const CompactionPart = PartBase.extend({
     type: z.literal("compaction"),
     auto: z.boolean(),
+    overflow: z.boolean().optional(),
+    tail_start_id: z.string().optional(),
   }).meta({
     ref: "CompactionPart",
   })
@@ -360,7 +423,6 @@ export namespace Message {
       .object({
         title: z.string().optional(),
         body: z.string().optional(),
-        diffs: Snapshot.FileDiff.array(),
       })
       .optional(),
     agent: z.string(),
@@ -410,6 +472,8 @@ export namespace Message {
         OutputLengthError.Schema,
         AbortedError.Schema,
         StructuredOutputError.Schema,
+        StructuredOutputPayloadError.Schema,
+        TerminalToolMissingError.Schema,
         ContextOverflowError.Schema,
         APIError.Schema,
       ])
@@ -417,10 +481,6 @@ export namespace Message {
     parentID: z.string(),
     modelID: z.string(),
     providerID: z.string(),
-    /**
-     * @deprecated
-     */
-    mode: z.string(),
     agent: z.string(),
     path: z.object({
       cwd: z.string(),
@@ -497,9 +557,72 @@ export namespace Message {
   })
   export type WithParts = z.infer<typeof WithParts>
 
-  export function toModelMessages(input: WithParts[], model: Provider.Model): ModelMessage[] {
+  /**
+   * Tools whose output is a snapshot of current task state (no side effects,
+   * no delta value once superseded). Older calls' outputs are projected to a
+   * short "superseded" note when a later call to the same tool exists in the
+   * same session — this prevents tool results from piling up in the prompt
+   * as the orchestrator reads state every turn. DB rows are NOT modified;
+   * projection runs only at prompt-assembly time so UI / audit keeps full
+   * fidelity.
+   *
+   * The source-of-truth for membership is `STATEFUL_SNAPSHOT_TOOL_NAMES` in
+   * `orchestrator/tools.ts`, co-located with the tool definitions so adding
+   * or renaming a stateful tool forces the developer to look at this list.
+   * We import it (rather than re-declaring) so the two cannot drift apart.
+   */
+  export const STATEFUL_SNAPSHOT_TOOLS: ReadonlySet<string> = new Set(STATEFUL_SNAPSHOT_TOOL_NAMES)
+
+  export interface ToModelMessagesOptions {
+    stripMedia?: boolean
+    toolOutputMaxChars?: number
+  }
+
+  function compactToolOutput(text: string, maxChars: number | undefined): string {
+    if (!maxChars || maxChars <= 0 || text.length <= maxChars) return text
+    const head = Math.max(0, Math.floor(maxChars * 0.7))
+    const tail = Math.max(0, maxChars - head)
+    return [
+      text.slice(0, head).trimEnd(),
+      `[Tool output truncated for compaction: ${text.length} chars total, ${text.length - maxChars} chars omitted]`,
+      text.slice(text.length - tail).trimStart(),
+    ].join("\n")
+  }
+
+  export async function toModelMessages(
+    input: WithParts[],
+    model: Provider.Model,
+    options: ToModelMessagesOptions = {},
+  ): Promise<ModelMessage[]> {
     const result: UIMessage[] = []
     const toolNames = new Set<string>()
+
+    // Pre-pass: for each stateful-snapshot tool, find the callID of its
+    // latest invocation. Any earlier invocation's output will be projected
+    // to a short "[superseded by later call]" note below, keeping only the
+    // live snapshot's full text in the prompt. Walking in reverse lets us
+    // short-circuit once we have the latest for every tool we've seen.
+    // Both completed and error states are treated as "a call happened" —
+    // an older error result is just as obsolete as an older success once a
+    // newer call exists, and leaving it in the prompt encourages the model
+    // to reason about stale failures.
+    const latestStatefulCallIDs = new Set<string>()
+    const seenStatefulTools = new Set<string>()
+    for (let i = input.length - 1; i >= 0; i--) {
+      const msg = input[i]
+      for (let j = msg.parts.length - 1; j >= 0; j--) {
+        const p = msg.parts[j]
+        if (
+          p.type === "tool" &&
+          STATEFUL_SNAPSHOT_TOOLS.has(p.tool) &&
+          (p.state.status === "completed" || p.state.status === "error") &&
+          !seenStatefulTools.has(p.tool)
+        ) {
+          seenStatefulTools.add(p.tool)
+          latestStatefulCallIDs.add(p.callID)
+        }
+      }
+    }
     // Track media from tool results that need to be injected as user messages
     // for providers that don't support media in tool results.
     //
@@ -521,34 +644,48 @@ export namespace Message {
       return false
     })()
 
-    const toModelOutput = (output: unknown) => {
+    // AI SDK v6 invokes tool.toModelOutput with an args object
+    // ({ toolCallId, input, output }), not a raw output. v5 passed `output`
+    // directly. Reading the wrapped argument as if it were the output gave
+    // outputObject.text === undefined for every tool result, which the v6
+    // ToolModelOutput zod schema rejected ("expected string, received
+    // undefined" at value[0].text), surfacing as
+    // `Invalid prompt: The messages do not match the ModelMessage[] schema`
+    // and a hard orchestrator retry loop.
+    const toModelOutput = (args: { toolCallId: string; input: unknown; output: unknown }) => {
+      const { output } = args
       if (typeof output === "string") {
         return { type: "text", value: output }
       }
 
-      if (typeof output === "object") {
+      if (typeof output === "object" && output !== null) {
         const outputObject = output as {
-          text: string
+          text?: string
           attachments?: Array<{ mime: string; url: string }>
         }
         const attachments = (outputObject.attachments ?? []).filter((attachment) => {
           return attachment.url.startsWith("data:") && attachment.url.includes(",")
         })
 
-        return {
-          type: "content",
-          value: [
-            { type: "text", text: outputObject.text },
-            ...attachments.map((attachment) => ({
-              type: "media",
-              mediaType: attachment.mime,
-              data: iife(() => {
-                const commaIndex = attachment.url.indexOf(",")
-                return commaIndex === -1 ? attachment.url : attachment.url.slice(commaIndex + 1)
-              }),
-            })),
-          ],
-        }
+        // ToolModelOutput.content also rejects a `text` part with undefined or
+        // empty text (screenshot-only outputs) — drop the text part when the
+        // tool produced no caption. Use `image-data` (v6 preferred) over the
+        // deprecated `media` discriminator for base64 image attachments.
+        const textPart =
+          typeof outputObject.text === "string" && outputObject.text.length > 0
+            ? [{ type: "text" as const, text: outputObject.text }]
+            : []
+        const attachmentParts = attachments.map((attachment) => ({
+          type: "image-data" as const,
+          mediaType: attachment.mime,
+          data: iife(() => {
+            const commaIndex = attachment.url.indexOf(",")
+            return commaIndex === -1 ? attachment.url : attachment.url.slice(commaIndex + 1)
+          }),
+        }))
+        const value = [...textPart, ...attachmentParts]
+        if (value.length === 0) return { type: "json", value: outputObject as never }
+        return { type: "content", value }
       }
 
       return { type: "json", value: output as never }
@@ -565,20 +702,37 @@ export namespace Message {
         }
         result.push(userMessage)
         for (const part of msg.parts) {
-          if (part.type === "text" && textForModel(part))
+          if (part.type === "text")
             userMessage.parts.push({
               type: "text",
               text: part.text,
             })
           // Text files are decoded into text parts upstream; skip them here.
-          // Only pass through binary file parts (images, PDFs, etc.) to the model.
-          if (part.type === "file" && !isDecodableText(part.mime, part.filename) && part.mime !== "application/x-directory")
-            userMessage.parts.push({
-              type: "file",
-              url: part.url,
-              mediaType: part.mime,
-              filename: part.filename,
-            })
+          // Binary file parts are only forwarded when the target model declares
+          // the capability to handle them — otherwise the AI SDK / provider
+          // conversion layer throws UnsupportedFunctionalityError at runtime.
+          if (part.type === "file" && !isDecodableText(part.mime, part.filename) && part.mime !== "application/x-directory") {
+            if (options.stripMedia) {
+              userMessage.parts.push({
+                type: "text",
+                text: `[Attached ${part.mime}: ${part.filename ?? "file"} omitted from compaction context]`,
+              })
+              continue
+            }
+            const isImage = part.mime.startsWith("image/")
+            const isPdf = part.mime === "application/pdf"
+            const capable =
+              (isImage && model.capabilities.input.image) ||
+              (isPdf && model.capabilities.input.pdf)
+            if (capable) {
+              userMessage.parts.push({
+                type: "file",
+                url: part.url,
+                mediaType: part.mime,
+                filename: part.filename,
+              })
+            }
+          }
 
           if (part.type === "compaction") {
             userMessage.parts.push({
@@ -628,12 +782,19 @@ export namespace Message {
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
               let outputText: string
+              const isSupersededStatefulSnapshot =
+                STATEFUL_SNAPSHOT_TOOLS.has(part.tool) && !latestStatefulCallIDs.has(part.callID)
               if (part.state.time.compacted) {
                 outputText = "[Old tool result content cleared]"
+              } else if (isSupersededStatefulSnapshot) {
+                outputText = `[${part.tool} snapshot superseded by a later call in this session]`
               } else {
-                outputText = part.state.output
+                outputText = compactToolOutput(part.state.output, options.toolOutputMaxChars)
               }
-              const attachments = part.state.time.compacted ? [] : (part.state.attachments ?? [])
+              const attachments =
+                part.state.time.compacted || isSupersededStatefulSnapshot || options.stripMedia
+                  ? []
+                  : (part.state.attachments ?? [])
 
               // For providers that don't support media in tool results, extract media files
               // (images, PDFs) to be sent as a separate user message
@@ -658,20 +819,26 @@ export namespace Message {
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-available",
                 toolCallId: part.callID,
-                input: part.state.input,
+                input: safeToolInput(part.state.input),
                 output,
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
             }
-            if (part.state.status === "error")
+            if (part.state.status === "error") {
+              const isSupersededStatefulError =
+                STATEFUL_SNAPSHOT_TOOLS.has(part.tool) && !latestStatefulCallIDs.has(part.callID)
+              const errorText = isSupersededStatefulError
+                ? `[${part.tool} error superseded by a later call in this session]`
+                : part.state.error
               assistantMessage.parts.push({
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-error",
                 toolCallId: part.callID,
-                input: part.state.input,
-                errorText: part.state.error,
+                input: safeToolInput(part.state.input),
+                errorText,
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
+            }
             // Handle pending/running tool calls to prevent dangling tool_use blocks
             // Anthropic/Claude APIs require every tool_use to have a corresponding tool_result
             if (part.state.status === "pending" || part.state.status === "running")
@@ -679,7 +846,7 @@ export namespace Message {
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-error",
                 toolCallId: part.callID,
-                input: part.state.input,
+                input: safeToolInput(part.state.input),
                 errorText: "[Tool execution was interrupted]",
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
@@ -719,7 +886,25 @@ export namespace Message {
 
     const tools = Object.fromEntries(Array.from(toolNames).map((toolName) => [toolName, { toModelOutput }]))
 
-    return convertToModelMessages(
+    // Reasoning blocks intentionally pass through unchanged. An earlier
+    // attempt stripped reasoning from every assistant message except the
+    // last to "save context" — that miscarried (rule 14: 怀疑自己，没
+    // 数据支撑就是胡说):
+    //   1. Stripping reasoning from messages BEFORE the cache breakpoint
+    //      (provider/transform.ts:applyCaching marks system[0], system[-1],
+    //      messages[-2], messages[-1]) changes the cache-prefix bytes
+    //      every turn — every request would cache-miss and pay full input
+    //      price for the entire history. Anthropic 5-min cache hit is
+    //      0.1× input price; cache write is 1.25× — even a 50%-reasoning
+    //      history costs ~80% MORE under the strip strategy than under
+    //      pass-through with cache hits.
+    //   2. Anthropic's thinking + tool_use protocol requires the
+    //      immediately-prior assistant's thinking blocks to remain when
+    //      the current request is a tool_result follow-up; "last assistant"
+    //      in our store may not coincide with that protocol position.
+    // Net: pass-through wins on cost AND correctness. Don't strip.
+
+    return await convertToModelMessages(
       result.filter((msg) => msg.parts.some((part) => part.type !== "step-start")),
       {
         //@ts-expect-error (convertToModelMessages expects a ToolSet but only actually needs tools[name]?.toModelOutput)
@@ -809,15 +994,23 @@ export namespace Message {
   export async function filterCompacted(stream: AsyncIterable<Message.WithParts>) {
     const result = [] as Message.WithParts[]
     const completed = new Set<string>()
+    let retain: string | undefined
     for await (const msg of stream) {
       result.push(msg)
-      if (
-        msg.info.role === "user" &&
-        completed.has(msg.info.id) &&
-        msg.parts.some((part) => part.type === "compaction")
-      )
-        break
-      if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish) completed.add(msg.info.parentID)
+      if (retain) {
+        if (msg.info.id === retain) break
+        continue
+      }
+      if (msg.info.role === "user" && completed.has(msg.info.id)) {
+        const part = msg.parts.find((item): item is Message.CompactionPart => item.type === "compaction")
+        if (!part) continue
+        if (!part.tail_start_id) break
+        retain = part.tail_start_id
+        if (msg.info.id === retain) break
+        continue
+      }
+      if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish && !msg.info.error)
+        completed.add(msg.info.parentID)
     }
     result.reverse()
     return result
@@ -834,6 +1027,8 @@ export namespace Message {
         ).toObject()
       case Message.OutputLengthError.isInstance(e):
         return e
+      case Message.StructuredOutputPayloadError.isInstance(e):
+        return e.toObject()
       case LoadAPIKeyError.isInstance(e):
         return new Message.AuthError(
           {

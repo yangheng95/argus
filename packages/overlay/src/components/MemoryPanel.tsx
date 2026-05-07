@@ -14,6 +14,10 @@ import {
 } from "solid-js";
 import { t } from "../utils/i18n";
 import { apiJson } from "../services/api";
+import { nativeMessage } from "../services/app-dialog";
+import { Dialog } from "./primitives/Dialog";
+import { useAsyncAction } from "../solid/async-action";
+import { Button } from "./ui/Button";
 
 // ── Types ──
 
@@ -65,8 +69,6 @@ interface MemoryDetailDialogProps {
 }
 
 function MemoryDetailDialog(props: MemoryDetailDialogProps) {
-  let dialogRef: HTMLDialogElement | undefined;
-
   const [detail, setDetail] = createSignal<MemoryDetail | null>(null);
   const [errorMsg, setErrorMsg] = createSignal("");
   const [loading, setLoading] = createSignal(true);
@@ -95,103 +97,104 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
     }
   };
 
-  const handleDelete = async () => {
+  const deleteAction = useAsyncAction(async () => {
     try {
       await apiJson(
         `panel/knowledge/memory/${encodeURIComponent(props.fileId)}`,
         { method: "DELETE" },
       );
-      dialogRef?.close();
       props.onDeleted();
-    } catch {
- // Silently ignore; the list will refresh on close.
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[MemoryPanel] delete failed", err);
+      void nativeMessage(t("memory.delete_failed", { error: msg }), {
+        title: t("memory.delete_failed_title"),
+      });
     }
-  };
+  });
 
- // Load on mount
-  load();
+ // Load on mount and when the selected memory file changes.
+  createEffect(() => {
+    props.fileId;
+    void load();
+  });
 
   return (
-    <dialog
-      class="dialog"
-      ref={(el) => {
-        dialogRef = el;
-        if (el) queueMicrotask(() => el.showModal());
-      }}
+    <Dialog
+      open={true}
+      title={
+        loading()
+          ? t("common.loading")
+          : errorMsg()
+            ? t("common.error")
+            : (detail()?.title ?? "")
+      }
       onClose={props.onClose}
-    >
-      <div class="dialog-form">
-        <div class="dialog-head">
-          <span class="dialog-title">
-            {loading()
-              ? t("common.loading")
-              : errorMsg()
-                ? t("common.error")
-                : (detail()?.title ?? "")}
-          </span>
-        </div>
-
-        <Show when={!loading() && !errorMsg() && detail() !== null}>
-          {(_) => {
-            const d = detail()!;
-            return (
-              <>
-                <div class="memory-detail-meta">
-                  <span
-                    class="knowledge-scope"
-                    data-scope={d.scope}
-                  >
-                    {knowledgeScopeLabel(d.scope)}
-                  </span>
-                  <span>{t("memory.source", { value: d.source })}</span>
-                  <span>
-                    {t("memory.created", {
-                      value: formatDateTime(d.timeCreated),
-                    })}
-                  </span>
-                  <span>
-                    {t("memory.updated", {
-                      value: formatDateTime(d.timeUpdated),
-                    })}
-                  </span>
-                </div>
-                <pre class="memory-detail-content">
-                  {d.content || t("memory.empty_value")}
-                </pre>
-              </>
-            );
-          }}
-        </Show>
-
-        <Show when={!loading() && !!errorMsg()}>
-          <div class="config-status-box" data-status="error">{errorMsg()}</div>
-        </Show>
-
-        <Show when={loading()}>
-          <div class="loading-hint">{t("common.loading")}</div>
-        </Show>
-
-        <div class="dialog-actions">
-          <button
+      footer={
+        <>
+          <Button
             type="button"
-            class="btn btn-ghost mini danger"
-            onClick={() => void handleDelete()}
+            variant="ghost"
+            size="sm"
+            tone="danger"
+            onClick={() => void deleteAction.run()}
+            disabled={loading() || deleteAction.pending() || !!errorMsg()}
           >
-            {t("common.delete")}
-          </button>
-          <button
+            {deleteAction.pending() ? t("common.loading") : t("common.delete")}
+          </Button>
+          <Button
             type="button"
-            class="btn btn-ghost"
-            onClick={() => {
-              dialogRef?.close();
-              props.onClose();
-            }}
+            variant="ghost"
+            size="md"
+            tone="neutral"
+            disabled={deleteAction.pending()}
+            onClick={props.onClose}
           >
             {t("common.close")}
-          </button>
-        </div>
-      </div>
-    </dialog>
+          </Button>
+        </>
+      }
+    >
+      <Show when={!loading() && !errorMsg() && detail() !== null}>
+        {(_) => {
+          const d = detail()!;
+          return (
+            <>
+              <div class="memory-detail-meta">
+                <span
+                  class="knowledge-scope"
+                  data-scope={d.scope}
+                >
+                  {knowledgeScopeLabel(d.scope)}
+                </span>
+                <span>{t("memory.source", { value: d.source })}</span>
+                <span>
+                  {t("memory.created", {
+                    value: formatDateTime(d.timeCreated),
+                  })}
+                </span>
+                <span>
+                  {t("memory.updated", {
+                    value: formatDateTime(d.timeUpdated),
+                  })}
+                </span>
+              </div>
+              <pre class="memory-detail-content">
+                {d.content || t("memory.empty_value")}
+              </pre>
+            </>
+          );
+        }}
+      </Show>
+
+      <Show when={!loading() && !!errorMsg()}>
+        <div class="config-status-box" data-status="error">{errorMsg()}</div>
+      </Show>
+
+      <Show when={loading()}>
+        <div class="loading-hint">{t("common.loading")}</div>
+      </Show>
+    </Dialog>
   );
 }
 
@@ -237,6 +240,8 @@ export function MemoryPanel(props: MemoryPanelProps) {
     }
     setLoading(true);
     try {
+      // Body-only branch — no implicit fallback to old results, every search
+      // call either succeeds or surfaces the error to the operator below.
       const results = await apiJson("panel/knowledge/memory/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -259,8 +264,12 @@ export function MemoryPanel(props: MemoryPanelProps) {
       }));
       setFiles(mapped);
       setSearchMode(true);
-    } catch {
- // Leave current results in place on search error
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[MemoryPanel] search failed", err);
+      void nativeMessage(t("memory.search_failed", { error: msg }), {
+        title: t("memory.search_failed_title"),
+      });
     } finally {
       setLoading(false);
     }
@@ -283,8 +292,12 @@ export function MemoryPanel(props: MemoryPanelProps) {
         { method: "DELETE" },
       );
       await loadMemory();
-    } catch {
- // Silently ignore
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[MemoryPanel] inline delete failed", err);
+      void nativeMessage(t("memory.delete_failed", { error: msg }), {
+        title: t("memory.delete_failed_title"),
+      });
     }
   };
 
@@ -323,24 +336,28 @@ export function MemoryPanel(props: MemoryPanelProps) {
             }
           }}
         />
-        <button
+        <Button
           type="button"
           id="btnMemorySearch"
-          class="btn btn-ghost mini"
+          variant="ghost"
+          size="sm"
+          tone="neutral"
           disabled={loading()}
           onClick={handleSearchSubmit}
         >
           {t("common.search")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           id="btnMemoryRefresh"
-          class="btn btn-ghost mini"
+          variant="ghost"
+          size="sm"
+          tone="neutral"
           onClick={handleRefresh}
           disabled={loading()}
         >
           {t("common.refresh")}
-        </button>
+        </Button>
       </div>
 
       {/* List */}
@@ -382,9 +399,11 @@ export function MemoryPanel(props: MemoryPanelProps) {
                     <span class="knowledge-scope" data-scope={f.scope}>
                       {knowledgeScopeLabel(f.scope)}
                     </span>
-                    <button
+                    <Button
                       type="button"
-                      class="btn btn-ghost mini danger knowledge-delete"
+                      variant="ghost"
+                      size="sm"
+                      tone="danger"
                       data-action="delete-memory"
                       data-id={f.id}
                       title={t("memory.delete_button_title")}
@@ -395,7 +414,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
                       }}
                     >
                       {t("common.delete")}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );

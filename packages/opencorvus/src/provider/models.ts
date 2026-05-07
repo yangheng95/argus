@@ -85,17 +85,29 @@ export namespace ModelsDev {
     return Flag.OPENCORVUS_MODELS_URL || "https://models.dev"
   }
 
+  // Catalog resolution is strictly offline-first:
+  //   1. user-supplied JSON at OPENCORVUS_MODELS_PATH or the per-instance
+  //      cache (./models.json) populated by the most recent explicit
+  //      refresh,
+  //   2. the snapshot embedded at build time (script/build.ts pulls from
+  //      models.dev once during the matrix build and writes
+  //      provider/models-snapshot.ts),
+  //   3. empty record — never silently network-fetch.
+  // The third tier was previously a fallback `fetch(models.dev/api.json)`
+  // plus a top-level auto-refresh + hourly setInterval; both removed so
+  // every outbound network call to the registry is the result of an
+  // explicit `refresh()` invocation (UI button, CLI `models --refresh`,
+  // POST /provider/refresh). This avoids surprise traffic on `serve`
+  // startup, makes air-gapped deployments correct by default, and keeps
+  // the catalog deterministic for the duration of a process.
   export const Data = lazy(async () => {
     const result = await Filesystem.readJson(Flag.OPENCORVUS_MODELS_PATH ?? filepath).catch(() => {})
     if (result) return result
-    // @ts-ignore
     const snapshot = await import("./models-snapshot")
       .then((m) => m.snapshot as Record<string, unknown>)
       .catch(() => undefined)
     if (snapshot) return snapshot
-    if (Flag.OPENCORVUS_DISABLE_MODELS_FETCH) return {}
-    const json = await fetch(`${url()}/api.json`).then((x) => x.text())
-    return JSON.parse(json)
+    return {}
   })
 
   export async function get() {
@@ -103,30 +115,35 @@ export namespace ModelsDev {
     return result as Record<string, Provider>
   }
 
-  export async function refresh() {
-    const result = await fetch(`${url()}/api.json`, {
-      headers: {
-        "User-Agent": Installation.USER_AGENT,
-      },
-      signal: AbortSignal.timeout(10 * 1000),
-    }).catch((e) => {
-      log.error("Failed to fetch models.dev", {
-        error: e,
+  /**
+   * Pull a fresh registry snapshot from the configured URL and persist it
+   * to the per-instance cache. Returns `{ ok: true, fetchedAt }` on a
+   * successful update, otherwise `{ ok: false, error }`. Callers are the
+   * UI button in ProvidersPanel, `opencorvus models --refresh`, and
+   * `POST /provider/refresh` — there is no implicit invocation.
+   */
+  export async function refresh(): Promise<
+    { ok: true; fetchedAt: number } | { ok: false; error: string }
+  > {
+    try {
+      const result = await fetch(`${url()}/api.json`, {
+        headers: { "User-Agent": Installation.USER_AGENT },
+        signal: AbortSignal.timeout(10 * 1000),
       })
-    })
-    if (result && result.ok) {
+      if (!result.ok) {
+        const error = `${result.status} ${result.statusText}`
+        log.error("registry refresh non-2xx", { error })
+        return { ok: false, error }
+      }
       await Filesystem.write(filepath, await result.text())
       ModelsDev.Data.reset()
+      const fetchedAt = Date.now()
+      log.info("registry refreshed", { fetchedAt })
+      return { ok: true, fetchedAt }
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e)
+      log.error("registry refresh failed", { error })
+      return { ok: false, error }
     }
   }
-}
-
-if (!Flag.OPENCORVUS_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
-  ModelsDev.refresh()
-  setInterval(
-    async () => {
-      await ModelsDev.refresh()
-    },
-    60 * 1000 * 60,
-  ).unref()
 }

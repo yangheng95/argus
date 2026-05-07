@@ -4,12 +4,13 @@
 use std::{
     collections::VecDeque,
     fs,
-    net::TcpListener,
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
     path::PathBuf,
     process::{Child, Command, Stdio},
-    sync::Mutex,
+    sync::{Condvar, Mutex, OnceLock},
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 #[cfg(windows)]
@@ -29,8 +30,9 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
-const LOCAL_SERVER_HOST: &str = "127.0.0.1";
-const DEFAULT_SERVER_PORT: u16 = 7878;
+include!(concat!(env!("OUT_DIR"), "/server_defaults.rs"));
+
+const LOCAL_SERVER_HOST: &str = DEFAULT_SERVER_HOST;
 const TRAY_ID: &str = "main-tray";
 const TRAY_TOOLTIP_DEFAULT: &str = "OpenCorvus";
 const TRAY_TOOLTIP_ALERT: &str = "OpenCorvus - Action required";
@@ -174,13 +176,24 @@ struct TrayAttentionState {
     flashing: bool,
 }
 
-struct TrayAttention(Mutex<TrayAttentionState>);
+struct TrayAttention {
+    state: Mutex<TrayAttentionState>,
+    cvar: Condvar,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct OverlayServerInfo {
     port: u16,
     url: String,
+    /// PID of the spawned sidecar `bun` process. Surfaced in the title-bar
+    /// connection badge next to the port so an operator can `kill <pid>` /
+    /// `lsof -p <pid>` without hunting through netstat or Activity Monitor.
+    /// Optional because some callers populate it lazily — every live
+    /// callsite goes through `server_info_with_pid` (the legacy
+    /// pid-less `server_info` constructor was deleted as dead code).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pid: Option<u32>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -192,12 +205,10 @@ struct OverlaySettings {
     username: Option<String>,
     executor: Option<String>,
     init_git: Option<bool>,
-    always_on_top: Option<bool>,
-    unattended: Option<bool>,
-    auto_permission: Option<bool>,
-    auto_question: Option<bool>,
+    sidebar_collapsed: Option<bool>,
     sidebar_width: Option<u32>,
     sections_width: Option<u32>,
+    workspace_panel_height: Option<u32>,
     opacity: Option<f64>,
     zoom: Option<f64>,
     theme: Option<String>,
@@ -207,67 +218,34 @@ struct OverlaySettings {
     workspace_task_id: Option<String>,
     workspace_session_id: Option<String>,
     workspace_directory: Option<String>,
+    desktop_notifications: Option<bool>,
 }
 
-fn overlay_directory(directory: Option<String>) -> Option<PathBuf> {
-    directory.and_then(|item| {
-        let item = item.trim();
-        (!item.is_empty()).then(|| PathBuf::from(item))
-    })
-}
-
-fn overlay_settings_path(directory: Option<String>) -> Result<PathBuf, String> {
-    overlay_directory(directory)
-        .map(|dir| Ok(dir.join(".opencorvus").join("overlay.json")))
-        .unwrap_or_else(|| {
-            std::env::current_dir()
-                .map(|dir| dir.join(".opencorvus").join("overlay.json"))
-                .map_err(|err| err.to_string())
-        })
-}
-
-fn legacy_overlay_settings_path() -> Result<PathBuf, String> {
-    std::env::current_dir()
+fn overlay_settings_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
         .map(|dir| dir.join("overlay.json"))
         .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
-fn overlay_settings_load(directory: Option<String>) -> Result<OverlaySettings, String> {
-    let path = overlay_settings_path(directory)?;
-    if path.exists() {
-        let text = fs::read_to_string(path).map_err(|err| err.to_string())?;
-        return serde_json::from_str(&text).map_err(|err| err.to_string());
-    }
-
-    let legacy = legacy_overlay_settings_path()?;
-    if !legacy.exists() {
+fn overlay_settings_load<R: Runtime>(app: AppHandle<R>) -> Result<OverlaySettings, String> {
+    let path = overlay_settings_path(&app)?;
+    if !path.exists() {
         return Ok(OverlaySettings::default());
     }
-
-    let text = fs::read_to_string(&legacy).map_err(|err| err.to_string())?;
-    let settings: OverlaySettings = serde_json::from_str(&text).map_err(|err| err.to_string())?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-    }
-    fs::write(&path, text).map_err(|err| err.to_string())?;
-    let _ = fs::remove_file(legacy);
-    Ok(settings)
+    let text = fs::read_to_string(path).map_err(|err| err.to_string())?;
+    serde_json::from_str(&text).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
-fn overlay_settings_save(settings: OverlaySettings, directory: Option<String>) -> Result<bool, String> {
-    let path = overlay_settings_path(directory.or_else(|| settings.directory.clone()))?;
+fn overlay_settings_save<R: Runtime>(app: AppHandle<R>, settings: OverlaySettings) -> Result<bool, String> {
+    let path = overlay_settings_path(&app)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
     let text = serde_json::to_string_pretty(&settings).map_err(|err| err.to_string())?;
     fs::write(&path, text).map_err(|err| err.to_string())?;
-    if let Ok(legacy) = legacy_overlay_settings_path() {
-        if legacy != path {
-            let _ = fs::remove_file(legacy);
-        }
-    }
     Ok(true)
 }
 
@@ -295,6 +273,70 @@ fn overlay_open_url<R: Runtime>(app: AppHandle<R>, url: String) -> Result<bool, 
         .map_err(|err| err.to_string())
 }
 
+#[derive(Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum ProjectEditor {
+    Vscode,
+    Pycharm,
+    Webstorm,
+    Intellij,
+    Cursor,
+}
+
+impl ProjectEditor {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Vscode => "VS Code",
+            Self::Pycharm => "PyCharm",
+            Self::Webstorm => "WebStorm",
+            Self::Intellij => "IntelliJ IDEA",
+            Self::Cursor => "Cursor",
+        }
+    }
+
+    fn command(self) -> &'static str {
+        #[cfg(windows)]
+        {
+            match self {
+                Self::Vscode => "code.cmd",
+                Self::Pycharm => "pycharm64.exe",
+                Self::Webstorm => "webstorm64.exe",
+                Self::Intellij => "idea64.exe",
+                Self::Cursor => "cursor.cmd",
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            match self {
+                Self::Vscode => "code",
+                Self::Pycharm => "pycharm",
+                Self::Webstorm => "webstorm",
+                Self::Intellij => "idea",
+                Self::Cursor => "cursor",
+            }
+        }
+    }
+}
+
+#[tauri::command]
+fn overlay_open_project_editor(editor: ProjectEditor, path: String) -> Result<bool, String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Ok(false);
+    }
+
+    let mut cmd = Command::new(editor.command());
+    cmd.arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.spawn()
+        .map(|_| true)
+        .map_err(|err| format!("{}: {}", editor.label(), err))
+}
+
 #[tauri::command]
 fn overlay_create_dir(path: String) -> Result<bool, String> {
     let path = path.trim();
@@ -320,42 +362,39 @@ fn overlay_write_file(path: String, content: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn overlay_create_temp_dir() -> Result<String, String> {
-    let root = std::env::temp_dir();
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| err.to_string())?
-        .as_millis();
-
-    for attempt in 0..64 {
-        let suffix = if attempt == 0 {
-            format!("{stamp}-{}", std::process::id())
-        } else {
-            format!("{stamp}-{}-{attempt}", std::process::id())
-        };
-        let path = root.join(format!("opencorvus-overlay-{suffix}"));
-        match fs::create_dir(&path) {
-            Ok(()) => return Ok(path.to_string_lossy().to_string()),
-            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(err) => return Err(err.to_string()),
-        }
-    }
-
-    Err("failed to create overlay temp directory".into())
-}
-
-#[tauri::command]
 fn overlay_pick_dir<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> Result<Option<String>, String> {
-    let dialog = if let Some(start) = start.map(|item| item.trim().to_string()).filter(|item| !item.is_empty()) {
-        app.dialog().file().set_directory(start)
+    let start_clean = start
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty());
+    let dialog = if let Some(ref dir) = start_clean {
+        app.dialog().file().set_directory(dir)
     } else {
         app.dialog().file()
     };
 
-    Ok(dialog
-        .blocking_pick_folder()
-        .and_then(|item| item.into_path().ok())
-        .map(|item| item.to_string_lossy().to_string()))
+    let picked = dialog.blocking_pick_folder();
+    let result = picked
+        .and_then(|item| {
+            // Try into_path first; fall back to display string for shell/virtual paths
+            match item.into_path() {
+                Ok(p) => Some(p.to_string_lossy().to_string()),
+                Err(item_back) => {
+                    let s = item_back.to_string();
+                    if s.is_empty() { None } else { Some(s) }
+                }
+            }
+        });
+
+    // Guard: if the dialog returned exactly the start directory, treat it as
+    // a cancelled/no-op pick — the user did not select anything new.
+    if let (Some(ref picked_path), Some(ref start_path)) = (&result, &start_clean) {
+        let norm = |s: &str| s.trim_end_matches(['/', '\\']).replace('\\', "/").to_lowercase();
+        if norm(picked_path) == norm(start_path) {
+            return Ok(None);
+        }
+    }
+
+    Ok(result)
 }
 
 fn mime_from_ext(filename: &str) -> &'static str {
@@ -521,10 +560,11 @@ fn server_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
         .find(|path| path.exists())
 }
 
-fn server_info(port: u16) -> OverlayServerInfo {
+fn server_info_with_pid(port: u16, pid: u32) -> OverlayServerInfo {
     OverlayServerInfo {
         port,
         url: format!("http://{LOCAL_SERVER_HOST}:{port}"),
+        pid: Some(pid),
     }
 }
 
@@ -554,12 +594,24 @@ fn next_server_port() -> Result<u16, String> {
 
 fn stop_server<R: Runtime>(app: &AppHandle<R>) {
     let state = app.state::<Server>();
-    let mut lock = match state.0.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            eprintln!("overlay: server mutex poisoned in stop_server, recovering");
-            poisoned.into_inner()
+    let mut lock = state.0.lock().unwrap();
+
+    let exited_gracefully = if let (Some(port), Some(child)) = (lock.port, lock.child.as_mut()) {
+        match request_server_shutdown(port) {
+            Ok(()) => match wait_for_child_exit(child, Duration::from_secs(5)) {
+                Ok(exited) => exited,
+                Err(err) => {
+                    eprintln!("overlay: failed while waiting for graceful shutdown: {err}");
+                    false
+                }
+            },
+            Err(err) => {
+                eprintln!("overlay: graceful shutdown request failed: {err}");
+                false
+            }
         }
+    } else {
+        false
     };
 
     // Windows: drop the Job Object handle → KILL_ON_JOB_CLOSE terminates every
@@ -571,7 +623,7 @@ fn stop_server<R: Runtime>(app: &AppHandle<R>) {
     // grandchildren that inherited the group (LSP servers, PTY shells, etc.).
     #[cfg(unix)]
     if let Some(pgid) = lock.pgid.take() {
-        if pgid > 1 {
+        if !exited_gracefully && pgid > 1 {
             // SAFETY: kill(2) is always safe to call; SIGKILL = 9.
             unsafe { kill(-(pgid as i32), 9); }
         }
@@ -579,13 +631,156 @@ fn stop_server<R: Runtime>(app: &AppHandle<R>) {
 
     // Reap the direct child (may already be dead from the above).
     if let Some(mut child) = lock.child.take() {
-        let _ = child.kill(); // Ignore error — process may already be gone.
+        if !exited_gracefully {
+            let _ = child.kill(); // Ignore error — process may already be gone.
+        }
         if let Err(err) = child.wait() {
             eprintln!("overlay: failed to wait on server process: {err}");
         }
     }
 
     lock.port = None;
+}
+
+fn server_shutdown_authorization() -> Option<String> {
+    let password = std::env::var("OPENCORVUS_SERVER_PASSWORD").ok()?;
+    let password = password.trim();
+    if password.is_empty() {
+        return None;
+    }
+    let username = std::env::var("OPENCORVUS_SERVER_USERNAME")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "opencorvus".to_string());
+    Some(format!("Basic {}", STANDARD.encode(format!("{username}:{password}"))))
+}
+
+fn request_server_shutdown(port: u16) -> Result<(), String> {
+    let mut stream = TcpStream::connect((LOCAL_SERVER_HOST, port)).map_err(|err| err.to_string())?;
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(750)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(750)));
+
+    let mut request = format!(
+        "POST /shutdown HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: close\r\nContent-Length: 0\r\n",
+        host = LOCAL_SERVER_HOST,
+        port = port,
+    );
+    if let Some(auth) = server_shutdown_authorization() {
+        request.push_str(&format!("Authorization: {auth}\r\n"));
+    }
+    request.push_str("\r\n");
+
+    stream.write_all(request.as_bytes()).map_err(|err| err.to_string())?;
+    let mut response = String::new();
+    let _ = stream.read_to_string(&mut response);
+    Ok(())
+}
+
+fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> Result<bool, String> {
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return Ok(true),
+            Ok(None) => {
+                if started.elapsed() >= timeout {
+                    return Ok(false);
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(err) => return Err(err.to_string()),
+        }
+    }
+}
+
+/// Resolve the writable directory we want the spawned sidecar's
+/// `process.cwd()` to be. The sidecar inherits whatever cwd the Tauri
+/// host had when it spawned, which on macOS .app launched from
+/// Finder/Dock is `/` — a read-only directory that turned every
+/// fallback-to-cwd code path on the server into a 500 (W2-V31 fixed
+/// the explicit fallback; this fix removes the implicit one too so a
+/// future regression cannot reach `/` again).
+///
+/// We use the same per-OS app-data root that `opencorvus_log_dir`
+/// already creates and that the sidecar already has write access to.
+/// Walking the path so the cwd lands at the parent of `log/` keeps
+/// scope minimal — we don't want to land *inside* `log/` because
+/// every random `git init` or `mkdir` the sidecar issues would then
+/// pollute the log tree.
+fn sidecar_cwd_dir() -> PathBuf {
+    opencorvus_log_dir()
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(std::env::temp_dir)
+}
+
+/// Resolve the directory where opencorvus stores its log files. Mirrors
+/// `Global.Path.log` on the sidecar side so all logs land together:
+///   - Windows: %LOCALAPPDATA%\opencorvus\log
+///   - macOS:   ~/Library/Application Support/opencorvus/log (xdg fallback below)
+///   - Linux:   $XDG_DATA_HOME/opencorvus/log or ~/.local/share/opencorvus/log
+/// Falls back to the system temp dir if no home is resolvable.
+fn opencorvus_log_dir() -> PathBuf {
+    if let Ok(portable) = std::env::var("OPENCORVUS_HOME") {
+        if !portable.trim().is_empty() {
+            return PathBuf::from(portable).join("data").join("log");
+        }
+    }
+    #[cfg(windows)]
+    {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            if !local.is_empty() {
+                return PathBuf::from(local).join("opencorvus").join("log");
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+            if !xdg.is_empty() {
+                return PathBuf::from(xdg).join("opencorvus").join("log");
+            }
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.is_empty() {
+                return PathBuf::from(home).join(".local").join("share").join("opencorvus").join("log");
+            }
+        }
+    }
+    std::env::temp_dir().join("opencorvus").join("log")
+}
+
+/// Build (stdout, stderr) Stdio targets for the spawned sidecar. Both streams
+/// are written to a single per-launch file so chronological order is preserved.
+/// On any failure we fall back to Stdio::null() — capturing logs is best-effort
+/// diagnostic plumbing, not a hard requirement for the sidecar to run.
+fn sidecar_stdio_targets() -> (Stdio, Stdio) {
+    let dir = opencorvus_log_dir();
+    if let Err(err) = fs::create_dir_all(&dir) {
+        eprintln!("overlay: cannot create sidecar log dir {:?}: {}", dir, err);
+        return (Stdio::null(), Stdio::null());
+    }
+    let pid = std::process::id();
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let path = dir.join(format!("sidecar-{}-{}.log", secs, pid));
+    let file = match fs::OpenOptions::new().create(true).append(true).open(&path) {
+        Ok(f) => f,
+        Err(err) => {
+            eprintln!("overlay: cannot open sidecar log {:?}: {}", path, err);
+            return (Stdio::null(), Stdio::null());
+        }
+    };
+    let dup = match file.try_clone() {
+        Ok(f) => f,
+        Err(err) => {
+            eprintln!("overlay: cannot clone sidecar log handle: {}", err);
+            return (Stdio::null(), Stdio::null());
+        }
+    };
+    (Stdio::from(file), Stdio::from(dup))
 }
 
 fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, String> {
@@ -595,8 +790,31 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
     };
     let port = next_server_port()?;
 
+    // Capture the sidecar's stdio to a per-launch log file. Without this,
+    // any panic the sidecar produces before its internal Log.init() writes
+    // the first record (env/proxy detection, registry probes, missing DLLs,
+    // bun runtime errors) is silently dropped — which is exactly what makes
+    // VM-only failures impossible to diagnose. The Tauri-side stderr is
+    // already eaten by the windows_subsystem = "windows" attribute, so the
+    // log file is the only signal.
+    let (stdout_target, stderr_target) = sidecar_stdio_targets();
+
+    // W2-V35: ensure the spawned sidecar inherits a writable, predictable
+    // cwd. Without this, macOS .app launched from Finder/Dock spawns the
+    // sidecar with `cwd="/"`. Anything inside the sidecar that reads
+    // `process.cwd()` (or did so before W2-V31 / W2-V32 removed the
+    // server-side fallbacks) would then attempt to write at `/` and
+    // permission-deny across every project route.
+    let sidecar_cwd = sidecar_cwd_dir();
+    if let Err(err) = fs::create_dir_all(&sidecar_cwd) {
+        eprintln!(
+            "overlay: cannot create sidecar cwd {:?}: {} (continuing with default cwd inheritance)",
+            sidecar_cwd, err
+        );
+    }
     let mut cmd = Command::new(path);
-    cmd.arg("serve")
+    cmd.current_dir(&sidecar_cwd)
+        .arg("serve")
         .arg("--hostname")
         .arg(LOCAL_SERVER_HOST)
         .arg("--port")
@@ -604,9 +822,17 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
         .env("OPENCORVUS_VERSION", env!("CARGO_PKG_VERSION"))
         .env("OPENCORVUS_CHANNEL", "latest")
         .env("OPENCORVUS_CLIENT", "app")
+        // Overlay-launched opencorvus must always write trace files under the
+        // active project's `<Instance.directory>/.opencorvus/trace/`. Inheriting
+        // a stray `OPENCORVUS_AGENT_TRACE_DIR` from the launching shell (or
+        // a prior benchmark run that exported it globally) would silently
+        // route trace into a stale temp path instead of the project directory,
+        // and the overlay's debug surfaces would never see it. Strip it before
+        // spawn so the env override only applies where it's set on purpose.
+        .env_remove("OPENCORVUS_AGENT_TRACE_DIR")
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(stdout_target)
+        .stderr(stderr_target);
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
     // Unix: move child into its own process group so kill(-pgid) reaches all
@@ -635,15 +861,10 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
     #[cfg(unix)]
     let pgid = child.id();
 
-    let info = server_info(port);
+    let pid = child.id();
+    let info = server_info_with_pid(port, pid);
     let state = app.state::<Server>();
-    let mut lock = match state.0.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            eprintln!("overlay: server mutex poisoned in start_server, recovering");
-            poisoned.into_inner()
-        }
-    };
+    let mut lock = state.0.lock().unwrap();
     lock.child = Some(child);
     lock.port = Some(port);
     #[cfg(windows)]
@@ -661,18 +882,17 @@ fn restart_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, S
 fn ensure_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, String> {
     {
         let state = app.state::<Server>();
-        let mut lock = match state.0.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                eprintln!("overlay: server mutex poisoned in ensure_server, recovering");
-                poisoned.into_inner()
-            }
-        };
+        let mut lock = state.0.lock().unwrap();
+        // Capture `port` BEFORE borrowing `lock.child` mutably — otherwise
+        // the immutable read inside the `Ok(None)` arm overlaps the mutable
+        // borrow held by `child` and the borrow checker rejects (E0502).
+        let port_snapshot = lock.port;
         if let Some(child) = lock.child.as_mut() {
             match child.try_wait() {
                 Ok(None) => {
-                    if let Some(port) = lock.port {
-                        return Ok(server_info(port));
+                    if let Some(port) = port_snapshot {
+                        let pid = child.id();
+                        return Ok(server_info_with_pid(port, pid));
                     }
                 }
                 Ok(Some(_)) | Err(_) => {
@@ -873,36 +1093,26 @@ fn apply_tray_attention<R: Runtime>(app: &AppHandle<R>, active: bool) {
 }
 
 fn clear_tray_attention<R: Runtime>(app: &AppHandle<R>) {
-    let state = app.state::<TrayAttention>();
-    let mut lock = match state.0.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            eprintln!("overlay: tray attention mutex poisoned while clearing, recovering");
-            poisoned.into_inner()
-        }
-    };
+    let attention = app.state::<TrayAttention>();
+    let mut lock = attention.state.lock().unwrap();
     lock.active = false;
     lock.flashing = false;
     drop(lock);
+    attention.cvar.notify_one();
     apply_tray_attention(app, false);
     request_attention(app, false);
 }
 
 #[tauri::command]
 fn overlay_attention_set<R: Runtime>(app: AppHandle<R>, active: bool) -> Result<bool, String> {
-    let state = app.state::<TrayAttention>();
-    let mut lock = match state.0.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            eprintln!("overlay: tray attention mutex poisoned while updating, recovering");
-            poisoned.into_inner()
-        }
-    };
+    let attention = app.state::<TrayAttention>();
+    let mut lock = attention.state.lock().unwrap();
     lock.active = active;
     if !active {
         lock.flashing = false;
     }
     drop(lock);
+    attention.cvar.notify_one();
 
     if active {
         request_attention(&app, true);
@@ -939,8 +1149,8 @@ fn main() {
             overlay_server_restart,
             overlay_open_path,
             overlay_open_url,
+            overlay_open_project_editor,
             overlay_create_dir,
-            overlay_create_temp_dir,
             overlay_write_file,
             overlay_pick_dir,
             overlay_pick_files,
@@ -949,7 +1159,10 @@ fn main() {
         ])
         .setup(|app| {
             app.manage(Server(Mutex::new(ServerState::default())));
-            app.manage(TrayAttention(Mutex::new(TrayAttentionState::default())));
+            app.manage(TrayAttention {
+                state: Mutex::new(TrayAttentionState::default()),
+                cvar: Condvar::new(),
+            });
             let handle = app.handle().clone();
             restart_server(&handle)?;
 
@@ -970,9 +1183,9 @@ fn main() {
                     // Panel: ~80% width (clamped 760..1600), ~72% height (clamped 480..920)
                     let w = (logical_w * 0.80).clamp(760.0, 1600.0);
                     let h = (logical_h * 0.72).clamp(480.0, 920.0);
-                    // Position: bottom-right with 24px margin
-                    let x = logical_w - w - 24.0;
-                    let y = logical_h - h - 64.0; // leave room for taskbar
+                    // Position: centered on primary monitor
+                    let x = (logical_w - w) / 2.0;
+                    let y = (logical_h - h) / 2.0;
 
                     let _ = window.set_size(tauri::LogicalSize::new(w, h));
                     let _ = window.set_position(tauri::LogicalPosition::new(x, y));
@@ -1053,31 +1266,25 @@ fn main() {
             {
                 let app = app.handle().clone();
                 thread::spawn(move || loop {
-                    thread::sleep(Duration::from_millis(700));
-                    let next = {
-                        let state = app.state::<TrayAttention>();
-                        let mut lock = match state.0.lock() {
-                            Ok(guard) => guard,
-                            Err(poisoned) => {
-                                eprintln!("overlay: tray attention mutex poisoned in flasher, recovering");
-                                poisoned.into_inner()
-                            }
-                        };
-                        if !lock.active {
-                            if !lock.flashing {
-                                None
-                            } else {
-                                lock.flashing = false;
-                                Some(false)
-                            }
-                        } else {
-                            lock.flashing = !lock.flashing;
-                            Some(lock.flashing)
-                        }
-                    };
-                    if let Some(active) = next {
-                        apply_tray_attention(&app, active);
-                    }
+                    let attention = app.state::<TrayAttention>();
+                    // Block until attention becomes active. No polling, no
+                    // wake-ups while idle — set/clear notify the cvar.
+                    let mut lock = attention
+                        .cvar
+                        .wait_while(attention.state.lock().unwrap(), |s| !s.active)
+                        .unwrap();
+                    lock.flashing = !lock.flashing;
+                    let next = lock.active && lock.flashing;
+                    drop(lock);
+                    apply_tray_attention(&app, next);
+                    // Sleep 700ms; set/clear can wake us early via notify_one
+                    // so a clear takes effect on the next iteration without
+                    // waiting out the remainder of this tick.
+                    let lock = attention.state.lock().unwrap();
+                    let _ = attention
+                        .cvar
+                        .wait_timeout(lock, Duration::from_millis(700))
+                        .unwrap();
                 });
             }
 
@@ -1092,10 +1299,26 @@ fn main() {
         })
 }
 
-/// Build a tray-specific icon by stripping the flat background from the bundled logo.
-fn create_tray_icon() -> tauri::image::Image<'static> {
+// Tray icons are decoded once (PNG decode + Lanczos3 resize + flood-fill) and
+// cached for the lifetime of the process. The flasher swaps icons every 700ms
+// while attention is active, so re-running the pipeline each call burned CPU
+// for no reason.
+
+struct CachedIcon {
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+}
+
+fn cached_icon_image(cached: &'static CachedIcon) -> tauri::image::Image<'static> {
+    tauri::image::Image::new(cached.rgba.as_slice(), cached.width, cached.height)
+}
+
+fn build_normal_tray_icon() -> CachedIcon {
     if let Some(icon) = tray_icon_from_bundle() {
-        return icon;
+        let width = icon.width();
+        let height = icon.height();
+        return CachedIcon { rgba: icon.rgba().to_vec(), width, height };
     }
 
     let size: u32 = 32;
@@ -1125,23 +1348,25 @@ fn create_tray_icon() -> tauri::image::Image<'static> {
         }
     }
 
-    tauri::image::Image::new_owned(rgba, size, size)
+    CachedIcon { rgba, width: size, height: size }
 }
 
-fn create_attention_tray_icon() -> tauri::image::Image<'static> {
-    let size: u32 = 32;
-    let mut rgba = create_tray_icon().rgba().to_vec();
-    let cx = 24.0;
-    let cy = 8.0;
-    let outer = 6.0;
-    let inner = 3.0;
+fn build_attention_tray_icon() -> CachedIcon {
+    let base = build_normal_tray_icon();
+    let mut rgba = base.rgba.clone();
+    let width = base.width;
+    let height = base.height;
+    let cx = 24.0_f64;
+    let cy = 8.0_f64;
+    let outer = 6.0_f64;
+    let inner = 3.0_f64;
 
-    for y in 0..size {
-        for x in 0..size {
+    for y in 0..height {
+        for x in 0..width {
             let dx = x as f64 - cx;
             let dy = y as f64 - cy;
             let dist = (dx * dx + dy * dy).sqrt();
-            let idx = ((y * size + x) * 4) as usize;
+            let idx = ((y * width + x) * 4) as usize;
 
             if dist <= outer {
                 rgba[idx] = 0xf8;
@@ -1158,5 +1383,77 @@ fn create_attention_tray_icon() -> tauri::image::Image<'static> {
         }
     }
 
-    tauri::image::Image::new_owned(rgba, size, size)
+    CachedIcon { rgba, width, height }
+}
+
+fn create_tray_icon() -> tauri::image::Image<'static> {
+    static CACHED: OnceLock<CachedIcon> = OnceLock::new();
+    cached_icon_image(CACHED.get_or_init(build_normal_tray_icon))
+}
+
+fn create_attention_tray_icon() -> tauri::image::Image<'static> {
+    static CACHED: OnceLock<CachedIcon> = OnceLock::new();
+    cached_icon_image(CACHED.get_or_init(build_attention_tray_icon))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    /// W2-V35 — `sidecar_cwd_dir()` MUST never resolve to `/` (macOS app
+    /// bundle launch default) or any other read-only root. Pre-fix, the
+    /// Tauri sidecar inherited cwd from Finder, which is `/` on macOS;
+    /// every server-side route that fell back to `process.cwd()` then
+    /// tried to write at `/` and permission-denied. This test pins the
+    /// new contract: the chosen cwd is a child of an app-data root, not
+    /// the filesystem root.
+    #[test]
+    fn sidecar_cwd_dir_is_not_filesystem_root() {
+        let dir = sidecar_cwd_dir();
+        assert_ne!(dir, Path::new("/"), "sidecar cwd should not be filesystem root");
+        // The chosen cwd must have at least one non-root path component
+        // (e.g. `opencorvus`, `Application Support`, `AppData`, etc.) —
+        // landing directly at `/` or `C:\` is the regression we're guarding
+        // against.
+        let has_meaningful_component = dir
+            .components()
+            .filter(|c| matches!(c, std::path::Component::Normal(_)))
+            .next()
+            .is_some();
+        assert!(has_meaningful_component, "sidecar cwd has no meaningful path components: {:?}", dir);
+    }
+
+    /// `sidecar_cwd_dir()` must be deterministic for the same env so
+    /// repeated launches don't drift between locations.
+    #[test]
+    fn sidecar_cwd_dir_is_deterministic() {
+        let a = sidecar_cwd_dir();
+        let b = sidecar_cwd_dir();
+        assert_eq!(a, b);
+    }
+
+    /// On a portable install (`OPENCORVUS_HOME` set), the sidecar cwd
+    /// must point under that root rather than the per-user app-data
+    /// directory.
+    #[test]
+    fn sidecar_cwd_dir_respects_opencorvus_home() {
+        let original = std::env::var("OPENCORVUS_HOME").ok();
+        let tmp = std::env::temp_dir().join("oc_cwd_test_portable");
+        std::env::set_var("OPENCORVUS_HOME", &tmp);
+        let dir = sidecar_cwd_dir();
+        // Reset before assert so a panic doesn't leak the var.
+        match original {
+            Some(v) => std::env::set_var("OPENCORVUS_HOME", v),
+            None => std::env::remove_var("OPENCORVUS_HOME"),
+        }
+        // The portable layout is `OPENCORVUS_HOME/data/log` for log_dir;
+        // the cwd we pick is its parent, i.e. `OPENCORVUS_HOME/data`.
+        assert!(
+            dir.starts_with(&tmp),
+            "expected cwd to start with {:?}, got {:?}",
+            tmp,
+            dir
+        );
+    }
 }

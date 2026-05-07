@@ -3,7 +3,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Decimal } from "decimal.js"
 import z from "zod"
-import { type ProviderMetadata } from "ai"
+import { type LanguageModelUsage, type ProviderMetadata } from "ai"
 import { Config } from "../config/config"
 import { Flag } from "../flag/flag"
 import { Identifier } from "../id/id"
@@ -11,7 +11,7 @@ import { Installation } from "../installation"
 
 import { Database, NotFoundError, eq, and, gte, isNull, desc, like, inArray, lt } from "../storage/db"
 import type { SQL } from "../storage/db"
-import { SessionTable, MessageTable, PartTable } from "./session.sql"
+import { SessionTable, MessageTable, PartTable, type SessionKind } from "./session.sql"
 import { ProjectTable } from "../project/project.sql"
 import { Storage } from "@/storage/storage"
 import { Log } from "../util/log"
@@ -25,11 +25,15 @@ import { Snapshot } from "@/snapshot"
 
 import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
-import type { LanguageModelV2Usage } from "@ai-sdk/provider"
 import { iife } from "@/util/iife"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
+
+  // [observability/phase-0] Dedupe set for the cache_write extraction-miss log
+  // in getUsage(). Keyed by `${providerID}/${modelID}` so we emit one structured
+  // sample per distinct provider+model combination per process lifetime.
+  const cacheWriteMissLogged = new Set<string>()
 
   const parentTitlePrefix = "New session - "
   const childTitlePrefix = "Child session - "
@@ -53,11 +57,9 @@ export namespace Session {
             additions: row.summary_additions ?? 0,
             deletions: row.summary_deletions ?? 0,
             files: row.summary_files ?? 0,
-            diffs: row.summary_diffs ?? undefined,
           }
         : undefined
     const share = row.share_url ? { url: row.share_url } : undefined
-    const revert = row.revert ?? undefined
     return {
       id: row.id,
       slug: row.slug,
@@ -66,9 +68,11 @@ export namespace Session {
       parentID: row.parent_id ?? undefined,
       title: row.title,
       version: row.version,
+      kind: row.kind,
+      goalID: row.goal_id ?? undefined,
+      metadata: row.metadata ?? undefined,
       summary,
       share,
-      revert,
       permission: row.permission ?? undefined,
       time: {
         created: row.time_created,
@@ -88,12 +92,13 @@ export namespace Session {
       directory: info.directory,
       title: info.title,
       version: info.version,
+      kind: info.kind,
+      goal_id: info.goalID ?? null,
+      metadata: info.metadata ?? null,
       share_url: info.share?.url,
       summary_additions: info.summary?.additions,
       summary_deletions: info.summary?.deletions,
       summary_files: info.summary?.files,
-      summary_diffs: info.summary?.diffs,
-      revert: info.revert ?? null,
       permission: info.permission,
       time_created: info.time.created,
       time_updated: info.time.updated,
@@ -124,7 +129,6 @@ export namespace Session {
           additions: z.number(),
           deletions: z.number(),
           files: z.number(),
-          diffs: Snapshot.FileDiff.array().optional(),
         })
         .optional(),
       share: z
@@ -134,6 +138,32 @@ export namespace Session {
         .optional(),
       title: z.string(),
       version: z.string(),
+      /** Session's role/purpose, fixed at creation. Authoritative source of
+       *  "what is this session for"; UI channel routing reads this column
+       *  directly. See SessionKind in session.sql.ts. */
+      kind: z.enum([
+        "root",
+        "orchestrator",
+        "assistant",
+        "gateway",
+        "intent-analysis",
+        "requirements",
+        "design-analyst",
+        "goal",
+        "architect",
+        "integrity",
+        "delivery",
+        "executor",
+        "build",
+        "evaluator",
+        "system",
+      ]),
+      /** Goal this session belongs to (executor container / build
+       *  worker / evaluator only); drives overlay card nesting. Fixed at
+       *  creation. */
+      goalID: Identifier.schema("goal").optional(),
+      /** Free-form per-session state. */
+      metadata: z.record(z.string(), z.any()).optional(),
       time: z.object({
         created: z.number(),
         updated: z.number(),
@@ -141,14 +171,6 @@ export namespace Session {
         archived: z.number().optional(),
       }),
       permission: PermissionNext.Ruleset.optional(),
-      revert: z
-        .object({
-          messageID: z.string(),
-          partID: z.string().optional(),
-          snapshot: z.string().optional(),
-          diff: z.string().optional(),
-        })
-        .optional(),
     })
     .meta({
       ref: "Session",
@@ -209,19 +231,21 @@ export namespace Session {
   }
 
   export const create = fn(
-    z
-      .object({
-        parentID: Identifier.schema("session").optional(),
-        title: z.string().optional(),
-        permission: Info.shape.permission,
-      })
-      .optional(),
+    z.object({
+      kind: Info.shape.kind,
+      goalID: Info.shape.goalID,
+      parentID: Identifier.schema("session").optional(),
+      title: z.string().optional(),
+      permission: Info.shape.permission,
+    }),
     async (input) => {
       return createNext({
-        parentID: input?.parentID,
+        kind: input.kind,
+        goalID: input.goalID,
+        parentID: input.parentID,
         directory: Instance.directory,
-        title: input?.title,
-        permission: input?.permission,
+        title: input.title,
+        permission: input.permission,
       })
     },
   )
@@ -235,9 +259,14 @@ export namespace Session {
       const original = await get(input.sessionID)
       if (!original) throw new Error("session not found")
       const title = getForkedTitle(original.title)
+      // fork = clone: inherits the original session's kind and goal. This
+      // is the session's identity, not a default — forking a "delivery"
+      // session into an "executor" container would be semantically broken.
       const session = await createNext({
         directory: Instance.directory,
         parentID: input.sessionID,
+        kind: original.kind,
+        goalID: original.goalID,
         title,
       })
       const msgs = await messages({ sessionID: input.sessionID })
@@ -285,6 +314,14 @@ export namespace Session {
   })
 
   export async function createNext(input: {
+    /** Required. The session's role/purpose — see SessionKind in session.sql.ts.
+     *  Authoritative for UI channel routing. There is NO default: every
+     *  caller must state what the session is for. */
+    kind: SessionKind
+    /** Goal this session belongs to (executor/build only). Pass it
+     *  at creation so sessionGoalID() is a pure DB lookup — never inferred
+     *  from parent chains or registry state. */
+    goalID?: string
     id?: string
     title?: string
     parentID?: string
@@ -299,6 +336,8 @@ export namespace Session {
       directory: input.directory,
       parentID: input.parentID,
       title: input.title ?? createDefaultTitle(!!input.parentID),
+      kind: input.kind,
+      goalID: input.goalID,
       permission: input.permission,
       time: {
         created: Date.now(),
@@ -318,14 +357,6 @@ export namespace Session {
       info: result,
     })
     return result
-  }
-
-  export function plan(input: { slug: string; time: { created: number } }) {
-    return path.join(Instance.worktree, ".opencorvus", "plans", [input.time.created, input.slug].join("-") + ".md")
-  }
-
-  export function spec(input: { slug: string; time: { created: number } }) {
-    return path.join(Instance.worktree, ".opencorvus", "specs", [input.time.created, input.slug].join("-") + ".md")
   }
 
   export const get = fn(Identifier.schema("session"), async (id) => {
@@ -349,6 +380,36 @@ export namespace Session {
           .get()
         if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
         const info = fromRow(row)
+        Database.effect(() => Bus.publish(Event.Updated, { info }))
+        return info
+      })
+    },
+  )
+
+  /**
+   * Merge `patch` into `session.metadata`, preserving keys not listed in patch.
+   * Atomic at row-level (single UPDATE under transaction). Caller-side merges
+   * race with concurrent writers; collapse all metadata writes for one session
+   * through the same code path to avoid lost updates.
+   */
+  export const mergeMetadata = fn(
+    z.object({
+      sessionID: Identifier.schema("session"),
+      patch: z.record(z.string(), z.any()),
+    }),
+    async (input) => {
+      return Database.transaction((db) => {
+        const row = db.select().from(SessionTable).where(eq(SessionTable.id, input.sessionID)).get()
+        if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
+        const current = (row.metadata ?? {}) as Record<string, unknown>
+        const next = { ...current, ...input.patch }
+        const updated = db
+          .update(SessionTable)
+          .set({ metadata: next })
+          .where(eq(SessionTable.id, input.sessionID))
+          .returning()
+          .get()!
+        const info = fromRow(updated)
         Database.effect(() => Bus.publish(Event.Updated, { info }))
         return info
       })
@@ -396,52 +457,6 @@ export namespace Session {
       })
     },
   )
-
-  export const setRevert = fn(
-    z.object({
-      sessionID: Identifier.schema("session"),
-      revert: Info.shape.revert,
-      summary: Info.shape.summary,
-    }),
-    async (input) => {
-      return Database.use((db) => {
-        const row = db
-          .update(SessionTable)
-          .set({
-            revert: input.revert ?? null,
-            summary_additions: input.summary?.additions,
-            summary_deletions: input.summary?.deletions,
-            summary_files: input.summary?.files,
-            time_updated: Date.now(),
-          })
-          .where(eq(SessionTable.id, input.sessionID))
-          .returning()
-          .get()
-        if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
-        const info = fromRow(row)
-        Database.effect(() => Bus.publish(Event.Updated, { info }))
-        return info
-      })
-    },
-  )
-
-  export const clearRevert = fn(Identifier.schema("session"), async (sessionID) => {
-    return Database.use((db) => {
-      const row = db
-        .update(SessionTable)
-        .set({
-          revert: null,
-          time_updated: Date.now(),
-        })
-        .where(eq(SessionTable.id, sessionID))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Session not found: ${sessionID}` })
-      const info = fromRow(row)
-      Database.effect(() => Bus.publish(Event.Updated, { info }))
-      return info
-    })
-  })
 
   export const setSummary = fn(
     z.object({
@@ -621,6 +636,7 @@ export namespace Session {
     // CASCADE delete handles messages and parts automatically
     Database.use((db) => {
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
+      Database.effect(() => Database.incrementalVacuum())
       Database.effect(() =>
         Bus.publish(Event.Deleted, {
           info: session,
@@ -674,6 +690,46 @@ export namespace Session {
     return msg
   })
 
+  /**
+   * Persist one logical message atomically.
+   *
+   * The message row itself must exist before parts can reference it, but
+   * publishing `message.updated` before the parts are durable creates an
+   * observable split-brain: listeners can see a header-only message and miss
+   * the authored text if the process dies mid-write. We therefore:
+   *   1. save the message row silently as the foreign-key target,
+   *   2. queue the visible `message.updated` event in the same transaction,
+   *   3. write every part in that same transaction,
+   *   4. optionally touch the owning session before commit.
+   *
+   * Because the bus effects drain only after the transaction commits, any
+   * observer that sees `message.updated` or `message.part.updated` is guaranteed
+   * to read the fully durable message bundle from SQLite.
+   */
+  export const persistMessage = fn(
+    z.object({
+      info: Message.Info,
+      parts: z.array(Message.Part),
+      touchSessionID: Identifier.schema("session").optional(),
+    }),
+    async (input) => {
+      Database.transaction(() => {
+        saveMessage(input.info)
+        updateMessage(input.info)
+        for (const part of input.parts) {
+          updatePart(part)
+        }
+        if (input.touchSessionID) {
+          touch(input.touchSessionID)
+        }
+      })
+      return {
+        info: input.info,
+        parts: input.parts,
+      }
+    },
+  )
+
   export const removeMessage = fn(
     z.object({
       sessionID: Identifier.schema("session"),
@@ -723,39 +779,6 @@ export namespace Session {
 
   const TOOL_STATUS_RANK: Record<string, number> = { pending: 0, running: 1, completed: 2, error: 2 }
 
-  function applyPartDelta(
-    part: Omit<Message.Part, "id" | "sessionID" | "messageID">,
-    input: {
-      field: string
-      delta: string
-    },
-  ) {
-    if (input.field === "text") {
-      if (!("text" in part) || typeof part.text !== "string") {
-        throw new Error(`Part ${part.type} does not support text deltas`)
-      }
-      return {
-        ...part,
-        text: part.text + input.delta,
-      }
-    }
-
-    if (input.field === "raw") {
-      if (part.type !== "tool") {
-        throw new Error(`Part ${part.type} does not support raw deltas`)
-      }
-      return {
-        ...part,
-        state: {
-          ...part.state,
-          raw: String(part.state?.raw ?? "") + input.delta,
-        },
-      }
-    }
-
-    throw new Error(`Unsupported part delta field: ${input.field}`)
-  }
-
   export const updatePart = fn(UpdatePartInput, async (part) => {
     const { id, messageID, sessionID, ...data } = part
     const time = Date.now()
@@ -791,6 +814,17 @@ export namespace Session {
     return part
   })
 
+  // updatePartDelta is a pure Bus publish. Deltas are ephemeral by contract —
+  // the protocol bridge (task-message-protocol-bridge.ts:bridgeDelta) routes
+  // them through ProtocolStore.dispatchEphemeral with no sequence and no
+  // replay, and every streaming caller (session-hooks, engine/runtime,
+  // session/processor) already maintains an in-memory accumulator and
+  // persists the complete Part via updatePart at each natural boundary
+  // (tool-call, reasoning-end, session.idle). Writing deltas to PartTable
+  // would therefore produce state that is overwritten at the next boundary
+  // and never observed — pure write amplification. Under parallel goal
+  // execution this amplification used to starve the SQLite write lock and
+  // stall the main event loop, which read as "overlay freezing".
   export const updatePartDelta = fn(
     z.object({
       sessionID: z.string(),
@@ -800,46 +834,14 @@ export namespace Session {
       delta: z.string(),
     }),
     async (input) => {
-      const time = Date.now()
-      Database.use((db) => {
-        const row = db
-          .select({ data: PartTable.data })
-          .from(PartTable)
-          .where(
-            and(
-              eq(PartTable.id, input.partID),
-              eq(PartTable.message_id, input.messageID),
-              eq(PartTable.session_id, input.sessionID),
-            ),
-          )
-          .get()
-        if (!row?.data) {
-          throw new NotFoundError({ message: `Part not found: ${input.partID}` })
-        }
-        db.update(PartTable)
-          .set({
-            data: applyPartDelta(row.data as Omit<Message.Part, "id" | "sessionID" | "messageID">, input),
-            time_updated: time,
-          })
-          .where(
-            and(
-              eq(PartTable.id, input.partID),
-              eq(PartTable.message_id, input.messageID),
-              eq(PartTable.session_id, input.sessionID),
-            ),
-          )
-          .run()
-        Database.effect(() =>
-          Bus.publish(Message.Event.PartDelta, input),
-        )
-      })
+      Bus.publish(Message.Event.PartDelta, input)
     },
   )
 
   export const getUsage = fn(
     z.object({
       model: z.custom<Provider.Model>(),
-      usage: z.custom<LanguageModelV2Usage>(),
+      usage: z.custom<LanguageModelUsage>(),
       metadata: z.custom<ProviderMetadata>().optional(),
     }),
     (input) => {
@@ -858,6 +860,37 @@ export namespace Session {
           (input.metadata?.["venice"] as any)?.["usage"]?.["cacheCreationInputTokens"] ??
           0) as number,
       )
+
+      // [observability/phase-0] When a provider reports cache hits (read>0) but we
+      // extract 0 write tokens, the provider either (a) genuinely doesn't expose
+      // a "creation" field (OpenAI-style servers manage cache server-side and only
+      // surface read), or (b) nests the field under a provider key we haven't
+      // added above. Log the metadata shape once per (provider, model) combo so
+      // the fix (or documented "this provider has no write signal") is
+      // evidence-based — not spammed per request.
+      if (cacheReadInputTokens > 0 && cacheWriteInputTokens === 0 && input.metadata) {
+        const dedupeKey = `${input.model.providerID}/${input.model.id}`
+        if (!cacheWriteMissLogged.has(dedupeKey)) {
+          cacheWriteMissLogged.add(dedupeKey)
+          const providerKeys = Object.keys(input.metadata)
+          const snapshot = providerKeys.reduce<Record<string, unknown>>((acc, key) => {
+            const value = (input.metadata as Record<string, unknown>)[key]
+            acc[key] = value && typeof value === "object"
+              ? { keys: Object.keys(value as object) }
+              : typeof value
+            return acc
+          }, {})
+          log.info("cache_write extraction miss", {
+            providerID: input.model.providerID,
+            modelID: input.model.id,
+            npm: input.model.api.npm,
+            cacheReadInputTokens,
+            metadataProviderKeys: providerKeys,
+            metadataShape: snapshot,
+            usageKeys: Object.keys(input.usage as object),
+          })
+        }
+      }
 
       // OpenRouter provides inputTokens as the total count of input tokens (including cached).
       // AFAIK other providers (OpenRouter/OpenAI/Gemini etc.) do it the same way e.g. vercel/ai#8794 (comment)
@@ -903,8 +936,8 @@ export namespace Session {
             .add(new Decimal(tokens.output).mul(costInfo?.output ?? 0).div(1_000_000))
             .add(new Decimal(tokens.cache.read).mul(costInfo?.cache?.read ?? 0).div(1_000_000))
             .add(new Decimal(tokens.cache.write).mul(costInfo?.cache?.write ?? 0).div(1_000_000))
-            // TODO: update models.dev to have better pricing model, for now:
-            // charge reasoning tokens at the same rate as output tokens
+            // models.dev does not expose a separate reasoning rate; charge reasoning
+            // tokens at the output rate.
             .add(new Decimal(tokens.reasoning).mul(costInfo?.output ?? 0).div(1_000_000))
             .toNumber(),
         ),
@@ -937,3 +970,8 @@ export namespace Session {
     },
   )
 }
+
+export { Message } from "./message"
+export { Todo } from "./todo"
+export { SessionStatus } from "./status"
+export { SessionWake } from "./wake"

@@ -4,7 +4,7 @@ import { SessionCoordinator } from "../src/session-coordinator"
 import { sdkMock } from "./sdk-mock"
 
 mock.module("@opencorvus-ai/sdk", () => sdkMock)
-mock.module("@opencorvus-ai/sdk/v2", () => sdkMock)
+mock.module("@opencorvus-ai/sdk", () => sdkMock)
 
 const { ChannelRuntime } = await import("../src/core")
 
@@ -33,8 +33,6 @@ function incoming(text: string): IncomingMessage {
 
 beforeEach(() => {
   delete process.env.OPENCORVUS_CHANNEL_SESSION_QUEUE_LIMIT
-  delete process.env.OPENCORVUS_CHANNEL_PERMISSION_ASK_REPLY
-  delete process.env.OPENCORVUS_PERMISSION_ASK_REPLY
 })
 
 describe("channel runtime queue guard", () => {
@@ -72,7 +70,7 @@ describe("channel runtime queue guard", () => {
 })
 
 describe("channel runtime permission asked", () => {
-  test("auto-replies permission request with always by default", async () => {
+  test("surfaces permission request without replying", async () => {
     const sent: string[] = []
     const calls: Array<{ requestID: string; reply: "once" | "always" | "reject" }> = []
     const a = adapter(sent)
@@ -114,55 +112,7 @@ describe("channel runtime permission asked", () => {
       },
     })
 
-    expect(calls).toEqual([{ requestID: "permission_1", reply: "always" }])
-    expect(sent.at(-1)).toBe("Auto-replied permission (always): bash [git push]")
-  })
-
-  test("supports OPENCORVUS_CHANNEL_PERMISSION_ASK_REPLY override", async () => {
-    process.env.OPENCORVUS_CHANNEL_PERMISSION_ASK_REPLY = "once"
-    const sent: string[] = []
-    const calls: Array<{ requestID: string; reply: "once" | "always" | "reject" }> = []
-    const a = adapter(sent)
-    const core = new ChannelRuntime() as unknown as {
-      session: SessionCoordinator<
-        { sessionId: string; adapter: ChannelAdapter; channel: string; thread: string },
-        IncomingMessage
-      >
-      client: {
-        permission: {
-          reply(input: { requestID: string; reply: "once" | "always" | "reject" }): Promise<{ error?: unknown }>
-        }
-      }
-      handleEvent(event: unknown): Promise<void>
-    }
-
-    core.session.bind("slack:C1:T1", {
-      sessionId: "session_1",
-      adapter: a,
-      channel: "C1",
-      thread: "T1",
-    })
-    core.client = {
-      permission: {
-        reply: async (input) => {
-          calls.push(input)
-          return {}
-        },
-      },
-    }
-
-    await core.handleEvent({
-      type: "permission.asked",
-      properties: {
-        id: "permission_2",
-        sessionID: "session_1",
-        permission: "edit",
-        patterns: ["src/main.ts"],
-      },
-    })
-
-    expect(calls).toEqual([{ requestID: "permission_2", reply: "once" }])
-    expect(sent.at(-1)).toBe("Auto-replied permission (once): edit [src/main.ts]")
+    expect(calls).toEqual([])
+    expect(sent.at(-1)).toBe("Permission requested: bash [git push]. Waiting for operator reply.")
   })
 })
-

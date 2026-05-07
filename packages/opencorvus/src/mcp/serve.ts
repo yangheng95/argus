@@ -11,13 +11,30 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import { Instance } from "@/project/instance"
-import { ToolRegistry } from "@/tool/registry"
 import { Session } from "@/session"
 import { Installation } from "@/installation"
 import { PermissionNext } from "@/permission/next"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
-import type { Message } from "@/session/message"
+import type { Message } from "@/session"
+import { Tool } from "@/tool/tool"
+import { MemoryTool } from "@/tool/memory"
+import { TaskReportTool } from "@/tool/task-report"
+import {
+  WebpageExtractTool,
+  WebpageCompileTool,
+  WebpageAnalyzeTool,
+  WebpageImageExtractTool,
+  WebpageImageCompileTool,
+  WebpageImageAnalyzeTool,
+  WebpageRenderTool,
+  WebpageEvaluateTool,
+  WebpageTextDiffTool,
+  WebpageVisionJudgeTool,
+  FigmaExtractTool,
+  FigmaCompileTool,
+  FigmaAnalyzeTool,
+} from "@/mirror/tools"
 import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
 import path from "path"
@@ -25,60 +42,18 @@ import z from "zod"
 
 const log = Log.create({ service: "mcp.serve" })
 
-const EXECUTOR_MODEL = {
-  providerID: "codex",
-  modelID: "gpt-5.3-codex",
-}
-
 const TOOLSET = z.enum(["executor"])
 type Toolset = z.infer<typeof TOOLSET>
+const DEFAULT_SERVER_NAME = "opencorvus"
 
+// External coding executors (claude-code, codex) ship with their own
+// shell/read/edit/write/glob/grep/web-fetch/web-search tools. Re-exposing
+// those over MCP creates a double-source surface (CLAUDE.md rule 22) and
+// confuses the LLM about which one to call. Only expose the OpenCorvus
+// toolset that the host environment doesn't provide natively:
+//   - mirror toolchain (webpage_* / figma_*) — visual cloning pipeline
+//   - memory / task_report — OpenCorvus-specific coordination surface
 const EXECUTOR_TOOLS = {
-  bash: {
-    name: "shell_command",
-    annotations: {
-      destructive: true,
-      openWorld: true,
-    },
-  },
-  read: {
-    name: "read_file",
-    annotations: {
-      readOnly: true,
-    },
-  },
-  glob: {
-    name: "find_files",
-    annotations: {
-      readOnly: true,
-    },
-  },
-  grep: {
-    name: "search_code",
-    annotations: {
-      readOnly: true,
-    },
-  },
-  apply_patch: {
-    name: "apply_patch",
-    annotations: {
-      destructive: true,
-    },
-  },
-  webfetch: {
-    name: "fetch_url",
-    annotations: {
-      readOnly: true,
-      openWorld: true,
-    },
-  },
-  websearch: {
-    name: "web_search",
-    annotations: {
-      readOnly: true,
-      openWorld: true,
-    },
-  },
   memory: {
     name: "memory",
     annotations: {
@@ -89,24 +64,168 @@ const EXECUTOR_TOOLS = {
     name: "task_report",
     annotations: {},
   },
+  webpage_extract: {
+    name: "webpage_extract",
+    annotations: {
+      openWorld: true,
+    },
+  },
+  webpage_compile: {
+    name: "webpage_compile",
+    annotations: {
+      readOnly: true,
+    },
+  },
+  webpage_analyze: {
+    name: "webpage_analyze",
+    annotations: {
+      destructive: true,
+    },
+  },
+  webpage_image_extract: {
+    name: "webpage_image_extract",
+    annotations: {
+      openWorld: true,
+    },
+  },
+  webpage_image_compile: {
+    name: "webpage_image_compile",
+    annotations: {
+      readOnly: true,
+    },
+  },
+  webpage_image_analyze: {
+    name: "webpage_image_analyze",
+    annotations: {
+      destructive: true,
+    },
+  },
+  webpage_render: {
+    name: "webpage_render",
+    annotations: {
+      destructive: true,
+    },
+  },
+  webpage_evaluate: {
+    name: "webpage_evaluate",
+    annotations: {
+      destructive: true,
+    },
+  },
+  webpage_text_diff: {
+    name: "webpage_text_diff",
+    annotations: {
+      readOnly: true,
+    },
+  },
+  webpage_vision_judge: {
+    name: "webpage_vision_judge",
+    annotations: {
+      openWorld: true,
+    },
+  },
+  figma_extract: {
+    name: "figma_extract",
+    annotations: {
+      openWorld: true,
+    },
+  },
+  figma_compile: {
+    name: "figma_compile",
+    annotations: {
+      readOnly: true,
+    },
+  },
+  figma_analyze: {
+    name: "figma_analyze",
+    annotations: {
+      destructive: true,
+    },
+  },
 } as const
 
 type ExecutorToolID = keyof typeof EXECUTOR_TOOLS
+const EXECUTOR_TOOL_IMPLS: Record<ExecutorToolID, Tool.Info> = {
+  memory: MemoryTool,
+  task_report: TaskReportTool,
+  webpage_extract: WebpageExtractTool,
+  webpage_compile: WebpageCompileTool,
+  webpage_analyze: WebpageAnalyzeTool,
+  webpage_image_extract: WebpageImageExtractTool,
+  webpage_image_compile: WebpageImageCompileTool,
+  webpage_image_analyze: WebpageImageAnalyzeTool,
+  webpage_render: WebpageRenderTool,
+  webpage_evaluate: WebpageEvaluateTool,
+  webpage_text_diff: WebpageTextDiffTool,
+  webpage_vision_judge: WebpageVisionJudgeTool,
+  figma_extract: FigmaExtractTool,
+  figma_compile: FigmaCompileTool,
+  figma_analyze: FigmaAnalyzeTool,
+}
 
 export namespace MCPServe {
   export const Toolset = TOOLSET
+  export const ServerName = DEFAULT_SERVER_NAME
 
-  export function command(cwd: string) {
+  export function command(
+    cwd: string,
+    runtime: {
+      execPath?: string
+      moduleDir?: string
+    } = {},
+  ) {
+    const execPath = runtime.execPath ?? process.execPath
+    const moduleDir = runtime.moduleDir ?? import.meta.dir
+    const args = isBunRuntime(execPath)
+      ? [path.resolve(moduleDir, "stdio.ts"), "--cwd", cwd, "--toolset", "executor"]
+      : ["mcp", "serve", "--cwd", cwd, "--toolset", "executor"]
+
     return {
-      name: "opencorvus",
-      command: process.execPath,
-      args: [path.resolve(import.meta.dir, "..", "..", "src", "index.ts"), "mcp", "serve", "--cwd", cwd, "--toolset", "executor"],
-      env: {} as Record<string, string>,
+      name: DEFAULT_SERVER_NAME,
+      command: execPath,
+      args,
     }
   }
 
-  export async function toolDefinitions(toolset: Toolset) {
-    const tools = await runtimeTools(toolset)
+  export function executorToolNames() {
+    return Object.keys(EXECUTOR_TOOLS).map((id) => EXECUTOR_TOOLS[id as ExecutorToolID].name)
+  }
+
+  export function codingExecutorToolName(toolName: string, serverName = DEFAULT_SERVER_NAME) {
+    return `mcp__${mcpSafeName(serverName)}__${mcpSafeName(toolName)}`
+  }
+
+  export function normalizeCodingExecutorToolName(toolName: string, serverName = DEFAULT_SERVER_NAME) {
+    const prefix = `mcp__${mcpSafeName(serverName)}__`
+    return toolName.startsWith(prefix) ? toolName.slice(prefix.length) : toolName
+  }
+
+  export function codingExecutorPromptSection(serverName = DEFAULT_SERVER_NAME) {
+    const aliases = executorToolNames()
+      .map((name) => `- ${name} => ${codingExecutorToolName(name, serverName)}`)
+      .join("\n")
+    return [
+      "# OpenCorvus MCP tools for external coding executors",
+      "",
+      `External coding executors expose the OpenCorvus executor MCP server as ${serverName}. When task prompts, skills, or architect contracts mention a bare OpenCorvus tool name, call the exact MCP-prefixed tool name below.`,
+      "",
+      aliases,
+      "",
+      "Mirror extraction artifacts must come from the mirror MCP toolchain. Do not create, copy, or handwrite mirror/reference.png, mirror/extracted-page.json, mirror/page-ir.xml, mirror/scaffold.json, mirror/design-tokens.ts, mirror/App.tsx, or mirror/shared-context.md to satisfy file-existence checks when a mirror tool is required.",
+      "If a required OpenCorvus MCP tool is missing, unavailable, or fails to start, stop and report that tool availability failure instead of fabricating the artifact.",
+    ].join("\n")
+  }
+
+  export async function toolDefinitions(
+    toolset: Toolset,
+    options: {
+      includeRuntime?: boolean
+      includeProxied?: boolean
+      proxiedTools?: Awaited<ReturnType<typeof MCP.serverTools>>
+    } = {},
+  ) {
+    const tools = options.includeRuntime === false ? [] : await runtimeTools(toolset)
+    const proxiedTools = options.proxiedTools ?? (options.includeProxied === false ? [] : await MCP.serverTools())
     return [
       ...tools.map((item) => ({
         name: item.name,
@@ -117,10 +236,10 @@ export namespace MCPServe {
           original_tool_id: item.id,
         },
       })),
-      ...(await MCP.serverTools()).map((item) => ({
+      ...proxiedTools.map((item) => ({
         name: item.key,
         description: item.description,
-        inputSchema: item.inputSchema,
+        inputSchema: inputObjectSchema(item.inputSchema),
         metadata: {
           surface: "mcp",
           proxied_client: item.client,
@@ -130,19 +249,19 @@ export namespace MCPServe {
     ]
   }
 
-  export async function serve(raw: {
-    cwd: string
-    toolset: Toolset
-  }) {
-    const input = z.object({
-      cwd: z.string(),
-      toolset: TOOLSET,
-    }).parse(raw)
+  export async function serve(raw: { cwd: string; toolset: Toolset }) {
+    const input = z
+      .object({
+        cwd: z.string(),
+        toolset: TOOLSET,
+      })
+      .parse(raw)
 
     await Instance.provide({
       directory: input.cwd,
       fn: async () => {
         const session = await Session.createNext({
+          kind: "assistant",
           title: `MCP ${input.toolset}`,
           directory: input.cwd,
         })
@@ -150,26 +269,16 @@ export namespace MCPServe {
         const tools = await runtimeTools(input.toolset, session.id, approved)
         const byName = new Map<string, (typeof tools)[number]>(tools.map((item) => [item.name, item]))
         const server = new McpServer({
-          name: "opencorvus",
+          name: DEFAULT_SERVER_NAME,
           version: Installation.VERSION,
         })
-        await Promise.all([
-          MCP.serverTools(),
-          MCP.serverPrompts(),
-          MCP.serverResources(),
-        ]).catch((error) => {
+        await Promise.all([MCP.serverTools(), MCP.serverPrompts(), MCP.serverResources()]).catch((error) => {
           log.warn("mcp serve prewarm failed", { error: String(error) })
         })
         server.server.registerCapabilities({
-          tools: {
-            listChanged: true,
-          },
-          prompts: {
-            listChanged: true,
-          },
-          resources: {
-            listChanged: true,
-          },
+          tools: { listChanged: true },
+          prompts: { listChanged: true },
+          resources: { listChanged: true },
         })
         server.server.setRequestHandler(ListToolsRequestSchema, async () => ({
           tools: [
@@ -186,7 +295,7 @@ export namespace MCPServe {
             ...(await MCP.serverTools()).map((item) => ({
               name: item.key,
               description: item.description,
-              inputSchema: item.inputSchema,
+              inputSchema: inputObjectSchema(item.inputSchema),
               annotations: item.annotations,
               _meta: {
                 surface: "mcp",
@@ -198,8 +307,10 @@ export namespace MCPServe {
         }))
         server.server.setRequestHandler(CallToolRequestSchema, async (request, _extra) => {
           const args =
-            request.params.arguments && typeof request.params.arguments === "object" && !Array.isArray(request.params.arguments)
-              ? request.params.arguments as Record<string, unknown>
+            request.params.arguments &&
+            typeof request.params.arguments === "object" &&
+            !Array.isArray(request.params.arguments)
+              ? (request.params.arguments as Record<string, unknown>)
               : {}
           const local = byName.get(request.params.name)
           if (local) return executeLocal(server, local, session.id, approved, args)
@@ -221,7 +332,9 @@ export namespace MCPServe {
           })),
         }))
         server.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-          const proxy = await MCP.serverPrompts().then((items) => items.find((item) => item.key === request.params.name))
+          const proxy = await MCP.serverPrompts().then((items) =>
+            items.find((item) => item.key === request.params.name),
+          )
           if (!proxy) throw new McpError(ErrorCode.InvalidParams, `Prompt ${request.params.name} not found`)
           const result = await MCP.getPrompt(proxy.client, proxy.name, request.params.arguments)
           if (!result) throw new McpError(ErrorCode.InternalError, `Prompt ${proxy.name} failed`)
@@ -283,17 +396,31 @@ export namespace MCPServe {
   }
 }
 
+function isBunRuntime(execPath: string) {
+  const executable = path.basename(execPath).toLowerCase().replace(/\.exe$/, "")
+  return executable === "bun"
+}
+
+function mcpSafeName(input: string) {
+  return input.replace(/[^A-Za-z0-9_-]/g, "_")
+}
+
 async function runtimeTools(toolset: Toolset, sessionID = "ses_mcp", approved: PermissionNext.Ruleset = []) {
-  const ids = toolset === "executor" ? Object.keys(EXECUTOR_TOOLS) as ExecutorToolID[] : []
-  const tools = await ToolRegistry.tools(EXECUTOR_MODEL)
-  return tools
-    .filter((item): item is (typeof tools)[number] & { id: ExecutorToolID } => ids.includes(item.id as ExecutorToolID))
-    .map((item) => ({
-      ...item,
-      name: EXECUTOR_TOOLS[item.id].name,
-      annotations: EXECUTOR_TOOLS[item.id].annotations,
-      run: (server: McpServer, args: Record<string, unknown>) => executeLocal(server, item, sessionID, approved, args),
-    }))
+  const ids = toolset === "executor" ? (Object.keys(EXECUTOR_TOOLS) as ExecutorToolID[]) : []
+  return Promise.all(
+    ids.map(async (id) => {
+      const item = EXECUTOR_TOOL_IMPLS[id]
+      const initialized = await item.init()
+      return {
+        id: item.id,
+        ...initialized,
+        name: EXECUTOR_TOOLS[id].name,
+        annotations: EXECUTOR_TOOLS[id].annotations,
+        run: (server: McpServer, args: Record<string, unknown>) =>
+          executeLocal(server, { id: item.id, ...initialized }, sessionID, approved, args),
+      }
+    }),
+  )
 }
 
 function attachmentSummary(input: Array<{ filename?: string; mime?: string }> | undefined) {
@@ -304,16 +431,124 @@ function attachmentSummary(input: Array<{ filename?: string; mime?: string }> | 
 
 function toolSchema(schema: z.ZodType) {
   const json = z.toJSONSchema(schema) as Record<string, unknown>
-  if (json.type === "object") return json
+  return inputObjectSchema(json)
+}
+
+function inputObjectSchema(input: Record<string, unknown>) {
+  const json =
+    input.type === "object"
+      ? { ...input }
+      : {
+          type: "object",
+          ...(Array.isArray(input.required) ? { required: input.required } : {}),
+          ...(input.properties && typeof input.properties === "object"
+            ? { properties: input.properties }
+            : { properties: {} }),
+          ...(input.anyOf ? { anyOf: input.anyOf } : {}),
+          ...(input.oneOf ? { oneOf: input.oneOf } : {}),
+          ...(input.allOf ? { allOf: input.allOf } : {}),
+          additionalProperties: input.additionalProperties ?? true,
+        }
+  return flattenTopLevelCombinators(json)
+}
+
+function flattenTopLevelCombinators(input: Record<string, unknown>) {
+  const anyOf = objectBranches(input.anyOf)
+  const oneOf = objectBranches(input.oneOf)
+  const allOf = objectBranches(input.allOf)
+  if (anyOf.length === 0 && oneOf.length === 0 && allOf.length === 0) return input
+
+  const output = { ...input }
+  delete output.anyOf
+  delete output.oneOf
+  delete output.allOf
+
+  const properties: Record<string, unknown> = {
+    ...(isRecord(input.properties) ? input.properties : {}),
+  }
+  const required = new Set(arrayOfStrings(input.required))
+  for (const item of requiredForUnion(anyOf)) required.add(item)
+  for (const item of requiredForUnion(oneOf)) required.add(item)
+  for (const branch of allOf) {
+    for (const item of arrayOfStrings(branch.required)) required.add(item)
+  }
+  for (const branch of [...anyOf, ...oneOf, ...allOf]) {
+    if (!isRecord(branch.properties)) continue
+    for (const [key, value] of Object.entries(branch.properties)) {
+      properties[key] = mergePropertySchema(properties[key], value)
+    }
+  }
+
+  output.type = "object"
+  output.properties = properties
+  output.required = [...required]
+  output.additionalProperties = input.additionalProperties ?? true
+  return output
+}
+
+function requiredForUnion(branches: Record<string, unknown>[]) {
+  if (branches.length === 0) return []
+  const counts = new Map<string, number>()
+  for (const branch of branches) {
+    for (const item of arrayOfStrings(branch.required)) {
+      counts.set(item, (counts.get(item) ?? 0) + 1)
+    }
+  }
+  return [...counts.entries()].filter(([, count]) => count === branches.length).map(([key]) => key)
+}
+
+function objectBranches(input: unknown) {
+  if (!Array.isArray(input)) return []
+  return input.filter((item): item is Record<string, unknown> => isRecord(item) && item.type === "object")
+}
+
+function mergePropertySchema(left: unknown, right: unknown): unknown {
+  if (!isRecord(left)) return normalizePropertySchema(right)
+  if (!isRecord(right)) return normalizePropertySchema(left)
+  const values = [...literalValues(left), ...literalValues(right)]
+  if (values.length > 0) {
+    const next = {
+      ...left,
+      ...right,
+      type: left.type ?? right.type ?? "string",
+      enum: [...new Set(values)],
+    } as Record<string, unknown>
+    delete next["const"]
+    return {
+      ...next,
+    }
+  }
   return {
-    type: "object",
-    ...(Array.isArray(json.required) ? { required: json.required } : {}),
-    ...(json.properties && typeof json.properties === "object" ? { properties: json.properties } : { properties: {} }),
-    ...(json.anyOf ? { anyOf: json.anyOf } : {}),
-    ...(json.oneOf ? { oneOf: json.oneOf } : {}),
-    ...(json.allOf ? { allOf: json.allOf } : {}),
-    additionalProperties: json.additionalProperties ?? true,
+    ...left,
+    ...right,
+  }
+}
+
+function normalizePropertySchema(input: unknown): unknown {
+  if (!isRecord(input)) return input
+  const values = literalValues(input)
+  if (values.length === 0) return input
+  const output = {
+    ...input,
+    enum: [...new Set(values)],
   } as Record<string, unknown>
+  delete output["const"]
+  return output
+}
+
+function literalValues(input: Record<string, unknown>) {
+  const out: unknown[] = []
+  if ("const" in input) out.push(input["const"])
+  if (Array.isArray(input.enum)) out.push(...input.enum)
+  return out
+}
+
+function arrayOfStrings(input: unknown) {
+  return Array.isArray(input) ? input.filter((item): item is string => typeof item === "string") : []
+}
+
+function isRecord(input: unknown): input is Record<string, unknown> {
+  return !!input && typeof input === "object" && !Array.isArray(input)
 }
 
 async function ask(
@@ -321,7 +556,9 @@ async function ask(
   approved: PermissionNext.Ruleset,
   request: Omit<PermissionNext.Request, "id" | "sessionID" | "tool">,
 ) {
-  const allowed = request.patterns.every((pattern) => PermissionNext.evaluate(request.permission, pattern, approved).action === "allow")
+  const allowed = request.patterns.every(
+    (pattern) => PermissionNext.evaluate(request.permission, pattern, approved).action === "allow",
+  )
   if (allowed) return
 
   const diff = typeof request.metadata?.diff === "string" ? request.metadata.diff.slice(0, 4000) : ""
@@ -331,7 +568,9 @@ async function ask(
     request.patterns.length > 0 ? `Patterns: ${request.patterns.join(", ")}` : "",
     filepath ? `Path: ${filepath}` : "",
     diff ? `Preview:\n${diff}` : "",
-  ].filter(Boolean).join("\n\n")
+  ]
+    .filter(Boolean)
+    .join("\n\n")
 
   const result = await server.server.elicitInput({
     mode: "form",
@@ -381,7 +620,7 @@ function resourceKey(uri: string) {
 
 async function executeLocal(
   server: McpServer,
-  item: Awaited<ReturnType<typeof ToolRegistry.tools>>[number],
+  item: Awaited<ReturnType<Tool.Info["init"]>> & { id: string },
   sessionID: string,
   approved: PermissionNext.Ruleset,
   args: Record<string, unknown>,
@@ -414,6 +653,8 @@ async function executeLocal(
     ],
     structuredContent: {
       title: header,
+      output: result.output,
+      text: body,
       metadata: {
         ...metadata,
         ...result.metadata,

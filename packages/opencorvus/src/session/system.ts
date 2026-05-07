@@ -1,5 +1,6 @@
 import os from "os"
 import { Instance } from "../project/instance"
+import { Project } from "../project/project"
 import { Shell } from "@/shell/shell"
 import { Config } from "@/config/config"
 import { Skill } from "@/skill"
@@ -66,7 +67,6 @@ export namespace SystemPrompt {
   }
 
   export async function environment(model: Provider.Model) {
-    const project = Instance.project
     const platform = platformName()
     const arch = process.arch
     const hostname = os.hostname()
@@ -82,13 +82,12 @@ export namespace SystemPrompt {
         `<env>`,
         `  Working directory: ${Instance.directory}`,
         `  Workspace root folder: ${Instance.worktree}`,
-        `  Is directory a git repo: ${project.vcs === "git" ? "yes" : "no"}`,
+        `  Is directory a git repo: ${Project.isGitRepo(Instance.directory) ? "yes" : "no"}`,
         `  Platform: ${platform} (${arch})`,
         `  Hostname: ${hostname}`,
         `  Shell: ${shell}`,
         ...(display ? [`  Display-Server: ${display}`] : []),
         `  Today's date: ${now.toDateString()}`,
-        `  Current time (ISO-8601): ${now.toISOString()}`,
         `  Local timezone: ${zone} (UTC${utcOffset(now)})`,
         `</env>`,
       ].join("\n"),
@@ -113,8 +112,15 @@ export namespace SystemPrompt {
     if (compatible.length === 0) return
 
     return [
-      "Skills provide specialized instructions and workflows for specific tasks.",
-      "Use the skill tool to load a skill when a task matches its description.",
+      "## Skill Policy",
+      "",
+      "Skills are curated, tested workflows for recurring task shapes (webpage cloning, spec research, delivery verification, etc.). Each skill bundles instructions, the right tool sequence, and resource files.",
+      "",
+      "### Check First",
+      "1. Before planning, scan `<available_skills>` below for any entry whose description matches the current task.",
+      "2. If one matches, call the `skill` tool with its name to load the full instructions into context **before** you start executing.",
+      "3. Follow the loaded skill's prescribed tools and step order rather than improvising — skills encode workflows that have already been validated.",
+      "4. If several skills could apply, load the most specific one first; load additional skills only if the task spans their domains.",
       "",
       "<available_skills>",
       ...compatible.map((s) => `- ${s.name}: ${s.description}`),

@@ -2,8 +2,20 @@
 // Solid.js port of renderChatComposer / renderChatAttachments / chatForm submit
 // and related attachment/keyboard logic
 
-import { createSignal, createMemo, For, Show, onMount, onCleanup } from "solid-js";
-import { t } from "../utils/i18n";
+import { createSignal, createMemo, createEffect, For, Show, onMount, onCleanup } from "solid-js";
+import { t, tArray } from "../utils/i18n";
+import { ExecutorSelector } from "./ExecutorSelector";
+import { nativeMessage } from "../services/app-dialog";
+import { messageStore, setChatAttachments } from "../store/messages";
+import {
+  MAX_ATTACHMENT_SIZE,
+  MAX_TOTAL_ATTACHMENT_SIZE,
+  wouldExceedAggregateLimit,
+} from "../services/chat-attach-limits";
+import { fileToDataUrl } from "../services/file-to-data-url";
+import { Button } from "./ui/Button";
+import { Icon } from "./Icon";
+import { useDisclosure } from "../solid/disclosure";
 
 // ── Types ──
 
@@ -28,14 +40,27 @@ export interface ChatComposerProps {
  */
   stopping?: boolean;
   /** Called when the user submits a message. */
-  onSubmit: (text: string, attachments: ChatAttachment[]) => void;
+  onSubmit: (text: string, attachments: ChatAttachment[], webSearch: boolean) => void | Promise<void>;
   /** Called when the user clicks the stop button while busy. */
   onStop?: () => void;
+  /**
+   * One-shot suggestion to inject into the empty composer (used after a
+   * task finishes — parent provides an LLM-generated follow-up). Written
+   * into the textarea only when the current text is empty so we never
+   * overwrite the user's in-progress input.
+   */
+  pendingSuggestion?: string;
+  /** Called once the pending suggestion has been applied (or intentionally
+   *  dropped because the user was already typing). Parent should clear its
+   *  signal to avoid re-applying the same suggestion. */
+  onSuggestionConsumed?: () => void;
 }
 
 // ── Constants ──
 
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10 MiB
+// MAX_ATTACHMENT_SIZE / MAX_TOTAL_ATTACHMENT_SIZE imported from
+// services/chat-attach-limits (audit W2-V15) so the cap can be
+// unit-tested without rendering the component.
 
 const FILE_ACCEPT = [
   "image/*",
@@ -68,14 +93,39 @@ const FILE_ACCEPT = [
 ].join(",");
 
 // ── Helpers ──
+//
+// fileToDataUrl moved to services/file-to-data-url so the V18 catch
+// pattern in addAttachment is unit-testable via a FileReader factory
+// override (Bun test runner has no jsdom).
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+// Names that propagate from drop / paste / file-picker into the
+// orchestrator's attachment inventory must be:
+//   - non-empty (paste hands us "" on Chromium)
+//   - shell-safe (no path separators, no metacharacters) — server-side
+//     `displayFilename` rejects unsafe names and falls back to a sha
+//     handle that is unreadable to sub-agents
+// Mirrors the SAFE_FILENAME_RE rule in
+// `opencorvus/src/storage/attachment-store.ts`. Keeping the regex
+// duplicated here (the server-side helper is not bundled into the
+// overlay) is the lesser evil; the alternative is shipping the server
+// rule through the SDK just for one literal.
+const SAFE_FILENAME_RE = /^[A-Za-z0-9._\-一-鿿 ]+$/;
+const PASTE_EXT_BY_MIME: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/svg+xml": "svg",
+  "application/pdf": "pdf",
+  "text/plain": "txt",
+};
+function chooseAttachmentFilename(original: string | undefined, mime: string): string {
+  if (original && SAFE_FILENAME_RE.test(original)) return original;
+  const ext = PASTE_EXT_BY_MIME[mime] ?? (mime.split("/")[1] ?? "bin").replace(/[^A-Za-z0-9]/g, "");
+  // Stamp lets the operator distinguish multiple pastes within one
+  // composer session at a glance — sha-style handles all blur together.
+  const stamp = new Date().toISOString().replace(/[-:T]/g, "").replace(/\..+/, "");
+  return `pasted-${stamp}.${ext || "bin"}`;
 }
 
 // ── Component ──
@@ -86,38 +136,187 @@ export function ChatComposer(props: ChatComposerProps) {
   let formRef!: HTMLFormElement;
 
   const [text, setText] = createSignal("");
-  const [attachments, setAttachments] = createSignal<ChatAttachment[]>([]);
+  // audit-2026-04-29 W2-V12 — single source of truth for staged
+  // chat attachments lives in `messageStore.chatAttachments`. The
+  // composer used to keep its own local signal, which meant
+  // host-driven `composer.attach` ui-commands (the "OpenCorvus:
+  // Attach Current File" path from vscode-extension's
+  // attach-file.ts) wrote into the store but the composer rendered
+  // its disjoint local copy — the user never saw the attachment
+  // and submitted without it. CLAUDE.md §二-8 forbids dual sources;
+  // collapse to the store and route every add/remove/clear through
+  // setChatAttachments.
+  const attachments = () => messageStore.chatAttachments as ChatAttachment[];
+  const setAttachments = (next: ChatAttachment[] | ((prev: ChatAttachment[]) => ChatAttachment[])) => {
+    const nextValue = typeof next === "function"
+      ? (next as (prev: ChatAttachment[]) => ChatAttachment[])(attachments())
+      : next;
+    setChatAttachments(nextValue);
+  };
   const [dragover, setDragover] = createSignal(false);
+  const [webSearch, setWebSearch] = createSignal(false);
+  const composerExpanded = useDisclosure();
+  const expanded = composerExpanded.open;
+  const [focused, setFocused] = createSignal(false);
+  const [hintText, setHintText] = createSignal("");
+  const [submitting, setSubmitting] = createSignal(false);
 
   const hasText = createMemo(() => text().trim().length > 0);
   const stopping = () => props.stopping === true;
 
- // ── Auto-resize textarea (
+  // ── Rotating placeholder ──
+  // Cycles through a shuffled list of project-level examples while the
+  // composer sits idle (empty + unfocused). One signal write per rotation;
+  // no per-character typewriter. The previous 28–60ms typewriter loop wrote
+  // 20–70 signal-driven DOM mutations per second the entire time the
+  // composer was visible — Tauri's transparent WebView2 then alpha-blended
+  // the desktop on every frame, dominating idle power draw on laptops.
+  let rotateTimer: ReturnType<typeof setInterval> | undefined;
+  let hintOrder: number[] = [];
+  let hintCursor = 0;
+  const ROTATE_MS = 7_000;
 
-  function sizeTextarea() {
-    if (!textareaRef) return;
-    textareaRef.style.height = "auto";
-    const style = getComputedStyle(document.documentElement);
-    const min = Number.parseFloat(style.getPropertyValue("--ui-chat-min-height")) || 72;
-    const max = Number.parseFloat(style.getPropertyValue("--ui-chat-max-height")) || 180;
-    const h = Math.min(textareaRef.scrollHeight, max);
-    textareaRef.style.height = `${Math.max(h, min)}px`;
+  function shuffleIndices(n: number): number[] {
+    const arr = Array.from({ length: n }, (_, i) => i);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
   }
+
+  function stopHint() {
+    if (rotateTimer) {
+      clearInterval(rotateTimer);
+      rotateTimer = undefined;
+    }
+  }
+
+  function startRotate(examples: string[]) {
+    stopHint();
+    if (examples.length === 0) {
+      setHintText("");
+      return;
+    }
+    if (hintOrder.length !== examples.length) {
+      hintOrder = shuffleIndices(examples.length);
+      hintCursor = 0;
+    }
+    setHintText(examples[hintOrder[hintCursor % hintOrder.length]!]!);
+    if (examples.length === 1) return;
+    rotateTimer = setInterval(() => {
+      hintCursor = (hintCursor + 1) % hintOrder.length;
+      setHintText(examples[hintOrder[hintCursor]!]!);
+    }, ROTATE_MS);
+  }
+
+  const showHint = createMemo(
+    () => props.enabled && !props.busy && !focused() && text().length === 0,
+  );
+
+  createEffect(() => {
+    const examples = tArray("chat.placeholder_projects");
+    if (showHint() && examples.length > 0) {
+      startRotate(examples);
+    } else {
+      stopHint();
+      setHintText("");
+    }
+  });
+
+  // Pause rotation when the overlay window is hidden / minimized — the user
+  // is not looking, and Tauri's WebView2 still wakes the JS event loop on
+  // setInterval ticks. visibilitychange covers minimize / alt-tab on Windows.
+  if (typeof document !== "undefined") {
+    const onVisibility = () => {
+      if (document.hidden) {
+        stopHint();
+      } else {
+        const examples = tArray("chat.placeholder_projects");
+        if (showHint() && examples.length > 0) startRotate(examples);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    onCleanup(() => document.removeEventListener("visibilitychange", onVisibility));
+  }
+
+  onCleanup(() => stopHint());
+
+  // ── Pending suggestion injection ──
+  // When the parent supplies a non-empty suggestion and the composer is
+  // idle & empty, pre-fill the textarea so the user can tweak or send.
+  // Either way, call onSuggestionConsumed so the parent clears its signal
+  // and we don't re-apply on subsequent unrelated re-renders.
+  createEffect(() => {
+    const pending = props.pendingSuggestion?.trim();
+    if (!pending) return;
+    if (!props.enabled || props.busy) return;
+    if (text().length === 0) {
+      setText(pending);
+      if (textareaRef) textareaRef.value = pending;
+    }
+    props.onSuggestionConsumed?.();
+  });
 
  // ── Attachment handling ──
 
   async function addAttachment(file: File) {
     if (!file) return;
     if (file.size > MAX_ATTACHMENT_SIZE) {
- // Surface a notice; callers may hook into a global notification system.
- // For now we log and bail — the showLlmNotice here.
       console.warn("[ChatComposer] file too large:", file.name, file.size);
+      const limitMb = (MAX_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0);
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      void nativeMessage(t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }), {
+        title: t("chat.attach_too_large_title"),
+      });
       return;
     }
-    const url = await fileToDataUrl(file);
+    // audit-2026-04-29 W2-V18 — pre-fix the FileReader reject
+    // (file deleted mid-read, EACCES on the OS handle, browser-
+    // imposed quota error) propagated as a throw out of
+    // `fileToDataUrl`. The drop/paste/file-input loop callers all
+    // run `for (file of files) await addAttachment(file)`, so a
+    // single failing file ABORTED the loop; subsequent files in
+    // the same drag never got processed and the user saw no
+    // error. Catch here so the loop continues with the next
+    // file, and surface an actionable toast naming the file that
+    // failed.
+    let url: string
+    try {
+      url = await fileToDataUrl(file);
+    } catch (err) {
+      console.warn("[ChatComposer] FileReader failed for", file.name, err);
+      void nativeMessage(t("chat.attach_read_failed", { name: file.name }), {
+        title: t("chat.attach_too_large_title"),
+      });
+      return;
+    }
+    if (wouldExceedAggregateLimit(attachments(), url.length)) {
+      console.warn("[ChatComposer] aggregate attachment size exceeded:", url.length);
+      const limitMb = (MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0);
+      const sizeMb = (url.length / (1024 * 1024)).toFixed(1);
+      // Reuse the per-file too-large i18n string so we don't churn
+      // the locale catalogues for a single new copy line; the user
+      // sees the same actionable message ("attachment too big") with
+      // the aggregate numbers.
+      void nativeMessage(t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }), {
+        title: t("chat.attach_too_large_title"),
+      });
+      return;
+    }
+    // Clipboard paste hands us a synthesized File whose `name` is often
+    // empty (Chromium) or an opaque "image.png" with no clue what was
+    // copied. Empty/unsafe names propagate to the orchestrator inventory
+    // and then surface to sub-agents as a 64-char sha — the operator
+    // saw e.g. `529bae80…970.png` instead of "the image I pasted".
+    // Fix at the single client-side seam (drop / paste / picker all flow
+    // here per rule 9) so every downstream consumer gets a stable,
+    // human-readable handle.
+    const mime = file.type || "application/octet-stream";
+    const filename = chooseAttachmentFilename(file.name, mime);
     setAttachments((prev) => [
       ...prev,
-      { mime: file.type || "application/octet-stream", url, filename: file.name },
+      { mime, url, filename },
     ]);
   }
 
@@ -127,22 +326,35 @@ export function ChatComposer(props: ChatComposerProps) {
 
  // ── Submit ──
 
-  function handleSubmit(e: SubmitEvent) {
+  function submitErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) return error.message;
+    return String(error);
+  }
+
+  async function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
     if (props.busy) return;
+    if (submitting()) return;
     if (!props.enabled) return;
     const trimmed = text().trim();
     if (!trimmed) return;
     const sentAttachments = [...attachments()];
- // Clear state immediately (
-    setText("");
-    setAttachments([]);
- // Resize back to minimum
-    if (textareaRef) {
-      textareaRef.value = "";
-      sizeTextarea();
+    setSubmitting(true);
+    try {
+      await props.onSubmit(trimmed, sentAttachments, webSearch());
+      setText("");
+      setAttachments([]);
+      composerExpanded.close();
+      if (textareaRef) textareaRef.value = "";
+    } catch (error) {
+      console.error("[ChatComposer] submit failed", error);
+      void nativeMessage(t("chat.send_failed", { error: submitErrorMessage(error) }), {
+        title: t("chat.send_failed_title"),
+        kind: "error",
+      });
+    } finally {
+      setSubmitting(false);
     }
-    props.onSubmit(trimmed, sentAttachments);
   }
 
  // ── Keyboard: Enter to send, Shift+Enter for newline ──
@@ -200,10 +412,18 @@ export function ChatComposer(props: ChatComposerProps) {
 
   const sendDisabled = createMemo(() => {
     if (props.busy) return stopping();
-    return !props.enabled || !hasText();
+    return submitting() || !props.enabled || !hasText();
   });
 
-  const sendTitle = () => (props.busy ? t("chat.stop_title") : t("chat.send_title"));
+  // Surface WHY the send button is disabled in its title — operators
+  // were left guessing whether grey meant "task busy", "no text yet", or
+  // "permissions blocked". Order matches sendDisabled's predicate.
+  const sendTitle = () => {
+    if (props.busy) return t("chat.stop_title");
+    if (!props.enabled) return t("chat.disabled_unavailable");
+    if (!hasText()) return t("chat.disabled_empty");
+    return t("chat.send_title");
+  };
   const sendAriaLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"));
   const sendLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"));
 
@@ -264,99 +484,118 @@ export function ChatComposer(props: ChatComposerProps) {
         onChange={handleFileChange}
       />
 
-      {/* Compose row */}
+      {/* Compose row: textarea + icon column + send */}
       <div class="chat-compose-row">
-        <textarea
-          ref={textareaRef}
-          id="chatTextarea"
-          class="chat-textarea"
-          rows={2}
-          disabled={!props.enabled}
-          placeholder={props.enabled ? t("chat.placeholder") : t("chat.placeholder_disabled")}
-          value={text()}
-          onInput={(e) => {
-            setText(e.currentTarget.value);
-            sizeTextarea();
-          }}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-        />
-        <div class="chat-compose-actions">
-          {/* Attach button */}
-          <button
+        <div class="chat-textarea-wrap" data-expanded={expanded() ? "true" : undefined}>
+          <textarea
+            ref={textareaRef}
+            id="chatTextarea"
+            class="chat-textarea"
+            data-expanded={expanded() ? "true" : undefined}
+            rows={2}
+            disabled={!props.enabled}
+            placeholder={props.enabled ? "" : t("chat.placeholder_disabled")}
+            value={text()}
+            onInput={(e) => {
+              setText(e.currentTarget.value);
+            }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+          />
+          <Show when={showHint()}>
+            <div class="chat-placeholder-float" aria-hidden="true">
+              <span class="chat-placeholder-text">{hintText()}</span>
+              <span class="chat-placeholder-caret" />
+            </div>
+          </Show>
+        </div>
+
+        {/* Icon column: attach / web search / expand */}
+        <div class="chat-icon-col" data-disabled={!props.enabled ? "true" : undefined}>
+          <Button
             type="button"
             id="btnChatAttach"
-            class="chat-attach-btn"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-chrome="icon-action"
+            data-ui="chat-toolbar-button"
             title={t("chat.attach_title")}
             aria-label={t("chat.attach_title")}
             onClick={() => fileInputRef?.click()}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-
-          {/* Send / Stop button */}
-          <button
-            id={props.busy ? "btnTaskInterrupt" : "chatSend"}
-            class={`chat-send${props.busy ? " chat-interrupt" : ""}`}
-            type={props.busy ? "button" : "submit"}
-            data-mode={props.busy ? "stop" : "send"}
-            disabled={sendDisabled()}
-            title={sendTitle()}
-            aria-label={sendAriaLabel()}
-            onClick={(e) => {
-              if (props.busy) {
-                e.preventDefault();
-                props.onStop?.();
-              }
-            }}
+            <Icon name="attach" size={14} />
+          </Button>
+          <Button
+            type="button"
+            id="btnWebSearch"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-chrome="icon-action"
+            data-ui="chat-toolbar-button"
+            data-active={webSearch() ? "true" : undefined}
+            title={t("chat.web_search_title")}
+            aria-label={t("chat.web_search_title")}
+            aria-pressed={webSearch()}
+            onClick={() => setWebSearch((v) => !v)}
           >
-            <span class="chat-send-icon" aria-hidden="true">
-              <Show
-                when={props.busy}
-                fallback={
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 8l10-5-3 5 3 5z" fill="currentColor" />
-                  </svg>
-                }
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <rect
-                    x="4.25"
-                    y="4.25"
-                    width="7.5"
-                    height="7.5"
-                    rx="1.2"
-                    fill="currentColor"
-                  />
-                </svg>
-              </Show>
-            </span>
-            <span class="chat-send-label">{sendLabel()}</span>
-          </button>
+            <Icon name="web-search" size={14} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-chrome="icon-action"
+            data-ui="chat-toolbar-button"
+            data-active={expanded() ? "true" : undefined}
+            title={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}
+            aria-label={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}
+            aria-pressed={expanded()}
+            onClick={() => composerExpanded.toggle()}
+          >
+            <Show when={expanded()} fallback={<Icon name="chevron-up" size={14} />}>
+              <Icon name="chevron-down" size={14} />
+            </Show>
+          </Button>
         </div>
+
+        {/* Send / Stop button */}
+        <button
+          id={props.busy ? "btnTaskInterrupt" : "chatSend"}
+          class={`chat-send${props.busy ? " chat-interrupt" : ""}`}
+          type={props.busy ? "button" : "submit"}
+          data-mode={props.busy ? "stop" : "send"}
+          disabled={sendDisabled()}
+          title={sendTitle()}
+          aria-label={sendAriaLabel()}
+          onClick={(e) => {
+            if (props.busy) {
+              e.preventDefault();
+              props.onStop?.();
+            }
+          }}
+        >
+          <span class="chat-send-icon" aria-hidden="true">
+            <Show when={props.busy} fallback={<Icon name="send" />}>
+              <Icon name="stop" />
+            </Show>
+          </span>
+          <span class="chat-send-label">{sendLabel()}</span>
+        </button>
       </div>
 
-      {/* Compose meta (version/author + tip) */}
+      {/* Compose meta (executor selector + tip) */}
       <div class="chat-compose-meta">
         <div class="chat-compose-meta-left">
-          <span class="chat-version" id="chatVersion"></span>
-          <span class="chat-author">代码生成组@同花顺</span>
+          <ExecutorSelector />
         </div>
-        <div class="chat-compose-tip">{t("chat.tip")}</div>
+        <div class="chat-compose-meta-right">
+          <div class="chat-compose-tip">{t("chat.tip")}</div>
+        </div>
       </div>
     </form>
   );

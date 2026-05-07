@@ -1,6 +1,6 @@
 // ── Init Service ──
 // Application startup sequence:
-// - Load overlay settings from localStorage (+ Tauri native store)
+// - Load overlay settings from the active host persistence source
 // - Load i18n locale data
 // - Configure the API client
 // - Check server connection
@@ -8,12 +8,14 @@
 // - Restore last workspace
 // - Set up a periodic reconnect loop
 
-import { configure as configureApi, apiJson } from "./api";
+import { configure as configureApi, apiJsonWithTimeout } from "./api";
+import { installComposerAttachSubscription } from "./composer-attach";
 import {
   checkConnection as checkServerConnection,
   startConnectionMonitor,
   stopConnectionMonitor,
 } from "./connection";
+import { startTaskListSSE, stopTaskListSSE } from "./sse";
 import { loadAllLocales, setLocale } from "../utils/i18n";
 import {
   loadSettings,
@@ -22,19 +24,19 @@ import {
   saveSettings,
   bumpDirectoryEpoch,
   bumpWorkspaceEpoch,
-  applySettings,
-  setSavedDirectory,
-  savedDirectoryValue,
+  DEFAULT_SETTINGS,
+  type ToolPermissions,
 } from "../store/settings";
-import { setAppStore } from "../store/app";
-import { boardStore, setBoardStore, loadTasks } from "../store/board";
+import { appStore, setAppStore } from "../store/app";
+import { boardStore, setBoardStore, loadTasks, clearTasksForMissingDirectory } from "../store/board";
 import { loadMeta } from "./meta";
 import { loadExtensions } from "./extensions";
 import { loadExecutors } from "./executor";
 import { ensureWorkspaceDirectory } from "./workspace";
 import { ensureDefaultDirectory } from "./workspace";
-import { workspaceRestoreDirectory } from "./workspace";
+import { workspaceRestoreDirectory } from "../store/settings";
 import { selectTask } from "./task";
+import { ensureDesktopNotificationPermission } from "./notify";
 
 // ── Types ──
 
@@ -72,10 +74,24 @@ function syncApiConfig(): void {
  * Load all initial data that requires a live server connection.
  * Load all initial data in parallel after connection is established.
  */
-async function loadInitialData(): Promise<void> {
-  await ensureDefaultDirectory().catch(() => false);
-  await ensureWorkspaceDirectory().catch(() => settingsStore.directory || "");
+async function loadInitialData(): Promise<boolean> {
+  // Let-it-crash: init-time failures must not be swallowed, otherwise the
+  // UI boots into an inconsistent state (e.g. directory unset but tasks loaded
+  // against a stale cwd). Errors propagate to initApp's caller which decides
+  // how to surface them.
+  await ensureDefaultDirectory();
+  const directory = await ensureWorkspaceDirectory();
   syncApiConfig();
+  if (!directory) {
+    clearTasksForMissingDirectory();
+    setBoardStore({
+      board: null,
+      path: null,
+      vcs: null,
+      changes: [],
+    });
+    return false;
+  }
   await Promise.all([
     loadTasks(),
     loadMeta(),
@@ -83,6 +99,7 @@ async function loadInitialData(): Promise<void> {
     loadConfigInfo(),
     loadExecutors(),
   ]);
+  return true;
 }
 
 // ── Public API ──
@@ -90,7 +107,7 @@ async function loadInitialData(): Promise<void> {
 /**
  * Initialise the Solid overlay layer.
  * Call order:
- * 1. Load settings from localStorage
+ * 1. Load settings from the active host persistence source
  * 2. Apply settings to API client
  * 3. Load i18n (all supported locales)
  * 4. Apply locale from settings
@@ -105,24 +122,14 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
     reconnectInterval = 10_000,
   } = options;
 
- // 1. Load settings from localStorage into the Solid store
-  loadSettings();
+ // 0. Install host → webview ui-command subscriptions (composer.attach
+ //    from VS Code "Attach Current File"; no-op in Tauri). Done first so
+ //    early host messages — e.g. an attach fired before the user even
+ //    saw the panel — still land on the chat composer (plan §19.2.6).
+  installComposerAttachSubscription();
 
-  const invoke = (window as any).__TAURI__?.core?.invoke as
-    | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
-    | undefined;
-  if (typeof invoke === "function") {
-    const nativeSettings = await invoke("overlay_settings_load").catch(() => null);
-    if (nativeSettings && typeof nativeSettings === "object" && !Array.isArray(nativeSettings)) {
-      applySettings(nativeSettings as any);
-      setSavedDirectory(
-        savedDirectoryValue(
-          (nativeSettings as any).directory,
-          (nativeSettings as any).directoryMode,
-        ),
-      );
-    }
-  }
+ // 1. Load settings into the Solid store
+  await loadSettings();
 
  // 2. Push settings into the API client (server URL + auth)
   syncApiConfig();
@@ -133,23 +140,31 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
  // 4. Apply locale from settings
   await setLocale(settingsStore.locale);
 
+ // 4a. Request desktop notification permission on startup. The in-app
+ // notification center is always available; this only enables the OS shell
+ // channel and surfaces any denial/blocker through that same notification
+ // center instead of hiding it in console output.
+  void ensureDesktopNotificationPermission("startup");
+
  // 5. Check connection
   const connected = await checkServerConnection();
 
   if (connected) {
  // 6. Load initial data
-    await loadInitialData();
-    await restoreInitialWorkspace();
+    const loaded = await loadInitialData();
+    if (loaded) await restoreInitialWorkspace();
     await onConnected?.();
+    if (loaded) startTaskListSSE();
   }
 
  // 7. Start reconnect loop
   stopConnectionMonitor();
   startConnectionMonitor(async () => {
     syncApiConfig();
-    await loadInitialData();
-    await restoreInitialWorkspace();
+    const loaded = await loadInitialData();
+    if (loaded) await restoreInitialWorkspace();
     await onReconnect?.();
+    if (loaded) startTaskListSSE();
   }, reconnectInterval);
 }
 
@@ -159,10 +174,11 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
  */
 export function teardownApp(): void {
   stopConnectionMonitor();
+  stopTaskListSSE();
 }
 
 /**
- * Persist current settings to localStorage and re-apply to the API client.
+ * Persist current settings through the active host and re-apply the API client.
  * Thin wrapper so callers don't need to import from multiple modules.
  */
 export function persistAndSyncSettings(): void {
@@ -172,44 +188,125 @@ export function persistAndSyncSettings(): void {
 
 // ── Config loading ──
 
+const CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS = 20_000;
+let configInfoLoadSequence = 0;
+
+function loadErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return String(error);
+}
+
+function settledValue<T>(
+  key: string,
+  result: PromiseSettledResult<T>,
+  fallback: T,
+  errors: Record<string, string>,
+): T {
+  if (result.status === "fulfilled") return result.value;
+  errors[key] = loadErrorMessage(result.reason);
+  return fallback;
+}
+
 /**
  * Load server-side config, provider catalog, provider auth, channel list and
  * prompt entries from the API, then push everything into the Solid stores.
  * Pushes config, provider, channel, and prompt data into the Solid stores.
  */
-export async function loadConfigInfo(): Promise<void> {
+export async function loadConfigInfo(
+  timeoutMilliseconds = CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS,
+): Promise<void> {
+  const loadSequence = ++configInfoLoadSequence;
   try {
-    const [config, catalog, auth, channels, prompts] = await Promise.all([
-      apiJson("config"),
-      apiJson("provider"),
-      apiJson("provider/auth"),
-      apiJson("channel"),
-      apiJson("config/prompt").catch(() => []),
+    const [configResult, catalogResult, authResult, channelsResult, promptsResult] = await Promise.allSettled([
+      apiJsonWithTimeout("config", timeoutMilliseconds),
+      apiJsonWithTimeout("provider", timeoutMilliseconds),
+      apiJsonWithTimeout("provider/auth", timeoutMilliseconds),
+      apiJsonWithTimeout("channel", timeoutMilliseconds),
+      apiJsonWithTimeout("config/prompt", timeoutMilliseconds),
     ]);
+    const errors: Record<string, string> = {};
+    const config = settledValue("config", configResult, appStore.config ?? null, errors);
+    const catalog = settledValue("provider", catalogResult, appStore.providerCatalog ?? null, errors);
+    const auth = settledValue("provider/auth", authResult, appStore.providerAuth ?? null, errors);
+    const channels = settledValue(
+      "channel",
+      channelsResult,
+      Array.isArray(appStore.channels) ? appStore.channels : [],
+      errors,
+    );
+    const prompts = settledValue(
+      "config/prompt",
+      promptsResult,
+      Array.isArray(appStore.promptEntries) ? appStore.promptEntries : [],
+      errors,
+    );
+    if (Object.keys(errors).length > 0) {
+      console.warn("[init] loadConfigInfo partial failure", errors);
+    }
 
- // Push into appStore
+    if (loadSequence !== configInfoLoadSequence) return;
+
+    // Push into appStore
     setAppStore({
       config: config ?? null,
       providerCatalog: catalog ?? null,
       providerAuth: auth ?? null,
+      configLoadErrors: errors,
       channels: Array.isArray(channels) ? channels : [],
       promptEntries: Array.isArray(prompts) ? prompts : [],
     });
 
- // Unattended: if the server config carries a boolean value, honour it and
- // persist it to localStorage so it survives a page reload.
- // Sync unattended flag from server config to local settings.
-    const remoteUnattended = (config as any)?.unattended;
-    if (typeof remoteUnattended === "boolean") {
-      setSettingsStore("unattended", remoteUnattended);
-      saveSettings();
+ // Sync tool_permissions from server config into settingsStore.
+    const remoteTP = (config as any)?.tool_permissions;
+    if (remoteTP && typeof remoteTP === "object") {
+      const def = DEFAULT_SETTINGS.toolPermissions;
+      const merged: ToolPermissions = {
+        websearch:          remoteTP.websearch          ?? def.websearch,
+        webfetch:           remoteTP.webfetch           ?? def.webfetch,
+        skill:              remoteTP.skill              ?? def.skill,
+        external_directory: remoteTP.external_directory ?? def.external_directory,
+        task:               remoteTP.task               ?? def.task,
+        schedule:           remoteTP.schedule           ?? def.schedule,
+      };
+      setSettingsStore("toolPermissions", merged);
     }
   } catch (e) {
+    if (loadSequence !== configInfoLoadSequence) return;
     console.warn("[init] loadConfigInfo failed", e);
+    setAppStore("configLoadErrors", { loadConfigInfo: loadErrorMessage(e) });
   }
 }
 
 // ── Workspace restoration ──
+
+const RESTORABLE_RUNNING_TASK_STATUSES = new Set(["active", "queued"]);
+
+function taskIDFromItem(item: any): string {
+  const id = item?.task?.id ?? item?.id;
+  return typeof id === "string" ? id.trim() : "";
+}
+
+function taskStatusFromItem(item: any): string {
+  const status = item?.task?.status ?? item?.status;
+  return typeof status === "string" ? status.trim() : "";
+}
+
+export function initialRestoreTaskID(
+  tasks: any[],
+  savedTaskID: string,
+  options: { selectRunningWhenUnmatched?: boolean } = {},
+): string {
+  const list = Array.isArray(tasks) ? tasks : [];
+  const saved = typeof savedTaskID === "string" ? savedTaskID.trim() : "";
+  if (saved && list.some((item: any) => taskIDFromItem(item) === saved)) {
+    return saved;
+  }
+  if (options.selectRunningWhenUnmatched === false) return "";
+  const running = list.find((item: any) =>
+    RESTORABLE_RUNNING_TASK_STATUSES.has(taskStatusFromItem(item)),
+  );
+  return taskIDFromItem(running);
+}
 
 /**
  * Restore the last workspace state (task selection + directory) that was
@@ -225,7 +322,6 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
   if (settingsStore.workspaceEpoch > 0) return false;
 
   const base = activeDir || "";
-  const taskID = workspaceTaskID || "";
   const directory = workspaceRestoreDirectory(workspaceDirectory || "");
   const moved = !!directory && !!base && directory !== base;
 
@@ -235,7 +331,13 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
     bumpDirectoryEpoch();
   }
 
-  if (taskID && tasks.some((item: any) => item?.task?.id === taskID)) {
+  const taskID = initialRestoreTaskID(
+    tasks,
+    workspaceTaskID || "",
+    { selectRunningWhenUnmatched: !moved },
+  );
+
+  if (taskID) {
     if (boardStore.selectedTaskID !== taskID || !boardStore.board) {
       await selectTask(taskID);
     }

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>Overlay Redesign — Visual Verification</title>
+  <link rel="stylesheet" href="../src/styles.css">
+  <link rel="stylesheet" href="../src/styles/surfaces/card.css">
+  <style>
+    /* Match overlay's actual conversation panel constraints so the
+     * sticky bar + cards lay out the way the operator sees them. */
+    html, body { background: #0a0a0c; }
+    body {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 12px 18px 32px;
+      color: var(--text);
+    }
+    .scenario {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .label-banner {
+      font: 600 11px/1.3 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #f5c46c;
+      background: rgba(242, 178, 79, 0.12);
+      border: 1px solid rgba(242, 178, 79, 0.32);
+      padding: 6px 12px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body data-theme="dark">
+
+<div class="label-banner">After: 4 fixes — sticky progress bar · status disambiguation · goal preview · StructuredOutput suppressed</div>
+
+<div class="scenario">
+  <!-- ── Sticky progress strip — Fix C ── -->
+  <div class="task-progress" role="region" aria-label="Goals" data-running="true" style="--card-bg-1: #1a1a22; --card-bg-0: #131318; --card-border: rgba(255,255,255,0.1); --card-border-strong: rgba(255,255,255,0.16); --card-bg-hover: rgba(255,255,255,0.08); --text-soft: #b8b8c0; --text-muted: #8b8b95; --text-strong: #e8e8ee; --good: #69b578; --bad: #d56262; --warn: #c28b55;">
+    <div class="task-progress__header">
+      <span class="task-progress__heading">Goals</span>
+      <span class="task-progress__summary" title="0/6 passed · 2 failed · 1 running">0/6</span>
+    </div>
+    <div class="task-progress__bar" aria-hidden="true">
+      <div class="task-progress__bar-fill" style="width: 0%"></div>
+      <div class="task-progress__bar-fail" style="width: 33%"></div>
+    </div>
+    <div class="task-progress__pills">
+      <button type="button" class="task-progress__pill" data-state="failed" title="Extract reference webpage — failed">
+        <span class="task-progress__pill-id">#G1V4</span>
+        <span class="task-progress__pill-title">Extract reference webpage</span>
+      </button>
+      <button type="button" class="task-progress__pill" data-state="running" title="Backend API — running">
+        <span class="task-progress__pill-id">#G2V1</span>
+        <span class="task-progress__pill-title">Backend API and virtual data engine</span>
+      </button>
+      <button type="button" class="task-progress__pill" data-state="failed" title="UI shell — failed">
+        <span class="task-progress__pill-id">#G3V4</span>
+        <span class="task-progress__pill-title">UI shell and routing</span>
+      </button>
+      <button type="button" class="task-progress__pill" data-state="pending" title="Charts module — pending">
+        <span class="task-progress__pill-id">#G4V1</span>
+        <span class="task-progress__pill-title">Charts module</span>
+      </button>
+      <button type="button" class="task-progress__pill" data-state="pending" title="News feed — pending">
+        <span class="task-progress__pill-id">#G5V1</span>
+        <span class="task-progress__pill-title">News feed integration</span>
+      </button>
+      <button type="button" class="task-progress__pill" data-state="pending" title="Search and watchlist — pending">
+        <span class="task-progress__pill-id">#G6V1</span>
+        <span class="task-progress__pill-title">Search and watchlist</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 编排器 (running) -->
+  <article class="card card--collapsed" data-kind="agent" data-stage="orchestrator" data-status="running" data-depth="0" style="--card-stage: var(--card-stage-orchestrator);">
+    <div class="card__head" role="button" tabindex="0" aria-expanded="false">
+      <span class="card__badge card__badge--running" title="running"><span class="card__spinner"></span></span>
+      <div class="card__main">
+        <div class="card__title-row">
+          <span class="card__title">编排器</span>
+          <span class="card__subtitle">deliver phase</span>
+          <span class="card__title-spacer" aria-hidden="true"></span>
+          <div class="card__activity-stats" title="messages 29 · tools 15 · skills 1">
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">29</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">15</span></span>
+            <span class="card__stat" data-kind="skills"><span class="card__stat-icon">🎯</span><span class="card__stat-value">1</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="card__actions">
+        <span class="card__chevron">▼</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- 助手 (cancelled — Fix B: outline ⊘ instead of red ✗) -->
+  <article class="card card--collapsed" data-kind="agent" data-stage="assistant" data-status="error" data-depth="0" style="--card-stage: var(--card-stage-assistant);">
+    <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
+      <span class="card__badge card__badge--cancelled" title="cancelled">⊘</span>
+      <div class="card__main">
+        <div class="card__title-row">
+          <span class="card__title">助手</span>
+          <span class="card__subtitle">superseded by replan</span>
+          <span class="card__title-spacer" aria-hidden="true"></span>
+          <div class="card__activity-stats" title="messages 8 · tools 15">
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">8</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">15</span></span>
+          </div>
+        </div>
+        <div class="card__preview-row">
+          <!-- Fix A: StructuredOutput tool no longer surfaces as preview text;
+               showing the actual reasoning text the operator wrote. -->
+          <span class="card__collapsed-preview">Intent classified as build-from-reference; deferring to design analyst.</span>
+        </div>
+      </div>
+      <div class="card__actions">
+        <span class="card__chevron">▼</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- 设计分析师 (completed clean) -->
+  <article class="card card--collapsed" data-kind="agent" data-stage="design-analyst" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-design-analyst);">
+    <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
+      <span class="card__badge card__badge--done" title="completed">✓</span>
+      <div class="card__main">
+        <div class="card__title-row">
+          <span class="card__title">设计分析师</span>
+          <span class="card__subtitle">4 sections · 12 components</span>
+          <span class="card__title-spacer" aria-hidden="true"></span>
+          <div class="card__activity-stats">
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">4</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">39</span></span>
+          </div>
+        </div>
+        <div class="card__preview-row">
+          <span class="card__collapsed-preview">Header navigation, hero ticker, market grid, news strip, footer with regulatory line.</span>
+        </div>
+      </div>
+      <div class="card__actions">
+        <span class="card__chevron">▼</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- 需求 (completed clean) -->
+  <article class="card card--collapsed" data-kind="agent" data-stage="requirements" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-requirements);">
+    <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
+      <span class="card__badge card__badge--done" title="completed">✓</span>
+      <div class="card__main">
+        <div class="card__title-row">
+          <span class="card__title">需求</span>
+          <span class="card__subtitle">22 reqs · 10 decisions</span>
+          <span class="card__title-spacer" aria-hidden="true"></span>
+          <div class="card__activity-stats">
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">11</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">39</span></span>
+          </div>
+        </div>
+        <div class="card__preview-row">
+          <span class="card__collapsed-preview">Requirements extraction complete. 22 requirements and 10 foundational technical decisions registered.</span>
+        </div>
+      </div>
+      <div class="card__actions">
+        <span class="card__chevron">▼</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- 架构师 (completed clean — emits 6 goals) -->
+  <article class="card card--collapsed" data-kind="agent" data-stage="architect" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-architect);">
+    <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
+      <span class="card__badge card__badge--done" title="completed">✓</span>
+      <div class="card__main">
+        <div class="card__title-row">
+          <span class="card__title">架构师</span>
+          <span class="card__subtitle">6 goals</span>
+          <span class="card__title-spacer" aria-hidden="true"></span>
+          <div class="card__activity-stats">
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">18</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">71</span></span>
+          </div>
+        </div>
+        <div class="card__preview-row">
+          <span class="card__collapsed-preview">Architect output finalized. Decomposition includes 6 goals across reference extraction, backend, UI shell, charts, news, and search.</span>
+        </div>
+      </div>
+      <div class="card__actions">
+        <span class="card__chevron">▼</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- 完整性审查 (Fix B: concerns ⚠ amber) -->
+  <article class="card card--collapsed" data-kind="integrity" data-stage="integrity" data-status="completed" data-depth="0" style="--card-stage: var(--card-stage-architect);">
+    <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
+      <span class="card__badge card__badge--concerns" title="completed with concerns">⚠</span>
+      <div class="card__main">
+        <div class="card__title-row">
+          <span class="card__title">完整性审查</span>
+          <span class="card__subtitle">verdict: concerns</span>
+          <span class="card__title-spacer" aria-hidden="true"></span>
+          <div class="card__activity-stats">
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">6</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">5</span></span>
+          </div>
+        </div>
+        <div class="card__preview-row">
+          <span class="card__collapsed-preview">Aggregate Verdict: concerns. 2 dimensions flagged — goal_fidelity has 1 missing scenario, technical_feasibility raised an authentication gap.</span>
+        </div>
+      </div>
+      <div class="card__actions">
+        <span class="card__chevron">▼</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- #G1V4 (Fix A: shows goal title in preview, not "Bash: rg --files") -->
+  <article class="card card--collapsed" data-kind="step" data-stage="executor" data-status="error" data-depth="0" style="--card-stage: var(--card-stage-executor);">
+    <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
+      <span class="card__badge card__badge--error" title="failed">✗</span>
+      <div class="card__main">
+        <div class="card__title-row">
+          <span class="card__round card__round--lead">#G1V4</span>
+          <span class="card__title">Extract and analyze reference webpage</span>
+          <span class="card__title-spacer" aria-hidden="true"></span>
+          <div class="card__activity-stats">
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">48</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">7</span></span>
+          </div>
+        </div>
+        <div class="card__preview-row">
+          <!-- Fix A: was "Bash: rg --files" before. Now uses goalDescription. -->
+          <span class="card__collapsed-preview">Fetch the reference URL, capture rendered DOM and screenshots, derive component inventory and visual hierarchy for downstream goals.</span>
+        </div>
+      </div>
+      <div class="card__actions">
+        <span class="card__chevron">▼</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- #G3V4 (Fix A: shows goal title in preview, not "Bash: rg --files") -->
+  <article class="card card--collapsed" data-kind="step" data-stage="executor" data-status="error" data-depth="0" style="--card-stage: var(--card-stage-executor);">
+    <div class="card__head card__head--with-meta" role="button" tabindex="0" aria-expanded="false">
+      <span class="card__badge card__badge--error" title="failed">✗</span>
+      <div class="card__main">
+        <div class="card__title-row">
+          <span class="card__round card__round--lead">#G3V4</span>
+          <span class="card__title">Backend API and virtual data engine</span>
+          <span class="card__title-spacer" aria-hidden="true"></span>
+          <div class="card__activity-stats">
+            <span class="card__stat" data-kind="messages"><span class="card__stat-icon">💬</span><span class="card__stat-value">16</span></span>
+            <span class="card__stat" data-kind="tools"><span class="card__stat-icon">🛠</span><span class="card__stat-value">3</span></span>
+          </div>
+        </div>
+        <div class="card__preview-row">
+          <!-- Fix A: was "Bash: pwsh -Command 'rg --files'" before. -->
+          <span class="card__collapsed-preview">Implement /api/data endpoint and an in-memory data engine that approximates the live ticker stream so the UI can run end-to-end without external services.</span>
+        </div>
+      </div>
+      <div class="card__actions">
+        <span class="card__chevron">▼</span>
+      </div>
+    </div>
+  </article>
+
+</div>
+
+</body>
+</html>

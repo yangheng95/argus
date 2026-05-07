@@ -16,49 +16,201 @@
 import { boardStore } from "../store/board";
 import { selectTask } from "../services/task";
 import { settingsStore } from "../store/settings";
+import { hasWorkspaceSelection, QUICK_PROJECT_EDITORS } from "../services/workspace";
 import { t } from "./i18n";
 import { escapeHtml } from "./markdown";
-export { sanitizeDirectoryMode } from "../store/settings";
 
 // ── Auto-scroll ──
 
 /**
- * Set up auto-scroll-to-bottom on a scrollable container.
+ * Set up user-controlled follow-to-bottom on a scrollable container.
  *
  * Behavior:
- * - Automatically scrolls to the bottom when new content appears
- * - If the user scrolls up, auto-scroll pauses
- * - When the user scrolls back to the bottom, auto-scroll resumes
+ * - Tracking state is owned by the caller (accessor `isTracking`). When true,
+ *   new content triggers an rAF scroll-to-bottom; when false the container
+ *   is left alone so the user can read without the viewport jumping.
+ * - When tracking is ON and the user manually scrolls away from the bottom,
+ *   `onUserScrollUp` is invoked so the caller can flip tracking off.
+ * - On initial mount the container snaps to the bottom once, regardless of
+ *   tracking state, so the user lands on the latest content.
+ * - `scrollToBottom` on the returned controller jumps to the bottom without
+ *   being mis-classified as a user scroll (used when the caller turns
+ *   tracking on again).
+ * - `scrollToTop` mirrors that behavior for explicit jumps to the start of
+ *   the transcript without polluting user-scroll detection.
  *
- * Uses MutationObserver to detect DOM changes (works with SolidJS reactivity).
- * Returns a cleanup function that removes the listener and disconnects the observer.
+ * Program-initiated scrolls (our own scrollTop writes) are distinguished
+ * from user scrolls by tracking the last landing position we set. Scroll
+ * events that land within `PROGRAM_TOLERANCE` px of that position are
+ * treated as program-echo and never fire `onUserScrollUp`.
+ *
+ * Follow-lock should only drop on likely user-driven upward scrolls. Reflow,
+ * focus management, or other programmatic scrollTop changes must not disable
+ * tracking, so we also require a recent scroll intent signal.
  */
-export function setupAutoScroll(el: HTMLElement, threshold = 60): () => void {
-  let tracking = true;
+const BOTTOM_TOLERANCE = 8;
+const PROGRAM_TOLERANCE = 2;
+const USER_SCROLL_INTENT_WINDOW_MS = 250;
+const USER_SCROLL_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+  " ",
+  "Spacebar",
+]);
 
-  function onScroll() {
-    tracking = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+export interface AutoScrollOptions {
+  isTracking: () => boolean;
+  onUserScrollUp: () => void;
+}
+
+export interface AutoScrollController {
+  cleanup: () => void;
+  scrollToBottom: () => void;
+  scrollToTop: () => void;
+}
+
+export function setupAutoScroll(
+  el: HTMLElement,
+  opts: AutoScrollOptions,
+): AutoScrollController {
+  let rafPending = false;
+  let expectedTop = el.scrollTop;
+  const observedChildren = new Set<Element>();
+  let lastUserScrollIntentAt = Number.NEGATIVE_INFINITY;
+
+  function nowMs(): number {
+    return typeof performance !== "undefined" ? performance.now() : Date.now();
   }
 
-  function scrollDown() {
-    if (tracking) {
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-      });
+  function markUserScrollIntent() {
+    lastUserScrollIntentAt = nowMs();
+  }
+
+  function hasRecentUserScrollIntent(): boolean {
+    return nowMs() - lastUserScrollIntentAt <= USER_SCROLL_INTENT_WINDOW_MS;
+  }
+
+  function onWheel() {
+    markUserScrollIntent();
+  }
+
+  function onTouchMove() {
+    markUserScrollIntent();
+  }
+
+  function onPointerDown(event: PointerEvent) {
+    if (event.target === el) markUserScrollIntent();
+  }
+
+  function onKeyDown(event: KeyboardEvent) {
+    if (event.defaultPrevented) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (USER_SCROLL_KEYS.has(event.key)) markUserScrollIntent();
+  }
+
+  function distanceFromBottom(): number {
+    return el.scrollHeight - el.clientHeight - el.scrollTop;
+  }
+
+  function syncResizeTargets() {
+    const nextChildren = new Set(Array.from(el.children));
+    for (const child of nextChildren) {
+      if (observedChildren.has(child)) continue;
+      resizeObserver.observe(child);
+      observedChildren.add(child);
+    }
+    for (const child of Array.from(observedChildren)) {
+      if (nextChildren.has(child)) continue;
+      resizeObserver.unobserve(child);
+      observedChildren.delete(child);
     }
   }
 
+  function onScroll() {
+    const nextTop = el.scrollTop;
+    const delta = nextTop - expectedTop;
+    if (Math.abs(delta) <= PROGRAM_TOLERANCE) {
+      expectedTop = nextTop;
+      return;
+    }
+    const movedUp = delta < -PROGRAM_TOLERANCE;
+    expectedTop = nextTop;
+    if (
+      opts.isTracking() &&
+      movedUp &&
+      hasRecentUserScrollIntent() &&
+      distanceFromBottom() > BOTTOM_TOLERANCE
+    ) {
+      opts.onUserScrollUp();
+    }
+  }
+
+  function scrollDown() {
+    if (!opts.isTracking() || rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+      rafPending = false;
+      if (!opts.isTracking()) return;
+      el.scrollTop = el.scrollHeight;
+      expectedTop = el.scrollTop;
+    });
+  }
+
+  el.addEventListener("wheel", onWheel, { passive: true });
+  el.addEventListener("touchmove", onTouchMove, { passive: true });
+  el.addEventListener("pointerdown", onPointerDown, { passive: true });
+  el.addEventListener("keydown", onKeyDown);
   el.addEventListener("scroll", onScroll, { passive: true });
 
-  const observer = new MutationObserver(scrollDown);
-  observer.observe(el, { childList: true, subtree: true, characterData: true });
+  const resizeObserver = new ResizeObserver(scrollDown);
+  resizeObserver.observe(el);
+  syncResizeTargets();
 
-  // Initial scroll to bottom
-  scrollDown();
+  const mutationObserver = new MutationObserver((records) => {
+    if (records.some((record) => record.type === "childList")) {
+      syncResizeTargets();
+    }
+    scrollDown();
+  });
+  // childList:true is enough — every text mutation that grows the
+  // scrollHeight (TextPart's appendChild of frozen blocks, Card's
+  // structural updates) shows up as a childList record. The previously
+  // enabled `characterData: true` fired the callback for every SSE
+  // token tick on top of that, producing a callback storm during
+  // streaming (50ms flush × per-character text mutations on the active
+  // tail block). The ResizeObserver above already catches scrollHeight
+  // grows from in-place text edits, so dropping characterData costs
+  // zero correctness and removes the high-frequency redundant work.
+  mutationObserver.observe(el, { childList: true, subtree: true });
 
-  return () => {
-    el.removeEventListener("scroll", onScroll);
-    observer.disconnect();
+  requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight;
+    expectedTop = el.scrollTop;
+  });
+
+  return {
+    cleanup: () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("keydown", onKeyDown);
+      el.removeEventListener("scroll", onScroll);
+      mutationObserver.disconnect();
+      resizeObserver.disconnect();
+      observedChildren.clear();
+    },
+    scrollToBottom: () => {
+      el.scrollTop = el.scrollHeight;
+      expectedTop = el.scrollTop;
+    },
+    scrollToTop: () => {
+      el.scrollTop = 0;
+      expectedTop = el.scrollTop;
+    },
   };
 }
 
@@ -129,7 +281,6 @@ export function sizeChat(textarea?: HTMLTextAreaElement): void {
  * returned. Returns `false` if there are no tasks available.
  */
 export async function ensureTaskSelection(): Promise<boolean> {
-  const { hasWorkspaceSelection } = await import("../services/workspace");
   if (hasWorkspaceSelection()) {
     return false;
   }
@@ -194,7 +345,7 @@ export function pathItems(value: string): Array<{ label: string; path: string }>
 
 /**
  * Return an inline SVG string for the given path-action button kind.
- * Supported kinds: "browse" | "new" | "history" | any (returns × close icon).
+ * Supported kinds: "browse" | "new" | any (returns × close icon).
  */
 export function pathIcon(kind: string): string {
   if (kind === "browse") {
@@ -205,13 +356,6 @@ export function pathIcon(kind: string): string {
   if (kind === "new") {
     return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-    </svg>`;
-  }
-  if (kind === "history") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 4v4l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M3.05 8a5 5 0 1 1 .5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <path d="M3 10.5L3.05 8 1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
   }
   return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -226,19 +370,15 @@ export function pathIcon(kind: string): string {
 export function pathBreadcrumb(value: string): string {
   const browse = escapeHtml(t("cwd.browse"));
   const create = escapeHtml(t("cwd.new"));
-  const reset = escapeHtml(t("cwd.reset"));
-  const recent = escapeHtml(t("cwd.recent"));
-  const directory = settingsStore.directory;
+  const editorActions = QUICK_PROJECT_EDITORS.map((editor) => {
+    const label = escapeHtml(t("cwd.open_in_editor", { name: editor.label }));
+    return `<button type="button" class="task-dir-tool task-dir-editor" data-path-editor=${jsonAttr(editor.id)} title="${label}" aria-label="${label}"><span class="task-dir-tool-label">${escapeHtml(editor.shortLabel)}</span></button>`;
+  });
   const actions = [
-    `<button type="button" class="task-dir-tool" data-path-action="recent" title="${recent}" aria-label="${recent}">${pathIcon("history")}</button>`,
     `<button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>`,
     `<button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>`,
-    directory
-      ? `<button type="button" class="task-dir-tool danger" data-path-action="reset" title="${reset}" aria-label="${reset}">${pathIcon("reset")}</button>`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("");
+    ...editorActions,
+  ].join("");
   if (!value) {
     return `
       <span class="task-dir-shell" data-empty="true">

@@ -2,20 +2,27 @@
  * Quick verification that all prompt files load correctly as non-empty strings.
  *
  * Run: bun test test/prompt-loading.test.ts
+ *
+ * audit-2026-04-29 W2-V37 — pre-fix imported `summary.txt`,
+ * `spec-core.txt`, `plan-core.txt`, all of which were removed
+ * (same plan-mode + spec-mode cleanup pattern as W2-V27/V33/V36).
+ * The bare `import x from "missing.txt"` fired at module load
+ * → "Cannot find module" → "Unhandled error between tests" →
+ * cascaded into `test/config/agent-color.test.ts` and
+ * `test/config/config.test.ts` failures (Bun's test runner
+ * doesn't isolate the module-load failure to just this file).
+ *
+ * Trim imports to currently-bundled prompts only.
  */
 import { describe, test, expect } from "bun:test"
 
-// --- Agent prompts ---
+// --- Agent prompts (currently bundled) ---
+import PROMPT_BUILD from "../src/agent/prompt/build.txt"
 import PROMPT_EXPLORE from "../src/agent/prompt/explore.txt"
 import PROMPT_GENERAL from "../src/agent/prompt/general.txt"
 import PROMPT_COMPACTION from "../src/agent/prompt/compaction.txt"
-import PROMPT_SUMMARY from "../src/agent/prompt/summary.txt"
 import PROMPT_TITLE from "../src/agent/prompt/title.txt"
 import PROMPT_JUDGE from "../src/agent/prompt/judge.txt"
-
-// --- Core prompts ---
-import SPEC_CORE from "../src/prompt/core/spec-core.txt"
-import PLAN_CORE from "../src/prompt/core/plan-core.txt"
 
 // --- System prompt ---
 import PROMPT_SYSTEM from "../src/session/prompt/system.txt"
@@ -23,14 +30,12 @@ import PROMPT_SYSTEM from "../src/session/prompt/system.txt"
 describe("Prompt file loading", () => {
   const prompts: Record<string, string> = {
     system: PROMPT_SYSTEM,
+    build: PROMPT_BUILD,
     explore: PROMPT_EXPLORE,
     general: PROMPT_GENERAL,
     compaction: PROMPT_COMPACTION,
-    summary: PROMPT_SUMMARY,
     title: PROMPT_TITLE,
     judge: PROMPT_JUDGE,
-    spec_core: SPEC_CORE,
-    plan_core: PLAN_CORE,
   }
 
   for (const [name, content] of Object.entries(prompts)) {
@@ -39,24 +44,4 @@ describe("Prompt file loading", () => {
       expect(content.length).toBeGreaterThan(30)
     })
   }
-})
-
-describe("Core prompt composition", () => {
-  test("spec core contains shared identity", () => {
-    expect(SPEC_CORE).toContain("OpenCorvus")
-    expect(SPEC_CORE).toContain("EXPLORE")
-    expect(SPEC_CORE).toContain("spec_items")
-  })
-
-  test("plan core contains shared identity", () => {
-    expect(PLAN_CORE).toContain("OpenCorvus")
-    expect(PLAN_CORE).toContain("EXPLORE")
-    expect(PLAN_CORE).toContain("<goals>")
-  })
-})
-
-describe("Prompt uniqueness", () => {
-  test("core prompts are distinct from each other", () => {
-    expect(SPEC_CORE).not.toBe(PLAN_CORE)
-  })
 })

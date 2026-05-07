@@ -53,7 +53,7 @@ type ThemeColors = {
   info: RGBA
   text: RGBA
   textMuted: RGBA
-  selectedListItemText: RGBA
+  selectedListItemText?: RGBA
   background: RGBA
   backgroundPanel: RGBA
   backgroundElement: RGBA
@@ -99,17 +99,14 @@ type ThemeColors = {
 }
 
 type Theme = ThemeColors & {
-  _hasSelectedListItemText: boolean
   thinkingOpacity: number
 }
 
 export function selectedForeground(theme: Theme, bg?: RGBA): RGBA {
-  // If theme explicitly defines selectedListItemText, use it
-  if (theme._hasSelectedListItemText) {
+  if (theme.selectedListItemText) {
     return theme.selectedListItemText
   }
 
-  // For transparent backgrounds, calculate contrast based on the actual bg (or fallback to primary)
   if (theme.background.a === 0) {
     const targetColor = bg ?? theme.primary
     const { r, g, b } = targetColor
@@ -117,7 +114,6 @@ export function selectedForeground(theme: Theme, bg?: RGBA): RGBA {
     return luminance > 0.5 ? RGBA.fromInts(0, 0, 0) : RGBA.fromInts(255, 255, 255)
   }
 
-  // Fall back to background color
   return theme.background
 }
 
@@ -205,29 +201,20 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
       }),
   ) as Partial<ThemeColors>
 
-  // Handle selectedListItemText separately since it's optional
-  const hasSelectedListItemText = theme.theme.selectedListItemText !== undefined
-  if (hasSelectedListItemText) {
-    resolved.selectedListItemText = resolveColor(theme.theme.selectedListItemText!)
-  } else {
-    // Backward compatibility: if selectedListItemText is not defined, use background color
-    // This preserves the current behavior for all existing themes
-    resolved.selectedListItemText = resolved.background
+  if (theme.theme.selectedListItemText !== undefined) {
+    resolved.selectedListItemText = resolveColor(theme.theme.selectedListItemText)
   }
 
-  // Handle backgroundMenu - optional with fallback to backgroundElement
   if (theme.theme.backgroundMenu !== undefined) {
     resolved.backgroundMenu = resolveColor(theme.theme.backgroundMenu)
   } else {
     resolved.backgroundMenu = resolved.backgroundElement
   }
 
-  // Handle thinkingOpacity - optional with default of 0.6
   const thinkingOpacity = theme.theme.thinkingOpacity ?? 0.6
 
   return {
     ...resolved,
-    _hasSelectedListItemText: hasSelectedListItemText,
     thinkingOpacity,
   } as Theme
 }

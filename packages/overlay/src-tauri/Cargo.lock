@@ -2252,7 +2252,7 @@ dependencies = [
 
 [[package]]
 name = "opencorvus-overlay"
-version = "0.0.1-alpha"
+version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
  "image",

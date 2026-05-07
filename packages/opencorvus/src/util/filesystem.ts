@@ -5,10 +5,33 @@ import { realpathSync } from "fs"
 import { dirname, isAbsolute, join, parse, relative, resolve as pathResolve, normalize } from "path"
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
+import z from "zod"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { Glob } from "./glob"
 import { traceSync } from "./debug-trace"
 
 export namespace Filesystem {
+  /**
+   * Thrown by `Filesystem.resolve` when the input string is a path
+   * shaped for the wrong OS (e.g. a Windows `C:\foo` reaches a darwin
+   * sidecar after settings sync, or a bare POSIX path reaches Windows
+   * outside the supported Git Bash / Cygwin / WSL mount layouts).
+   *
+   * Pre-fix `Filesystem.resolve` silently fed cross-platform inputs to
+   * `path.resolve`, which on POSIX treats `C:\Users\...` as a relative
+   * fragment and produces a corrupted directory name with literal
+   * backslashes — the corrupted path then flowed into git invocations
+   * and produced opaque "no such directory" errors. Rejecting at the
+   * boundary (rule 1) makes the failure observable instead of cascading.
+   */
+  export const InvalidDirectoryError = NamedError.create(
+    "InvalidDirectoryError",
+    z.object({
+      value: z.string(),
+      reason: z.enum(["windows-path-on-posix", "posix-path-on-windows"]),
+      message: z.string(),
+    }),
+  )
   export async function exists(p: string): Promise<boolean> {
     return access(p).then(
       () => true,
@@ -141,7 +164,54 @@ export namespace Filesystem {
     }
   }
 
+  /**
+   * Single source for the bash-style drive mounts recognized on Windows.
+   * `/<drive>/...` is Git Bash; `/<mount>/<drive>/...` is Cygwin / WSL
+   * with the mount root being `mnt`, `cygdrive`, or anything the user
+   * exports via `OPENCORVUS_WINDOWS_DRIVE_MOUNTS`. Both `windowsPath`
+   * (which translates them to native form) and `looksLikeBashMount`
+   * (the cross-platform path-validation predicate) read from this same
+   * collection so we never ship two parallel mount lists (rule 8).
+   */
+  function collectWindowsDriveMounts(): Set<string> {
+    const mounts = new Set(["mnt", "cygdrive"])
+    for (const item of (process.env.OPENCORVUS_WINDOWS_DRIVE_MOUNTS || "").split(",")) {
+      const value = item.trim().replace(/^\/+|\/+$/g, "")
+      if (value) mounts.add(value)
+    }
+    return mounts
+  }
+
+  function looksLikeBashMount(p: string): boolean {
+    if (!p.startsWith("/")) return false
+    // /X/... — Git Bash native
+    if (/^\/[a-zA-Z]\//.test(p)) return true
+    const mounts = Array.from(collectWindowsDriveMounts())
+      .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|")
+    return new RegExp(`^\\/(?:${mounts})\\/[a-zA-Z]\\/`).test(p)
+  }
+
   export function resolve(p: string): string {
+    if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(p)) {
+      throw new InvalidDirectoryError({
+        value: p,
+        reason: "windows-path-on-posix",
+        message: `Cannot resolve "${p}" on ${process.platform}: this is a Windows-style path. The directory was likely synced from a Windows session and is not interpretable here.`,
+      })
+    }
+    if (
+      process.platform === "win32" &&
+      /^\//.test(p) &&
+      !p.startsWith("//") && // UNC paths translate via windowsPath
+      !looksLikeBashMount(p)
+    ) {
+      throw new InvalidDirectoryError({
+        value: p,
+        reason: "posix-path-on-windows",
+        message: `Cannot resolve "${p}" on win32: this is a POSIX-style path that is not a recognized Git Bash / Cygwin / WSL mount. Set OPENCORVUS_WINDOWS_DRIVE_MOUNTS to add custom mount roots.`,
+      })
+    }
     return normalizePath(pathResolve(windowsPath(p)))
   }
 
@@ -150,13 +220,7 @@ export namespace Filesystem {
     // UNC paths may come through as //server/share on POSIX-style tools.
     if (p.startsWith("//")) return p.replace(/\//g, "\\")
 
-    const mounts = new Set(["mnt", "cygdrive"])
-    for (const item of (process.env.OPENCORVUS_WINDOWS_DRIVE_MOUNTS || "").split(",")) {
-      const value = item.trim().replace(/^\/+|\/+$/g, "")
-      if (value) mounts.add(value)
-    }
-
-    const escapedMounts = Array.from(mounts)
+    const escapedMounts = Array.from(collectWindowsDriveMounts())
       .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
       .join("|")
 

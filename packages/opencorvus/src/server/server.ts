@@ -9,27 +9,45 @@ import { Flag } from "../flag/flag"
 import { lazy } from "../util/lazy"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { Instance } from "../project/instance"
+import { Filesystem } from "../util/filesystem"
 import { NotFoundError } from "../storage/db"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { websocket } from "hono/bun"
 import { HTTPException } from "hono/http-exception"
+import z from "zod"
 import { AuthRoutes } from "./routes/auth"
 import { AppDocumentation, AppRoutes } from "./routes/app"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
 import { muteAISdkWarnings } from "@/runtime/shims"
 import { OverlayUI } from "./overlay-ui"
+import { DEFAULT_SERVER_PORT } from "./defaults"
 
 muteAISdkWarnings()
 
 export namespace Server {
   const log = Log.create({ service: "server" })
 
+  /**
+   * Project-scoped routes require an explicit `directory` (via `?directory=`
+   * or `x-opencorvus-directory` header). Falling back to `process.cwd()`
+   * silently bound the entire orchestrator to whatever directory the
+   * sidecar was launched in — on darwin .app this is `/`, which made
+   * every subsequent project request 500 (rule 7: no fallback).
+   */
+  export const DirectoryRequiredError = NamedError.create(
+    "DirectoryRequiredError",
+    z.object({
+      message: z.string(),
+    }),
+  )
+
   let _url: URL | undefined
   let _corsWhitelist: string[] = []
 
   export function url(): URL {
-    return _url ?? new URL("http://localhost:7878")
+    if (!_url) throw new Error("Server.url() called before serve() — server not started")
+    return _url
   }
 
   function decodeDirectory(raw: string) {
@@ -52,12 +70,28 @@ export namespace Server {
             let status: ContentfulStatusCode
             if (err instanceof NotFoundError) status = 404
             else if (err instanceof Provider.ModelNotFoundError) status = 400
+            else if (err instanceof DirectoryRequiredError) status = 400
+            else if (err instanceof Filesystem.InvalidDirectoryError) status = 400
+            // WorktreeNotGitError is a precondition (the directory is reachable
+            // and valid, but does not contain a `.git` repository). 412 lets
+            // the overlay distinguish "fix your input" (400) from "init the
+            // repo and retry" (412); the former is an irrecoverable user error,
+            // the latter is a one-click recovery prompt.
+            else if (err.name === "WorktreeNotGitError") status = 412
             else if (err.name.startsWith("Worktree")) status = 400
             else status = 500
             return c.json(err.toObject(), { status })
           }
           if (err instanceof HTTPException) return err.getResponse()
-          const message = err instanceof Error && err.stack ? err.stack : err.toString()
+          // audit-2026-04-29 W2-V13 — pre-fix the response body
+          // returned `err.stack`, which on a managed sidecar leaks
+          // the user's local repo path layout (`C:\Users\<user>\
+          // ...\packages\opencorvus\src\server\...`) and node_modules
+          // structure to any caller who can hit the port. The full
+          // stack already lands in `log.error` above, which is the
+          // right surface for the operator (who is the server admin
+          // in managed mode). Send `err.message` only over the wire.
+          const message = err instanceof Error ? err.message : String(err)
           return c.json(new NamedError.Unknown({ message }).toObject(), {
             status: 500,
           })
@@ -112,8 +146,16 @@ export namespace Server {
         .route("/auth", AuthRoutes())
         .route("/ui", OverlayUI.routes())
         .use(async (c, next) => {
-          if (c.req.path === "/log") return next()
-          const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory") || process.cwd()
+          // Control-plane routes must stay available even if project bootstrap is broken.
+          if (c.req.path === "/log" || c.req.path === "/shutdown" || c.req.path === "/restart") {
+            return next()
+          }
+          const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory")
+          if (!raw) {
+            throw new DirectoryRequiredError({
+              message: `Project-scoped route ${c.req.path} requires ?directory= query parameter or x-opencorvus-directory header`,
+            })
+          }
           const directory = decodeDirectory(raw)
           return Instance.provide({
             directory,
@@ -139,6 +181,13 @@ export namespace Server {
     mdns?: boolean
     mdnsDomain?: string
     cors?: string[]
+    /**
+     * When true, port=0 maps directly to OS-assigned random port without
+     * first attempting DEFAULT_SERVER_PORT. Required by managed sidecar
+     * mode (vscode-extension) so multiple workspaces never collide on the
+     * default port.
+     */
+    randomPort?: boolean
   }) {
     _corsWhitelist = opts.cors ?? []
 
@@ -157,7 +206,17 @@ export namespace Server {
         return undefined
       }
     }
-    const server = opts.port === 0 ? (tryServe(7878) ?? tryServe(0)) : tryServe(opts.port)
+    let server: ReturnType<typeof Bun.serve> | undefined
+    if (opts.randomPort) {
+      if (opts.port !== 0) {
+        throw new Error(`randomPort=true requires port=0, got ${opts.port}`)
+      }
+      server = tryServe(0)
+    } else if (opts.port === 0) {
+      server = tryServe(DEFAULT_SERVER_PORT) ?? tryServe(0)
+    } else {
+      server = tryServe(opts.port)
+    }
     if (!server) {
       const detail = failure instanceof Error ? failure.message : failure ? String(failure) : "unknown"
       throw new Error(`Failed to start server on port ${opts.port}: ${detail}`)

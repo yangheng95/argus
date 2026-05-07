@@ -1,0 +1,414 @@
+// ── AgentModelsPanel ──
+// LLM model configuration panel — a read/write mirror of opencorvus.jsonc.
+//
+// Two sections:
+//   1. Project default — the top-level `model` field. Every agent resolves
+//      to this when it has no explicit override. Missing this field is a
+//      hard error: `resolveAgentModel` throws `MissingModelConfigError` and
+//      the backend refuses to dispatch any agent work. The panel shows a
+//      prominent warning in that state.
+//   2. Per-agent overrides — `agent.<name>.model`. Optional; empty means
+//      "inherit the project default".
+//
+// Strict contract: the panel IS the source of truth for what the backend
+// will use. No hidden fallbacks (env vars, `~/.local/state/argus/model.json`
+// recent list, session user-message propagation) exist anymore — those were
+// removed because they silently switched provider/model between goal retries
+// and collapsed prompt cache.
+
+import { createSignal, createMemo, createResource, For, Show } from "solid-js";
+import { apiJsonWithTimeout } from "../../services/api";
+import { patchConfig } from "../../services/config";
+import { appStore } from "../../store/app";
+import { settingsStore } from "../../store/settings";
+import { t } from "../../utils/i18n";
+import {
+  HEXIN_REFRESH_TIMEOUT_MILLISECONDS,
+  loadAgentModelsData,
+  type AgentInfo,
+  type ProvidersPayload,
+} from "./agent-models-data";
+import { Button } from "../ui/Button";
+import { SurfaceHeader } from "../ui/SurfaceHeader";
+
+// Tier groupings are display-only: they organize the UI list but no longer
+// affect default model resolution (all agents inherit the project default).
+const CORE_AGENTS = ["orchestrator", "build", "delivery", "general"];
+const INTERNAL_AGENTS = ["compaction", "title", "summary"];
+
+function tierOf(name: string): "core" | "internal" | "lightweight" {
+  if (CORE_AGENTS.includes(name)) return "core";
+  if (INTERNAL_AGENTS.includes(name)) return "internal";
+  return "lightweight";
+}
+
+const TIER_ORDER: Array<"core" | "lightweight" | "internal"> = [
+  "core",
+  "lightweight",
+  "internal",
+];
+
+const TIER_LABEL: Record<string, string> = {
+  core: "Core — main coding agents",
+  lightweight: "Lightweight — spec/plan/explore/etc.",
+  internal: "Internal — background tasks",
+};
+
+export default function AgentModelsPanel() {
+  const [refreshing, setRefreshing] = createSignal(false);
+  const [refreshMsg, setRefreshMsg] = createSignal<string>("");
+  const [savingAgents, setSavingAgents] = createSignal<Set<string>>(new Set());
+  const [savingDefault, setSavingDefault] = createSignal(false);
+  const [activeSelect, setActiveSelect] = createSignal<string>("");
+
+  // Agents + providers change rarely and are fetched via createResource with a
+  // refreshToken knob. The project default `model` is deliberately NOT fetched
+  // here — it is read directly from `appStore.config`, which the SSE
+  // `config.changed` event keeps current. Keeping two independent sources of
+  // truth for the same field (local createResource + global appStore.config)
+  // was the original bug: after a save we set one and not the other, the UI
+  // briefly flashed the new value, then the SSE-driven appStore refresh (or a
+  // subsequent re-render reading stale createResource data) snapped it back.
+  const [refreshToken, setRefreshToken] = createSignal(0);
+
+  const [data] = createResource(
+    () => `${refreshToken()}:${settingsStore.directory.trim()}`,
+    () => loadAgentModelsData(),
+  );
+  const readyData = createMemo(() => {
+    if (data.loading || data.error) return undefined;
+    return data();
+  });
+
+  // Single source of truth for the currently-persisted project default model.
+  // Reads directly from appStore.config.model — the same value SSE
+  // `config.changed` refreshes via loadConfigInfo(). Any write path below must
+  // update appStore.config so this memo reflects reality without a re-fetch.
+  const projectModel = createMemo<string>(() => {
+    const m = (appStore.config as { model?: unknown } | null | undefined)?.model;
+    return typeof m === "string" ? m : "";
+  });
+
+  async function onSelectProjectDefault(value: string) {
+    setSavingDefault(true);
+    try {
+      // patchConfig sends only the diff (RFC 7396) and writes the returned
+      // config to appStore.config. projectModel() is a memo over
+      // appStore.config.model, so the UI reflects the new value the moment
+      // the PATCH returns — no re-fetch window, no two-source drift.
+      await patchConfig({ model: value ? value : null });
+    } catch (e) {
+      console.error("[project-default-model] save failed", e);
+    } finally {
+      setSavingDefault(false);
+    }
+  }
+
+  function configAgentEntry(agentName: string): Record<string, any> | null {
+    const agents = (appStore.config as { agent?: unknown } | null | undefined)?.agent;
+    if (!agents || typeof agents !== "object" || Array.isArray(agents)) return null;
+    const entry = (agents as Record<string, unknown>)[agentName];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+    return entry as Record<string, any>;
+  }
+
+  function configAgentModel(agentName: string): string {
+    const model = configAgentEntry(agentName)?.model;
+    return typeof model === "string" ? model : "";
+  }
+
+  function configAgentHasNonModelFields(agentName: string): boolean {
+    const entry = configAgentEntry(agentName);
+    if (!entry) return false;
+    return Object.keys(entry).some((key) => key !== "model");
+  }
+
+  function setAgentSaving(agentName: string, saving: boolean): void {
+    setSavingAgents((prev) => {
+      const next = new Set(prev);
+      if (saving) next.add(agentName);
+      else next.delete(agentName);
+      return next;
+    });
+  }
+
+  async function onSelect(agentName: string, value: string) {
+    setAgentSaving(agentName, true);
+    try {
+      await patchConfig({
+        agent: {
+          [agentName]: value
+            ? { model: value }
+            : configAgentHasNonModelFields(agentName)
+              ? { model: null }
+              : null,
+        },
+      });
+      setRefreshToken((x) => x + 1);
+    } catch (e) {
+      console.error("[agent-models] save failed", e);
+    } finally {
+      setAgentSaving(agentName, false);
+    }
+  }
+
+  async function handleRefreshHexin() {
+    setRefreshing(true);
+    setRefreshMsg("");
+    try {
+      const result = (await apiJsonWithTimeout(
+        "provider/hexin/refresh",
+        HEXIN_REFRESH_TIMEOUT_MILLISECONDS,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      )) as { ok: boolean; count: number; error?: string };
+      if (result.ok) {
+        setRefreshMsg(`Refreshed: ${result.count} hexin models`);
+        setRefreshToken((x) => x + 1);
+      } else {
+        setRefreshMsg(`Refresh failed: ${result.error ?? "unknown"}`);
+      }
+    } catch (e) {
+      setRefreshMsg(`Refresh error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  interface ProviderGroup {
+    id: string;
+    name: string;
+    models: Array<{ value: string; label: string }>;
+  }
+
+  function providerGroups(payload: ProvidersPayload | undefined): ProviderGroup[] {
+    if (!payload) return [];
+    const groups: ProviderGroup[] = [];
+    const sortedProviders = [...payload.providers].sort((a, b) => a.name.localeCompare(b.name));
+    for (const p of sortedProviders) {
+      const modelIDs = Object.keys(p.models).sort();
+      if (modelIDs.length === 0) continue;
+      groups.push({
+        id: p.id,
+        name: p.name || p.id,
+        models: modelIDs.map((modelID) => ({
+          value: `${p.id}/${modelID}`,
+          label: modelID,
+        })),
+      });
+    }
+    return groups;
+  }
+
+  function allModelValues(groups: ProviderGroup[]): Set<string> {
+    const out = new Set<string>();
+    for (const g of groups) for (const m of g.models) out.add(m.value);
+    return out;
+  }
+
+  function groupedAgents(agents: AgentInfo[]) {
+    const byTier: Record<string, AgentInfo[]> = { core: [], lightweight: [], internal: [] };
+    for (const a of agents) byTier[tierOf(a.name)].push(a);
+    for (const tier of Object.keys(byTier)) {
+      byTier[tier].sort((x, y) => x.name.localeCompare(y.name));
+    }
+    return byTier;
+  }
+
+  function optionLabel(value: string, groups: ProviderGroup[]): string {
+    for (const group of groups) {
+      const found = group.models.find((model) => model.value === value);
+      if (found) return found.label;
+    }
+    return value;
+  }
+
+  function ModelSelect(props: {
+    id: string;
+    testid: string;
+    value: string;
+    groups: ProviderGroup[];
+    unavailable: boolean;
+    disabled: boolean;
+    emptyLabel: string;
+    unavailableLabel: string;
+    onSelect: (value: string) => void;
+  }) {
+    const expanded = () => activeSelect() === props.id;
+    const selected = () => props.value;
+    const selectedAvailable = () =>
+      !!selected() && props.groups.some((group) => group.models.some((model) => model.value === selected()));
+    return (
+      <select
+        class="field-input agent-model-select"
+        data-testid={props.testid}
+        value={selected()}
+        disabled={props.disabled}
+        onFocus={() => setActiveSelect(props.id)}
+        onPointerDown={() => setActiveSelect(props.id)}
+        onChange={(e) => props.onSelect((e.currentTarget as HTMLSelectElement).value)}
+      >
+        <option value="">{props.emptyLabel}</option>
+        <Show when={!!selected() && (!expanded() || props.unavailable || !selectedAvailable())}>
+          <option value={selected()}>
+            {props.unavailable ? props.unavailableLabel : optionLabel(selected(), props.groups)}
+          </option>
+        </Show>
+        <Show when={expanded()}>
+          <For each={props.groups}>
+            {(g) => (
+              <optgroup label={g.name}>
+                <For each={g.models}>
+                  {(opt) => (
+                    <option value={opt.value}>{opt.label}</option>
+                  )}
+                </For>
+              </optgroup>
+            )}
+          </For>
+        </Show>
+      </select>
+    );
+  }
+
+  return (
+    <div class="general-panel">
+      <div class="config-panel-group">
+        <SurfaceHeader
+          variant="settings-group"
+          title="Agent Models"
+          actions={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
+              onClick={handleRefreshHexin}
+              disabled={refreshing()}
+            >
+              {refreshing() ? t("agent_models.refreshing") : t("agent_models.refresh_hexin")}
+            </Button>
+          }
+        />
+        <p class="agent-models-info">
+          {t("agent_models.intro")}
+        </p>
+        <Show when={refreshMsg()}>
+          <div class="config-panel-card agent-models-refresh-msg">
+            {refreshMsg()}
+          </div>
+        </Show>
+
+        <Show when={data.loading}>
+          <div class="agent-models-loading" role="status" aria-live="polite">
+            <span class="agent-models-loading-spinner" aria-hidden="true" />
+            <span>{t("agent_models.loading")}</span>
+          </div>
+        </Show>
+
+        <Show when={data.error}>
+          <div class="agent-models-error" role="alert">
+            <div class="agent-models-error-msg">
+              {t("agent_models.load_failed", { error: String((data.error as any)?.message ?? data.error) })}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
+              onClick={() => setRefreshToken((x) => x + 1)}
+              disabled={data.loading}
+            >
+              {data.loading ? t("common.retrying") : t("common.retry")}
+            </Button>
+          </div>
+        </Show>
+
+        <Show when={readyData()} keyed>
+          {(payload) => {
+            const groups = providerGroups(payload.providers);
+            const available = allModelValues(groups);
+            const grouped = groupedAgents(payload.agents);
+            // projectModel() is a memo over appStore.config.model — re-reads
+            // each render, so UI stays in sync with the canonical store.
+            const currentProjectModel = () => projectModel();
+            const projectModelMissing = () => !currentProjectModel();
+            const projectModelUnavailable = () => {
+              const current = currentProjectModel();
+              return !!current && !available.has(current);
+            };
+            return (
+              <>
+                <div class="agent-model-project-default">
+                  <div class="agent-model-row" title={t("agent_models.project_default_title")}>
+                    <span class="agent-model-name">{t("agent_models.project_default")}</span>
+                    <ModelSelect
+                      id="project"
+                      testid="agent-model-select-project"
+                      value={currentProjectModel()}
+                      disabled={savingDefault()}
+                      groups={groups}
+                      unavailable={projectModelUnavailable()}
+                      emptyLabel={t("agent_models.option_not_set")}
+                      unavailableLabel={t("agent_models.option_unavailable", { model: currentProjectModel() })}
+                      onSelect={onSelectProjectDefault}
+                    />
+                    <span class="agent-model-status">
+                      <Show when={savingDefault()}>{t("agent_models.saving")}</Show>
+                    </span>
+                  </div>
+                  <Show when={projectModelMissing()}>
+                    <div class="config-panel-card agent-models-warning">
+                      {t("agent_models.warning_no_default_prefix")}
+                      <code> MissingModelConfigError </code>
+                      {t("agent_models.warning_no_default_suffix")}
+                    </div>
+                  </Show>
+                </div>
+                <div class="agent-model-table">
+                  <For each={TIER_ORDER}>
+                    {(tier) => (
+                      <Show when={grouped[tier].length > 0}>
+                        <div class="agent-model-tier-label">{TIER_LABEL[tier]}</div>
+                        <For each={grouped[tier]}>
+                          {(agent) => {
+                            const current = () => configAgentModel(agent.name);
+                            const missing = () => {
+                              const selected = current();
+                              return selected !== "" && !available.has(selected);
+                            };
+                            return (
+                              <div class="agent-model-row" title={agent.description || ""}>
+                                <span class="agent-model-name">{agent.name}</span>
+                                <ModelSelect
+                                  id={`agent:${agent.name}`}
+                                  testid={`agent-model-select-${agent.name}`}
+                                  value={current()}
+                                  disabled={savingAgents().has(agent.name)}
+                                  groups={groups}
+                                  unavailable={missing()}
+                                  emptyLabel="— inherit project default —"
+                                  unavailableLabel={`${current()} (unavailable)`}
+                                  onSelect={(value) => onSelect(agent.name, value)}
+                                />
+                                <span class="agent-model-status">
+                                  <Show when={savingAgents().has(agent.name)}>saving…</Show>
+                                </span>
+                              </div>
+                            );
+                          }}
+                        </For>
+                      </Show>
+                    )}
+                  </For>
+                </div>
+              </>
+            );
+          }}
+        </Show>
+      </div>
+    </div>
+  );
+}

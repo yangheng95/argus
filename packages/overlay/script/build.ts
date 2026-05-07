@@ -76,7 +76,6 @@ function tauriArgs() {
   return [
     "--config",
     JSON.stringify({
-      build: { frontendDist: "../dist-vite" },
       bundle: { resources: [] },
     }),
   ]
@@ -116,13 +115,28 @@ if (!(await exists(distServer))) {
   throw new Error(`Bundled opencorvus binary not found at ${distServer}`)
 }
 
-await $`bun run build:mainjs`.cwd(dir)
 await $`bun run build:vite`.cwd(dir)
 
 await fs.rm(distRoot, { recursive: true, force: true }).catch(() => undefined)
 await cleanBuildResidue()
 
-await $`tauri build --no-bundle ${tauriArgs()}`.cwd(dir).env({
+// `tauri build` alone leaves Tauri 2.x without an explicit bundle list
+// and the build silently produces only the bare executable — no
+// .app/.dmg on macOS, no .msi/-setup.exe on Windows, no
+// .deb/.rpm/.AppImage on Linux. Even with bundle.active=true and
+// targets="all" in tauri.conf.json, the CLI's --config deep-merge
+// (we pass {bundle:{resources:[]}}) interacts poorly enough that the
+// bundle pipeline gets skipped. The `--bundles` flag opts in
+// unconditionally, but Tauri 2.x rejects the keyword `all`; valid
+// values are platform-specific (`app dmg` on macOS, `msi nsis` on
+// Windows, `deb rpm appimage` on Linux), so we pass the host's full
+// default set explicitly.
+function bundleTargets(): string[] {
+  if (process.platform === "darwin") return ["app", "dmg"]
+  if (process.platform === "win32") return ["msi", "nsis"]
+  return ["deb", "rpm", "appimage"]
+}
+await $`tauri build --bundles ${bundleTargets()} ${tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: target,
   OPENCORVUS_EMBED_PATH: distServer,
   PATH: await cargoPath(),
@@ -135,4 +149,3 @@ if (!(await exists(builtOverlay))) {
 
 await fs.mkdir(distRoot, { recursive: true })
 await copyFile(builtOverlay, packagedOverlay, { required: true })
-await cleanBuildResidue()

@@ -3,27 +3,30 @@ import { Identifier } from "@/id/id"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { TaskQueueTable } from "@/scheduler/task-queue.sql"
 import { Bus } from "@/bus"
+import { GlobalBus } from "@/bus/global"
 import { Session } from "@/session"
-import { Message } from "@/session/message"
+import { Message, SessionStatus } from "@/session"
 import { SessionSummary } from "@/session/summary"
 import { SessionPrompt } from "@/session/prompt"
-import { SessionStatus } from "@/session/status"
 import { Snapshot } from "@/snapshot"
 import { Database, eq, and, inArray } from "@/storage/db"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
+import { sessionGoalID } from "@/orchestrator/task-event"
+import { createEventQueue } from "@/util/event-queue"
+import { EngineConfig } from "@/engine/config"
 
 const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
   prompt: z.string(),
-  priority: z.enum(["high", "normal", "low"]).optional(),
-  source: z.enum(["planner", "evaluator", "system"]).optional(),
+  priority: z.enum(["critical", "high", "normal", "low"]).optional(),
+  source: z.enum(["evaluator", "system"]).optional(),
 })
 
 const ResumeInput = z.object({
   sessionID: Identifier.schema("session"),
   message: z.string(),
-  priority: z.enum(["high", "normal", "low"]).optional(),
+  priority: z.enum(["critical", "high", "normal", "low"]).optional(),
 })
 
 const EventResult = z.object({
@@ -57,8 +60,12 @@ export namespace OpencodeExecutor {
           },
         ],
       },
-      source: "orchestrator.task",
-      priority: input.priority,
+      source: "engine.task",
+      // Inner agent task queue only knows high/normal/low — that queue
+      // schedules steps inside one orchestrator task and has no concept of
+      // cross-task pre-emption. Orchestrator-level "critical" (used for fix
+      // tasks that jump the project queue) maps to inner "high".
+      priority: input.priority === "critical" ? "high" : input.priority,
     })
     void TaskQueueService.runNow()
     return {
@@ -125,72 +132,100 @@ export namespace OpencodeExecutor {
     }
   }
 
-  export async function* events(input: { sessionID?: string; queueTaskID?: string; signal?: AbortSignal }) {
-    if (!input.sessionID) return
-    const sessionID = input.sessionID
-    const queue: Array<z.infer<typeof EventResult>> = []
-    let done = false
-    let wake: (() => void) | undefined
-    const push = (event: z.infer<typeof EventResult>) => {
-      queue.push(event)
-      wake?.()
-    }
-    const unsub = Bus.subscribeAll((event) => {
-      const next = mapEvent(event, sessionID)
+  export async function* events(input: { goalID?: string; sessionID?: string; queueTaskID?: string; signal?: AbortSignal }) {
+    if (!input.goalID && !input.sessionID) return
+
+    // audit-2026-04-29 W2-V30 — pre-fix the generator awaited
+    // EngineConfig.get() BEFORE registering the GlobalBus handler.
+    // Any event published between events() being called (caller
+    // does `stream = events(...)`) and the await resolving was
+    // dropped — the generator hadn't subscribed yet. Hardest to
+    // see in production (eventual replay or retry covers it) but
+    // fully exposed in tests that publish a single event after
+    // calling stream.next() and time out waiting for it.
+    //
+    // Subscribe SYNCHRONOUSLY in the body's pre-await region.
+    // Buffer events into a pre-await holding array; once the
+    // queue is materialised after EngineConfig.get(), drain into
+    // it. This way no event published from caller-time to
+    // queue-creation-time is lost.
+    const buffered: z.infer<typeof EventResult>[] = []
+    let queue: ReturnType<typeof createEventQueue<z.infer<typeof EventResult>>> | undefined
+
+    const handler = (msg: { payload: any }) => {
+      const event = msg.payload
+      if (!event || typeof event.type !== "string") return
+      const next = mapEvent(event, input)
       if (!next) return
-      push(next)
-      // When task-queue marks the task as completed, terminate the event stream.
-      if (next.type === "task-queue.completed" && input.queueTaskID) {
-        const payload = next.payload as { queueTaskID?: string } | undefined
-        if (payload?.queueTaskID === input.queueTaskID) {
-          done = true
-          wake?.()
+      const target = queue
+      if (target) {
+        target.push(next)
+        if (next.type === "task-queue.completed" && input.queueTaskID) {
+          const payload = next.payload as { queueTaskID?: string } | undefined
+          if (payload?.queueTaskID === input.queueTaskID) target.complete()
         }
+      } else {
+        // Pre-queue event — buffer until the queue is ready.
+        buffered.push(next)
       }
-    })
-    const abort = () => {
-      done = true
-      unsub()
-      wake?.()
     }
-    input.signal?.addEventListener("abort", abort)
+    // Subscribe to GlobalBus (cross-Instance): goal executors run in
+    // worktree Instances while the pipeline consumer sits in the MAIN
+    // Instance. Bus.subscribeAll() is Instance-scoped and would miss
+    // the worktree events — GlobalBus is the only common surface.
+    GlobalBus.on("event", handler)
     try {
-      while (!done) {
-        if (queue.length === 0) {
-          await new Promise<void>((resolve) => {
-            wake = resolve
-          })
-          wake = undefined
-          if (done && queue.length === 0) break
+      const cfg = await EngineConfig.get()
+      queue = createEventQueue<z.infer<typeof EventResult>>({
+        idleMs: cfg.activity.executor_events_idle_ms,
+        signal: input.signal,
+        label: `mirrorcode-executor:${input.queueTaskID ?? input.sessionID ?? input.goalID}`,
+      })
+      // Drain anything we caught during the EngineConfig.get await.
+      for (const ev of buffered) {
+        queue.push(ev)
+        if (ev.type === "task-queue.completed" && input.queueTaskID) {
+          const payload = ev.payload as { queueTaskID?: string } | undefined
+          if (payload?.queueTaskID === input.queueTaskID) queue.complete()
         }
-        const next = queue.shift()
-        if (next) yield next
       }
+      buffered.length = 0
+      yield* queue.iterable
     } finally {
-      input.signal?.removeEventListener("abort", abort)
-      unsub()
+      GlobalBus.off("event", handler)
+      queue?.complete()
     }
   }
 }
 
-function mapEvent(event: { type: string; properties: Record<string, unknown> }, sessionID: string) {
+function eventSessionID(event: { type: string; properties: Record<string, unknown> }) {
   const props = event.properties
-  const matchSession =
-    props.sessionID === sessionID ||
-    (typeof props === "object" &&
-      props !== null &&
-      "info" in props &&
-      typeof props.info === "object" &&
-      props.info !== null &&
-      (props.info as Record<string, unknown>).sessionID === sessionID) ||
-    (typeof props === "object" &&
-      props !== null &&
-      "part" in props &&
-      typeof props.part === "object" &&
-      props.part !== null &&
-      (props.part as Record<string, unknown>).sessionID === sessionID)
+  if (typeof props.sessionID === "string" && props.sessionID.length > 0) return props.sessionID
+  const info = props.info
+  if (typeof info === "object" && info !== null && typeof (info as Record<string, unknown>).sessionID === "string") {
+    return (info as Record<string, unknown>).sessionID as string
+  }
+  const part = props.part
+  if (typeof part === "object" && part !== null && typeof (part as Record<string, unknown>).sessionID === "string") {
+    return (part as Record<string, unknown>).sessionID as string
+  }
+  return undefined
+}
 
-  if (!matchSession) return
+function mapEvent(
+  event: { type: string; properties: Record<string, unknown> },
+  input: { goalID?: string; sessionID?: string },
+) {
+  const props = event.properties
+  const sessionID = eventSessionID(event)
+  if (!sessionID) return
+  if (input.goalID) {
+    if (sessionGoalID(sessionID) !== input.goalID) return
+  } else if (input.sessionID) {
+    if (sessionID !== input.sessionID) return
+  } else {
+    return
+  }
 
   if (event.type === SessionStatus.Event.Status.type) {
     return {

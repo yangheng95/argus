@@ -6,7 +6,9 @@
 import { createMemo } from "solid-js";
 import { messageStore } from "../store/messages";
 import { appStore, setConnectionStatus } from "../store/app";
+import { settingsStore } from "../store/settings";
 import { t } from "../utils/i18n";
+import { apiJson } from "../services/api";
 
 // ── Types ──
 
@@ -25,9 +27,6 @@ function statusLabel(status: ConnectionStatus): string {
  */
 async function handleRestart(): Promise<void> {
   setConnectionStatus("connecting");
-
- // Import apiJson lazily to avoid a circular dependency at module init time.
-  const { apiJson } = await import("../services/api");
 
   try {
     await apiJson("restart", {
@@ -63,19 +62,49 @@ export function ConnectionBadge(props: ConnectionBadgeProps) {
 
   const label = createMemo(() => statusLabel(status()));
 
+  // ── Port + PID display ──
+  // The sidecar's port is dynamic (default 4096, falls back up to +32 and
+  // then ephemeral — see overlay/src-tauri/build.rs + main.rs::next_server_port).
+  // Port comes from settingsStore.serverUrl; PID comes from appStore.serverPid
+  // (populated by connection.ts:syncLocalServerUrl from the Tauri
+  // overlay_server_info command). Surface both next to "online" so the
+  // operator can `kill <pid>` / `lsof -p <pid>` / `curl :<port>` directly,
+  // without hunting through netstat.
+  const port = createMemo<string>(() => {
+    const raw = settingsStore.serverUrl;
+    if (!raw) return "";
+    const parsed = URL.canParse?.(raw) ? new URL(raw) : null;
+    return parsed?.port ?? "";
+  });
+
+  const pid = createMemo<string>(() => {
+    const value = appStore.serverPid;
+    return typeof value === "number" && value > 0 ? String(value) : "";
+  });
+
+  const title = createMemo(() => {
+    if (status() !== "online") return label();
+    const p = port();
+    const pidValue = pid();
+    const parts = [label()];
+    if (p) parts.push(`${t("titlebar.connection.port")} ${p}`);
+    if (pidValue) parts.push(`${t("titlebar.connection.pid")} ${pidValue}`);
+    return parts.join(" · ");
+  });
+
   return (
     <span
       id="connBadge"
       class="conn-badge"
       data-status={status()}
-      title={label()}
-      aria-label={label()}
+      title={title()}
+      aria-label={title()}
       aria-live="polite"
       onDblClick={() => {
         void handleRestart();
       }}
     >
-      {label()}
+      <span class="conn-badge__label">{label()}</span>
     </span>
   );
 }

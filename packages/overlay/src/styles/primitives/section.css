@@ -1,0 +1,86 @@
+/* ── section.css ──
+ * Structural base for the overlay's collapsible right-rail sections.
+ * Built on native HTML <details>/<summary> for zero-JS toggle behaviour.
+ *
+ * Contract:
+ *   .oc-section              → <details> root (flex-column)
+ *   .oc-section__head        → <summary> (flex, icon + title + badge)
+ *   .oc-section__icon        → SVG icon slot (shrink 0)
+ *   .oc-section__title       → section label (flex: 1)
+ *   .oc-section__badge       → trailing chip (shrink 0)
+ *   .oc-section__body        → collapsible content area
+ *
+ * The existing `.section` / `.section-head` family in inspector.css and
+ * cascade/typography.css stays active until Step 9.E migrates each
+ * callsite. No conflicts arise because the .oc-section namespace is new.
+ *
+ * No colors or raw px values appear here — all sizing comes from cascade
+ * tokens (--ui-gap-*, --oc-icon-size, --oc-density-control-height).
+ */
+
+.oc-section {
+  --oc-section-head-height: var(--oc-density-control-height);
+  --oc-section-icon-size: var(--oc-icon-size);
+  --oc-section-head-gap: var(--ui-gap-sm);
+  --oc-section-head-pad-x: var(--ui-gap-md);
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* <summary> — override UA list-item/disclosure defaults */
+.oc-section__head {
+  display: flex;
+  align-items: center;
+  min-height: var(--oc-section-head-height);
+  gap: var(--oc-section-head-gap);
+  padding: 0 var(--oc-section-head-pad-x);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.oc-section__head::-webkit-details-marker {
+  display: none;
+}
+
+.oc-section__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--oc-section-icon-size);
+  height: var(--oc-section-icon-size);
+  color: var(--text-muted);
+  transition: color var(--ui-duration-fast) var(--ui-ease-out);
+}
+
+.oc-section[open] > .oc-section__head > .oc-section__icon {
+  color: var(--accent);
+}
+
+.oc-section__title {
+  flex: 1;
+  font-size: var(--ui-font-heading);
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text-strong);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-section__badge {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.oc-section__body {
+  /* Content revealed when <details> is open.
+   * Surface files add padding and overflow rules as needed. */
+}
+
+/* Variant selectors let surface files adjust look via data attributes. */
+.oc-section[data-variant] {}
+.oc-section[data-size] {}
+.oc-section[data-tone] {}

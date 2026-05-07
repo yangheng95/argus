@@ -143,7 +143,78 @@ describe("memory typed recall", () => {
           query: "socket mode xoxb",
         })
         expect(injected).toContain("Auto-Recalled Memory")
-        expect(injected).toContain("Memory Recall Policy")
+        expect(injected).toContain("Memory Policy")
+      },
+    })
+  })
+})
+
+// Memory.listFiles { sessionIDs } — exercises the backend fix that lets
+// the panel route surface "Task Context" by passing a recursive walk of
+// the task's session tree. See packages/opencorvus/src/server/routes/
+// panel.ts and packages/opencorvus/src/engine/store.ts:sessionIDsForTask.
+describe("Memory.listFiles sessionIDs filter", () => {
+  test("returns rows whose sessionID is in the set, plus all global rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectId = Instance.project.id
+        // Three session-scoped memories under three different sessions,
+        // one global memory shared across the project.
+        Memory.captureEpisode({
+          title: "session A note",
+          content: "## Outcome\n- foo",
+          source: "compaction",
+          projectId,
+          scope: "session",
+          sessionID: "ses_a",
+        })
+        Memory.captureEpisode({
+          title: "session B note",
+          content: "## Outcome\n- bar",
+          source: "compaction",
+          projectId,
+          scope: "session",
+          sessionID: "ses_b",
+        })
+        Memory.captureEpisode({
+          title: "session C note",
+          content: "## Outcome\n- baz",
+          source: "compaction",
+          projectId,
+          scope: "session",
+          sessionID: "ses_c",
+        })
+        Memory.captureEpisode({
+          title: "global note",
+          content: "## Outcome\n- shared",
+          source: "compaction",
+          projectId,
+          scope: "global",
+        })
+
+        // Only sessions A + B are "in the task tree".
+        const filtered = Memory.listFiles({
+          projectId,
+          sessionIDs: ["ses_a", "ses_b"],
+        })
+
+        const titles = filtered.map((row) => row.title).sort()
+        expect(titles).toContain("session A note")
+        expect(titles).toContain("session B note")
+        expect(titles).toContain("global note")
+        expect(titles).not.toContain("session C note")
+
+        // Empty sessionIDs array should fall through to the legacy
+        // single-sessionID semantics — exercised by passing undefined
+        // sessionID + empty sessionIDs (treated as null sessionSet).
+        const noFilter = Memory.listFiles({
+          projectId,
+          sessionIDs: [],
+        })
+        expect(noFilter.find((r) => r.title === "global note")).toBeDefined()
       },
     })
   })

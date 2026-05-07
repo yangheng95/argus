@@ -4,6 +4,7 @@ import { ExecutorDiscovery } from "../../src/executor/discovery"
 import { CodexAppServerClientProcess } from "../../src/executor/codex-app-server-client"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Instance } from "../../src/project/instance"
+import { MCPServe } from "../../src/mcp/serve"
 import { tmpdir } from "../fixture/fixture"
 
 describe("executor.bootstrap", () => {
@@ -15,8 +16,8 @@ describe("executor.bootstrap", () => {
   test("injects OpenCorvus MCP config into codex app-server via -c flags", async () => {
     const seen: Array<{ command: string[] }> = []
     spyOn(ExecutorDiscovery, "scan").mockResolvedValue({
-      opencode: {
-        name: "opencode",
+      mirrorcode: {
+        name: "mirrorcode",
         available: true,
         source: "builtin",
         detail: "builtin",
@@ -36,6 +37,12 @@ describe("executor.bootstrap", () => {
         source: "missing",
         detail: "missing",
       },
+    })
+    const mcpCommand = "C:\\Program Files\\OpenCorvus\\opencorvus.exe"
+    spyOn(MCPServe, "command").mockReturnValue({
+      name: "opencorvus",
+      command: mcpCommand,
+      args: ["mcp", "serve", "--cwd", "D:\\repo\\worktree", "--toolset", "executor"],
     })
     spyOn(CodexAppServerClientProcess, "create").mockImplementation((input) => {
       seen.push({ command: input.command })
@@ -107,14 +114,22 @@ describe("executor.bootstrap", () => {
     const cmd = seen[0]?.command ?? []
     expect(cmd).toContain("app-server")
     expect(cmd).toContain("-c")
-    expect(cmd.some((item) => item === 'mcp_servers.opencorvus.command="bun"' || item.includes("mcp_servers.opencorvus.command"))).toBe(true)
+    expect(cmd).toContain(`mcp_servers.opencorvus.command=${JSON.stringify(mcpCommand)}`)
     expect(cmd.some((item) => item.includes("mcp_servers.opencorvus.args"))).toBe(true)
+    // Full-permission overrides — the app-server ignores
+    // --dangerously-bypass-approvals-and-sandbox, so config keys are the
+    // only authoritative path. Without these, sandbox stays workspace-write
+    // and our own MCP server hits per-call approval popups.
+    expect(cmd).toContain('sandbox_mode="danger-full-access"')
+    expect(cmd).toContain('approval_policy="never"')
+    expect(cmd).toContain('mcp_servers.opencorvus.default_tools_approval_mode="approve"')
+    expect(cmd.includes("--dangerously-bypass-approvals-and-sandbox")).toBe(false)
   })
 
   test("does not override an executor that is already registered", async () => {
     spyOn(ExecutorDiscovery, "scan").mockResolvedValue({
-      opencode: {
-        name: "opencode",
+      mirrorcode: {
+        name: "mirrorcode",
         available: true,
         source: "builtin",
         detail: "builtin",

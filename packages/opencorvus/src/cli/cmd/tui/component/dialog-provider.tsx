@@ -8,7 +8,7 @@ import { DialogPrompt } from "../ui/dialog-prompt"
 import { Link } from "../ui/link"
 import { useTheme } from "../context/theme"
 import { TextAttributes } from "@opentui/core"
-import type { ProviderAuthAuthorization } from "@opencorvus-ai/sdk/v2"
+import type { ProviderAuthAuthorization } from "@opencorvus-ai/sdk"
 import { DialogModel } from "./dialog-model"
 import { useKeyboard } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
@@ -18,9 +18,8 @@ const PROVIDER_PRIORITY: Record<string, number> = {
   opencorvus: 0,
   "opencorvus-go": 1,
   openai: 2,
-  "github-copilot": 3,
-  anthropic: 4,
-  google: 5,
+  anthropic: 3,
+  google: 4,
 }
 
 export function createDialogProviderOptions() {

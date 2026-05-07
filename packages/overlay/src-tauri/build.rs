@@ -89,6 +89,42 @@ fn write_embed_module(source: &Path, target_os: &str, out_file: &Path) {
     .expect("write embedded_sidecar.rs");
 }
 
+fn write_server_defaults(manifest_dir: &Path, out_file: &Path) {
+    let defaults_path = manifest_dir
+        .parent()
+        .and_then(Path::parent)
+        .map(|p| p.join("opencorvus").join("server-defaults.json"))
+        .expect("resolve server-defaults.json");
+
+    let raw = fs::read_to_string(&defaults_path)
+        .unwrap_or_else(|e| panic!("read {}: {e}", defaults_path.display()));
+    let parsed: serde_json::Value = serde_json::from_str(&raw)
+        .unwrap_or_else(|e| panic!("parse {}: {e}", defaults_path.display()));
+    let host = parsed
+        .get("host")
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| panic!("missing 'host' in {}", defaults_path.display()))
+        .to_string();
+    let port = parsed
+        .get("port")
+        .and_then(|v| v.as_u64())
+        .unwrap_or_else(|| panic!("missing 'port' in {}", defaults_path.display()));
+    if port > u16::MAX as u64 {
+        panic!("port {port} in {} exceeds u16::MAX", defaults_path.display());
+    }
+
+    fs::write(
+        out_file,
+        format!(
+            "pub const DEFAULT_SERVER_HOST: &str = {host:?};\n\
+             pub const DEFAULT_SERVER_PORT: u16 = {port};\n"
+        ),
+    )
+    .expect("write server_defaults.rs");
+
+    println!("cargo:rerun-if-changed={}", defaults_path.display());
+}
+
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS");
@@ -96,11 +132,14 @@ fn main() {
     let embed_path = env::var_os("OPENCORVUS_EMBED_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|| default_embed_path(&manifest_dir, &target_os, &target_arch));
-    let out_file = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR")).join("embedded_sidecar.rs");
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
+    let embed_out = out_dir.join("embedded_sidecar.rs");
+    let defaults_out = out_dir.join("server_defaults.rs");
 
     println!("cargo:rerun-if-env-changed=OPENCORVUS_EMBED_PATH");
     println!("cargo:rerun-if-changed={}", embed_path.display());
-    write_embed_module(&embed_path, &target_os, &out_file);
+    write_embed_module(&embed_path, &target_os, &embed_out);
+    write_server_defaults(&manifest_dir, &defaults_out);
 
     tauri_build::build()
 }

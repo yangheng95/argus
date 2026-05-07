@@ -18,7 +18,6 @@ import {
   type PromptRequest,
   type ResumeSessionRequest,
   type ResumeSessionResponse,
-  type Role,
   type SessionInfo,
   type SetSessionModelRequest,
   type SetSessionModeRequest,
@@ -36,13 +35,11 @@ import type { ACPConfig } from "./types"
 import { Provider } from "../provider/provider"
 import { Agent as AgentModule } from "../agent/agent"
 import { Installation } from "@/installation"
-import { Message } from "@/session/message"
-import { textAudience, textForACP } from "@/session/part-visibility"
+import { Message, Todo } from "@/session"
 import { Config } from "@/config/config"
-import { Todo } from "@/session/todo"
 import { z } from "zod"
 import { LoadAPIKeyError } from "ai"
-import type { AssistantMessage, Event, OpencodeClient, SessionMessageResponse, ToolPart } from "@opencorvus-ai/sdk/v2"
+import type { AssistantMessage, Event, OpencodeClient, SessionMessageResponse, ToolPart } from "@opencorvus-ai/sdk"
 import { applyPatch } from "diff"
 
 type ModeOption = { id: string; name: string; description?: string }
@@ -476,7 +473,7 @@ export namespace ACP {
           const part = message.parts.find((p) => p.id === props.partID)
           if (!part) return
 
-          if (part.type === "text" && props.field === "text" && textForACP(part)) {
+          if (part.type === "text" && props.field === "text") {
             await this.connection
               .sessionUpdate({
                 sessionId,
@@ -967,8 +964,6 @@ export namespace ACP {
         } else if (part["type"] === "text") {
           const textStr = part["text"] as string | undefined
           if (textStr) {
-            const scope = textAudience(part as Parameters<typeof textAudience>[0])
-            const audience: Role[] | undefined = scope ? [scope] : undefined
             await this.connection
               .sessionUpdate({
                 sessionId,
@@ -977,7 +972,6 @@ export namespace ACP {
                   content: {
                     type: "text",
                     text: textStr,
-                    ...(audience && { annotations: { audience } }),
                   },
                 },
               })
@@ -1303,20 +1297,15 @@ export namespace ACP {
       const agent = session.modeId ?? (await AgentModule.defaultAgent())
 
       const parts: Array<
-        | { type: "text"; text: string; synthetic?: boolean; ignored?: boolean }
+        | { type: "text"; text: string }
         | { type: "file"; url: string; filename: string; mime: string }
       > = []
       for (const part of params.prompt) {
         switch (part.type) {
           case "text":
-            const audience = part.annotations?.audience
-            const forAssistant = audience?.length === 1 && audience[0] === "assistant"
-            const forUser = audience?.length === 1 && audience[0] === "user"
             parts.push({
               type: "text" as const,
               text: part.text,
-              ...(forAssistant && { synthetic: true }),
-              ...(forUser && { ignored: true }),
             })
             break
           case "image": {
@@ -1498,7 +1487,8 @@ export namespace ACP {
       case "write":
         return "edit"
 
-      case "grep":
+      case "search_code":
+      case "external_code_search":
       case "glob":
       case "context7_resolve_library_id":
       case "context7_get_library_docs":
@@ -1521,7 +1511,7 @@ export namespace ACP {
       case "write":
         return input["filePath"] ? [{ path: input["filePath"] }] : []
       case "glob":
-      case "grep":
+      case "search_code":
         return input["path"] ? [{ path: input["path"] }] : []
       case "bash":
         return []

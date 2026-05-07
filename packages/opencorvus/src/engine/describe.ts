@@ -1,0 +1,693 @@
+/**
+ * Describe layer — project a task / goal's CURRENT STATE from the event stream.
+ *
+ * This is the single read-path the orchestrator LLM uses to see "what's going
+ * on." It composes an LLM-readable snapshot from append-only events:
+ *   - engine_goal_run (attempt history, immutable)
+ *   - engine_iteration (delivery arbiter trajectory)
+ *   - engine_artifact  (latest verdict payload)
+ *   - decision_log     (operator + agent decisions)
+ *   - clarifications / operator notes
+ *
+ * **It does NOT read `engine_goal.status` as authoritative.** The status
+ * derivations here are computed from the goal_run chain tip at describe time.
+ * When Phase 3 deletes the status cache field this layer keeps working with
+ * zero changes — that's the whole point.
+ *
+ * The orchestrator LLM makes dispatch / retry / publish decisions directly
+ * from this snapshot. There is no FSM gate between the LLM and the tools;
+ * this description IS the gate — if the LLM mis-reads it, that's the LLM's
+ * problem, not a state-machine deadlock.
+ */
+
+import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
+import { readIterationHistory as readHistory } from "@/metrics/store"
+import { deriveGoalStatus } from "./goal-status"
+import { isRunOrphan } from "./orphan"
+import { deriveTaskStatus } from "./task-status"
+
+/** Derived goal status enum — returned by goalStatusByID / statusOf.
+ *  The column it used to shadow (engine_goal.status) is gone; this is
+ *  the function-return type for the live derivation. */
+export type EngineGoalStatus = "pending" | "running" | "passed" | "failed"
+import {
+  effectiveMaxFixRuns,
+  effectiveMaxRuns,
+  clarificationTranscriptSection,
+  operatorNotesSection,
+} from "./helpers"
+import {
+  findActivePlanForTask,
+  findActiveRunForTask,
+  findActiveSpecForTask,
+  findLatestDeliveryVerdictArtifact,
+  findRuns,
+  findTask,
+  listGoalRunsByGoal,
+  listGoals,
+  listOrchestratorStreamErrorArtifacts,
+  type GoalRow,
+  type GoalRunRow,
+  type TaskRow,
+} from "./store"
+
+/** Cap recent stream-failure entries surfaced into the orchestrator prompt.
+ *  A chronically failing provider can write an artifact every wake; older
+ *  entries add no decision value once the LLM has seen the trend. */
+const STREAM_FAILURE_PROMPT_CAP = 5
+
+const LIVE_STATES = new Set(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
+const TERMINAL_OK_STATES = new Set(["completed"])
+const TERMINAL_FAIL_STATES = new Set(["failed"])
+const TERMINAL_ABORTED_STATES = new Set(["aborted"])
+
+// ---------------------------------------------------------------------------
+// Structured description types (exported for tests / UI)
+// ---------------------------------------------------------------------------
+
+export interface GoalAttemptSummary {
+  goal_run_id: string
+  /** FSM status of this particular goal_run row (immutable once terminal). */
+  outcome: string
+  /** If non-null, this attempt was itself superseded by a newer one — the
+   *  typed reason names why (delivery_rework / manual_retry / modify_contract /
+   *  restart_stage). Terminal + superseded_reason means "redispatchable." */
+  superseded_reason?: string
+  superseded_at?: number
+  /** Points at the older attempt this row supersedes (forms the chain). */
+  supersede_of?: string
+  time_started?: number
+  time_completed?: number
+  duration_ms?: number
+  error?: string
+  blocking_reason?: string
+  session_id?: string
+}
+
+export interface GoalDesc {
+  id: string
+  title: string
+  kind: string
+  priority: "blocking" | "advisory"
+  objective: string
+  acceptance_summary: string
+  owned_paths: string[]
+  depends_on: string[]
+  exports: string[]
+  imports: string[]
+  /** All historical goal_runs in chronological order (oldest → newest). */
+  attempts: GoalAttemptSummary[]
+  attempt_count: number
+  /** The tip — the newest attempt with no successor pointing at it via
+   *  supersede_of. `undefined` when the goal has never dispatched. */
+  latest_attempt?: GoalAttemptSummary
+  // Derived boolean views. All are pure functions of `latest_attempt`;
+  // NO read from engine_goal.status.
+  is_running: boolean
+  is_terminal_ok: boolean
+  is_terminal_fail: boolean
+  is_aborted: boolean
+  /** True when the tip is terminal (completed/failed/aborted) AND carries
+   *  superseded_reason — meaning: a retry intent was recorded, the goal
+   *  should be re-dispatched. The orchestrator LLM uses this to decide
+   *  whether to call `dispatch_goal(id)`. */
+  needs_redispatch: boolean
+  /** True when the goal has never had a goal_run. */
+  never_dispatched: boolean
+}
+
+export interface StreamFailureDesc {
+  artifact_id: string
+  time_created: number
+  /** Free-text reason recorded by `recordOrchestratorStreamError` —
+   *  e.g. "APIError: Provider alibaba-coding-plan returned HTTP 401 …". */
+  reason: string
+  /** Class name from the AI SDK error (`APIError`, `AbortError`, …) when
+   *  the writer captured one. */
+  error_name?: string
+  /** Orchestrator session id active at the moment of the failure, when
+   *  available. */
+  session_id?: string
+}
+
+export interface DeliveryVerdictDesc {
+  iteration: number
+  verdict: string
+  summary: string
+  issues: string[]
+  details: Array<{ category?: string; file?: string; error: string; suggestion?: string }>
+  verdict_artifact_id?: string
+}
+
+export interface TaskDesc {
+  id: string
+  title: string
+  kind: "workflow" | "build"
+  status: string
+  request: string
+  error?: string
+  spec_summary?: string
+  plan_summary?: string
+  active_run_id?: string
+  active_run_status?: string
+  /** True when `active_run_id` refers to a run that currently has no live
+   *  executor (no live `engine_goal_run` attached) — i.e. this run has
+   *  lost its OS-level execution context, typically because the owner
+   *  process was restarted. Derived by `engine/recovery.ts#isRunOrphan`
+   *  from the existing live-run / live-goal-run tables. Phase 4+ retires
+   *  the abort brake that today translates this fact into status writes;
+   *  this boolean becomes the sole signal the orchestrator LLM reads. */
+  run_orphan?: boolean
+  clarifications?: string
+  operator_notes?: string
+  goals: GoalDesc[]
+  /** When the goal set contains a `kind=bootstrap` goal whose status is not
+   *  yet `passed`, this is its id; otherwise null. Surfaced upfront so the
+   *  orchestrator LLM can serialise dispatch (build the bootstrap goal first,
+   *  THEN fan-out non-bootstrap goals) when that is the correct collaboration
+   *  shape. No tool gate enforces this; the orchestrator is responsible for
+   *  the scheduling decision from the describe snapshot. */
+  active_bootstrap_goal_id?: string
+  collaboration_closure?: CollaborationClosureDesc
+  budget: {
+    runs_used: number
+    max_runs: number
+    fix_count: number
+    max_fix_runs: number
+  }
+  recent_verdict?: DeliveryVerdictDesc
+  /** Recent orchestrator-stream-error artifacts (newest first, capped at
+   *  STREAM_FAILURE_PROMPT_CAP). Each entry marks a wake whose LLM stream
+   *  aborted before any decision was made. The orchestrator LLM reads this
+   *  list on its next wake and decides retry_task / restart_from_stage /
+   *  fail_task — there is no engine state machine that auto-handles them
+   *  (rule 13). Empty / undefined when the task has had no stream failures
+   *  since `task.time_started`. */
+  recent_stream_failures?: StreamFailureDesc[]
+  iterations_count: number
+}
+
+export interface CollaborationClosureDesc {
+  execution_started: boolean
+  attempts_count: number
+  passed_goal_ids: string[]
+  failed_goal_ids: string[]
+  dispatchable_goal_ids: string[]
+  blocked_goals: Array<{ goal_id: string; blocked_by: Array<{ goal_id: string; status: string }> }>
+}
+
+// ---------------------------------------------------------------------------
+// Goal description
+// ---------------------------------------------------------------------------
+
+function describeAttempt(row: GoalRunRow): GoalAttemptSummary {
+  const durationMs = row.time_started && row.time_completed
+    ? row.time_completed - row.time_started
+    : undefined
+  return {
+    goal_run_id: row.id,
+    outcome: row.status,
+    supersede_of: row.supersede_of ?? undefined,
+    superseded_reason: row.superseded_reason ?? undefined,
+    superseded_at: row.superseded_at ?? undefined,
+    time_started: row.time_started ?? undefined,
+    time_completed: row.time_completed ?? undefined,
+    duration_ms: durationMs,
+    error: row.error ?? undefined,
+    blocking_reason: row.blocking_reason ?? undefined,
+    session_id: row.session_id ?? undefined,
+  }
+}
+
+function tipFromChain(rows: GoalRunRow[]): GoalRunRow | undefined {
+  if (rows.length === 0) return undefined
+  const supersededIDs = new Set(
+    rows.map((r) => r.supersede_of).filter((x): x is string => !!x),
+  )
+  // Rows are ordered desc by time_created — the first tip is the newest.
+  return rows.find((r) => !supersededIDs.has(r.id))
+}
+
+export function describeGoal(goal: GoalRow, rewindCursor?: number | null): GoalDesc {
+  let rows = listGoalRunsByGoal(goal.id)
+  // Apply rewind cursor: events after the cursor are invisible to the UI /
+  // orchestrator view. The append-only chain is intact in DB; this is a
+  // projection filter.
+  if (rewindCursor != null) {
+    rows = rows.filter((r) => (r.time_created ?? 0) <= rewindCursor)
+  }
+  const tip = tipFromChain(rows)
+  // Render attempts oldest → newest so the LLM reads a natural timeline.
+  const attempts = [...rows].reverse().map(describeAttempt)
+  const latest = tip ? describeAttempt(tip) : undefined
+
+  const tipIsLive = !!tip && LIVE_STATES.has(tip.status)
+  const tipIsOk = !!tip && TERMINAL_OK_STATES.has(tip.status)
+  const tipIsFail = !!tip && TERMINAL_FAIL_STATES.has(tip.status)
+  const tipIsAborted = !!tip && TERMINAL_ABORTED_STATES.has(tip.status)
+  const tipHasRedispatchIntent = !!tip && !!tip.superseded_reason
+  const isTerminal = tipIsOk || tipIsFail || tipIsAborted
+
+  return {
+    id: goal.id,
+    title: goal.title,
+    kind: goal.kind ?? "feature",
+    priority: goal.priority as "blocking" | "advisory",
+    objective: goal.objective,
+    acceptance_summary: renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 300),
+    owned_paths: (goal.owned_paths ?? []) as string[],
+    depends_on: (goal.depends_on ?? []) as string[],
+    exports: (goal.exports ?? []) as string[],
+    imports: (goal.imports ?? []) as string[],
+    attempts,
+    attempt_count: attempts.length,
+    latest_attempt: latest,
+    is_running: tipIsLive,
+    is_terminal_ok: tipIsOk && !tipHasRedispatchIntent,
+    is_terminal_fail: tipIsFail && !tipHasRedispatchIntent,
+    is_aborted: tipIsAborted && !tipHasRedispatchIntent,
+    needs_redispatch: isTerminal && tipHasRedispatchIntent,
+    never_dispatched: rows.length === 0,
+  }
+}
+
+/**
+ * Drop-in replacement for reading `engine_goal.status` as a cache. Derives
+ * the status live from the goal_run chain (plus cascade_state) on each call.
+ * When the goal has never dispatched, returns "pending" — matching the
+ * initial cache value. Use this at every call-site that previously did
+ * `goal.status === X` / `g.status === X` so the cache field can be retired
+ * in Phase 4 without another sweep.
+ *
+ * Same sync semantics as `deriveGoalStatus` — it hits the DB via
+ * findGoal + listGoalRunsByGoal, both of which are primary-key / indexed
+ * queries. Acceptable in filter loops with small goal counts (≤100 per task).
+ */
+export function goalStatusByID(goalID: string): EngineGoalStatus {
+  return deriveGoalStatus(goalID) ?? "pending"
+}
+
+function buildCollaborationClosure(goals: GoalDesc[]): CollaborationClosureDesc | undefined {
+  if (goals.length === 0) return undefined
+
+  const attemptsCount = goals.reduce((sum, goal) => sum + goal.attempt_count, 0)
+  const passed = new Set(goals.filter((goal) => goal.is_terminal_ok).map((goal) => goal.id))
+  const failedGoalIDs = goals.filter((goal) => goal.is_terminal_fail).map((goal) => goal.id)
+  const byID = new Map(goals.map((goal) => [goal.id, goal]))
+  const dispatchableGoalIDs: string[] = []
+  const blockedGoals: CollaborationClosureDesc["blocked_goals"] = []
+
+  for (const goal of goals) {
+    const mayDispatch = goal.never_dispatched || goal.needs_redispatch
+    if (!mayDispatch) continue
+
+    const blockers = goal.depends_on
+      .filter((depID) => !passed.has(depID))
+      .map((depID) => {
+        const dep = byID.get(depID)
+        return { goal_id: depID, status: dep ? describeDerivedState(dep) : "missing" }
+      })
+
+    if (blockers.length > 0) {
+      blockedGoals.push({ goal_id: goal.id, blocked_by: blockers })
+    } else {
+      dispatchableGoalIDs.push(goal.id)
+    }
+  }
+
+  return {
+    execution_started: attemptsCount > 0,
+    attempts_count: attemptsCount,
+    passed_goal_ids: [...passed],
+    failed_goal_ids: failedGoalIDs,
+    dispatchable_goal_ids: dispatchableGoalIDs,
+    blocked_goals: blockedGoals,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Task description
+// ---------------------------------------------------------------------------
+
+function describeVerdict(taskID: string): DeliveryVerdictDesc | undefined {
+  const art = findLatestDeliveryVerdictArtifact(taskID)
+  if (!art) return undefined
+  const payload = (art.payload ?? {}) as Record<string, unknown>
+  const history = readHistory(taskID)
+  const lastIter = history[history.length - 1]
+  // Single source of truth (rule 22): rejection_details is the canonical
+  // structured field; the human-readable issues list is derived from each
+  // entry's `.error`, not stored as a separate `issues_found` shadow field.
+  const details = Array.isArray(payload.rejection_details)
+    ? (payload.rejection_details as DeliveryVerdictDesc["details"])
+    : []
+  const issues = details
+    .map((d) => (typeof d.error === "string" ? d.error : ""))
+    .filter((s) => s.length > 0)
+  return {
+    iteration: lastIter?.iteration ?? 0,
+    verdict: typeof payload.verdict === "string" ? payload.verdict : "unknown",
+    summary: typeof payload.summary === "string" ? payload.summary : "",
+    issues,
+    details,
+    verdict_artifact_id: art.id,
+  }
+}
+
+export async function describeTask(taskID: string): Promise<TaskDesc> {
+  const task = findTask(taskID)
+  if (!task) {
+    throw new Error(`describeTask: task ${taskID} not found`)
+  }
+  return describeTaskFromRow(task)
+}
+
+async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
+  // Rewind cursor: filters events with time_created > cursor from every
+  // derived view below (goal attempts, iterations, verdict). Goals
+  // themselves are kept regardless — a rewound task still has its goals
+  // visible, just with an empty attempt history if they were all created
+  // after the cursor. This matches the UX "go back to before I started."
+  const rewindCursor = task.rewind_cursor_time ?? null
+
+  let goalRows = listGoals(task.id)
+  if (rewindCursor != null) {
+    goalRows = goalRows.filter((g) => (g.time_created ?? 0) <= rewindCursor)
+  }
+  const goals = goalRows.map((g) => describeGoal(g, rewindCursor))
+
+  let specSummary: string | undefined
+  const activeSpec = findActiveSpecForTask(task.id)
+  if (activeSpec) {
+    specSummary = activeSpec.summary
+  }
+
+  let planSummary: string | undefined
+  const activePlan = findActivePlanForTask(task.id)
+  if (activePlan) {
+    planSummary = activePlan.summary
+  }
+
+  let activeRunStatus: string | undefined
+  let runOrphan: boolean | undefined
+  const activeRunForTask = findActiveRunForTask(task.id)
+  if (activeRunForTask) {
+    activeRunStatus = activeRunForTask.status
+    // Fact-only orphan probe from engine/orphan.ts. Phase-7 removed the
+    // abort-brake-on-startup path; the LLM reads `run_orphan` and
+    // decides whether to retry / restart_from_stage / drop.
+    runOrphan = isRunOrphan(task.project_id, activeRunForTask.id)
+  }
+
+  const totalRuns = findRuns(task.id).length
+  const [maxRuns, maxFixRuns] = await Promise.all([
+    effectiveMaxRuns(task),
+    effectiveMaxFixRuns(task),
+  ])
+  const fixCount = activeRunForTask?.retry_count ?? 0
+
+  const history = readHistory(task.id)
+  const verdict = describeVerdict(task.id)
+
+  // Surface recent orchestrator stream errors so the LLM can read them on
+  // its next wake and decide retry / restart / fail. The reviveZombieTasks
+  // poll resumes the task even when these are present (rule 13: no engine
+  // state machine that decides for the LLM); without this projection the
+  // artifacts would be invisible to the prompt and the LLM would be told
+  // "you woke up" with no clue why the previous attempt failed.
+  const streamErrorFloor = task.time_started ?? task.time_created
+  const streamErrorRows = listOrchestratorStreamErrorArtifacts(
+    task.id,
+    streamErrorFloor,
+    STREAM_FAILURE_PROMPT_CAP,
+  )
+  const recentStreamFailures: StreamFailureDesc[] = streamErrorRows.map((row) => {
+    const payload = (row.payload ?? {}) as {
+      reason?: string
+      errorName?: string
+      sessionID?: string
+    }
+    return {
+      artifact_id: row.id,
+      time_created: row.time_created,
+      reason: typeof payload.reason === "string" ? payload.reason : "",
+      error_name: typeof payload.errorName === "string" ? payload.errorName : undefined,
+      session_id: typeof payload.sessionID === "string" ? payload.sessionID : undefined,
+    }
+  })
+
+  // Bootstrap-first signal. Single source — derived from goal status and
+  // surfaced as collaboration context. This is not a dispatch gate.
+  const activeBootstrap = goalRows.find(
+    (g) => g.kind === "bootstrap" && goalStatusByID(g.id) !== "passed",
+  )
+  const collaborationClosure = buildCollaborationClosure(goals)
+
+  return {
+    id: task.id,
+    title: task.title,
+    kind: task.kind,
+    status: deriveTaskStatus(task),
+    request: task.request,
+    error: task.error ?? undefined,
+    spec_summary: specSummary,
+    plan_summary: planSummary,
+    active_run_id: activeRunForTask?.id,
+    active_run_status: activeRunStatus,
+    run_orphan: runOrphan,
+    clarifications: clarificationTranscriptSection(task.id) || undefined,
+    operator_notes: operatorNotesSection(task.id) || undefined,
+    goals,
+    active_bootstrap_goal_id: activeBootstrap?.id,
+    collaboration_closure: collaborationClosure,
+    budget: {
+      runs_used: totalRuns,
+      max_runs: maxRuns,
+      fix_count: fixCount,
+      max_fix_runs: maxFixRuns,
+    },
+    recent_verdict: verdict,
+    recent_stream_failures: recentStreamFailures.length > 0 ? recentStreamFailures : undefined,
+    iterations_count: history.length,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Markdown rendering — the orchestrator prompt consumes this directly.
+// ---------------------------------------------------------------------------
+
+function describeDerivedState(g: GoalDesc): string {
+  const flags: string[] = []
+  if (g.never_dispatched) flags.push("never_dispatched")
+  if (g.is_running) flags.push("running")
+  if (g.is_terminal_ok) flags.push("terminal_ok")
+  if (g.is_terminal_fail) flags.push("terminal_fail")
+  if (g.is_aborted) flags.push("aborted")
+  if (g.needs_redispatch) flags.push(`NEEDS_REDISPATCH(${g.latest_attempt?.superseded_reason})`)
+  return flags.length > 0 ? flags.join(", ") : "unknown"
+}
+
+function renderGoal(g: GoalDesc): string[] {
+  const lines: string[] = []
+  lines.push(`### Goal ${g.id}: ${g.title} [${g.priority}, ${g.kind}]`)
+  lines.push(`Objective: ${g.objective}`)
+  if (g.owned_paths.length > 0) lines.push(`Responsibility paths: ${g.owned_paths.join(", ")}`)
+  if (g.depends_on.length > 0) lines.push(`Depends on: ${g.depends_on.join(", ")}`)
+  if (g.exports.length > 0) lines.push(`Exports: ${g.exports.join(", ")}`)
+  if (g.imports.length > 0) lines.push(`Imports: ${g.imports.join(", ")}`)
+  if (g.acceptance_summary) lines.push(`Acceptance (first 300): ${g.acceptance_summary}`)
+  lines.push(`State: ${describeDerivedState(g)}`)
+
+  if (g.attempts.length > 0) {
+    lines.push(`Attempts (${g.attempt_count}):`)
+    for (const [i, a] of g.attempts.entries()) {
+      const parts: string[] = [`#${i + 1} run=${a.goal_run_id} outcome=${a.outcome}`]
+      if (a.duration_ms !== undefined) parts.push(`duration=${a.duration_ms}ms`)
+      if (a.superseded_reason) parts.push(`superseded_reason=${a.superseded_reason}`)
+      if (a.error) parts.push(`error=${truncate(a.error, 120)}`)
+      if (a.blocking_reason) parts.push(`blocked=${truncate(a.blocking_reason, 80)}`)
+      lines.push(`  ${parts.join(" | ")}`)
+      const recoveryHint = buildAttemptRecoveryHint(a.error)
+      if (recoveryHint) lines.push(`    recovery_hint=${recoveryHint}`)
+    }
+  } else {
+    lines.push(`Attempts: (none — goal has never dispatched)`)
+  }
+
+  return lines
+}
+
+function buildAttemptRecoveryHint(error?: string): string | undefined {
+  if (!error) return undefined
+  if (!error.includes("report_build_result") && !error.includes("missing_terminal_report")) return undefined
+  return "Build exhausted same-session report_build_result recovery without a structured terminal report. The retained goal worktree is diagnostic under .opencorvus/worktrees, not primary workspace pollution. Retry this goal with explicit report_build_result(files_changed[]) instructions only after same-session recovery has failed; do not restart_from_stage solely because diagnostic worktree files exist."
+}
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text
+  return text.slice(0, max - 1) + "…"
+}
+
+export function renderCollaborationClosure(desc: CollaborationClosureDesc | undefined, goals: GoalDesc[]): string[] {
+  if (!desc) return []
+
+  const lines: string[] = []
+  const titleByID = new Map(goals.map((goal) => [goal.id, goal.title]))
+  lines.push("## Collaboration Closure")
+  lines.push(`Execution attempts recorded: ${desc.attempts_count}`)
+
+  if (desc.execution_started) {
+    lines.push(
+      "The active goal graph has entered execution. Treat it as the shared collaboration contract, not a scratchpad to re-plan for ordinary shared-file edits.",
+    )
+    lines.push(
+      "Ordinary collaboration drift belongs in Build `files_changed[]` reports and, when the written contract needs a point correction, `modify_goal`. Architect re-entry is structural re-planning and needs delivery/prosecutor/reference-coverage evidence or an explicit upstream restart.",
+    )
+  } else {
+    lines.push("Execution has not started yet; this is still the planning window.")
+  }
+
+  if (desc.passed_goal_ids.length > 0) {
+    lines.push(`Passed goals: ${desc.passed_goal_ids.map((id) => `${id} (${titleByID.get(id) ?? "untitled"})`).join(", ")}`)
+  }
+
+  if (desc.failed_goal_ids.length > 0) {
+    lines.push("Failed goals requiring same-graph diagnosis:")
+    for (const goalID of desc.failed_goal_ids) {
+      lines.push(`- ${goalID}: ${titleByID.get(goalID) ?? "untitled"}`)
+    }
+    lines.push(
+      "Failed goals stay inside the current collaboration closure. Read `query_failed_goals`, then retry `build({ goalID })` or apply `modify_goal` when the contract itself needs a point correction. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
+    )
+  }
+
+  if (desc.dispatchable_goal_ids.length > 0) {
+    lines.push("Next dispatchable goals:")
+    for (const goalID of desc.dispatchable_goal_ids) {
+      lines.push(`- ${goalID}: ${titleByID.get(goalID) ?? "untitled"}`)
+    }
+  } else {
+    lines.push("Next dispatchable goals: none derived from current dependency evidence.")
+  }
+
+  if (desc.blocked_goals.length > 0) {
+    lines.push("Dependency-blocked goals:")
+    for (const blocked of desc.blocked_goals) {
+      const blockers = blocked.blocked_by.map((dep) => `${dep.goal_id} [${dep.status}]`).join(", ")
+      lines.push(`- ${blocked.goal_id}: blocked by ${blockers}`)
+    }
+  }
+
+  return lines
+}
+
+/**
+ * Render a TaskDesc as markdown suitable for direct injection into the
+ * orchestrator's system prompt. LLM reads this instead of querying piecemeal.
+ */
+export function renderTaskDescription(desc: TaskDesc): string {
+  const lines: string[] = []
+  lines.push(`## Task: ${desc.title} (${desc.status})`)
+  lines.push(`Kind: ${desc.kind}`)
+  lines.push(`Request: ${truncate(desc.request, 2000)}`)
+  if (desc.spec_summary) lines.push(`Spec: ${desc.spec_summary}`)
+  if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
+  if (desc.active_run_id) {
+    const orphanTag = desc.run_orphan ? " ORPHAN" : ""
+    lines.push(`Active run: ${desc.active_run_id}${desc.active_run_status ? ` (${desc.active_run_status})` : ""}${orphanTag}`)
+    if (desc.run_orphan) {
+      lines.push(
+        `Note: this run has no live executor — the owner process was restarted. ` +
+          `The next decision should treat it as abandoned (retry, restart_from_stage, ` +
+          `or drop) rather than assuming it is still progressing.`,
+      )
+    }
+  }
+  if (desc.error) lines.push(`Error: ${desc.error}`)
+  lines.push(
+    `Budget: ${desc.budget.runs_used}/${desc.budget.max_runs} runs, ` +
+      `${desc.budget.fix_count}/${desc.budget.max_fix_runs} fixes, ` +
+      `${desc.iterations_count} delivery iterations`,
+  )
+
+  const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals)
+  if (closureLines.length > 0) {
+    lines.push("")
+    lines.push(...closureLines)
+  }
+
+  if (desc.clarifications) {
+    lines.push("")
+    lines.push(desc.clarifications)
+  }
+  if (desc.operator_notes) {
+    lines.push("")
+    lines.push(desc.operator_notes)
+  }
+
+  lines.push("")
+  if (desc.goals.length === 0) {
+    lines.push("## Goals (none authored yet)")
+  } else {
+    lines.push(`## Goals (${desc.goals.length})`)
+    if (desc.active_bootstrap_goal_id) {
+      // Physical-fact framing: state the collaboration risk, then let the
+      // orchestrator decide. No hidden dispatch gate sits behind this text.
+      lines.push("")
+      lines.push(
+        `**Bootstrap-first dispatch order**: goal \`${desc.active_bootstrap_goal_id}\` ` +
+        `(\`kind=bootstrap\`) is not yet \`passed\`. Bootstrap goals own ` +
+        `scaffold-level files (\`package.json\`, \`vite.config.ts\`/\`bunfig.toml\`, ` +
+        `\`tsconfig.json\`, \`src/main.*\`, \`src/App.*\`); every other goal ` +
+        `would inevitably touch those files on its worktree, producing ` +
+        `coordination risk at merge and delivery time. Plan deliberately: ` +
+        `dispatch the bootstrap goal first when the scaffold is not yet real, ` +
+        `or dispatch another goal only when its prompt and files_changed[] ` +
+        `can explain how it cooperates with the shared scaffold milestone.`,
+      )
+    }
+    for (const g of desc.goals) {
+      lines.push("")
+      lines.push(...renderGoal(g))
+    }
+  }
+
+  if (desc.recent_stream_failures && desc.recent_stream_failures.length > 0) {
+    lines.push("")
+    lines.push(`## Recent orchestrator stream failures (${desc.recent_stream_failures.length})`)
+    for (const f of desc.recent_stream_failures) {
+      const ts = new Date(f.time_created).toISOString()
+      const tag = f.error_name ? `[${f.error_name}] ` : ""
+      lines.push(`- ${ts} ${tag}${truncate(f.reason, 240)}`)
+    }
+    lines.push(
+      `Each entry is an upstream LLM-call failure that aborted a wake before any ` +
+        `decision was made. Use this history to decide: \`retry_task\` (transient ` +
+        `network/idle blip), \`restart_from_stage\` (config-level — wrong provider/key), ` +
+        `or \`fail_task\` (permanent — quota exhausted, key revoked, model gone).`,
+    )
+  }
+
+  if (desc.recent_verdict) {
+    const v = desc.recent_verdict
+    lines.push("")
+    lines.push(`## Latest Delivery Verdict (iteration ${v.iteration})`)
+    lines.push(`Verdict: ${v.verdict}`)
+    if (v.summary) lines.push(`Summary: ${truncate(v.summary, 800)}`)
+    if (v.issues.length > 0) {
+      lines.push(`Issues (${v.issues.length}):`)
+      for (const issue of v.issues) lines.push(`  - ${truncate(issue, 200)}`)
+    }
+    if (v.details.length > 0) {
+      lines.push(`Structured details:`)
+      for (const d of v.details) {
+        const filePart = d.file ? ` [${d.file}]` : ""
+        const catPart = d.category ? `[${d.category}]` : ""
+        const sugPart = d.suggestion ? ` → ${truncate(d.suggestion, 160)}` : ""
+        lines.push(`  - ${catPart}${filePart}: ${truncate(d.error, 160)}${sugPart}`)
+      }
+    }
+  }
+
+  return lines.join("\n")
+}

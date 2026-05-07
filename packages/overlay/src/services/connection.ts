@@ -8,9 +8,11 @@
 // Render-side effects (DOM badge updates) remain
 // this module updates the Solid appStore.connectionStatus.
 
-import { apiJson, apiUrl, apiHeaders, configure as configureApi, DEFAULT_SERVER } from "./api";
-import { appStore, setConnectionStatus } from "../store/app";
+import { apiJson, configure as configureApi, DEFAULT_SERVER } from "./api";
+import { appStore, setAppStore, setConnectionStatus } from "../store/app";
 import { settingsStore, applySettings, saveSettings } from "../store/settings";
+import { getHostTransport } from "./host-transport";
+import { makeMonitorTick } from "./monitor-tick";
 
 // ── Helpers ──
 
@@ -18,19 +20,11 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function hasTauriRuntime(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof (window as any).__TAURI__?.core?.invoke === "function"
-  );
-}
-
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const globalInvoke = (window as any).__TAURI__?.core?.invoke;
-  if (typeof globalInvoke === "function") {
-    return globalInvoke(command, args) as Promise<T>;
-  }
-  throw new Error(`Tauri runtime unavailable for ${command}`);
+/** Tauri host owns its sidecar; vscode host does not run a managed
+ *  local server (the extension owns the sidecar there, not the
+ *  webview). Use this whenever a code path is Tauri-specific. */
+function hostOwnsLocalServer(): boolean {
+  return getHostTransport().kind === "tauri";
 }
 
 function normalizeUrl(value: string | undefined, fallback: string): string {
@@ -63,6 +57,9 @@ function usesManagedLocalServer(): boolean {
 
 export interface LocalServerInfo {
   url: string;
+  /** PID of the spawned sidecar `bun` server process (Tauri-side child).
+   *  Absent when the overlay is talking to an external server. */
+  pid?: number;
   [key: string]: unknown;
 }
 
@@ -71,11 +68,15 @@ export interface LocalServerInfo {
  * from the stored value, persists the new URL.
  */
 export async function localServerInfo(): Promise<LocalServerInfo | null> {
-  if (!hasTauriRuntime()) return null;
-  const info = await tauriInvoke<LocalServerInfo>("overlay_server_info").catch(
-    () => undefined,
-  );
-  return info && typeof info.url === "string" ? info : null;
+  if (!hostOwnsLocalServer()) return null;
+  try {
+    const info = (await getHostTransport().native({ kind: "server.info" })) as
+      | LocalServerInfo
+      | undefined;
+    return info && typeof info.url === "string" ? info : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface SyncLocalServerUrlOptions {
@@ -89,10 +90,14 @@ export interface SyncLocalServerUrlOptions {
 export async function syncLocalServerUrl(
   options: SyncLocalServerUrlOptions = {},
 ): Promise<LocalServerInfo | null> {
-  if (!hasTauriRuntime()) return null;
+  if (!hostOwnsLocalServer()) return null;
   if (!options.force && !usesManagedLocalServer()) return null;
   const info = await localServerInfo();
   if (!info) return null;
+  // Stash the sidecar PID even when the URL hasn't changed — overlay restart
+  // / hot reload can land in a fresh process whose PID is the only thing
+  // that's different from the in-memory app store.
+  setAppStore("serverPid", typeof info.pid === "number" ? info.pid : undefined);
   const next = normalizeUrl(info.url, settingsStore.serverUrl);
   if (normalizeUrl(settingsStore.serverUrl, settingsStore.serverUrl) === next) {
     return info;
@@ -109,11 +114,12 @@ export async function syncLocalServerUrl(
  * Returns the new server info on success, null if not applicable.
  */
 export async function restartLocalServer(): Promise<LocalServerInfo | null> {
-  if (!hasTauriRuntime() || !usesManagedLocalServer()) return null;
-  const info = await tauriInvoke<LocalServerInfo>(
-    "overlay_server_restart",
-  ).catch(() => undefined);
+  if (!hostOwnsLocalServer() || !usesManagedLocalServer()) return null;
+  const info = (await getHostTransport()
+    .native({ kind: "server.restart" })
+    .catch(() => undefined)) as LocalServerInfo | undefined;
   if (!info || typeof info.url !== "string") return null;
+  setAppStore("serverPid", typeof info.pid === "number" ? info.pid : undefined);
   const next = normalizeUrl(info.url, settingsStore.serverUrl);
   applySettings({ ...settingsStore, serverUrl: next });
   saveSettings();
@@ -140,7 +146,16 @@ export async function checkConnection(): Promise<boolean> {
 
   for (let i = 0; i < attempts; i++) {
     try {
-      await apiJson("global/health", { signal: AbortSignal.timeout(5000) });
+      const health: any = await apiJson("global/health", { signal: AbortSignal.timeout(5000) });
+      const paths = health?.paths;
+      if (
+        paths &&
+        typeof paths.database === "string" &&
+        typeof paths.data === "string" &&
+        typeof paths.home === "string"
+      ) {
+        setAppStore("enginePaths", { database: paths.database, data: paths.data, home: paths.home });
+      }
       setConnectionStatus("online");
       return true;
     } catch (e) {
@@ -174,18 +189,16 @@ export function startConnectionMonitor(
   intervalMs = 10_000,
 ): void {
   stopConnectionMonitor();
-  _monitorTimer = setInterval(async () => {
-    try {
-      if (!appStore.connected) {
-        const ok = await checkConnection();
-        if (ok) {
-          await onReconnect?.();
-        }
-      }
-    } catch (err) {
-      console.warn("[connection] monitor retry failed", err);
-    }
-  }, intervalMs);
+  // audit-2026-04-29 W2-V24 — re-entrance-guarded tick lives in
+  // services/monitor-tick.ts so the no-overlap contract is
+  // testable.
+  const tick = makeMonitorTick({
+    isHidden: () => typeof document !== "undefined" && document.hidden,
+    isConnected: () => appStore.connected,
+    check: () => checkConnection(),
+    onReconnect,
+  });
+  _monitorTimer = setInterval(tick, intervalMs);
 }
 
 /**

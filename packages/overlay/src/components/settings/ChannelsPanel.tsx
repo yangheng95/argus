@@ -12,11 +12,12 @@ import {
   Show,
 } from "solid-js";
 import { t } from "../../utils/i18n";
-import { apiJson } from "../../services/api";
 import { appStore } from "../../store/app";
 import { updateConfig } from "../../services/config";
-import { loadConfigInfo } from "../../services/init";
 import { nativeOpen } from "../../utils/native";
+import { Dialog } from "../primitives/Dialog";
+import { useAsyncAction } from "../../solid/async-action";
+import { Button } from "../ui/Button";
 
 // ── Tutorial docs (matches pre-Solid OPENCLAW_DOCS constant) ──
 
@@ -76,7 +77,6 @@ function channelStatusLabel(status: string): string {
 export default function ChannelsPanel() {
   const [editingID, setEditingID] = createSignal<string | null>(null);
   const [fieldValues, setFieldValues] = createSignal<Record<string, any>>({});
-  const [saving, setSaving] = createSignal(false);
   const [notice, setNotice] = createSignal("");
   const [noticeTone, setNoticeTone] = createSignal("");
 
@@ -91,10 +91,13 @@ export default function ChannelsPanel() {
   });
 
   const [localPublicUrl, setLocalPublicUrl] = createSignal("");
+  const saveAction = useAsyncAction(async (commit: () => Promise<void>) => {
+    await commit();
+  });
   // Sync local input from store when it changes
   createEffect(() => {
     const storeUrl = publicUrl();
-    if (!saving()) setLocalPublicUrl(storeUrl);
+    if (!saveAction.pending()) setLocalPublicUrl(storeUrl);
   });
 
   const editingEntry = createMemo(
@@ -129,51 +132,42 @@ export default function ChannelsPanel() {
   async function handleSaveChannel() {
     const entry = editingEntry();
     if (!entry) return;
-    setSaving(true);
     try {
-      // Mirrors original: GET /config → patch channel[id] → PATCH /config
-      const config = await apiJson("config");
-      config.channel = config.channel || {};
-      const next: Record<string, any> = {};
-      for (const field of entry.fields) {
-        if (field.type === "boolean") {
-          next[field.key] = fieldValues()[field.key] !== false;
-        } else {
-          const value = String(fieldValues()[field.key] ?? "").trim();
-          if (value) next[field.key] = value;
-        }
-      }
-      config.channel[entry.id] = next;
-      await apiJson("config", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+      await saveAction.run(async () => {
+        await updateConfig((config) => {
+          config.channel = config.channel || {};
+          const next: Record<string, any> = {};
+          for (const field of entry.fields) {
+            if (field.type === "boolean") {
+              next[field.key] = fieldValues()[field.key] !== false;
+            } else {
+              const value = String(fieldValues()[field.key] ?? "").trim();
+              if (value) next[field.key] = value;
+            }
+          }
+          config.channel[entry.id] = next;
+        });
+        showNotice(t("common.saved"), "active");
+        closeEdit();
       });
-      showNotice(t("common.saved"), "active");
-      closeEdit();
-      await loadConfigInfo();
     } catch (e) {
       showNotice(e instanceof Error ? e.message : String(e), "error");
-    } finally {
-      setSaving(false);
     }
   }
 
   async function handleSavePublicUrl() {
-    setSaving(true);
     try {
-      await updateConfig((current: any) => {
-        current.server = current.server || {};
-        current.server.publicUrl = localPublicUrl().trim() || undefined;
-        if (current.server.publicUrl === undefined) delete current.server.publicUrl;
-        if (Object.keys(current.server).length === 0) delete current.server;
+      await saveAction.run(async () => {
+        await updateConfig((current: any) => {
+          current.server = current.server || {};
+          current.server.publicUrl = localPublicUrl().trim() || undefined;
+          if (current.server.publicUrl === undefined) delete current.server.publicUrl;
+          if (Object.keys(current.server).length === 0) delete current.server;
+        });
+        showNotice(t("common.saved"), "active");
       });
-      showNotice(t("common.saved"), "active");
-      await loadConfigInfo();
     } catch (e) {
       showNotice(e instanceof Error ? e.message : String(e), "error");
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -206,20 +200,31 @@ export default function ChannelsPanel() {
           <input
             class="field-input"
             type="url"
+            pattern="https?://.+"
             placeholder="https://opencorvus.example.com"
             value={localPublicUrl()}
             onInput={(e) => setLocalPublicUrl(e.currentTarget.value)}
+            onBlur={(e) => {
+              const v = e.currentTarget.value.trim();
+              e.currentTarget.setCustomValidity(
+                v && !/^https?:\/\/.+/i.test(v)
+                  ? t("channel.public_url_invalid")
+                  : "",
+              );
+            }}
           />
         </label>
         <div class="dialog-actions compact">
-          <button
+          <Button
             type="button"
-            class="btn btn-ghost mini"
+            variant="ghost"
+            size="sm"
+            tone="neutral"
             onClick={handleSavePublicUrl}
-            disabled={saving()}
+            disabled={saveAction.pending()}
           >
             {t("common.save")}
-          </button>
+          </Button>
         </div>
       </div>
       <div class="empty-hint">{t("channel.public_url_hint")}</div>
@@ -246,24 +251,28 @@ export default function ChannelsPanel() {
                 >
                   {channelStatusLabel(item.status)}
                 </span>
-                <button
+                <Button
                   type="button"
-                  class="btn btn-ghost mini"
+                  variant="ghost"
+                  size="sm"
+                  tone="neutral"
                   title={t("channel.tutorial_hint")}
                   aria-label={t("channel.tutorial_hint")}
                   onClick={() => nativeOpen(channelTutorialUrl(item.id))}
                 >
                   {t("channel.tutorial")}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  class="btn btn-primary mini"
+                  variant="solid"
+                  size="sm"
+                  tone="accent"
                   title={t("channel.edit_title")}
                   aria-label={t("channel.edit_title")}
                   onClick={() => openEdit(item.id)}
                 >
                   {t("common.edit")}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -275,104 +284,103 @@ export default function ChannelsPanel() {
         {(_) => {
           const entry = editingEntry()!;
           return (
-            <dialog
-              class="dialog"
-              ref={(el) => { if (el) queueMicrotask(() => el.showModal()); }}
+            <Dialog
+              open={true}
+              title={t("channel.configuration_title", { name: entry.name })}
               onClose={closeEdit}
-            >
-              <div class="dialog-form">
-                <div class="dialog-head">
-                  <h2 class="dialog-title">
-                    {t("channel.configuration_title", { name: entry.name })}
-                  </h2>
-                </div>
-
-                {/* Tutorial card — mirrors channelTutorialCard() from pre-Solid */}
-                <div class="channel-doc-card">
-                  <div class="channel-doc-copy">
-                    <span class="channel-doc-title">{t("channel.tutorial_hint")}</span>
-                    <small class="channel-doc-credit">
-                      {t("channel.tutorial_credit", { source: OPENCLAW_DOCS.credit })}
-                    </small>
-                  </div>
-                  <button
+              footer={
+                <>
+                  <Button
                     type="button"
-                    class="btn btn-ghost"
-                    title={t("channel.tutorial_hint")}
-                    aria-label={t("channel.tutorial_hint")}
-                    onClick={() => nativeOpen(channelTutorialUrl(entry.id))}
+                    variant="ghost"
+                    size="md"
+                    tone="neutral"
+                    onClick={closeEdit}
+                    disabled={saveAction.pending()}
                   >
-                    {t("channel.tutorial")}
-                  </button>
+                    {t("common.cancel")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="solid"
+                    size="md"
+                    tone="accent"
+                    onClick={handleSaveChannel}
+                    disabled={saveAction.pending()}
+                  >
+                    {saveAction.pending() ? t("common.saving") : t("common.save")}
+                  </Button>
+                </>
+              }
+            >
+              {/* Tutorial card — mirrors channelTutorialCard() from pre-Solid */}
+              <div class="channel-doc-card">
+                <div class="channel-doc-copy">
+                  <span class="channel-doc-title">{t("channel.tutorial_hint")}</span>
+                  <small class="channel-doc-credit">
+                    {t("channel.tutorial_credit", { source: OPENCLAW_DOCS.credit })}
+                  </small>
                 </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="md"
+                  tone="neutral"
+                  title={t("channel.tutorial_hint")}
+                  aria-label={t("channel.tutorial_hint")}
+                  onClick={() => nativeOpen(channelTutorialUrl(entry.id))}
+                >
+                  {t("channel.tutorial")}
+                </Button>
+              </div>
 
-                <For each={entry.fields}>
-                  {(field) => {
-                    const name = `channel_${entry.id}_${field.key}`;
-                    const currentVal = () => fieldValues()[field.key];
+              <For each={entry.fields}>
+                {(field) => {
+                  const name = `channel_${entry.id}_${field.key}`;
+                  const currentVal = () => fieldValues()[field.key];
 
-                    if (field.type === "boolean") {
-                      return (
-                        <label class="field field-inline">
-                          <span class="field-label">{field.label}</span>
-                          <input
-                            type="checkbox"
-                            name={name}
-                            checked={currentVal() !== false}
-                            onChange={(e) =>
-                              handleFieldChange(
-                                field.key,
-                                e.currentTarget.checked,
-                              )
-                            }
-                          />
-                        </label>
-                      );
-                    }
-
-                    const inputType =
-                      field.type === "secret" ? "password" : "text";
+                  if (field.type === "boolean") {
                     return (
-                      <label class="field">
+                      <label class="field field-inline">
                         <span class="field-label">{field.label}</span>
                         <input
-                          class="field-input"
-                          type={inputType}
+                          type="checkbox"
                           name={name}
-                          value={String(currentVal() ?? "")}
-                          placeholder={field.placeholder || ""}
-                          onInput={(e) =>
+                          checked={currentVal() !== false}
+                          onChange={(e) =>
                             handleFieldChange(
                               field.key,
-                              e.currentTarget.value,
+                              e.currentTarget.checked,
                             )
                           }
                         />
                       </label>
                     );
-                  }}
-                </For>
+                  }
 
-                <div class="dialog-actions">
-                  <button
-                    type="button"
-                    class="btn btn-ghost"
-                    onClick={closeEdit}
-                    disabled={saving()}
-                  >
-                    {t("common.cancel")}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-primary"
-                    onClick={handleSaveChannel}
-                    disabled={saving()}
-                  >
-                    {saving() ? t("common.saving") : t("common.save")}
-                  </button>
-                </div>
-              </div>
-            </dialog>
+                  const inputType =
+                    field.type === "secret" ? "password" : "text";
+                  return (
+                    <label class="field">
+                      <span class="field-label">{field.label}</span>
+                      <input
+                        class="field-input"
+                        type={inputType}
+                        name={name}
+                        value={String(currentVal() ?? "")}
+                        placeholder={field.placeholder || ""}
+                        onInput={(e) =>
+                          handleFieldChange(
+                            field.key,
+                            e.currentTarget.value,
+                          )
+                        }
+                      />
+                    </label>
+                  );
+                }}
+              </For>
+            </Dialog>
           );
         }}
       </Show>

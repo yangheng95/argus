@@ -5,29 +5,15 @@ import { bootstrap } from "../bootstrap"
 import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { EOL } from "os"
-import path from "path"
-import { Filesystem } from "../../util/filesystem"
-import { LLMTrace } from "../../session/llm-trace"
-import { buildSessionTraceHtml } from "./export-html"
 
 export const ExportCommand = cmd({
   command: "export [sessionID]",
-  describe: "export session data as JSON or HTML trace report",
+  describe: "export session data as JSON",
   builder: (yargs: Argv) => {
-    return yargs
-      .positional("sessionID", {
-        describe: "session id to export",
-        type: "string",
-      })
-      .option("html", {
-        describe: "export as HTML report (conversation + LLM call trace + screenshots)",
-        type: "boolean",
-        default: false,
-      })
-      .option("out", {
-        describe: "output HTML file path (used with --html)",
-        type: "string",
-      })
+    return yargs.positional("sessionID", {
+      describe: "session id to export",
+      type: "string",
+    })
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
@@ -82,25 +68,6 @@ export const ExportCommand = cmd({
       try {
         const sessionInfo = await Session.get(sessionID!)
         const messages = await Session.messages({ sessionID: sessionID! })
-        const html = args.html === true
-
-        if (html) {
-          const calls = await LLMTrace.read(sessionID!)
-          const report = await buildSessionTraceHtml({
-            session: {
-              id: sessionInfo.id,
-              title: sessionInfo.title,
-              time: sessionInfo.time,
-            },
-            messages,
-            calls,
-          })
-          const out = path.resolve(process.cwd(), String(args.out ?? `opencorvus-trace-${sessionID}.html`))
-          await Filesystem.write(out, report)
-          process.stdout.write(out)
-          process.stdout.write(EOL)
-          return
-        }
 
         const exportData = {
           info: sessionInfo,

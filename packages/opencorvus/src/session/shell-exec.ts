@@ -8,13 +8,15 @@ import { Instance } from "../project/instance"
 import { Plugin } from "../plugin"
 import { defer } from "../util/defer"
 import { ulid } from "ulid"
-import { SessionRevert } from "./revert"
+import { clearRewindCursorForSession } from "@/engine/rewind"
 import { spawn } from "child_process"
 import { Shell } from "@/shell/shell"
-import { SessionPromptState } from "./prompt-state"
+import { PidGuard } from "@/shell/pid-guard"
+import { SessionPromptState } from "./prompt/state"
+import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 
 export namespace SessionShell {
-  const { log, state, start, cancel, lastModel } = SessionPromptState
+  const { log, state, start, cancel } = SessionPromptState
 
   export const ShellInput = z.object({
     sessionID: Identifier.schema("session"),
@@ -46,12 +48,10 @@ export namespace SessionShell {
       }
     })
 
-    const session = await Session.get(input.sessionID)
-    if (session.revert) {
-      await SessionRevert.cleanup(session)
-    }
+    await clearRewindCursorForSession(input.sessionID)
     const agent = await Agent.get(input.agent)
-    const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+    const { Provider } = await import("../provider/provider")
+    const model = input.model ?? agent.model ?? (await Provider.defaultModel())
     const userMsg: Message.User = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
@@ -72,7 +72,6 @@ export namespace SessionShell {
       messageID: userMsg.id,
       sessionID: input.sessionID,
       text: "The following tool was executed by the user",
-      synthetic: true,
     }
     await Session.updatePart(userPart)
 
@@ -80,7 +79,6 @@ export namespace SessionShell {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
       parentID: userMsg.id,
-      mode: input.agent,
       agent: input.agent,
       cost: 0,
       path: {
@@ -176,6 +174,7 @@ export namespace SessionShell {
       { cwd, sessionID: input.sessionID, callID: part.callID },
       { env: {} },
     )
+    const guardEnv = await PidGuard.env(shellBin)
     const proc = spawn(shellBin, args, {
       cwd,
       detached: process.platform !== "win32",
@@ -184,6 +183,8 @@ export namespace SessionShell {
         ...process.env,
         ...shellEnv.env,
         TERM: "dumb",
+        ...gitCeilingEnvForWorktree(cwd, { ...process.env, ...shellEnv.env }),
+        ...guardEnv,
       },
     })
 

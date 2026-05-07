@@ -1,0 +1,2752 @@
+/* Inspector surface — owns the right panel column shell + the
+   workflow / inspector / preview tab body containers. The richer
+   `.section` / `.gwg` card chrome and the per-section variants
+   stay in styles.css until they are reworked through palette tokens
+   (their hover states + theme overrides need a deliberate sweep). */
+
+.sections {
+  width: var(--ui-sections-width);
+  min-width: min(100%, var(--ui-rail-min-width));
+  max-width: var(--ui-sections-width);
+  flex: 0 1 var(--ui-sections-width);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--inspector-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.sections-title {
+  display: inline-flex;
+  align-items: center;
+  min-height: calc(16px * var(--ui-scale));
+}
+
+/* Section card stack: scrollable body that holds inspector cards. The
+   scrollbar is hidden because the panel uses a reflow-based scroll
+   indicator instead of a visual gutter. Stack gap + outer padding
+   share `--ui-gap-sm` (6px) so the space above the first card matches
+   the gap between siblings — the right-rail's single spacing rhythm. */
+.sections-stack {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-sm);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.sections-stack::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Tab body container: each top-level inspector tab (workflow,
+   inspector, preview) renders inside one of these. Inactive tabs
+   collapse via `[data-active="false"]`. */
+.sections-tab-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sections-tab-body[data-active="false"] {
+  display: none;
+}
+
+.sections-tab-body[data-panel-tab="inspector"] {
+  display: flex;
+  min-height: 0;
+}
+
+.sections-tab-body[data-panel-tab="inspector"][data-active="false"] {
+  display: none;
+}
+
+.sections-tab-body[data-panel-tab="workflow"] {
+  min-height: 0;
+}
+
+.sections-tab-body[data-panel-tab="preview"] {
+  min-height: 0;
+}
+
+/* Section icon-button: small 26x24 action button used inside section
+   heads. Reuses overlay control vocab: 1-unit border, accent-tinted
+   hover/focus chrome, opacity-only disabled. */
+.oc-section__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(26px * var(--ui-scale));
+  height: calc(24px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.oc-section__icon-btn:hover,
+.oc-section__icon-btn:focus-visible {
+  border-color: var(--hover-accent-border);
+  color: var(--accent);
+  outline: none;
+}
+
+.oc-section__icon-btn:disabled {
+  opacity: var(--ui-opacity-faint);
+  cursor: default;
+}
+
+/* Frontend preview tab: iframe + url toolbar + empty/error states. The
+   iframe canvas keeps a literal `white` background because the rendered
+   web content expects a white base regardless of overlay theme. The
+   two old `.frontend-preview` rules (height + display) are folded into
+   one block here. */
+.frontend-preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: color-mix(in srgb, var(--surface-inset) 82%, transparent);
+}
+
+.frontend-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  min-height: calc(38px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  flex-shrink: 0;
+}
+
+.frontend-preview-url {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--ui-font-meta);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.frontend-preview-frame {
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  /* The iframe paints whatever its `srcdoc` contains; the frame
+   * element itself only shows in the brief moment before the doc
+   * loads or around the doc's body margin. Use the active theme's
+   * canvas surface so it does not flash bright-white inside dark
+   * themes (regression: pre-fix this was hard-coded `white`). */
+  background: var(--surface-inset);
+}
+
+.frontend-preview-empty {
+  flex: 1 1 0;
+  display: grid;
+  place-items: center;
+  padding: calc(18px * var(--ui-scale));
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.frontend-preview-empty[data-kind="error"] {
+  color: var(--bad);
+}
+
+/* Section content rails: icon (16x16, accent-on-open), title text
+   (650 weight + slight tracking), badge chip (auto-width pill with
+   tone-driven dot + label), head-action overlay button, body padding,
+   and the disclosure caret pseudo. The richer `.section` shell + the
+   per-phase-state hover/border/box-shadow chrome stay in styles.css
+   until those raw rgba gradients are reworked through palette tokens. */
+.oc-section__icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-soft);
+  flex-shrink: 0;
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+}
+
+.oc-section__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.oc-section[open] .oc-section__icon {
+  color: var(--accent);
+}
+
+.oc-section__title {
+  flex: 1;
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text-strong);
+  letter-spacing: 0.03em;
+  text-transform: none;
+}
+
+.oc-section__badge {
+  margin-left: auto;
+  position: relative;
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-strong);
+  min-height: auto;
+  padding: 0 0 0 calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  color: var(--text-soft);
+  background: transparent;
+  border: none;
+  opacity: var(--ui-opacity-full);
+  line-height: 1.3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.oc-section__badge:empty {
+  display: none;
+}
+
+.oc-section__badge::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: calc(5px * var(--ui-scale));
+  height: calc(5px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--subtle-4) 96%, transparent);
+  transform: translateY(-50%);
+}
+
+.oc-section__badge[data-variant="metric"] {
+  padding-left: 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.oc-section__badge[data-variant="metric"]::before {
+  display: none;
+}
+
+.oc-section__badge[data-tone="good"] {
+  color: color-mix(in srgb, var(--accent) 82%, var(--text-soft));
+}
+
+.oc-section__badge[data-tone="good"]::before {
+  background: color-mix(in srgb, var(--accent) 84%, transparent);
+}
+
+.oc-section__badge[data-tone="bad"] {
+  color: var(--bad);
+}
+
+.oc-section__badge[data-tone="bad"]::before {
+  background: color-mix(in srgb, var(--bad) 84%, transparent);
+}
+
+.oc-section__badge[data-tone="warn"] {
+  color: var(--warn);
+}
+
+.oc-section__badge[data-tone="warn"]::before {
+  background: color-mix(in srgb, var(--warn) 84%, transparent);
+}
+
+.oc-section__badge[data-tone="accent"] {
+  color: var(--accent);
+}
+
+.oc-section__badge[data-tone="accent"]::before {
+  background: color-mix(in srgb, var(--accent) 84%, transparent);
+}
+
+.section-head-action {
+  min-width: calc(58px * var(--ui-scale));
+  position: relative;
+  z-index: var(--ui-z-decoration);
+  border-radius: var(--oc-radius-large);
+  padding: 0 calc(8px * var(--ui-scale));
+  line-height: 1;
+}
+
+.oc-section__body {
+  padding: 0 var(--ui-gap-sm) var(--ui-gap-sm);
+}
+
+.oc-section__head::before {
+  content: "▸";
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  opacity: var(--ui-opacity-subtle);
+  transition: transform var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.oc-section[open] > .oc-section__head::before {
+  transform: rotate(90deg);
+}
+
+/* Section shell — flat card.
+ *
+ * Flat-redesign Step 2 (2026-05-04): the self-border that wrapped every
+ * section card was retired (rule §2.2 A). The right-rail now carries one
+ * card per agent stage, stacked vertically — `--surface-inset` against
+ * the rail's `--bg` lightness step delivers the visible boundary, and
+ * the inter-card gap (`.sections-stack` parent's `gap`) does the rest.
+ * The `:last-child` border-bottom re-assertion that compensated for
+ * collapsing dividers also went away with the parent border. The
+ * left-edge accent stripe (rule §2.2 C) is rendered in
+ * `.oc-section[data-phase-state="active"]` below. */
+.oc-section {
+  position: relative;
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Section head — clickable summary. The 3% white hover wash is
+   expressed via `color-mix` so the surface stays palette-clean
+   without an rgba literal. */
+.oc-section__head {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: none;
+  border-radius: inherit;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  min-height: calc(28px * var(--ui-scale));
+  transition:
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    color var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard);
+  line-height: 1.25;
+  background: var(--oc-header-bg);
+}
+
+.oc-section__head::-webkit-details-marker {
+  display: none;
+}
+
+.oc-section__head::marker {
+  display: none;
+  content: "";
+}
+
+.oc-section__head:hover {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 74%),
+    color-mix(in srgb, var(--surface-strong) 66%, var(--surface-inset) 34%);
+}
+
+/* Section phase-state variants — the right-panel cards highlight
+ * the currently-active workflow step (`active`) and sibling steps
+ * tied to it (`related`).
+ *
+ * Flat-redesign Step 2 (2026-05-04): the per-state `border-color`
+ * flip + outer drop-shadow that announced "active" were retired
+ * (rule §2.2 C). Active state is now a 2px accent left-stripe
+ * rendered via `::after`, plus the existing background wash. The
+ * stripe pattern matches `.delivery-panel::before` in this same
+ * file, which is the established left-rail accent idiom. */
+.oc-section[data-phase-state="related"] {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 3%, transparent), transparent 72%),
+    color-mix(in srgb, var(--surface) 91%, var(--surface-inset) 9%);
+}
+
+.oc-section[data-phase-state="related"] > .oc-section__head::before {
+  border-left-color: var(--accent);
+}
+
+.oc-section[data-phase-state="related"] .oc-section__icon {
+  color: var(--accent);
+}
+
+.oc-section[data-phase-state="active"] {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 74%),
+    color-mix(in srgb, var(--surface) 92%, var(--surface-inset) 8%);
+}
+
+.oc-section[data-phase-state="active"]::after {
+  content: "";
+  position: absolute;
+  inset-block: calc(6px * var(--ui-scale));
+  inset-inline-start: 0;
+  width: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.oc-section[data-phase-state="active"] > .oc-section__head {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 72%),
+    color-mix(in srgb, var(--accent) 7%, var(--surface-strong));
+  box-shadow: none;
+  animation: none;
+}
+
+.oc-section[data-phase-state="active"] > .oc-section__head::before {
+  border-left-color: var(--accent);
+}
+
+.oc-section[data-phase-state="active"] .oc-section__icon,
+.oc-section[data-phase-state="active"] .oc-section__title {
+  color: var(--text-strong);
+}
+
+.oc-section[data-phase-state="active"] .oc-section__badge:not(:empty) {
+  color: var(--accent);
+  background: transparent;
+}
+
+.oc-section[data-phase-state="active"] .oc-section__badge:not(:empty)::before {
+  background: color-mix(in srgb, var(--accent) 86%, transparent);
+}
+
+/* Eval error card — semantic error chrome that surfaces evaluator
+   failures inside the right panel. Background routes through
+   color-mix on var(--bad) (was raw rgba on a slightly different red;
+   the design language wants --bad consistently). */
+.eval-error {
+  margin-top: calc(4px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bad) 16%, transparent),
+      color-mix(in srgb, var(--bad) 8%, transparent)
+    );
+  box-shadow: none;
+}
+
+.eval-error-name {
+  font-size: var(--ui-font-title);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--bad);
+}
+
+.eval-error-meta {
+  margin-top: calc(1px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.eval-error-detail {
+  margin-top: calc(2px * var(--ui-scale));
+  font-size: var(--ui-font-body);
+  color: var(--text);
+  font-family: var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: calc(60px * var(--ui-scale));
+  overflow: auto;
+  line-height: 1.4;
+}
+
+.eval-error + .eval-error {
+  margin-top: calc(3px * var(--ui-scale));
+}
+
+.eval-summary {
+  font-size: var(--ui-font-title);
+  color: var(--text);
+  margin-top: calc(4px * var(--ui-scale));
+  line-height: 1.4;
+}
+
+/* Delivery panel — verdict card with a left-rail accent stripe.
+   Tone is driven by the data-verdict attribute (`accepted` →
+   --good, `rejected` → --bad, `inflight` → --accent, `empty` →
+   transparent). The accent rail is rendered via `::before` against
+   the local `--delivery-panel-accent` cascade var. */
+.delivery-panel {
+  --delivery-panel-accent: var(--text-muted);
+  position: relative;
+  padding: calc(6px * var(--ui-scale));
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  box-shadow: none;
+  margin-top: calc(2px * var(--ui-scale));
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+  overflow: hidden;
+}
+
+.delivery-panel::before {
+  content: "";
+  position: absolute;
+  inset-block: calc(6px * var(--ui-scale));
+  inset-inline-start: 0;
+  width: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--delivery-panel-accent);
+  pointer-events: none;
+}
+
+.delivery-panel[data-verdict="accepted"] {
+  --delivery-panel-accent: var(--good);
+}
+
+.delivery-panel[data-verdict="rejected"] {
+  --delivery-panel-accent: var(--bad);
+}
+
+.delivery-panel[data-verdict="inflight"] {
+  --delivery-panel-accent: var(--accent);
+}
+
+.delivery-panel[data-verdict="empty"] {
+  background: transparent;
+}
+
+.delivery-panel[data-verdict="empty"]::before {
+  display: none;
+}
+
+/* Criteria group — flat card grouping a set of acceptance-criteria
+   checkboxes inside the eval/inspector tab. The hover state lives
+   in a shared multi-class rule in styles.css that targets
+   `.goal-item, .extension-row, .channel-doc-card, …, .criteria-
+   group` together — that is shared chrome, not surface-local, so
+   it stays where it is. The richer `.criteria-item` interactive
+   row + check-mark variants stay in styles.css until their raw
+   rgba accent washes get a palette-token pass. */
+.criteria-group {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale));
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface);
+  box-shadow: none;
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base);
+  flex: 1 1 calc(180px * var(--ui-scale));
+  min-width: calc(160px * var(--ui-scale));
+}
+
+.criteria-group-head {
+  display: flex;
+  align-items: center;
+  min-height: calc(26px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+}
+
+.criteria-group-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  color: var(--text-soft);
+  opacity: var(--ui-opacity-dim);
+}
+
+.criteria-group-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.criteria-group-title {
+  flex: 1;
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+}
+
+.criteria-group-count {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  font-family: var(--mono);
+}
+
+.criteria-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+  padding: 0;
+}
+
+/* GWG (Goal-Workflow-Graph) card — flat shell with a left-rail
+   ::before accent stripe whose tone rotates with the goal status
+   modifier. The richer `.gwg-header` / `-title` / `-revision` /
+   `-objective` / `-step` / `-verdict` / `-checks` family still
+   lives in styles.css until each block gets a token sweep —
+   relocating them piecemeal would explode the surface size before
+   the cleanup pays off. */
+.gwg {
+  position: relative;
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  overflow: hidden;
+  transition: background var(--ui-duration-slow) var(--ui-timing-standard);
+}
+
+.gwg::before {
+  content: "";
+  position: absolute;
+  left: calc(11px * var(--ui-scale));
+  top: calc(12px * var(--ui-scale));
+  bottom: calc(12px * var(--ui-scale));
+  width: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--subtle-5) 86%, transparent);
+  transition:
+    background var(--ui-duration-slow) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-slow) var(--ui-timing-standard);
+  pointer-events: none;
+}
+
+.gwg:hover {
+  box-shadow: 0 calc(9px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, black 12%, transparent);
+}
+
+.gwg--expanded {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white 2.8%, transparent),
+      color-mix(in srgb, var(--accent) 1.2%, transparent)
+    ),
+    color-mix(in srgb, var(--surface) 96%, transparent);
+}
+
+/* `.gwg--*` status modifiers — rail tone via `::before`. */
+.gwg--passed::before {
+  background: color-mix(in srgb, var(--accent) 52%, var(--text-soft));
+}
+
+.gwg--failed::before {
+  background: color-mix(in srgb, var(--bad) 82%, white 4%);
+}
+
+.gwg--running::before {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+/* GWG header bar: clickable summary row carrying the status icon,
+   goal title, optional priority/revision tags, and edit/delete
+   actions. The status-icon child rotates background + color
+   through the three status modifier classes — those variants
+   live next to the base so per-status chrome stays in one place. */
+.gwg-header {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  min-height: calc(26px * var(--ui-scale));
+  line-height: 1.22;
+  background: var(--oc-header-bg);
+  transition:
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.gwg-header:focus-visible {
+  outline: calc(2px * var(--ui-scale)) solid var(--accent);
+  outline-offset: calc(-2px * var(--ui-scale));
+}
+
+.gwg-title-row {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.gwg-header-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  margin-left: auto;
+}
+
+/* Status icon: 18x18 round chip showing the status glyph. The
+   `clamp()` cap that used to fence the font-size between absolute
+   10-11px bounds was dropped because the bounds escaped the
+   `--ui-scale` token (and the icon already auto-scales with the
+   chip). The base font is now plainly scaled. */
+.gwg-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: calc(10px * var(--ui-scale));
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1;
+  background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.gwg--passed .gwg-status-icon {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 24%, transparent) inset;
+}
+
+.gwg--failed .gwg-status-icon {
+  background: var(--bad-dim);
+  color: var(--bad);
+  box-shadow: none;
+}
+
+.gwg--running .gwg-status-icon {
+  background: var(--accent-dim);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.gwg-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1.28;
+  letter-spacing: 0.01em;
+  color: var(--text-strong);
+}
+
+.gwg-revision {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.02em;
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  color: var(--text-soft);
+  line-height: 1.4;
+}
+
+/* GWG header action buttons (edit / delete) — hidden until the
+   parent card is hovered or focus-within. Tone shifts on hover via
+   surface-inset wash, and the delete variant tints to var(--bad). */
+.gwg-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+  line-height: 1;
+  cursor: pointer;
+  border-radius: var(--oc-radius-pill);
+  flex-shrink: 0;
+  opacity: var(--ui-opacity-hidden);
+  pointer-events: none;
+  transform: translateY(calc(1px * var(--ui-scale)));
+  transition:
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    color var(--ui-duration-base) var(--ui-timing-standard),
+    opacity var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.gwg:hover .gwg-action-btn,
+.gwg:focus-within .gwg-action-btn {
+  opacity: var(--ui-opacity-subtle);
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.gwg-action-btn:hover {
+  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  color: var(--text);
+}
+
+.gwg-action-delete:hover {
+  background: var(--bad-dim);
+  color: var(--bad);
+}
+
+/* Disclosure chevron — round chip on the trailing edge. The
+   `.gwg--expanded` modifier flips the rotation to indicate the
+   open state. */
+.gwg-chevron {
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  background: color-mix(in srgb, var(--surface-inset) 58%, transparent);
+  border-radius: var(--oc-radius-pill);
+  transition: transform var(--ui-duration-slow) var(--ui-timing-standard);
+  flex-shrink: 0;
+}
+
+.gwg--expanded .gwg-chevron {
+  transform: rotate(180deg);
+}
+
+/* GWG body: container that opens beneath the header when a goal is
+   expanded. Top border separates header from body, with a faint
+   white wash gradient on top to lift the panel. */
+.gwg-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+  padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--subtle-3) 72%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, white 1.5%, transparent), transparent 26%);
+}
+
+/* Objective block: Architect-written 1-2 sentence execution
+   directive that lives at the top of the body. Padded card with
+   subtle inset background and a 12-radius corner. */
+.gwg-objective {
+  margin-bottom: 0;
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  border: var(--oc-border-width) solid var(--subtle-4);
+  border-radius: var(--oc-radius-large);
+}
+
+.gwg-objective-label {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  margin-bottom: calc(3px * var(--ui-scale));
+}
+
+.gwg-objective-text {
+  font-size: var(--ui-font-body);
+  color: var(--text);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* Done-definition block — Architect's success criteria for this
+   goal. Same chrome as the objective; carried in a sibling card. */
+.gwg-done-definition {
+  margin-bottom: 0;
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  border: var(--oc-border-width) solid var(--subtle-4);
+  border-radius: var(--oc-radius-large);
+}
+
+.gwg-done-definition-label {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  margin-bottom: calc(3px * var(--ui-scale));
+}
+
+.gwg-done-definition-text {
+  font-size: var(--ui-font-body);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* Markdown reset for goal-card prose blocks: nuke the default
+   margins so the content sits flush against the card's own
+   padding. The descendant selector list also covers
+   `.gwg-plan-node-*` and `.gwg-eval-summary` rendered prose. */
+.gwg-objective-text .msg-text,
+.gwg-objective-text .md-frozen-block,
+.gwg-objective-text .md-active-block,
+.gwg-done-definition-text .msg-text,
+.gwg-done-definition-text .md-frozen-block,
+.gwg-done-definition-text .md-active-block,
+.gwg-plan-node-title .msg-text,
+.gwg-plan-node-brief .msg-text,
+.gwg-eval-summary .msg-text,
+.gwg-eval-summary .md-frozen-block,
+.gwg-eval-summary .md-active-block {
+  margin: 0;
+}
+
+.gwg-objective-text .msg-text > :first-child,
+.gwg-done-definition-text .msg-text > :first-child,
+.gwg-plan-node-title .msg-text > :first-child,
+.gwg-plan-node-brief .msg-text > :first-child,
+.gwg-eval-summary .msg-text > :first-child {
+  margin-top: 0;
+}
+
+.gwg-objective-text .msg-text > :last-child,
+.gwg-done-definition-text .msg-text > :last-child,
+.gwg-plan-node-title .msg-text > :last-child,
+.gwg-plan-node-brief .msg-text > :last-child,
+.gwg-eval-summary .msg-text > :last-child {
+  margin-bottom: 0;
+}
+
+/* GWG step row: icon + label + status pill, repeated inside the
+   goal body to render the agent's ordered todo list. The 1px-bias
+   on the vertical padding keeps the row visually centered against
+   the 16-tall icon. Status modifiers retint icon + status pill
+   based on `[--pending|--running|--done|--failed|--skipped]`. */
+.gwg-step {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: calc(1px * var(--ui-scale) + var(--ui-gap-xs)) var(--ui-gap-sm);
+  font-size: var(--ui-font-control);
+  border-radius: var(--oc-radius-soft);
+  transition: background var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+/* Step icon: small round chip carrying the per-step glyph. The
+   absolute-bounded font-size clamp that used to sit here was
+   dropped for the same reason it was dropped on the goal-card
+   status icon — the bounds escaped `--ui-scale` and the glyph
+   never overflows. */
+.gwg-step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--subtle-2);
+  color: var(--text-muted);
+  font-size: calc(10px * var(--ui-scale));
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1;
+  box-shadow: 0 0 0 var(--oc-border-width) var(--subtle-3) inset;
+}
+
+.gwg-step-label {
+  flex: 1;
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text);
+  letter-spacing: 0.005em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwg-step-summary {
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.gwg-step-status {
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-2);
+  color: var(--text-muted);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status-tinted variants — `--pending` / `--running` / `--done` /
+   `--failed` / `--skipped`. The previous raw rgba fills on the
+   running/failed inset rings routed through color-mix on
+   var(--accent) and var(--bad). */
+.gwg-step--pending .gwg-step-icon {
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+.gwg-step--pending .gwg-step-status {
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+.gwg-step--running {
+  background: linear-gradient(90deg, var(--accent-dim), transparent 92%);
+}
+
+.gwg-step--running .gwg-step-icon {
+  background: var(--accent-dim);
+  color: var(--accent);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 40%, transparent) inset;
+}
+
+.gwg-step--running .gwg-step-status {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.gwg-step--done .gwg-step-icon {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 68%, var(--text-soft));
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 22%, transparent) inset;
+}
+
+.gwg-step--done .gwg-step-status {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 68%, var(--text-soft));
+}
+
+.gwg-step--failed {
+  background: linear-gradient(90deg, var(--bad-dim), transparent 92%);
+}
+
+.gwg-step--failed .gwg-step-icon {
+  background: var(--bad-dim);
+  color: var(--bad);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 35%, transparent) inset;
+}
+
+.gwg-step--failed .gwg-step-status {
+  background: var(--bad-dim);
+  color: var(--bad);
+}
+
+.gwg-step--skipped .gwg-step-icon {
+  background: var(--subtle-1);
+  color: var(--text-muted);
+}
+
+.gwg-step--skipped .gwg-step-label {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.gwg-step--skipped .gwg-step-status {
+  background: var(--subtle-1);
+  color: var(--text-muted);
+}
+
+/* Expandable step (details/summary) — wraps a step row in a
+   <details> shell so the agent log/diff can collapse beneath it. */
+.gwg-step-detail {
+  border-radius: var(--oc-radius-soft);
+  overflow: hidden;
+}
+
+.gwg-step-detail > .gwg-step {
+  cursor: pointer;
+  list-style: none;
+}
+
+.gwg-step-detail[open] > .gwg-step {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.gwg-step-detail > .gwg-step:hover {
+  filter: brightness(1.08);
+}
+
+.gwg-step-detail > .gwg-step::-webkit-details-marker,
+.gwg-step-detail > .gwg-step::marker {
+  display: none;
+}
+
+.gwg-step-count {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  padding: 0 calc(4px * var(--ui-scale));
+}
+
+/* Step body — collapsible content beneath each step row. Hosts
+   the plan-node list, diff stats, changed files, eval summary,
+   and message log. Border-top separates body from row, faint
+   subtle wash gives the body its own depth. */
+.gwg-step-body {
+  padding: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);
+  background: var(--subtle-1);
+  border-top: var(--oc-border-width) solid var(--subtle-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+
+/* Plan-node list (inside the plan-step body): numbered cards
+   with a leading absolute counter chip. The counter container
+   sits to the left of the body content via padding-inline-start
+   carrying the chip width + gap. */
+.gwg-plan-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  counter-reset: gwg-plan;
+}
+
+.gwg-plan-node {
+  position: relative;
+  padding: var(--ui-gap-xs) var(--ui-gap-sm) var(--ui-gap-xs)
+    calc(18px * var(--ui-scale) + var(--ui-gap-md));
+  background: var(--subtle-2);
+  border-radius: var(--oc-radius-soft);
+  counter-increment: gwg-plan;
+}
+
+.gwg-plan-node::before {
+  content: counter(gwg-plan);
+  position: absolute;
+  left: var(--ui-gap-sm);
+  top: calc(1px * var(--ui-scale) + var(--ui-gap-xs));
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.gwg-plan-node-title {
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  line-height: 1.4;
+}
+
+.gwg-plan-node-brief {
+  margin-top: calc(2px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Changed files + diff stats (inside the execute-step body). The
+   `.gwg-diff-additions` / `-deletions` chips reuse `--good-dim`
+   and `--bad-dim` semantic dims. */
+.gwg-changed-files {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.gwg-diff-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  margin-bottom: var(--ui-gap-xs);
+  padding-bottom: var(--ui-gap-xs);
+  border-bottom: var(--oc-border-width) dashed var(--subtle-3);
+  font-size: var(--ui-font-tiny);
+  font-variant-numeric: tabular-nums;
+}
+
+.gwg-diff-files {
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gwg-diff-additions {
+  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  background: var(--good-dim);
+  color: var(--good);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.gwg-diff-deletions {
+  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  background: var(--bad-dim);
+  color: var(--bad);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.gwg-changed-file {
+  padding: calc(2px * var(--ui-scale)) var(--ui-gap-sm);
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  color: var(--text);
+  border-radius: var(--oc-radius-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.gwg-changed-file:hover {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+}
+
+/* Open-session action — the "open in chat" button surfaced at
+   the bottom of a step body when a goal has an attached session. */
+.gwg-open-session {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.gwg-open-session-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) var(--ui-gap-md);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-pill);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition:
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    color var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.gwg-open-session-btn:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Eval verdict pill — accepted / rejected / inconclusive. The
+   inset rings' raw rgba(--good/--bad/--warn at 35%) routed
+   through color-mix on the matching semantic token. */
+.gwg-verdict {
+  align-self: flex-start;
+  padding: calc(3px * var(--ui-scale)) var(--ui-gap-md);
+  border-radius: var(--oc-radius-pill);
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+.gwg-verdict--accepted {
+  background: var(--good-dim);
+  color: var(--good);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--good) 35%, transparent) inset;
+}
+
+.gwg-verdict--rejected {
+  background: var(--bad-dim);
+  color: var(--bad);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 35%, transparent) inset;
+}
+
+.gwg-verdict--inconclusive {
+  background: var(--warn-dim);
+  color: var(--warn);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--warn) 35%, transparent) inset;
+}
+
+.gwg-eval-summary {
+  padding: var(--ui-gap-sm) var(--ui-gap-md);
+  background: var(--subtle-2);
+  border-left: calc(2px * var(--ui-scale)) solid var(--subtle-4);
+  border-radius: var(--oc-radius-soft);
+  font-size: var(--ui-font-small);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* Step message log — scrollable container for live agent output
+   inside the step body. Custom thin scrollbar via webkit pseudos. */
+.gwg-step-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  max-height: calc(240px * var(--ui-scale));
+  overflow-y: auto;
+  padding-right: calc(2px * var(--ui-scale));
+}
+
+.gwg-step-messages::-webkit-scrollbar {
+  width: calc(4px * var(--ui-scale));
+}
+
+.gwg-step-messages::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--oc-radius-soft);
+}
+
+.gwg-step-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Eval checks list — itemized pass/fail rows shown after the
+   verdict pill. Each `.gwg-check` row hosts an icon, a name, and
+   an optional `.gwg-check-evidence` mono-font snippet. The
+   passed/failed/pending status modifiers retint icon background
+   + box-shadow; the failed modifier also retints the name. */
+.gwg-checks {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1px * var(--ui-scale));
+}
+
+.gwg-check {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: calc(4px * var(--ui-scale)) var(--ui-gap-sm);
+  font-size: var(--ui-font-control);
+  border-radius: var(--oc-radius-soft);
+  transition: background var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.gwg-check + .gwg-check {
+  border-top: var(--oc-border-width) solid var(--subtle-2);
+}
+
+.gwg-check:hover {
+  background: var(--subtle-2);
+}
+
+/* Check icon: same 14x14 round chip pattern as the step icon.
+   The earlier 10/10/10 clamp around the font-size collapsed to
+   its preferred value (min === max), so the clamp was a no-op
+   even visually — kept just `calc(10px * --ui-scale)` here. */
+.gwg-check-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: calc(10px * var(--ui-scale));
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1;
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+.gwg-check-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwg-check-evidence {
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: calc(1px * var(--ui-scale)) calc(5px * var(--ui-scale));
+  background: var(--subtle-1);
+  border-radius: var(--oc-radius-soft);
+}
+
+/* Status modifiers — passed / failed / pending. Inset rings'
+   raw rgba on --good / --bad routed through color-mix. */
+.gwg-check--passed .gwg-check-icon {
+  background: var(--good-dim);
+  color: var(--good);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--good) 35%, transparent) inset;
+}
+
+.gwg-check--failed .gwg-check-icon {
+  background: var(--bad-dim);
+  color: var(--bad);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 35%, transparent) inset;
+}
+
+.gwg-check--failed .gwg-check-name {
+  color: var(--bad);
+}
+
+.gwg-check--pending .gwg-check-icon {
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+/* Requirements panel (RequirementsPanel.tsx): renders the spec
+   agent's parsed requirement list inside the inspector tab. The
+   tab body uses a divided list with a leading mono-font index,
+   description body, and trailing type / status / priority pill
+   meta row. The streaming sub-block surfaces live spec-agent
+   output while the agent runs. */
+.req-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+
+.req-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.req-item {
+  display: grid;
+  gap: calc(7px * var(--ui-scale));
+  padding: calc(9px * var(--ui-scale)) 0;
+  font-size: var(--ui-font-control);
+  border-bottom: var(--oc-border-width) solid var(--subtle-1);
+}
+
+.req-item:last-child {
+  border-bottom: none;
+}
+
+.req-item-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: calc(10px * var(--ui-scale));
+  min-width: 0;
+}
+
+.req-index {
+  font-family: var(--mono);
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--accent);
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.req-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  padding-left: calc(56px * var(--ui-scale));
+}
+
+/* Type / status pill family: flat dim-tinted chip carrying
+   uppercase short label. Three type variants and three status
+   variants each pull their tone from the corresponding
+   `--{semantic}-dim` / `--{semantic}` token pair. */
+.req-type,
+.req-status {
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
+  border-radius: var(--oc-radius-pill);
+  flex-shrink: 0;
+}
+
+.req-type--explicit {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.req-type--inferred {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+.req-type--system {
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+.req-status--passed {
+  background: var(--good-dim);
+  color: var(--good);
+}
+
+.req-status--failed {
+  background: var(--bad-dim);
+  color: var(--bad);
+}
+
+.req-status--pending {
+  background: var(--subtle-2);
+  color: var(--text-muted);
+}
+
+.req-desc {
+  min-width: 0;
+  color: var(--text);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* Priority pill: separate from type/status because it always
+   renders with the warn-tone palette regardless of value. */
+.req-priority {
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  text-transform: uppercase;
+  padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
+  border-radius: var(--oc-radius-pill);
+  background: var(--warn-dim);
+  color: var(--warn);
+  flex-shrink: 0;
+}
+
+/* Streaming block: surfaced while the spec agent is producing
+   requirements live. The accent left-rail visually marks the
+   sub-block as in-progress. */
+.req-streaming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+
+.req-streaming-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-xs) 0;
+  color: var(--accent);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.req-streaming-label {
+  color: var(--accent);
+}
+
+.req-streaming-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+  max-height: calc(160px * var(--ui-scale));
+  overflow-y: auto;
+  padding-left: var(--ui-gap-sm);
+  border-left: calc(2px * var(--ui-scale)) solid var(--accent-dim);
+}
+
+.req-streaming-messages::-webkit-scrollbar {
+  width: calc(4px * var(--ui-scale));
+}
+
+.req-streaming-messages::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--oc-radius-soft);
+}
+
+/* Spec-detail collapsible: shows the raw spec text under a
+   <details><summary> shell when the user opens it. Mono-font
+   pre-wrap preserves formatting from the spec agent. */
+.req-spec-detail {
+  margin-top: var(--ui-gap-sm);
+}
+
+.req-spec-detail > summary {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-soft);
+  cursor: pointer;
+  padding: var(--ui-gap-xs) 0;
+}
+
+.req-spec-content {
+  font-family: var(--mono);
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: var(--ui-gap-sm);
+  background: var(--subtle-1);
+  border-radius: var(--oc-radius-soft);
+  max-height: calc(200px * var(--ui-scale));
+  overflow-y: auto;
+}
+
+/* IntegrityCard panel (IntegrityCard.tsx): renders the architecture
+   integrity LLM's verdict + per-dimension breakdown + correction
+   diffs + missing-coverage list inside the inspector tab. The
+   shared `.verdict-pill` primitive (used here + Board) still lives
+   in styles.css until its raw-rgba/hex chrome gets a token sweep. */
+.integrity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-md);
+}
+
+.integrity__header {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+}
+
+.integrity__attempts {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.integrity__summary {
+  margin: 0;
+  font-size: var(--ui-font-control);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.integrity__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+}
+
+.integrity__section-title {
+  margin: 0;
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+}
+
+.integrity__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-xs);
+}
+
+/* Dimension row: shows a single integrity dimension's verdict +
+   issue counts. Left-rail border tone rotates with `[data-verdict]`. */
+.integrity__dimension {
+  display: flex;
+  gap: var(--ui-gap-sm);
+  align-items: baseline;
+  padding: var(--ui-gap-xs) var(--ui-gap-sm);
+  background: var(--subtle-2);
+  border-left: calc(2px * var(--ui-scale)) solid var(--subtle-4);
+  border-radius: var(--oc-radius-soft);
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
+}
+
+.integrity__dimension[data-verdict="pass"] {
+  border-left-color: var(--good);
+}
+
+.integrity__dimension[data-verdict="concerns"] {
+  border-left-color: var(--warn);
+}
+
+.integrity__dimension[data-verdict="needs_correction"] {
+  border-left-color: var(--bad);
+}
+
+.integrity__dimension-name {
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  flex: 1;
+  min-width: 0;
+}
+
+.integrity__dimension-counts {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Issue / correction / missing row: the same chrome pattern as
+   `.integrity__dimension` (subtle bg + 2px left rail), shared via
+   a multi-class declaration to avoid copy-paste. The
+   `.integrity__issue` row layout layers a flex on top of the
+   shared chrome. */
+.integrity__issue,
+.integrity__correction,
+.integrity__missing {
+  padding: var(--ui-gap-xs) var(--ui-gap-sm);
+  background: var(--subtle-2);
+  border-left: calc(2px * var(--ui-scale)) solid var(--subtle-4);
+  border-radius: var(--oc-radius-soft);
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
+}
+
+.integrity__issue {
+  display: flex;
+  gap: var(--ui-gap-sm);
+  align-items: baseline;
+}
+
+.integrity__issue-desc {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+}
+
+/* Tag pill: classifies an issue/correction by intent. Default tone
+   is warn; `--action` data-attribute remaps to accent / warn / bad
+   based on what the LLM proposes. */
+.integrity__tag {
+  flex-shrink: 0;
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
+  border-radius: var(--oc-radius-pill);
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+.integrity__tag[data-action="modify"] {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.integrity__tag[data-action="split"] {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+.integrity__tag[data-action="remove"] {
+  background: var(--bad-dim);
+  color: var(--bad);
+}
+
+/* Issue type taxonomy: hard violations push the rail to `--bad`;
+   softer concerns route to `--warn`. */
+.integrity__issue[data-type="uncovered"],
+.integrity__issue[data-type="infeasible_stack"],
+.integrity__issue[data-type="contract_collision"],
+.integrity__issue[data-type="dependency_cycle"],
+.integrity__issue[data-type="invented_artifact"] {
+  border-left-color: var(--bad);
+}
+
+.integrity__issue[data-type="partial"],
+.integrity__issue[data-type="distorted"],
+.integrity__issue[data-type="merged_incorrectly"],
+.integrity__issue[data-type="missing_capability"],
+.integrity__issue[data-type="out_of_scope"],
+.integrity__issue[data-type="unsupported_claim"],
+.integrity__issue[data-type="granularity_off"],
+.integrity__issue[data-type="weak_acceptance"],
+.integrity__issue[data-type="ownership_overlap"],
+.integrity__issue[data-type="ordering_smell"] {
+  border-left-color: var(--warn);
+}
+
+/* Correction sub-block: head row layered on the shared chrome. */
+.integrity__correction-head {
+  display: flex;
+  gap: var(--ui-gap-sm);
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.integrity__correction-reason {
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.integrity__goal-id {
+  font-family: var(--mono);
+  font-size: var(--ui-font-small);
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  flex-shrink: 0;
+}
+
+/* Definition-list diff inside a correction: shows before/after for
+   each changed field. */
+.integrity__diff {
+  margin: var(--ui-gap-xs) 0 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: calc(2px * var(--ui-scale)) var(--ui-gap-sm);
+  font-size: var(--ui-font-small);
+}
+
+.integrity__diff dt {
+  color: var(--text-muted);
+  font-weight: var(--ui-font-weight-strong);
+  font-variant: small-caps;
+}
+
+.integrity__diff dd {
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Missing-coverage row sub-text. */
+.integrity__missing-title {
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+}
+
+.integrity__missing-objective {
+  color: var(--text);
+  margin-top: calc(2px * var(--ui-scale));
+}
+
+.integrity__missing-reason {
+  margin-top: calc(2px * var(--ui-scale));
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: var(--ui-font-small);
+}
+
+/* ArchitectPanel (ArchitectPanel.tsx): renders the architect
+   agent's decisions and the inferred category overview inside
+   the inspector tab. The panel layers an overview row (count +
+   category pills + detail blurb) above a decisions list (per-
+   decision card with key/value/reason) and a streaming row
+   surfaced while the architect agent runs. */
+.arch-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+
+.arch-overview {
+  display: grid;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.arch-summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-gap-sm);
+}
+
+.arch-count {
+  font-size: var(--ui-font-heading);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--accent);
+}
+
+.arch-count-label {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+}
+
+.arch-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-gap-xs);
+}
+
+.arch-cat-badge {
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-strong);
+  padding: var(--ui-badge-padding-y) var(--ui-pill-padding-x);
+  border-radius: var(--oc-radius-pill);
+  background: var(--subtle-2);
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.arch-detail {
+  font-size: var(--ui-font-control);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* Decision list: each card carries the decision key, target
+   goal id, decision value, and rationale on separate rows. */
+.arch-decisions {
+  display: grid;
+  gap: calc(7px * var(--ui-scale));
+}
+
+.arch-decision {
+  display: grid;
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--subtle-2);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+}
+
+.arch-decision-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-sm);
+  min-width: 0;
+}
+
+.arch-decision-key {
+  min-width: 0;
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arch-decision-goal {
+  max-width: 45%;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arch-decision-value {
+  color: var(--text);
+  font-size: var(--ui-font-control);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.arch-decision-reason {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* Streaming sub-block: surfaced while the architect agent is
+   producing decisions live. */
+.arch-generating {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-sm) 0;
+  color: var(--accent);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.arch-generating-label {
+  color: var(--accent);
+}
+
+.delivery-evidence-group {
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+}
+.delivery-evidence-group[open] {
+  background: transparent;
+}
+.delivery-evidence-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  cursor: pointer;
+  font-size: var(--ui-font-control);
+  list-style: none;
+}
+.delivery-evidence-group-head::-webkit-details-marker {
+  display: none;
+}
+.delivery-evidence-group-head::before {
+  content: "▸";
+  margin-right: calc(6px * var(--ui-scale));
+  color: var(--text-muted);
+  transition: transform var(--ui-duration-base) var(--ui-timing-standard);
+}
+.delivery-evidence-group[open] > .delivery-evidence-group-head::before {
+  transform: rotate(90deg);
+  display: inline-block;
+}
+.delivery-evidence-group-label {
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text);
+}
+.delivery-evidence-group-count {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.delivery-evidence-list {
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+  margin: 0;
+  padding: 0 calc(10px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  list-style: none;
+}
+
+.delivery-evidence-row {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) max-content;
+  gap: calc(8px * var(--ui-scale));
+  align-items: center;
+  font-size: var(--ui-font-control);
+}
+.delivery-evidence-row:not([data-has-pill]) {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.delivery-evidence-goal-pill {
+  background: var(--surface-inset);
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-pill);
+  padding: calc(1px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  font-size: var(--ui-font-tiny);
+  font-family: var(--mono);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.delivery-evidence-goal-pill:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.delivery-evidence-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.criteria-panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+}
+.criteria-summary {
+  display: flex;
+  gap: calc(12px * var(--ui-scale));
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+  margin-bottom: calc(4px * var(--ui-scale));
+}
+.criteria-summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+}
+.criteria-summary-item--passed {
+  color: var(--good);
+}
+.criteria-summary-item--failed {
+  color: var(--bad);
+}
+.criteria-summary-item--skipped {
+  color: var(--text-muted);
+}
+.criteria-family {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.criteria-family-head {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+.criteria-item .criteria-name {
+  font-family: var(--mono);
+  font-size: var(--ui-font-small);
+  color: var(--text);
+}
+.criteria-item--failed .criteria-name {
+  color: var(--bad);
+}
+.criteria-item--skipped .criteria-name {
+  color: var(--text-muted);
+}
+.criteria-evidence {
+  grid-column: 2;
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: calc(2px * var(--ui-scale));
+}
+
+.criteria-list {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--ui-scale));
+}
+
+/* The legacy .criteria-item rule (4-col grid card chip used inside
+ * .criteria-list) and the older 2-col-grid .criteria-panel list-row
+ * rule both lived in styles.css; the older rule's only surviving
+ * contribution after the newer rule's `border:` shorthand stomp was
+ * `list-style: none`, so the merged canonical adds that here. The
+ * .criteria-item:last-child border-bottom override is preserved as a
+ * state rule because border-bottom: none defeats the chip's all-side
+ * `border:1px solid transparent` baseline only on the trailing item. */
+.criteria-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid transparent;
+  border-radius: var(--oc-radius-soft);
+  list-style: none;
+  cursor: pointer;
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base);
+}
+.criteria-item:last-child {
+  border-bottom: none;
+}
+.criteria-item:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.criteria-item input[type="checkbox"] {
+  display: none;
+}
+
+.check-mark {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  border: calc(1.2px * var(--ui-scale)) solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--ui-duration-base);
+  background: transparent;
+}
+.criteria-item input:checked + .check-mark {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.criteria-item input:checked + .check-mark::after {
+  content: "";
+  width: calc(6px * var(--ui-scale));
+  height: calc(4px * var(--ui-scale));
+  border-left: calc(1.2px * var(--ui-scale)) solid var(--text-on-accent);
+  border-bottom: calc(1.2px * var(--ui-scale)) solid var(--text-on-accent);
+  transform: rotate(-45deg) translateY(calc(-1px * var(--ui-scale)));
+}
+
+.criteria-copy {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.criteria-name {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text-strong);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.criteria-desc {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.criteria-status {
+  width: calc(7px * var(--ui-scale));
+  height: calc(7px * var(--ui-scale));
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.criteria-result {
+  min-width: calc(40px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  text-align: right;
+}
+.criteria-status[data-result="pending"] {
+  background: var(--subtle-5);
+}
+.criteria-status[data-result="passed"] {
+  background: var(--good);
+  box-shadow: 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--good) 40%, transparent);
+}
+.criteria-status[data-result="failed"] {
+  background: var(--bad);
+  box-shadow: 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--bad) 40%, transparent);
+}
+.criteria-status[data-result="skipped"] {
+  background: var(--text-muted);
+}
+.criteria-status[data-result="off"] {
+  background: transparent;
+  border: var(--oc-border-width) solid var(--subtle-5);
+  box-shadow: none;
+}
+.criteria-status[data-result="passed"] + .criteria-result {
+  color: var(--good);
+}
+.criteria-status[data-result="failed"] + .criteria-result {
+  color: var(--bad);
+}
+.criteria-status[data-result="skipped"] + .criteria-result {
+  color: var(--text-soft);
+}
+.criteria-status[data-result="off"] + .criteria-result {
+  color: var(--text-muted);
+}
+.criteria-status:not([data-result]) {
+  display: none;
+}
+
+.goals-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1px * var(--ui-scale));
+}
+
+details.goal-item {
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  border: none;
+  transition: background var(--ui-duration-fast);
+}
+details.goal-item:hover {
+  background: color-mix(in srgb, white 2%, transparent);
+}
+details.goal-item[open] {
+  background: color-mix(in srgb, white 2%, transparent);
+}
+
+.goal-item-head {
+  display: flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  min-height: calc(22px * var(--ui-scale));
+}
+.goal-item-head::-webkit-details-marker {
+  display: none;
+}
+.goal-item-head::marker {
+  display: none;
+  content: "";
+}
+
+.goal-item-chevron {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform var(--ui-duration-base) var(--ui-timing-standard);
+  line-height: 1;
+  opacity: var(--ui-opacity-disabled);
+}
+details.goal-item[open] > .goal-item-head > .goal-item-chevron {
+  transform: rotate(90deg);
+}
+
+.goal-desc-inline {
+  flex-shrink: 0;
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-medium);
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+}
+.goal-title-brief {
+  flex: 1;
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.goal-item-id {
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  opacity: var(--ui-opacity-disabled);
+  cursor: pointer;
+  padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  flex-shrink: 0;
+  transition:
+    opacity var(--ui-duration-base),
+    background var(--ui-duration-base);
+}
+.goal-item-id:hover {
+  opacity: var(--ui-opacity-full);
+  background: color-mix(in srgb, white 8%, transparent);
+}
+
+.goal-item-body {
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-top: none;
+}
+.goal-item-body .goal-desc {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-body);
+  color: var(--text);
+  line-height: 1.5;
+}
+.goal-item-body .goal-criteria {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  margin-top: calc(3px * var(--ui-scale));
+  line-height: 1.45;
+}
+.goal-item-body .plan-version {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  margin-bottom: calc(3px * var(--ui-scale));
+}
+
+.goal-status-icon {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: var(--ui-font-small);
+  line-height: 1;
+}
+.goal-status-icon[data-status="pending"] {
+  background: var(--subtle-3);
+  color: var(--text-muted);
+}
+.goal-status-icon[data-status="running"] {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.goal-status-icon[data-status="passed"] {
+  background: var(--good-dim);
+  color: var(--good);
+}
+.goal-status-icon[data-status="failed"] {
+  background: var(--bad-dim);
+  color: var(--bad);
+}
+
+.goal-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.goal-desc {
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  word-break: break-word;
+}
+
+.goal-criteria {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  margin-top: calc(2px * var(--ui-scale));
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.goal-priority {
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  flex-shrink: 0;
+}
+.goal-priority[data-priority="blocking"] {
+  color: var(--bad);
+  background: var(--bad-dim);
+}
+.goal-priority[data-priority="advisory"] {
+  color: var(--text-soft);
+  background: var(--subtle-3);
+}
+
+.goal-actions {
+  position: absolute;
+  top: calc(6px * var(--ui-scale));
+  right: calc(6px * var(--ui-scale));
+  display: flex;
+  gap: calc(4px * var(--ui-scale));
+  align-items: center;
+  opacity: var(--ui-opacity-hidden);
+  pointer-events: none;
+  transition: opacity var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.goal-item:hover .goal-actions {
+  opacity: var(--ui-opacity-full);
+  pointer-events: auto;
+}
+
+.task-actions-buttons {
+  display: flex;
+  gap: var(--ui-gap-sm);
+  flex-wrap: wrap;
+  padding: var(--ui-gap-sm) var(--ui-section-padding-x);
+}
+
+/* Two .task-actions-buttons .btn rules previously lived in styles.css
+ * (base padding/font-size near plan-version, then deeper presentation
+ * with positioning + ::before dot 1500 lines lower). The deeper rule's
+ * padding shorthand stomped the base rule's padding; merging here
+ * collapses both into a single canonical so the cascade has one
+ * source. The font-size from the base rule is preserved because the
+ * deeper rule never set it. */
+.task-actions-buttons .btn {
+  min-height: auto;
+  padding: 0 0 0 var(--ui-btn-mini-padding-x);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  position: relative;
+  color: var(--text-soft);
+  font-weight: var(--ui-font-weight-strong);
+  font-size: var(--ui-font-control);
+}
+
+.task-actions-buttons .btn::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: calc(5px * var(--ui-scale));
+  height: calc(5px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--subtle-4) 94%, transparent);
+  transform: translateY(-50%);
+}
+
+.task-actions-buttons .btn:hover {
+  background: transparent;
+  color: var(--text-strong);
+  box-shadow: none;
+}
+
+.task-actions-buttons .btn:focus-visible {
+  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 36%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
+  box-shadow: none;
+}
+
+.task-actions-buttons .btn[data-task-action="retry"] {
+  color: var(--accent);
+}
+
+.task-actions-buttons .btn[data-task-action="retry"]::before {
+  background: color-mix(in srgb, var(--accent) 84%, transparent);
+}
+
+.task-actions-buttons .btn:disabled {
+  background: transparent;
+}
+
+.verdict-pill {
+  align-self: flex-start;
+  padding: calc(3px * var(--ui-scale)) var(--ui-gap-md);
+  border-radius: var(--oc-radius-pill);
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+}
+.verdict-pill[data-verdict="pass"],
+.verdict-pill[data-verdict="accepted"] {
+  background: var(--good-dim);
+  color: var(--good);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--good) 35%, transparent) inset;
+}
+.verdict-pill[data-verdict="concerns"] {
+  background: var(--warn-dim);
+  color: var(--warn);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--warn) 35%, transparent) inset;
+}
+.verdict-pill[data-verdict="needs_correction"],
+.verdict-pill[data-verdict="rejected"] {
+  background: var(--bad-dim);
+  color: var(--bad);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 35%, transparent) inset;
+}
+.verdict-pill[data-verdict="inflight"] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 35%, transparent) inset;
+}
+.verdict-pill[data-verdict="empty"] {
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  box-shadow: 0 0 0 var(--oc-border-width) var(--border) inset;
+}
+
+/* The session viewer dialog (rendered by services/dialog.ts when an
+ * operator opens an executor session from the inspector workspace)
+ * shows a list of role-tagged messages. The .session-msg base + the
+ * two role variants ([data-role="assistant"|"user"]) plus the role
+ * label and message text canonicals live here next to the rest of
+ * the inspector-side dialogs. */
+.session-msg {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+}
+
+.session-msg[data-role="assistant"] {
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 74%, transparent),
+    color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.session-msg[data-role="user"] {
+  width: min(100%, calc(560px * var(--ui-scale)));
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--accent-dim) 68%, transparent);
+}
+
+.session-msg-role {
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+}
+
+.session-msg[data-role="assistant"] .session-msg-role {
+  color: var(--accent);
+}
+
+.session-msg-text {
+  font-size: var(--ui-font-small);
+  color: var(--text-base);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  max-height: calc(200px * var(--ui-scale));
+  overflow-y: auto;
+}
+
+.session-msg .msg-tool {
+  margin: 0;
+}
+
+.session-msg .tool-detail {
+  font-size: var(--ui-font-small);
+}
+
+.criteria-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ui-gap-xs);
+  margin-top: var(--ui-gap-xs);
+}
+
+.criteria-check {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: calc(6px * var(--ui-scale)) var(--ui-section-padding-x);
+  border-radius: var(--oc-radius-soft);
+  cursor: pointer;
+  font-size: var(--ui-font-control);
+  color: var(--text);
+  transition: background var(--ui-duration-fast);
+}
+.criteria-check:hover {
+  background: var(--subtle-2);
+}
+.criteria-check input {
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
+}
+.criteria-check input:checked + span {
+  color: var(--text-strong);
+  font-weight: var(--ui-font-weight-medium);
+}
+
+/* Inspector ("sections" container) bounds the height of the
+ * narrative blocks the operator scrolls through (plan summary,
+ * overview, overview-next-step, goal desc + criteria, change-path,
+ * eval summary + error-detail). Each card scrolls vertically
+ * inside the rail without pushing the rail itself off-screen. The
+ * 112px ceiling is a density choice for the rail-vs-content split
+ * — same value pre-extraction, just owned by the inspector
+ * surface instead of the legacy God CSS. */
+.sections .plan-summary,
+.sections .overview-summary,
+.sections .overview-next-step,
+.sections .goal-desc,
+.sections .goal-criteria,
+.sections .change-path,
+.sections .eval-summary,
+.sections .eval-error-detail {
+  max-height: calc(112px * var(--ui-scale));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Inspector misc (extracted 2026-05-04): section-actions toolbar
+   inside section bodies, embedded session list panel, criteria
+   typography helpers.
+   ───────────────────────────────────────────────────────────── */
+
+.section-actions {
+  display: flex;
+  gap: var(--ui-gap-sm);
+  margin-top: var(--ui-gap-md);
+  flex-wrap: wrap;
+}
+
+.section-actions .btn {
+  padding: calc(4px * var(--ui-scale)) var(--ui-section-padding-x);
+  font-size: var(--ui-font-control);
+}
+
+.section-actions.compact {
+  margin-top: 0;
+}
+
+.session-list-panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  min-height: calc(180px * var(--ui-scale));
+  max-height: calc(320px * var(--ui-scale));
+  overflow-y: auto;
+  padding: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface-inset);
+}
+
+.criteria-result,
+.pref-item-key {
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Inspector list-row variants (extracted 2026-05-04): goal/market/
+   knowledge/pref/criteria card chrome + their unified hover lift,
+   gwg list + priority badge, goalsSection scroll override.
+   ───────────────────────────────────────────────────────────── */
+
+.goal-item,
+.market-card,
+.knowledge-item,
+.pref-item,
+.criteria-check {
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--subtle-1);
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
+}
+
+.goal-item:hover,
+.extension-row:hover,
+.channel-doc-card:hover,
+.market-card:hover,
+.knowledge-item:hover,
+.pref-item:hover,
+.criteria-check:hover,
+.criteria-group:hover {
+  background: var(--hover-accent-wash);
+  border-color: var(--hover-accent-border);
+  box-shadow:
+    var(--shadow),
+    var(--hover-accent-shadow);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+#goalsSection > .oc-section__body {
+  max-height: none;
+  overflow-y: visible;
+  overscroll-behavior: auto;
+}
+
+.gwg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}

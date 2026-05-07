@@ -1,15 +1,12 @@
 import { Identifier } from "@/id/id"
-import { Instance } from "@/project/instance"
-import { State } from "@/project/state"
-import { Database, and, asc, desc, eq, gt } from "@/storage/db"
+import { Database, and, asc, desc, eq, gt, lte } from "@/storage/db"
 import { Channel } from "@/util/channel"
 import { withKeyedLock } from "@/util/lock"
 import { Log } from "@/util/log"
-import { ProtocolEventTable, ProtocolStreamChunkTable } from "./protocol.sql"
-import type { ProtocolAggregate, ProtocolKind, ProtocolStreamKind } from "./schema"
+import { ProtocolEventTable } from "./protocol.sql"
+import type { ProtocolAggregate, ProtocolKind } from "./schema"
 
 const eventLocks = new Map<string, Promise<void>>()
-const streamLocks = new Map<string, Promise<void>>()
 const log = Log.create({ service: "protocol.store" })
 
 type Payload = Record<string, unknown>
@@ -36,21 +33,7 @@ type EventInput = {
   seq?: number
 }
 
-type ChunkInput = {
-  stream_id: string
-  task_id?: string | null
-  run_id?: string | null
-  goal_run_id?: string | null
-  session_id?: string | null
-  kind: ProtocolStreamKind
-  text: string
-  payload?: Payload | null
-  emitted_at?: number
-  chunk_seq?: number
-}
-
 type EventRow = typeof ProtocolEventTable.$inferSelect
-type ChunkRow = typeof ProtocolStreamChunkTable.$inferSelect
 type EventView = ReturnType<typeof eventView>
 type EventFilter = {
   aggregate?: ProtocolAggregate
@@ -66,22 +49,17 @@ type EventSubscription = {
   close(): void
 }
 
-const live = State.create(
-  () => {
-    try {
-      return Instance.directory
-    } catch {
-      return "__protocol_global__"
-    }
-  },
-  () => ({
-    subscriptions: new Set<EventSubscription>(),
-  }),
-  async (entry) => {
-    for (const subscription of entry.subscriptions) subscription.close()
-    entry.subscriptions.clear()
-  },
-)
+// ── Global subscription registry ──
+// Subscriptions MUST be global (not per-Instance) because:
+// 1. Database is a global singleton — events from any Instance land in the same DB.
+// 2. SSE handlers register subscriptions from one Instance context, but events may
+//    be written from a different Instance context (e.g. cross-Instance bridge in
+//    task-message-protocol-bridge writes events in hostDirectory context while the
+//    SSE client connected from a different directory).
+// 3. matchesEvent() already filters by taskID/runID/sessionID — Instance-level
+//    isolation is redundant and causes real-time events to be silently dropped
+//    when the writer and reader are in different Instance contexts.
+const globalSubscriptions = new Set<EventSubscription>()
 
 function eventKey(input: { aggregate: ProtocolAggregate; aggregate_id: string }) {
   return `${input.aggregate}:${input.aggregate_id}`
@@ -104,7 +82,7 @@ function matchesEvent(event: EventView, filter?: EventFilter) {
 }
 
 function dispatchEvent(event: EventView) {
-  for (const subscription of live().subscriptions) {
+  for (const subscription of globalSubscriptions) {
     if (!matchesEvent(event, subscription.filter)) continue
     subscription.dispatch(event)
   }
@@ -141,25 +119,6 @@ function eventView(row: EventRow) {
   }
 }
 
-function chunkView(row: ChunkRow) {
-  return {
-    id: row.id,
-    streamID: row.stream_id,
-    taskID: row.task_id ?? undefined,
-    runID: row.run_id ?? undefined,
-    goalRunID: row.goal_run_id ?? undefined,
-    sessionID: row.session_id ?? undefined,
-    kind: row.kind,
-    chunkSequence: row.chunk_seq,
-    text: row.text,
-    payload: row.payload ?? undefined,
-    time: {
-      emitted: row.emitted_at,
-      created: row.time_created,
-      updated: row.time_updated,
-    },
-  }
-}
 
 export namespace ProtocolStore {
   export async function appendEvent(input: EventInput) {
@@ -230,19 +189,23 @@ export namespace ProtocolStore {
     return withKeyedLock(eventLocks, eventKey(input), async () => insert(nextAggregateSequence(input.aggregate, input.aggregate_id)))
   }
 
-  export function listTaskEventsAfter(taskID: string, sequence: number) {
-    return Database.use((db) =>
-      db
+  export function listTaskEventsAfter(taskID: string, sequence: number, opts?: { until?: number; limit?: number }) {
+    const conditions = [
+      eq(ProtocolEventTable.aggregate_type, "task"),
+      eq(ProtocolEventTable.task_id, taskID),
+      gt(ProtocolEventTable.seq, sequence),
+    ]
+    if (typeof opts?.until === "number") {
+      conditions.push(lte(ProtocolEventTable.seq, opts.until))
+    }
+    return Database.use((db) => {
+      const query = db
         .select()
         .from(ProtocolEventTable)
-        .where(and(
-          eq(ProtocolEventTable.aggregate_type, "task"),
-          eq(ProtocolEventTable.task_id, taskID),
-          gt(ProtocolEventTable.seq, sequence),
-        ))
+        .where(and(...conditions))
         .orderBy(asc(ProtocolEventTable.seq), asc(ProtocolEventTable.id))
-        .all(),
-    ).map(eventView)
+      return typeof opts?.limit === "number" ? query.limit(opts.limit).all() : query.all()
+    }).map(eventView)
   }
 
   export function listTaskEvents(taskID: string) {
@@ -274,7 +237,7 @@ export namespace ProtocolStore {
         controller.abort()
       },
     }
-    live().subscriptions.add(subscription)
+    globalSubscriptions.add(subscription)
     void (async () => {
       for await (const event of events) {
         if (controller.signal.aborted) break
@@ -288,17 +251,19 @@ export namespace ProtocolStore {
       }
     })()
     return () => {
-      if (!live().subscriptions.delete(subscription)) return
+      if (!globalSubscriptions.delete(subscription)) return
       subscription.close()
     }
   }
 
   /**
    * Push an event through live subscriptions WITHOUT writing to DB.
-   * Used for high-frequency ephemeral events (e.g. message.part.delta)
-   * that should reach SSE clients in real-time but don't need persistence
-   * or sequence numbering. On reconnect these events are NOT replayed —
-   * the client recovers full state from persisted message.part.updated events.
+   * Used for events whose source of truth lives in another table — clients
+   * see them live via SSE; on reconnect they hydrate from the canonical
+   * store (message/part tables for `message.*` events) instead of replaying
+   * an event log. Avoids the 双源 footgun where the same content is held in
+   * two places (rule 23) and prevents `protocol_event.payload` blowing up
+   * by re-snapshotting full message state on every update.
    */
   export function dispatchEphemeral(input: {
     type: string
@@ -336,64 +301,6 @@ export namespace ProtocolStore {
     })
   }
 
-  export async function appendChunk(input: ChunkInput) {
-    const now = input.emitted_at ?? Date.now()
-    const insert = (chunkSeq: number) => {
-      const id = Identifier.ascending("protocol_stream_chunk")
-      Database.use((db) =>
-        db
-          .insert(ProtocolStreamChunkTable)
-          .values({
-            id,
-            stream_id: input.stream_id,
-            task_id: input.task_id ?? null,
-            run_id: input.run_id ?? null,
-            goal_run_id: input.goal_run_id ?? null,
-            session_id: input.session_id ?? null,
-            kind: input.kind,
-            chunk_seq: chunkSeq,
-            text: input.text,
-            payload: input.payload ?? null,
-            emitted_at: now,
-            time_created: now,
-            time_updated: now,
-          })
-          .run(),
-      )
-      return chunkView({
-        id,
-        stream_id: input.stream_id,
-        task_id: input.task_id ?? null,
-        run_id: input.run_id ?? null,
-        goal_run_id: input.goal_run_id ?? null,
-        session_id: input.session_id ?? null,
-        kind: input.kind,
-        chunk_seq: chunkSeq,
-        text: input.text,
-        payload: input.payload ?? null,
-        emitted_at: now,
-        time_created: now,
-        time_updated: now,
-      })
-    }
-
-    if (typeof input.chunk_seq === "number" && input.chunk_seq >= 0) {
-      return insert(input.chunk_seq)
-    }
-
-    return withKeyedLock(streamLocks, input.stream_id, async () => insert(nextChunkSequence(input.stream_id)))
-  }
-
-  export function listChunksAfter(streamID: string, chunkSequence: number) {
-    return Database.use((db) =>
-      db
-        .select()
-        .from(ProtocolStreamChunkTable)
-        .where(and(eq(ProtocolStreamChunkTable.stream_id, streamID), gt(ProtocolStreamChunkTable.chunk_seq, chunkSequence)))
-        .orderBy(asc(ProtocolStreamChunkTable.chunk_seq), asc(ProtocolStreamChunkTable.id))
-        .all(),
-    ).map(chunkView)
-  }
 }
 
 function nextAggregateSequence(aggregate: ProtocolAggregate, aggregateID: string) {
@@ -406,16 +313,4 @@ function nextAggregateSequence(aggregate: ProtocolAggregate, aggregateID: string
       .get(),
   )
   return (row?.seq ?? 0) + 1
-}
-
-function nextChunkSequence(streamID: string) {
-  const row = Database.use((db) =>
-    db
-      .select({ chunk_seq: ProtocolStreamChunkTable.chunk_seq })
-      .from(ProtocolStreamChunkTable)
-      .where(eq(ProtocolStreamChunkTable.stream_id, streamID))
-      .orderBy(desc(ProtocolStreamChunkTable.chunk_seq))
-      .get(),
-  )
-  return (row?.chunk_seq ?? -1) + 1
 }

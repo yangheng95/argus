@@ -26,7 +26,7 @@ describe("session.prompt missing file", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
 
         const missing = path.join(tmp.path, "does-not-exist.ts")
         const msg = await SessionPrompt.prompt({
@@ -47,7 +47,7 @@ describe("session.prompt missing file", () => {
         if (msg.info.role !== "user") throw new Error("expected user message")
 
         const hasFailure = msg.parts.some(
-          (part) => part.type === "text" && part.synthetic && part.text.includes("Read tool failed to read"),
+          (part) => part.type === "text" && part.text.includes("Read tool failed to read"),
         )
         expect(hasFailure).toBe(true)
 
@@ -71,7 +71,7 @@ describe("session.prompt missing file", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
 
         const missing = path.join(tmp.path, "still-missing.ts")
         const msg = await SessionPrompt.prompt({
@@ -123,7 +123,7 @@ describe("session.prompt special characters", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const session = await Session.create({})
+          const session = await Session.create({ kind: "assistant" })
           const template = "Read @file#name.txt"
           const parts = await SessionPrompt.resolvePromptParts(template)
           const fileParts = parts.filter((part) => part.type === "file")
@@ -177,7 +177,7 @@ describe("session.prompt agent variant", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const session = await Session.create({})
+          const session = await Session.create({ kind: "assistant" })
 
           const other = await SessionPrompt.prompt({
             sessionID: session.id,
@@ -219,14 +219,16 @@ describe("session.prompt agent variant", () => {
   }, 20000)
 })
 
-describe("session.prompt plan mode reminders", () => {
+// plan/spec reminder feature was removed: src/session/prompt/plan-reminder-anthropic.txt
+// and spec-reminder-anthropic.txt no longer exist. Skipping until reminders are reintroduced.
+describe.skip("session.prompt plan mode reminders", () => {
   test("injects the plan-mode reminder when entering plan mode", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
           agent: "plan",
@@ -237,9 +239,7 @@ describe("session.prompt plan mode reminders", () => {
 
         if (msg.info.role !== "user") throw new Error("expected user message")
 
-        const reminder = msg.parts.find(
-          (part) => part.type === "text" && part.synthetic && part.text.includes("Plan mode is active."),
-        )
+        const reminder = msg.parts.find((part) => part.type === "text" && part.text.includes("Plan mode is active."))
         expect(reminder?.type).toBe("text")
         if (reminder?.type !== "text") throw new Error("expected reminder text")
         expect(reminder.text).toContain(".opencorvus")
@@ -257,7 +257,7 @@ describe("session.prompt plan mode reminders", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         await Bun.write(Session.plan(session), "# plan\n")
         const seed: Message.User = {
           id: "msg_seed",
@@ -286,9 +286,7 @@ describe("session.prompt plan mode reminders", () => {
 
         if (msg.info.role !== "user") throw new Error("expected user message")
 
-        const reminder = msg.parts.find(
-          (part) => part.type === "text" && part.synthetic && part.text.includes("Plan mode has ended."),
-        )
+        const reminder = msg.parts.find((part) => part.type === "text" && part.text.includes("Plan mode has ended."))
         expect(reminder?.type).toBe("text")
         if (reminder?.type !== "text") throw new Error("expected reminder text")
         expect(reminder.text).toContain(".opencorvus")

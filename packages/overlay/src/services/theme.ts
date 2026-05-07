@@ -1,22 +1,24 @@
 // ── Theme Service ──
 // Exported surface:
-// sanitizeTheme(value) — "light" | "system" | "dark" (
+// sanitizeTheme(value) — supported theme id or DEFAULT_THEME
 // sanitizeOpacity(value) — number clamped to [0.5, 1.0]
 // sanitizeZoom(value) — number clamped to [0.8, 1.6]
 // resolvedTheme() — effective "light" | "dark" after system detection
-// applyTheme(theme) — writes document.body.dataset.theme
+// applyTheme(theme) — writes documentElement/body data-theme
 // applyZoom(zoom) — writes --ui-scale CSS custom property via renderScale
-// applyOpacity(opacity) — writes --ui-window-opacity or calls Tauri setOpacity
+// applyOpacity(opacity) — writes --ui-window-opacity CSS variable
 
 import {
   MIN_WINDOW_OPACITY,
+  DEFAULT_THEME,
   sanitizeOpacity,
   settingsStore,
 } from "../store/settings";
+import { getHostTransport } from "./host-transport";
 
 export { MIN_WINDOW_OPACITY, sanitizeOpacity } from "../store/settings";
 
-// ── Constants (mirror ) ──
+// ── Constants ──
 
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
@@ -33,11 +35,17 @@ const systemThemeMedia: MediaQueryList | null =
     : null;
 
 // ── sanitizeTheme ──
-// "light" | "system" → returned as-is; everything else → "dark"
+// "light" | "system" → returned as-is; everything else → default theme
 
 export function sanitizeTheme(value: any): string {
-  if (value === "light" || value === "system" || value === "vscode-dark") return value as string;
-  return "dark";
+  if (
+    value === "light" ||
+    value === "dark" ||
+    value === "system" ||
+    value === "vscode-dark"
+  )
+    return value as string;
+  return DEFAULT_THEME;
 }
 
 // ── sanitizeZoom ──
@@ -64,9 +72,10 @@ export function resolvedTheme(): string {
 }
 
 // ── applyTheme ──
-// Writes the effective (resolved) theme to document.body.dataset.theme.
-// Does NOT update brand logos or call renderTitlebarMenu (those belong to the
-// respective Solid components).
+// Writes the effective (resolved) theme to both root and body.
+// `documentElement` drives the new palette-only theme layer; `body` keeps
+// legacy God CSS selectors working until that file leaves the runtime path.
+// Does NOT update brand logos; those belong to the respective Solid components.
 
 export function applyTheme(theme: string): void {
   if (typeof document === "undefined") return;
@@ -74,58 +83,24 @@ export function applyTheme(theme: string): void {
   const effective = sanitized === "system"
     ? (systemThemeMedia?.matches ? "light" : "dark")
     : sanitized;
+  document.documentElement.dataset.theme = effective;
   document.body.dataset.theme = effective;
 }
 
-// ── Tauri window helper (internal) ──
-
-async function currentTauriWindow(): Promise<any | null> {
-  const getCurrent = (window as any).__TAURI__?.window?.getCurrentWindow;
-  if (typeof getCurrent === "function") {
-    try {
-      return getCurrent() as any;
-    } catch {
- // Not running inside Tauri
-    }
-  }
-  return null;
-}
-
-// ── applyOpacity ──
-// 1. Sanitise the value.
-// 2. Try Tauri win.setOpacity(). If that succeeds set --ui-window-opacity to "1"
-// (native compositing handles it), otherwise set it to the numeric value.
-// 3. In non-Tauri environments fall back to the CSS custom property.
-// Returns true if the native Tauri API was used successfully.
-
-export async function applyOpacity(opacity: number): Promise<boolean> {
-  if (typeof document === "undefined") return false;
-  const value = sanitizeOpacity(opacity);
-  const valueStr = String(value);
-
-  const win = await currentTauriWindow();
-  if (!win || typeof win.setOpacity !== "function") {
-    document.documentElement.style.setProperty(
-      "--ui-window-opacity",
-      valueStr,
-    );
-    return false;
-  }
-
-  const ok = await win.setOpacity(value).then(
-    () => true,
-    () => false,
-  );
+// Tauri's native setOpacity is unreliable on transparent windows (returns ok
+// but the compositor ignores it on Windows DWM). Single source of truth: the
+// --ui-window-opacity CSS variable consumed by `body { opacity: ... }`.
+export function applyOpacity(opacity: number): void {
+  if (typeof document === "undefined") return;
   document.documentElement.style.setProperty(
     "--ui-window-opacity",
-    ok ? "1" : valueStr,
+    String(sanitizeOpacity(opacity)),
   );
-  return ok;
 }
 
 // ── applyZoom ──
-// The full renderScale() also triggers pane layout, fitBrandVersion, sizeChat, etc.
-// Those are side-effects. This service function covers
+// The full renderScale() also triggers pane layout and chat sizing. Those are
+// side-effects. This service function covers
 // only the CSS write portion that is safe to call from Solid components:
 // document.documentElement.style.setProperty("--ui-scale", ...)
 // Callers that need the full layout recalc should trigger it .
@@ -184,9 +159,11 @@ export function stepZoom(delta: number): void {
 
 export function handleZoomHotkey(event: KeyboardEvent): void {
   if (typeof window === "undefined") return;
-  const hasTauri =
-    typeof (window as any).__TAURI__?.core?.invoke === "function";
-  if (!hasTauri || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+  // Only intercept Ctrl/Cmd +/−/0 inside the Tauri overlay window —
+  // browser preview and the VS Code webview rely on the host's native
+  // zoom, so we must not steal the keystroke there.
+  const isTauri = getHostTransport().kind === "tauri";
+  if (!isTauri || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return;
 
   const plus =
     event.code === "Equal" ||
@@ -219,62 +196,6 @@ export function handleZoomHotkey(event: KeyboardEvent): void {
   setZoom(1);
 }
 
-// ── shouldMigrateOpacity ──
-// Returns true when the persisted opacity value is a legacy sub-0.3 value that
-// should be migrated upward to the minimum supported value.
-
-const OPACITY_MIGRATION_KEY = "oc_opacity_migrated_v1";
-const LEGACY_WINDOW_OPACITY = 0.3;
-
-export function shouldMigrateOpacity(value: unknown): boolean {
-  if (typeof localStorage === "undefined") return false;
-  if (localStorage.getItem(OPACITY_MIGRATION_KEY) === "true") return false;
-  const next =
-    typeof value === "number"
-      ? value
-      : Number.parseFloat(String(value ?? ""));
-  return Number.isFinite(next) && next <= LEGACY_WINDOW_OPACITY;
-}
-
-// ── applyWindowPin ──
-// Apply the alwaysOnTop state to the native Tauri window.
-// side effects, which remain.
-// Returns true when the Tauri API was called successfully.
-
-export async function applyWindowPin(alwaysOnTop: boolean): Promise<boolean> {
-  const win = await currentTauriWindow();
-  if (!win || typeof win.setAlwaysOnTop !== "function") return false;
-  await win.setAlwaysOnTop(alwaysOnTop).catch(() => undefined);
-  return true;
-}
-
-// ── withUnpinned ──
-// Temporarily unpin the window, run an async callback, then restore pin state.
-
-export async function withUnpinned<T>(run: () => Promise<T> | T): Promise<T> {
-  const win = await currentTauriWindow();
-  if (
-    !win ||
-    typeof win.isAlwaysOnTop !== "function" ||
-    typeof win.setAlwaysOnTop !== "function"
-  ) {
-    return run();
-  }
-  const pinned = await win.isAlwaysOnTop().catch(() => false);
-  if (!pinned) return run();
-  await win.setAlwaysOnTop(false).catch(() => undefined);
-  try {
-    return await run();
-  } finally {
-    await win.setAlwaysOnTop(true).catch(() => undefined);
-    await win.setFocus?.().catch(() => undefined);
-  }
-}
-
-// ── applyWindowOpacity ──
-// Apply window opacity via Tauri native API (preferred) or CSS variable fallback.
-// Render side-effects (renderTitlebarMenu) remain.
-
 /**
  * Register a listener for OS-level prefers-color-scheme changes.
  * Returns a cleanup function that removes the listener.
@@ -287,23 +208,9 @@ export function installSystemThemeListener(onchange: () => void): () => void {
 
 /** Toggle Tauri devtools (F12 handler). No-op outside Tauri. */
 export async function toggleDevtools(): Promise<void> {
-  const invoke = (window as any).__TAURI__?.core?.invoke;
-  if (typeof invoke === "function") {
-    await invoke("overlay_toggle_devtools").catch(() => {});
+  try {
+    await getHostTransport().native({ kind: "devtools.toggle" });
+  } catch {
+    // No-op for hosts without devtools (vscode webview).
   }
-}
-
-export async function applyWindowOpacity(opacity: number): Promise<boolean> {
-  const value = String(sanitizeOpacity(opacity));
-  const win = await currentTauriWindow();
-  if (!win || typeof (win as any).setOpacity !== "function") {
-    document.documentElement.style.setProperty("--ui-window-opacity", value);
-    return false;
-  }
-  const ok = await (win as any).setOpacity(sanitizeOpacity(opacity)).then(
-    () => true,
-    () => false,
-  );
-  document.documentElement.style.setProperty("--ui-window-opacity", ok ? "1" : value);
-  return ok;
 }

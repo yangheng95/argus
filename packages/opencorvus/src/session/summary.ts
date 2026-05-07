@@ -1,5 +1,6 @@
 import { fn } from "@/util/fn"
 import z from "zod"
+import { Log } from "@/util/log"
 import { Session } from "."
 
 import { Message } from "./message"
@@ -10,6 +11,8 @@ import { Storage } from "@/storage/storage"
 import { Bus } from "@/bus"
 
 export namespace SessionSummary {
+  const log = Log.create({ service: "session.summary" })
+
   function unquoteGitPath(input: string) {
     if (!input.startsWith('"')) return input
     if (!input.endsWith('"')) return input
@@ -73,10 +76,7 @@ export namespace SessionSummary {
     }),
     async (input) => {
       const all = await Session.messages({ sessionID: input.sessionID })
-      await Promise.all([
-        summarizeSession({ sessionID: input.sessionID, messages: all }),
-        summarizeMessage({ messageID: input.messageID, messages: all }),
-      ])
+      await summarizeSession({ sessionID: input.sessionID, messages: all })
     },
   )
 
@@ -89,26 +89,20 @@ export namespace SessionSummary {
         deletions: diffs.reduce((sum, x) => sum + x.deletions, 0),
         files: diffs.length,
       },
-    }).catch(() => undefined)
+    }).catch((err) => {
+      // Don't take down the diff/event publish below — this is best-effort
+      // metadata. But surface the cause so a stuck overlay summary header can
+      // be traced to a write failure instead of disappearing silently.
+      log.warn("setSummary failed; overlay header may be stale", {
+        sessionID: input.sessionID,
+        error: err,
+      })
+    })
     await Storage.write(["session_diff", input.sessionID], diffs)
     Bus.publish(Session.Event.Diff, {
       sessionID: input.sessionID,
       diff: diffs,
     })
-  }
-
-  async function summarizeMessage(input: { messageID: string; messages: Message.WithParts[] }) {
-    const messages = input.messages.filter(
-      (m) => m.info.id === input.messageID || (m.info.role === "assistant" && m.info.parentID === input.messageID),
-    )
-    const msgWithParts = messages.find((m) => m.info.id === input.messageID)!
-    const userMsg = msgWithParts.info as Message.User
-    const diffs = await computeDiff({ messages })
-    userMsg.summary = {
-      ...userMsg.summary,
-      diffs,
-    }
-    await Session.updateMessage(userMsg).catch(() => undefined)
   }
 
   export const diff = fn(
@@ -127,7 +121,9 @@ export namespace SessionSummary {
         }
       })
       const changed = next.some((item, i) => item.file !== diffs[i]?.file)
-      if (changed) Storage.write(["session_diff", input.sessionID], next).catch(() => {})
+      if (changed) Storage.write(["session_diff", input.sessionID], next).catch((err) => {
+        log.warn("session_diff storage write failed", { sessionID: input.sessionID, error: String(err) })
+      })
       return next
     },
   )

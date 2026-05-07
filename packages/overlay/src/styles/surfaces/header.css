@@ -1,0 +1,54 @@
+.oc-surface-header,
+.sidebar-header.oc-surface-header,
+.chat-header.oc-surface-header,
+.sections-header.oc-surface-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--oc-header-height);
+  min-height: var(--oc-header-height);
+  max-height: var(--oc-header-height);
+  padding: var(--oc-header-padding-y) var(--oc-header-padding-x);
+  gap: var(--oc-header-gap);
+  background: var(--oc-header-bg);
+  border-block-end: var(--oc-header-border);
+  border-radius: 0;
+  box-shadow: var(--oc-header-shadow);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.oc-surface-header[data-surface="settings-group"] {
+  width: 100%;
+}
+
+.chat-header.oc-surface-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+}
+
+.oc-surface-header__main,
+.oc-surface-header__actions {
+  display: flex;
+  align-items: center;
+  min-width: var(--oc-radius-none);
+  gap: var(--oc-header-gap);
+}
+
+.sections-tabs.oc-surface-header__actions {
+  width: 100%;
+  gap: var(--oc-header-actions-padding);
+  padding: var(--oc-header-actions-padding);
+}
+
+.oc-surface-header__title {
+  min-width: var(--oc-radius-none);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--oc-header-title-font);
+  line-height: var(--oc-header-title-line-height);
+  letter-spacing: var(--oc-header-title-letter-spacing);
+  text-transform: var(--oc-header-title-transform);
+  color: var(--text-strong);
+}

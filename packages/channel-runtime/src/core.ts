@@ -1,5 +1,5 @@
 import path from "node:path"
-import { createOpencode, createOpencodeClient, type Event, type OpencodeClient } from "@opencorvus-ai/sdk/v2"
+import { createOpencode, createOpencodeClient, type Event, type OpencodeClient } from "@opencorvus-ai/sdk"
 import { mkdir } from "node:fs/promises"
 import type { ChannelAdapter, IncomingMessage } from "./adapter"
 import type { STTPipeline } from "./stt/pipeline"
@@ -10,11 +10,7 @@ import {
   polishText,
   splitText,
 } from "./message-formatter"
-import {
-  permissionReply as permissionReplyRule,
-  queueLimit as queueLimitRule,
-  type PermissionReply,
-} from "./channel-policy"
+import { queueLimit as queueLimitRule } from "./channel-policy"
 import { SessionCoordinator } from "./session-coordinator"
 
 interface TaskReportProperties {
@@ -90,7 +86,7 @@ type EventSessionError = Extract<Event, { type: "session.error" }>
 type EventSessionStatus = Extract<Event, { type: "session.status" }>
 type EventMessageUpdated = Extract<Event, { type: "message.updated" }>
 type EventMessagePartUpdated = Extract<Event, { type: "message.part.updated" }>
-type EventOrchestratorEvaluationCompleted = Extract<Event, { type: "orchestrator.evaluation.completed" }>
+type EventEvaluationCompleted = Extract<Event, { type: "evaluation.completed" }>
 const MIRROR_PREFIX = "[opencorvus-mirror]"
 type PendingTask = {
   taskId: string
@@ -165,7 +161,42 @@ export class ChannelRuntime {
     })
   }
 
+  /**
+   * audit-2026-04-29 W2-V14 — concurrent-start race. Pre-fix
+   * `start()` had no idempotency guard. Two near-simultaneous
+   * callers both saw `this.running === false` (only set on entry,
+   * not before the await on `createOpencode`), and BOTH proceeded
+   * to spawn an OpenCorvus server, register adapter handlers
+   * twice, and call `subscribeEvents` twice — leaving a duplicate
+   * SSE reconnect loop, double event dispatch, and (in the
+   * non-baseUrl branch) port collision on the second
+   * `createOpencode`.
+   *
+   * Hold an in-flight Promise so concurrent callers share the
+   * single startup; subsequent calls after a successful start are
+   * a no-op. This mirrors the pendingStart pattern in
+   * vscode-extension/extension.ts and the start-once contract in
+   * Server.listen.
+   */
+  private startPromise: Promise<void> | undefined
+
   async start(): Promise<void> {
+    if (this.running) return
+    if (this.startPromise) return this.startPromise
+    this.startPromise = this._doStart().catch((err) => {
+      // Roll back the running flag so a failure (createOpencode
+      // throwing, adapter rejection, etc.) doesn't block a
+      // legitimate retry. The throw still propagates to the
+      // caller so the failure is loud (CLAUDE.md §一-7).
+      this.running = false
+      throw err
+    }).finally(() => {
+      this.startPromise = undefined
+    })
+    return this.startPromise
+  }
+
+  private async _doStart(): Promise<void> {
     this.running = true
     const baseUrl = this.options?.baseUrl?.trim()
     if (baseUrl) {
@@ -305,7 +336,7 @@ export class ChannelRuntime {
           title: `${msg.platform} thread ${msg.thread}`,
         })
 
-        if (createResult.error) {
+        if (createResult.error || !createResult.data) {
           console.error("[ChannelRuntime] session.create error:", JSON.stringify(createResult.error).slice(0, 500))
           const notice = "Failed to create session."
           this.mirror("system", notice, {
@@ -779,7 +810,7 @@ export class ChannelRuntime {
     const createResult = await this.client.session.create({
       title: `${msg.platform} shared session`,
     })
-    if (createResult.error) {
+    if (createResult.error || !createResult.data) {
       console.error("[ChannelRuntime] shared session.create error:", JSON.stringify(createResult.error).slice(0, 500))
       return undefined
     }
@@ -995,10 +1026,6 @@ export class ChannelRuntime {
     return queueLimitRule(process.env)
   }
 
-  private permissionReply(): PermissionReply {
-    return permissionReplyRule(process.env)
-  }
-
   /** Format a brief status message for important tool completions */
   private formatToolStatus(tool: string, input: unknown): string | null {
     return formatToolStatusMessage(tool, input, process.env)
@@ -1130,8 +1157,14 @@ export class ChannelRuntime {
   }
 
   private async handleEvent(event: Event): Promise<void> {
-    if (event.type === "orchestrator.evaluation.completed") {
-      const info = (event as EventOrchestratorEvaluationCompleted).properties
+    // Engine emits evaluation.completed when delivery's adversarial verification
+    // finishes. Push the verdict back to every channel thread bound to the task
+    // so chat operators see acceptance/rejection without polling.
+    // (Earlier code checked "engine.evaluation.completed" — that prefix is
+    //  stripped by the orchestrator route before SSE, so the SDK type is the
+    //  bare "evaluation.completed".)
+    if (event.type === "evaluation.completed") {
+      const info = (event as EventEvaluationCompleted).properties
       const sessions = this.findTaskBindings(info.taskID)
       if (sessions.length === 0) return
       const msg = `Evaluation ${info.verdict}: ${info.summary}`
@@ -1193,41 +1226,23 @@ export class ChannelRuntime {
     if (event.type === "permission.asked") {
       const asked = (event as EventPermissionAsked).properties as PermissionAsked
       this.touchPending(asked.sessionID)
-      const reply = this.permissionReply()
-      const result = await this.client.permission.reply({
-        requestID: asked.id,
-        reply,
-      })
       const sessions = this.findSessions(asked.sessionID)
-      if (result.error) {
-        console.error("[ChannelRuntime] permission.reply error:", JSON.stringify(result.error).slice(0, 500))
-        this.mirrorSessions(
-          "system",
-          `Failed to reply permission request: ${asked.permission}`,
-          asked.sessionID,
-          sessions,
-        )
-        for (const session of sessions) {
-          await this.safeSend(session.adapter, session.channel, session.thread, `Failed to reply permission request: ${asked.permission}`)
-        }
-        return
-      }
+      const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
       this.mirrorSessions(
         "system",
-        `Auto-replied permission (${reply}): ${asked.permission}`,
+        `Permission requested: ${asked.permission} [${patterns}]`,
         asked.sessionID,
         sessions,
       )
       for (const session of sessions) {
-        const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
         await this.safeSend(
           session.adapter,
           session.channel,
           session.thread,
-          `Auto-replied permission (${reply}): ${asked.permission} [${patterns}]`,
+          `Permission requested: ${asked.permission} [${patterns}]. Waiting for operator reply.`,
         )
       }
-      console.log(`[ChannelRuntime] Auto-replied permission ${asked.id} with ${reply}`)
+      console.log(`[ChannelRuntime] Permission request ${asked.id} is waiting for operator reply`)
       return
     }
 
@@ -1432,16 +1447,25 @@ export class ChannelRuntime {
     }
   }
 
+  // ChannelRuntime relays events from every active OpenCorvus instance into
+  // IM channels, so it must subscribe to the cross-instance bus (/global/event).
+  // The project-scoped /event endpoint requires a directory and emits one
+  // instance's events only — using it here rejects with DirectoryRequiredError
+  // and breaks cross-project relaying. Mirror the ACP agent contract
+  // (packages/opencorvus/src/acp/agent.ts) which already uses global.event +
+  // payload unwrap.
   private subscribeEvents(): void {
     const reconnect = async () => {
       let delay = 1000
       while (this.running) {
         try {
-          const events = await this.client.event.subscribe()
+          const events = await this.client.global.event()
           delay = 1000 // reset backoff on successful connection
-          for await (const event of events.stream) {
+          for await (const wrapped of events.stream) {
+            const payload = (wrapped as { payload?: unknown })?.payload
+            if (!payload) continue
             try {
-              await this.handleEvent(event as Event)
+              await this.handleEvent(payload as Event)
             } catch (err) {
               console.error("[ChannelRuntime] event handler error:", err)
             }

@@ -4,15 +4,13 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { Provider } from "@/provider/provider"
 import { SessionPrompt } from "./prompt"
-import { Message } from "./message"
 import { Agent } from "@/agent/agent"
 
 /**
  * Session wake mechanism.
  *
- * Injects a synthetic user message into a session to trigger the
- * `waitForUserMessage()` listener. Same pattern as compaction.ts
- * "continue" message injection (lines 202-224).
+ * Appends a scheduled prompt as a normal session message to trigger the
+ * `waitForUserMessage()` listener.
  *
  * If the session's loop is in standby (waiting for user message),
  * the injected message will wake it. If the loop is not running,
@@ -24,16 +22,16 @@ export namespace SessionWake {
   export interface WakeInput {
     /** Existing session ID to wake. If omitted, creates a new session. */
     sessionID?: string
-    /** The prompt to inject as a synthetic user message. */
+    /** The prompt to append as the next session message. */
     prompt: string
-    /** Agent name (default: "default"). */
+    /** Agent name. If omitted, uses Agent.defaultAgent(). */
     agent?: string
-    /** Model override. If omitted, uses the session's last model or default. */
+    /** Model override. If omitted, uses the configured default model. */
     model?: { providerID: string; modelID: string }
   }
 
   /**
-   * Wake a session by injecting a synthetic user message.
+   * Wake a session by appending the scheduled prompt.
    * Returns the session ID (existing or newly created).
    */
   export async function wake(input: WakeInput): Promise<string> {
@@ -44,6 +42,7 @@ export namespace SessionWake {
     let sessionID = input.sessionID
     if (!sessionID) {
       const session = await Session.createNext({
+        kind: "assistant",
         directory: Instance.directory,
         title: `Scheduled: ${input.prompt.slice(0, 60)}`,
       })
@@ -51,13 +50,12 @@ export namespace SessionWake {
       log.info("created new session for wake", { sessionID })
     }
 
-    // Resolve model: use override, or fetch last model from session, or default
+    // Resolve model: use override, or the configured default model
     let model = input.model
     if (!model) {
       model = await resolveModel(sessionID)
     }
 
-    // Inject synthetic user message (same pattern as compaction.ts line 202-224)
     const msg = await Session.updateMessage({
       id: Identifier.ascending("message"),
       role: "user",
@@ -71,8 +69,7 @@ export namespace SessionWake {
       messageID: msg.id,
       sessionID,
       type: "text",
-      synthetic: true,
-      text: `[Scheduled wake-up] ${input.prompt}`,
+      text: input.prompt,
       time: {
         start: Date.now(),
         end: Date.now(),
@@ -101,15 +98,8 @@ export namespace SessionWake {
     return sessionID
   }
 
-  /** Resolve model from the session's last user message, or fall back to default. */
-  async function resolveModel(sessionID: string): Promise<{ providerID: string; modelID: string }> {
-    // Check last user message in this session for model info
-    for await (const item of Message.stream(sessionID)) {
-      if (item.info.role === "user" && item.info.model) {
-        return item.info.model
-      }
-    }
-    // Fall back to config default
+  /** Resolve the configured default model. Session history must not influence runtime model selection. */
+  async function resolveModel(_sessionID: string): Promise<{ providerID: string; modelID: string }> {
     return Provider.defaultModel()
   }
 }

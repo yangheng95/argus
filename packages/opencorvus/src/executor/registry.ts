@@ -1,22 +1,22 @@
 import { OpencodeExecutor } from "./opencode"
 import { ManagedCodingExecutor } from "./managed"
-import type { CodingProvider, CodingToolInfo, ExecutorAdapter, ExecutorNameInfo } from "./compat"
-import { ExecutorNotConfiguredError } from "./compat"
+import type { CodingProvider, CodingProviderOptions, ExecutorAdapter, ExecutorNameInfo } from "./contract"
+import { ExecutorNotConfiguredError } from "./contract"
 
 const base = () =>
   new Map<ExecutorNameInfo, ExecutorAdapter>([
-    ["opencode", OpencodeExecutor],
+    ["mirrorcode", OpencodeExecutor],
   ])
 
 const state = {
   items: base(),
 }
 
-const providerRegistry = new Map<string, { provider: CodingProvider; options: Record<string, any> }>()
+const providerRegistry = new Map<string, { provider: CodingProvider; options: CodingProviderOptions }>()
 
 export namespace ExecutorRegistry {
   function get(name: ExecutorNameInfo): ExecutorAdapter | undefined {
-    if (name === "opencode") return state.items.get(name) ?? OpencodeExecutor
+    if (name === "mirrorcode") return state.items.get(name) ?? OpencodeExecutor
     return state.items.get(name)
   }
 
@@ -35,15 +35,9 @@ export namespace ExecutorRegistry {
   }
 
   export function registerCoding(
-    name: Exclude<ExecutorNameInfo, "opencode">,
+    name: Exclude<ExecutorNameInfo, "mirrorcode">,
     provider: CodingProvider,
-    options: {
-      model?: string | (() => string | undefined)
-      cwd?: string | (() => string | undefined)
-      system?: string | (() => string | undefined)
-      maxTurns?: number | (() => number | undefined)
-      tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
-    },
+    options: CodingProviderOptions,
   ) {
     // Store provider + options so createInstance() can spawn fresh adapters
     providerRegistry.set(name, { provider, options })
@@ -61,8 +55,26 @@ export namespace ExecutorRegistry {
     return require(name)
   }
 
+  /**
+   * Returns the registered CodingProvider together with the dynamic options
+   * that feed model/system/maxTurns/tools into provider.run(). Direct callers
+   * such as BuildAgent must use this rather than the provider alone; otherwise
+   * the external executor loses its OpenCorvus tool surface.
+   */
+  export function requireCoding(name: Exclude<ExecutorNameInfo, "mirrorcode">) {
+    const entry = providerRegistry.get(name)
+    if (!entry) {
+      throw new ExecutorNotConfiguredError({
+        executor: name,
+        message: `coding provider not registered: ${name}`,
+      })
+    }
+    return entry
+  }
+
   export function reset() {
     state.items = base()
+    providerRegistry.clear()
   }
 
   export function has(name: ExecutorNameInfo) {

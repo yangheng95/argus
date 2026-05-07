@@ -9,6 +9,8 @@ import { Log } from "../util/log"
 import { NamedError } from "@opencorvus-ai/util/error"
 import z from "zod"
 import path from "path"
+import { mkdirSync } from "fs"
+import { rm } from "fs/promises"
 import * as schema from "./schema"
 import { SCHEMA_DDL } from "./ddl"
 
@@ -21,9 +23,37 @@ export const NotFoundError = NamedError.create(
 
 const log = Log.create({ service: "db" })
 
+function ensureSchemaCompatibility(sqlite: BunDatabase) {
+  const engineTaskColumns = sqlite.query<{ name: string }, []>("PRAGMA table_info(engine_task)").all()
+  if (engineTaskColumns.length > 0 && !engineTaskColumns.some((column) => column.name === "queue_order")) {
+    sqlite.run("ALTER TABLE engine_task ADD COLUMN queue_order integer NOT NULL DEFAULT 0")
+  }
+}
+
 
 export namespace Database {
-  export const Path = path.join(Global.Path.data, "opencorvus.db")
+  // Project-local DB lives under `<projectDir>/.opencorvus/opencorvus.db` so
+  // engine state (sqlite + WAL + SHM) is fully isolated from the user's
+  // primary worktree contents — `git merge --ff-only` can never trip on an
+  // untracked opencorvus.db dropped at the project root.
+  //
+  // Anchor: process.cwd(). The project context (Instance) is established
+  // AFTER Database.Client opens (Instance.provide → Project.fromDirectory
+  // → Database.use), so resolving via Instance.directory would deadlock the
+  // bootstrap. opencorvus is always invoked with cwd == project dir, so cwd
+  // and Instance.directory agree. The `.opencorvus/` subfolder is the
+  // architectural guarantee — not which variable provides the project root.
+  //
+  // OPENCORVUS_HOME (benchmarks, portable installs) keeps using the
+  // Global.Path.data layout. Path() stays a function — not a const — so
+  // OPENCORVUS_HOME resolves lazily on first DB open, after benchmarks have
+  // set their env.
+  export function Path() {
+    if (process.env.OPENCORVUS_HOME?.trim()) {
+      return path.join(Global.Path.data, "opencorvus.db")
+    }
+    return path.join(process.cwd(), ".opencorvus", "opencorvus.db")
+  }
   type Schema = typeof schema
   export type Transaction = SQLiteTransaction<"sync", void, Schema>
 
@@ -31,22 +61,39 @@ export namespace Database {
 
   const state = {
     sqlite: undefined as BunDatabase | undefined,
+    // Path used at last open. Captured so `reset()` can wipe the right files
+    // after `Instance.disposeAll()` has cleared the project context — Path()
+    // would otherwise throw when no Instance is active.
+    lastPath: undefined as string | undefined,
   }
 
   export const Client = lazy(() => {
-    log.info("opening database", { path: path.join(Global.Path.data, "opencorvus.db") })
+    const dbPath = Path()
+    state.lastPath = dbPath
+    log.info("opening database", { path: dbPath })
+    // Ensure data dir exists — benchmarks create OPENCORVUS_HOME at runtime,
+    // so the data subdirectory may not have been created by global/index.ts
+    // module-load ensureDirectory calls.
+    mkdirSync(path.dirname(dbPath), { recursive: true })
 
-    const sqlite = new BunDatabase(path.join(Global.Path.data, "opencorvus.db"), { create: true })
+    const sqlite = new BunDatabase(dbPath, { create: true })
     state.sqlite = sqlite
 
+    // auto_vacuum must be set before any table is created. For existing DBs
+    // opened with auto_vacuum=NONE this pragma is silently ignored — delete
+    // opencorvus.db to adopt the new mode (project rule: no DB migration).
+    sqlite.run("PRAGMA auto_vacuum = INCREMENTAL")
     sqlite.run("PRAGMA journal_mode = WAL")
     sqlite.run("PRAGMA synchronous = NORMAL")
     sqlite.run("PRAGMA busy_timeout = 5000")
     sqlite.run("PRAGMA cache_size = -64000")
     sqlite.run("PRAGMA foreign_keys = ON")
+    // Cap WAL file size on disk — anything above the limit is truncated at
+    // the next checkpoint instead of staying resident.
+    sqlite.run("PRAGMA journal_size_limit = 67108864")
     sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
 
-    // Create all tables (IF NOT EXISTS — idempotent)
+    ensureSchemaCompatibility(sqlite)
     sqlite.exec(SCHEMA_DDL)
     log.info("schema applied")
 
@@ -61,6 +108,75 @@ export namespace Database {
     sqlite.close()
     state.sqlite = undefined
     Client.reset()
+  }
+
+  // Atomic on-disk wipe shared by `opencorvus db reset` CLI and the
+  // /global/db/reset HTTP backdoor. Caller MUST pass the project directory
+  // explicitly — the DB path now lives under `<projectDir>/.opencorvus/`,
+  // and Instance state may already have been disposed before reset() runs
+  // (so we can't rely on Instance.directory here).
+  export async function reset(projectDir: string): Promise<Array<{ label: string; path: string; ok: boolean; error?: string }>> {
+    close()
+    const dbPath = path.join(projectDir, ".opencorvus", "opencorvus.db")
+    const targets: Array<{ label: string; path: string }> = [
+      { label: "db", path: dbPath },
+      { label: "db-wal", path: `${dbPath}-wal` },
+      { label: "db-shm", path: `${dbPath}-shm` },
+      { label: "snapshot", path: path.join(Global.Path.data, "snapshot") },
+      { label: "worktrees", path: path.join(projectDir, ".opencorvus", "worktrees") },
+      { label: "ownership", path: path.join(projectDir, ".opencorvus", "ownership") },
+    ]
+    const results: Array<{ label: string; path: string; ok: boolean; error?: string }> = []
+    for (const target of targets) {
+      try {
+        await rm(target.path, { recursive: true, force: true })
+        results.push({ ...target, ok: true })
+      } catch (err) {
+        results.push({ ...target, ok: false, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+    state.lastPath = undefined
+    return results
+  }
+
+  /**
+   * Run `PRAGMA wal_checkpoint(TRUNCATE)` to collapse the WAL back into the
+   * main DB file and truncate it on disk. Only meaningful after bulk
+   * DELETEs that shift many pages to free-list. Must run outside a
+   * transaction — caller is responsible for not holding one.
+   */
+  export function checkpointTruncate() {
+    // Forcing Client() ensures the sqlite handle is initialised; we cannot use
+    // `use()` here because checkpoint must not run inside a transaction ctx.
+    Client()
+    const sqlite = state.sqlite
+    if (!sqlite) return
+    sqlite.run("PRAGMA wal_checkpoint(TRUNCATE)")
+  }
+
+  /**
+   * Run `VACUUM` to rebuild the DB file and reclaim free pages into the
+   * filesystem. Expensive; call only after large-scale deletes. Must run
+   * outside a transaction.
+   */
+  export function vacuum() {
+    Client()
+    const sqlite = state.sqlite
+    if (!sqlite) return
+    sqlite.run("VACUUM")
+  }
+
+  /**
+   * Reclaim up to `pages` freelist pages back to the OS. Only effective when
+   * the DB was created with `auto_vacuum = INCREMENTAL`. Cheap — O(pages) —
+   * so safe to call after every cascading delete. Must run outside a
+   * transaction.
+   */
+  export function incrementalVacuum(pages = 1000) {
+    Client()
+    const sqlite = state.sqlite
+    if (!sqlite) return
+    sqlite.run(`PRAGMA incremental_vacuum(${pages})`)
   }
 
   export type TxOrDb = Transaction | Client

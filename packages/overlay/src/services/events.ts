@@ -7,7 +7,6 @@ import {
   enqueueEvent,
   shouldReloadConversationForMessageEvent,
   syncTask,
-  appendAgentEvent,
   loadConversation,
 } from "../store/messages";
 import {
@@ -15,8 +14,38 @@ import {
   scheduleBoard,
   loadTasks,
   setTaskSequence,
+  setSnapshotVersion,
 } from "../store/board";
 import { startSSE } from "./sse";
+import { loadConfigInfo } from "./init";
+import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
+import { notifyTaskLifecycle, notifyInteractionRequested } from "./notify";
+import {
+  isBoardInvalidatingEventType,
+  isRouterConsumedNoopEventType,
+} from "./event-policy";
+
+// Forward SSE events to the tree-writer. Runs alongside `enqueueEvent` so
+// the `messageStore.messages` index (still consumed by Board panels and
+// section phase detection) stays in sync with the `cardTreeStore` that
+// powers the conversation view.
+function writeToTree(event: any): void {
+  applyTreeWriterEvent(event);
+  // Permission / question prompts surface as `interaction.created`; ring
+  // the OS so an operator who has tabbed away gets pulled back. Lifecycle
+  // events live in the global task-list stream and are handled by
+  // handleTaskListNotification — this branch only handles the per-task
+  // stream's interaction signal.
+  const type = String(event?.type || "");
+  if (type === "interaction.created") {
+    const props = event?.properties ?? event?.payload ?? {};
+    const taskID = String(props.taskID || "");
+    const summary = typeof props.summary === "string" ? props.summary
+      : typeof props.title === "string" ? props.title
+      : "";
+    if (taskID) notifyInteractionRequested(taskID, summary);
+  }
+}
 
 // ── Helpers ──
 
@@ -50,8 +79,11 @@ function executorPartID(properties: any, eventID: string): string {
 
 /** Derive the executor session ID for message info. */
 function executorSessionID(properties: any): string {
-  return properties.goalRunID || properties.goal_run_id ||
+  return properties.sessionID || properties.session_id ||
+         properties.goalSessionID || properties.goal_session_id ||
+         properties.goalRunSessionID || properties.goal_run_session_id ||
          properties.executorSessionID || properties.executor_session_id ||
+         properties.goalRunID || properties.goal_run_id ||
          properties.runID || "";
 }
 
@@ -62,6 +94,17 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
   const timestamp = Number(event.timestamp || Date.now());
   const msgID = executorMessageID(properties);
   const sessionID = executorSessionID(properties);
+  // Propagate the backend-stamped goalID so tree-writer can nest these
+  // synthesized executor messages under their goal card. Without this,
+  // external-executor tool_call/tool_result events produce sessions with
+  // no goalID and the whole round floats to the top level instead of the
+  // goal group.
+  const goalID =
+    typeof properties.goalID === "string" && properties.goalID
+      ? properties.goalID
+      : typeof event?.goalID === "string" && event.goalID
+        ? event.goalID
+        : "";
 
   // Ensure the message exists with executor agent identity
   const messageEvent = {
@@ -72,8 +115,10 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
         sessionID,
         role: "assistant",
         resolvedRole: "executor",
+        channel: "executor",
         agent: "executor",
         time: { created: timestamp },
+        ...(goalID ? { goalID } : {}),
       },
     },
   };
@@ -90,15 +135,17 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
           part: {
             id: partID,
             messageID: msgID,
-            sessionID,
-            type: "tool",
-            tool: name,
-            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-            state: {
+             sessionID,
+             type: "tool",
+             tool: name,
+             resolvedRole: "executor",
+             channel: "executor",
+             callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+             state: {
               status: "running",
               input,
               title: event.summary || name,
-              metadata: { synthetic: true },
+              metadata: {},
               time: { start: timestamp },
             },
           },
@@ -122,16 +169,18 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
           part: {
             id: partID,
             messageID: msgID,
-            sessionID,
-            type: "tool",
-            tool: name,
-            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-            state: {
+             sessionID,
+             type: "tool",
+             tool: name,
+             resolvedRole: "executor",
+             channel: "executor",
+             callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+             state: {
               status: "completed",
               input,
               output,
               title: event.summary || name,
-              metadata: { synthetic: true },
+              metadata: {},
               time: { start: timestamp, end: timestamp },
             },
           },
@@ -152,9 +201,11 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
           part: {
             id: partID,
             messageID: msgID,
-            sessionID,
-            type: "text",
-            text: "",
+             sessionID,
+             type: "text",
+             resolvedRole: "executor",
+             channel: "executor",
+             text: "",
           },
         },
       },
@@ -185,9 +236,11 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
           part: {
             id: partID,
             messageID: msgID,
-            sessionID,
-            type: "reasoning",
-            text: "",
+             sessionID,
+             type: "reasoning",
+             resolvedRole: "executor",
+             channel: "executor",
+             text: "",
           },
         },
       },
@@ -238,7 +291,6 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
             sessionID,
             type: "text",
             text: event.summary,
-            kind: "trace",
           },
         },
       },
@@ -248,7 +300,80 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
   return [];
 }
 
+function shouldConvertRunProgress(properties: Record<string, any>): boolean {
+  const progressType = String(properties.type || "");
+  if (
+    progressType === "protocol.raw" ||
+    progressType === "executor.status" ||
+    progressType === "executor.progress"
+  ) {
+    return false;
+  }
+  if (
+    progressType === "message.part.updated" ||
+    progressType === "message.part.delta" ||
+    progressType === "message.updated"
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function replayTaskEventToTree(event: any): void {
+  const type: string = event?.type || "";
+  const properties = record(event?.properties)
+    ? event.properties
+    : record(event?.payload)
+      ? event.payload
+      : {};
+
+  writeToTree(event);
+
+  if (type === "run.progress") {
+    if (!shouldConvertRunProgress(properties)) return;
+    const messages = convertExecutorEventToMessages(event, properties);
+    for (const msg of messages) {
+      writeToTree(msg);
+    }
+    return;
+  }
+
+  if (type === "run.output") {
+    const messages = convertExecutorEventToMessages(
+      {
+        ...event,
+        summary:
+          typeof properties.text === "string" ? properties.text : event?.summary || "",
+      },
+      {
+        ...properties,
+        type: "text_delta",
+        text: typeof properties.text === "string" ? properties.text : event?.summary || "",
+      },
+    );
+    for (const msg of messages) {
+      writeToTree(msg);
+    }
+  }
+}
+
 // ── Main router ──
+
+const BOARD_EVENT_DEBOUNCE = 500;
+const CONFIG_EVENT_DEBOUNCE = 50;
+
+let tasksKickTimer: ReturnType<typeof setTimeout> | null = null;
+let configKickTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleConfigReload(): void {
+  if (configKickTimer) clearTimeout(configKickTimer);
+  configKickTimer = setTimeout(() => {
+    configKickTimer = null;
+    void loadConfigInfo().catch((err: unknown) => {
+      console.error("[sse] config.changed refresh failed", err);
+    });
+  }, CONFIG_EVENT_DEBOUNCE);
+}
 
 /**
  * Route a parsed SSE event to the appropriate Solid store or action.
@@ -258,12 +383,17 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
 export function routeSSEEvent(event: any): boolean {
   const type: string = event.type || "";
 
+  // Double-write to the new cardTreeStore. Runs before any legacy routing
+  // so a writer crash surfaces with the original event context intact.
+  writeToTree(event);
+
   // ── Message stream events → batched queue ──
   if (
     type === "message.updated" ||
     type === "message.part.updated" ||
     type === "message.part.delta"
   ) {
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
     if (shouldReloadConversationForMessageEvent(event)) {
       void loadConversation();
       return true;
@@ -279,6 +409,37 @@ export function routeSSEEvent(event: any): boolean {
     return true;
   }
 
+  // ── Task rewound → incremental prune of the card tree ──
+  // Backend emitted Event.TaskRewound after a rewindTask call. We prune
+  // the tail of the timeline locally (card-tree store) without a full
+  // refresh — the full-refresh path was the "user message → overlay
+  // 卡顿" symptom, and the server has already filtered its describe
+  // outputs to `time_created <= cursorTime`.
+  if (type === "task.rewound") {
+    const properties = record(event?.properties) ? event.properties : {};
+    const evtTaskID: string | undefined = typeof properties.taskID === "string" ? properties.taskID : undefined;
+    const cursorTime: number | undefined = typeof properties.cursorTime === "number" ? properties.cursorTime : undefined;
+    const resetWorktree = properties.resetWorktree === true;
+    if (!evtTaskID || cursorTime === undefined) return true;
+    // Only prune when the event concerns the currently-selected task —
+    // other tasks' card trees are not loaded in this overlay instance.
+    if (evtTaskID === boardStore.selectedTaskID && cursorTime > 0) {
+      // Idempotent — pruneCardsAfterCursor is a no-op if the cards are
+      // already gone (e.g. the local initiator already pruned optimistically).
+      void (async () => {
+        const { pruneCardsAfterCursor, clearPruneCursor } = await import("../store/card-tree");
+        pruneCardsAfterCursor(cursorTime);
+        if (resetWorktree) setSnapshotVersion(`${evtTaskID}:${cursorTime}:${Date.now()}`);
+        // cursorTime === 0 means "undo the undo"; reload to bring events back.
+        void clearPruneCursor;
+      })();
+    } else if (evtTaskID === boardStore.selectedTaskID && cursorTime === 0) {
+      // Rewind cleared by backend — full reload to restore the suppressed tail.
+      void syncTask(evtTaskID);
+    }
+    return true;
+  }
+
   const properties = record(event?.properties)
     ? event.properties
     : record(event?.payload)
@@ -287,36 +448,20 @@ export function routeSSEEvent(event: any): boolean {
 
   // ── Executor progress / output events → convert to standard messages ──
   if (type === "run.progress") {
-    const progressType: string = properties.type || "";
-
-    // Protocol noise — skip
-    if (
-      progressType === "protocol.raw" ||
-      progressType === "executor.status" ||
-      progressType === "executor.progress"
-    ) {
-      return true;
-    }
-
-    // OpenCode executor: these events already arrive via the direct message path.
-    // Skip to avoid duplication.
-    if (
-      progressType === "message.part.updated" ||
-      progressType === "message.part.delta" ||
-      progressType === "message.updated"
-    ) {
-      return true;
-    }
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
+    if (!shouldConvertRunProgress(properties)) return true;
 
     // Convert executor events (Codex/Claude-Code CodingEventInfo) to standard messages
     const messages = convertExecutorEventToMessages(event, properties);
     for (const msg of messages) {
+      writeToTree(msg);
       enqueueEvent(msg);
     }
     return true;
   }
 
   if (type === "run.output") {
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
     // Text output from executor — convert to message delta
     const messages = convertExecutorEventToMessages(event, {
       ...properties,
@@ -324,39 +469,25 @@ export function routeSSEEvent(event: any): boolean {
       text: typeof properties.text === "string" ? properties.text : event.summary || "",
     });
     for (const msg of messages) {
+      writeToTree(msg);
       enqueueEvent(msg);
     }
     return true;
   }
 
-  // ── Agent stage events ──
-  if (type === "agent.updated") {
-    appendAgentEvent(event);
-    return true;
-  }
-
   // ── Config changed → refresh appStore.config ──
   if (type === "config.changed") {
-    void import("./init").then(({ loadConfigInfo }) => loadConfigInfo()).catch(() => {});
+    scheduleConfigReload();
     return true;
   }
 
+  // Explicitly consumed protocol events that do not project into either
+  // messageStore or cardTreeStore. tree-writer whitelists them as no-ops so
+  // they remain auditable and don't surface as unknown-event crashes.
+  if (isRouterConsumedNoopEventType(type)) return true;
+
   // ── Board-invalidating events → forwarded to handleEventStreamEvent
-  if (
-    type === "task.updated" ||
-    type === "task.completed" ||
-    type === "task.failed" ||
-    type === "task.cancelled" ||
-    type === "task.blocked" ||
-    type.startsWith("run.") ||
-    type.startsWith("plan.") ||
-    type.startsWith("goal.") ||
-    type.startsWith("delivery.") ||
-    type.startsWith("evaluation.") ||
-    type.startsWith("interaction.")
-  ) {
-    return false;
-  }
+  if (isBoardInvalidatingEventType(type)) return false;
 
   return false;
 }
@@ -379,9 +510,6 @@ function executorEventKind(progressType: string | undefined): string {
 
 // ── Board / Task Lifecycle Event Handling ──
 
-const BOARD_EVENT_DEBOUNCE = 500;
-
-let tasksKickTimer: ReturnType<typeof setTimeout> | null = null;
 
 function normalizedEventType(event: any): string {
   const raw = String(event?.type || "").trim();
@@ -389,7 +517,7 @@ function normalizedEventType(event: any): string {
 }
 
 function eventTaskID(event: any): string {
-  return String(event?.properties?.taskID || event?.payload?.taskID || "");
+  return String(event?.taskID || event?.properties?.taskID || event?.payload?.taskID || "");
 }
 
 function eventSequence(event: any): number {
@@ -398,19 +526,16 @@ function eventSequence(event: any): number {
 }
 
 function boardInvalidatingEvent(type: string): boolean {
+  return isBoardInvalidatingEventType(type);
+}
+
+function shouldRefreshSelectedBoard(type: string): boolean {
   return (
-    type === "task.updated" ||
-    type === "task.completed" ||
-    type === "task.failed" ||
-    type === "task.cancelled" ||
-    type === "task.blocked" ||
+    boardInvalidatingEvent(type) ||
+    type.startsWith("message.") ||
     type.startsWith("run.") ||
-    type.startsWith("plan.") ||
-    type.startsWith("goal.") ||
-    type.startsWith("delivery.") ||
-    type.startsWith("evaluation.") ||
-    type.startsWith("interaction.") ||
-    type.startsWith("workflow.")
+    type === "task.message" ||
+    type === "session.status"
   );
 }
 
@@ -424,6 +549,8 @@ function scheduleTasksCompat(delay = 0): void {
 
 export function handleEventStreamEvent(event: any): void {
   const type = normalizedEventType(event);
+  // Double-write to the new cardTreeStore before any legacy routing.
+  writeToTree(event);
   if (type.startsWith("message.")) {
     if (shouldReloadConversationForMessageEvent({ ...event, type })) {
       void loadConversation();
@@ -453,8 +580,69 @@ export function handleEventStreamEvent(event: any): void {
   }
   if (boardInvalidatingEvent(type)) {
     scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
-    if (taskID && taskID === boardStore.selectedTaskID) {
+  }
+  if (taskID && taskID === boardStore.selectedTaskID && shouldRefreshSelectedBoard(type)) {
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
+  }
+}
+
+/**
+ * Handler for the GLOBAL task-list SSE stream (`GET /task/events`).
+ *
+ * Server contract (see server/routes/orchestrator.ts): this stream emits a
+ * pure change-notification shape — `{type, taskID, sequence}` — with NO
+ * payload / properties. It is meant to tell the sidebar "some task changed,
+ * refetch the list"; it is NOT the per-task message stream.
+ *
+ * The previous implementation routed these notifications through
+ * `handleEventStreamEvent`, which feeds events into `writeToTree` →
+ * tree-writer. tree-writer correctly throws for missing partID/info/part,
+ * producing one throw per stream notification. Under active benchmarks
+ * the task-list stream emits `message.part.delta` at full SSE cadence,
+ * which flooded the console and made the browser miss render deadlines
+ * (observed as `Overlay did not render streamed task output within 120s`
+ * in the overlay-web-benchmark).
+ *
+ * Route them correctly here instead:
+ *   - `message.*` notifications → only mean "that task changed"; if it
+ *     is the selected task, refresh the board.
+ *   - task lifecycle events → same refresh path.
+ *   - sequence tracking mirrors handleEventStreamEvent's rules.
+ *
+ * tree-writer is reserved for task-scope events that carry full payload
+ * (delivered via `routeSSEEvent` on the per-task stream).
+ */
+export function handleTaskListNotification(event: any): void {
+  const type = normalizedEventType(event);
+  // Desktop notifications fire BEFORE the refresh path so the OS shell
+  // pings even if loadTasks fails to refetch. notifyTaskLifecycle
+  // de-dupes per (taskID, kind), so the orchestrator emitting both
+  // task.updated and task.completed only rings once.
+  if (type === "task.completed" || type === "task.failed" || type === "task.cancelled") {
+    const lifecycleTaskID = String(event?.taskID || "");
+    if (lifecycleTaskID) notifyTaskLifecycle(lifecycleTaskID, type);
+  }
+  if (type === "task.replay_expired") {
+    if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
+    scheduleTasksCompat(0);
+    scheduleBoard(0);
+    return;
+  }
+  const taskID = eventTaskID(event);
+  const sequence = eventSequence(event);
+  if (taskID && taskID === boardStore.selectedTaskID && sequence > 0) {
+    const current = boardStore.taskSequence;
+    if (current > 0 && sequence <= current) return;
+    if (current > 0 && sequence > current + 1) {
       scheduleBoard(BOARD_EVENT_DEBOUNCE);
+      scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
     }
+    setTaskSequence(sequence);
+  }
+  if (taskID) {
+    scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
+  }
+  if (taskID && taskID === boardStore.selectedTaskID && shouldRefreshSelectedBoard(type)) {
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
   }
 }

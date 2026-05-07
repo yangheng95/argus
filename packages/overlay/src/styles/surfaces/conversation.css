@@ -1,0 +1,1191 @@
+/* Conversation surface — owns the chat scroll column's chrome.
+   The shell `.chat-empty--task` selector + its theme overrides still
+   live in styles.css until those rgba literals are reworked through
+   palette tokens. */
+
+/* Chat scroll: the message column flow. The canonical here folds in
+   the late `--card-min-inline-size`, gap, padding, and background
+   overrides that previously lived in styles.css as rule-8 duplicates;
+   the wider 1040px cap on cards (vs the historical 960px) was the
+   actually-rendered value. */
+.chat-scroll {
+  --card-min-inline-size: 46%;
+  flex: 1;
+  overflow-y: auto;
+  overflow-anchor: none;
+  padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--ui-scale));
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  background: var(--chat-canvas);
+}
+
+.chat-scroll > .card,
+.chat-scroll > .interaction-card {
+  width: auto;
+  max-width: min(100%, calc(1040px * var(--ui-scale)));
+  align-self: flex-start;
+}
+
+.chat-scroll > .card[data-kind="message"][data-role="user"] {
+  width: min(72%, calc(720px * var(--ui-scale)));
+  align-self: flex-end;
+}
+
+.chat-scroll > .card[data-kind="message"][data-role="system"] {
+  width: min(86%, calc(760px * var(--ui-scale)));
+  align-self: center;
+}
+
+@media (max-width: 900px) {
+  .chat-scroll > .card,
+  .chat-scroll > .interaction-card,
+  .chat-scroll > .card[data-kind="message"][data-role="user"],
+  .chat-scroll > .card[data-kind="message"][data-role="system"] {
+    width: 100%;
+    align-self: stretch;
+  }
+}
+
+/* Task-switch progress: a slim accent bar that absolutely-positions
+   over the chat header during task switches. Kept as `position:
+   absolute` (with `inset-block-start: 0`, `inset-inline: 0`) instead
+   of a flex item so the hidden state cannot reserve a 2px gap above
+   the header — `.chat` is `position: relative` to anchor it. */
+.task-switch-progress {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: var(--ui-z-raised);
+  height: calc(2px * var(--ui-scale));
+  overflow: hidden;
+  background: transparent;
+  opacity: var(--ui-opacity-hidden);
+  transition: opacity var(--ui-duration-base);
+  pointer-events: none;
+}
+
+.task-switch-progress[data-active="true"] {
+  opacity: var(--ui-opacity-full);
+}
+
+.task-switch-progress::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  transform: translateX(-100%);
+}
+
+.task-switch-progress[data-active="true"]::before {
+  animation: task-switch-progress-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes task-switch-progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+/* Chat header layout placements: the chat header is a 3-track grid;
+   each region claims one track via `justify-self`. */
+.chat-header-main {
+  justify-self: start;
+}
+
+.chat-title {
+  flex: none;
+}
+
+.chat-header-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  min-width: 0;
+}
+
+.chat-header-meta {
+  justify-self: end;
+  justify-content: flex-end;
+}
+
+/* Compact task-status pill rendered in the chat header center cell.
+   Reuses `.status-icon` / `.status-label` / `.elapsed` chrome from
+   the titlebar but at composer density. */
+.chat-task-status {
+  min-width: 0;
+  max-width: min(100%, calc(280px * var(--ui-scale)));
+  justify-content: center;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  margin-inline: auto;
+  padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
+}
+
+.chat-task-status .status-icon {
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
+}
+
+.chat-task-status .status-copy {
+  /* center, not baseline. baseline alignment depended on identical
+     line-heights between `.status-label` and `.elapsed`, which they
+     don't have at the chat density (label inherits, elapsed sets 1).
+     Center + matching line-height: 1 on both spans below makes the
+     icon, label and elapsed all share the same midline. */
+  display: flex;
+  min-width: 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: calc(6px * var(--ui-scale));
+  line-height: 1;
+}
+
+.chat-task-status .status-label {
+  font-size: var(--ui-font-meta);
+  text-transform: none;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.chat-task-status .elapsed {
+  font-size: var(--ui-font-meta);
+  line-height: 1;
+}
+
+/* Late `.chat-count` chrome that supersedes the simple meta-text
+   variant above: dot-prefixed lane with tabular numerals, hidden when
+   empty. The dot routes through `--oc-radius-pill`. */
+.chat-count {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  font-size: var(--ui-font-tiny);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.chat-count:empty {
+  display: none;
+}
+
+.chat-count::before {
+  content: "";
+  width: calc(4px * var(--ui-scale));
+  height: calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--text-muted) 72%, transparent);
+  flex-shrink: 0;
+}
+
+/* Chat header copy-all action: a calm dot-prefixed text lane (not a
+   button shell). Scoped to `.chat-header-meta` so the dot pseudo and
+   no-border treatment only applies inside the conversation header. */
+.chat-header-meta #btnChatCopyAll {
+  min-height: var(--oc-density-control-height);
+  padding: 0 calc(6px * var(--ui-scale)) 0 var(--ui-btn-mini-padding-x);
+  border: 0 solid transparent;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  box-shadow: none;
+  position: relative;
+  color: var(--text-strong);
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.chat-header-meta #btnChatCopyAll::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: calc(5px * var(--ui-scale));
+  height: calc(5px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--subtle-4) 94%, transparent);
+  transform: translateY(-50%);
+}
+
+.chat-header-meta #btnChatCopyAll:hover {
+  background: transparent;
+  color: var(--text-strong);
+}
+
+.chat-header-meta #btnChatCopyAll:focus-visible {
+  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
+  box-shadow: none;
+}
+
+/* Workspace toggle scoped to the chat header: a circular icon-only
+   button that flips accent when pressed. */
+.chat-header-meta .workspace-toggle {
+  min-width: calc(28px * var(--ui-scale));
+  width: calc(28px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  min-height: calc(28px * var(--ui-scale));
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: var(--oc-radius-pill);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-soft);
+  opacity: var(--ui-opacity-full);
+}
+
+.chat-header-meta .workspace-toggle:hover {
+  background: transparent;
+  color: var(--text-strong);
+}
+
+.chat-header-meta .workspace-toggle[aria-pressed="true"] {
+  background: transparent;
+  color: var(--accent);
+  opacity: var(--ui-opacity-full);
+}
+
+.chat-header-meta .workspace-toggle:focus-visible {
+  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
+  box-shadow: none;
+}
+
+/* Goals strip (inline goal status above the chat scroll). The HTML
+   element is currently a stub (`#chatGoalsStrip` is never populated by
+   any runtime path), but the chrome stays so a future re-enable does
+   not need to re-derive the design. The earlier rgba-gradient backdrop
+   was overwritten by a late `var(--surface-inset) !important` override
+   in styles.css; the surface declares the rendered value directly. */
+.chat-goals-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  min-height: 0;
+  background: var(--surface-inset);
+}
+
+.chat-goals-strip:empty {
+  display: none;
+}
+
+.goal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-large);
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  background: var(--card-fill);
+  border: var(--oc-border-width) solid var(--border);
+  color: var(--text-soft);
+  white-space: nowrap;
+  max-width: calc(200px * var(--ui-scale));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, white 5%, transparent);
+}
+
+.goal-chip[data-status="passed"] {
+  background: var(--good-dim);
+  border-color: var(--good);
+  color: var(--good);
+}
+
+.goal-chip[data-status="failed"] {
+  background: var(--bad-dim);
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.goal-chip[data-status="in_progress"] {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.goal-chip .goal-chip-icon {
+  font-size: var(--ui-font-control);
+}
+
+.chat-empty {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(16px * var(--ui-scale));
+  align-items: center;
+  justify-content: center;
+  width: min(100%, calc(420px * var(--ui-scale)));
+  min-height: calc(200px * var(--ui-scale));
+  margin: auto;
+  padding: calc(24px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  color: var(--text-soft);
+  text-align: center;
+  opacity: var(--ui-opacity-subtle);
+}
+
+.chat-empty-icon {
+  width: calc(44px * var(--ui-scale));
+  height: calc(44px * var(--ui-scale));
+  flex-shrink: 0;
+  color: var(--accent);
+  opacity: var(--ui-opacity-subtle);
+}
+
+.chat-empty-text {
+  max-width: 28ch;
+  color: var(--text-strong);
+  font-size: var(--ui-font-heading);
+  font-weight: var(--ui-font-weight-medium);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.chat-follow-label {
+  white-space: nowrap;
+}
+
+/* Task-aware empty-state children. The shell `.chat-empty--task` itself
+   + its theme overrides still live in styles.css until those overrides
+   are reworked through palette-aware tokens. */
+
+.chat-empty-marker {
+  display: grid;
+  place-items: center;
+  width: calc(38px * var(--ui-scale));
+  height: calc(38px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  color: var(--accent);
+  background: var(--surface);
+}
+
+.chat-empty-copy {
+  display: grid;
+  gap: calc(5px * var(--ui-scale));
+  min-width: 0;
+}
+
+.chat-empty-kicker {
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  line-height: 1.2;
+}
+
+.chat-empty-title {
+  color: var(--text-strong);
+  font-size: var(--ui-font-heading);
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-empty-meta {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+}
+
+.chat-empty-status {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.chat-empty-status::before {
+  content: "";
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: currentColor;
+}
+
+.chat-empty-status[data-status="queued"] {
+  color: var(--warn);
+}
+
+.chat-empty-status[data-status="failed"],
+.chat-empty-status[data-status="cancelled"] {
+  color: var(--bad);
+}
+
+.chat-empty-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Inside the task-aware variant the icon sits in `.chat-empty-marker`,
+   a 38px box, so the SVG shrinks one notch and uses a slightly muted
+   accent. */
+.chat-empty--task .chat-empty-marker .chat-empty-icon {
+  width: calc(30px * var(--ui-scale));
+  height: calc(30px * var(--ui-scale));
+  color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
+}
+
+/* ── TaskDirBar (chat header working-directory bar) ──────── */
+
+/* Layout containers — flex/grid only, no chrome. The single-row
+   layout pulled `space-between` into `.task-cwd` itself per
+   iter34 so the cwd dropdown stays left + workspace cluster
+   stays right. */
+.task-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(6px * var(--ui-scale));
+  width: 100%;
+  min-width: 0;
+  font-size: var(--ui-font-meta);
+}
+
+.task-cwd {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-sm);
+  min-width: 0;
+  flex: 1;
+  min-height: calc(24px * var(--ui-scale));
+}
+
+.task-dir {
+  min-width: 0;
+  flex: 1;
+  display: block;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.task-workspace {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-workspace-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+/* VcsBadge: branch + dirty/ahead/behind glyph cluster. Tone driven
+   by `[data-tone="good|warn|bad"]`. */
+.vcs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-xs);
+  padding: 0 var(--ui-gap-sm);
+  height: calc(18px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--subtle-1);
+  color: var(--text-soft);
+  font-size: var(--ui-font-meta);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.vcs-badge[data-tone="good"] {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 36%, var(--border));
+  background: var(--good-dim);
+}
+
+.vcs-badge[data-tone="warn"] {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 36%, var(--border));
+  background: var(--warn-dim);
+}
+
+.vcs-badge[data-tone="bad"] {
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 36%, var(--border));
+  background: var(--bad-dim);
+}
+
+.vcs-badge-icon {
+  font-size: var(--ui-font-meta);
+  opacity: var(--ui-opacity-subtle);
+}
+
+.vcs-badge-branch {
+  font-weight: var(--ui-font-weight-medium);
+  max-width: calc(160px * var(--ui-scale));
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vcs-badge-counts,
+.vcs-badge-arrows {
+  opacity: var(--ui-opacity-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cwd dropdown: control-vocab chip carrying the breadcrumb path
+   and a caret. The shell already routes through `--oc-control-*`
+   tokens — just relocating. */
+.task-dir-shell {
+  display: flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
+  min-width: 0;
+  border: var(--oc-border-width) solid var(--oc-control-border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--oc-control-bg);
+  box-shadow: var(--oc-control-shadow);
+}
+
+.task-cwd-dropdown {
+  cursor: pointer;
+  border-radius: var(--oc-radius-soft);
+  padding: 0 calc(4px * var(--ui-scale));
+  transition:
+    background var(--ui-duration-fast),
+    border-color var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.task-dir-shell.task-cwd-dropdown {
+  padding-inline: calc(2px * var(--ui-scale));
+  padding-block: calc(2px * var(--ui-scale));
+}
+
+.task-cwd-dropdown:hover,
+.task-cwd-dropdown:focus-visible {
+  background: var(--oc-control-bg-hover);
+  border-color: var(--oc-control-border-hover);
+  outline: none;
+}
+
+.task-cwd-dropdown[data-open="true"] {
+  background: var(--oc-control-bg-hover);
+  border-color: var(--oc-control-border-hover);
+}
+
+/* Caret rotates 180deg when the dropdown is open. Previous raw
+   slate hex literals (default + hover) routed through
+   `var(--text-muted)` (default tone) and `var(--text-strong)`
+   (hover/open tone) so the caret picks up theme colors. */
+.task-cwd-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  transition:
+    transform var(--ui-duration-base) var(--ui-timing-standard),
+    color var(--ui-duration-fast);
+}
+
+.task-cwd-dropdown:hover .task-cwd-caret {
+  color: var(--text-strong);
+}
+
+.task-cwd-dropdown[data-open="true"] .task-cwd-caret {
+  transform: rotate(180deg);
+  color: var(--text-strong);
+}
+
+/* Breadcrumb path + action buttons inside the dropdown shell. */
+.task-dir-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.task-dir-path {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.task-dir-path::-webkit-scrollbar {
+  display: none;
+}
+
+.task-dir-tool,
+.task-dir-node,
+.task-dir-step,
+.task-dir-empty {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.task-dir-tool {
+  width: calc(24px * var(--ui-scale));
+  height: calc(24px * var(--ui-scale));
+  min-width: calc(24px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--oc-radius-soft);
+  color: var(--text-soft);
+  transition:
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+}
+
+.task-dir-tool:hover {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+}
+
+.task-dir-editor {
+  font-size: calc(10px * var(--ui-scale));
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0;
+}
+
+.task-dir-tool-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(14px * var(--ui-scale));
+  line-height: 1;
+}
+
+/* The "danger" affordance on the delete tool tints with --bad.
+   Raw light-red rgba (literal expansion of `--bad` at 12%)
+   routed through color-mix. */
+.task-dir-tool.danger:hover {
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  color: var(--bad);
+}
+
+.task-dir-node,
+.task-dir-empty {
+  min-height: calc(24px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-medium);
+  white-space: nowrap;
+  transition:
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+}
+
+.task-dir-node {
+  flex-shrink: 0;
+}
+
+.task-dir-node:hover {
+  background: var(--subtle-3);
+}
+
+.task-dir-node[data-current="true"] {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.task-dir-step {
+  min-width: calc(18px * var(--ui-scale));
+  height: calc(24px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  transition:
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+}
+
+.task-dir-step:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.task-dir-empty {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  color: var(--text-soft);
+  cursor: default;
+}
+
+.task-dir[data-empty="false"] .task-dir-empty {
+  display: none;
+}
+
+.task-dir[data-empty="true"] .task-dir-shell {
+  gap: calc(6px * var(--ui-scale));
+}
+
+.task-dir[data-empty="true"] .task-dir-path {
+  display: none;
+}
+
+.task-dir-node,
+.task-dir-empty {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Task Bar (flat strip hosting the active task status and cwd) ──
+   Flat/calm design: bottom-border strip, no shadow, per-theme
+   glassmorphism only in light mode. The gradient-card original was
+   always overridden by the workbench compact pass; this is the
+   single-source flat canonical. */
+.task-bar {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale));
+  margin: 0;
+  border: none;
+  border-bottom: var(--oc-border-width) solid var(--border);
+  border-radius: 0;
+  background: var(--chrome);
+  flex-shrink: 0;
+  box-shadow: none;
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base);
+}
+
+.task-bar:hover,
+.task-bar:focus-within {
+  border-color: var(--border-hover);
+}
+
+body[data-theme="light"] .task-bar {
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
+  background: color-mix(in srgb, white 62%, transparent);
+  backdrop-filter: blur(calc(18px * var(--ui-scale)));
+}
+
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
+  background: var(--chrome);
+  backdrop-filter: none;
+}
+
+body[data-theme="vscode-dark"] .task-bar {
+  background: var(--surface);
+}
+
+.task-bar-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ui-gap-md);
+  width: 100%;
+}
+
+/* ── Task Status chip (inline status pill inside .task-bar) ── */
+.task-status {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  flex-shrink: 0;
+  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface-inset);
+  box-shadow: none;
+}
+
+.status-label {
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.elapsed {
+  font-size: var(--ui-font-small);
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Task CWD Actions (action buttons below the cwd bar) ── */
+.task-cwd-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.task-cwd-actions .btn {
+  white-space: nowrap;
+}
+
+/* ── Task Flag (inline feature-toggle checkbox chip) ── */
+.task-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--ui-pill-min-height);
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(7px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 30%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 80%, transparent);
+  color: var(--text-soft);
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.task-flag:hover {
+  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 90%, transparent);
+  color: var(--text-strong);
+}
+
+.task-flag input {
+  /* `accent-color` declared globally on body (tokens/design-language.css). */
+}
+
+/* ── Recent Directory Panel (popup from task-cwd-dropdown) ── */
+.recent-dir-panel {
+  position: fixed;
+  min-width: calc(260px * var(--ui-scale));
+  max-width: calc(460px * var(--ui-scale));
+  max-height: calc(320px * var(--ui-scale));
+  overflow: hidden;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white 4%, transparent),
+      color-mix(in srgb, var(--accent) 1.8%, transparent) 66%,
+      transparent
+    ),
+    color-mix(in srgb, var(--surface) 96%, var(--surface-inset) 4%);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border-strong) 88%, transparent);
+  border-radius: var(--oc-radius-large);
+  padding: 0;
+  box-shadow:
+    0 calc(20px * var(--ui-scale)) calc(40px * var(--ui-scale)) color-mix(in srgb, black 24%, transparent),
+    0 calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, black 12%, transparent);
+  z-index: var(--ui-z-titlebar);
+  scrollbar-width: thin;
+  scrollbar-color: var(--subtle-5) transparent;
+}
+
+.recent-dir-panel::-webkit-scrollbar {
+  width: calc(4px * var(--ui-scale));
+}
+
+.recent-dir-panel::-webkit-scrollbar-thumb {
+  background: var(--subtle-5);
+  border-radius: var(--oc-radius-soft);
+}
+
+.recent-dir-panel-shell {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale));
+}
+
+.recent-dir-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(12px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
+}
+
+.recent-dir-panel-title {
+  min-width: 0;
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+}
+
+.recent-dir-panel-meta {
+  min-width: 0;
+  max-width: 48%;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-dir-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  max-height: calc(248px * var(--ui-scale));
+  overflow-y: auto;
+  padding-right: calc(2px * var(--ui-scale));
+}
+
+.recent-dir-row {
+  display: flex;
+  align-items: stretch;
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: var(--oc-radius-large);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 72%),
+    color-mix(in srgb, var(--surface-inset) 74%, transparent);
+  transition:
+    background var(--ui-duration-base),
+    border-color var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    transform var(--ui-duration-base);
+}
+
+.recent-dir-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent) 72%,
+      transparent
+    ),
+    color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 calc(10px * var(--ui-scale)) calc(16px * var(--ui-scale)) color-mix(in srgb, black 10%, transparent);
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.recent-dir-row[data-active="true"] {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 12%, transparent),
+      color-mix(in srgb, var(--accent) 3%, transparent) 74%,
+      transparent
+    ),
+    color-mix(in srgb, var(--surface) 95%, transparent);
+  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.recent-dir-item {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--ui-scale));
+  border: none;
+  border-radius: var(--oc-radius-large);
+  background: transparent;
+  color: var(--text-soft);
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  cursor: pointer;
+}
+
+.recent-dir-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.recent-dir-label {
+  min-width: 0;
+  color: var(--text-strong);
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-dir-path {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-dir-state {
+  flex-shrink: 0;
+  width: calc(18px * var(--ui-scale));
+  height: calc(18px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: var(--ui-font-meta);
+  line-height: 1;
+}
+
+.recent-dir-row:hover .recent-dir-item {
+  color: var(--text-strong);
+}
+
+.recent-dir-row[data-active="true"] .recent-dir-item {
+  color: var(--text-strong);
+}
+
+.recent-dir-remove {
+  flex-shrink: 0;
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--ui-font-heading);
+  line-height: 1;
+  cursor: pointer;
+  margin: calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale)) 0 0;
+  opacity: var(--ui-opacity-hidden);
+  transition:
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast),
+    opacity var(--ui-duration-base);
+}
+
+.recent-dir-row:hover .recent-dir-remove,
+.recent-dir-row:focus-within .recent-dir-remove,
+.recent-dir-row[data-active="true"] .recent-dir-remove {
+  opacity: var(--ui-opacity-full);
+}
+
+.recent-dir-remove:hover {
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+  color: var(--bad);
+}
+
+.recent-dir-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(84px * var(--ui-scale));
+  padding: calc(16px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  border: var(--oc-border-width) dashed color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: var(--oc-radius-large);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white 2.5%, transparent),
+      color-mix(in srgb, var(--accent) 1.4%, transparent) 72%,
+      transparent
+    ),
+    color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  font-size: var(--ui-font-small);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Chat column shell + chat-scroll baseline (extracted 2026-05-04).
+   ───────────────────────────────────────────────────────────── */
+
+.chat {
+  flex: 999 1 var(--ui-chat-priority-width);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: min(100%, var(--ui-chat-min-width));
+  border: 0;
+  border-radius: 0;
+  background: var(--chat-canvas);
+  box-shadow: none;
+  backdrop-filter: none;
+  overflow: hidden;
+}
+
+.section-body > *,
+#evalBody > *,
+.goals-list > *,
+.criteria-list > *,
+.config-section-body > *,
+.config-subsection-body > *,
+.sidebar-body > *,
+.chat-scroll > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Chat responsive collapse (extracted 2026-05-04). At max-width
+   760px, the chat header collapses to two columns + status hides;
+   user / system message bubbles stretch full width.
+   ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  .chat-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .chat-header-status {
+    display: none;
+  }
+
+  .chat-scroll > .card,
+  .chat-scroll > .interaction-card,
+  .chat-scroll > .card[data-kind="message"][data-role="user"],
+  .chat-scroll > .card[data-kind="message"][data-role="system"] {
+    width: 100%;
+    max-width: 100%;
+    align-self: stretch;
+  }
+}

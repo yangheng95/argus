@@ -1,16 +1,9 @@
 /**
- * Tool Guard — circuit breaker + stall detector for sub-agent tool execution.
+ * Tool Guard — circuit breaker for sub-agent tool execution.
  *
- * Circuit breaker: after N consecutive thrown errors from the same tool,
- * subsequent calls throw immediately without executing. This prevents
- * the LLM from burning step quota on a tool that's down (e.g. web_search
- * with network issues). The counter resets on any successful execution.
- *
- * Stall detector: tracks consecutive "barren" steps where every tool call
- * in the step errored. After N such steps, the agent is considered stalled
- * and the provided AbortController is signalled. This catches patterns the
- * circuit breaker alone can't — e.g. the LLM cycling through multiple
- * broken tools, or calling a circuit-broken tool despite the error message.
+ * After N consecutive thrown errors from the same tool, subsequent calls
+ * throw immediately without executing. This prevents a broken tool from
+ * burning step quota while leaving overall turn control to the LLM.
  */
 
 import { Log } from "./log"
@@ -24,12 +17,12 @@ const log = Log.create({ service: "tool-guard" })
  * After `maxFailures` consecutive thrown errors, the tool short-circuits.
  *
  * @param tools - AI SDK tool map (`Record<string, { execute, ... }>`)
- * @param maxFailures - consecutive error threshold (default 3)
+ * @param maxFailures - consecutive error threshold (default 30)
  * @returns wrapped tool map (same shape, safe to pass to streamText)
  */
 export function withCircuitBreaker<T extends Record<string, any>>(
   tools: T,
-  maxFailures = 3,
+  maxFailures = 30,
 ): T {
   const failures = new Map<string, number>()
   const result = { ...tools } as Record<string, any>
@@ -64,79 +57,17 @@ export function withCircuitBreaker<T extends Record<string, any>>(
   return result as T
 }
 
-// ── Stall Detector ──
-
 /**
- * Create an `onStepFinish` callback that aborts the agent when it
- * detects N consecutive steps where every tool call errored (barren steps).
- *
- * A step is "barren" when:
- *   - It has tool results AND all of them are errors
- *   - It produced no text output
- *
- * Steps with text output (even partial) or at least one successful tool
- * result reset the counter.
- *
- * @returns `{ onStepFinish, signal }` — pass signal to streamText's abortSignal
- */
-export function createStallDetector(opts: {
-  /** consecutive barren steps before abort (default 5) */
-  maxBarrenSteps?: number
-}) {
-  const maxBarren = opts.maxBarrenSteps ?? 5
-  const ctrl = new AbortController()
-  let barren = 0
-
-  function onStepFinish(step: {
-    text?: string
-    toolResults?: Array<{ isError?: boolean }>
-  }) {
-    const hasText = typeof step.text === "string" && step.text.trim().length > 0
-    const results = Array.isArray(step.toolResults) ? step.toolResults : []
-    const hasTools = results.length > 0
-    const allErrored = hasTools && results.every((r) => r.isError === true)
-
-    if (hasText || !allErrored) {
-      barren = 0
-      return
-    }
-
-    barren++
-    if (barren >= maxBarren) {
-      log.warn("stall detected", { barrenSteps: barren })
-      ctrl.abort(`stall: ${barren} consecutive steps with only failed tool calls`)
-    }
-  }
-
-  return { onStepFinish, signal: ctrl.signal }
-}
-
-/**
- * Convenience: apply both circuit breaker and stall detector.
- *
- * @returns `{ tools, onStepFinish, signal }` — spread into streamText args:
- * ```ts
- * const guard = toolGuard(rawTools)
- * streamText({
- *   tools: guard.tools,
- *   abortSignal: AbortSignal.any([existingSignal, guard.signal]),
- *   onStepFinish: guard.onStepFinish,
- *   ...
- * })
- * ```
+ * Convenience wrapper: apply the circuit breaker and preserve the original
+ * tool-map shape for agent call sites.
  */
 export function toolGuard<T extends Record<string, any>>(
   tools: T,
   opts?: {
     maxFailures?: number
-    maxBarrenSteps?: number
   },
 ) {
-  const guarded = withCircuitBreaker(tools, opts?.maxFailures ?? 3)
-  const stall = createStallDetector({ maxBarrenSteps: opts?.maxBarrenSteps ?? 5 })
   return {
-    tools: guarded,
-    onStepFinish: stall.onStepFinish,
-    signal: stall.signal,
+    tools: withCircuitBreaker(tools, opts?.maxFailures ?? 30),
   }
 }

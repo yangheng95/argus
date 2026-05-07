@@ -6,6 +6,7 @@ import { Message } from "../session/message"
 import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
+import { SessionStatus } from "../session/status"
 import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
@@ -44,7 +45,6 @@ export const TaskTool = Tool.define("task", async (ctx) => {
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
       const config = await Config.get()
-      const planMode = ctx.extra?.planMode === true || ctx.agent === "plan"
 
       // Skip permission check when user explicitly invoked via @ or command subtask
       if (!ctx.extra?.bypassAgentCheck) {
@@ -62,7 +62,10 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       const agent = await Agent.get(params.subagent_type)
       if (!agent) throw new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`)
 
-      const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
+      // Stage agents (no permission ruleset) cannot be the target of the
+      // task-tool dispatch — that path is for SessionPrompt-driven agents
+      // (build/general/explore). Treat undefined as "no task perm".
+      const hasTaskPermission = agent.permission?.some((rule) => rule.permission === "task") ?? false
 
       const session = await iife(async () => {
         if (params.task_id) {
@@ -71,33 +74,10 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         }
 
         return await Session.create({
+          kind: "assistant",
           parentID: ctx.sessionID,
           title: params.description + ` (@${agent.name} subagent)`,
           permission: [
-            ...(planMode
-              ? [
-                  {
-                    permission: "edit" as const,
-                    pattern: "*" as const,
-                    action: "deny" as const,
-                  },
-                  {
-                    permission: "bash" as const,
-                    pattern: "*" as const,
-                    action: "deny" as const,
-                  },
-                  {
-                    permission: "apply_patch" as const,
-                    pattern: "*" as const,
-                    action: "deny" as const,
-                  },
-                  {
-                    permission: "schedule" as const,
-                    pattern: "*" as const,
-                    action: "deny" as const,
-                  },
-                ]
-              : []),
             {
               permission: "todowrite",
               pattern: "*",
@@ -150,23 +130,38 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
       const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
 
-      const result = await SessionPrompt.prompt({
-        messageID,
-        sessionID: session.id,
-        model: {
-          modelID: model.modelID,
-          providerID: model.providerID,
-        },
-        agent: agent.name,
-        tools: {
-          todowrite: false,
-          todoread: false,
-          ...(hasTaskPermission ? {} : { task: false }),
-          ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
-        },
-        extra: planMode ? { planMode: true } : undefined,
-        parts: promptParts,
-      })
+      let result: Awaited<ReturnType<typeof SessionPrompt.prompt>>
+      try {
+        result = await SessionPrompt.prompt({
+          messageID,
+          sessionID: session.id,
+          model: {
+            modelID: model.modelID,
+            providerID: model.providerID,
+          },
+          agent: agent.name,
+          tools: {
+            todowrite: false,
+            todoread: false,
+            ...(hasTaskPermission ? {} : { task: false }),
+            ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
+          },
+          parts: promptParts,
+        })
+      } catch (err) {
+        // The subagent's actor close path will eventually emit its own
+        // terminal — but only when the actor itself shuts down. For the
+        // overlay card to flip to its terminal display the moment the
+        // dispatch boundary completes (this is what the operator perceives
+        // as "the subagent finished"), publish here too. Idempotent: a
+        // later actor close will just rewrite the same terminal status.
+        SessionStatus.set(session.id, {
+          type: "terminal",
+          reason: "error",
+          error: err instanceof Error ? err.message : String(err),
+        })
+        throw err
+      }
 
       const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
 
@@ -177,6 +172,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         text,
         "</task_result>",
       ].join("\n")
+
+      // Subagent dispatch finished from the caller's perspective. The actor
+      // may stay alive in standby (so a future task_id resume can re-enter
+      // streaming) — that's fine, the next prompt() call will publish
+      // streaming again and the card will flip back.
+      SessionStatus.set(session.id, { type: "terminal", reason: "completed" })
 
       return {
         title: params.description,

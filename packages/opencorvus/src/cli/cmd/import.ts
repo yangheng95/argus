@@ -1,5 +1,5 @@
 import type { Argv } from "yargs"
-import type { Message, Part } from "@opencorvus-ai/sdk/v2"
+import type { Message, Part } from "@opencorvus-ai/sdk"
 import { Session } from "../../session"
 import { cmd } from "./cmd"
 import { bootstrap } from "../bootstrap"

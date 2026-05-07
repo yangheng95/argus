@@ -29,7 +29,7 @@ export const ApprovalToolAdapter: ToolAdapter = {
   },
   projectCall(call) {
     return [{
-      provider: call.metadata?.provider as "opencode" | "codex" | "claude-code",
+      provider: call.metadata?.provider as "mirrorcode" | "codex" | "claude-code",
       kind: "approval_request",
       summary: "Approval requested",
       refs: call.refs,
@@ -43,7 +43,7 @@ export const ApprovalToolAdapter: ToolAdapter = {
   },
   projectResult(result) {
     return [{
-      provider: result.metadata?.provider as "opencode" | "codex" | "claude-code",
+      provider: result.metadata?.provider as "mirrorcode" | "codex" | "claude-code",
       kind: "approval_response",
       summary: result.summary ?? "Approval resolved",
       refs: result.refs,

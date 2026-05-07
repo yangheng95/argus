@@ -17,6 +17,8 @@ import { Shell } from "@/shell/shell"
 import { BashArity } from "@/permission/arity"
 import { Truncate } from "./truncation"
 import { Plugin } from "@/plugin"
+import { PidGuard } from "@/shell/pid-guard"
+import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 
 const MAX_METADATA_LENGTH = 30_000
 const DEFAULT_TIMEOUT = Flag.OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -24,6 +26,25 @@ const DEFAULT_TIMEOUT = Flag.OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 
 export const log = Log.create({ service: "bash-tool" })
 const DYNAMIC_PATH_PATTERN = /[*?[\]{}$`~]/
 const FORBIDDEN_ENV_KEYS = new Set(["LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "DYLD_FORCE_FLAT_NAMESPACE"])
+
+// Commands that kill processes by name — can destroy the host process (benchmark,
+// server, other executors) when run inside an isolated worktree. Worktree isolation
+// protects the filesystem but NOT the process namespace.
+const HOST_KILLING_PATTERNS = [
+  /\btaskkill\b.*\/IM\b/i,                      // taskkill /F /IM bun.exe
+  /\bStop-Process\b.*-Name\b/i,                  // Stop-Process -Name 'bun'
+  /\bkillall\b/i,                                // killall bun
+  /\bpkill\b/i,                                  // pkill bun
+  /\bwmic\b.*process.*\bcall\b.*terminate/i,     // wmic process where name="bun.exe" call terminate
+  /\bxargs\s+kill\b/i,                           // ps | grep bun | xargs kill
+  /\bxargs\s+.*\bkill\b/i,                       // ps | xargs -I{} kill {}
+  /\bkill\b.*\$\(/i,                             // kill $(pgrep bun)
+  /\bkill\b.*`/i,                                // kill `pgrep bun`
+]
+
+function isHostKillingCommand(command: string): boolean {
+  return HOST_KILLING_PATTERNS.some(pattern => pattern.test(command))
+}
 
 const resolveWasm = (asset: string) => {
   if (asset.startsWith("file://")) return fileURLToPath(asset)
@@ -92,6 +113,7 @@ export const BashTool = Tool.define("bash", async () => {
 
   return {
     description: DESCRIPTION.replaceAll("${directory}", Instance.directory)
+      .replaceAll("${shell}", shell)
       .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
       .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES)),
     parameters: z.object({
@@ -108,6 +130,12 @@ export const BashTool = Tool.define("bash", async () => {
         .describe(
           "Clear, concise description of what this command does in 5-10 words. Examples:\nInput: ls\nOutput: Lists files in current directory\n\nInput: git status\nOutput: Shows working tree status\n\nInput: npm install\nOutput: Installs package dependencies\n\nInput: mkdir foo\nOutput: Creates directory 'foo'",
         ),
+      background: z
+        .boolean()
+        .describe(
+          "When true, the command keeps running after this tool call returns. The tool returns immediately with the spawned PID once stdout/stderr are observed (or after a short readiness window). Use ONLY for long-lived servers (dev/preview/serve) that must outlive a single tool call so delivery checks can probe them. You are responsible for stopping it later (e.g. `kill <pid>` or `lsof -ti :<port> | xargs kill`).",
+        )
+        .optional(),
     }),
     async execute(params, ctx) {
       const cwd = params.workdir || Instance.directory
@@ -115,57 +143,72 @@ export const BashTool = Tool.define("bash", async () => {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
       }
       const timeout = params.timeout ?? DEFAULT_TIMEOUT
-      const tree = await parser().then((p) => p.parse(params.command))
-      if (!tree) {
-        throw new Error("Failed to parse command")
+      // Block commands that kill processes by name — these can destroy the host
+      // process, benchmark, or sibling executors. Worktree isolation only covers
+      // the filesystem; the process namespace is shared.
+      if (isHostKillingCommand(params.command)) {
+        return {
+          title: "Refused",
+          output: `Refused: this command kills processes by name and would destroy the host process. Use process-specific alternatives (e.g. kill a PID you spawned, or stop a service you started).`,
+          metadata: { refused: true as boolean, command: params.command, output: "", exit: null as number | null, pid: null as number | null, background: false, description: params.description },
+        }
       }
+
       const directories = new Set<string>()
       if (!Instance.containsPath(cwd)) directories.add(cwd)
       const patterns = new Set<string>()
       const always = new Set<string>()
 
-      for (const node of tree.rootNode.descendantsOfType("command")) {
-        if (!node) continue
+      const tree = await parser().then((p) => p.parse(params.command))
+      if (!tree) {
+        throw new Error("Failed to parse command")
+      }
+      try {
+        for (const node of tree.rootNode.descendantsOfType("command")) {
+          if (!node) continue
 
-        // Get full command text including redirects if present
-        let commandText = node.parent?.type === "redirected_statement" ? node.parent.text : node.text
+          // Get full command text including redirects if present
+          let commandText = node.parent?.type === "redirected_statement" ? node.parent.text : node.text
 
-        const command: string[] = []
-        for (let i = 0; i < node.childCount; i++) {
-          const child = node.child(i)
-          if (!child) continue
-          if (
-            child.type !== "command_name" &&
-            child.type !== "word" &&
-            child.type !== "string" &&
-            child.type !== "raw_string" &&
-            child.type !== "concatenation"
-          ) {
-            continue
+          const command: string[] = []
+          for (let i = 0; i < node.childCount; i++) {
+            const child = node.child(i)
+            if (!child) continue
+            if (
+              child.type !== "command_name" &&
+              child.type !== "word" &&
+              child.type !== "string" &&
+              child.type !== "raw_string" &&
+              child.type !== "concatenation"
+            ) {
+              continue
+            }
+            command.push(child.text)
           }
-          command.push(child.text)
-        }
 
-        // not an exhaustive list, but covers most common cases
-        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
-          for (const arg of command.slice(1)) {
-            if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
-            const resolved = await resolveStaticPathArg(arg, cwd)
-            log.info("resolved path", { arg, resolved })
-            if (resolved) {
-              if (!Instance.containsPath(resolved)) {
-                const dir = (await Filesystem.isDir(resolved)) ? resolved : path.dirname(resolved)
-                directories.add(dir)
+          // not an exhaustive list, but covers most common cases
+          if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
+            for (const arg of command.slice(1)) {
+              if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
+              const resolved = await resolveStaticPathArg(arg, cwd)
+              log.info("resolved path", { arg, resolved })
+              if (resolved) {
+                if (!Instance.containsPath(resolved)) {
+                  const dir = (await Filesystem.isDir(resolved)) ? resolved : path.dirname(resolved)
+                  directories.add(dir)
+                }
               }
             }
           }
-        }
 
-        // cd covered by above check
-        if (command.length && command[0] !== "cd") {
-          patterns.add(commandText)
-          always.add(BashArity.prefix(command).join(" ") + " *")
+          // cd covered by above check
+          if (command.length && command[0] !== "cd") {
+            patterns.add(commandText)
+            always.add(BashArity.prefix(command).join(" ") + " *")
+          }
         }
+      } finally {
+        disposeSyntaxTree(tree)
       }
 
       if (directories.size > 0) {
@@ -196,10 +239,15 @@ export const BashTool = Tool.define("bash", async () => {
         { cwd, sessionID: ctx.sessionID, callID: ctx.callID },
         { env: {} },
       )
+      const guardEnv = await PidGuard.env(shell)
       const proc = spawn(params.command, {
         shell,
         cwd,
-        env: sanitizeChildEnv(process.env, shellEnv.env),
+        env: sanitizeChildEnv(process.env, {
+          ...shellEnv.env,
+          ...gitCeilingEnvForWorktree(cwd, { ...process.env, ...shellEnv.env }),
+          ...guardEnv,
+        }),
         stdio: ["ignore", "pipe", "pipe"],
         detached: process.platform !== "win32",
       })
@@ -237,6 +285,43 @@ export const BashTool = Tool.define("bash", async () => {
       if (ctx.abort.aborted) {
         aborted = true
         await kill()
+      }
+
+      if (params.background) {
+        proc.once("exit", () => {
+          exited = true
+        })
+        proc.once("error", () => {
+          exited = true
+        })
+        proc.unref?.()
+        const readinessMs = Math.min(timeout, 1500)
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, readinessMs)
+          proc.once("exit", () => {
+            clearTimeout(timer)
+            resolve()
+          })
+        })
+        const resultMetadata: string[] = [
+          `bash tool returned while command continues running in background (pid=${proc.pid ?? "unknown"})`,
+          `stop it later with: kill ${proc.pid ?? "<pid>"} (or kill by port)`,
+        ]
+        if (exited) resultMetadata.push(`background process exited before readiness window (exit=${proc.exitCode})`)
+        output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
+        return {
+          title: params.description,
+          metadata: {
+            refused: false as boolean,
+            command: params.command,
+            output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
+            exit: exited ? proc.exitCode : null,
+            pid: proc.pid ?? null,
+            background: true,
+            description: params.description,
+          },
+          output,
+        }
       }
 
       const abortHandler = () => {
@@ -287,8 +372,12 @@ export const BashTool = Tool.define("bash", async () => {
       return {
         title: params.description,
         metadata: {
+          refused: false as boolean,
+          command: params.command,
           output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
           exit: proc.exitCode,
+          pid: null as number | null,
+          background: false,
           description: params.description,
         },
         output,
@@ -296,3 +385,8 @@ export const BashTool = Tool.define("bash", async () => {
     },
   }
 })
+
+export function disposeSyntaxTree(tree: unknown): void {
+  const disposable = tree as { delete?: () => void }
+  disposable.delete?.()
+}

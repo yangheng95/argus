@@ -8,8 +8,19 @@ const SUPPORTED_LOCALES = ["zh-CN", "en-US"];
 
 // Module-level state (
 let messages: Record<string, any> = {};
+// Locale precedence (highest first):
+//   1. window.__OPENCORVUS_LOCALE__ — the host (VS Code extension /
+//      Tauri overlay window) injects vscode.env.language /
+//      sys-locale here so the overlay aligns with the IDE chrome
+//      (plan-vscode-extension.md §19.3.2).
+//   2. <html lang> — set by the host's HTML render step on first
+//      paint; same data as #1 but readable before any JS imports.
+//   3. navigator.language — browser dev preview fallback.
 let currentLocale: string = sanitizeLocale(
-  (typeof document !== "undefined" ? document.documentElement.lang : "") ||
+  (typeof globalThis !== "undefined"
+    ? (globalThis as any).__OPENCORVUS_LOCALE__
+    : "") ||
+    (typeof document !== "undefined" ? document.documentElement.lang : "") ||
     (typeof navigator !== "undefined" ? navigator.language : "") ||
     "en-US",
 );
@@ -54,6 +65,12 @@ export function t(key: string, vars?: Record<string, any>): string {
   return fillTemplate(value, vars);
 }
 
+export function tArray(key: string): string[] {
+  const value = localeValue(key) ?? localeValue(key, "en-US");
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
+  return [];
+}
+
 export function tc(key: string, count: number, vars?: Record<string, any>): string {
   const value = localeValue(key) ?? localeValue(key, "en-US");
   if (record(value)) {
@@ -76,13 +93,34 @@ export function getLocale(): string {
 
 // ── Locale loading ──
 
+function i18nAssetUrl(path: string): string {
+  const assetBase =
+    typeof globalThis !== "undefined"
+      ? (globalThis as any).__OPENCORVUS_ASSET_BASE__
+      : "";
+  if (typeof assetBase === "string" && assetBase.trim()) {
+    return new URL(path, assetBase).toString();
+  }
+  return path;
+}
+
+async function fetchLocaleData(locale: string): Promise<Record<string, any>> {
+  const url = i18nAssetUrl(`i18n/${locale}.json`);
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to load locale ${locale}: HTTP ${res.status} ${url}`);
+  }
+  const data = await res.json();
+  if (!record(data)) {
+    throw new Error(`Failed to load locale ${locale}: expected JSON object from ${url}`);
+  }
+  return data;
+}
+
 export async function loadLocale(locale: string): Promise<void> {
   const normalized = sanitizeLocale(locale);
   if (messages[normalized]) return; // already loaded
-  const data = await fetch(`i18n/${normalized}.json`)
-    .then((res) => (res.ok ? res.json() : {}))
-    .catch(() => ({}));
-  messages[normalized] = record(data) ? data : {};
+  messages[normalized] = await fetchLocaleData(normalized);
 }
 
 export async function setLocale(locale: string): Promise<void> {
@@ -101,10 +139,8 @@ export async function setLocale(locale: string): Promise<void> {
 export async function loadAllLocales(): Promise<void> {
   const entries = await Promise.all(
     SUPPORTED_LOCALES.map(async (locale) => {
-      const data = await fetch(`i18n/${locale}.json`)
-        .then((res) => (res.ok ? res.json() : {}))
-        .catch(() => ({}));
-      return [locale, record(data) ? data : {}] as [string, any];
+      const data = await fetchLocaleData(locale);
+      return [locale, data] as [string, any];
     }),
   );
   for (const [locale, data] of entries) {
@@ -116,12 +152,6 @@ export async function loadAllLocales(): Promise<void> {
 /** Inject pre-loaded locale data (used when app.js already loaded i18n). */
 export function setLocaleData(locale: string, data: Record<string, any>): void {
   messages[locale] = data;
-}
-
-/** Sync locale from app.js state (called by bridge code). */
-export function syncLocaleFromLegacy(locale: string, allMessages: Record<string, any>): void {
-  currentLocale = sanitizeLocale(locale);
-  messages = { ...allMessages };
 }
 
 // ── DOM helpers ──

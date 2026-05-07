@@ -1,5 +1,5 @@
-import { OrchestratorChannelBindingTable } from "@/orchestrator/orchestrator.sql"
-import { OrchestratorService } from "@/orchestrator/service"
+import { EngineChannelBindingTable } from "@/engine/engine.sql"
+import { EngineService } from "@/task-api"
 import { ControlMessage } from "@/control/message"
 import { ControlMessageInput, ControlMessageResult } from "@/control/message-schema"
 import { Database, and, eq } from "@/storage/db"
@@ -22,7 +22,7 @@ export const ChannelIngressInput = z.object({
   user_id: z.string().optional(),
   request_id: z.string().optional(),
   source: z.string().optional(),
-  executor: z.enum(["opencode", "codex", "claude-code"]).optional(),
+  executor: z.enum(["mirrorcode", "codex", "claude-code"]).optional(),
   allow_create: z.boolean().default(true),
   allow_session_mutation: z.boolean().default(false),
   bind: z.boolean().default(true),
@@ -31,10 +31,6 @@ export const ChannelIngressInput = z.object({
 })
 
 export const ChannelIngressResult = ControlMessageResult
-
-// Legacy aliases
-export const MessageInput = ChannelIngressInput
-export const MessageResult = ChannelIngressResult
 
 export namespace ChannelIngress {
   export async function message(raw: z.input<typeof ChannelIngressInput>) {
@@ -82,7 +78,7 @@ export namespace ChannelIngress {
     taskID: string
     payload?: Record<string, unknown>
   }) {
-    const { OrchestratorChannelBindingTable: T } = require("@/orchestrator/orchestrator.sql")
+    const { EngineChannelBindingTable: T } = require("@/engine/engine.sql")
     const { Identifier } = require("@/id/id")
     Database.use((db) => {
       const existing = db
@@ -130,22 +126,22 @@ async function tryReplyInteraction(
   taskID: string,
   text: string,
 ): Promise<z.infer<typeof ControlMessageResult> | undefined> {
-  const interactions = await OrchestratorService.listTaskInteractions(taskID)
+  const interactions = await EngineService.listTaskInteractions(taskID)
   const pending = interactions.find((item) => item.status === "pending")
   if (!pending) return undefined
 
   const value = text.trim().toLowerCase()
   if (pending.type === "permission") {
     if (["allow", "approve", "yes", "y", "once"].includes(value)) {
-      const result = await OrchestratorService.replyInteraction(pending.id, { reply: "once" })
+      const result = await EngineService.replyInteraction(pending.id, { reply: "once", autoReply: false })
       return { kind: "interaction", message: "Permission granted.", task_id: taskID, interaction_id: result.id }
     }
     if (["always", "allow always", "approve always"].includes(value)) {
-      const result = await OrchestratorService.replyInteraction(pending.id, { reply: "always" })
+      const result = await EngineService.replyInteraction(pending.id, { reply: "always", autoReply: false })
       return { kind: "interaction", message: "Permission granted (always).", task_id: taskID, interaction_id: result.id }
     }
     if (["reject", "deny", "no", "n"].includes(value)) {
-      const result = await OrchestratorService.rejectInteraction(pending.id, {})
+      const result = await EngineService.rejectInteraction(pending.id, { autoReply: false })
       return { kind: "interaction", message: "Permission rejected.", task_id: taskID, interaction_id: result.id }
     }
     // Unrecognized permission reply — fall through to LLM
@@ -153,7 +149,8 @@ async function tryReplyInteraction(
   }
 
   // Question interaction — pass message text; service will derive answers
-  const result = await OrchestratorService.replyInteraction(pending.id, {
+  const result = await EngineService.replyInteraction(pending.id, {
+    autoReply: false,
     message: text,
   })
   return { kind: "interaction", message: "Answer recorded.", task_id: taskID, interaction_id: result.id }
@@ -163,12 +160,12 @@ function find(platform: string, channel: string, thread: string) {
   return Database.use((db) =>
     db
       .select()
-      .from(OrchestratorChannelBindingTable)
+      .from(EngineChannelBindingTable)
       .where(
         and(
-          eq(OrchestratorChannelBindingTable.platform, platform),
-          eq(OrchestratorChannelBindingTable.channel, channel),
-          eq(OrchestratorChannelBindingTable.thread, thread),
+          eq(EngineChannelBindingTable.platform, platform),
+          eq(EngineChannelBindingTable.channel, channel),
+          eq(EngineChannelBindingTable.thread, thread),
         ),
       )
       .get(),

@@ -1,18 +1,29 @@
 import { expect, test } from "bun:test"
 import { launchBrowser } from "./launch"
+import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
 const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
 )
 
-const src = new URL("../src/", import.meta.url)
-const types = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
+await ensureOverlayDist()
+
+async function clickVisible(tab: Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>["newPage"]>>, selector: string) {
+  await tab.waitForSelector(selector)
+  const point = await tab.evaluate((value) => {
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>(value))
+    const node = nodes.find((candidate) => {
+      const style = getComputedStyle(candidate)
+      const rect = candidate.getBoundingClientRect()
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
+    })
+    if (!node) return null
+    node.scrollIntoView({ block: "center", inline: "nearest" })
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }, selector)
+  if (!point) throw new Error(`No visible element for ${selector}`)
+  await tab.mouse.click(point.x, point.y)
 }
 
 async function browser() {
@@ -88,7 +99,7 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
     },
     executors: [
       {
-        id: "opencode",
+        id: "mirrorcode",
         label: "OpenCorvus",
         detail: "Bundled",
         version: "0.0.1-alpha",
@@ -106,6 +117,7 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
         ...(init?.headers || {}),
       },
     })
+  let callbackCalls = 0
 
   const server = Bun.serve({
     port: 0,
@@ -118,16 +130,8 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
       if (path === "/ui" || path === "/ui/") {
         return Response.redirect(`${url.origin}/ui/index.html`, 302)
       }
-      if (path.startsWith("/ui/")) {
-        const name = decodeURIComponent(path.slice(4)) || "index.html"
-        if (name.includes("..")) return new Response("forbidden", { status: 403 })
-        const file = Bun.file(new URL(name, src))
-        if (!(await file.exists())) return new Response("not found", { status: 404 })
-        const type = types[name.slice(name.lastIndexOf(".")) as keyof typeof types] || "application/octet-stream"
-        return new Response(file, {
-          headers: { "content-type": type },
-        })
-      }
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks") return send({ tasks: [] })
       if (path === "/global/tasks") return send({ tasks: [] })
@@ -136,6 +140,18 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
       if (path === "/vcs") return send(data.vcs)
       if (path === "/provider") return send(data.provider)
       if (path === "/provider/auth") return send(data.providerAuth)
+      if (path === "/agent") return send([])
+      if (path === "/config/providers") {
+        return send({
+          providers: data.provider.all.map((item: any) => ({
+            id: item.id,
+            name: item.name || item.id,
+            models: item.models || {},
+          })),
+          default: data.provider.default || {},
+        })
+      }
+      if (path === "/config/prompt") return send([])
       if (path.startsWith("/provider/") && path.endsWith("/auth/prompts")) return send([])
       if (path === "/config" && req.method === "GET") return send(data.config)
       if (path === "/config" && req.method === "PATCH") {
@@ -157,6 +173,7 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
         })
       }
       if (path.startsWith("/provider/") && path.endsWith("/oauth/callback")) {
+        callbackCalls += 1
         if (!data.provider.connected.includes("openai")) data.provider.connected.push("openai")
         return send(true)
       }
@@ -201,6 +218,7 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
               return {
                 serverUrl,
                 autoServer: false,
+                directory: "D:/overlay/workspace/app",
               }
             }
             if (command === "overlay_settings_save") {
@@ -221,8 +239,6 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
               close: async () => undefined,
               minimize: async () => undefined,
               startDragging: async () => undefined,
-              setAlwaysOnTop: async () => undefined,
-              isAlwaysOnTop: async () => false,
               isMaximized: async () => false,
               onResized: async () => ({ unlisten: async () => undefined }),
             }
@@ -234,37 +250,29 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
     await tab.goto(`${base}/ui/index.html`, { waitUntil: "load" })
     await tab.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
 
-    await tab.click("#btnConfigToggle")
+    await tab.click('[data-menu-trigger="model"]')
+    await tab.waitForSelector('[data-testid="titlebar-open-providers"]')
+    await tab.click('[data-testid="titlebar-open-providers"]')
     await tab.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)
-    await tab.$eval("#llmAdvanced", (node) => {
-      ;(node as HTMLDetailsElement).open = true
-    })
-    await tab.waitForFunction(() => (document.querySelector("#llmAdvanced") as HTMLDetailsElement | null)?.open === true)
 
-    await tab.select("#llmProvider", "openai")
+    await tab.waitForSelector('[data-testid="provider-auth-openai"]')
+    await clickVisible(tab, '[data-testid="provider-auth-openai"]')
     await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
     await tab.click("#btnAppDialogOk")
-
-    await tab.waitForFunction(() => {
-      const status = document.querySelector("#llmStatus")
-      return status?.getAttribute("data-status") === "active" && status?.getAttribute("title") === "Provider connected"
-    })
+    for (let i = 0; i < 50 && callbackCalls === 0; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    expect(callbackCalls).toBe(1)
+    expect(data.provider.connected).toContain("openai")
 
     const result = await tab.evaluate(() => {
       const state = (window as typeof window & { __overlayTest: { open: string[] } }).__overlayTest
       return {
         opened: [...state.open],
-        provider: (document.querySelector("#llmProvider") as HTMLSelectElement | null)?.value,
-        model: (document.querySelector("#llmModel") as HTMLSelectElement | null)?.value,
-        status: document.querySelector("#llmStatus")?.getAttribute("data-status"),
-        title: document.querySelector("#llmStatus")?.getAttribute("title"),
+        connectedText: document.body.textContent || "",
       }
     })
 
-    expect(result.provider).toBe("openai")
-    expect(result.model).toBe("gpt-4o-mini")
-    expect(result.status).toBe("active")
-    expect(result.title).toBe("Provider connected")
     expect(result.opened).toContain("https://auth.example.com/openai")
   } finally {
     await page.close()

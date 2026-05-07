@@ -1,0 +1,80 @@
+// ── Interaction reply/reject helper ──
+// Shared low-level API wrappers used by InteractionCard (the unified
+// permission / question card rendered inline in the conversation and in
+// the workflow sidebar).
+//
+// `autoReply` is required on every call: `false` for direct user actions
+// (permission card buttons, question submissions), `true` for server-side
+// timeout resolution. This flag propagates all the way through to
+// PermissionNext.Event.Replied so the transcript can render "[auto-reply]".
+//
+// Per-interaction mutex: the same interaction id can surface in multiple UI
+// surfaces simultaneously (inline conversation card + sidebar workflow card),
+// and a timeout may race with a fast user click. The first request wins —
+// concurrent calls with the same id share the in-flight promise so we never
+// fire two HTTP requests against the same resolution. The server is the final
+// arbiter of conflicting actions; this layer guarantees we don't generate the
+// conflict ourselves.
+
+import { apiJson } from "./api";
+
+const REPLY_TIMEOUT_MS = 30_000;
+
+const inflight = new Map<string, Promise<void>>();
+
+function lockedRequest(id: string, fn: () => Promise<void>): Promise<void> {
+  const prev = inflight.get(id);
+  if (prev) return prev;
+  const p = fn().finally(() => {
+    if (inflight.get(id) === p) inflight.delete(id);
+  });
+  inflight.set(id, p);
+  return p;
+}
+
+export async function replyInteraction(
+  id: string,
+  action: "once" | "always" | "answer",
+  autoReply: boolean,
+  input: { answers?: unknown[]; message?: string } = {},
+): Promise<void> {
+  return lockedRequest(id, async () => {
+    if (action === "once" || action === "always") {
+      await apiJson(`interaction/${id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reply: action, autoReply }),
+        signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
+      });
+      return;
+    }
+
+    const answers = Array.isArray(input.answers) ? input.answers : undefined;
+    const message =
+      typeof input.message === "string" && input.message.trim()
+        ? input.message.trim()
+        : undefined;
+
+    await apiJson(`interaction/${id}/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        autoReply,
+        ...(answers ? { answers } : {}),
+        ...(message ? { message } : {}),
+      }),
+      signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
+    });
+  });
+}
+
+export async function rejectInteraction(id: string, autoReply: boolean): Promise<void> {
+  return lockedRequest(id, async () => {
+    await apiJson(`interaction/${id}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ autoReply }),
+      signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
+    });
+  });
+}

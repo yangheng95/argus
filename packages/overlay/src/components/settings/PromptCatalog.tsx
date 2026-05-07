@@ -19,6 +19,7 @@ import {
   resetPromptEntry as serviceReset,
   loadPromptCatalog,
 } from "../../services/config";
+import { Button } from "../ui/Button";
 
 // ── Types ──
 
@@ -59,10 +60,6 @@ function promptGroupLabel(group: string): string {
 function promptDescription(entry: PromptEntry): string {
   if (entry.key === "core_header") return t("prompt.desc.core_header");
   if (entry.key === "agent_generate") return t("prompt.desc.agent_generate");
-  if (entry.key === "planner_system") return t("prompt.desc.planner_system");
-  if (entry.key === "spec_system") return t("prompt.desc.spec_system");
-  if (entry.key === "evaluator_system") return t("prompt.desc.evaluator_system");
-  if (entry.key === "delivery_system") return t("prompt.desc.delivery_system");
   return entry.description || "";
 }
 
@@ -245,22 +242,26 @@ export default function PromptCatalog() {
                       {promptHelper(entry)}
                     </span>
                     <div class="dialog-actions compact">
-                      <button
+                      <Button
                         type="button"
-                        class="btn btn-ghost mini"
+                        variant="ghost"
+                        size="sm"
+                        tone="neutral"
                         disabled={saving() || (entry.configured_prompt === null && !dirty())}
                         onClick={() => handleReset(entry)}
                       >
                         {t("prompt.reset")}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        class="btn btn-primary mini"
+                        variant="solid"
+                        size="sm"
+                        tone="accent"
                         disabled={saving() || !dirty()}
                         onClick={() => handleSave(entry)}
                       >
                         {t("common.save")}
-                      </button>
+                      </Button>
                     </div>
                   </div>
 
@@ -273,10 +274,7 @@ export default function PromptCatalog() {
                       <summary class="prompt-diff-summary">
                         {t("prompt.show_default")}
                       </summary>
-                      <div
-                        class="prompt-preview-card"
-                        style="margin-top:0;border-top:none;opacity:0.7"
-                      >
+                      <div class="prompt-preview-card prompt-preview-card--default">
                         <div class="prompt-preview-head">
                           {t("prompt.default_label")}
                         </div>
@@ -292,10 +290,7 @@ export default function PromptCatalog() {
                     <summary class="prompt-diff-summary">
                       {t("prompt.preview")}
                     </summary>
-                    <div
-                      class="prompt-preview-card"
-                      style="border-top:none;border-radius:0 0 var(--radius) var(--radius)"
-                    >
+                    <div class="prompt-preview-card prompt-preview-card--attached">
                       <div
                         class="md-content prompt-preview-body"
                         innerHTML={promptPreviewHtml(currentDraft())}
