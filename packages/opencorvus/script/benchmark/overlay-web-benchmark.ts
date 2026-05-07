@@ -88,6 +88,27 @@ import puppeteer, { type Page } from "puppeteer-core"
 import { parseSSE } from "../../src/util/sse"
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
 
+type OverlayBenchmarkWindow = Window & {
+  applyDirectory: (directory: string, options: { save: boolean; temp: boolean; restoreWorkspace: boolean }) => Promise<void> | void
+  loadTasks: () => Promise<void> | void
+  selectTask: (taskID: string) => Promise<void> | void
+  persistOverlaySettings: () => Promise<void> | void
+  loadBoard: () => Promise<void> | void
+  loadConversation: () => Promise<void> | void
+  boardStore: {
+    board: any
+    tasks: any[]
+    pendingTasks: any[]
+    selectedTaskID: string
+  }
+  settingsStore: {
+    directory: string
+    savedDirectory: string
+    workspaceDirectory: string
+    workspaceTaskID: string
+  }
+}
+
 // Accept either `--name=value` or `--name value`. The old version quietly
 // returned undefined for the space form, which masked typos and mis-quoted
 // paths in benchmark invocations — by the time the task ran with a wrong
@@ -879,15 +900,12 @@ try {
     // Navigate browser to the overlay and select the existing task
     if (page) {
       await page.evaluate(async (id) => {
-        await window.eval("loadTasks")()
-        await window.eval("selectTask")(id)
+        const overlay = window as OverlayBenchmarkWindow
+        await overlay.loadTasks()
+        await overlay.selectTask(id)
       }, taskID)
       await page.waitForFunction((id) => {
-        try {
-          return window.eval("state").selectedTaskID === id
-        } catch {
-          return false
-        }
+        return (window as OverlayBenchmarkWindow).boardStore.selectedTaskID === id
       }, { timeout: 0 }, taskID)
     }
 
@@ -907,7 +925,7 @@ try {
 
     if (page) {
       await page.waitForFunction(() => {
-        try { return !!window.eval("state").board?.task?.id } catch { return false }
+        return !!(window as OverlayBenchmarkWindow).boardStore.board?.task?.id
       }, { timeout: 0 })
     }
     marks.boardAt = Date.now()
@@ -1003,28 +1021,20 @@ try {
 
     if (page) {
       await page.evaluate(async (id) => {
-        const state = window.eval("state")
-        if (state.selectedTaskID === id) return
-        await window.eval("loadTasks")()
-        await window.eval("selectTask")(id)
+        const overlay = window as OverlayBenchmarkWindow
+        if (overlay.boardStore.selectedTaskID === id) return
+        await overlay.loadTasks()
+        await overlay.selectTask(id)
       }, taskID)
       await page.waitForFunction((id) => {
-        try {
-          return window.eval("state").selectedTaskID === id
-        } catch {
-          return false
-        }
+        return (window as OverlayBenchmarkWindow).boardStore.selectedTaskID === id
       }, { timeout: 0 }, taskID)
     }
     marks.selectedAt = Date.now()
 
     if (page) {
       await page.waitForFunction(() => {
-        try {
-          return !!window.eval("state").board?.task?.id
-        } catch {
-          return false
-        }
+        return !!(window as OverlayBenchmarkWindow).boardStore.board?.task?.id
       }, { timeout: 0 })
     }
     marks.boardAt = Date.now()
@@ -1885,26 +1895,21 @@ async function verifyResume(
   await syncDirectory(next, directory)
   await waitForTaskCreated(next, api)
   await next.evaluate(async (id) => {
-    const state = window.eval("state")
-    if (state.selectedTaskID === id && state.board?.task?.id === id) return
-    await window.eval("selectTask")(id)
+    const overlay = window as OverlayBenchmarkWindow
+    if (overlay.boardStore.selectedTaskID === id && overlay.boardStore.board?.task?.id === id) return
+    await overlay.selectTask(id)
   }, taskID)
   await next.waitForFunction((id, dir) => {
-    try {
-      const state = window.eval("state")
-      return state.directory === dir && state.board?.task?.id === id && state.workspaceTaskID === id
-    } catch {
-      return false
-    }
+    const overlay = window as OverlayBenchmarkWindow
+    return overlay.settingsStore.directory === dir
+      && overlay.boardStore.board?.task?.id === id
+      && overlay.settingsStore.workspaceTaskID === id
   }, { timeout: 0 }, taskID, directory)
   await next.evaluate(async () => {
-    try {
-      await window.eval("persistOverlaySettings")()
-      if (!window.eval("state").board?.task?.id) await window.eval("loadBoard")()
-      await window.eval("loadConversation")()
-    } catch {
-      return
-    }
+    const overlay = window as OverlayBenchmarkWindow
+    await overlay.persistOverlaySettings()
+    if (!overlay.boardStore.board?.task?.id) await overlay.loadBoard()
+    await overlay.loadConversation()
   })
   await current.close().catch(() => undefined)
   return next
@@ -2009,89 +2014,70 @@ async function syncDirectory(page: Page, directory: string) {
     localStorage.setItem("oc_directory", dir)
     localStorage.setItem("oc_directory_mode", "custom")
     localStorage.setItem("oc_workspace_directory", dir)
-    await window.eval("applyDirectory")(dir, { save: true, temp: false, restoreWorkspace: false })
-    await window.eval("loadTasks")()
-    const state = window.eval("state")
+    const overlay = window as OverlayBenchmarkWindow
+    await overlay.applyDirectory(dir, { save: true, temp: false, restoreWorkspace: false })
+    await overlay.loadTasks()
     return {
-      directory: state.directory,
-      savedDirectory: state.savedDirectory,
-      workspaceDirectory: state.workspaceDirectory,
+      directory: overlay.settingsStore.directory,
+      savedDirectory: overlay.settingsStore.savedDirectory,
+      workspaceDirectory: overlay.settingsStore.workspaceDirectory,
     }
   }, directory)
 }
 
 async function overlaySnapshot(page: Page) {
   return page.evaluate(() => {
-    try {
-      const state = window.eval("state")
-      // Overlay conversation cards are rendered as `<article class="card" data-kind=...
-      // data-role=... data-stage=... data-depth="N">` via components/Card.tsx. Top-level
-      // items live at data-depth="0". Text for assistant/agent/goal/tool streams lives
-      // inside `.card__body` using `.msg-text` / `.reasoning-text` classes from CardParts
-      // and ReasoningPart. User-message cards carry data-role="user" and are excluded.
-      const visibleTurns = [...document.querySelectorAll<HTMLElement>('.card[data-depth="0"]')]
-        .map((element) => {
-          const role = element.dataset.role || element.dataset.kind || ""
-          const body = element.querySelector(".card__body")
-          const text = body?.querySelector(".msg-text")?.textContent?.trim()
-            || body?.querySelector(".reasoning-text")?.textContent?.trim()
-            || element.querySelector(".card__goal-desc")?.textContent?.trim()
-            || body?.textContent?.trim().slice(0, 200)
-            || element.querySelector(".card__title")?.textContent?.trim()
-            || ""
-          return { role, text }
-        })
-        .filter((item) => item.role && item.role !== "user" && item.text)
-      const liveTurn = visibleTurns.at(-1) || { role: "", text: "" }
-      const storage = {
-        directory: localStorage.getItem("oc_directory") || "",
-        directoryMode: localStorage.getItem("oc_directory_mode") || "",
-        workspaceDirectory: localStorage.getItem("oc_workspace_directory") || "",
-        workspaceTaskID: localStorage.getItem("oc_workspace_task") || "",
-      }
-      const firstText = (sel: string) =>
-        document.querySelector(sel)?.textContent?.trim() || ""
-      return {
-        directory: state.directory || "",
-        savedDirectory: state.savedDirectory || "",
-        workspaceDirectory: state.workspaceDirectory || "",
-        selectedTaskID: state.selectedTaskID || "",
-        pendingCount: Array.isArray(state.pendingTasks) ? state.pendingTasks.length : 0,
-        taskIDs: Array.isArray(state.tasks)
-          ? state.tasks.map((item: { task?: { id?: string } }) => item?.task?.id || "").filter(Boolean).slice(0, 5)
-          : [],
-        taskList: document.querySelector("#taskListPanel")?.textContent?.trim() || "",
-        reasoning: firstText('.card[data-role="assistant"] .reasoning-text')
-          || firstText('.card[data-kind="agent"] .reasoning-text')
-          || firstText('.card[data-kind="goal"] .reasoning-text')
-          || firstText('.card[data-depth="0"] .reasoning-text'),
-        assistantText: firstText('.card[data-role="assistant"] .msg-text')
-          || firstText('.card[data-kind="agent"] .msg-text')
-          || firstText('.card[data-kind="goal"] .msg-text')
-          || firstText('.card[data-kind="tool"] .msg-text')
-          || firstText('.card[data-depth="0"]:not([data-role="user"]) .card__body'),
-        liveRole: liveTurn.role,
-        liveText: liveTurn.text,
-        visibleTurns: visibleTurns.slice(-5),
-        storage,
-      }
-    } catch (error) {
-      return {
-        directory: "",
-        savedDirectory: "",
-        workspaceDirectory: "",
-        selectedTaskID: "",
-        pendingCount: 0,
-        taskIDs: [],
-        taskList: "",
-        reasoning: "",
-        assistantText: "",
-        liveRole: "",
-        liveText: "",
-        visibleTurns: [],
-        storage: {},
-        error: String(error),
-      }
+    const overlay = window as OverlayBenchmarkWindow
+    // Overlay conversation cards are rendered as `<article class="card" data-kind=...
+    // data-role=... data-stage=... data-depth="N">` via components/Card.tsx. Top-level
+    // items live at data-depth="0". Text for assistant/agent/goal/tool streams lives
+    // inside `.card__body` using `.msg-text` / `.reasoning-text` classes from CardParts
+    // and ReasoningPart. User-message cards carry data-role="user" and are excluded.
+    const visibleTurns = [...document.querySelectorAll<HTMLElement>('.card[data-depth="0"]')]
+      .map((element) => {
+        const role = element.dataset.role || element.dataset.kind || ""
+        const body = element.querySelector(".card__body")
+        const text = body?.querySelector(".msg-text")?.textContent?.trim()
+          || body?.querySelector(".reasoning-text")?.textContent?.trim()
+          || element.querySelector(".card__goal-desc")?.textContent?.trim()
+          || body?.textContent?.trim().slice(0, 200)
+          || element.querySelector(".card__title")?.textContent?.trim()
+          || ""
+        return { role, text }
+      })
+      .filter((item) => item.role && item.role !== "user" && item.text)
+    const liveTurn = visibleTurns.at(-1) || { role: "", text: "" }
+    const storage = {
+      directory: localStorage.getItem("oc_directory") || "",
+      directoryMode: localStorage.getItem("oc_directory_mode") || "",
+      workspaceDirectory: localStorage.getItem("oc_workspace_directory") || "",
+      workspaceTaskID: localStorage.getItem("oc_workspace_task") || "",
+    }
+    const firstText = (sel: string) =>
+      document.querySelector(sel)?.textContent?.trim() || ""
+    return {
+      directory: overlay.settingsStore.directory || "",
+      savedDirectory: overlay.settingsStore.savedDirectory || "",
+      workspaceDirectory: overlay.settingsStore.workspaceDirectory || "",
+      selectedTaskID: overlay.boardStore.selectedTaskID || "",
+      pendingCount: Array.isArray(overlay.boardStore.pendingTasks) ? overlay.boardStore.pendingTasks.length : 0,
+      taskIDs: Array.isArray(overlay.boardStore.tasks)
+        ? overlay.boardStore.tasks.map((item: { task?: { id?: string } }) => item?.task?.id || "").filter(Boolean).slice(0, 5)
+        : [],
+      taskList: document.querySelector("#taskListPanel")?.textContent?.trim() || "",
+      reasoning: firstText('.card[data-role="assistant"] .reasoning-text')
+        || firstText('.card[data-kind="agent"] .reasoning-text')
+        || firstText('.card[data-kind="goal"] .reasoning-text')
+        || firstText('.card[data-depth="0"] .reasoning-text'),
+      assistantText: firstText('.card[data-role="assistant"] .msg-text')
+        || firstText('.card[data-kind="agent"] .msg-text')
+        || firstText('.card[data-kind="goal"] .msg-text')
+        || firstText('.card[data-kind="tool"] .msg-text')
+        || firstText('.card[data-depth="0"]:not([data-role="user"]) .card__body'),
+      liveRole: liveTurn.role,
+      liveText: liveTurn.text,
+      visibleTurns: visibleTurns.slice(-5),
+      storage,
     }
   })
 }
