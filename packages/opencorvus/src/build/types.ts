@@ -157,14 +157,12 @@ export class BuildAgentContractError extends Error {
   readonly code: "missing_terminal_report"
   readonly diagnostics: {
     sessionID?: string
-    parseError?: string
     lastMergeBackOutcome?: string | null
   }
   constructor(
     code: "missing_terminal_report",
     diagnostics: {
       sessionID?: string
-      parseError?: string
       lastMergeBackOutcome?: string | null
     },
     message: string,

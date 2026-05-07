@@ -33,16 +33,15 @@ import { Message } from "../../src/session/message"
  */
 
 describe("BuildAgentContractError", () => {
-  test("missing_terminal_report carries sessionID + parseError diagnostics", () => {
+  test("missing_terminal_report carries sessionID diagnostic", () => {
     const err = new BuildAgentContractError(
       "missing_terminal_report",
-      { sessionID: "ses_abc123", parseError: "expected status, got undefined" },
+      { sessionID: "ses_abc123" },
       "Build agent terminated without a valid report_build_result tool call after same-session recovery. Retry this goal with files_changed only after recovery exhausted; not primary workspace pollution.",
     )
     expect(err).toBeInstanceOf(Error)
     expect(err.code).toBe("missing_terminal_report")
     expect(err.diagnostics.sessionID).toBe("ses_abc123")
-    expect(err.diagnostics.parseError).toBe("expected status, got undefined")
     expect(err.message).toMatch(/report_build_result/)
     expect(err.message).toMatch(/files_changed/)
     expect(err.message).toMatch(/same-session recovery/)

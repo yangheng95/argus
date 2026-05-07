@@ -113,15 +113,16 @@ build tool input schema 的 request 字段消费者：
 
 **删除 `build/agent.ts:704-714` dead code 分支**：保留 line 721 的 external executor generic Error throw（针对 external 返回 BuildResult schema 不匹配的真实场景）。
 
-**`orchestrator/tools.ts:4769-4789` decision_log entry reason 文本修订**（rule 8 单源 reason 模板）：
+**`orchestrator/tools.ts:4769-4789` decision_log entry value 改用 `runErr.message`**（rule 8 单源 — recovery hint 文本归 `convertMissingTerminalToolError` 单一所有），entry reason 退化为审计 metadata。recovery hint 实际实施措辞（避开 visible-brief-hygiene 禁止字符串列表）：
 
 ```text
-"Previous build session ended with finish=stop without calling report_build_result.
- Files already written to worktree by prior attempt(s); this turn MUST read/glob
- what's there, verify per acceptance_specs, then call report_build_result exactly
- once before turn ends. DO NOT write a markdown summary in place of the tool call —
- host ignores all turn-final prose."
+"Previous build session ended with finish=stop without producing the terminal
+ build report. Files already written to the goal worktree by prior attempt(s);
+ this turn MUST read/glob what is there and complete the build per the standard
+ build-agent contract (structured terminal report, not turn-final prose)."
 ```
+
+措辞要点：描述失败 FACT + 反指 BUILD_CORE 协议（"standard build-agent contract"）+ 反指 prose 行为，**不内联** prompt 协议文本（如 "call report_build_result exactly once" / "DO NOT write a markdown summary"）—— `test/agent/visible-brief-hygiene.test.ts` 强制 worker agent source files 不得复制 prompt 措辞。
 
 ### 5.2 信道还原（拆 objective ↔ retryGuidance）
 
@@ -148,11 +149,12 @@ build tool input schema 的 request 字段消费者：
 
 | 测试文件 | 断言 |
 |---|---|
-| `test/agent/runner-terminal-recovery.test.ts`（扩展） | `buildHardErrorFromFinalMessage` 在 TerminalToolMissingError 输入下：返回 AgentRunError、`nonRetryable=true`、`cause` 是原始 TerminalToolMissingError |
-| `test/build-agent/contract-error.test.ts`（扩展） | mock `runAgentSession` 抛 `AgentRunError(cause=TerminalToolMissingError)` → BuildAgent.run 转抛 BuildAgentContractError("missing_terminal_report")；mock 抛其他 AgentRunError → 原样 re-throw |
-| `test/orchestrator/build-feedback-context.test.ts`（扩展） | retryGuidance 字段存在时，goal-path / request-path renderer 都渲染 `## Retry Guidance From Orchestrator` 区块且位置在 retryFeedback 之前；retryGuidance 不影响 target.objective |
-| 同上（新增 case） | orchestrator catch 路径：runErr=AgentRunError(cause=TerminalToolMissingError) → 写 phase=retry decision_log entry 时 reason 含"call report_build_result exactly once"，**不含**"re-read acceptance_specs"等 modify_goal 模板字样（pin failure→feedback content 映射，rule 36 S2） |
-| `test/orchestrator/modify-goal.test.ts`（新增/扩展） | updates 等于当前 goal 各字段值时不触发 statusReset / 不写 phase=retry decision_log entry；任一字段实际不同则正常触发 |
+| `test/agent/runner-hard-error-propagation.test.ts`（扩展） | `buildHardErrorFromFinalMessage` 在 TerminalToolMissingError 输入下：返回 AgentRunError、`nonRetryable=true`、`cause` 是原始 TerminalToolMissingError；其他 isRetryable=false / true / 无 flag 路径不回归 |
+| `test/build-agent/contract-error.test.ts`（扩展） | `convertMissingTerminalToolError`：AgentRunError(cause=TerminalToolMissingError) → BuildAgentContractError；非匹配 cause → null；非 AgentRunError → null；非 Error → null。recovery hint 文本断言：含 "terminal build report" / "standard build-agent contract" / "structured terminal report" / "not turn-final prose"，**不含** "re-read acceptance_specs"（modify_goal 模板）和 "call report_build_result exactly once"（visible-brief 禁止字符串） |
+| `test/build-agent/prompt-context.test.ts`（扩展） | retryGuidance 字段存在时，goal-path / request-path renderer 都渲染 `## Retry Guidance From Orchestrator` 区块且位置在 retryFeedback 之前；retryGuidance 不影响 target.objective；空 / 空白 retryGuidance 被 drop |
+| `test/orchestrator/modify-goal-noop.test.ts`（新增） | `computeContractFieldChanges` 深比较：updates 全等于 goal → 空 setValues；string / array / 重排 / undefined / 未识别字段 / 数组增删 / priority enum 等场景全覆盖 |
+
+注：原 §5.4 列表里的 `test/orchestrator/build-feedback-context.test.ts` 在实施时改为 `test/build-agent/contract-error.test.ts` 内 pin —— `convertMissingTerminalToolError` 是 recovery hint 的单源（rule 8），断言它的输出等价于断言 orchestrator catch path 写入的 decision_log entry value（catch 直接传 `runErr.message`）。
 
 ## 6. scope gap（本 PR 不修，记录待办）
 
@@ -174,7 +176,12 @@ build tool input schema 的 request 字段消费者：
 
 本 PR 是路径 C 的前置——typed BuildAgentContractError 信号、retryGuidance 字段、modify_goal no-op 检测都是路径 C 让 reviewer 拿到准确失败信号的必要条件。
 
-### 6.2 预存测试失败（与本 PR 无关）
+### 6.2 后续清理（codex 二审 SHOULD-FIX 中不在本 PR 处理的项）
+
+- **集成 smoke 测试**：mock `runAgentSession` 抛 `AgentRunError(cause=TerminalToolMissingError)` → 断言 `BuildAgent.run` 转抛 `BuildAgentContractError`。当前两端 unit test 已 pin，中间 wiring 4 行直观，不加；wiring 出 bug 时再补。
+- **modify_goal execute 层级 return-string 断言**：`computeContractFieldChanges` helper 已 12 case 覆盖；execute 拼 string 是 pure 操作。
+
+### 6.3 预存测试失败（与本 PR 无关）
 
 跑 `bun test packages/opencorvus/test/agent/ test/build-agent/ test/session/` 时观察到 7 个预存失败：
 
@@ -210,3 +217,42 @@ build tool input schema 的 request 字段消费者：
 
 采纳替代方案：
 - 不动 runner.ts 的复杂返回类型，仅加 `cause` + `nonRetryable`；recognition 集中在 build/agent.ts catch（codex 推荐 alternative fix）——本地化变更，缩小 surface。
+
+## 9. codex 二审反馈（commit 691cc5bfb post-impl review）
+
+PR commit `691cc5bfb` 实施后由 codex 做对抗性 post-impl review（rule 24 二次审查）。完整结论：
+
+### VERDICT: ship as-is
+
+三个 first-round BLOCKING（B1 dead code 单源 / B2 nonRetryable 防御 / B3 双 renderer 对称）独立逐项验证全部正确实施；零 regression（非 missing-terminal AgentRunError 原样 re-throw、catch 在 finally 之前、abort path 未受影响、external executor 路径不变）；测试 44 / 44 pass。
+
+### NEW SHOULD-FIX（本次反馈处理）
+
+**S2.1 `BuildAgentContractError.diagnostics.parseError` 已成 dead optional**：
+- codex 指出 — `convertMissingTerminalToolError` 不传 parseError；former dead branch 删除后 production 代码路径无人写。
+- **采纳**：本反馈 commit 顺手清理（rule 17）—— `build/types.ts` 删字段；`contract-error.test.ts:36` 测试改为只测 `sessionID` diagnostic。范围 ~10 行。
+
+**S2.2 集成 smoke 测试 gap**（mock runAgentSession 抛 AgentRunError → BuildAgent.run 转抛 BuildAgentContractError）：
+- **不采纳**：当前两端单元测试已 pin（runner-hard-error-propagation pin cause 传递、contract-error pin converter 行为）；中间 wiring 是 4 行直观调用。codex 自评"acceptable per rule 36"。本 PR 不加。如未来 wiring 出 bug，单独补集成 test。
+
+**S2.3 modify_goal "(no changes)" return-string 未在 execute 层级断言**：
+- **不采纳**：`computeContractFieldChanges` helper 已 12 个 case 覆盖，return string 拼接是 pure string 操作。rule 5（避免过度工程）。
+
+### SPEC vs IMPL 漂移（本次反馈处理）
+
+**§5.1 reason text 实施措辞为 paraphrase**：
+- spec 原文引用了"call report_build_result exactly once / DO NOT write a markdown summary"措辞——这恰好是 `test/agent/visible-brief-hygiene.test.ts` 的 `forbiddenVisibleBriefSnippets` 所禁。实施时已改为 paraphrase（"complete the build per the standard build-agent contract / structured terminal report, not turn-final prose"），保留语义、避开 hygiene 红线。
+- **采纳**：本反馈 commit 同步更新 spec §5.1 引用文本到实际实施的 paraphrase + 加 rationale 说明。
+
+**§5.4 测试矩阵把 orchestrator catch path content pin 列在 `test/orchestrator/build-feedback-context.test.ts`，实际放在 `test/build-agent/contract-error.test.ts`**：
+- 单源（rule 8）效果等价 —— `convertMissingTerminalToolError` 是 recovery hint 的所有者；它的输出 = orchestrator catch path 写入 decision_log 的 value。
+- **采纳**：本反馈 commit 同步更新 §5.4 表格 + 加单源说明。
+
+### 不采纳但记入待办
+
+- 集成 smoke 测试 → 6.2 节追加。
+- modify_goal execute return-string 测试 → 6.2 节追加。
+
+### codex 二审 verbatim verdict
+
+> "Ship as-is. All three BLOCKING items from the first-round codex review are correctly addressed with no regressions, the test suite passes (44/44 spec tests + visible-brief hygiene), no duplicate throw sites exist, no fallback was introduced, and recognition is fully `instanceof`-based (rule 20)."
