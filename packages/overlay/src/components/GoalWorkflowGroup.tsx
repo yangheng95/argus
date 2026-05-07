@@ -9,10 +9,9 @@ import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
-import { goalStatusToTaskStatus } from "../utils/status-mapping";
+import { goalStatusToTaskStatus, statusIconName } from "../utils/status-mapping";
 import { StaticTextPart } from "./TextPart";
 import { Icon } from "./Icon";
-import { statusIconName } from "./Board";
 
 // ── Types ──
 

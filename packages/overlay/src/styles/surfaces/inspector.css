@@ -211,7 +211,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   white-space: nowrap;
 }
 

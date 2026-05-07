@@ -49,7 +49,7 @@ function expectNoViolations(kind: string, violations: string[], guidance: string
 }
 
 describe("flat-redesign color literal coverage — white/black", () => {
-  it.skip("surfaces and primitives contain no named white/black color literals", () => {
+  it("surfaces and primitives contain no named white/black color literals", () => {
     const violations = grepCss(/(?<![\w-])(?:white|black)(?![\w-])/i)
     expectNoViolations(
       "named white/black color literal",
@@ -60,14 +60,14 @@ describe("flat-redesign color literal coverage — white/black", () => {
 })
 
 describe("flat-redesign color literal coverage — hex", () => {
-  it.skip("surfaces and primitives contain no hex color literals", () => {
+  it("surfaces and primitives contain no hex color literals", () => {
     const violations = grepCss(/#[0-9a-fA-F]{3,8}\b/)
     expectNoViolations("hex color literal", violations, "Use cascade theme tokens instead of hard-coded hex colors.")
   })
 })
 
 describe("flat-redesign color literal coverage — rgba", () => {
-  it.skip("surfaces and primitives contain no rgb()/rgba() color literals", () => {
+  it("surfaces and primitives contain no rgb()/rgba() color literals", () => {
     const violations = grepCss(/\brgba?\s*\(/i)
     expectNoViolations(
       "rgb()/rgba() color literal",

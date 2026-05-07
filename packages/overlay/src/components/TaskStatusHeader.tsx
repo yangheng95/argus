@@ -7,7 +7,7 @@
 
 import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js";
 import { boardStore } from "../store/board";
-import { statusIconName } from "./Board";
+import { statusIconName } from "../utils/status-mapping";
 import { Icon } from "./Icon";
 import { t } from "../utils/i18n";
 import { formatDuration } from "../utils/time";

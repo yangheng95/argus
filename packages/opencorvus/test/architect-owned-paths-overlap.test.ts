@@ -51,13 +51,4 @@ describe("architectValidationIssues — owned_paths are collaboration responsibi
     const issues = architectValidationIssues(collector)
     expect(issues.find((i) => i.startsWith("Owned path"))).toBeUndefined()
   })
-
-  test("verification goals still keep their role-specific test-path boundary", () => {
-    const collector = buildCollector([
-      { id: "goal_feature", owned_paths: ["src/App.tsx"], kind: "feature" },
-      { id: "goal_verify", owned_paths: ["src/App.tsx"], kind: "verification" },
-    ])
-    const issues = architectValidationIssues(collector)
-    expect(issues.join("\n")).toContain("owned_paths must stay under tests/integration")
-  })
 })

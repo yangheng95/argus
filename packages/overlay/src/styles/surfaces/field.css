@@ -83,9 +83,8 @@
 }
 
 /* Chromium's autofill burns a `background-color: rgb(232, 240, 254)`
- * onto credential fields with `!important` priority that ordinary
- * declarations cannot override. The canonical workaround is an inset
- * `box-shadow` thick enough to repaint the entire field; the long
+ * onto credential fields at browser priority. The canonical workaround
+ * is an inset `box-shadow` thick enough to repaint the entire field; the long
  * transition keeps Chromium from animating back to the autofill colour
  * a few hundred milliseconds after focus.
  *

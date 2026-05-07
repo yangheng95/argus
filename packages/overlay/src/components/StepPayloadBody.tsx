@@ -10,24 +10,14 @@
 
 import { For, Show } from "solid-js";
 import type { StepPayload } from "../utils/card-tree";
+import { statusIconName } from "../utils/status-mapping";
+import { Icon } from "./Icon";
 import { StaticTextPart } from "./TextPart";
 
 function verdictClass(verdict: string): string {
   if (verdict === "accepted") return "gwg-verdict--accepted";
   if (verdict === "rejected") return "gwg-verdict--rejected";
   return "gwg-verdict--inconclusive";
-}
-
-function checkStatusIcon(status: string): string {
-  if (status === "passed") return "\u2713";
-  if (status === "failed") return "\u2717";
-  return "\u00B7";
-}
-
-function checkStatusClass(status: string): string {
-  if (status === "passed") return "gwg-check--passed";
-  if (status === "failed") return "gwg-check--failed";
-  return "gwg-check--pending";
 }
 
 export function StepPayloadBody(props: {
@@ -88,8 +78,10 @@ export function StepPayloadBody(props: {
           <div class="gwg-checks">
             <For each={props.payload!.checks}>
               {(check) => (
-                <div class={`gwg-check ${checkStatusClass(check.status)}`}>
-                  <span class="gwg-check-icon">{checkStatusIcon(check.status)}</span>
+                <div class="gwg-check" data-check-status={check.status}>
+                  <span class="gwg-check-icon" aria-hidden="true">
+                    <Icon name={statusIconName(check.status)} />
+                  </span>
                   <span class="gwg-check-name">{check.name}</span>
                   <Show when={check.evidence}>
                     <span class="gwg-check-evidence">{check.evidence}</span>

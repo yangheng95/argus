@@ -18,10 +18,33 @@ export const TASK_STATUS_PRIORITY: Record<string, number> = {
   cancelled: 3,
 };
 
+const STATUS_ICON_NAME: Record<string, IconName> = {
+  idle: "status-idle",
+  pending: "status-idle",
+  queued: "status-queued",
+  active: "status-active",
+  running: "status-active",
+  completed: "status-completed",
+  passed: "status-completed",
+  failed: "status-failed",
+  error: "status-failed",
+  cancelled: "status-cancelled",
+  skipped: "status-cancelled",
+};
+
+export function statusIconName(status: string): IconName {
+  const iconName = STATUS_ICON_NAME[status];
+  if (!iconName) {
+    throw new Error(`Unsupported status icon mapping: ${status}`);
+  }
+  return iconName;
+}
+
 const GOAL_STATUS_TO_TASK_STATUS: Record<string, TaskStatus> = {
   passed: "completed",
   failed: "failed",
   running: "active",
+  skipped: "cancelled",
 };
 
 export function goalStatusToTaskStatus(s: string): TaskStatus {

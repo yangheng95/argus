@@ -2,11 +2,14 @@
 
 import { createHash } from "node:crypto"
 import { readdirSync, statSync } from "node:fs"
+import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import ts from "typescript"
+import type * as TypeScript from "typescript"
 
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const requireFromWorkspace = createRequire(path.join(dir, "..", "..", "package.json"))
+const ts = requireFromWorkspace("typescript") as typeof TypeScript
 
 // ── Panel files for revision hash ──
 // Only top-level .html and .js files in src/ are hashed. This keeps the

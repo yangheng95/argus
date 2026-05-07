@@ -106,7 +106,7 @@ function failWithViolations(kind: string, violations: string[], guidance: string
 }
 
 describe("flat-redesign theme cascade discipline", () => {
-  it.skip("surfaces do not contain body[data-theme=] theme branches", () => {
+  it("surfaces do not contain body[data-theme=] theme branches", () => {
     const violations: string[] = []
     for (const file of walkCssFiles(SURFACES_ROOT).sort()) {
       const lines = withoutComments(readFileSync(file, "utf8")).split(/\r?\n/)
@@ -120,7 +120,7 @@ describe("flat-redesign theme cascade discipline", () => {
     failWithViolations("surface theme branch", violations, "Move theme-specific differences into cascade theme tokens.")
   })
 
-  it.skip("cascade/base.css :root declares no color token values or color-scheme", () => {
+  it("cascade/base.css :root declares no color token values or color-scheme", () => {
     const file = join(CASCADE_ROOT, "base.css")
     const block = rootBlock(file)
     const colorValue =
@@ -144,7 +144,7 @@ describe("flat-redesign theme cascade discipline", () => {
     )
   })
 
-  it.skip("dark, light, and vscode-dark theme token values are all present", () => {
+  it("dark, light, and vscode-dark theme token values are all present", () => {
     const themeFiles = [
       join(CASCADE_ROOT, "dark.css"),
       join(CASCADE_ROOT, "light.css"),

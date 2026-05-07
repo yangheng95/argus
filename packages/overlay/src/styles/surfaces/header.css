@@ -48,7 +48,7 @@
   white-space: nowrap;
   font: var(--oc-header-title-font);
   line-height: var(--oc-header-title-line-height);
-  letter-spacing: var(--oc-header-title-letter-spacing);
+  letter-spacing: var(--ui-letter-spacing-normal);
   text-transform: var(--oc-header-title-transform);
   color: var(--text-strong);
 }

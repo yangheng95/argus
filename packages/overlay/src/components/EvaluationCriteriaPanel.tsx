@@ -16,9 +16,8 @@
  */
 import { For, Show } from "solid-js";
 import { familyOrder, familyLabel } from "../utils/criteria";
-import { goalStatusToTaskStatus } from "../utils/status-mapping";
+import { goalStatusToTaskStatus, statusIconName } from "../utils/status-mapping";
 import { Icon } from "./Icon";
-import { statusIconName } from "./Board";
 
 interface CriteriaCheck {
   name: string;

@@ -194,7 +194,7 @@
   font-size: var(--ui-font-small);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
 }
 
 .changes-tab[data-active="true"] .changes-tab-count {
@@ -283,7 +283,7 @@
   background: transparent;
   color: var(--text-soft);
   text-transform: none;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   font-weight: var(--ui-font-weight-strong);
   font-size: var(--ui-font-small);
 }

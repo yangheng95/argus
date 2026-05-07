@@ -80,7 +80,7 @@ export function TodoListPart(props: { todos: TodoItem[]; variant?: "inline" | "c
       <div class="msg-todo-card__progress" aria-hidden="true">
         <span
           class="msg-todo-card__progress-fill"
-          style={{ width: `${progress()}%` }}
+          style={{ "--todo-progress": `${progress()}%` }}
         />
       </div>
 

@@ -147,6 +147,10 @@ export type NativeCommand =
   | { kind: "workspace.pickFiles"; start?: string; multiple?: boolean }
   | { kind: "workspace.createDir"; path: string }
   | { kind: "workspace.openProjectEditor"; editor: ProjectEditorID; path: string }
+  // services/notify.ts
+  | { kind: "notification.permission" }
+  | { kind: "notification.requestPermission" }
+  | { kind: "notification.send"; title: string; body?: string; tag?: string }
 
 export class UnsupportedNativeCommandError extends Error {
   override readonly name: string = "UnsupportedNativeCommandError"

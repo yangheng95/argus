@@ -705,7 +705,7 @@ export function TaskList(props: TaskListProps) {
       <Show when={boardStore.tasksError}>
         <div class="task-list-error" role="alert">
           <div class="task-list-error-msg">
-            {t("task.load_failed") || "Failed to load tasks"}: {boardStore.tasksError}
+            {t("task.load_failed")}: {boardStore.tasksError}
           </div>
           <Button
             type="button"
@@ -716,7 +716,7 @@ export function TaskList(props: TaskListProps) {
             disabled={retrying()}
             onClick={handleRetry}
           >
-            {retrying() ? (t("common.loading") || "…") : (t("common.retry") || "Retry")}
+            {retrying() ? t("common.loading") : t("common.retry")}
           </Button>
         </div>
       </Show>

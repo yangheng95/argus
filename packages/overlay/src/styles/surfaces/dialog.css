@@ -85,13 +85,6 @@
   margin: 0;
 }
 
-.dialog-subtitle {
-  font-size: var(--ui-font-meta);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
-  margin-top: var(--ui-gap-xs);
-}
-
 .dialog-head {
   display: flex;
   align-items: center;
