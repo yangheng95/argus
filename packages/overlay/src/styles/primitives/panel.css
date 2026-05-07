@@ -19,7 +19,6 @@
   --oc-panel-header-height: var(--oc-density-control-height);
   --oc-panel-bg: transparent;
   --oc-panel-border: none;
-  --oc-panel-radius: 0;
   --oc-panel-pad-x: var(--ui-gap-md);
 
   display: flex;
@@ -27,7 +26,7 @@
   min-height: 0;
   background: var(--oc-panel-bg);
   border: var(--oc-panel-border);
-  border-radius: var(--oc-panel-radius);
+  border-radius: var(--oc-radius-none);
   position: relative;
 }
 

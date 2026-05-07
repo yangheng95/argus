@@ -1438,7 +1438,9 @@ describe("overlay architecture guards", () => {
       expect(inspectorSurface).toMatch(new RegExp(`\\.req-type--${variant}\\s*\\{`))
     }
     for (const variant of ["passed", "failed", "pending"]) {
-      expect(inspectorSurface).toMatch(new RegExp(`\\.req-status--${variant}\\s*\\{`))
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.req-status\\[data-req-status="${variant}"\\]\\s*\\{`),
+      )
     }
     expect(inspectorSurface).toMatch(/\.req-spec-detail \> summary\s*\{/)
     expect(inspectorSurface).toMatch(/\.req-streaming-messages::-webkit-scrollbar\s*\{/)
@@ -1563,7 +1565,7 @@ describe("overlay architecture guards", () => {
         new RegExp(`(^|\\n)\\.gwg--${variant} \\.gwg-status-icon\\s*\\{`),
       )
       expect(inspectorSurface).toMatch(
-        new RegExp(`\\.gwg--${variant} \\.gwg-status-icon\\s*\\{`),
+        new RegExp(`\\.gwg\\[data-goal-status="${variant}"\\] \\.gwg-status-icon\\s*\\{`),
       )
     }
     expect(inspectorSurface).not.toMatch(/clamp\(10px,/)
@@ -1583,13 +1585,19 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.gwg::before\s*\{/)
     expect(inspectorSurface).toMatch(/\.gwg:hover\s*\{/)
 
-    for (const modifier of ["expanded", "passed", "failed", "running"]) {
-      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.gwg--${modifier}(?:::before)?\\s*\\{`))
-      expect(inspectorSurface).toMatch(new RegExp(`\\.gwg--${modifier}(?:::before)?\\s*\\{`))
+    expect(styles).not.toMatch(/(^|\n)\.gwg--expanded\s*\{/)
+    expect(inspectorSurface).toMatch(/\.gwg--expanded\s*\{/)
+    for (const status of ["passed", "failed", "running"]) {
+      expect(styles).not.toMatch(
+        new RegExp(`(^|\\n)\\.gwg\\[data-goal-status="${status}"\\](?:::before)?\\s*\\{`),
+      )
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.gwg\\[data-goal-status="${status}"\\](?:::before)?\\s*\\{`),
+      )
     }
 
     expect(inspectorSurface).not.toMatch(/#c3d2ee/)
-    expect(inspectorSurface).toMatch(/\.gwg--passed::before[\s\S]*?var\(--text-soft\)/)
+    expect(inspectorSurface).toMatch(/\.gwg\[data-goal-status="passed"\]::before[\s\S]*?var\(--text-soft\)/)
     expect(inspectorSurface).toContain("var(--ui-shadow-tone)")
   })
 

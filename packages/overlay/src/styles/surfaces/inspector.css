@@ -646,16 +646,16 @@
     color-mix(in srgb, var(--surface) 96%, transparent);
 }
 
-/* `.gwg--*` status modifiers — rail tone via `::before`. */
-.gwg--passed::before {
+/* Goal status rail tone is data-driven by the backend goal status. */
+.gwg[data-goal-status="passed"]::before {
   background: color-mix(in srgb, var(--accent) 52%, var(--text-soft));
 }
 
-.gwg--failed::before {
-  background: color-mix(in srgb, var(--bad) 82%, white 4%);
+.gwg[data-goal-status="failed"]::before {
+  background: color-mix(in srgb, var(--bad) 82%, var(--text-on-accent) 4%);
 }
 
-.gwg--running::before {
+.gwg[data-goal-status="running"]::before {
   background: var(--accent);
   box-shadow: none;
 }
@@ -724,19 +724,19 @@
   box-shadow: none;
 }
 
-.gwg--passed .gwg-status-icon {
+.gwg[data-goal-status="passed"] .gwg-status-icon {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
   box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 24%, transparent) inset;
 }
 
-.gwg--failed .gwg-status-icon {
+.gwg[data-goal-status="failed"] .gwg-status-icon {
   background: var(--bad-dim);
   color: var(--bad);
   box-shadow: none;
 }
 
-.gwg--running .gwg-status-icon {
+.gwg[data-goal-status="running"] .gwg-status-icon {
   background: var(--accent-dim);
   color: var(--accent);
   box-shadow: none;
@@ -1503,17 +1503,17 @@
   color: var(--text-muted);
 }
 
-.req-status--passed {
+.req-status[data-req-status="passed"] {
   background: var(--good-dim);
   color: var(--good);
 }
 
-.req-status--failed {
+.req-status[data-req-status="failed"] {
   background: var(--bad-dim);
   color: var(--bad);
 }
 
-.req-status--pending {
+.req-status[data-req-status="pending"] {
   background: var(--subtle-2);
   color: var(--text-muted);
 }
@@ -2100,10 +2100,10 @@
   font-size: var(--ui-font-small);
   color: var(--text);
 }
-.criteria-item--failed .criteria-name {
+.criteria-item[data-criteria-status="failed"] .criteria-name {
   color: var(--bad);
 }
-.criteria-item--skipped .criteria-name {
+.criteria-item[data-criteria-status="skipped"] .criteria-name {
   color: var(--text-muted);
 }
 .criteria-evidence {
@@ -2213,10 +2213,18 @@
 }
 
 .criteria-status {
-  width: calc(7px * var(--ui-scale));
-  height: calc(7px * var(--ui-scale));
-  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
   flex-shrink: 0;
+}
+
+.criteria-status svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
 }
 .criteria-result {
   min-width: calc(40px * var(--ui-scale));
@@ -2228,21 +2236,26 @@
   text-align: right;
 }
 .criteria-status[data-result="pending"] {
-  background: var(--subtle-5);
+  background: var(--subtle-2);
+  color: var(--text-muted);
 }
 .criteria-status[data-result="passed"] {
-  background: var(--good);
+  background: var(--good-dim);
+  color: var(--good);
   box-shadow: 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--good) 40%, transparent);
 }
 .criteria-status[data-result="failed"] {
-  background: var(--bad);
+  background: var(--bad-dim);
+  color: var(--bad);
   box-shadow: 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--bad) 40%, transparent);
 }
 .criteria-status[data-result="skipped"] {
-  background: var(--text-muted);
+  background: var(--subtle-2);
+  color: var(--text-muted);
 }
 .criteria-status[data-result="off"] {
   background: transparent;
+  color: var(--text-muted);
   border: var(--oc-border-width) solid var(--subtle-5);
   box-shadow: none;
 }

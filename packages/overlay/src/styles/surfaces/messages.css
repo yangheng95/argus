@@ -416,12 +416,19 @@
   border: var(--oc-border-width) solid var(--subtle-4);
 }
 .msg-todo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   width: calc(16px * var(--ui-scale));
-  text-align: center;
-  font-family: var(--mono);
+  height: calc(16px * var(--ui-scale));
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 1;
+}
+
+.msg-todo-icon svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
 }
 .msg-todo-content {
   flex: 1 1 auto;
