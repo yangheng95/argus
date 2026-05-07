@@ -73,8 +73,18 @@ export const PanelTool = Tool.define("panel", {
         // Use original user text when available to prevent the control-plane
         // LLM from silently summarising or truncating the user's request.
         const originalText = typeof ctx.extra?.originalText === "string" ? ctx.extra.originalText : undefined
-        // Decode text attachments (e.g. PRD .txt files) and append to the request so the
-        // executor session also has access to the file content.
+        // Two semantically different attachment outlets — both must run, this
+        // is NOT a double-source situation:
+        //   1. Text attachments (PRD .txt / .md / .json) → inlined into the
+        //      request prose so the executor session reads them as user
+        //      intent without needing a separate `read` round-trip.
+        //   2. Binary attachments (images, PDF, audio, …) → forwarded as
+        //      TaskAttachmentInput so EngineService.createTask runs the same
+        //      AttachmentStore.write + persistQueuedTask path that the direct
+        //      POST /task ingress uses. Without this, every image dropped
+        //      through control-plane LLM (overlay panel.message.stream + 14
+        //      IM channels) silently disappeared before reaching task.attachments,
+        //      causing build-agent visual fidelity 0.
         const rawAttachments = Array.isArray(ctx.extra?.attachments)
           ? (ctx.extra.attachments as Array<{ mime: string; url: string; filename?: string }>)
           : []
@@ -87,6 +97,19 @@ export const PanelTool = Tool.define("panel", {
           })
           .filter(Boolean)
           .join("")
+        const binaryAttachments = rawAttachments
+          .filter((a) => !isDecodableText(a.mime, a.filename))
+          .map((a) => {
+            // overlay sends data URLs (data:<mime>;base64,<bytes>); the engine
+            // schema expects raw base64 only. Strip the prefix once here so
+            // EngineService.createTask sees a clean TaskAttachmentInput.
+            const data = a.url.includes(",") ? a.url.split(",", 2)[1] : a.url
+            return {
+              mime: a.mime,
+              data,
+              ...(a.filename ? { filename: a.filename } : {}),
+            }
+          })
         const baseRequest = originalText || params.request
         const request = attachmentTexts ? baseRequest + attachmentTexts : baseRequest
         const taskID = await EngineService.createTask({
@@ -106,6 +129,7 @@ export const PanelTool = Tool.define("panel", {
                 },
               }
             : {}),
+          ...(binaryAttachments.length > 0 ? { attachments: binaryAttachments } : {}),
           metadata: params.metadata,
         })
         return {

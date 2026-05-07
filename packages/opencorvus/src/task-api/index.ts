@@ -1489,7 +1489,15 @@ export namespace EngineService {
 
     // Decode base64 attachments once, write bytes to AttachmentStore, and carry
     // references downstream. Mirrors createTask so that follow-up messages and
-    // new-task messages share the same persistence shape.
+    // new-task messages share the same persistence shape. Each ref is also
+    // appended to `task.attachments` so subsequent build / architect / design
+    // dispatches (which read task.attachments, not session history) can see
+    // the new visual reference. Without this, follow-up images persist in
+    // session history but never reach the build agent — the orchestrator wakes
+    // with task.attachments still equal to the create-time snapshot, build
+    // agent's `input.task.attachments` is therefore stale, and a user dropping
+    // a screenshot into a follow-up message gets fidelity 0 even though the
+    // bytes were saved.
     const attachmentRefs: AttachmentStore.Reference[] = []
     if (input.attachments?.length) {
       const projectID = Instance.project.id
@@ -1497,7 +1505,9 @@ export namespace EngineService {
         const bytes = Buffer.from(att.data, "base64")
         const ref = await AttachmentStore.write(projectID, bytes, att.mime, att.filename)
         const intent = att.mime.startsWith("image/") ? "visual_reference" : "spec_artifact"
-        attachmentRefs.push({ ...ref, intent, source: "user-upload" })
+        const annotated = { ...ref, intent, source: "user-upload" }
+        attachmentRefs.push(annotated)
+        await appendTaskAttachment(taskID, annotated)
       }
     }
 
