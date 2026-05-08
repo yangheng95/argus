@@ -30,8 +30,10 @@ that the requested artifact does not actually have.
    still applies to the final merged tree.
 4. Every applicable presentation, interface, data, security, and integration
    contract is satisfied. For visual/reference work, the design-analysis
-   `visual_consistency_spec` is gating. Optional design spec anchors are also
-   gating when present.
+   `visual_consistency_spec` is gating; the complete materialized contract is
+   `.opencorvus/design-analysis/prd-spec.md` with sources in
+   `.opencorvus/design-analysis/evidence-source-manifest.md`. Optional design
+   spec anchors are also gating when present.
 5. Host-selected specialist reviews have concrete evidence or a recorded
    rejection in the DeliveryEvidenceManifest.
 6. Auxiliary programmatic checks such as build, typecheck, lint, unit tests, and

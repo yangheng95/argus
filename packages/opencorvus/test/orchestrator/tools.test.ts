@@ -22,6 +22,7 @@ let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
 let architectCoordinateImpl: ((input: any) => Promise<any>) | undefined
 let deliveryServiceVerifyImpl: ((input: any) => Promise<any>) | undefined
+let designAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 
 mock.module("@/build/agent", () => ({
   BuildAgent: {
@@ -44,6 +45,15 @@ mock.module("@/architect/agent", () => ({
     coordinate: (input: any) => {
       if (!architectCoordinateImpl) throw new Error("ArchitectAgent.coordinate mock not configured")
       return architectCoordinateImpl(input)
+    },
+  },
+}))
+
+mock.module("@/design-analyst", () => ({
+  DesignAnalystAgent: {
+    analyze: (input: any) => {
+      if (!designAnalyzeImpl) throw new Error("DesignAnalystAgent.analyze mock not configured")
+      return designAnalyzeImpl(input)
     },
   },
 }))
@@ -178,6 +188,7 @@ describe("orchestrator tools", () => {
     reviewIntegrityImpl = undefined
     architectCoordinateImpl = undefined
     deliveryServiceVerifyImpl = undefined
+    designAnalyzeImpl = undefined
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
@@ -300,6 +311,91 @@ describe("orchestrator tools", () => {
         expect(buildResult).toContain("blocked")
         expect(buildResult).toContain("design_analysis")
         expect(buildResult).toContain("evidence_source_manifest")
+      },
+    })
+  })
+
+  test("design_analysis materializes PRD/SPEC and source manifest files", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_design_files_${stamp}`
+    const taskID = `tsk_design_files_${stamp}`
+    const goalID = `gol_design_files_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const workflowState = createWorkflowState(pipeline)
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Design files project",
+      taskTitle: "Design files task",
+      request: "复刻 https://example.com/amd 的完整前后端页面",
+      goalTitle: "Implement visual page",
+      goalSlug: "implement-visual-page",
+      objective: "Implement the page from the visual reference",
+      now,
+    })
+    Database.use((db) => {
+      db.update(EngineTaskTable)
+        .set({
+          attachments: [{
+            sha: "sha-design-reference",
+            url: "attachment://design-reference.png",
+            mime: "image/png",
+            size: 42,
+            filename: "design-reference.png",
+            intent: "visual_reference",
+            source: "user-upload",
+          }],
+        })
+        .where(eq(EngineTaskTable.id, taskID))
+        .run()
+    })
+
+    designAnalyzeImpl = async () => ({
+      specs: [],
+      designSystem: "Reference design system",
+      techStack: ["React", "Bun"],
+      productSpec: "Product Requirements Document body",
+      frontendSpec: "Frontend specification body",
+      visualConsistencySpec: "Match reference layout, typography, colors, and spacing exactly.",
+      backendSpec: "Backend API mock contract",
+      prdIterationNotes: ["First pass covered layout.", "Second pass covered visual consistency."],
+      completenessReview: "Complete enough for downstream implementation.",
+      referenceArtifacts: ["mirror/reference.png", "mirror/page-ir.xml"],
+      openQuestions: ["Live feed authentication is unknown."],
+      sessionID: "ses_design_analysis_mock",
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "design files test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        const result = await tools.design_analysis.execute({ reason: "visual replica requires source PRD" }, {} as any)
+        expect(result).toContain("prd_spec_file")
+        expect(result).toContain(".opencorvus")
+
+        const prdPath = path.join(tmp.path, ".opencorvus", "design-analysis", "prd-spec.md")
+        const manifestPath = path.join(tmp.path, ".opencorvus", "design-analysis", "evidence-source-manifest.md")
+        const prd = await fs.readFile(prdPath, "utf8")
+        const manifest = await fs.readFile(manifestPath, "utf8")
+        expect(prd).toContain("## Visual Consistency Spec")
+        expect(prd).toContain("Match reference layout, typography, colors, and spacing exactly.")
+        expect(prd).toContain(".opencorvus/design-analysis/evidence-source-manifest.md")
+        expect(manifest).toContain("Canonical PRD/SPEC file: .opencorvus/design-analysis/prd-spec.md")
+        expect(manifest).toContain("design-reference.png")
+        expect(manifest).toContain("mirror/reference.png")
       },
     })
   })
