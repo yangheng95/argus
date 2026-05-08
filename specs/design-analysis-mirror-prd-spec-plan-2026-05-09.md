@@ -97,3 +97,13 @@ The architectural correction is:
    - `.opencorvus/design-analysis/evidence-source-manifest.md`
 2. Requirements, architect, build, and delivery receive a compact handoff reference with those paths, the `design_analysis` phase name, and bounded decision-log excerpts only. They must read the files when they need detail.
 3. Non-design native agents receive explicit mirror permission denies after user permission config is merged. This aligns permission logs with the registry boundary and prevents custom config from reopening mirror access outside design-analysis.
+
+## Iteration 2026-05-09: AMD Benchmark Delivery Tooling Findings
+
+The `amd-design-analysis-handoff-20260509-033126` benchmark confirmed the new handoff shape but exposed two delivery-infrastructure defects unrelated to PRD generation:
+
+1. Delivery `run_command` inherited `SHELL=powershell` on Windows even though `Shell.fromEnv` already marks PowerShell as unacceptable. This made delivery-agent probes misread `bun run build` output and PowerShell stderr wrapping as failures while the same project-gate command and manual command passed.
+2. Managed frontend preview started Vite with its default `localhost` binding. On this Windows host that could resolve through `::1` and fail with `EACCES`, even though an IPv4 loopback preview is the contract delivery needs.
+3. Goal worktree cleanup used only 5 filesystem remove retries while goal cleanup uses 50. The benchmark produced `EBUSY` cleanup failures on Windows after build/test/server processes released handles slowly.
+
+The correction is to make shell selection enforce the existing no-PowerShell rule, start Vite previews with `--host 127.0.0.1`, and use the same 50-retry filesystem cleanup budget for worktree removal.

@@ -1152,7 +1152,7 @@ export namespace Worktree {
         .rm(target, {
           recursive: true,
           force: true,
-          maxRetries: 5,
+          maxRetries: 50,
           retryDelay: 100,
         })
         .catch((error) => {
