@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "7729d1f0b70b2a2f"
+    "panel_revision": "6b6d057f6b6fbd08"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -740,6 +740,7 @@
   "workspace.file_loading": "加载文件中…",
   "workspace.file_binary": "二进制文件，无法预览。",
   "workspace.file_error": "加载文件失败：{{message}}",
+  "workspace.editor_launchers": "IDE 快捷入口",
   "workspace.toggle": "切换工作区",
   "workflow.architect": "架构协同",
   "workflow.architect_empty": "尚未记录架构决策。",
