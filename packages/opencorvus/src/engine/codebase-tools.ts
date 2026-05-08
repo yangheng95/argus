@@ -11,8 +11,9 @@ import fs from "fs"
 import { Instance } from "@/project/instance"
 
 const DENSE_MIRROR_ARTIFACT_MAX_LINES = 120
+const READ_FILE_MAX_LINE_CHARS = 1200
 
-function denseMirrorArtifactReason(relPath: string): string | null {
+function rawMirrorArtifactReason(relPath: string): string | null {
   const normalized = relPath.replace(/\\/g, "/")
   if (
     normalized.endsWith("/mirror/extracted-page.json") ||
@@ -24,6 +25,11 @@ function denseMirrorArtifactReason(relPath: string): string | null {
   ) {
     return "raw mirror extraction JSON"
   }
+  return null
+}
+
+function denseMirrorArtifactReason(relPath: string): string | null {
+  const normalized = relPath.replace(/\\/g, "/")
   if (normalized.endsWith("/mirror/scaffold.json") || normalized === "mirror/scaffold.json") {
     return "dense mirror scaffold JSON"
   }
@@ -70,6 +76,14 @@ export function createCodebaseTools(projectDir?: string) {
       execute: async ({ path: filePath, max_lines }) => {
         const abs = safePath(filePath)
         if (!abs) return "Error: path is outside the project boundary."
+        const rawMirrorArtifact = rawMirrorArtifactReason(filePath)
+        if (rawMirrorArtifact) {
+          return (
+            `Error: ${filePath} is ${rawMirrorArtifact}. ` +
+            "It is a tool input and evidence-manifest source, not a prompt-readable artifact. " +
+            "Use mirror/page-ir.xml, mirror/shared-context.md, bounded mirror/scaffold.json reads, and mirror tool summaries instead."
+          )
+        }
         const denseMirrorArtifact = denseMirrorArtifactReason(filePath)
         if (denseMirrorArtifact && (max_lines ?? 300) > DENSE_MIRROR_ARTIFACT_MAX_LINES) {
           return (
@@ -92,7 +106,13 @@ export function createCodebaseTools(projectDir?: string) {
           const lines = content.split("\n")
           const limit = max_lines ?? 300
           const slice = lines.slice(0, limit)
-          const numbered = slice.map((line, i) => `${String(i + 1).padStart(5)} | ${line}`).join("\n")
+          const numbered = slice.map((line, i) => {
+            const displayLine =
+              line.length > READ_FILE_MAX_LINE_CHARS
+                ? `${line.slice(0, READ_FILE_MAX_LINE_CHARS)}... (line truncated, ${line.length - READ_FILE_MAX_LINE_CHARS} more chars)`
+                : line
+            return `${String(i + 1).padStart(5)} | ${displayLine}`
+          }).join("\n")
           if (lines.length > limit) {
             return numbered + `\n... (${lines.length - limit} more lines, total ${lines.length})`
           }
