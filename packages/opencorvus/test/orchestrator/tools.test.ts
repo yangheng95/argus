@@ -300,6 +300,11 @@ describe("orchestrator tools", () => {
         expect(requirementsResult).toContain("evidence_source_manifest")
         expect(findActiveSpecForTask(taskID)).toBeDefined()
 
+        const intentResult = await tools.analyze_intent.execute({ reason: "Need intent reading" }, {} as any)
+        expect(intentResult).toContain("blocked")
+        expect(intentResult).toContain("design_analysis")
+        expect(intentResult).toContain("evidence_source_manifest")
+
         const architectResult = await tools.architect.execute({ reason: "Need goals" }, {} as any)
         expect(architectResult).toContain("blocked")
         expect(architectResult).toContain("design_analysis")

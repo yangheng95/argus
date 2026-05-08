@@ -194,7 +194,7 @@ runs only when its output earns its budget for THIS particular request AND the t
 allows that route. `Kind: build` can go `build({ request }) → deliver` for a direct
 single-scope fix. Fresh `Kind: workflow` cannot start with task-level `build({ request })`;
 it must first establish REQ-N rows and architect goals before per-goal build. A multi-file
-UI replication in workflow mode usually calls `analyze_intent → design_analysis →
+UI replication in workflow mode usually calls `design_analysis → analyze_intent →
 requirements → architect → parallel builds → deliver → prosecute →
 publish_delivery`. Most tasks land between those extremes — pick the subset that fits
 without crossing the task-kind contract.
@@ -203,7 +203,7 @@ Reason from the request itself, not from a pre-committed workflow:
   - What axis of ambiguity, if any, would silently mislead a downstream stage? → that
     decides whether `analyze_intent` is worth running.
   - Are there visual references, webpage URLs, Figma links, screenshots, mockups, or captured visual artifacts?
-    → `design_analysis` MUST be first. It must complete mirror extraction and at least two PRD/SPEC review passes before requirements, architect, build, integrity, or delivery consume the task.
+    → `design_analysis` MUST be first, before `analyze_intent` and before every downstream implementation stage. It must complete mirror extraction and at least two PRD/SPEC review passes before any other agent consumes the task.
   - Is the work multi-file with implicit acceptance criteria the build agent would have
     to guess? → that decides `requirements` and (if you decompose into goals) `architect`.
   - Did architect produce a non-trivial graph (multiple goals, cross-goal contracts,
@@ -238,8 +238,8 @@ once and decide upstream:
     `backend_spec`, `prd_iteration_notes`, `completeness_review`, and
     `evidence_source_manifest`. If a task
     has a URL, Figma link, image/PDF visual attachment, or visual_reference system
-    artifact, call `design_analysis` first and do not call requirements,
-    architect, build, integrity, deliver, or publish until that handoff exists.
+    artifact, call `design_analysis` first and do not call analyze_intent,
+    requirements, architect, build, integrity, deliver, or publish until that handoff exists.
   - `architect` requires a requirements spec snapshot. If you call it without
     requirements, it has no REQ-N rows to decompose against.
   - `integrity` requires architect goals on the active spec snapshot. It records

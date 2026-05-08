@@ -2887,14 +2887,16 @@ export function createOrchestratorTools(input: {
     }),
 
     // -----------------------------------------------------------------------
-    // Analyze intent — front-of-pipeline disambiguation.
+    // Analyze intent — post-design disambiguation for visual/reference tasks.
     //
     // Lifted out of an unused free-floating IntentAnalysisAgent.analyze
     // module (audit 2026-04-25). The agent runs at the very front of the
     // pipeline (before requirements / architect) to reconstruct the user's
     // real intent from a typically-terse request, the surrounding work
     // record (decision log + prior delivery feedback when re-entering a
-    // task), and a read-only tour of the repository.
+    // task), and a read-only tour of the repository. Visual/reference tasks
+    // are gated through design_analysis first so intent analysis reads the
+    // same PRD/SPEC source as every downstream stage.
     // -----------------------------------------------------------------------
 
     analyze_intent: tool({
@@ -2906,7 +2908,8 @@ export function createOrchestratorTools(input: {
         "and scope estimates in the repo's actual shape. Output: an " +
         "IntentAnalysisResult (intent class, complexity band, extracted slots, " +
         "missing-info keys, blocker / nice clarifications, overall confidence, " +
-        "one-sentence summary).\n\n" +
+        "one-sentence summary). For visual/reference tasks, this tool is blocked " +
+        "until design_analysis has produced the PRD/SPEC contract and source manifest.\n\n" +
         "USE WHEN: terse request, ambiguous scope, multiple plausible intent classes " +
         "(feature vs refactor vs bug-fix), the user's intent might silently mislead " +
         "downstream stages, OR re-entering after operator_message / refine / " +
@@ -2922,6 +2925,8 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
+        const designBlock = requireDesignAnalysisBefore("analyze_intent", task)
+        if (designBlock) return designBlock
         await trackStepStart("analyze_intent")
         let out
         try {
