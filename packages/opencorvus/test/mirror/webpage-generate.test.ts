@@ -25,8 +25,10 @@ describe("webpage-generate dependency guards", () => {
     // Content invariants: generated source contract, strictly-serial
     // extract/compile/analyze, no old static-page branch.
     expect(parsed.content).toContain("Generated React source")
-    expect(parsed.content).toContain("src/App.tsx")
-    expect(parsed.content).toContain("src/design-tokens.ts")
+    expect(parsed.content).toContain("sourcePaths")
+    expect(parsed.content).toContain("mirror/scaffold.json")
+    expect(parsed.content).not.toContain("src/App.tsx")
+    expect(parsed.content).not.toContain("src/design-tokens.ts")
     expect(parsed.content).toContain("Steps 1–3 are **strictly serial**")
     expect(parsed.content).toContain("Refine the generated React source")
     expect(parsed.content).not.toMatch(/Tailwind CDN|cdn\.tailwindcss\.com/)

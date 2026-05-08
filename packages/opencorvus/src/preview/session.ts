@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { spawn, type ChildProcess } from "node:child_process"
+import stripAnsi from "strip-ansi"
 import { isLoopbackHttpUrl, probeFrontendDocument } from "./frontend"
 
 const PREVIEW_START_IDLE_TIMEOUT_MS = 30_000
@@ -75,8 +76,9 @@ export async function ensureManagedPreviewSession(input: {
     throw new Error(`no_package_manager: ${workspaceDir} package.json must define packageManager for frontend runtime evaluation`)
   }
 
+  const executable = packageManagerExecutable(manager)
   const command = `${manager} run dev`
-  const child = spawn(manager, ["run", "dev"], {
+  const child = spawn(executable, ["run", "dev"], {
     cwd: workspaceDir,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
@@ -160,6 +162,7 @@ async function waitForManagedPreviewUrl(child: ChildProcess): Promise<string> {
   let candidateUrl: string | undefined
   let candidateSeenAt = 0
   let lastOutputAt = Date.now()
+  let spawnError: Error | undefined
   child.stdout?.on("data", (chunk) => {
     lastOutputAt = Date.now()
     output += Buffer.from(chunk).toString("utf8")
@@ -177,8 +180,14 @@ async function waitForManagedPreviewUrl(child: ChildProcess): Promise<string> {
   child.once("exit", (code, signal) => {
     exited = { code, signal }
   })
+  child.once("error", (error) => {
+    spawnError = error
+  })
 
   while (true) {
+    if (spawnError) {
+      throw new Error(`preview_process_error: ${spawnError.message}`)
+    }
     if (candidateUrl) {
       if (await probeFrontendDocument(candidateUrl)) return candidateUrl
       if (Date.now() - candidateSeenAt > PREVIEW_READY_TIMEOUT_MS) {
@@ -196,7 +205,7 @@ async function waitForManagedPreviewUrl(child: ChildProcess): Promise<string> {
 }
 
 function firstLoopbackUrl(output: string): string | undefined {
-  const matches = output.match(/https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|::1):\d+\/?/g) ?? []
+  const matches = stripAnsi(output).match(/https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|::1):\d+\/?/g) ?? []
   return matches.find((url) => isLoopbackHttpUrl(url))
 }
 
@@ -244,6 +253,11 @@ function packageManagerName(pkg: { packageManager?: string }) {
   if (!raw) return undefined
   const manager = raw.split("@", 1)[0]
   return /^[a-z0-9._-]+$/i.test(manager) ? manager : undefined
+}
+
+function packageManagerExecutable(manager: string) {
+  if (process.platform !== "win32") return manager
+  return manager === "bun" ? manager : `${manager}.cmd`
 }
 
 function sessionView(session: LiveManagedPreviewSession | undefined): ManagedPreviewSession | undefined {

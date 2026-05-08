@@ -5,9 +5,8 @@
  * Figma2code's analogue of `webpage_analyze` / `webpage_image_analyze`.
  * Reads `figma-design.json`, synthesises a `ProjectScaffold`, and writes
  * the same mirror facts and generated React source URL and image flows write.
- * The build agent's
- * downstream codegen prompt + skill text reference these exact filenames;
- * rule 22 keeps every source on one downstream contract.
+ * Downstream agents read generated source paths from scaffold.json and the
+ * tool metadata; rule 22 keeps every source on one downstream contract.
  */
 
 import fs from "node:fs/promises"
@@ -31,7 +30,7 @@ export const FigmaAnalyzeTool = Tool.define("figma_analyze", {
 Reads \`<outputDir>/figma-design.json\` (from figma_extract). Writes the same mirror facts and generated React source the URL / image analyze steps write:
   - scaffold.json           full ProjectScaffold
   - shared-context.md       compact token + section summary
-  - src/**                  React source files from the scaffold contract
+  - sourcePaths             React source files from the scaffold contract
 
 Returns a compact summary; agent should \`read\` scaffold.json for full detail.
 

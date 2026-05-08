@@ -4,12 +4,25 @@ import type { ProjectScaffold } from "@/mirror/ir/scaffold"
 import type { EvaluationReport } from "@/mirror/visual/evaluate"
 
 const scaffoldStub = {
-  sections: [{ name: "Header", elementCount: 5, bounds: { x: 0, y: 0, w: 1440, h: 64 } }],
+  sections: [{
+    name: "Header",
+    elementCount: 5,
+    bounds: { x: 0, y: 0, w: 1440, h: 64 },
+    file: {
+      filePath: "app/sections/Header.tsx",
+      exportName: "Header",
+      isDefaultExport: false,
+      propsInterface: "",
+      imports: {},
+      patterns: [],
+    },
+    subComponents: [],
+  }],
   sharedComponents: [],
   catalog: { patterns: [], totalElements: 0, coveredElements: 0 },
   tokens: { colors: [], fonts: [], spacing: [], radii: [], shadows: [], customProperties: {} },
   tokensFile: {
-    filePath: "design-tokens.ts",
+    filePath: "app/tokens/generated.ts",
     exportName: "COLORS",
     isDefaultExport: false,
     propsInterface: "",
@@ -17,7 +30,7 @@ const scaffoldStub = {
     patterns: [],
   },
   appFile: {
-    filePath: "App.tsx",
+    filePath: "app/root/GeneratedApp.tsx",
     exportName: "App",
     isDefaultExport: true,
     propsInterface: "",
@@ -38,9 +51,12 @@ test("buildClonePrompt enforces generated React source contract", () => {
     scaffold: scaffoldStub,
   })
   expect(p).toContain("generated React source")
-  expect(p).toContain("src/App.tsx")
-  expect(p).toContain("src/design-tokens.ts")
-  expect(p).toContain("Do not create a parallel static page")
+  expect(p).toContain("app/root/GeneratedApp.tsx")
+  expect(p).toContain("app/tokens/generated.ts")
+  expect(p).toContain("Generated source paths from scaffold.json")
+  expect(p).not.toContain("src/App.tsx")
+  expect(p).not.toContain("src/design-tokens.ts")
+  expect(p).toContain("not create a parallel deliverable")
   expect(p).not.toContain("cdn.tailwindcss.com")
   expect(p).not.toMatch(/use tailwind|with tailwind/i)
   expect(p).not.toContain("vanilla CSS")

@@ -47,6 +47,7 @@ import {
   findGoal,
   findGoalRun,
   findLatestDeliveryVerdictArtifact,
+  findLatestIntegrityAttemptArtifact,
   findLatestTipGoalRun,
   findPlan,
   getGoalRetryCount,
@@ -3209,23 +3210,6 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        // Persist aggregated delivery — task-scoped variant, which is the
-        // only path that creates the `scope='delivery'` evaluation row the
-        // delivery-agent later settles via updateEvaluationFromDeliveryVerdict.
-        const { persistTaskDelivery } = await import("@/engine/persist")
-        const deliveryID = Identifier.ascending("delivery")
-        persistTaskDelivery({
-          task: task as any,
-          run: run as any,
-          deliveryID,
-          delivery: {
-            summary: summaries.length > 0 ? summaries.join("\n") : "Aggregated delivery",
-            diffs: allDiffs,
-          },
-          now: Date.now(),
-        })
-
-        // Run DeliveryAgent to verify build/test/startup
         const allGoals = listGoals(taskID)
         const activeSpecSnapshot = findActiveSpecForTask(taskID)
         const goalInfos = allGoals.map(g => {
@@ -3245,6 +3229,41 @@ export function createOrchestratorTools(input: {
             owned_paths: Array.isArray(g.owned_paths) ? g.owned_paths as string[] : [],
           }
         })
+
+        const { requiresIntegrityReview } = await import("@/delivery/checks/project-gate")
+        if (requiresIntegrityReview(goalInfos)) {
+          if (!activeSpecSnapshot) {
+            throw new Error("deliver integrity prerequisite failed: required integrity review has no active spec snapshot")
+          }
+          const existingIntegrity = findLatestIntegrityAttemptArtifact({
+            taskID,
+            specSnapshotID: activeSpecSnapshot.id,
+          })
+          if (!existingIntegrity) {
+            const integrityOutcome = await runIntegrityReview()
+            if (integrityOutcome.status === "blocked") {
+              throw new Error(`deliver integrity prerequisite failed: ${integrityOutcome.headline}`)
+            }
+          }
+        }
+
+        // Persist aggregated delivery — task-scoped variant, which is the
+        // only path that creates the `scope='delivery'` evaluation row the
+        // delivery-agent later settles via updateEvaluationFromDeliveryVerdict.
+        const { persistTaskDelivery } = await import("@/engine/persist")
+        const deliveryID = Identifier.ascending("delivery")
+        persistTaskDelivery({
+          task: task as any,
+          run: run as any,
+          deliveryID,
+          delivery: {
+            summary: summaries.length > 0 ? summaries.join("\n") : "Aggregated delivery",
+            diffs: allDiffs,
+          },
+          now: Date.now(),
+        })
+
+        // Run DeliveryAgent to verify build/test/startup
         const deliveryInfo: import("@/delivery/checks").DeliveryInfo = {
           summary: summaries.join("\n"),
           changedFiles: allDiffs.map(d => d.file),

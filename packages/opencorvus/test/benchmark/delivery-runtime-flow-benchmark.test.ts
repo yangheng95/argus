@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { spawn, type ChildProcess } from "node:child_process"
 import fs from "node:fs/promises"
 import http from "node:http"
 import { mkdtemp } from "node:fs/promises"
@@ -13,15 +12,13 @@ import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
 
 const tempDirs: string[] = []
-const childProcesses: ChildProcess[] = []
+const previewServers: http.Server[] = []
 
 afterEach(async () => {
-  for (const child of childProcesses.splice(0)) {
-    if (child.exitCode !== null) continue
-    child.kill()
+  for (const server of previewServers.splice(0)) {
     await new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, 2_000)
-      child.once("exit", () => {
+      server.close(() => {
         clearTimeout(timer)
         resolve()
       })
@@ -199,48 +196,27 @@ function recordPassingIntegrity(taskID: string, specSnapshotID: string) {
 }
 
 async function startFixturePreviewServer(dir: string): Promise<string> {
-  const port = await firstAvailablePreviewPort()
-  const serverPath = path.join(dir, "preview-server.mjs")
-  await fs.writeFile(serverPath, `
-import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-
-const root = process.cwd();
-const port = Number(process.argv[2]);
-const server = createServer(async (_req, res) => {
-  const html = await readFile(join(root, "dist", "index.html"));
-  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-  res.end(html);
-});
-server.listen(port, "127.0.0.1");
-`)
-  const child = spawn(process.execPath, [serverPath, String(port)], {
-    cwd: dir,
-    stdio: ["ignore", "ignore", "ignore"],
-    windowsHide: true,
+  const server = http.createServer(async (_req, res) => {
+    const html = await fs.readFile(path.join(dir, "dist", "index.html"))
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(html)
   })
-  childProcesses.push(child)
+  const port = await new Promise<number>((resolve, reject) => {
+    server.once("error", reject)
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject)
+      const address = server.address()
+      if (!address || typeof address === "string") {
+        reject(new Error("preview fixture did not receive a TCP port"))
+        return
+      }
+      resolve(address.port)
+    })
+  })
+  previewServers.push(server)
   const url = `http://127.0.0.1:${port}/`
   await waitForHttp(url)
   return url
-}
-
-async function firstAvailablePreviewPort(): Promise<number> {
-  for (const port of [5173, 4173, 3000, 3001, 4321, 8080, 8000, 5000]) {
-    if (await canBind(port)) return port
-  }
-  throw new Error("no preview benchmark port is available")
-}
-
-function canBind(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = http.createServer()
-    server.once("error", () => resolve(false))
-    server.listen(port, "127.0.0.1", () => {
-      server.close(() => resolve(true))
-    })
-  })
 }
 
 async function waitForHttp(url: string): Promise<void> {

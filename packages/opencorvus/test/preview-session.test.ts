@@ -49,6 +49,60 @@ await new Promise(() => {});
     expect(getManagedPreviewSession({ taskID: "tsk_preview_session", workspaceDir: dir })).toBeUndefined()
   }, 60_000)
 
+  test("parses a colored Vite-style loopback URL from dev output", async () => {
+    const dir = await packageFixture({
+      "scripts/dev-server.ts": `
+const server = Bun.serve({
+  port: 0,
+  hostname: "127.0.0.1",
+  fetch() {
+    return new Response("<!doctype html><html><body><main>colored url preview</main></body></html>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  },
+});
+console.log("\\u001b[32m➜\\u001b[39m Local: \\u001b[36mhttp://127.0.0.1:\\u001b[1m" + server.port + "\\u001b[22m/\\u001b[39m");
+await new Promise(() => {});
+`,
+    })
+
+    const session = await ensureManagedPreviewSession({
+      taskID: "tsk_preview_colored_url",
+      workspaceDir: dir,
+    })
+
+    expect(session.status).toBe("ready")
+    expect(session.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//)
+  }, 60_000)
+
+  test("starts npm package-manager scripts on Windows command shims", async () => {
+    const dir = await packageFixture({
+      "scripts/dev-server.mjs": `
+import http from "node:http";
+const server = http.createServer((_req, res) => {
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  res.end("<!doctype html><html><body><main>npm preview session</main></body></html>");
+});
+server.listen(0, "127.0.0.1", () => {
+  const address = server.address();
+  console.log("Local: http://127.0.0.1:" + address.port + "/");
+});
+`,
+    }, {
+      packageManager: "npm@10.0.0",
+      scripts: { dev: "node scripts/dev-server.mjs" },
+    })
+
+    const session = await ensureManagedPreviewSession({
+      taskID: "tsk_preview_npm_manager",
+      workspaceDir: dir,
+    })
+
+    expect(session.status).toBe("ready")
+    expect(session.command).toBe("npm run dev")
+    expect(session.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//)
+  }, 60_000)
+
   test("uses explicit metadata preview URL without starting a process", async () => {
     const dir = await packageFixture({})
 
@@ -96,13 +150,13 @@ await new Promise(() => {});
 
 async function packageFixture(
   files: Record<string, string>,
-  options?: { scripts?: Record<string, string> },
+  options?: { packageManager?: string; scripts?: Record<string, string> },
 ) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "oc-preview-session-"))
   tempDirs.push(dir)
   await fs.writeFile(path.join(dir, "package.json"), JSON.stringify({
     type: "module",
-    packageManager: "bun@1.3.13",
+    packageManager: options?.packageManager ?? "bun@1.3.13",
     scripts: options?.scripts ?? { dev: "bun scripts/dev-server.ts" },
   }, null, 2))
   for (const [file, text] of Object.entries(files)) {

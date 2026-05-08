@@ -386,7 +386,7 @@ function buildReviewEvidence(input: {
   }]
 }
 
-function requiresIntegrityReview(goals: Array<{
+export function requiresIntegrityReview(goals: Array<{
   priority?: "blocking" | "advisory"
   depends_on?: string[]
   imports?: string[]

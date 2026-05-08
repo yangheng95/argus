@@ -19,10 +19,10 @@
  *    (`src/mirror/tools/output-dir.ts`) — prompts must actually surface it.
  *
  * 3. **Ground-truth enforcement + materialisation** — captured artifacts
- *    (`scaffold.json`, `shared-context.md`) and generated `src/` files are
- *    the authoritative source for any visual clone of the URL. Sub-agents
- *    must refine the generated source in place instead of copying old mirror
- *    reference files or writing a competing scaffold.
+ *    (`scaffold.json`, `shared-context.md`) and generated source files declared
+ *    by the scaffold are the authoritative source for any visual clone of the
+ *    URL. Sub-agents must refine the generated source in place instead of
+ *    copying old mirror reference files or writing a competing scaffold.
  *
  * Static teaching is short (~150 tokens) to keep overhead low for tasks that
  * have nothing to do with webpages. The cache listing only appears when the
@@ -41,6 +41,7 @@ export interface MirrorCacheEntry {
   renderReady: boolean
   pageIrReady: boolean
   diffReady: boolean
+  sourcePaths: string[]
 }
 
 /**
@@ -60,7 +61,7 @@ export function buildMirrorToolsPromptSection(opts: { cwd: string }): string {
     "# Web Tooling",
     "",
     "For any URL you want to clone, render, analyze visually, extract design",
-    "tokens from, or reproduce as HTML, use the `webpage_*` mirror pipeline —",
+    "tokens from, or reproduce visually, use the `webpage_*` mirror pipeline —",
     "NOT `webfetch`. `webfetch` handles pure-text content (API docs,",
     "README, plain JSON/XML) only.",
     "",
@@ -69,7 +70,7 @@ export function buildMirrorToolsPromptSection(opts: { cwd: string }): string {
     "                        (DOM tree + ~33 CSS props/element + tokens + assets)",
     "  2. `webpage_compile`  extracted-page.json → `page-ir.xml` (compact XML IR)",
     "  3. `webpage_analyze`  extracted-page.json → `scaffold.json` +",
-    "                        `shared-context.md` + generated `src/**` React source",
+    "                        `shared-context.md` + generated React source paths",
     "  4. (agent refines generated source)",
     "  5. `webpage_render`   url=<http(s)://...> → `rendered.png`",
     "  6. `webpage_vision_judge` (reference.png, rendered.png) → acceptance verdict",
@@ -95,6 +96,17 @@ export function buildMirrorToolsPromptSection(opts: { cwd: string }): string {
     return `- **${entry.url}** → \`${entry.extractedJson}\`${extrasText} — captured ${entry.extractedAtIso}`
   })
 
+  const sourceLines = cache.flatMap((entry) => {
+    if (entry.sourcePaths.length === 0) return []
+    return [
+      `Generated source paths for **${entry.url}**:`,
+      ...entry.sourcePaths.map((filePath) => `  - \`${filePath}\``),
+    ]
+  })
+  const sourceSection = sourceLines.length > 0
+    ? ["", "## Generated Source Paths", "", ...sourceLines]
+    : []
+
   const cacheSection = [
     "",
     `## Mirror Cache (\`${mirrorDir}\`)`,
@@ -107,20 +119,21 @@ export function buildMirrorToolsPromptSection(opts: { cwd: string }): string {
     "**The cached artifacts are ground truth, not reference material.** For",
     "any visual clone of these URLs, the implementation MUST be built on",
     "top of the captured `scaffold.json` / `shared-context.md` and generated",
-    "`src/**` files.",
+    "source paths declared by `scaffold.json`.",
     "",
-    "Required action: refine the generated `src/App.tsx`, `src/design-tokens.ts`,",
-    "and `src/components/**` files in place. Read `mirror/shared-context.md`,",
+    "Required action: refine the generated source paths listed in",
+    "`scaffold.json` in place. Read `mirror/shared-context.md`,",
     "`mirror/page-ir.xml`, and `mirror/scaffold.json` before changing layout,",
-    "copy, assets, or component boundaries.",
+    "copy, assets, tokens, or component boundaries.",
+    ...sourceSection,
     "",
     "Forbidden:",
     "  - redefining the same tokens (colors, typography, spacing) with",
-    "    different values from generated `src/design-tokens.ts`;",
+    "    different values from the scaffold's generated token file;",
     "  - demoting the captured artifacts to \"supplementary\" / \"reference\"",
     "    while shipping a competing theme or scaffold of your own design;",
     "  - implementing the page from the screenshot or your own taste while",
-    "    leaving the generated `src/App.tsx` and section components unused.",
+    "    leaving the generated scaffold source unused.",
     "",
     "If you believe a captured artifact is wrong (token mismatch, missing",
     "section, misclassified component), raise the conflict explicitly in",
@@ -178,5 +191,32 @@ function readMirrorEntry(dir: string): MirrorCacheEntry | null {
     scaffoldReady: fs.existsSync(path.join(dir, "scaffold.json")),
     renderReady: fs.existsSync(path.join(dir, "rendered.png")),
     diffReady: fs.existsSync(path.join(dir, "diff.png")),
+    sourcePaths: readGeneratedSourcePaths(dir),
   }
+}
+
+function readGeneratedSourcePaths(dir: string): string[] {
+  const scaffoldPath = path.join(dir, "scaffold.json")
+  if (!fs.existsSync(scaffoldPath)) return []
+
+  const scaffold = JSON.parse(fs.readFileSync(scaffoldPath, "utf8")) as {
+    tokensFile?: { filePath?: unknown }
+    appFile?: { filePath?: unknown }
+    sharedComponents?: Array<{ filePath?: unknown }>
+    sections?: Array<{
+      file?: { filePath?: unknown }
+      subComponents?: Array<{ filePath?: unknown }>
+    }>
+  }
+
+  const paths = [
+    scaffold.tokensFile?.filePath,
+    scaffold.appFile?.filePath,
+    ...(scaffold.sharedComponents ?? []).map((file) => file.filePath),
+    ...(scaffold.sections ?? []).flatMap((section) => [
+      section.file?.filePath,
+      ...(section.subComponents ?? []).map((file) => file.filePath),
+    ]),
+  ]
+  return Array.from(new Set(paths.filter((filePath): filePath is string => typeof filePath === "string")))
 }

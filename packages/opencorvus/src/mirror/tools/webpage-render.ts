@@ -23,7 +23,7 @@ Returns the screenshot path + render time. Use as step 5 of the webpage-generate
       .string()
       .url()
       .describe(
-        "The exact browser URL to capture. Use http:// or https:// for an already running app, or file:// for a self-contained local HTML file.",
+        "The exact browser URL to capture. Use http:// or https:// for the already running app.",
       ),
     outputDir: z
       .string()
