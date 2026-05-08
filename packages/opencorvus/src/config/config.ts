@@ -40,6 +40,7 @@ import { withKeyedLock } from "@/util/lock"
 
 export namespace Config {
   const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
+  export const DEFAULT_MODEL = "alibaba-coding-plan-cn/kimi-k2.5"
 
   const log = Log.create({ service: "config" })
 
@@ -254,6 +255,7 @@ export namespace Config {
       const configFile = projectConfigFile()
       if (!existsSync(configFile)) {
         try {
+          result.model ??= DEFAULT_MODEL
           await fs.mkdir(projectConfigDirectory(), { recursive: true })
           await Filesystem.writeJson(configFile, result)
           log.info("wrote default config to project directory", { path: configFile })
@@ -1060,7 +1062,9 @@ export namespace Config {
         .array(z.string())
         .optional()
         .describe("When set, ONLY these providers will be enabled. All other providers will be ignored"),
-      model: ModelId.describe("Model to use in the format of provider/model, eg anthropic/claude-2").optional(),
+      model: ModelId.describe(
+        `Model to use in the format of provider/model, eg ${DEFAULT_MODEL}`,
+      ).optional(),
       small_model: ModelId.describe(
         "Small model to use for tasks like title generation in the format of provider/model",
       ).optional(),

@@ -30,6 +30,9 @@ test("loads config with defaults when no files exist", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
+      const writtenConfig = await Filesystem.readJson(path.join(tmp.path, ".opencorvus", "opencorvus.jsonc"))
+      expect(config.model).toBe(Config.DEFAULT_MODEL)
+      expect(writtenConfig.model).toBe(Config.DEFAULT_MODEL)
       expect(config.username).toBeDefined()
       expect(config.experimental?.auto_question).toBe(true)
     },

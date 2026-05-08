@@ -19,7 +19,7 @@ describe("resolveConfiguredModelRef — strict, no fallback", () => {
     mock.module("../../src/config/config", () => ({
       Config: {
         ...Config,
-        get: async () => ({ model: "anthropic/claude-sonnet-4-6" }) as any,
+        get: async () => ({ model: Config.DEFAULT_MODEL }) as any,
       },
     }))
     await Instance.provide({
@@ -28,8 +28,8 @@ describe("resolveConfiguredModelRef — strict, no fallback", () => {
         const fresh = (await import("../../src/agent/model"))
           .resolveConfiguredModelRef
         await expect(fresh()).resolves.toEqual({
-          providerID: "anthropic",
-          modelID: "claude-sonnet-4-6",
+          providerID: "alibaba-coding-plan-cn",
+          modelID: "kimi-k2.5",
         })
       },
     })
