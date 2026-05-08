@@ -6,7 +6,7 @@
  * writes mirror facts plus deterministic React source that a codegen agent then consumes:
  *   - `<outputDir>/scaffold.json`         full ProjectScaffold
  *   - `<outputDir>/shared-context.md`     compact token + pattern summary
- *   - `<worktree>/src/**`                 tokens, App, sections, components
+ *   - generated source paths declared by the materialized scaffold
  *
  * Returns only the summary so the tool output stays small.
  */
@@ -34,7 +34,7 @@ export const WebpageAnalyzeTool = Tool.define("webpage_analyze", {
 Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror facts plus generated React source:
   - scaffold.json           full ProjectScaffold
   - shared-context.md       compact token + pattern summary for prompts
-  - src/**                  React source files from the scaffold contract
+  - sourcePaths             React source files from the scaffold contract
 
 Returns a summary: section list, pattern list, token counts. The agent should \`read\` scaffold.json for full detail when needed.
 

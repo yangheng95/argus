@@ -34,7 +34,9 @@ import {
 import { persistEvidence } from "@/verification/persist"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
-import { findGoal, findGoalLatestWorkspace, findGoalRun, findLatestTipGoalRun, findPlan, listGoalRunsByGoal, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { findGoal, findGoalLatestWorkspace, findGoalRun, findLatestTipGoalRun, findPlan, listGoalRunsByGoal, listGoals, listGoalsForPlan, listOrchestratorStreamErrorArtifacts, requireTask, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { updateTask } from "./state"
+import { isTaskTerminal } from "./task-status"
 import { syncGoalStatus } from "./goal-status"
 import { createDecisionLog } from "@/decision-log"
 
@@ -1962,4 +1964,76 @@ export function recordOrchestratorStreamError(input: {
       })
       .run(),
   )
+}
+
+/**
+ * Stream-error retry circuit breaker.
+ *
+ * When the orchestrator's LLM stream early-dies before producing any token,
+ * the next external wake replays the same history. If the cause is structural
+ * — provider rejecting a malformed assistant turn, payload too large, account
+ * blocked — every replay deterministically fails. `monitorRuns` happily wakes
+ * the task ~once per second (no in-flight loop = zombie eligible), burning
+ * the same provider 4xx in a tight loop. The 2026-05-08 incident on
+ * `tsk_e078e1f2a001t4ZwUl5SWgoG8o` produced 277 identical `orchestrator-
+ * stream-error` artifacts in 2.5 minutes against DeepSeek 400.
+ *
+ * The structural side of that bug is fixed at the conversion boundary
+ * (`session/message.ts::toModelMessages` now drops assistant turns with no
+ * provider-visible content), but any future provider truncation / new error
+ * class can recur the loop. This fuse is the resource-governance bound:
+ * three stream-errors within {@link ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS}
+ * on the same task transitions the task to `failed` so `reviveZombieTasks`
+ * stops waking it (a terminal task is not active).
+ *
+ * Same family as a provider rate-limit, NOT a workflow FSM (rule 13/23): the
+ * LLM here cannot decide because the stream produced no tokens. Threshold
+ * and window are hardcoded constants — no config knob to drift.
+ *
+ * Returns `{ tripped: false, ... }` when the count stayed under threshold,
+ * the task is already terminal, or it disappeared. Otherwise marks the task
+ * `failed` and returns `{ tripped: true, consecutive, windowMs }`.
+ */
+export const ORCHESTRATOR_STREAM_ERROR_FUSE_THRESHOLD = 3
+export const ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS = 60_000
+
+export async function maybeTripOrchestratorStreamErrorFuse(input: {
+  taskID: string
+  now: number
+  lastReason: string
+}): Promise<{ tripped: boolean; consecutive: number; windowMs: number }> {
+  const recent = listOrchestratorStreamErrorArtifacts(
+    input.taskID,
+    input.now - ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS,
+    ORCHESTRATOR_STREAM_ERROR_FUSE_THRESHOLD,
+  )
+  if (recent.length < ORCHESTRATOR_STREAM_ERROR_FUSE_THRESHOLD) {
+    return {
+      tripped: false,
+      consecutive: recent.length,
+      windowMs: ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS,
+    }
+  }
+  const current = requireTask(input.taskID)
+  if (isTaskTerminal(current)) {
+    return {
+      tripped: false,
+      consecutive: recent.length,
+      windowMs: ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS,
+    }
+  }
+  const seconds = ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS / 1000
+  await updateTask(
+    current,
+    {
+      status: "failed",
+      error: `Orchestrator stream failed ${recent.length} consecutive times within ${seconds}s — last error: ${input.lastReason}. Operator must retry or fail_task.`,
+    },
+    `Stream-error fuse tripped after ${recent.length} consecutive failures`,
+  )
+  return {
+    tripped: true,
+    consecutive: recent.length,
+    windowMs: ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS,
+  }
 }

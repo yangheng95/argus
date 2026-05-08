@@ -7,12 +7,11 @@
  *
  * Why image needs an analyze stage even though the LLM already produced
  * tokens / tree:
- *   - Rule 22 single source. URL & figma flows publish `scaffold.json` /
- *     `design-tokens.ts` / `shared-context.md` to `mirror/`; the build
- *     agent's prompt + skill text reference those exact filenames. Image
- *     used to dump only `image-analysis.json` — the build agent had to
- *     branch per source. Producing the same artifacts puts every source
- *     on the same downstream contract.
+ *   - Rule 22 single source. URL & figma flows publish mirror facts plus
+ *     generated source paths through a shared ProjectScaffold contract. Image
+ *     used to dump only `image-analysis.json` — the build agent had to branch
+ *     per source. Producing the same artifacts puts every source on the same
+ *     downstream contract.
  *   - Rule 24 abstraction: the `ProjectScaffold` shape is the single
  *     downstream interface. Each upstream source's analyze synthesises
  *     a `ProjectScaffold` from its own native IR.

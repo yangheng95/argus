@@ -27,7 +27,7 @@ Sister skill to `webpage-generate` — same loop shape, same downstream evaluati
 
 This skill is tech-stack-neutral. Pick what best fits the brief and the surrounding repo:
 
-- **Generated React source** (`src/App.tsx`, `src/design-tokens.ts`, `src/components/**`): this is the only scaffold path after `webpage_image_analyze`.
+- **Generated React source**: `webpage_image_analyze` writes the source paths declared by `mirror/scaffold.json` and returns them as `sourcePaths`.
 - **Project shell**: create or reuse the minimal dev-server shell required to run the generated source.
 - **CSS approach**: use the project convention, but values must come from generated design tokens and mirror artifacts.
 - **Backend**: include only if dynamic data is genuinely required.
@@ -41,7 +41,7 @@ Non-negotiable regardless of stack:
 
 ## Critical rules
 
-- Steps 1–3 are **strictly serial**. Each consumes the previous step's output (`image-analysis.json` → `page-ir.xml` → `scaffold.json` + `design-tokens.ts` + `shared-context.md`); never batch them in the same response.
+- Steps 1–3 are **strictly serial**. Each consumes the previous step's output (`image-analysis.json` → `page-ir.xml` → `scaffold.json` + `shared-context.md` + generated source paths); never batch them in the same response.
 - Do NOT delete `mirror/` artifacts — downstream goals + delivery agents read them.
 - Do NOT mark the goal `passed` without the visual-acceptance gate (see "Hard acceptance gate").
 - Do NOT invent text or palette values not present in the analysis output. If the analysis missed something visible in the screenshot, edit `mirror/image-analysis.json` to record it (the analysis is an estimate; the screenshot is the ground truth) and re-run compile.
@@ -79,7 +79,7 @@ Call `webpage_image_compile` (no args needed — defaults read `mirror/image-ana
 
 ## Step 3 — Analyze tokens + scaffold
 
-Call `webpage_image_analyze` (no args needed — defaults read `mirror/image-analysis.json` and write `mirror/scaffold.json` + `mirror/shared-context.md` plus generated `src/**` React source). Same downstream contract the URL flow's `webpage_analyze` produces. Pure transformation, no LLM.
+Call `webpage_image_analyze` (no args needed — defaults read `mirror/image-analysis.json` and write `mirror/scaffold.json` + `mirror/shared-context.md` plus generated React source paths). Same downstream contract the URL flow's `webpage_analyze` produces. Pure transformation, no LLM.
 
 ## Step 4 — Read the artefacts BEFORE writing
 
@@ -87,11 +87,11 @@ Call `webpage_image_analyze` (no args needed — defaults read `mirror/image-ana
 
 - `mirror/page-ir.xml` — element structure + visible text (your section catalogue)
 - `mirror/shared-context.md` — token + section summary
-- `src/design-tokens.ts` — palette / fonts / spacing / radii constants
+- The generated token file declared by `mirror/scaffold.json` — palette / fonts / spacing / radii constants
 - `mirror/scaffold.json` — full ProjectScaffold (sections, FileContracts) for fine-grained reference
 - `mirror/reference.png` — the visual target
 
-Quote the exact strings, use the exact token values from `src/design-tokens.ts`, follow section ordering from `page-ir.xml`. Do not paraphrase headings, nav labels, or button text — and do not invent palette values not in the tokens file.
+Quote the exact strings, use the exact token values from the generated token file, follow section ordering from `page-ir.xml`. Do not paraphrase headings, nav labels, or button text — and do not invent palette values not in the tokens file.
 
 ## Step 5 — Implement the page
 

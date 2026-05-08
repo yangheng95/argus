@@ -21,6 +21,7 @@ import { Filesystem } from "../../src/util/filesystem"
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
 let architectCoordinateImpl: ((input: any) => Promise<any>) | undefined
+let deliveryServiceVerifyImpl: ((input: any) => Promise<any>) | undefined
 
 mock.module("@/build/agent", () => ({
   BuildAgent: {
@@ -43,6 +44,16 @@ mock.module("@/architect/agent", () => ({
     coordinate: (input: any) => {
       if (!architectCoordinateImpl) throw new Error("ArchitectAgent.coordinate mock not configured")
       return architectCoordinateImpl(input)
+    },
+  },
+}))
+
+mock.module("@/delivery/service", () => ({
+  DeliveryFailureError: class DeliveryFailureError extends Error {},
+  DeliveryService: {
+    verify: (input: any) => {
+      if (!deliveryServiceVerifyImpl) throw new Error("DeliveryService.verify mock not configured")
+      return deliveryServiceVerifyImpl(input)
     },
   },
 }))
@@ -166,6 +177,7 @@ describe("orchestrator tools", () => {
     buildAgentRunImpl = undefined
     reviewIntegrityImpl = undefined
     architectCoordinateImpl = undefined
+    deliveryServiceVerifyImpl = undefined
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
@@ -1996,6 +2008,78 @@ describe("orchestrator tools", () => {
         expect(result).toContain("status=passed")
         expect(buildCalls).toBe(1)
         expect(listGoalRunsByGoal(goalID)).toHaveLength(1)
+      },
+    })
+  })
+
+  test("deliver creates required integrity evidence before delivery verification", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_deliver_integrity_prereq_${stamp}`
+    const taskID = `tsk_deliver_integrity_prereq_${stamp}`
+    const goalID = `goal_deliver_integrity_prereq_${stamp}`
+    const specID = `spec_${goalID}`
+    const order: string[] = []
+    let verifySawIntegrity = false
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "deliver integrity prerequisite test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Deliver integrity prerequisite project",
+          taskTitle: "Deliver integrity prerequisite task",
+          request: "Deliver must evaluate architecture integrity before final delivery verification",
+          goalTitle: "Deliverable goal",
+          goalSlug: "deliverable-goal",
+          objective: "Create a non-trivial blocking goal requiring integrity evidence",
+          now,
+          specID,
+        })
+        reviewIntegrityImpl = async () => {
+          order.push("integrity")
+          return {
+            verdict: "pass",
+            summary: "Integrity pass before delivery",
+            dimensions: [
+              { id: "goal_fidelity", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
+              { id: "technical_feasibility", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
+              { id: "hallucination", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
+              { id: "solution_quality", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
+            ],
+            issues: [],
+            corrections: [],
+            missingGoals: [],
+            sessionID: `ses_integrity_deliver_${stamp}`,
+          }
+        }
+        deliveryServiceVerifyImpl = async () => {
+          order.push("verify")
+          verifySawIntegrity = Boolean(findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID }))
+          throw new Error("stop_after_delivery_service")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.deliver.execute({ reason: "All goals are ready for final delivery" }, {} as any)
+
+        expect(result).toContain("stop_after_delivery_service")
+        expect(order).toEqual(["integrity", "verify"])
+        expect(verifySawIntegrity).toBe(true)
+        const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
+        expect(artifact?.label).toBe("verdict-pass")
       },
     })
   })

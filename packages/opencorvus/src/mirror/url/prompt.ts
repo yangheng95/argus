@@ -2,9 +2,9 @@
  * Single source of the webpage-clone prompt + feedback — consumed by both
  * the `mirror-*-clone` benchmark scripts and the `webpage-generate` skill.
  *
- * Output contract: generated React source under `src/` refined by the LLM.
- * `webpage_analyze` owns deterministic App/tokens/section materialisation;
- * the LLM edits that source instead of hand-writing a separate static page.
+ * Output contract: generated React source paths declared by ProjectScaffold
+ * and returned by the analyze tool. The LLM edits that source instead of
+ * hand-writing a separate deliverable.
  */
 import type { ProjectScaffold } from "../ir/scaffold"
 import type { EvaluationReport } from "../visual/evaluate"
@@ -22,6 +22,11 @@ export interface BuildClonePromptInput {
 }
 
 export function buildClonePrompt(input: BuildClonePromptInput): string {
+  const sourcePaths = generatedSourcePaths(input.scaffold)
+  const sourcePathList = sourcePaths.length > 0
+    ? sourcePaths.map((filePath) => `  - \`${filePath}\``).join("\n")
+    : "  - (no generated source paths declared)"
+  const tokenPath = input.scaffold.tokensFile.filePath
   const sectionList = input.scaffold.sections
     .map((s) => `- ${s.name} (${s.elementCount} el, ${s.bounds.w}×${s.bounds.h}px)`)
     .join("\n")
@@ -42,10 +47,10 @@ export function buildClonePrompt(input: BuildClonePromptInput): string {
 ${iterationHeader}
 
 # Goal
-Refine the generated React source under \`src/\` so the running app visually reproduces
-${input.referenceUrl}. The acceptance source is \`webpage_vision_judge.accepted = true\`
-after rendering the deliverable with an explicit browser URL. SSIM/pixel scores are
-diagnostic progress signals only.
+Refine the generated React source paths declared by \`scaffold.json\` so the
+running app visually reproduces ${input.referenceUrl}. The acceptance source is
+\`webpage_vision_judge.accepted = true\` after rendering the deliverable with an
+explicit browser URL. SSIM/pixel scores are diagnostic progress signals only.
 
 # Viewport
 ${input.viewport.width} × ${input.viewport.height} (logical).
@@ -57,14 +62,16 @@ ${input.outputDir}
 - \`page-ir.xml\`           — ${input.xmlIRBytes} bytes of structured XML IR describing the page
 - \`shared-context.md\`     — concise design-token + pattern summary
 - \`scaffold.json\`         — ProjectScaffold (file paths + contracts)
-- generated \`src/design-tokens.ts\`, \`src/App.tsx\`, \`src/components/**\`
 - \`reference.png\`         — pixel-perfect reference screenshot
 
+# Generated source paths from scaffold.json
+${sourcePathList}
+
 # Rules
-1. **Generated source only**: edit \`src/App.tsx\`, \`src/design-tokens.ts\`, and
-   \`src/components/**\`. Do not create a parallel static page.
+1. **Generated source only**: edit the generated source paths listed above. Do
+   not create a parallel deliverable outside those paths.
 2. **Design tokens**: use every COLORS / FONTS / SPACING / RADII value from
-   \`src/design-tokens.ts\`. Do not hard-code hex values that bypass tokens.
+   \`${tokenPath}\`. Do not hard-code hex values that bypass tokens.
 3. **CSS hygiene**: include a real reset
    (\`*, *::before, *::after { box-sizing: border-box }\`, \`body { margin: 0 }\`),
    set \`font-family\` on \`body\`, write media queries when the reference uses them.
@@ -151,11 +158,24 @@ Operating guidance:
   2. Do NOT remove any element or CSS rule that is already rendering correctly.
   3. Pick the most visually-impactful gap first (wrong layout / wrong colour /
      wrong icon). Don't chase pixel-level shimmer.
-  4. Colours MUST come from \`design-tokens.ts\` (COLORS constant) — reference
-     them via the \`var(--…)\` custom properties you injected at \`:root\`. Do not
-     invent hex values.
+  4. Colours MUST come from the generated token module (COLORS constant) —
+     reference them via the \`var(--…)\` custom properties you injected at
+     \`:root\`. Do not invent hex values.
 
 Make targeted edits, then stop. Reply with a list of the specific sections you
 modified.
 `.trim()
+}
+
+function generatedSourcePaths(scaffold: ProjectScaffold): string[] {
+  const paths = [
+    scaffold.tokensFile.filePath,
+    scaffold.appFile.filePath,
+    ...scaffold.sharedComponents.map((file) => file.filePath),
+    ...scaffold.sections.flatMap((section) => [
+      section.file.filePath,
+      ...section.subComponents.map((file) => file.filePath),
+    ]),
+  ]
+  return Array.from(new Set(paths.filter(Boolean)))
 }

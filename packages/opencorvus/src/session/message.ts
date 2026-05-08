@@ -859,7 +859,27 @@ export namespace Message {
             })
           }
         }
-        if (assistantMessage.parts.length > 0) {
+        // Structural validity gate for provider replay. The chat-completion
+        // contract (OpenAI / DeepSeek / vLLM / etc.) requires every assistant
+        // message to carry `content` or `tool_calls`. When a stream early-dies
+        // — provider truncates the response after opening a reasoning block,
+        // socket dies, model returns nothing — the persisted assistant turn
+        // ends up with only [step-start, reasoning("")] and `finish=null,
+        // error=null`. Replaying it serialises to {role:"assistant",
+        // content:"", tool_calls:undefined}; the provider rejects with HTTP
+        // 4xx and `monitorRuns → reviveZombieTasks` keeps replaying the same
+        // broken history, burning a deterministic retry storm
+        // (orchestrator-stream-error artifact loop, 2026-05-08, see
+        // specs/new-arch/2026-05-08-stream-early-death-and-retry-fuse.md).
+        // step-start is dropped by the global filter below; reasoning alone
+        // is not visible content for chat-completion providers, so neither
+        // counts toward "message has something the provider can read".
+        const hasProviderVisibleContent = assistantMessage.parts.some(
+          (part) =>
+            (part.type === "text" && typeof part.text === "string" && part.text.length > 0) ||
+            (typeof part.type === "string" && part.type.startsWith("tool-")),
+        )
+        if (assistantMessage.parts.length > 0 && hasProviderVisibleContent) {
           result.push(assistantMessage)
           // Inject pending media as a user message for providers that don't support
           // media (images, PDFs) in tool results

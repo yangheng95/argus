@@ -432,14 +432,36 @@ export namespace Orchestrator {
           streamErrors: streamErrors.length,
           firstFailureName: first?.errorName,
         })
-        const { recordOrchestratorStreamError } = await import("@/engine/persist")
+        const { recordOrchestratorStreamError, maybeTripOrchestratorStreamErrorFuse } = await import("@/engine/persist")
+        const now = Date.now()
         recordOrchestratorStreamError({
           taskID,
           reason,
           errorName: first?.errorName,
           sessionID: agentSession.id,
-          now: Date.now(),
+          now,
         })
+
+        // Retry circuit breaker. When stream early-death produces a malformed
+        // assistant turn (or any provider-side rejection that recurs on
+        // replay), `monitorRuns` would otherwise wake the task once per
+        // second and burn provider 4xx in a tight loop. The structural side
+        // of that bug is fixed at `session/message.ts::toModelMessages`, but
+        // any future error class can recur it; this fuse is the resource
+        // bound. See engine/persist.ts::maybeTripOrchestratorStreamErrorFuse
+        // and specs/new-arch/2026-05-08-stream-early-death-and-retry-fuse.md.
+        const fuse = await maybeTripOrchestratorStreamErrorFuse({
+          taskID,
+          now,
+          lastReason: reason,
+        })
+        if (fuse.tripped) {
+          log.error("orchestrator stream-error fuse tripped — task marked failed", {
+            taskID,
+            consecutive: fuse.consecutive,
+            windowMs: fuse.windowMs,
+          })
+        }
       }
 
     } catch (error) {

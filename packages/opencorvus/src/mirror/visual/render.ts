@@ -43,7 +43,7 @@ html { scrollbar-width: none !important; }
 // ─── Public API ──────────────────────────────────────────────────────────
 
 export const RenderInputSchema = z.object({
-  /** Explicit page URL to capture. Use file:// for self-contained local HTML. */
+  /** Explicit page URL to capture. */
   url: z.string().url(),
   viewport: z.object({ width: z.number(), height: z.number() }),
   timeout: z.number().optional(),

@@ -4,9 +4,9 @@
  *
  * Image2code's analogue of `webpage_analyze`. Reads `image-analysis.json`,
  * synthesises a `ProjectScaffold`, and writes the same mirror facts and
- * generated React source the URL flow's `webpage_analyze` writes. The build agent's downstream codegen
- * prompt + skill text reference these exact filenames; rule 22 keeps every
- * source on one downstream contract.
+ * generated React source the URL flow's `webpage_analyze` writes. Downstream
+ * agents read generated source paths from scaffold.json and the tool metadata;
+ * rule 22 keeps every source on one downstream contract.
  */
 
 import fs from "node:fs/promises"
@@ -30,7 +30,7 @@ export const WebpageImageAnalyzeTool = Tool.define("webpage_image_analyze", {
 Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes the same mirror facts and generated React source the URL analyze step writes:
   - scaffold.json           full ProjectScaffold
   - shared-context.md       compact token + section summary for prompts
-  - src/**                  React source files from the scaffold contract
+  - sourcePaths             React source files from the scaffold contract
 
 Returns a summary: section list, token counts. The agent should \`read\` scaffold.json for full detail when needed.
 
