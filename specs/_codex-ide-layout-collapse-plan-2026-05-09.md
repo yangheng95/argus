@@ -2,11 +2,11 @@
 
 ## Goal
 
-Make the overlay project view expose compact titlebar layout controls and allow both the left conversation sidebar and the right inspector sidebar to collapse to zero visible width.
+Make the overlay project view expose compact workspace layout controls and allow both the left conversation sidebar and the right inspector sidebar to collapse to zero visible width.
 
 ## Implementation
 
-- Move restore affordances to titlebar-level controls so a collapsed pane does not need a residual rail.
+- Put restore affordances in the project workspace strip beside the active directory context, so a collapsed pane does not need a residual rail and the window titlebar remains window/menu-only.
 - Persist right inspector collapse state beside the existing left sidebar collapse state.
 - Treat collapsed pane widths as zero in the pane layout service.
 - Hide collapsed panes and their resize handles with `hidden`/`display: none`.

@@ -12,7 +12,7 @@ import { TaskStatusHeader } from "./components/TaskStatusHeader";
 import { TaskDirContent, TaskWorkspaceLine } from "./components/TaskDirBar";
 import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
-import { TitlebarLayoutControls } from "./components/TitlebarLayoutControls";
+import { WorkspaceLayoutControls } from "./components/WorkspaceLayoutControls";
 import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/TitlebarMenubar";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { FilesSection } from "./components/FilesSection";
@@ -736,16 +736,16 @@ if (titlebarMenuEl) {
   );
 }
 
-const titlebarLayoutControlsEl = document.getElementById("solidTitlebarLayoutControls");
-if (titlebarLayoutControlsEl) {
+const workspaceLayoutControlsEl = document.getElementById("solidWorkspaceLayoutControls");
+if (workspaceLayoutControlsEl) {
   render(
     () => (
-      <TitlebarLayoutControls
+      <WorkspaceLayoutControls
         workspaceOpen={workspaceOpen}
         onToggleWorkspace={toggleWorkspace}
       />
     ),
-    titlebarLayoutControlsEl,
+    workspaceLayoutControlsEl,
   );
 }
 
