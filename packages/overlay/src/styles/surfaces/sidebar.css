@@ -19,11 +19,12 @@
 }
 
 .sidebar[data-collapsed="true"] {
-  width: calc(62px * var(--ui-scale));
-  min-width: calc(62px * var(--ui-scale));
-  max-width: calc(62px * var(--ui-scale));
-  flex-basis: calc(62px * var(--ui-scale));
-  flex-shrink: 0;
+  display: none;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  flex-basis: 0;
+  flex-shrink: 1;
 }
 
 .sidebar[data-collapsed="true"] [data-ui="sidebar-toggle-button"] svg {

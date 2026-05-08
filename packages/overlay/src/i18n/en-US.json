@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "78417d1faffdd326"
+    "panel_revision": "467abe662667ad3b"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -563,6 +563,9 @@
   "right_panel.workflow": "Workflow",
   "right_panel.inspector": "Inspector",
   "right_panel.preview": "Preview",
+  "right_panel.close": "Collapse inspector",
+  "right_panel.open": "Open inspector",
+  "layout.controls": "Layout controls",
   "agent_workflow.title": "Agent Workflow",
   "agent_workflow.count": "{{count}} agents",
   "agent_workflow.refresh": "Refresh agent workflow trace",

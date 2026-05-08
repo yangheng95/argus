@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "78417d1faffdd326"
+    "panel_revision": "467abe662667ad3b"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -563,6 +563,9 @@
   "right_panel.workflow": "工作流",
   "right_panel.inspector": "Inspector",
   "right_panel.preview": "预览",
+  "right_panel.close": "收起 Inspector",
+  "right_panel.open": "展开 Inspector",
+  "layout.controls": "布局控制",
   "agent_workflow.title": "Agent 工作流",
   "agent_workflow.count": "{{count}} 个 Agent",
   "agent_workflow.refresh": "刷新 Agent 工作流 trace",

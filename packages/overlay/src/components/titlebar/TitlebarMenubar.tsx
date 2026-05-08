@@ -267,6 +267,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
       sectionsWidth: null,
       workspacePanelHeight: null,
       sidebarCollapsed: false,
+      rightPanelCollapsed: false,
     });
     saveSettings();
     closeMenu();

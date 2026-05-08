@@ -21,6 +21,14 @@
   backdrop-filter: none;
 }
 
+.sections[data-collapsed="true"] {
+  display: none;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  flex-basis: 0;
+}
+
 .sections-title {
   display: inline-flex;
   align-items: center;
