@@ -42,11 +42,10 @@ export function buildTaskUpstreamAgentContextSections(taskID: string): string[] 
   return [
     buildRequirementsCatalogSection(taskID),
     buildArchitectureContractCatalogSection(taskID),
-    // Design-analysis remains narrative: the gating surface for visual specs is
-    // already rendered separately in delivery/agent.ts as the Design Contract
-    // block (sourced from task.design_specs). The decision-log summary here
-    // captures *why* design choices changed across iterations — useful context
-    // but not contractual.
+    // Design-analysis is narrative but authoritative: the PRD/SPEC decision-log
+    // entries include the visual_consistency_spec and source manifest delivery
+    // evaluates against. Optional task.design_specs anchors may be rendered
+    // separately when present.
     createDecisionLog(taskID).phasePromptSection("design_analysis", "Design Analysis Summary"),
   ].filter(hasContent)
 }

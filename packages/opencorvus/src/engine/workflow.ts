@@ -360,8 +360,16 @@ function taskStepStatusByTool(
         ? "completed"
         : "pending"
     case "design_analysis": {
-      const specs = task.design_specs
-      return Array.isArray(specs) && specs.length > 0 ? "completed" : "pending"
+      const keys = new Set(createDecisionLog(taskID).readByPhase("design_analysis").map((entry) => entry.key))
+      return [
+        "product_spec",
+        "frontend_spec",
+        "visual_consistency_spec",
+        "backend_spec",
+        "prd_iteration_notes",
+        "completeness_review",
+        "evidence_source_manifest",
+      ].every((key) => keys.has(key)) ? "completed" : "pending"
     }
     case "requirements":
       return findActiveSpecForTask(taskID) ? "completed" : "pending"

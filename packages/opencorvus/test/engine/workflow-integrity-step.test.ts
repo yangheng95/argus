@@ -4,6 +4,7 @@ import { ProjectTable } from "../../src/project/project.sql"
 import { EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { WorkflowRegistry, projectTaskSteps } from "../../src/engine/workflow"
+import { createDecisionLog } from "../../src/decision-log"
 import { resetDatabase } from "../fixture/db"
 
 describe("pipeline workflow architecture review step", () => {
@@ -30,6 +31,59 @@ describe("pipeline workflow architecture review step", () => {
     ])
     expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["architect"])
     expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
+  })
+
+  test("projects design_analysis as completed from PRD/SPEC decision log without visual rows", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_design_${stamp}`
+    const taskID = `tsk_workflow_design_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable).values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "Workflow design step test",
+        sandboxes: [],
+        time_created: now,
+        time_updated: now,
+      }).run()
+      db.insert(EngineTaskTable).values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Workflow design status",
+        request: "Clone a visual webpage",
+        kind: "workflow",
+        priority: "normal",
+        design_specs: [],
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      }).run()
+    })
+
+    const log = createDecisionLog(taskID)
+    for (const key of [
+      "product_spec",
+      "frontend_spec",
+      "visual_consistency_spec",
+      "backend_spec",
+      "prd_iteration_notes",
+      "completeness_review",
+      "evidence_source_manifest",
+    ]) {
+      log.append({
+        phase: "design_analysis",
+        key,
+        value: `${key} value`,
+        reason: "test",
+      })
+    }
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.design_analysis?.status).toBe("completed")
   })
 
   test("projects integrity as completed when the active spec has an integrity attempt", () => {

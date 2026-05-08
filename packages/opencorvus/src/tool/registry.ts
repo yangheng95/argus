@@ -182,8 +182,8 @@ export namespace ToolRegistry {
 
     // Agent tool adapter: filter by agent's declared tool set
     // Design-analysis is the single owner of mirror extraction. Other agents
-    // consume task.design_specs and decision-log PRD/SPEC entries instead of
-    // reopening URL/Figma/image extraction through registry tools.
+    // consume decision-log PRD/SPEC entries and optional task.design_specs
+    // anchors instead of reopening URL/Figma/image extraction through registry tools.
     if (agent?.name !== "design-analyst") {
       items = items.filter((t) => !isMirrorToolId(t.id))
     }

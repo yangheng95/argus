@@ -88,13 +88,13 @@ export namespace BuildAgent {
     /** REQ-N list produced by Requirements. Drives "what does the user
      *  actually want" beyond the goal's compressed acceptance_specs. */
     requirements?: Array<{ id: string; type: "explicit" | "implicit"; description: string }>
-    /** Visual contract from design_analysis (palette, typography, layout,
-     *  components, interactions). Build implementations pulling on UI must
-     *  honour the relevant subset. */
+    /** Optional visual anchors from design_analysis. The PRD/SPEC is the
+     *  authoritative contract; these rows only provide compact ids when present. */
     designSpecs?: VisualSpec[]
     /** Full design-analysis PRD/SPEC and source manifest from the decision log.
-     *  This names product_spec, frontend_spec, backend_spec, review notes,
-     *  completeness audit, reference artifacts, and evidence_source_manifest. */
+     *  This names product_spec, frontend_spec, visual_consistency_spec,
+     *  backend_spec, review notes, completeness audit, reference artifacts, and
+     *  evidence_source_manifest. */
     designAnalysis?: string
     /** Cross-goal interface contracts the architect committed to the
      *  decision log. Build receives the complete set so every goal sees the
@@ -2125,18 +2125,19 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
+    if (context?.designAnalysis && context.designAnalysis.trim().length > 0) {
+      lines.push("## Design Analysis PRD/SPEC Source")
+      lines.push("")
+      lines.push(context.designAnalysis.trim())
+      lines.push("")
+    }
+
     if (context?.designSpecs && context.designSpecs.length > 0) {
-      if (context.designAnalysis && context.designAnalysis.trim().length > 0) {
-        lines.push("## Design Analysis PRD/SPEC Source")
-        lines.push("")
-        lines.push(context.designAnalysis.trim())
-        lines.push("")
-      }
       lines.push(renderVisualContractPromptSection({
         specs: context.designSpecs,
         instructions: [
-          "The visual contract below came from design_analysis. It is authoritative for the referenced UI/web target: restore the relevant subset 1:1 as closely as the stack allows.",
-          "Implement the subset relevant to this goal's responsibility paths, UI surface, and interactions; ignore specs targeting unrelated regions.",
+          "The optional visual anchors below came from design_analysis. The PRD/SPEC above remains authoritative for the referenced UI/web target: restore the relevant subset 1:1 as closely as the stack allows.",
+          "Use the subset relevant to this goal's responsibility paths, UI surface, and interactions; ignore anchors targeting unrelated regions.",
         ],
       }))
       lines.push("")

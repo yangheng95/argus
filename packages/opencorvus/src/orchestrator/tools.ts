@@ -231,12 +231,12 @@ function visualReferenceSignals(task: TaskRow): string[] {
 }
 
 function designAnalysisContractComplete(task: TaskRow): boolean {
-  if (!Array.isArray(task.design_specs) || task.design_specs.length === 0) return false
   const entries = createDecisionLog(task.id).readByPhase("design_analysis")
   const keys = new Set(entries.map((entry) => entry.key))
   return [
     "product_spec",
     "frontend_spec",
+    "visual_consistency_spec",
     "backend_spec",
     "prd_iteration_notes",
     "completeness_review",
@@ -253,8 +253,8 @@ function renderEvidenceSourceManifest(input: {
 }): string {
   const lines: string[] = []
   lines.push("## PRD/SPEC Source Manifest")
-  lines.push("Canonical PRD/SPEC entries: decision_log phase=design_analysis keys product_spec, frontend_spec, backend_spec, prd_iteration_notes, completeness_review.")
-  lines.push("Canonical visual rows: task.design_specs.")
+  lines.push("Canonical PRD/SPEC entries: decision_log phase=design_analysis keys product_spec, frontend_spec, visual_consistency_spec, backend_spec, prd_iteration_notes, completeness_review.")
+  lines.push("Optional visual anchors: task.design_specs, when present. They are secondary to visual_consistency_spec.")
 
   const requestUrls = [...new Set([...input.task.request.matchAll(/https?:\/\/\S+/gi)].map((m) => m[0]))]
   const urls = [...new Set([...requestUrls, ...input.liveUrls])]
@@ -316,10 +316,10 @@ function requireDesignAnalysisBefore(stage: string, task: TaskRow) {
     summary:
       `This task has visual/reference inputs (${signals.join(", ")}), but the active design-analysis contract is incomplete. ` +
       "Run design_analysis first and require it to complete mirror extraction plus at least two PRD/SPEC review passes. " +
-      "Downstream agents must consume task.design_specs and decision_log phase=design_analysis, including evidence_source_manifest; they must not infer from the raw URL or attachments.",
+      "Downstream agents must consume decision_log phase=design_analysis, including visual_consistency_spec and evidence_source_manifest; they must not infer from the raw URL or attachments.",
     fields: [
       ["next_action", "design_analysis"],
-      ["required_contract", "task.design_specs + product_spec + frontend_spec + backend_spec + prd_iteration_notes + completeness_review + evidence_source_manifest"],
+      ["required_contract", "product_spec + frontend_spec + visual_consistency_spec + backend_spec + prd_iteration_notes + completeness_review + evidence_source_manifest"],
     ],
     pointer: "design_analysis",
   })
@@ -1173,6 +1173,7 @@ export function createOrchestratorTools(input: {
     // intentional no-op: see workflow.ts::projectGoalSteps
   }
 
+  // Architecture review findings are actionable feedback: the review itself does not rewrite requirements or goals, and the orchestrator chooses the next repair lane from durable decision-log context.
   function renderIntegrityOutcome(outcome: IntegrityReviewOutcome) {
     if (outcome.status === "blocked") {
       return SubAgentProtocol.yieldResult({
@@ -1381,7 +1382,7 @@ export function createOrchestratorTools(input: {
   }
 
   // (removed) postBuildReviewReworkGoalIDs / dependentGoalClosure /
-  // openArchitectureReviewRework — these were the auto-supersede +
+  // openArchitectureReviewRework / architecture_review_rework — these were the auto-supersede +
   // auto-startNewAttempt + dependent-cascade chain that violated
   // CLAUDE.md rule 13 (no state-machine flow control). The orchestrator LLM
   // now reads the full review markdown returned in the build tool result
@@ -1534,7 +1535,7 @@ export function createOrchestratorTools(input: {
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
         "build agent can run against the user's text alone and `deliver` has enough " +
         "signal in the request to verify. For visual/reference tasks, design_analysis is a hard prerequisite: " +
-        "do not call requirements until design_analysis has persisted task.design_specs plus PRD/SPEC review entries.",
+        "do not call requirements until design_analysis has persisted PRD/SPEC review entries.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
       }),
@@ -1561,6 +1562,7 @@ export function createOrchestratorTools(input: {
           const { RequirementsAgent } = await import("@/requirements")
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
+          const designAnalysis = decisionLog.phasePromptSection("design_analysis", "Design Analysis PRD/SPEC Source")
 
           // Stage-level retry was removed in step 5/7 (rule 8 — single
           // source). Transient LLM-call failures are now retried inside
@@ -1575,6 +1577,7 @@ export function createOrchestratorTools(input: {
             request: task.request,
             attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
             designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
+            designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
@@ -1740,15 +1743,16 @@ export function createOrchestratorTools(input: {
 
     design_analysis: tool({
       description: [
-        "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a mirror-grounded PRD/SPEC plus structured visual specs.",
+        "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a mirror-grounded PRD/SPEC with a visual-consistency contract.",
         "Call this BEFORE every other downstream agent when the task involves frontend/UI development AND:",
         "  - Image attachments are provided (screenshots, mockups, design files)",
         "  - The request mentions a URL to replicate or analyze",
         "  - The request explicitly asks for layout/design analysis",
         "",
         "The design-analysis agent must iterate the PRD/SPEC at least twice before handoff.",
-        "Visual rows are persisted on task.design_specs. The full PRD/SPEC plus iteration/completeness review is persisted",
-        "into the decision log from the same design-analysis run. The decision log also includes evidence_source_manifest,",
+        "The full PRD/SPEC plus visual_consistency_spec and iteration/completeness review is persisted",
+        "into the decision log from the same design-analysis run. Optional task.design_specs rows may exist as anchors, but the",
+        "decision-log PRD/SPEC is authoritative. The decision log also includes evidence_source_manifest,",
         "which names the source files, images, URLs, materialized artifacts, and mirror artifacts downstream stages can read so they",
         "consume one source of truth instead of re-running mirror extraction.",
         "",
@@ -2087,12 +2091,9 @@ export function createOrchestratorTools(input: {
             onSessionCreated: (id) => { runnerSessionID = id },
           })
 
-          // Persist the visual contract on task.design_specs (dedicated JSON
-          // column, not metadata). Delivery reads it directly as a visual
-          // review contract. We also write a compact phase summary into the
-          // Decision Log so architect / planner / build prompts can see the
-          // design-system and recommended-stack conclusions without trying to
-          // inline the full spec list.
+          // Persist optional visual anchors on task.design_specs (dedicated
+          // JSON column, not metadata). The binding contract is the PRD/SPEC
+          // persisted into the Decision Log below; empty anchors are valid.
           const freshTask = requireTask(taskID)
           await updateTask(
             freshTask,
@@ -2121,12 +2122,12 @@ export function createOrchestratorTools(input: {
             phase: "design_analysis",
             key: "visual_contract_summary",
             value:
-              `Total specs: ${analysis.specs.length}. ` +
+              `Optional visual anchors: ${analysis.specs.length}. ` +
               `Color ${countByCategory.color ?? 0}, typography ${countByCategory.typography ?? 0}, ` +
               `spacing ${countByCategory.spacing ?? 0}, layout ${countByCategory.layout ?? 0}, ` +
               `component ${countByCategory.component ?? 0}, interaction ${countByCategory.interaction ?? 0}, ` +
               `responsive ${countByCategory.responsive ?? 0}.`,
-            reason: "Design-analyst summary for downstream architect, planner, and build prompts.",
+            reason: "Design-analyst optional anchor summary; the PRD/SPEC entries are authoritative.",
           })
           if (analysis.designSystem.trim()) {
             decisionLog.append({
@@ -2155,6 +2156,12 @@ export function createOrchestratorTools(input: {
             key: "frontend_spec",
             value: analysis.frontendSpec,
             reason: "Frontend implementation specification derived from visual evidence and mirror artifacts.",
+          })
+          decisionLog.append({
+            phase: "design_analysis",
+            key: "visual_consistency_spec",
+            value: analysis.visualConsistencySpec,
+            reason: "Primary visual-fidelity contract for downstream implementation and delivery review.",
           })
           decisionLog.append({
             phase: "design_analysis",
@@ -2208,7 +2215,7 @@ export function createOrchestratorTools(input: {
 
           return SubAgentProtocol.yieldResult({
             headline:
-              "SUCCESS: Mirror-grounded PRD/SPEC persisted in decision log and visual contract persisted on task.design_specs. " +
+              "SUCCESS: Mirror-grounded PRD/SPEC and visual_consistency_spec persisted in decision log. " +
               "NEXT: call requirements for functional decomposition.",
             fields: [
               ["total_specs", String(analysis.specs.length)],
@@ -2226,7 +2233,7 @@ export function createOrchestratorTools(input: {
               ["source_manifest", "decision_log:design_analysis/evidence_source_manifest"],
               ["open_questions", String(analysis.openQuestions.length)],
             ],
-            pointer: "task.design_specs + decision_log phase=design_analysis",
+            pointer: "decision_log phase=design_analysis",
           })
         } catch (err) {
           await trackStepComplete("design_analysis", undefined, true)
@@ -2312,6 +2319,7 @@ export function createOrchestratorTools(input: {
             value: d.value,
             reason: d.reason,
           }))
+          const designAnalysis = decisionLog.phasePromptSection("design_analysis", "Design Analysis PRD/SPEC Source")
 
           const { ArchitectAgent } = await import("@/architect/agent")
           const { copyRequirementsToSpecSnapshot, upsertGoalsFromArchitect } = await import("@/engine/persist")
@@ -2343,6 +2351,7 @@ export function createOrchestratorTools(input: {
             requirements,
             requirementDecisions,
             designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
+            designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
             attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
             signal: input.signal,
             parentSessionID: input.agentSessionID,
@@ -4812,7 +4821,7 @@ export function createOrchestratorTools(input: {
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
         "per-goal build → deliver (the pipeline workflow). For visual/reference tasks, design_analysis must " +
-        "already have produced task.design_specs and PRD/SPEC review entries before any build dispatch.",
+        "already have produced PRD/SPEC review entries, especially visual_consistency_spec, before any build dispatch.",
       inputSchema: z.object({
         request: z
           .string()

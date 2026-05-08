@@ -13,7 +13,8 @@
  * resolution, child-session creation, system-prompt composition, abort /
  * stream-error handling. Agent-specific code is the user prompt builder
  * (with prefetched repo context + clarification transcript + design
- * specs + multimodal attachments) and the output tool kit.
+ * PRD/SPEC + optional visual anchors + multimodal attachments) and the output
+ * tool kit.
  */
 import { runAgentSession } from "@/agent/runner"
 import { createAgentContextTools, prefetchContext } from "@/agent/context-tools"
@@ -62,6 +63,8 @@ export namespace RequirementsAgent {
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
     /** Advisory visual contract produced by design_analysis. */
     designSpecs?: VisualSpec[]
+    /** Authoritative PRD/SPEC entries produced by design_analysis. */
+    designAnalysis?: string
     taskID?: string
     parentSessionID?: string
     model?: { providerID: string; modelID: string }
@@ -213,6 +216,7 @@ function buildUserPrompt(
     title: string
     request: string
     designSpecs?: VisualSpec[]
+    designAnalysis?: string
     taskID?: string
   },
   prefetched: string,
@@ -237,6 +241,10 @@ function buildUserPrompt(
 
   if (input.designSpecs && input.designSpecs.length > 0) {
     sections.push(renderVisualContractPromptSection({ specs: input.designSpecs }))
+  }
+
+  if (input.designAnalysis && input.designAnalysis.trim().length > 0) {
+    sections.push(input.designAnalysis)
   }
 
   if (prefetched?.trim()) {

@@ -22,7 +22,7 @@ import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Plugin } from "@/plugin"
 import { entries, values as objectValues } from "@/util/object"
-import { MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
+import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
 
 export namespace Agent {
   export const Info = z
@@ -324,6 +324,9 @@ export namespace Agent {
         // design-analyst is the only stage that owns mirror extraction.
         // Requirements / architect / build consume the persisted SPEC and
         // visual specs rather than calling mirror tools themselves.
+        // Render/evaluate/diff/judge mirror tools are delivery quality-gate
+        // surfaces, not PRD/SPEC extraction surfaces, so they stay out of
+        // design-analysis to prevent implementation-style score loops.
         tools: {
           include: [
             "read_file",
@@ -335,7 +338,7 @@ export namespace Agent {
             "url_screenshot",
             "todoread",
             "todowrite",
-            ...MIRROR_TOOL_IDS,
+            ...MIRROR_ANALYSIS_TOOL_IDS,
           ],
         },
         options: {},
