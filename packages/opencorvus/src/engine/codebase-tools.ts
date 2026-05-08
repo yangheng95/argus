@@ -10,6 +10,26 @@ import path from "path"
 import fs from "fs"
 import { Instance } from "@/project/instance"
 
+const DENSE_MIRROR_ARTIFACT_MAX_LINES = 120
+
+function denseMirrorArtifactReason(relPath: string): string | null {
+  const normalized = relPath.replace(/\\/g, "/")
+  if (
+    normalized.endsWith("/mirror/extracted-page.json") ||
+    normalized === "mirror/extracted-page.json" ||
+    normalized.endsWith("/mirror/image-analysis.json") ||
+    normalized === "mirror/image-analysis.json" ||
+    normalized.endsWith("/mirror/figma-design.json") ||
+    normalized === "mirror/figma-design.json"
+  ) {
+    return "raw mirror extraction JSON"
+  }
+  if (normalized.endsWith("/mirror/scaffold.json") || normalized === "mirror/scaffold.json") {
+    return "dense mirror scaffold JSON"
+  }
+  return null
+}
+
 function detectBinaryKind(buf: Buffer, filePath: string): string | null {
   if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "a PNG image"
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "a JPEG image"
@@ -50,6 +70,14 @@ export function createCodebaseTools(projectDir?: string) {
       execute: async ({ path: filePath, max_lines }) => {
         const abs = safePath(filePath)
         if (!abs) return "Error: path is outside the project boundary."
+        const denseMirrorArtifact = denseMirrorArtifactReason(filePath)
+        if (denseMirrorArtifact && (max_lines ?? 300) > DENSE_MIRROR_ARTIFACT_MAX_LINES) {
+          return (
+            `Error: ${filePath} is ${denseMirrorArtifact}. ` +
+            `Use mirror/page-ir.xml, mirror/shared-context.md, and mirror tool summaries as the PRD/SPEC working surface. ` +
+            `If a specific gap requires this artifact, call read_file with max_lines <= ${DENSE_MIRROR_ARTIFACT_MAX_LINES}.`
+          )
+        }
         try {
           const buf = fs.readFileSync(abs)
           // Refuse known binary signatures and NUL-heavy content — decoding

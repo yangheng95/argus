@@ -32,7 +32,7 @@ Writes to the output directory (defaults to \`mirror/\` under the worktree):
   - figma-design.json   the full CompressedDesign (frames + tokens + components + images map)
   - reference.png       the first rendered frame — visual target for downstream render/evaluate/vision-judge
 
-Returns a compact summary (pages, frame count, token counts, image-export count). The agent should \`read\` figma-design.json or call \`figma_compile\` next; do NOT inline the design tree in chat context.
+Returns a compact summary (pages, frame count, token counts, image-export count). The agent should call \`figma_compile\` and \`figma_analyze\`, then use the compiled IR, shared context, and tool summaries as prompt-facing evidence. \`figma-design.json\` is the raw source artifact for deterministic tools and the evidence manifest; do not read it wholesale into prompt context.
 
 Authentication: requires FIGMA_API_TOKEN environment variable, or pass \`token\` explicitly. Throws a typed MirrorFigmaFetchError when the token is missing or the URL is malformed.`,
   parameters: z.object({

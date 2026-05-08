@@ -36,7 +36,7 @@ Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror 
   - shared-context.md       compact token + pattern summary for prompts
   - sourcePaths             scaffold-generated source files for analysis only
 
-Returns a summary: section list, pattern list, token counts. The agent should \`read\` scaffold.json for full detail when needed.
+Returns a summary: section list, pattern list, token counts. The agent should read \`shared-context.md\` and \`page-ir.xml\` first, then use bounded targeted \`scaffold.json\` reads only for specific gaps.
 
 This tool is artifact-dependent: do NOT call it until \`webpage_extract\` has completed and written \`extracted-page.json\`. Never batch it in the same assistant turn as \`webpage_extract\`.
 
@@ -125,7 +125,7 @@ Use as step 3 of the design-analysis webpage PRD/SPEC workflow. Pure function, n
         `- \`${contextPath}\` — compact prompt-ready summary`,
         `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: read `scaffold.json`, `shared-context.md`, and `page-ir.xml`, then write the PRD/SPEC and visual specs. Do not treat generated source as the deliverable.",
+        "Next: read `shared-context.md` and `page-ir.xml`, then use bounded targeted `scaffold.json` reads only for missing details before writing the PRD/SPEC. Do not treat generated source as the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,

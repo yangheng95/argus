@@ -8,8 +8,9 @@
  *   - `<outputDir>/images/*`               downloaded image assets (when keep_images=true)
  *
  * The tool returns just the summary + artifact paths so the agent's context
- * isn't polluted with a ~50KB tree dump — it `read`s the JSON when it needs
- * detail, or calls `webpage_compile` / `webpage_analyze` next.
+ * isn't polluted with a large tree dump. The raw JSON is durable evidence and
+ * a compile/analyze input; prompt-facing work should use the compiled IR and
+ * shared context artifacts.
  */
 
 import fs from "node:fs/promises"
@@ -32,7 +33,7 @@ Writes to the output directory (defaults to the worktree):
   - extracted-page.json          the full ExtractedPage object (DOM + tokens + assets)
   - images/*                     downloaded image assets (so the clone can reference local paths)
 
-Returns a compact summary (title, viewport, element count, artifact paths). The design-analysis agent should read extracted-page.json or page-ir.xml (via webpage_compile) rather than inline the tree in context.
+Returns a compact summary (title, viewport, element count, artifact paths). The design-analysis agent should call \`webpage_compile\` and \`webpage_analyze\`, then use \`page-ir.xml\`, \`shared-context.md\`, and the tool summaries as its prompt-facing evidence. \`extracted-page.json\` is the raw source artifact for deterministic tools and the evidence manifest; do not read it wholesale into prompt context.
 
 Use this as step 1 of the design-analysis webpage PRD/SPEC workflow. Requires network access to the target URL.`,
   parameters: z.object({
@@ -129,7 +130,7 @@ Use this as step 1 of the design-analysis webpage PRD/SPEC workflow. Requires ne
         `**Reference screenshot:** \`${referencePath}\``,
         `**Full extracted page JSON:** \`${jsonPath}\``,
         "",
-        "Next: call `webpage_compile`, then `webpage_analyze`, then read the artifacts before writing the PRD/SPEC.",
+        "Next: call `webpage_compile`, then `webpage_analyze`, then read `page-ir.xml`, `shared-context.md`, and bounded scaffold details before writing the PRD/SPEC. Do not read `extracted-page.json` wholesale.",
       ].join("\n"),
       metadata: summary,
     }

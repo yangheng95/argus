@@ -32,7 +32,7 @@ Reads \`<outputDir>/figma-design.json\` (from figma_extract). Writes the same mi
   - shared-context.md       compact token + section summary
   - sourcePaths             scaffold-generated source files for analysis only
 
-Returns a compact summary; agent should \`read\` scaffold.json for full detail.
+Returns a compact summary. The agent should read \`shared-context.md\` and \`page-ir.xml\` first, then use bounded targeted \`scaffold.json\` reads only for specific gaps.
 
 Artifact-dependent: do NOT call until \`figma_extract\` has finished. Never batch with figma_extract.
 
@@ -106,7 +106,7 @@ Step 3 of the design-analysis Figma PRD/SPEC workflow. Pure function, no network
         `- \`${contextPath}\` — compact prompt-ready summary`,
         `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: read `scaffold.json`, `shared-context.md`, and `page-ir.xml`, then write the PRD/SPEC and visual specs. Do not treat generated source as the deliverable.",
+        "Next: read `shared-context.md` and `page-ir.xml`, then use bounded targeted `scaffold.json` reads only for missing details before writing the PRD/SPEC. Do not treat generated source as the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,

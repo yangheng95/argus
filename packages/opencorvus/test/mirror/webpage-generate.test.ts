@@ -26,6 +26,7 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.content).toContain("visual_consistency_spec")
     expect(parsed.content).toContain("completeness_review")
     expect(parsed.content).toContain("mirror/scaffold.json")
+    expect(parsed.content).toContain("Do not read `mirror/extracted-page.json` wholesale")
     expect(parsed.content).not.toContain("src/App.tsx")
     expect(parsed.content).not.toContain("src/design-tokens.ts")
     expect(parsed.content).toContain("The extraction steps are strictly serial")
@@ -46,6 +47,7 @@ describe("webpage-generate dependency guards", () => {
       expect(parsed.content).toContain("prd_iteration_notes")
       expect(parsed.content).toContain("Build agents consume the persisted PRD/SPEC")
       expect(parsed.content).toContain("visual_consistency_spec")
+      expect(parsed.content).toContain("PRD/SPEC working surface")
       expect(parsed.content).not.toContain("webpage_render url=<explicit")
       expect(parsed.content).not.toContain("webpage_evaluate.passed = true")
       expect(parsed.content).not.toContain("webpage_vision_judge.accepted = true")
@@ -54,6 +56,26 @@ describe("webpage-generate dependency guards", () => {
       expect(parsed.content).not.toMatch(/static mode|Live-server mode|defaults render `<worktree>/i)
       expect(parsed.content).not.toMatch(/overall score\s+\*\*≥\s*95\*\*\s+AND/i)
     }
+  })
+
+  test("read_file refuses unbounded dense mirror artifacts", async () => {
+    const { createCodebaseTools } = await import("../../src/engine/codebase-tools")
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/mirror/extracted-page.json`, "[\n{}\n]\n")
+    await Bun.write(`${tmp.path}/mirror/scaffold.json`, "[\n{}\n]\n")
+
+    const tools = createCodebaseTools(tmp.path)
+    const readFile = tools.read_file as any
+
+    const raw = await readFile.execute({ path: "mirror/extracted-page.json" }, {})
+    expect(raw).toContain("raw mirror extraction JSON")
+    expect(raw).toContain("mirror/page-ir.xml")
+
+    const scaffold = await readFile.execute({ path: "mirror/scaffold.json", max_lines: 1000 }, {})
+    expect(scaffold).toContain("dense mirror scaffold JSON")
+
+    const bounded = await readFile.execute({ path: "mirror/scaffold.json", max_lines: 20 }, {})
+    expect(bounded).toContain("1 | [")
   })
 
   test("compile and analyze surface an actionable missing-artifact error", async () => {

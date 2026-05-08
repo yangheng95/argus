@@ -21,7 +21,7 @@ You are not implementing the page. You are producing the authoritative PRD/SPEC 
 1. Run `figma_extract` for the Figma URL.
 2. Run `figma_compile` after extraction finishes.
 3. Run `figma_analyze` after extraction finishes.
-4. Read the generated Figma mirror artifacts, compiled IR, scaffold, and shared context.
+4. Read `mirror/reference.png`, the compiled IR, `mirror/shared-context.md`, and mirror tool summaries. Use `mirror/scaffold.json` only for bounded targeted gaps. Do not read `mirror/figma-design.json` wholesale; it is the raw source artifact for compile/analyze and the downstream manifest, not the PRD/SPEC working surface.
 5. Write visual consistency requirements directly into `visual_consistency_spec`: reusable tokens, layout, components, interactions, responsive rules, and dense repeated surfaces. Do not create one row per repeated table row, ticker, text instance, candle, or data point.
 6. Perform at least two PRD/SPEC review passes: inventory coverage, then downstream frontend/backend implementability.
 7. Finalize with StructuredOutput fields: `product_spec`, `frontend_spec`, `visual_consistency_spec`, `backend_spec`, `prd_iteration_notes`, `completeness_review`, `reference_artifacts`, and `open_questions`. Put every source file/image URL and mirror artifact name you used into `reference_artifacts`; the orchestrator will publish them as `evidence_source_manifest` and materialize `.opencorvus/design-analysis/prd-spec.md` plus `.opencorvus/design-analysis/evidence-source-manifest.md` for downstream agents.
