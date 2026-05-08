@@ -7,6 +7,10 @@ import path from "node:path"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project-gate"
+import {
+  ensureProjectReadyForRuntime,
+  runtimeReadinessInstallCommand,
+} from "../../src/delivery/checks/runtime-readiness"
 import { runtimeInteractionViolations } from "../../src/delivery/checks/runtime-evidence"
 import { stopAllManagedPreviewSessions } from "../../src/preview/session"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
@@ -27,6 +31,165 @@ afterEach(async () => {
 })
 
 describe("delivery project evidence gate", () => {
+  test("runtime readiness requires packageManager when package.json declares scripts", async () => {
+    const dir = await runtimePackageFixture({
+      packageJson: {
+        type: "module",
+        scripts: { build: "bun -e \"console.log('build')\"" },
+      },
+      files: { "bun.lock": "# test lockfile\n" },
+    })
+
+    const readiness = await ensureProjectReadyForRuntime({ projectRoot: dir })
+
+    expect(readiness.status).toBe("failed")
+    expect(readiness.failedReadinessIds).toEqual(["runtime-readiness:package-manager"])
+    expect(readiness.checks.find((item) => item.id === "runtime-readiness:package-manager")?.evidence[0])
+      .toContain("package.json must declare packageManager")
+  })
+
+  test("runtime readiness rejects invalid packageManager values", async () => {
+    const dir = await runtimePackageFixture({
+      packageJson: {
+        type: "module",
+        packageManager: "deno@2.0.0",
+        scripts: { build: "deno task build" },
+      },
+    })
+
+    const readiness = await ensureProjectReadyForRuntime({ projectRoot: dir })
+
+    expect(readiness.status).toBe("failed")
+    expect(readiness.failedReadinessIds).toEqual(["runtime-readiness:package-manager"])
+  })
+
+  test("runtime readiness requires the matching lockfile", async () => {
+    const dir = await runtimePackageFixture({
+      packageJson: {
+        type: "module",
+        packageManager: "npm@10.9.0",
+        scripts: { build: "vite build" },
+      },
+      files: { "bun.lock": "# wrong lockfile\n" },
+    })
+
+    const readiness = await ensureProjectReadyForRuntime({ projectRoot: dir })
+
+    expect(readiness.status).toBe("failed")
+    expect(readiness.failedReadinessIds).toEqual(["runtime-readiness:lockfile"])
+    expect(readiness.checks.find((item) => item.id === "runtime-readiness:lockfile")?.evidence)
+      .toEqual(["missing_lockfile=package-lock.json", "conflicting_lockfiles=bun.lock"])
+  })
+
+  test("runtime readiness rejects conflicting lockfiles", async () => {
+    const dir = await runtimePackageFixture({
+      packageJson: {
+        type: "module",
+        packageManager: "pnpm@9.0.0",
+        scripts: { build: "vite build" },
+      },
+      files: {
+        "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+        "package-lock.json": "{}\n",
+      },
+    })
+
+    const readiness = await ensureProjectReadyForRuntime({ projectRoot: dir })
+
+    expect(readiness.status).toBe("failed")
+    expect(readiness.failedReadinessIds).toEqual(["runtime-readiness:lockfile"])
+    expect(readiness.checks.find((item) => item.id === "runtime-readiness:lockfile")?.evidence)
+      .toContain("conflicting_lockfiles=package-lock.json")
+  })
+
+  test("runtime readiness selects frozen install commands", () => {
+    expect(runtimeReadinessInstallCommand("npm").command).toBe("npm ci")
+    expect(runtimeReadinessInstallCommand("bun").command).toBe("bun install --frozen-lockfile")
+    expect(runtimeReadinessInstallCommand("pnpm").command).toBe("pnpm install --frozen-lockfile")
+    expect(runtimeReadinessInstallCommand("yarn").command).toBe("yarn install --immutable")
+  })
+
+  test("runtime readiness passes when package manager and lockfile agree", async () => {
+    const dir = await runtimePackageFixture({
+      packageJson: {
+        type: "module",
+        packageManager: "bun@1.3.13",
+        scripts: { build: "bun -e \"console.log('build')\"" },
+      },
+      files: { "bun.lock": "# test lockfile\n" },
+    })
+
+    const readiness = await ensureProjectReadyForRuntime({ projectRoot: dir })
+
+    expect(readiness.status).toBe("passed")
+    expect(readiness.packageManagerName).toBe("bun")
+    expect(readiness.failedReadinessIds).toEqual([])
+  })
+
+  test("runtime readiness failures are primary delivery blockers", async () => {
+    const dir = await runtimePackageFixture({
+      packageJson: {
+        type: "module",
+        scripts: { build: "bun -e \"console.log('build')\"" },
+      },
+      files: { "src/app.ts": "export const ok = true\n" },
+    })
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_readiness_primary",
+        runID: "run_readiness_primary",
+        deliveryID: "dlv_readiness_primary",
+        changedFiles: ["src/app.ts"],
+      }),
+    })
+
+    expect(manifest.runtimeReadiness?.failedReadinessIds).toEqual(["runtime-readiness:package-manager"])
+    expect(manifest.finalGate.failedReadinessIds).toEqual(["runtime-readiness:package-manager"])
+    expect(manifest.finalGate.status).toBe("failed")
+    expect(manifest.functionalAssessment).toMatchObject({
+      status: "incomplete",
+      primaryFailureIds: ["runtime-readiness:package-manager"],
+      auxiliaryFailureIds: [],
+    })
+  })
+
+  test("functional assessment keeps readiness primary and required checks auxiliary", async () => {
+    const dir = await runtimePackageFixture({
+      packageJson: {
+        type: "module",
+        packageManager: "bun@1.3.13",
+        scripts: {
+          build: "bun -e \"console.log('build')\"",
+          test: "bun -e \"process.exit(1)\"",
+          typecheck: "bun -e \"process.exit(1)\"",
+        },
+      },
+      files: {
+        "bun.lock": "# test lockfile\n",
+        "src/app.ts": "export const ok = true\n",
+      },
+    })
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_readiness_required_aux",
+        runID: "run_readiness_required_aux",
+        deliveryID: "dlv_readiness_required_aux",
+        changedFiles: ["src/app.ts"],
+      }),
+    })
+
+    expect(manifest.requiredChecks.map((item) => item.name)).toEqual(["build", "test", "typecheck"])
+    expect(manifest.finalGate.failedReadinessIds).toEqual([])
+    expect(manifest.finalGate.failedCheckIds).toEqual(["test#1", "typecheck#1"])
+    expect(manifest.finalGate.status).toBe("passed")
+    expect(manifest.functionalAssessment?.primaryFailureIds).toEqual([])
+    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toEqual(["test#1", "typecheck#1"])
+  })
+
   test("fails delivery when explicitly configured lint script fails even if build and test pass", async () => {
     const dir = await packageFixture({
       build: "bun -e \"console.log('build ok')\"",
@@ -186,6 +349,7 @@ console.log("lint scope ok", cwd())
     expect(validateDeliveryEvidenceManifest(manifest)).toEqual({
       status: "failed",
       summary: "Delivery evidence gate failed 1 required check(s).",
+      failedReadinessIds: [],
       failedCheckIds: ["lint#1"],
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
@@ -274,7 +438,7 @@ console.log("lint scope ok", cwd())
     expect(manifest.checkResults).toMatchObject([{
       id: "lint#1",
       status: "skipped",
-      outputExcerpt: "Skipped because delivery completion evidence failed before auxiliary programmatic checks.",
+      outputExcerpt: "Skipped because delivery completion or runtime readiness evidence failed before auxiliary programmatic checks.",
     }])
     expect(manifest.finalGate.failedCoverageIds).toEqual(["goal:gol_missing_acceptance"])
     expect(manifest.finalGate.failedCheckIds).toEqual([])
@@ -662,7 +826,30 @@ async function packageFixture(
     dependencies: options?.dependencies ?? {},
     devDependencies: options?.devDependencies ?? {},
   }, null, 2))
+  await fs.writeFile(path.join(dir, "bun.lock"), "# test lockfile\n")
+  if (
+    Object.keys(options?.dependencies ?? {}).length > 0 ||
+    Object.keys(options?.devDependencies ?? {}).length > 0
+  ) {
+    await fs.mkdir(path.join(dir, "node_modules"), { recursive: true })
+  }
   for (const [file, text] of Object.entries(options?.files ?? {})) {
+    const target = path.join(dir, file)
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await fs.writeFile(target, text)
+  }
+  return dir
+}
+
+async function runtimePackageFixture(input: {
+  packageJson: Record<string, unknown>
+  files?: Record<string, string>
+}) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "oc-runtime-readiness-"))
+  tempDirs.push(dir)
+  await fs.mkdir(path.join(dir, "src"), { recursive: true })
+  await fs.writeFile(path.join(dir, "package.json"), JSON.stringify(input.packageJson, null, 2))
+  for (const [file, text] of Object.entries(input.files ?? {})) {
     const target = path.join(dir, file)
     await fs.mkdir(path.dirname(target), { recursive: true })
     await fs.writeFile(target, text)

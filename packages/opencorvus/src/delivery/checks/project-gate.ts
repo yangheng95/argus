@@ -21,6 +21,7 @@ import { arbitrateDeliveryGate } from "../arbiter"
 import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
 import { runSecurityDataReview } from "../specialists/security-data"
 import { ensureManagedPreviewSession } from "@/preview/session"
+import { ensureProjectReadyForRuntime } from "./runtime-readiness"
 import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
@@ -48,7 +49,6 @@ const CHECK_WORKSPACE_EXCLUDED_NAMES = new Set([
   ".turbo",
   ".cache",
   "coverage",
-  "node_modules",
   "out",
 ])
 
@@ -90,15 +90,31 @@ export async function buildDeliveryEvidenceManifest(input: {
   const requiredChecks = await requiredChecksFromGroups(groups)
   const coverage = buildCoverage(input.goals ?? [])
   const failedCoverageIds = validateDeliveryCoverage(coverage)
-  const runtimeFlows = await runRuntimeFlows({
-    taskID: input.taskID,
-    iteration: input.iteration ?? 0,
-    surfaceManifest,
-    requiredChecks,
-    checkResults: [],
-    goals: input.goals,
-    metadata: input.metadata,
+  const runtimeReadiness = await ensureProjectReadyForRuntime({ projectRoot })
+  const failedReadinessIds = runtimeReadiness.failedReadinessIds
+  const preRuntimeAssessment = assessFunctionalCompletion({
+    failedReadinessIds,
+    failedCheckIds: [],
+    failedCoverageIds,
+    failedRuntimeFlowIds: [],
+    failedReviewIds: [],
+    specialistReviews: [],
   })
+  const checkResults = preRuntimeAssessment.status === "complete"
+    ? await runRequiredChecks(requiredChecks)
+    : requiredChecks.map((check) => skipRequiredCheck(
+        check,
+        "Skipped because delivery completion or runtime readiness evidence failed before auxiliary programmatic checks.",
+      ))
+  const runtimeFlows = preRuntimeAssessment.status === "complete"
+    ? await runRuntimeFlows({
+        taskID: input.taskID,
+        iteration: input.iteration ?? 0,
+        surfaceManifest,
+        goals: input.goals,
+        metadata: input.metadata,
+      })
+    : []
   const failedRuntimeFlowIds = runtimeFlows
     .filter((item) => item.status === "failed")
     .map((item) => item.id)
@@ -109,7 +125,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     projectRoot,
     surfaceManifest,
     requiredChecks,
-    checkResults: [],
+    checkResults,
     runtimeFlows,
     goals: input.goals ?? [],
   })
@@ -128,19 +144,6 @@ export async function buildDeliveryEvidenceManifest(input: {
   const failedReviewIds = reviewEvidence
     .filter((item) => item.status === "failed")
     .map((item) => item.id)
-  const completionAssessment = assessFunctionalCompletion({
-    failedCheckIds: [],
-    failedCoverageIds,
-    failedRuntimeFlowIds,
-    failedReviewIds,
-    specialistReviews,
-  })
-  const checkResults = completionAssessment.status === "complete"
-    ? await runRequiredChecks(requiredChecks)
-    : requiredChecks.map((check) => skipRequiredCheck(
-        check,
-        "Skipped because delivery completion evidence failed before auxiliary programmatic checks.",
-      ))
 
   const manifest: DeliveryEvidenceManifest = {
     id: createManifestId(),
@@ -150,6 +153,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     iteration: input.iteration ?? 0,
     headRef: await currentHeadRef(Instance.directory),
     requiredChecks,
+    runtimeReadiness,
     checkResults,
     goalCoverage: coverage.goalCoverage,
     requirementCoverage: coverage.requirementCoverage,
@@ -161,6 +165,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     finalGate: {
       status: "failed",
       summary: "Delivery evidence gate not evaluated.",
+      failedReadinessIds: [],
       failedCheckIds: [],
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
@@ -169,9 +174,10 @@ export async function buildDeliveryEvidenceManifest(input: {
     timeCreated: Date.now(),
   }
   const checks = validateDeliveryEvidenceManifest(manifest, {
-    skippedChecksPass: completionAssessment.status === "incomplete",
+    skippedChecksPass: preRuntimeAssessment.status === "incomplete",
   })
   const functionalAssessment = assessFunctionalCompletion({
+    failedReadinessIds,
     failedCheckIds: checks.failedCheckIds,
     failedCoverageIds,
     failedRuntimeFlowIds,
@@ -181,6 +187,7 @@ export async function buildDeliveryEvidenceManifest(input: {
   manifest.functionalAssessment = functionalAssessment
   manifest.finalGate = arbitrateDeliveryGate({
     checks,
+    failedReadinessIds,
     failedCoverageIds,
     failedRuntimeFlowIds,
     failedReviewIds,
@@ -199,6 +206,7 @@ async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
 
 /**
  * Blocking criteria — these failures mean delivery completion is not proven:
+ *   - failedReadinessIds: merged trunk cannot prove its declared runtime.
  *   - failedCoverageIds: blocking goals without acceptance specs.
  *   - failedRuntimeFlowIds: requested frontend/runtime surfaces did not render.
  *   - review:integrity: required architecture integrity evidence is missing or
@@ -211,6 +219,7 @@ async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
  *     specialist:*): the delivery agent reads the full evidence and decides.
  */
 function assessFunctionalCompletion(input: {
+  failedReadinessIds: string[]
   failedCheckIds: string[]
   failedCoverageIds: string[]
   failedRuntimeFlowIds: string[]
@@ -220,6 +229,7 @@ function assessFunctionalCompletion(input: {
   const blockingReviewIds = input.failedReviewIds.filter((id) => id === "review:integrity")
   const blockingReviewIdSet = new Set<string>(blockingReviewIds)
   const primaryFailureIds = [
+    ...input.failedReadinessIds,
     ...input.failedCoverageIds,
     ...input.failedRuntimeFlowIds,
     ...blockingReviewIds,
@@ -437,8 +447,6 @@ async function runRuntimeFlows(input: {
   taskID?: string
   iteration: number
   surfaceManifest: DeliverySurfaceManifest
-  requiredChecks: DeliveryRequiredCheck[]
-  checkResults: DeliveryCheckResult[]
   goals?: Array<{ runtime_scenario_count?: number }>
   metadata?: Record<string, unknown>
 }): Promise<DeliveryRuntimeFlowResult[]> {
@@ -449,19 +457,7 @@ async function runRuntimeFlows(input: {
   const root = input.surfaceManifest.projectRoot
   const requireInteraction = (input.goals ?? [])
     .some((goal) => (goal.runtime_scenario_count ?? 0) > 0)
-  const failedBuild = input.checkResults.some(
-    (item) => (item.cwd ?? Instance.directory) === root && item.name === "build" && item.status !== "passed",
-  )
   const id = `runtime:web:${path.relative(Instance.directory, root).replaceAll("\\", "/") || "."}`
-  if (failedBuild) {
-    flows.push({
-      id,
-      name: "Web Runtime Render",
-      status: "failed",
-      evidence: ["build check failed; runtime render cannot be trusted until build passes"],
-    })
-    return flows
-  }
   let preview: Awaited<ReturnType<typeof resolveRuntimeFlowPreview>> | undefined
   try {
     preview = await resolveRuntimeFlowPreview({

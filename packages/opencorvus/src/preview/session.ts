@@ -3,6 +3,7 @@ import path from "node:path"
 import { spawn, type ChildProcess } from "node:child_process"
 import stripAnsi from "strip-ansi"
 import { isLoopbackHttpUrl, probeFrontendDocument } from "./frontend"
+import { packageManagerExecutable, packageManagerName } from "@/delivery/checks/runtime-readiness"
 
 const PREVIEW_START_IDLE_TIMEOUT_MS = 30_000
 const PREVIEW_READY_TIMEOUT_MS = 15_000
@@ -246,18 +247,6 @@ async function readRuntimePackage(projectDir: string): Promise<{
 }> {
   const raw = await fs.readFile(path.join(projectDir, "package.json"), "utf8")
   return JSON.parse(raw) as { scripts?: Record<string, string>; packageManager?: string }
-}
-
-function packageManagerName(pkg: { packageManager?: string }) {
-  const raw = pkg.packageManager?.trim()
-  if (!raw) return undefined
-  const manager = raw.split("@", 1)[0]
-  return /^[a-z0-9._-]+$/i.test(manager) ? manager : undefined
-}
-
-function packageManagerExecutable(manager: string) {
-  if (process.platform !== "win32") return manager
-  return manager === "bun" ? manager : `${manager}.cmd`
 }
 
 function sessionView(session: LiveManagedPreviewSession | undefined): ManagedPreviewSession | undefined {
