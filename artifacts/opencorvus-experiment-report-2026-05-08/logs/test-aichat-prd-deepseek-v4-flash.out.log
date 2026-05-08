@@ -1,0 +1,115 @@
+
+> multimodel-ai-chat@1.0.0 test
+> vitest run
+
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/chuan/myhexin-local/demos/aichat-prd-deepseek-v4-flash[39m
+
+ [32m✓[39m src/features/chat/resume/__tests__/StreamResumer.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 210[2mms[22m[39m
+ [32m✓[39m src/features/settings/__tests__/systemPromptTemplates.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 224[2mms[22m[39m
+ [32m✓[39m src/components/layout/__tests__/Sidebar.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 132[2mms[22m[39m
+ [32m✓[39m tests/integration/advanced-chat-flow.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 437[2mms[22m[39m
+ [32m✓[39m tests/integration/responsive.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 202[2mms[22m[39m
+ [32m✓[39m tests/integration/auth-flow.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 459[2mms[22m[39m
+ [32m✓[39m tests/integration/attachments.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[33m 1394[2mms[22m[39m
+ [32m✓[39m tests/integration/api-keys-flow.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 1525[2mms[22m[39m
+   [33m[2m✓[22m[39m API Keys Flow — Page rendering[2m > [22mshows save buttons for each provider [33m369[2mms[22m[39m
+ [32m✓[39m tests/integration/conversations.test.tsx [2m([22m[2m23 tests[22m[2m)[22m[33m 1836[2mms[22m[39m
+   [33m[2m✓[22m[39m Conversations — EmptyState[2m > [22mrenders with title from translation [33m397[2mms[22m[39m
+ [32m✓[39m tests/integration/search-settings.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 2290[2mms[22m[39m
+   [33m[2m✓[22m[39m Search — useSearch hook[2m > [22msearches by title when query is set [33m474[2mms[22m[39m
+   [33m[2m✓[22m[39m Search — useSearch hook[2m > [22mreturns empty for non-matching query [33m484[2mms[22m[39m
+   [33m[2m✓[22m[39m Search — GlobalSearchModal[2m > [22mrenders search input when open [33m410[2mms[22m[39m
+ [32m✓[39m src/features/chat/branches/__tests__/useBranches.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 45[2mms[22m[39m
+ [32m✓[39m src/lib/db/__tests__/db.test.ts [2m([22m[2m49 tests[22m[2m)[22m[33m 3106[2mms[22m[39m
+ [32m✓[39m src/app/__tests__/router.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 399[2mms[22m[39m
+ [32m✓[39m src/components/markdown/__tests__/MarkdownRenderer.test.tsx [2m([22m[2m19 tests[22m[2m)[22m[33m 1945[2mms[22m[39m
+   [33m[2m✓[22m[39m MarkdownRenderer[2m > [22mshould render nested elements correctly [33m1371[2mms[22m[39m
+ [32m✓[39m src/features/sharing/__tests__/SharePage.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 166[2mms[22m[39m
+ [32m✓[39m src/features/conversations/__tests__/useConversations.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 207[2mms[22m[39m
+ [32m✓[39m tests/integration/rendering.test.tsx [2m([22m[2m32 tests[22m[2m)[22m[33m 2203[2mms[22m[39m
+   [33m[2m✓[22m[39m Rendering — Mermaid[2m > [22mrenders a flowchart [33m1301[2mms[22m[39m
+ [32m✓[39m tests/integration/chat-flow.test.tsx [2m([22m[2m24 tests[22m[2m)[22m[33m 2218[2mms[22m[39m
+   [33m[2m✓[22m[39m Chat Flow — UI Component Rendering[2m > [22mErrorCard renders error message and retry button [33m300[2mms[22m[39m
+ [32m✓[39m src/lib/llm/__tests__/connectivity.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m src/features/search/__tests__/useSearch.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 1910[2mms[22m[39m
+   [33m[2m✓[22m[39m useSearch[2m > [22mshould search conversations by title [33m413[2mms[22m[39m
+   [33m[2m✓[22m[39m useSearch[2m > [22mshould search messages by content [33m347[2mms[22m[39m
+   [33m[2m✓[22m[39m useSearch[2m > [22mshould clear search results [33m350[2mms[22m[39m
+   [33m[2m✓[22m[39m useSearch[2m > [22mshould handle no results [33m355[2mms[22m[39m
+   [33m[2m✓[22m[39m useSearch[2m > [22mshould handle search errors gracefully [33m415[2mms[22m[39m
+ [32m✓[39m src/features/conversations/__tests__/useTags.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 226[2mms[22m[39m
+ [32m✓[39m src/features/conversations/__tests__/useSidebarSearch.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 2682[2mms[22m[39m
+   [33m[2m✓[22m[39m useSidebarSearch[2m > [22mshould return empty results when query is empty [33m556[2mms[22m[39m
+   [33m[2m✓[22m[39m useSidebarSearch[2m > [22mshould find conversations by title match [33m527[2mms[22m[39m
+   [33m[2m✓[22m[39m useSidebarSearch[2m > [22mshould find conversations by message content match [33m534[2mms[22m[39m
+   [33m[2m✓[22m[39m useSidebarSearch[2m > [22mshould clear results when query is cleared [33m1062[2mms[22m[39m
+ [32m✓[39m src/features/chat/__tests__/MessageBubble.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[90m 220[2mms[22m[39m
+ [32m✓[39m src/features/error/__tests__/errorBoundary.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 173[2mms[22m[39m
+ [32m✓[39m src/features/conversations/__tests__/useFolders.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 184[2mms[22m[39m
+ [32m✓[39m src/lib/crypto/__tests__/crypto.test.ts [2m([22m[2m11 tests[22m[2m)[22m[90m 69[2mms[22m[39m
+ [32m✓[39m src/features/export/__tests__/markdownExport.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 43[2mms[22m[39m
+ [32m✓[39m src/lib/llm/__tests__/deepseekAdapter.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 274[2mms[22m[39m
+ [32m✓[39m src/components/layout/__tests__/MainLayout.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 160[2mms[22m[39m
+ [32m✓[39m src/features/sharing/__tests__/useShare.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 251[2mms[22m[39m
+ [32m✓[39m src/features/auth/__tests__/AuthContext.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 151[2mms[22m[39m
+ [32m✓[39m src/components/markdown/__tests__/CodeBlock.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 832[2mms[22m[39m
+ [32m✓[39m src/features/chat/components/__tests__/MessageMetadata.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[90m 111[2mms[22m[39m
+ [32m✓[39m src/features/chat/__tests__/ChatInput.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1023[2mms[22m[39m
+   [33m[2m✓[22m[39m ChatInput[2m > [22mshould render the textarea [33m424[2mms[22m[39m
+   [33m[2m✓[22m[39m ChatInput[2m > [22mshould call onSend when Enter is pressed [33m341[2mms[22m[39m
+ [32m✓[39m src/features/attachments/__tests__/fileTypes.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m src/components/layout/__tests__/MobileDrawer.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 146[2mms[22m[39m
+ [32m✓[39m src/features/chat/components/__tests__/MessageFeedback.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[90m 126[2mms[22m[39m
+ [32m✓[39m src/features/chat/__tests__/SlashCommandMenu.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 160[2mms[22m[39m
+ [32m✓[39m src/components/markdown/__tests__/SandboxModal.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 476[2mms[22m[39m
+   [33m[2m✓[22m[39m SandboxModal[2m > [22mshould render when open [33m333[2mms[22m[39m
+ [32m✓[39m src/features/chat/__tests__/ModelSelector.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 453[2mms[22m[39m
+ [32m✓[39m src/features/conversations/__tests__/ConversationGroup.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m src/features/auth/__tests__/EmailLoginForm.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 2464[2mms[22m[39m
+   [33m[2m✓[22m[39m EmailLoginForm[2m > [22mshould render email and password inputs [33m344[2mms[22m[39m
+   [33m[2m✓[22m[39m EmailLoginForm[2m > [22mshould show email validation error for invalid email [33m380[2mms[22m[39m
+   [33m[2m✓[22m[39m EmailLoginForm[2m > [22mshould show password required error when empty [33m421[2mms[22m[39m
+   [33m[2m✓[22m[39m EmailLoginForm[2m > [22mshould be able to type in email and password fields [33m673[2mms[22m[39m
+   [33m[2m✓[22m[39m EmailLoginForm[2m > [22mshould show loading state on submit with valid inputs [33m642[2mms[22m[39m
+ [32m✓[39m src/features/auth/__tests__/storage.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m src/features/settings/__tests__/clearDataButton.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 133[2mms[22m[39m
+ [32m✓[39m src/features/settings/__tests__/modelParamsPanel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 498[2mms[22m[39m
+   [33m[2m✓[22m[39m ModelParamsPanel[2m > [22mshould render temperature, maxTokens, and topP sliders [33m390[2mms[22m[39m
+ [32m✓[39m src/features/chat/components/__tests__/ShareButton.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 128[2mms[22m[39m
+ [32m✓[39m src/components/layout/__tests__/Header.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 185[2mms[22m[39m
+ [32m✓[39m src/app/guards/__tests__/AuthGuard.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 120[2mms[22m[39m
+ [32m✓[39m src/features/error/__tests__/errorFallback.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 150[2mms[22m[39m
+ [32m✓[39m src/lib/llm/__tests__/mockAdapter.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 5326[2mms[22m[39m
+   [33m[2m✓[22m[39m mockAdapter[2m > [22mshould stream chat content progressively [33m834[2mms[22m[39m
+   [33m[2m✓[22m[39m mockAdapter[2m > [22mshould complete with done delta [33m4380[2mms[22m[39m
+ [32m✓[39m src/features/chat/components/__tests__/ThinkingBlock.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 466[2mms[22m[39m
+   [33m[2m✓[22m[39m ThinkingBlock[2m > [22mshould be collapsed by default [33m307[2mms[22m[39m
+ [32m✓[39m src/features/export/__tests__/jsonExport.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 29[2mms[22m[39m
+ [32m✓[39m src/components/markdown/__tests__/SanitizeHtml.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 83[2mms[22m[39m
+ [32m✓[39m src/features/api-keys/__tests__/ApiKeysPage.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 823[2mms[22m[39m
+   [33m[2m✓[22m[39m ApiKeysPage[2m > [22mrenders the page title [33m605[2mms[22m[39m
+ [32m✓[39m src/features/auth/__tests__/usage.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 28[2mms[22m[39m
+ [32m✓[39m src/app/guards/__tests__/GuestGuard.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 150[2mms[22m[39m
+ [32m✓[39m src/lib/llm/__tests__/providerAdapter.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m src/components/__tests__/EmptyState.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 624[2mms[22m[39m
+   [33m[2m✓[22m[39m EmptyState[2m > [22mshould render action button and handle click [33m501[2mms[22m[39m
+ [32m✓[39m src/features/settings/__tests__/contextStrategyPanel.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 540[2mms[22m[39m
+   [33m[2m✓[22m[39m ContextStrategyPanel[2m > [22mshould render all strategy options [33m427[2mms[22m[39m
+ [32m✓[39m src/components/markdown/__tests__/KatexRenderer.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 156[2mms[22m[39m
+ [32m✓[39m src/components/markdown/__tests__/LinkPreview.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 591[2mms[22m[39m
+   [33m[2m✓[22m[39m LinkPreview[2m > [22mshould show loading skeleton initially [33m305[2mms[22m[39m
+ [32m✓[39m src/features/auth/__tests__/GoogleLoginButton.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 330[2mms[22m[39m
+ [32m✓[39m src/lib/llm/__tests__/adapterFactory.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/shortcuts/__tests__/useShortcuts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 40[2mms[22m[39m
+ [32m✓[39m src/features/chat/__tests__/StopButton.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 261[2mms[22m[39m
+ [32m✓[39m src/components/layout/__tests__/ContentArea.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 57[2mms[22m[39m
+ [32m✓[39m src/pages/__tests__/NotFound.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 78[2mms[22m[39m
+ [32m✓[39m src/components/markdown/__tests__/MermaidRenderer.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 930[2mms[22m[39m
+   [33m[2m✓[22m[39m MermaidRenderer[2m > [22mshould handle invalid chart syntax [33m868[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m68 passed[39m[22m[90m (68)[39m
+[2m      Tests [22m [1m[32m525 passed[39m[22m[90m (525)[39m
+[2m   Start at [22m 13:47:51
+[2m   Duration [22m 22.98s[2m (transform 7.49s, setup 16.42s, collect 38.70s, tests 42.92s, environment 168.58s, prepare 14.95s)[22m
+

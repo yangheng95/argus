@@ -1,0 +1,80 @@
+
+> chat@0.1.0 test
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90mC:/Users/chuan/myhexin-local/demos/aichat-opus4-7[39m
+
+ [32m✓[39m src/lib/storage/session-store.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+ [32m✓[39m src/lib/storage/message-store.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m src/lib/storage/index.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+ [32m✓[39m src/lib/sse/manager.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 69[2mms[22m[39m
+ [32m✓[39m src/hooks/use-sse.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 204[2mms[22m[39m
+ [32m✓[39m src/contexts/chat-context.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 654[2mms[22m[39m
+ [32m✓[39m src/components/chat/session-item.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 817[2mms[22m[39m
+   [33m[2m✓[22m[39m SessionItem[2m > [22mshows editing UI when edit mode is triggered via dropdown [33m 304[2mms[22m[39m
+ [32m✓[39m src/components/chat/new-chat-page.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 958[2mms[22m[39m
+ [32m✓[39m src/contexts/auth-context.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1771[2mms[22m[39m
+   [33m[2m✓[22m[39m AuthContext[2m > [22mgoogle login resolves within mock delay window and sets user [33m 1308[2mms[22m[39m
+ [32m✓[39m src/components/chat/message-bubble.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 187[2mms[22m[39m
+ [32m✓[39m src/components/chat/chat-input.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1490[2mms[22m[39m
+   [33m[2m✓[22m[39m ChatInput[2m > [22msubmit button calls onSend with text [33m 724[2mms[22m[39m
+ [32m✓[39m src/components/markdown/markdown-renderer.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 681[2mms[22m[39m
+ [32m✓[39m src/lib/sse/resume.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+ [32m✓[39m src/lib/__tests__/upload-handler.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/lib/storage/api-key-store.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 67[2mms[22m[39m
+ [32m✓[39m src/hooks/use-file-upload.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m src/components/ui/button.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 439[2mms[22m[39m
+ [32m✓[39m src/components/markdown/code-block.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 2964[2mms[22m[39m
+   [33m[2m✓[22m[39m CodeBlock[2m > [22mclears the copied indicator after the delay elapses [33m 1863[2mms[22m[39m
+ [32m✓[39m src/lib/storage/settings-store.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/types/types.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/lib/storage/db.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/lib/__tests__/crypto.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m src/components/markdown/sandbox-dialog.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 832[2mms[22m[39m
+   [33m[2m✓[22m[39m SandboxDialog[2m > [22msimulates execution and shows mock stdout when Run is pressed [33m 410[2mms[22m[39m
+ [32m✓[39m src/components/ui/select.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 720[2mms[22m[39m
+   [33m[2m✓[22m[39m Select[2m > [22mopens listbox and selects an option [33m 569[2mms[22m[39m
+ [32m✓[39m src/components/ui/dialog.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 618[2mms[22m[39m
+   [33m[2m✓[22m[39m Dialog[2m > [22mopens content when trigger is clicked [33m 565[2mms[22m[39m
+ [32m✓[39m src/components/ui/card.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 130[2mms[22m[39m
+ [32m✓[39m src/components/ui/input.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 420[2mms[22m[39m
+   [33m[2m✓[22m[39m Input[2m > [22maccepts user typing [33m 311[2mms[22m[39m
+ [32m✓[39m src/components/ui/accordion.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 500[2mms[22m[39m
+   [33m[2m✓[22m[39m Accordion[2m > [22mhides content by default and reveals on trigger click [33m 481[2mms[22m[39m
+ [32m✓[39m src/components/ui/tabs.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 469[2mms[22m[39m
+ [32m✓[39m src/components/markdown/task-list.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 304[2mms[22m[39m
+ [32m✓[39m src/components/ui/sheet.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 472[2mms[22m[39m
+   [33m[2m✓[22m[39m Sheet[2m > [22mopens content on trigger click [33m 394[2mms[22m[39m
+ [32m✓[39m src/components/markdown/mermaid-block.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 155[2mms[22m[39m
+ [32m✓[39m src/components/ui/avatar.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 105[2mms[22m[39m
+ [32m✓[39m src/components/markdown/link-preview.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 247[2mms[22m[39m
+ [32m✓[39m src/components/ui/textarea.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 315[2mms[22m[39m
+ [32m✓[39m src/components/ui/dropdown-menu.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 548[2mms[22m[39m
+   [33m[2m✓[22m[39m DropdownMenu[2m > [22mopens menu and triggers item selection [33m 545[2mms[22m[39m
+ [32m✓[39m src/components/ui/badge.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+ [32m✓[39m src/components/ui/tooltip.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 294[2mms[22m[39m
+ [32m✓[39m src/components/markdown/table-block.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 94[2mms[22m[39m
+ [32m✓[39m src/components/markdown/math-block.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 129[2mms[22m[39m
+ [32m✓[39m src/components/ui/separator.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 75[2mms[22m[39m
+ [32m✓[39m src/components/ui/label.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 75[2mms[22m[39m
+ [32m✓[39m src/components/ui/scroll-area.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 120[2mms[22m[39m
+ [32m✓[39m src/__tests__/setup.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/components/ui/utils.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/components/ui/skeleton.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 62[2mms[22m[39m
+ [32m✓[39m src/__tests__/integration.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 6116[2mms[22m[39m
+   [33m[2m✓[22m[39m app integration[2m > [22mlogs in with email + password and lands on the chat page [33m 1291[2mms[22m[39m
+   [33m[2m✓[22m[39m app integration[2m > [22msends a message, streams a mock reply, and persists both [33m 1965[2mms[22m[39m
+   [33m[2m✓[22m[39m app integration[2m > [22mpreserves sessions and messages across remount (persistence) [33m 1772[2mms[22m[39m
+   [33m[2m✓[22m[39m app integration[2m > [22mlogout returns the user to /login [33m 896[2mms[22m[39m
+ [32m✓[39m src/lib/__tests__/anthropic.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 9637[2mms[22m[39m
+   [33m[2m✓[22m[39m createClaudeStream[2m > [22mshould return mock stream when apiKey is empty [33m 4484[2mms[22m[39m
+   [33m[2m✓[22m[39m createMockStream[2m > [22mshould produce text and done chunks [33m 2667[2mms[22m[39m
+   [33m[2m✓[22m[39m createMockStream[2m > [22mshould include sessionId when provided [33m 2468[2mms[22m[39m
+ [32m✓[39m src/components/ui/toast.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 96[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m49 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m [1m[32m247 passed[39m[22m[90m (247)[39m
+[2m   Start at [22m 13:50:56
+[2m   Duration [22m 12.43s[2m (transform 5.95s, setup 19.30s, collect 21.57s, tests 33.29s, environment 64.42s, prepare 11.96s)[22m
+

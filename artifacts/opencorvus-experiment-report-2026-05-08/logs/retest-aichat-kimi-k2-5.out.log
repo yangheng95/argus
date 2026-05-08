@@ -1,0 +1,13 @@
+
+> claude-chat@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.5 C:/Users/chuan/myhexin-local/demos/aichat-kimi-k2-5
+
+
+ Test Files  14 passed (14)
+      Tests  45 passed (45)
+   Start at  13:50:29
+   Duration  5.79s (transform 3.01s, setup 0ms, import 17.73s, tests 7.51s, environment 18.24s)
+

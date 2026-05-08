@@ -1,0 +1,7 @@
+bun install v1.3.13 (bf2e2cec)
+
++ @types/bun@1.3.13
++ typescript@5.9.3
++ hono@4.12.18
+
+6 packages installed [1311.00ms]
