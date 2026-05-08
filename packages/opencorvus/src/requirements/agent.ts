@@ -23,8 +23,6 @@ import { clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { AttachmentStore } from "@/storage/attachment-store"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
-import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
-import { Instance } from "@/project/instance"
 import type {
   ParsedRequirement,
   RequirementsDecision,
@@ -244,8 +242,6 @@ function buildUserPrompt(
   if (prefetched?.trim()) {
     sections.push(prefetched)
   }
-
-  sections.push(buildMirrorToolsPromptSection({ cwd: Instance.directory }))
 
   return sections.join("\n\n")
 }

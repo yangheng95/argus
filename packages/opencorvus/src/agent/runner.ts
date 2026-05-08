@@ -268,19 +268,6 @@ const BUILD_SKILL_GATED_TOOLS = [
   "schedule",
   "planner",
   "goal_report",
-  "webpage_extract",
-  "webpage_compile",
-  "webpage_analyze",
-  "webpage_image_extract",
-  "webpage_image_compile",
-  "webpage_image_analyze",
-  "webpage_render",
-  "webpage_evaluate",
-  "webpage_text_diff",
-  "webpage_vision_judge",
-  "figma_extract",
-  "figma_compile",
-  "figma_analyze",
 ] as const
 
 export function promptToolSwitchesForAgentRun(input: {

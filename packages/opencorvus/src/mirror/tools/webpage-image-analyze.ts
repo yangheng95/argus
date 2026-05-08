@@ -4,9 +4,8 @@
  *
  * Image2code's analogue of `webpage_analyze`. Reads `image-analysis.json`,
  * synthesises a `ProjectScaffold`, and writes the same mirror facts and
- * generated React source the URL flow's `webpage_analyze` writes. Downstream
- * agents read generated source paths from scaffold.json and the tool metadata;
- * rule 22 keeps every source on one downstream contract.
+ * scaffold artifacts the URL flow's `webpage_analyze` writes. Design-analysis
+ * reads those artifacts and persists one downstream PRD/SPEC contract.
  */
 
 import fs from "node:fs/promises"
@@ -27,21 +26,21 @@ import { writeGeneratedSourceFiles } from "./generated-source"
 export const WebpageImageAnalyzeTool = Tool.define("webpage_image_analyze", {
   description: `Analyze an ImageAnalysis into a deterministic ProjectScaffold (sections, file contracts, design-token system). Zero LLM — the vision-LLM call already ran in webpage_image_extract; this stage folds its structured output into the same cross-source ProjectScaffold contract that webpage_analyze (URL) and figma_analyze produce.
 
-Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes the same mirror facts and generated React source the URL analyze step writes:
+Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes the same mirror facts and scaffold artifacts the URL analyze step writes:
   - scaffold.json           full ProjectScaffold
   - shared-context.md       compact token + section summary for prompts
-  - sourcePaths             React source files from the scaffold contract
+  - sourcePaths             scaffold-generated source files for analysis only
 
 Returns a summary: section list, token counts. The agent should \`read\` scaffold.json for full detail when needed.
 
 This tool is artifact-dependent: do NOT call it until \`webpage_image_extract\` has completed and written \`image-analysis.json\`. Never batch it in the same assistant turn as \`webpage_image_extract\`.
 
-Use as step 3 of the image-generate workflow. Pure function, no network or LLM.`,
+Use as step 3 of the design-analysis image PRD/SPEC workflow. Pure function, no network or LLM.`,
   parameters: z.object({
     outputDir: z
       .string()
       .describe(
-        `Directory containing image-analysis.json. Writes scaffold.json and shared-context.md here, and generated React source under the worktree source layout. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_image_extract's default).`,
+        `Directory containing image-analysis.json. Writes scaffold.json and shared-context.md here, plus scaffold-generated source files for analysis only. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_image_extract's default).`,
       )
       .optional(),
   }),
@@ -102,7 +101,7 @@ Use as step 3 of the image-generate workflow. Pure function, no network or LLM.`
         `- \`${contextPath}\` — compact prompt-ready summary`,
         `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: run the generated React source and iterate it with `webpage_render` + `webpage_vision_judge` + `webpage_evaluate`.",
+        "Next: read `scaffold.json`, `shared-context.md`, and `page-ir.xml`, then write the PRD/SPEC and visual specs. Do not treat generated source as the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,

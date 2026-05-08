@@ -32,9 +32,9 @@ Writes to the output directory (defaults to the worktree):
   - extracted-page.json          the full ExtractedPage object (DOM + tokens + assets)
   - images/*                     downloaded image assets (so the clone can reference local paths)
 
-Returns a compact summary (title, viewport, element count, artifact paths). The agent should 'read' extracted-page.json or page-ir.xml (via webpage_compile) rather than inline the tree in context.
+Returns a compact summary (title, viewport, element count, artifact paths). The design-analysis agent should read extracted-page.json or page-ir.xml (via webpage_compile) rather than inline the tree in context.
 
-Use this as step 1 of the webpage-generate workflow. Requires network access to the target URL.`,
+Use this as step 1 of the design-analysis webpage PRD/SPEC workflow. Requires network access to the target URL.`,
   parameters: z.object({
     url: z.string().describe("The webpage to extract. Must start with http:// or https://."),
     outputDir: z
@@ -129,7 +129,7 @@ Use this as step 1 of the webpage-generate workflow. Requires network access to 
         `**Reference screenshot:** \`${referencePath}\``,
         `**Full extracted page JSON:** \`${jsonPath}\``,
         "",
-        "Next: call `webpage_analyze` on the JSON to get a `ProjectScaffold`, or `webpage_compile` to get compact XML IR.",
+        "Next: call `webpage_compile`, then `webpage_analyze`, then read the artifacts before writing the PRD/SPEC.",
       ].join("\n"),
       metadata: summary,
     }

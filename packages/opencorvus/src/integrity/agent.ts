@@ -44,7 +44,6 @@ import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { DecisionLog } from "@/decision-log"
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
-import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import { AttachmentStore } from "@/storage/attachment-store"
 import {
   INTEGRITY_DIMENSIONS,
@@ -734,13 +733,6 @@ function buildIntegrityPrompt(input: {
 
   const dlSection = input.decisionLog?.toPromptSection()
   if (dlSection) sections.push(dlSection)
-
-  try {
-    const mirrorSection = buildMirrorToolsPromptSection({ cwd: Instance.directory })
-    if (mirrorSection.trim().length > 0) sections.push(mirrorSection)
-  } catch {
-    // Instance not initialised — advisory section, skip.
-  }
 
   sections.push(
     "Now review every dimension above. Cite REQ-N / spec ids / goal ids / verbatim user " +

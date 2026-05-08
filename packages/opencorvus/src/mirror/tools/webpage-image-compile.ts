@@ -4,7 +4,7 @@
  * Image2code analogue of `webpage_compile`. Reads a previously-written
  * `image-analysis.json` and emits the same compact XML IR dialect used by
  * the URL and Figma flows. Writes to `<outputDir>/page-ir.xml` (same
- * filename — downstream codegen never branches per source).
+ * filename so design-analysis consumes one artifact contract).
  */
 
 import fs from "node:fs/promises"
@@ -19,13 +19,13 @@ import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 export const WebpageImageCompileTool = Tool.define("webpage_image_compile", {
   description: `Compile an ImageAnalysis JSON into a compact XML IR (zero LLM, deterministic).
 
-Same XML dialect that \`webpage_compile\` (URL) and \`figma_compile\` produce — downstream codegen does not branch per source. Containers, text leaves, image leaves, and repeated children all serialise identically across the three sources.
+Same XML dialect that \`webpage_compile\` (URL) and \`figma_compile\` produce — design-analysis consumes one artifact contract across sources. Containers, text leaves, image leaves, and repeated children all serialise identically.
 
 Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes \`<outputDir>/page-ir.xml\`. Returns a preview of the first 2KB and total byte size.
 
 This tool is artifact-dependent: do NOT call it until \`webpage_image_extract\` has completed and written \`image-analysis.json\`. Never batch it in the same assistant turn as \`webpage_image_extract\`.
 
-Use as step 2 of the image-generate workflow. Pure function, no network or LLM.`,
+Use as step 2 of the design-analysis image PRD/SPEC workflow. Pure function, no network or LLM.`,
   parameters: z.object({
     outputDir: z
       .string()
@@ -75,7 +75,7 @@ Use as step 2 of the image-generate workflow. Pure function, no network or LLM.`
         ir.xml.length > preview.length ? "<!-- truncated -->" : "",
         "```",
         "",
-        "Next: implement the page (any tech stack), then iterate via `webpage_render` + `webpage_vision_judge` + `webpage_evaluate`.",
+        "Next: call `webpage_image_analyze`, then read `page-ir.xml`, `scaffold.json`, and `shared-context.md` before writing the PRD/SPEC.",
       ].join("\n"),
       metadata: {
         irPath,

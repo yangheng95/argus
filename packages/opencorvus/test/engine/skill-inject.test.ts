@@ -84,27 +84,28 @@ describe("resolveStageSkills", () => {
     })
   })
 
-  test("aggregates required_tools across auto-detected build skills for webpage tasks", async () => {
+  test("webpage reference skill belongs to design_analyst, not build", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        // webpage-generate.md declares `{ request_contains_url: true }`.
-        // A URL reference is sufficient; screenshots are optional supporting
-        // evidence, not the activation gate.
-        const result = await resolveStageSkills([], "build", {
+        const build = await resolveStageSkills([], "build", {
           request_contains_url: true,
           request_text: "复刻 https://www.baidu.com/",
         })
-        expect(result.requiredTools).toContain("webpage_extract")
-        expect(result.requiredTools).toContain("webpage_compile")
-        expect(result.requiredTools).toContain("webpage_analyze")
-        expect(result.requiredTools).toContain("webpage_render")
-        expect(result.requiredTools).toContain("webpage_evaluate")
-        expect(result.requiredTools).toContain("webpage_text_diff")
-        expect(result.requiredTools).not.toContain("webpage_compile_html")
-        expect(result.prompt).toContain("Skill-system invariants")
-        expect(result.prompt).toContain("Skill: webpage-generate")
+        expect(build.skills.map((s) => s.name)).not.toContain("webpage-generate")
+        expect(build.requiredTools).toEqual([])
+
+        const design = await resolveStageSkills([], "design_analyst", {
+          request_contains_url: true,
+          request_text: "复刻 https://www.baidu.com/",
+        })
+        expect(design.requiredTools).toContain("webpage_extract")
+        expect(design.requiredTools).toContain("webpage_compile")
+        expect(design.requiredTools).toContain("webpage_analyze")
+        expect(design.requiredTools).not.toContain("webpage_render")
+        expect(design.prompt).toContain("Design-analysis is the only stage")
+        expect(design.prompt).toContain("Skill: webpage-generate")
       },
     })
   })
@@ -127,16 +128,19 @@ describe("resolveStageSkills", () => {
     })
   })
 
-  test("image-only request fires image-generate WITHOUT cross-firing webpage-generate", async () => {
+  test("image-only request fires image-generate in design_analyst only", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        // image-generate.md declares `{ has_attachment_image: true,
-        // request_contains_url: false }`. Webpage-generate also lists
-        // has_attachment_image: true but additionally requires url=true,
-        // so AND-of-explicit excludes it from this signal set.
-        const result = await resolveStageSkills([], "build", {
+        const build = await resolveStageSkills([], "build", {
+          has_attachment_image: true,
+          request_contains_url: false,
+          request_text: "复刻附图所示页面（无 URL，仅截图）",
+        })
+        expect(build.skills.map((s) => s.name)).not.toContain("image-generate")
+
+        const result = await resolveStageSkills([], "design_analyst", {
           has_attachment_image: true,
           request_contains_url: false,
           request_text: "复刻附图所示页面（无 URL，仅截图）",
@@ -156,7 +160,7 @@ describe("resolveStageSkills", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await resolveStageSkills([], "build", {
+        const result = await resolveStageSkills([], "design_analyst", {
           has_attachment_image: true,
           request_contains_url: true,
           request_text: "复刻 https://example.com/ — 附图作为视觉参考",
@@ -173,7 +177,7 @@ describe("resolveStageSkills", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await resolveStageSkills([], "build", {
+        const result = await resolveStageSkills([], "design_analyst", {
           has_attachment_image: false,
           request_contains_url: true,
           request_text: "Clone https://example.com/",
@@ -197,7 +201,14 @@ describe("resolveStageSkills", () => {
         //   - webpage-generate fails the url=true gate (url is false here).
         // Each skill independently declares its own constraint; no cross-skill
         // coordination in their frontmatter.
-        const result = await resolveStageSkills([], "build", {
+        const build = await resolveStageSkills([], "build", {
+          has_attachment_image: true,
+          ...deriveUrlSignals("复刻 https://www.figma.com/design/abc/title"),
+          request_text: "复刻 https://www.figma.com/design/abc/title",
+        })
+        expect(build.skills.map((s) => s.name)).not.toContain("figma-generate")
+
+        const result = await resolveStageSkills([], "design_analyst", {
           has_attachment_image: true,
           ...deriveUrlSignals("复刻 https://www.figma.com/design/abc/title"),
           request_text: "复刻 https://www.figma.com/design/abc/title",

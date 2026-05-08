@@ -4,6 +4,8 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
 import { PermissionNext } from "../../src/permission/next"
+import { ToolRegistry } from "../../src/tool/registry"
+import { MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
 
 // Helper to evaluate permission for a tool with wildcard pattern
 function evalPerm(agent: Agent.Info | undefined, permission: string): PermissionNext.Action | undefined {
@@ -507,6 +509,32 @@ test("design-analyst advertises url_screenshot and omits webfetch", async () => 
 
       const { createUrlScreenshotTool } = await import("../../src/design-analyst/url-screenshot-tool")
       expect(Object.keys(createUrlScreenshotTool())).toEqual(["url_screenshot"])
+    },
+  })
+})
+
+test("only design-analyst receives mirror tools from the registry", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const designAnalyst = await Agent.get("design-analyst")
+      expect(designAnalyst).toBeDefined()
+      const designTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, designAnalyst)
+      const designToolIds = new Set(designTools.map((tool) => tool.id))
+      for (const id of MIRROR_TOOL_IDS) {
+        expect(designToolIds.has(id)).toBe(true)
+      }
+
+      for (const name of ["build", "general", "explore", "requirements", "architect", "integrity", "prosecutor"]) {
+        const agent = await Agent.get(name)
+        expect(agent).toBeDefined()
+        const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent)
+        const toolIds = new Set(tools.map((tool) => tool.id))
+        for (const id of MIRROR_TOOL_IDS) {
+          expect(toolIds.has(id)).toBe(false)
+        }
+      }
     },
   })
 })

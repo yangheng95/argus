@@ -20,13 +20,9 @@ describe("agent runner build tool scope", () => {
     expect(switches.schedule).toBe(false)
     expect(switches.planner).toBe(false)
     expect(switches.goal_report).toBe(false)
-    expect(switches.webpage_extract).toBe(false)
-    expect(switches.webpage_image_extract).toBe(false)
-    expect(switches.figma_extract).toBe(false)
-    expect(switches.webpage_vision_judge).toBe(false)
   })
 
-  test("build skills expose exactly their declared reference tools", () => {
+  test("build skills do not reopen mirror tools", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["report_build_result"],
       skillsStage: "build",
@@ -34,11 +30,9 @@ describe("agent runner build tool scope", () => {
     })
 
     expect(switches.report_build_result).toBe(true)
-    expect(switches.webpage_extract).toBe(true)
-    expect(switches.webpage_render).toBe(true)
-    expect(switches.webpage_vision_judge).toBe(true)
-    expect(switches.webpage_image_extract).toBe(false)
-    expect(switches.figma_extract).toBe(false)
+    expect(switches.webpage_extract).toBeUndefined()
+    expect(switches.webpage_render).toBeUndefined()
+    expect(switches.webpage_vision_judge).toBeUndefined()
   })
 
   test("build skills expose exactly their declared research tools", () => {
@@ -53,7 +47,6 @@ describe("agent runner build tool scope", () => {
     expect(switches.webfetch).toBe(true)
     expect(switches.external_code_search).toBe(false)
     expect(switches.task).toBe(false)
-    expect(switches.webpage_extract).toBe(false)
   })
 
   test("non-build agents are not silently scoped by build skill policy", () => {

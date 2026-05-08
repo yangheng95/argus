@@ -4,9 +4,9 @@
  *
  * Figma2code's analogue of `webpage_analyze` / `webpage_image_analyze`.
  * Reads `figma-design.json`, synthesises a `ProjectScaffold`, and writes
- * the same mirror facts and generated React source URL and image flows write.
- * Downstream agents read generated source paths from scaffold.json and the
- * tool metadata; rule 22 keeps every source on one downstream contract.
+ * the same mirror facts and scaffold artifacts URL and image flows write.
+ * Design-analysis reads those artifacts and persists one downstream PRD/SPEC
+ * contract for build agents.
  */
 
 import fs from "node:fs/promises"
@@ -27,21 +27,21 @@ import { writeGeneratedSourceFiles } from "./generated-source"
 export const FigmaAnalyzeTool = Tool.define("figma_analyze", {
   description: `Analyze a CompressedDesign into a deterministic ProjectScaffold (sections, file contracts, design-token system). Zero LLM — the Figma REST fetch already ran in figma_extract; this stage folds its output into the same cross-source ProjectScaffold contract that webpage_analyze (URL) and webpage_image_analyze produce.
 
-Reads \`<outputDir>/figma-design.json\` (from figma_extract). Writes the same mirror facts and generated React source the URL / image analyze steps write:
+Reads \`<outputDir>/figma-design.json\` (from figma_extract). Writes the same mirror facts and scaffold artifacts the URL / image analyze steps write:
   - scaffold.json           full ProjectScaffold
   - shared-context.md       compact token + section summary
-  - sourcePaths             React source files from the scaffold contract
+  - sourcePaths             scaffold-generated source files for analysis only
 
 Returns a compact summary; agent should \`read\` scaffold.json for full detail.
 
 Artifact-dependent: do NOT call until \`figma_extract\` has finished. Never batch with figma_extract.
 
-Step 3 of the figma2code workflow. Pure function, no network or LLM.`,
+Step 3 of the design-analysis Figma PRD/SPEC workflow. Pure function, no network or LLM.`,
   parameters: z.object({
     outputDir: z
       .string()
       .describe(
-        `Directory containing figma-design.json. Writes scaffold.json and shared-context.md here, and generated React source under the worktree source layout. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree.`,
+        `Directory containing figma-design.json. Writes scaffold.json and shared-context.md here, plus scaffold-generated source files for analysis only. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree.`,
       )
       .optional(),
   }),
@@ -106,7 +106,7 @@ Step 3 of the figma2code workflow. Pure function, no network or LLM.`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
         `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: run the generated React source and iterate it with `webpage_render` + `webpage_vision_judge` + `webpage_evaluate`.",
+        "Next: read `scaffold.json`, `shared-context.md`, and `page-ir.xml`, then write the PRD/SPEC and visual specs. Do not treat generated source as the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { BuildAgent, externalEventPartText, externalToolProtocolErrorMessage } from "../../src/build/agent"
 
 describe("BuildAgent external coding system prompt", () => {
-  test("injects OpenCorvus MCP tool aliases for Codex build sessions", () => {
+  test("injects OpenCorvus MCP executor aliases without reopening mirror tools", () => {
     const composed = BuildAgent.composeExternalCodingSystem({
       executor: "codex",
       baseSystem: "base system",
@@ -14,9 +14,11 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("You are the OpenCorvus external build executor running through codex.")
     expect(composed.system).toContain("Treat the user prompt as a build contract, not as a chat request.")
     expect(composed.system).toContain("Do not call OpenCorvus-only tools such as report_build_result or merge_back")
-    expect(composed.system).toContain("webpage_extract => mcp__opencorvus__webpage_extract")
-    expect(composed.system).toContain("webpage_compile => mcp__opencorvus__webpage_compile")
-    expect(composed.system).toContain("Do not create, copy, or handwrite")
+    expect(composed.system).toContain("memory => mcp__opencorvus__memory")
+    expect(composed.system).toContain("task_report => mcp__opencorvus__task_report")
+    expect(composed.system).not.toContain("webpage_extract => mcp__opencorvus__webpage_extract")
+    expect(composed.system).not.toContain("figma_extract => mcp__opencorvus__figma_extract")
+    expect(composed.system).toContain("Mirror extraction artifacts are produced by the upstream design_analysis stage")
     expect(composed.system).toContain("those references are authoritative")
     expect(composed.system).toContain("Match them 1:1 as closely as the stack allows")
     expect(composed.system).toContain("Write shell commands for the actual platform and shell")

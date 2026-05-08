@@ -66,7 +66,7 @@ afterAll(() => {
 
 describe("design-analyst agent (real-LLM smoke)", () => {
   liveTest(
-    "produces a VisualSpec[] + design_system + tech_stack from a text-only brief",
+    "produces VisualSpec[] plus PRD/SPEC fields from a text-only brief",
     async () => {
       await Instance.provide({
         directory: PACKAGE_ROOT,
@@ -88,6 +88,14 @@ describe("design-analyst agent (real-LLM smoke)", () => {
           expect(result.designSystem.length).toBeGreaterThan(0)
           expect(Array.isArray(result.techStack)).toBe(true)
           expect(result.techStack.length).toBeGreaterThanOrEqual(1)
+          expect(typeof result.productSpec).toBe("string")
+          expect(result.productSpec.length).toBeGreaterThan(0)
+          expect(typeof result.frontendSpec).toBe("string")
+          expect(result.frontendSpec.length).toBeGreaterThan(0)
+          expect(typeof result.backendSpec).toBe("string")
+          expect(result.backendSpec.length).toBeGreaterThan(0)
+          expect(Array.isArray(result.referenceArtifacts)).toBe(true)
+          expect(Array.isArray(result.openQuestions)).toBe(true)
           // Spec count is LLM-dependent; just assert well-formed structure
           // when any specs exist.
           for (const spec of result.specs) {
