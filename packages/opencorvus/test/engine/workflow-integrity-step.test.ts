@@ -21,14 +21,16 @@ describe("pipeline workflow architecture review step", () => {
     expect(pipeline).toBeDefined()
     const stepIDs = pipeline!.steps.map((step) => step.id)
     expect(stepIDs).toEqual([
-      "analyze_intent",
       "design_analysis",
+      "analyze_intent",
       "requirements",
       "architect",
       "build",
       "integrity",
       "deliver",
     ])
+    expect(pipeline!.steps.find((step) => step.id === "design_analysis")?.after).toEqual([])
+    expect(pipeline!.steps.find((step) => step.id === "analyze_intent")?.after).toEqual(["design_analysis"])
     expect(pipeline!.steps.find((step) => step.id === "build")?.after).toEqual(["architect"])
     expect(pipeline!.steps.find((step) => step.id === "integrity")?.after).toEqual(["build"])
   })

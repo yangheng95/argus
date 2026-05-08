@@ -4,7 +4,7 @@
  * 系统只内置两条路径：
  *   1. **direct**   — build → deliver（对抗式迭代）
  *      用于显式 kind=build 的单文件改动 / bugfix / 配置调整 / 短篇调试。无需 requirements / architect / goals。
- *   2. **pipeline** — (design_analysis) → requirements → architect → per-goal[build] → deliver
+ *   2. **pipeline** — (design_analysis) → analyze_intent → requirements → architect → per-goal[build] → deliver
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
  * 两条路径都以 build 做实现、以 deliver 做对抗式验收，rejection 会循环回到 build 进行返工。
@@ -170,31 +170,31 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(design_analysis 可选) → requirements → architect → per-goal[build + architecture_review] → deliver；
+ *  流程：(design_analysis 可选) → analyze_intent → requirements → architect → per-goal[build + architecture_review] → deliver；
  *  rejection 触发返工。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
-  description: "analyze_intent → (design_analysis) → requirements → architect → per-goal[build + architecture_review] → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
+  description: "(design_analysis) → analyze_intent → requirements → architect → per-goal[build + architecture_review] → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
-      id: "analyze_intent",
-      tool: "analyze_intent",
-      label: "Intent",
-      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。按需调用 —— request 模糊或 scope 不清时跑。返回 blocker clarifications 时先调 question。",
+      id: "design_analysis",
+      tool: "design_analysis",
+      label: "Design",
+      hint: "视觉/网页/图片/Figma 参考任务的第一阶段。独占 mirror 工具，多轮核对像素和网页代码，产出完整 PRD/SPEC、visual_consistency_spec 与 evidence_source_manifest 后才允许下游消费。",
       scope: "task",
       skippable: true,
       after: [],
     },
     {
-      id: "design_analysis",
-      tool: "design_analysis",
-      label: "Design",
-      hint: "分析视觉参考（图片/URL），提取布局、样式、组件清单。仅前端/UI 任务且有视觉参考时按需触发。",
+      id: "analyze_intent",
+      tool: "analyze_intent",
+      label: "Intent",
+      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。按需调用 —— request 模糊或 scope 不清时跑。视觉/参考任务必须等 design_analysis PRD/SPEC 完成后再跑。",
       scope: "task",
       skippable: true,
-      after: ["analyze_intent"],
+      after: ["design_analysis"],
     },
     {
       id: "requirements",
