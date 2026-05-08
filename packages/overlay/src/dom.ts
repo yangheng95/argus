@@ -24,7 +24,6 @@ export interface DomRefs {
  // Layout panels
   panelBody: HTMLElement | null;
   sidebar: HTMLElement | null;
-  btnSidebarToggle: HTMLButtonElement | null;
   leftPaneResizer: HTMLElement | null;
   workspaceMain: HTMLElement | null;
   rightPaneResizer: HTMLElement | null;
@@ -115,7 +114,6 @@ export interface DomRefs {
 
  // Task list panel
   taskListPanel: HTMLElement | null;
-  btnRefreshTasks: HTMLButtonElement | null;
   btnCreateTask: HTMLButtonElement | null;
 
  // Knowledge: Memory
@@ -178,7 +176,6 @@ export function getDomRefs(): DomRefs {
  // Layout panels
     panelBody: $<HTMLElement>("#panelBody"),
     sidebar: $<HTMLElement>("#sidebar"),
-    btnSidebarToggle: $<HTMLButtonElement>("#btnSidebarToggle"),
     leftPaneResizer: $<HTMLElement>("#leftPaneResizer"),
     workspaceMain: $<HTMLElement>("#workspaceMain"),
     rightPaneResizer: $<HTMLElement>("#rightPaneResizer"),
@@ -270,7 +267,6 @@ export function getDomRefs(): DomRefs {
 
  // Task list panel
     taskListPanel: $<HTMLElement>("#taskListPanel"),
-    btnRefreshTasks: $<HTMLButtonElement>("#btnRefreshTasks"),
     btnCreateTask: $<HTMLButtonElement>("#btnCreateTask"),
 
  // Knowledge: Memory

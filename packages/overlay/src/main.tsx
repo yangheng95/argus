@@ -1014,18 +1014,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
  // ── Sidebar buttons ──
-  document.getElementById("btnRefreshTasks")?.addEventListener("click", () => {
-    void loadTasks();
-  });
-  document.getElementById("btnSidebarToggle")?.addEventListener("click", () => {
-    const next = !settingsStore.sidebarCollapsed;
-    setSettingsStore("sidebarCollapsed", next);
-    const sidebar = document.getElementById("sidebar");
-    if (sidebar) sidebar.dataset.collapsed = String(next);
-    const toggleBtn = document.getElementById("btnSidebarToggle");
-    if (toggleBtn) toggleBtn.title = next ? t("sidebar.open") : t("sidebar.close");
-    saveSettings();
-  });
   document.getElementById("btnCreateTask")?.addEventListener("click", () => {
     // Deselect current task and focus the composer — the user types their
     // request directly in the ChatComposer, no modal dialog needed.
@@ -1161,7 +1149,6 @@ disposers.push(createRoot((dispose) => {
     const sections = document.getElementById("sections");
     const leftResizer = document.getElementById("leftPaneResizer") as HTMLElement | null;
     const rightResizer = document.getElementById("rightPaneResizer") as HTMLElement | null;
-    const sidebarToggle = document.getElementById("btnSidebarToggle");
 
     if (sidebar) {
       sidebar.dataset.collapsed = String(sidebarCollapsed);
@@ -1173,7 +1160,6 @@ disposers.push(createRoot((dispose) => {
     }
     if (leftResizer) leftResizer.hidden = sidebarCollapsed;
     if (rightResizer) rightResizer.hidden = rightPanelCollapsed;
-    if (sidebarToggle) sidebarToggle.title = sidebarCollapsed ? t("sidebar.open") : t("sidebar.close");
 
     renderPaneLayout({
       sidebarCollapsed,

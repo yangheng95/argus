@@ -27,62 +27,6 @@
   flex-shrink: 1;
 }
 
-.sidebar[data-collapsed="true"] [data-ui="sidebar-toggle-button"] svg {
-  transform: rotate(180deg);
-}
-
-/* Sidebar tool cluster: a control-group container holding icon-only
-   actions in the rail header. Routes through `--oc-control-*` tokens
-   so the cluster shape matches the rest of the overlay control vocab. */
-.sidebar-toolset {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--oc-control-border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--oc-control-bg);
-  box-shadow: var(--oc-control-shadow);
-}
-
-.sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"],
-.sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"] {
-  --oc-button-height: calc(28px * var(--ui-scale));
-  --oc-button-padding-x: 0;
-  --oc-button-border: var(--oc-border-width) solid transparent;
-  --oc-button-bg: transparent;
-  --oc-button-color: var(--text-soft);
-
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  width: calc(28px * var(--ui-scale));
-  height: calc(28px * var(--ui-scale));
-  flex-shrink: 0;
-  transition:
-    border-color var(--ui-duration-fast),
-    background var(--ui-duration-fast),
-    color var(--ui-duration-fast),
-    transform var(--ui-duration-fast);
-  box-shadow: none;
-}
-
-.sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"]:hover,
-.sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"]:focus-visible,
-.sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"]:hover,
-.sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"]:focus-visible {
-  --oc-button-border: var(--oc-border-width) solid var(--oc-control-border-hover);
-  --oc-button-bg: var(--oc-control-bg-hover);
-  --oc-button-color: var(--text-strong);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
-
-.sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"]:focus-visible,
-.sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"]:focus-visible {
-  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--oc-control-focus-ring);
-}
-
 /* Sidebar header text lanes: align with the shared
    `.oc-surface-header__title` / `__actions` grammar. */
 .sidebar-title {
@@ -905,16 +849,6 @@
   gap: calc(8px * var(--ui-scale));
 }
 
-.sidebar[data-collapsed="true"] .sidebar-toolset {
-  width: 100%;
-}
-
-.sidebar[data-collapsed="true"] .sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"],
-.sidebar[data-collapsed="true"] .sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"] {
-  flex: 1;
-  width: auto;
-}
-
 .sidebar[data-collapsed="true"] .oc-button[data-ui="sidebar-new-task-button"] {
   width: 100%;
   justify-content: center;
@@ -929,15 +863,10 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Sidebar header equal-height button row:
-   - sidebar refresh/toggle buttons inside .sidebar-toolset: 22px inner
-   - sidebar new-task button: 28px — matches toolset outer height
-     (22px inner + 2*2px padding + 2*1px border = 28px total)
-   Chat header controls share the same 28px cap.
+   Header equal-height button row. Chat header controls use the same
+   22px cap while the sidebar keeps only the New Chat command.
    ───────────────────────────────────────────────────────────── */
 
-.sidebar-header .oc-button[data-ui="sidebar-refresh-button"],
-.sidebar-header .oc-button[data-ui="sidebar-toggle-button"],
 .chat-header .chat-task-status,
 .chat-header .workspace-toggle,
 .chat-header-meta #btnChatCopyAll {
