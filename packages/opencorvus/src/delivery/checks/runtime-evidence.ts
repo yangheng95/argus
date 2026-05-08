@@ -1,7 +1,7 @@
 /**
  * P1-A · Runtime-evidence check。
  *
- * goal-agent 不得仅靠 `mirror/scaffold.json` + `App.tsx` 级文本脚手架就标记完成
+ * goal-agent 不得仅靠 `mirror/scaffold.json` + 生成的 React 文本脚手架就标记完成
  * （ainvest 事故的上游根因）。本 check 在 delivery verdict 之前独立采集：
  *   1. 必须拿到 live preview URL；启动项目由 agent / preview resolver 完成，
  *      runtime evidence 不推断 package manager、不启动 server、不读静态文件。
@@ -138,7 +138,7 @@ export async function computeRuntimeEvidence(input: {
       detail:
         `rendered DOM 节点数=${render.dom.nodeCount} < 阈值` +
         ` ${RUNTIME_EVIDENCE_THRESHOLDS.min_dom_node_count}。` +
-        `这是 mirror/App.tsx 级脚手架产物，非实际可交互 UI。`,
+        `这是未完成的 React 脚手架产物，非实际可交互 UI。`,
     })
   }
   if (input.requireInteraction) {

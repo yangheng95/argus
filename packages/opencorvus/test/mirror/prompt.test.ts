@@ -26,7 +26,7 @@ const scaffoldStub = {
   },
 } as unknown as ProjectScaffold
 
-test("buildClonePrompt enforces vanilla CSS, single-file, static, no Tailwind", () => {
+test("buildClonePrompt enforces generated React source contract", () => {
   const p = buildClonePrompt({
     iter: 1,
     referenceUrl: "https://example.com/",
@@ -37,14 +37,13 @@ test("buildClonePrompt enforces vanilla CSS, single-file, static, no Tailwind", 
     xmlIRBytes: 1234,
     scaffold: scaffoldStub,
   })
-  expect(p).toContain("vanilla CSS")
-  expect(p).toContain(":root")
-  expect(p).toContain("var(--")
-  expect(p).toContain("Single-file")
-  // No CDN dependency, no positive instruction to use Tailwind.
+  expect(p).toContain("generated React source")
+  expect(p).toContain("src/App.tsx")
+  expect(p).toContain("src/design-tokens.ts")
+  expect(p).toContain("Do not create a parallel static page")
   expect(p).not.toContain("cdn.tailwindcss.com")
   expect(p).not.toMatch(/use tailwind|with tailwind/i)
-  expect(p).toMatch(/NO Tailwind/i)
+  expect(p).not.toContain("vanilla CSS")
 })
 
 test("buildClonePrompt iter > 1 instructs edit-not-rewrite", () => {
@@ -81,6 +80,7 @@ test("buildCloneFeedback surfaces score, missing tokens, regression guard", () =
     referencePath: "/tmp/reference.png",
     targetScore: 95,
     bestScore: 75,
+    consecutiveNoImprovement: 0,
     missingTokens: ["新闻", "百度一下"],
   })
   expect(fb).toContain("70/100")
@@ -106,6 +106,7 @@ test("buildCloneFeedback omits regression guard when current is best", () => {
     referencePath: "/tmp/reference.png",
     targetScore: 95,
     bestScore: 90,
+    consecutiveNoImprovement: 0,
     missingTokens: [],
   })
   expect(fb).not.toContain("Regression guard")

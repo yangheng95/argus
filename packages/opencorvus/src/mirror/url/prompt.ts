@@ -2,11 +2,9 @@
  * Single source of the webpage-clone prompt + feedback — consumed by both
  * the `mirror-*-clone` benchmark scripts and the `webpage-generate` skill.
  *
- * Output contract: a single `index.html` written by the LLM, vanilla CSS
- * only (one `<style>` block, design tokens injected as `:root` custom
- * properties, real cascading selectors). No framework, no CDN, no JS
- * runtime — keeps the deliverable generic (rule 15) and the skill's
- * generation strategy single-sourced (rule 22).
+ * Output contract: generated React source under `src/` refined by the LLM.
+ * `webpage_analyze` owns deterministic App/tokens/section materialisation;
+ * the LLM edits that source instead of hand-writing a separate static page.
  */
 import type { ProjectScaffold } from "../ir/scaffold"
 import type { EvaluationReport } from "../visual/evaluate"
@@ -37,14 +35,14 @@ export function buildClonePrompt(input: BuildClonePromptInput): string {
 
   const iterationHeader =
     input.iter === 1
-      ? `You are cloning ${input.referenceUrl} as a single-file static HTML page with vanilla CSS.`
-      : `Iteration ${input.iter}. The previous attempt had visual differences. **Add missing elements and rules with \`edit\`** — do NOT rewrite the whole file. Preserve every section that already matches.`
+      ? `You are cloning ${input.referenceUrl} by refining generated React source.`
+      : `Iteration ${input.iter}. The previous attempt had visual differences. **Add missing elements and rules with \`edit\`** — do NOT rewrite whole files. Preserve every section that already matches.`
 
   return `
 ${iterationHeader}
 
 # Goal
-Produce an \`index.html\` at the root of the working directory that visually reproduces
+Refine the generated React source under \`src/\` so the running app visually reproduces
 ${input.referenceUrl}. The acceptance source is \`webpage_vision_judge.accepted = true\`
 after rendering the deliverable with an explicit browser URL. SSIM/pixel scores are
 diagnostic progress signals only.
@@ -59,33 +57,27 @@ ${input.outputDir}
 - \`page-ir.xml\`           — ${input.xmlIRBytes} bytes of structured XML IR describing the page
 - \`shared-context.md\`     — concise design-token + pattern summary
 - \`scaffold.json\`         — ProjectScaffold (file paths + contracts)
-- \`design-tokens.ts\`      — COLORS / FONTS / SPACING / RADII constants
+- generated \`src/design-tokens.ts\`, \`src/App.tsx\`, \`src/components/**\`
 - \`reference.png\`         — pixel-perfect reference screenshot
 
 # Rules
-1. **Single-file static HTML**: write exactly one \`index.html\`. All styles MUST
-   live inside ONE \`<style>\` block at the top of \`<head>\`. Use real CSS class
-   selectors and cascading rules — do NOT inline styles on every element.
-2. **Vanilla CSS only**: NO Tailwind. NO external CSS framework. NO CDN. NO JS
-   framework. NO build step. NO \`<script>\` tag. Only standard HTML5 + CSS3.
-3. **Design tokens via custom properties**: inject every COLORS / FONTS /
-   SPACING / RADII value from \`design-tokens.ts\` as a CSS custom property under
-   \`:root { --color-primary: …; }\` and reference them via \`var(--…)\`. Do not
-   hard-code hex values inside selectors — every colour reference goes through a
-   token.
-4. **CSS hygiene**: include a real reset
+1. **Generated source only**: edit \`src/App.tsx\`, \`src/design-tokens.ts\`, and
+   \`src/components/**\`. Do not create a parallel static page.
+2. **Design tokens**: use every COLORS / FONTS / SPACING / RADII value from
+   \`src/design-tokens.ts\`. Do not hard-code hex values that bypass tokens.
+3. **CSS hygiene**: include a real reset
    (\`*, *::before, *::after { box-sizing: border-box }\`, \`body { margin: 0 }\`),
    set \`font-family\` on \`body\`, write media queries when the reference uses them.
-5. **Static text**: every visible text node from the reference appears as raw
-   HTML so a non-executing reader sees the content. NO client-side rendering.
-6. Use **exact text** from the XML IR (\`<Text …>content</Text>\`) and \`Section
+4. **Rendered text**: every visible text node from the reference appears in the
+   generated React tree so the browser render exposes the content.
+5. Use **exact text** from the XML IR (\`<Text …>content</Text>\`) and \`Section
    Text\` catalogs. Do not paraphrase headings, nav labels, or button text.
-7. Use **exact image paths**: \`Section Images\` catalogs list \`img-N: path\`.
+6. Use **exact image paths**: \`Section Images\` catalogs list \`img-N: path\`.
    Reference the local paths where present. If a selected image path is missing,
    stop and report the missing asset instead of linking remote originals.
-8. Structure must match the section list exactly (in order, with matching bounds).
-9. Do not fetch \`${input.referenceUrl}\` at runtime; the clone must be fully static.
-10. Before writing \`index.html\`, \`read\` \`page-ir.xml\` and at least
+7. Structure must match the section list exactly (in order, with matching bounds).
+8. Do not fetch \`${input.referenceUrl}\` at runtime; the clone must render from local source.
+9. Before editing generated source, \`read\` \`page-ir.xml\` and at least
     \`shared-context.md\`.
 
 # Section summary
@@ -96,8 +88,8 @@ ${patternList || "- (none)"}
 
 ${input.previousFeedback ? `# Diff feedback from previous iteration\n${input.previousFeedback}\n` : ""}
 # Deliverable
-Write \`index.html\`. When finished, reply briefly with the list of top-level
-sections you rendered and any known gaps.
+Refine generated source. When finished, reply briefly with the list of top-level
+sections you modified and any known gaps.
 `.trim()
 }
 
@@ -118,14 +110,14 @@ export function buildCloneFeedback(input: BuildCloneFeedbackInput): string {
   const missing = input.missingTokens.slice(0, 30)
   const missingLines =
     missing.length > 0
-      ? `Missing textual content (these strings appear in the reference but NOT in your rendered \`index.html\`):\n${missing
+      ? `Missing textual content (these strings appear in the reference but NOT in your rendered app):\n${missing
           .map((t) => `  - "${t}"`)
-          .join("\n")}\n\nAdd every missing string to \`index.html\` in its correct section. Use the \`Section Text\` catalog in \`page-ir.xml\` to find the right parent node for each.`
+          .join("\n")}\n\nAdd every missing string to generated source in its correct section. Use the \`Section Text\` catalog in \`page-ir.xml\` to find the right parent node for each.`
       : "Text coverage is complete — remaining gap is structural/visual only."
 
   const regressionWarning =
     input.bestScore > r.overallScore
-      ? `\n**Regression guard**: a previous iteration scored ${input.bestScore}/100, and we restored \`index.html\` to that best version. Do NOT rewrite the whole file with \`write\` — use \`edit\` to ADD missing elements and CSS rules. Deleting existing correct markup has cost us points before.\n`
+      ? `\n**Regression guard**: a previous iteration scored ${input.bestScore}/100. Do NOT rewrite whole files with \`write\` — use \`edit\` to ADD missing elements and CSS rules. Deleting existing correct markup has cost us points before.\n`
       : ""
 
   const stagnationWarning =
@@ -154,8 +146,8 @@ ${regressionWarning}${stagnationWarning}
 ${missingLines}
 
 Operating guidance:
-  1. Use \`edit\` (NOT \`write\`) to append missing elements / add CSS rules to
-     the existing \`index.html\`.
+   1. Use \`edit\` (NOT \`write\`) to append missing elements / add CSS rules to
+     the generated source.
   2. Do NOT remove any element or CSS rule that is already rendering correctly.
   3. Pick the most visually-impactful gap first (wrong layout / wrong colour /
      wrong icon). Don't chase pixel-level shimmer.

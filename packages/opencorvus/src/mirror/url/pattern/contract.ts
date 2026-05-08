@@ -25,8 +25,8 @@ import type {
   FileContract,
   SectionContract,
 } from "../../ir/scaffold"
+import { DEFAULT_REACT_SOURCE_LAYOUT } from "../../shared/scaffold-helpers"
 
-const BASE_PATH = "packages/app/src"
 const SHARED_THRESHOLD = 2
 const MAX_IR_DEPTH = 8
 const MAX_IR_CHARS = 20_000
@@ -289,7 +289,7 @@ function generatePropsInterface(pattern: ComponentPattern): string {
 function buildSharedComponentContract(pattern: ComponentPattern, imageMap?: Record<string, string>): FileContract {
   const kebab = toKebab(pattern.name)
   return {
-    filePath: `${BASE_PATH}/components/ui/${kebab}.tsx`,
+    filePath: `${DEFAULT_REACT_SOURCE_LAYOUT.sharedComponentsDir}/${kebab}.tsx`,
     exportName: pattern.name,
     isDefaultExport: false,
     propsInterface: generatePropsInterface(pattern),
@@ -431,19 +431,19 @@ function buildSectionContract(
   }
 
   const mainFile: FileContract = {
-    filePath: `${BASE_PATH}/components/${kebab}.tsx`,
+    filePath: `${DEFAULT_REACT_SOURCE_LAYOUT.componentsDir}/${kebab}.tsx`,
     exportName: pascal,
     isDefaultExport: false,
     propsInterface: "",
     imports: {
       ...imports,
-      "../constants/design-tokens": ["COLORS", "FONTS"],
+      "../design-tokens": ["COLORS", "FONTS"],
     },
     patterns: patternNames,
     sectionIR,
   }
   const subComponents: FileContract[] = localPatterns.map((p) => ({
-    filePath: `${BASE_PATH}/components/${kebab}/${toKebab(p.name)}.tsx`,
+    filePath: `${DEFAULT_REACT_SOURCE_LAYOUT.componentsDir}/${kebab}/${toKebab(p.name)}.tsx`,
     exportName: p.name,
     isDefaultExport: false,
     propsInterface: generatePropsInterface(p),
@@ -464,7 +464,7 @@ function buildSectionContract(
 
 function buildTokensFileContract(_tokens: DesignTokenSystem): FileContract {
   return {
-    filePath: `${BASE_PATH}/constants/design-tokens.ts`,
+    filePath: DEFAULT_REACT_SOURCE_LAYOUT.tokensFilePath,
     exportName: "COLORS",
     isDefaultExport: false,
     propsInterface: "",
@@ -476,12 +476,12 @@ function buildTokensFileContract(_tokens: DesignTokenSystem): FileContract {
 function buildAppFileContract(sections: SectionContract[]): FileContract {
   const imports: Record<string, string[]> = {}
   for (const sec of sections) {
-    const importPath = `./${sec.file.filePath.replace(`${BASE_PATH}/`, "").replace(/\.tsx$/, "")}`
+    const importPath = `./${sec.file.filePath.replace(`${DEFAULT_REACT_SOURCE_LAYOUT.sourceDir}/`, "").replace(/\.tsx$/, "")}`
     imports[importPath] = [sec.file.exportName]
   }
 
   return {
-    filePath: `${BASE_PATH}/App.tsx`,
+    filePath: DEFAULT_REACT_SOURCE_LAYOUT.appFilePath,
     exportName: "App",
     isDefaultExport: false,
     propsInterface: "",

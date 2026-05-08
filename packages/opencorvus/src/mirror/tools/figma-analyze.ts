@@ -4,8 +4,8 @@
  *
  * Figma2code's analogue of `webpage_analyze` / `webpage_image_analyze`.
  * Reads `figma-design.json`, synthesises a `ProjectScaffold`, and writes
- * the same four artifacts URL and image flows write — `scaffold.json` /
- * `design-tokens.ts` / `App.tsx` / `shared-context.md`. The build agent's
+ * the same mirror facts and generated React source URL and image flows write.
+ * The build agent's
  * downstream codegen prompt + skill text reference these exact filenames;
  * rule 22 keeps every source on one downstream contract.
  */
@@ -19,19 +19,19 @@ import { analyzeFigma } from "../figma/analyze"
 import { CompressedDesignSchema } from "../ir/compressed-design"
 import {
   buildSharedContext,
-  generateAppFile,
-  generateTokensFile,
+  generateReactSourceFiles,
+  materializeScaffoldForReactSource,
 } from "../shared/scaffold-helpers"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
+import { writeGeneratedSourceFiles } from "./generated-source"
 
 export const FigmaAnalyzeTool = Tool.define("figma_analyze", {
   description: `Analyze a CompressedDesign into a deterministic ProjectScaffold (sections, file contracts, design-token system). Zero LLM — the Figma REST fetch already ran in figma_extract; this stage folds its output into the same cross-source ProjectScaffold contract that webpage_analyze (URL) and webpage_image_analyze produce.
 
-Reads \`<outputDir>/figma-design.json\` (from figma_extract). Writes the same four artifacts the URL / image analyze steps write:
+Reads \`<outputDir>/figma-design.json\` (from figma_extract). Writes the same mirror facts and generated React source the URL / image analyze steps write:
   - scaffold.json           full ProjectScaffold
-  - design-tokens.ts        COLORS / FONTS / SPACING / RADII constants
-  - App.tsx                 auto-generated section composition (reference)
   - shared-context.md       compact token + section summary
+  - src/**                  React source files from the scaffold contract
 
 Returns a compact summary; agent should \`read\` scaffold.json for full detail.
 
@@ -42,7 +42,7 @@ Step 3 of the figma2code workflow. Pure function, no network or LLM.`,
     outputDir: z
       .string()
       .describe(
-        `Directory containing figma-design.json. Writes scaffold.json, design-tokens.ts, App.tsx, shared-context.md here. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree.`,
+        `Directory containing figma-design.json. Writes scaffold.json and shared-context.md here, and generated React source under the worktree source layout. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree.`,
       )
       .optional(),
   }),
@@ -65,9 +65,8 @@ Step 3 of the figma2code workflow. Pure function, no network or LLM.`,
 
     const raw = JSON.parse(designText)
     const design = CompressedDesignSchema.parse(raw)
-    const scaffold = analyzeFigma(design)
-    const tokensFile = generateTokensFile(scaffold)
-    const appFile = generateAppFile(scaffold)
+    const scaffold = materializeScaffoldForReactSource(analyzeFigma(design))
+    const sourceFiles = generateReactSourceFiles(scaffold)
     const sharedContext = buildSharedContext(scaffold, {
       url: design.figmaUrl,
       title: design.fileName,
@@ -78,14 +77,11 @@ Step 3 of the figma2code workflow. Pure function, no network or LLM.`,
     })
 
     const scaffoldPath = path.join(outputDir, "scaffold.json")
-    const tokensPath = path.join(outputDir, "design-tokens.ts")
-    const appPath = path.join(outputDir, "App.tsx")
     const contextPath = path.join(outputDir, "shared-context.md")
+    const sourcePaths = await writeGeneratedSourceFiles(sourceFiles)
 
     await Promise.all([
       fs.writeFile(scaffoldPath, JSON.stringify(scaffold, null, 2), "utf8"),
-      fs.writeFile(tokensPath, tokensFile.code, "utf8"),
-      fs.writeFile(appPath, appFile.code, "utf8"),
       fs.writeFile(contextPath, sharedContext, "utf8"),
     ])
 
@@ -108,17 +104,15 @@ Step 3 of the figma2code workflow. Pure function, no network or LLM.`,
         "",
         `**Artifacts written:**`,
         `- \`${scaffoldPath}\` — full ProjectScaffold`,
-        `- \`${tokensPath}\` — design tokens`,
-        `- \`${appPath}\` — auto-generated App composition`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
+        `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: implement the page (any tech stack), then iterate via `webpage_render` + `webpage_vision_judge` + `webpage_evaluate`.",
+        "Next: run the generated React source and iterate it with `webpage_render` + `webpage_vision_judge` + `webpage_evaluate`.",
       ].join("\n"),
       metadata: {
         scaffoldPath,
-        tokensPath,
-        appPath,
         contextPath,
+        sourcePaths,
         sectionCount: scaffold.sections.length,
         tokenColors: scaffold.tokens.colors.length,
       },

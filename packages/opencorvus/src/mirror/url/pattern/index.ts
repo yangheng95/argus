@@ -25,6 +25,9 @@ export {
   scaffoldToPlan,
   generateTokensFile,
   generateAppFile,
+  generateReactSourceFiles,
+  generateSectionFile,
+  materializeScaffoldForReactSource,
   buildSharedContext,
 } from "../../shared/scaffold-helpers"
 export {

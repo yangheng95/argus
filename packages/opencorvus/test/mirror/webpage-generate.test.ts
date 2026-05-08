@@ -9,7 +9,7 @@ import imageGenerateMd from "../../src/skill/builtin/image-generate.md" with { t
 import figmaGenerateMd from "../../src/skill/builtin/figma-generate.md" with { type: "text" }
 
 describe("webpage-generate dependency guards", () => {
-  test("skill declares vanilla-CSS handwrite pipeline and build-required tools", () => {
+  test("skill declares generated React source pipeline and build-required tools", () => {
     const parsed = matter(webpageGenerateMd)
     // Required tools cover extract → compile → analyze (serial), then the
     // render/evaluate/text-diff loop. The deterministic compile-html tool is
@@ -22,18 +22,17 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.data.required_tools).toContain("webpage_evaluate")
     expect(parsed.data.required_tools).toContain("webpage_text_diff")
     expect(parsed.data.required_tools).not.toContain("webpage_compile_html")
-    // Content invariants: vanilla CSS contract, hand-write requirement,
-    // strictly-serial extract/compile/analyze, no Tailwind / CDN / JS runtime.
-    expect(parsed.content).toContain("vanilla CSS")
-    expect(parsed.content).toContain(":root")
+    // Content invariants: generated source contract, strictly-serial
+    // extract/compile/analyze, no old static-page branch.
+    expect(parsed.content).toContain("Generated React source")
+    expect(parsed.content).toContain("src/App.tsx")
+    expect(parsed.content).toContain("src/design-tokens.ts")
     expect(parsed.content).toContain("Steps 1–3 are **strictly serial**")
-    // Skill must say the LLM writes the page itself (no magic compile tool).
-    // Phrasing was refactored from "hand-write" to the tech-stack-neutral
-    // "you implement" / "you implement the page" — same invariant.
-    expect(parsed.content).toMatch(/you implement (the )?page/i)
+    expect(parsed.content).toContain("Refine the generated React source")
     expect(parsed.content).not.toMatch(/Tailwind CDN|cdn\.tailwindcss\.com/)
     expect(parsed.content).not.toContain("`webpage_compile_html`")
-    expect(parsed.content).toContain("webpage_render url=<explicit URL>")
+    expect(parsed.content).toContain("webpage_render url=<explicit HTTP URL>")
+    expect(parsed.content).not.toContain("single-file static")
     expect(parsed.content).toContain("webpage_vision_judge.accepted = true")
     expect(parsed.content).toContain("SINGLE primary acceptance signal")
     expect(parsed.content).not.toMatch(/\bbun run dev\b|\bnpm start\b/i)
@@ -43,7 +42,7 @@ describe("webpage-generate dependency guards", () => {
   test("visual generation skills keep one URL render path and one acceptance signal", () => {
     for (const md of [webpageGenerateMd, imageGenerateMd, figmaGenerateMd]) {
       const parsed = matter(md)
-      expect(parsed.content).toContain("webpage_render url=<explicit URL>")
+      expect(parsed.content).toMatch(/webpage_render url=<explicit (HTTP )?URL>/)
       expect(parsed.content).toContain("webpage_vision_judge.accepted = true")
       expect(parsed.content).toContain("diagnostic")
       expect(parsed.content).not.toMatch(/\bbun run dev\b|\bnpm start\b/i)

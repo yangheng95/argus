@@ -211,7 +211,7 @@ export namespace MCPServe {
       "",
       aliases,
       "",
-      "Mirror extraction artifacts must come from the mirror MCP toolchain. Do not create, copy, or handwrite mirror/reference.png, mirror/extracted-page.json, mirror/page-ir.xml, mirror/scaffold.json, mirror/design-tokens.ts, mirror/App.tsx, or mirror/shared-context.md to satisfy file-existence checks when a mirror tool is required.",
+      "Mirror extraction artifacts and generated source must come from the mirror MCP toolchain. Do not create, copy, or handwrite mirror/reference.png, mirror/extracted-page.json, mirror/page-ir.xml, mirror/scaffold.json, mirror/shared-context.md, or generated src/** scaffold files to satisfy file-existence checks when a mirror tool is required.",
       "If a required OpenCorvus MCP tool is missing, unavailable, or fails to start, stop and report that tool availability failure instead of fabricating the artifact.",
     ].join("\n")
   }

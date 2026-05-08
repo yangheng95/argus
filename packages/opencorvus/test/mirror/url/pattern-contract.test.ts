@@ -6,11 +6,6 @@ import { extractTokenSystem } from "../../../src/mirror/url/pattern/tokens"
 import { ProjectScaffoldSchema } from "../../../src/mirror/ir/scaffold"
 import type { ExtractedPage, ExtractedElement } from "../../../src/mirror/ir/extracted-page"
 
-// Golden parity — mirror originals
-import { generateScaffold as mirrorGenerateScaffold } from "D:/myhexin-local/opencode-private/packages/mirror/src/infra/pattern/contract.ts"
-import { detectPatterns as mirrorDetect } from "D:/myhexin-local/opencode-private/packages/mirror/src/infra/pattern/detect.ts"
-import { extractTokenSystem as mirrorTokens } from "D:/myhexin-local/opencode-private/packages/mirror/src/infra/pattern/tokens.ts"
-
 function el(tag: string, extras: Partial<ExtractedElement> = {}): ExtractedElement {
   return {
     selector: tag,
@@ -78,9 +73,9 @@ function buildLandingPage(): ExtractedPage {
   ])
 }
 
-// ─── GOLDEN PARITY ────────────────────────────────────────────────────────
+// ─── Deterministic scaffold generation ────────────────────────────────────
 
-describe("generateScaffold — GOLDEN PARITY byte-level", () => {
+describe("generateScaffold — deterministic source layout", () => {
   const cases: Array<{ name: string; build: () => ExtractedPage }> = [
     { name: "empty page", build: () => page([]) },
     { name: "single wrapper unwrapping", build: () => page([el("div", { children: [el("header", { role: "header" }), el("main"), el("footer", { role: "footer" })] })]) },
@@ -94,11 +89,9 @@ describe("generateScaffold — GOLDEN PARITY byte-level", () => {
       const tokens = extractTokenSystem(p)
       const ours = generateScaffold(p, catalog, tokens)
 
-      const theirCatalog = mirrorDetect(p)
-      const theirTokens = mirrorTokens(p)
-      const theirs = mirrorGenerateScaffold(p, theirCatalog, theirTokens)
-
-      expect(ours).toEqual(theirs)
+      expect(ours).toEqual(generateScaffold(p, catalog, tokens))
+      expect(ours.appFile.filePath).toBe("src/App.tsx")
+      expect(ours.tokensFile.filePath).toBe("src/design-tokens.ts")
     })
   }
 })

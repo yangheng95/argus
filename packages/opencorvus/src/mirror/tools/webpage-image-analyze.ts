@@ -3,9 +3,8 @@
  * + the shared scaffold-helpers emitters.
  *
  * Image2code's analogue of `webpage_analyze`. Reads `image-analysis.json`,
- * synthesises a `ProjectScaffold`, and writes the same four artifacts the
- * URL flow's `webpage_analyze` writes — `scaffold.json` / `design-tokens.ts`
- * / `App.tsx` / `shared-context.md`. The build agent's downstream codegen
+ * synthesises a `ProjectScaffold`, and writes the same mirror facts and
+ * generated React source the URL flow's `webpage_analyze` writes. The build agent's downstream codegen
  * prompt + skill text reference these exact filenames; rule 22 keeps every
  * source on one downstream contract.
  */
@@ -19,19 +18,19 @@ import { analyzeImage } from "../image/analyze"
 import { ImageAnalysisSchema } from "../ir/image-analysis"
 import {
   buildSharedContext,
-  generateAppFile,
-  generateTokensFile,
+  generateReactSourceFiles,
+  materializeScaffoldForReactSource,
 } from "../shared/scaffold-helpers"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
+import { writeGeneratedSourceFiles } from "./generated-source"
 
 export const WebpageImageAnalyzeTool = Tool.define("webpage_image_analyze", {
   description: `Analyze an ImageAnalysis into a deterministic ProjectScaffold (sections, file contracts, design-token system). Zero LLM — the vision-LLM call already ran in webpage_image_extract; this stage folds its structured output into the same cross-source ProjectScaffold contract that webpage_analyze (URL) and figma_analyze produce.
 
-Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes the same four artifacts the URL analyze step writes:
+Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes the same mirror facts and generated React source the URL analyze step writes:
   - scaffold.json           full ProjectScaffold
-  - design-tokens.ts        COLORS / FONTS / SPACING / RADII constants (ready to import)
-  - App.tsx                 auto-generated section composition (reference)
   - shared-context.md       compact token + section summary for prompts
+  - src/**                  React source files from the scaffold contract
 
 Returns a summary: section list, token counts. The agent should \`read\` scaffold.json for full detail when needed.
 
@@ -42,7 +41,7 @@ Use as step 3 of the image-generate workflow. Pure function, no network or LLM.`
     outputDir: z
       .string()
       .describe(
-        `Directory containing image-analysis.json. Writes scaffold.json, design-tokens.ts, App.tsx, shared-context.md here. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_image_extract's default).`,
+        `Directory containing image-analysis.json. Writes scaffold.json and shared-context.md here, and generated React source under the worktree source layout. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_image_extract's default).`,
       )
       .optional(),
   }),
@@ -65,23 +64,19 @@ Use as step 3 of the image-generate workflow. Pure function, no network or LLM.`
 
     const raw = JSON.parse(analysisText)
     const analysis = ImageAnalysisSchema.parse(raw)
-    const scaffold = analyzeImage(analysis)
-    const tokensFile = generateTokensFile(scaffold)
-    const appFile = generateAppFile(scaffold)
+    const scaffold = materializeScaffoldForReactSource(analyzeImage(analysis))
+    const sourceFiles = generateReactSourceFiles(scaffold)
     const sharedContext = buildSharedContext(scaffold, {
       title: analysis.description.slice(0, 80) || "Image clone",
       viewport: analysis.viewport,
     })
 
     const scaffoldPath = path.join(outputDir, "scaffold.json")
-    const tokensPath = path.join(outputDir, "design-tokens.ts")
-    const appPath = path.join(outputDir, "App.tsx")
     const contextPath = path.join(outputDir, "shared-context.md")
+    const sourcePaths = await writeGeneratedSourceFiles(sourceFiles)
 
     await Promise.all([
       fs.writeFile(scaffoldPath, JSON.stringify(scaffold, null, 2), "utf8"),
-      fs.writeFile(tokensPath, tokensFile.code, "utf8"),
-      fs.writeFile(appPath, appFile.code, "utf8"),
       fs.writeFile(contextPath, sharedContext, "utf8"),
     ])
 
@@ -104,17 +99,15 @@ Use as step 3 of the image-generate workflow. Pure function, no network or LLM.`
         "",
         `**Artifacts written:**`,
         `- \`${scaffoldPath}\` — full ProjectScaffold`,
-        `- \`${tokensPath}\` — design tokens`,
-        `- \`${appPath}\` — auto-generated App composition`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
+        `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: implement the page (any tech stack), then iterate via `webpage_render` + `webpage_vision_judge` + `webpage_evaluate`.",
+        "Next: run the generated React source and iterate it with `webpage_render` + `webpage_vision_judge` + `webpage_evaluate`.",
       ].join("\n"),
       metadata: {
         scaffoldPath,
-        tokensPath,
-        appPath,
         contextPath,
+        sourcePaths,
         sectionCount: scaffold.sections.length,
         tokenColors: scaffold.tokens.colors.length,
       },

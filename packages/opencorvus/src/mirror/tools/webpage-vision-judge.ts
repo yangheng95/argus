@@ -166,7 +166,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
     const userPrompt =
       "You are comparing two screenshots of a webpage:\n" +
       "  1. Reference (the target — what the page should look like)\n" +
-      "  2. Rendered (the current attempt — what the developer's `index.html` produces)\n\n" +
+      "  2. Rendered (the current attempt — what the running app produces)\n\n" +
       "List every visible difference. For each: severity, region, what you see, what you should see, " +
       "and one concrete fix the developer should make. Then decide accepted=true ONLY when all " +
       "high-impact elements are visually faithful (sections present, palette right, key icons / " +
