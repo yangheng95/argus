@@ -65,15 +65,24 @@ export function createCodebaseTools(projectDir?: string) {
     read_file: tool({
       description:
         "Read the contents of a file. Returns the file contents with line numbers. " +
-        "Use this to understand code structure, conventions, and existing patterns.",
+        "Use this to understand code structure, conventions, and existing patterns. " +
+        "For large files, set start_line to continue from the next unread line instead of re-reading from line 1.",
       inputSchema: z.object({
         path: z.string().describe("File path relative to project root"),
+        start_line: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("1-based line number to start reading from (default 1). Use to page through large files."),
         max_lines: z
           .number()
+          .int()
+          .positive()
           .optional()
           .describe("Maximum lines to read (default 300). Use for large files."),
       }),
-      execute: async ({ path: filePath, max_lines }) => {
+      execute: async ({ path: filePath, start_line, max_lines }) => {
         const abs = safePath(filePath)
         if (!abs) return "Error: path is outside the project boundary."
         const rawMirrorArtifact = rawMirrorArtifactReason(filePath)
@@ -105,16 +114,25 @@ export function createCodebaseTools(projectDir?: string) {
           const content = buf.toString("utf-8")
           const lines = content.split("\n")
           const limit = max_lines ?? 300
-          const slice = lines.slice(0, limit)
+          const startIndex = Math.max(0, (start_line ?? 1) - 1)
+          if (startIndex >= lines.length) {
+            return `Error: start_line ${start_line ?? 1} is past end of file (${lines.length} lines).`
+          }
+          const slice = lines.slice(startIndex, startIndex + limit)
           const numbered = slice.map((line, i) => {
             const displayLine =
               line.length > READ_FILE_MAX_LINE_CHARS
                 ? `${line.slice(0, READ_FILE_MAX_LINE_CHARS)}... (line truncated, ${line.length - READ_FILE_MAX_LINE_CHARS} more chars)`
                 : line
-            return `${String(i + 1).padStart(5)} | ${displayLine}`
+            return `${String(startIndex + i + 1).padStart(5)} | ${displayLine}`
           }).join("\n")
-          if (lines.length > limit) {
-            return numbered + `\n... (${lines.length - limit} more lines, total ${lines.length})`
+          const remaining = lines.length - (startIndex + slice.length)
+          if (remaining > 0) {
+            return (
+              numbered +
+              `\n... (${remaining} more lines, total ${lines.length}; ` +
+              `next chunk: read_file path="${filePath}" start_line=${startIndex + slice.length + 1} max_lines=${limit})`
+            )
           }
           return numbered
         } catch (e) {

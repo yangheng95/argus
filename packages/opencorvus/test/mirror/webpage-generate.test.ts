@@ -95,6 +95,24 @@ describe("webpage-generate dependency guards", () => {
     expect(output.length).toBeLessThan(1400)
   })
 
+  test("read_file supports paged reads with stable line numbers", async () => {
+    const { createCodebaseTools } = await import("../../src/engine/codebase-tools")
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/large.txt`, Array.from({ length: 5 }, (_, i) => `line-${i + 1}`).join("\n"))
+
+    const tools = createCodebaseTools(tmp.path)
+    const readFile = tools.read_file as any
+    const first = await readFile.execute({ path: "large.txt", max_lines: 2 }, {})
+    expect(first).toContain("1 | line-1")
+    expect(first).toContain("next chunk: read_file path=\"large.txt\" start_line=3 max_lines=2")
+
+    const second = await readFile.execute({ path: "large.txt", start_line: 3, max_lines: 2 }, {})
+    expect(second).not.toContain("line-1")
+    expect(second).toContain("3 | line-3")
+    expect(second).toContain("4 | line-4")
+    expect(second).toContain("start_line=5")
+  })
+
   test("compile and analyze surface an actionable missing-artifact error", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
