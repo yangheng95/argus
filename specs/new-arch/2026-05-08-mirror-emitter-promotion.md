@@ -57,5 +57,8 @@ Promote the emitter through a single materialisation layer.
 - `scaffold.json` records the same source paths the tools wrote.
 - Skill and prompt text describe generated source as the implementation starting
   point, not reference material and not a manual copy task.
+- Skill and prompt text must read generated source paths from `scaffold.json`
+  or analyze `sourcePaths`; they must not duplicate the default source layout
+  strings such as `src/App.tsx` or `src/design-tokens.ts`.
 - Delivery still rejects non-rendered or DOM-thin generated skeletons.
 - Focused tests cover path projection, source emission, and prompt/guard wording.
