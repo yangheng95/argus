@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "548fadc7531805e0"
+    "panel_revision": "78417d1faffdd326"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -582,7 +582,6 @@
   "frontend_preview.refresh": "刷新预览",
   "frontend_preview.open_external": "在浏览器中打开",
   "frontend_preview.source.delivery": "已从交付运行证据加载。",
-  "frontend_preview.source.port_probe": "已从本地前端服务端口 {{port}} 加载。",
   "sections.title": "Inspector",
   "settings.language": "语言",
   "settings.language.en_us": "English",

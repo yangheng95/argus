@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
-import { spawn, type ChildProcess } from "node:child_process"
+import { spawn } from "node:child_process"
 import { Instance } from "@/project/instance"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
@@ -20,7 +20,7 @@ import type { DeliverySurfaceManifest } from "../surface-detector"
 import { arbitrateDeliveryGate } from "../arbiter"
 import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
 import { runSecurityDataReview } from "../specialists/security-data"
-import { isLoopbackHttpUrl, probeFrontendDocument } from "@/preview/frontend"
+import { ensureManagedPreviewSession } from "@/preview/session"
 import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
@@ -40,8 +40,6 @@ import {
 import type { DeliverySpecialistReview } from "../specialist-review"
 
 const COMMAND_TIMEOUT_MS = 180_000
-const PREVIEW_START_IDLE_TIMEOUT_MS = 30_000
-const PREVIEW_READY_TIMEOUT_MS = 15_000
 const CHECK_WORKSPACE_EXCLUDED_NAMES = new Set([
   ".git",
   ".opencorvus",
@@ -467,6 +465,7 @@ async function runRuntimeFlows(input: {
   let preview: Awaited<ReturnType<typeof resolveRuntimeFlowPreview>> | undefined
   try {
     preview = await resolveRuntimeFlowPreview({
+      taskID: input.taskID,
       projectDir: root,
       metadata: input.metadata,
     })
@@ -522,144 +521,24 @@ async function runRuntimeFlows(input: {
   return flows
 }
 
-function previewUrlFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
-  const raw = metadata?.previewUrl ?? metadata?.frontendPreviewUrl
-  if (typeof raw !== "string") return undefined
-  const trimmed = raw.trim()
-  return isLoopbackHttpUrl(trimmed) ? trimmed : undefined
-}
-
 async function resolveRuntimeFlowPreview(input: {
+  taskID?: string
   projectDir: string
   metadata?: Record<string, unknown>
 }): Promise<{ url: string; evidence: string[]; dispose: () => Promise<void> }> {
-  const explicitPreviewUrl = previewUrlFromMetadata(input.metadata)
-  if (explicitPreviewUrl) {
-    return {
-      url: explicitPreviewUrl,
-      evidence: [`preview_url=${explicitPreviewUrl}`, "preview_source=metadata"],
-      dispose: async () => {},
-    }
-  }
-  return startManagedFrontendPreview(input.projectDir)
-}
-
-async function startManagedFrontendPreview(projectDir: string): Promise<{
-  url: string
-  evidence: string[]
-  dispose: () => Promise<void>
-}> {
-  const pkg = await readRuntimePackage(projectDir)
-  if (!pkg.scripts?.dev) {
-    throw new Error(`no_preview_start_script: ${projectDir} package.json must define scripts.dev for frontend runtime evaluation`)
-  }
-  const manager = packageManagerName(pkg)
-  if (!manager) {
-    throw new Error(`no_package_manager: ${projectDir} package.json must define packageManager for frontend runtime evaluation`)
-  }
-  const child = spawn(manager, ["run", "dev"], {
-    cwd: projectDir,
-    windowsHide: true,
-    stdio: ["ignore", "pipe", "pipe"],
+  const session = await ensureManagedPreviewSession({
+    taskID: input.taskID,
+    workspaceDir: input.projectDir,
+    metadata: input.metadata,
   })
-  const evidence = [`managed_preview_command=${manager} run dev`]
-  try {
-    const url = await waitForManagedPreviewUrl(child)
-    evidence.push(`preview_url=${url}`)
-    return {
-      url,
-      evidence,
-      dispose: async () => {
-        await stopManagedPreview(child)
-      },
-    }
-  } catch (error) {
-    await stopManagedPreview(child)
-    throw error
+  if (session.status !== "ready" || !session.url) {
+    throw new Error(`preview_session_not_ready: status=${session.status} reason=${session.reason ?? "none"}`)
   }
-}
-
-async function waitForManagedPreviewUrl(child: ChildProcess): Promise<string> {
-  let output = ""
-  let candidateUrl: string | undefined
-  let candidateSeenAt = 0
-  let lastOutputAt = Date.now()
-  child.stdout?.on("data", (chunk) => {
-    lastOutputAt = Date.now()
-    output += Buffer.from(chunk).toString("utf8")
-    candidateUrl = candidateUrl ?? firstLoopbackUrl(output)
-    if (candidateUrl && candidateSeenAt === 0) candidateSeenAt = Date.now()
-  })
-  child.stderr?.on("data", (chunk) => {
-    lastOutputAt = Date.now()
-    output += Buffer.from(chunk).toString("utf8")
-    candidateUrl = candidateUrl ?? firstLoopbackUrl(output)
-    if (candidateUrl && candidateSeenAt === 0) candidateSeenAt = Date.now()
-  })
-
-  let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined
-  child.once("exit", (code, signal) => {
-    exited = { code, signal }
-  })
-
-  while (true) {
-    if (candidateUrl) {
-      if (await probeFrontendDocument(candidateUrl)) return candidateUrl
-      if (Date.now() - candidateSeenAt > PREVIEW_READY_TIMEOUT_MS) {
-        throw new Error(`preview_not_ready: ${candidateUrl} did not serve an HTML document before timeout`)
-      }
-    }
-    if (exited) {
-      throw new Error(`preview_process_exited: code=${exited.code ?? "null"} signal=${exited.signal ?? "null"}`)
-    }
-    if (!candidateUrl && Date.now() - lastOutputAt > PREVIEW_START_IDLE_TIMEOUT_MS) {
-      throw new Error("preview_start_idle_timeout: dev script did not print a loopback preview URL")
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250))
+  return {
+    url: session.url,
+    evidence: session.evidence,
+    dispose: async () => {},
   }
-}
-
-function firstLoopbackUrl(output: string): string | undefined {
-  const matches = output.match(/https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|::1):\d+\/?/g) ?? []
-  return matches.find((url) => isLoopbackHttpUrl(url))
-}
-
-async function stopManagedPreview(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return
-  if (process.platform === "win32" && child.pid) {
-    await new Promise<void>((resolve) => {
-      const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
-        windowsHide: true,
-        stdio: ["ignore", "ignore", "ignore"],
-      })
-      killer.once("exit", () => resolve())
-      killer.once("error", () => resolve())
-    })
-    return
-  }
-  child.kill()
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, 2_000)
-    child.once("exit", () => {
-      clearTimeout(timer)
-      resolve()
-    })
-  })
-}
-
-async function readRuntimePackage(projectDir: string): Promise<{
-  scripts?: Record<string, string>
-  packageManager?: string
-}> {
-  const raw = await fs.readFile(path.join(projectDir, "package.json"), "utf8")
-  return JSON.parse(raw) as { scripts?: Record<string, string>; packageManager?: string }
-}
-
-function packageManagerName(pkg: { packageManager?: string }) {
-  const raw = pkg.packageManager?.trim()
-  if (!raw) return undefined
-  const manager = raw.split("@", 1)[0]
-  return /^[a-z0-9._-]+$/i.test(manager) ? manager : undefined
 }
 
 function buildCoverage(goals: Array<{

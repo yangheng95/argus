@@ -594,46 +594,39 @@ if (taskListEl) {
   );
 }
 
-// ── Mount: Board (Spec / Plan / Goals / Criteria / Delivery / Interactions) ──
+function retrySelectedTask(): void {
+  const id = boardStore.selectedTaskID;
+  if (!id) return;
+  void retryTask(id);
+}
 
-const boardEl = document.getElementById("solidBoardMount");
-if (boardEl) {
-  boardEl.innerHTML = "";
-  render(
-    () => (
-      <Board
-        onRetry={async () => {
-          const id = boardStore.selectedTaskID;
-          if (!id) return;
-          void retryTask(id);
-        }}
-        onReplan={() => {
-          const id = boardStore.selectedTaskID;
-          if (id) void replanTask(id);
-        }}
-        onCancel={() => {
-          const id = boardStore.selectedTaskID;
-          if (id) void cancelTask(id);
-        }}
-        onEditGoal={(goalId, title, detail) => {
-          openGoalDialog(goalId || "", title || "", detail || "");
-        }}
-        onDeleteGoal={async (goalId) => {
-          if (!goalId || !boardStore.selectedTaskID) return;
-          try {
-            await panelMessage(`Delete goal ${goalId}.`, {
-              goalID: goalId,
-              taskID: boardStore.selectedTaskID || undefined,
-            });
-            await loadBoard({ sync: true });
-          } catch (e) {
-            console.error("Failed to delete goal", e);
-          }
-        }}
-      />
-    ),
-    boardEl,
-  );
+function replanSelectedTask(): void {
+  const id = boardStore.selectedTaskID;
+  if (id) void replanTask(id);
+}
+
+function cancelSelectedTask(): void {
+  const id = boardStore.selectedTaskID;
+  if (id) void cancelTask(id);
+}
+
+function editGoal(goalId: string, title: string, detail: string): void {
+  openGoalDialog(goalId || "", title || "", detail || "");
+}
+
+function deleteGoal(goalId: string): void {
+  if (!goalId || !boardStore.selectedTaskID) return;
+  void (async () => {
+    try {
+      await panelMessage(`Delete goal ${goalId}.`, {
+        goalID: goalId,
+        taskID: boardStore.selectedTaskID || undefined,
+      });
+      await loadBoard({ sync: true });
+    } catch (e) {
+      console.error("Failed to delete goal", e);
+    }
+  })();
 }
 
 // ── Mount: ChatComposer ──
@@ -875,6 +868,24 @@ createEffect(() => {
 const filesSectionMountEl = document.getElementById("solidFilesSectionMount");
 if (filesSectionMountEl) {
   render(() => <FilesSection />, filesSectionMountEl);
+}
+
+// ── Mount: Board (Goal Workflow Graph) ──
+
+const boardMountEl = document.getElementById("solidBoardMount");
+if (boardMountEl) {
+  render(
+    () => (
+      <Board
+        onRetry={retrySelectedTask}
+        onReplan={replanSelectedTask}
+        onCancel={cancelSelectedTask}
+        onEditGoal={editGoal}
+        onDeleteGoal={deleteGoal}
+      />
+    ),
+    boardMountEl,
+  );
 }
 
 // ── Mount: DeliveryPanel ──

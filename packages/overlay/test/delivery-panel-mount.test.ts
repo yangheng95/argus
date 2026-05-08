@@ -40,22 +40,25 @@ function readAllSurfaceCss(): string {
 // delivery card at all. This suite locks both the structural wiring and the
 // redesigned panel's verdict-driven behavior in place.
 
-test("index.html declares the #solidDeliveryMount node so DeliveryPanel has a place to render", async () => {
-  const html = await readSrc("src/index.html");
-  expect(html).toContain('id="solidDeliveryMount"');
-});
-
-test("index.html declares the right-panel Preview tab mount beside Inspector", async () => {
+test("index.html declares the three right-panel tab mounts", async () => {
   const html = await readSrc("src/index.html");
   expect(html).toContain('id="solidRightPanelTabs"');
   expect(html).toContain('id="rightPanelWorkflow"');
   expect(html).toContain('id="solidAgentWorkflowMount"');
   expect(html).toContain('id="rightPanelInspector"');
+  expect(html).toContain('id="solidBoardMount"');
+  expect(html).toContain('id="solidDeliveryMount"');
+  expect(html).toContain('id="solidFilesSectionMount"');
   expect(html).toContain('id="rightPanelPreview"');
   expect(html).toContain('id="solidFrontendPreviewMount"');
 });
 
-test("index.html mounts the delivery panel BEFORE the files panel — verdict is the lead context", async () => {
+test("index.html does not declare the rejected single InspectorPanel root", async () => {
+  const html = await readSrc("src/index.html");
+  expect(html).not.toContain('id="solidInspectorPanelMount"');
+});
+
+test("index.html keeps delivery before files inside the Inspector tab", async () => {
   const html = await readSrc("src/index.html");
   const deliveryAt = html.indexOf('id="solidDeliveryMount"');
   const filesAt = html.indexOf('id="solidFilesSectionMount"');
@@ -64,21 +67,18 @@ test("index.html mounts the delivery panel BEFORE the files panel — verdict is
   expect(deliveryAt).toBeLessThan(filesAt);
 });
 
-test("main.tsx imports DeliveryPanel and mounts it at #solidDeliveryMount", async () => {
+test("main.tsx mounts the top-level right tabs and preview panel", async () => {
   const main = await readSrc("src/main.tsx");
-  expect(main).toMatch(/import\s+\{\s*DeliveryPanel,\s*deliveryPanelDelivery\s*\}\s+from "\.\/components\/Board"/);
-  expect(main).toContain('document.getElementById("solidDeliveryMount")');
-  expect(main).toContain("<DeliveryPanel");
-});
-
-test("main.tsx mounts AgentWorkflowPanel as a root right-panel tab", async () => {
-  const main = await readSrc("src/main.tsx");
-  const frontendPreview = await readSrc("src/services/frontend-preview.ts");
-  expect(frontendPreview).toContain('export type RightPanelTab = "workflow" | "inspector" | "preview"');
-  expect(main).toContain('import { AgentWorkflowPanel } from "./components/AgentWorkflowPanel"');
-  expect(main).toContain('onClick={() => selectRightPanelTab("workflow")}');
+  expect(main).toContain('document.getElementById("solidRightPanelTabs")');
   expect(main).toContain('document.getElementById("solidAgentWorkflowMount")');
-  expect(main).toContain("<AgentWorkflowPanel");
+  expect(main).toContain('document.getElementById("solidBoardMount")');
+  expect(main).toContain('document.getElementById("solidDeliveryMount")');
+  expect(main).toContain('document.getElementById("solidFilesSectionMount")');
+  expect(main).toContain('document.getElementById("solidFrontendPreviewMount")');
+  expect(main).toContain("<FrontendPreviewPanel");
+  expect(main).toContain("nextTabForPreviewResolution");
+  expect(main).not.toContain('import { InspectorPanel } from "./components/InspectorPanel"');
+  expect(main).not.toContain("<InspectorPanel");
 });
 
 test("AgentWorkflowPanel renders a calm workflow map without high-energy effects", async () => {
@@ -193,7 +193,10 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "delivery.show_less",
     "delivery.empty.hint",
     "delivery.inflight.hint",
+    "right_panel.tabs",
     "right_panel.workflow",
+    "right_panel.inspector",
+    "right_panel.preview",
     "agent_workflow.title",
     "agent_workflow.output_report",
   ];

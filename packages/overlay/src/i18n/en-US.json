@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "548fadc7531805e0"
+    "panel_revision": "78417d1faffdd326"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -582,7 +582,6 @@
   "frontend_preview.refresh": "Refresh preview",
   "frontend_preview.open_external": "Open in browser",
   "frontend_preview.source.delivery": "Loaded from delivery runtime evidence.",
-  "frontend_preview.source.port_probe": "Loaded from local frontend server on port {{port}}.",
   "sections.title": "Inspector",
   "settings.language": "Language",
   "settings.language.en_us": "English",

@@ -8,6 +8,7 @@ import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project-gate"
 import { runtimeInteractionViolations } from "../../src/delivery/checks/runtime-evidence"
+import { stopAllManagedPreviewSessions } from "../../src/preview/session"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { Database } from "../../src/storage/db"
@@ -21,6 +22,7 @@ import {
 const tempDirs: string[] = []
 
 afterEach(async () => {
+  await stopAllManagedPreviewSessions()
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 

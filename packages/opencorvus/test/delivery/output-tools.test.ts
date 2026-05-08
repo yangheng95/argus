@@ -73,6 +73,48 @@ describe("delivery output tools", () => {
     expect(DeliveryVerdict.parse(kit.getCollector().verdict).verdict).toBe("accepted")
   })
 
+  test("requires managed preview tool evidence for frontend acceptance", async () => {
+    const kit = createDeliveryOutputTools({ requiredEvidenceFacets: ["frontend"] })
+
+    const missing = await kit.tools.submit_verdict.execute!(
+      {
+        ...acceptedBase,
+        frontend_check: {
+          attempted: true,
+          renders_correctly: true,
+          notes: "preview inspected",
+        },
+      },
+      {} as any,
+    )
+
+    expect(missing).toContain("start_frontend_preview")
+    expect(kit.getCollector().finalized).toBe(false)
+
+    const accepted = await kit.tools.submit_verdict.execute!(
+      {
+        ...acceptedBase,
+        tool_call_evidence: [
+          ...acceptedBase.tool_call_evidence,
+          {
+            tool: "start_frontend_preview",
+            passed: true,
+            detail: "managed preview URL rendered",
+          },
+        ],
+        frontend_check: {
+          attempted: true,
+          renders_correctly: true,
+          notes: "preview inspected",
+        },
+      },
+      {} as any,
+    )
+
+    expect(accepted).toContain("verdict=accepted")
+    expect(DeliveryVerdict.parse(kit.getCollector().verdict).verdict).toBe("accepted")
+  })
+
   test("rejects accepted verdict while manifest gate is failed", async () => {
     const kit = createDeliveryOutputTools({
       manifestGate: {
