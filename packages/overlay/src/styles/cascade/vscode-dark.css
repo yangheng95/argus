@@ -1,66 +1,58 @@
 /* ─────────────────────────────────────────────────────────────
-   VS Code dark palette — 100% passthrough (theme-vscode-
-   passthrough-2026-05-07).
+   VS Code dark palette — Overlay-owned historical Default Dark+ palette.
 
-   Theme isolation contract (user 2026-05-07: "完全隔离，不要耦合"):
+   Theme isolation contract:
 
-   1. Every palette token MUST resolve through `var(--vscode-*)` or
-      `color-mix()` derived from one. No hex / rgb / rgba literals.
-      No `var(--vscode-*, hexFallback)` — the fallback is itself a
-      coupling to a hand-picked Default Dark+ value and defeats the
-      whole point of passthrough.
+   1. This is an Overlay-owned theme, available in Tauri, browser, and
+      VS Code webview hosts. It must not depend on host-injected
+      `--vscode-*` variables; those vary with the user's editor theme
+      and were the source of menu panels taking on unexpected colors.
 
    2. No reference to tokens defined in cascade/dark.css or
-      cascade/light.css. Those are Tauri / browser palettes and do
-      not belong in a webview-driven theme.
+      cascade/light.css. VS Code dark is a sibling theme, not a
+      passthrough alias for either palette.
 
    3. Black / white CSS keywords are allowed inside color-mix() for
       structural scrims, high-lights, and shadow tones — they are
       structural, not theme color (matches every major design system:
       Material, Carbon, FAST).
 
-   4. If this theme accidentally activates outside a VS Code webview
-      (Tauri / browser), tokens resolve to nothing and the UI breaks
-      visibly. That is the intended behavior — silent fallback to a
-      hand-coded "VSCode-ish" palette is exactly the bleed the user
-      complained about for 4 hours.
-
    The token name set is symmetric with cascade/dark.css and
    cascade/light.css; only the values differ. flat-redesign-theme-
    symmetry.test.ts pins the parity. flat-redesign-vscode-theme-
-   passthrough.test.ts pins the no-literal / passthrough discipline.
+   passthrough.test.ts pins the no-host-token discipline.
    ───────────────────────────────────────────────────────────── */
 
 :root[data-theme="vscode-dark"],
 body[data-theme="vscode-dark"] {
   color-scheme: dark;
 
-  --text-on-accent: var(--vscode-button-foreground);
-  --bg: var(--vscode-editor-background);
-  --surface: var(--vscode-sideBar-background);
-  --surface-hover: var(--vscode-list-hoverBackground);
-  --surface-inset: var(--vscode-input-background);
-  --surface-strong: var(--vscode-titleBar-activeBackground);
-  --rail-surface: var(--vscode-sideBar-background);
-  --chat-canvas: var(--vscode-editor-background);
-  --inspector-surface: var(--vscode-sideBar-background);
+  --text-on-accent: #ffffff;
+  --bg: #1e1e1e;
+  --surface: #252526;
+  --surface-hover: #2a2d2e;
+  --surface-inset: #181818;
+  --surface-strong: #333333;
+  --rail-surface: #252526;
+  --chat-canvas: #1e1e1e;
+  --inspector-surface: #252526;
 
-  --body-bg: var(--vscode-editor-background);
-  --panel-body-bg: var(--vscode-panel-background);
+  --body-bg: #1e1e1e;
+  --panel-body-bg: #1e1e1e;
   --panel-body-blur: none;
-  --chrome: var(--vscode-titleBar-activeBackground);
-  --border: var(--vscode-panel-border);
-  --border-hover: var(--vscode-focusBorder);
-  --border-strong: var(--vscode-input-border);
+  --chrome: #3c3c3c;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-hover: rgba(0, 122, 204, 0.5);
+  --border-strong: rgba(255, 255, 255, 0.18);
 
-  --text: var(--vscode-foreground);
-  --text-strong: var(--vscode-editor-foreground);
-  --text-soft: var(--vscode-descriptionForeground);
-  --text-muted: var(--vscode-disabledForeground);
+  --text: #cccccc;
+  --text-strong: #d4d4d4;
+  --text-soft: #9d9d9d;
+  --text-muted: #717171;
 
-  --accent: var(--vscode-button-background);
-  --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
-  --accent-hover: var(--vscode-button-hoverBackground);
+  --accent: #007acc;
+  --accent-dim: rgba(0, 122, 204, 0.18);
+  --accent-hover: #1a8fd4;
   --accent-start: var(--accent);
   --accent-mid: var(--accent);
   --accent-end: var(--accent-hover);
@@ -73,13 +65,13 @@ body[data-theme="vscode-dark"] {
   --hover-accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
   --hover-accent-shadow: 0 18px 40px color-mix(in srgb, black 50%, transparent);
 
-  --info: var(--vscode-charts-blue);
+  --info: #3794ff;
   --info-dim: color-mix(in srgb, var(--info) 12%, transparent);
-  --good: var(--vscode-charts-green);
+  --good: #73c991;
   --good-dim: color-mix(in srgb, var(--good) 14%, transparent);
-  --warn: var(--vscode-charts-yellow);
+  --warn: #cca700;
   --warn-dim: color-mix(in srgb, var(--warn) 15%, transparent);
-  --bad: var(--vscode-charts-red);
+  --bad: #f48771;
   --bad-dim: color-mix(in srgb, var(--bad) 14%, transparent);
 
   /* High-lights (white inset) and shadow tones (black scrim) are
@@ -92,8 +84,8 @@ body[data-theme="vscode-dark"] {
   --shadow-md: inset 0 1px 0 color-mix(in srgb, white 4.5%, transparent);
   --shadow-lg: inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
 
-  --scrollbar-thumb: var(--vscode-scrollbarSlider-background);
-  --scrollbar-thumb-hover: var(--vscode-scrollbarSlider-hoverBackground);
+  --scrollbar-thumb: color-mix(in srgb, #797979 40%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, #646464 70%, transparent);
   --session-scrollbar-track: color-mix(in srgb, var(--text) 4%, transparent);
 
   --subtle-1: color-mix(in srgb, var(--accent) 4%, transparent);
@@ -102,30 +94,30 @@ body[data-theme="vscode-dark"] {
   --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
 
-  --dialog-bg: var(--vscode-editor-background);
+  --dialog-bg: #252526;
   --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
   --ui-scrim: color-mix(in srgb, black 60%, transparent);
   --ui-shadow-tone: color-mix(in srgb, black 32%, transparent);
   --ui-highlight-tone: color-mix(in srgb, white 4%, transparent);
   --ui-glass-tint: color-mix(in srgb, white 3%, transparent);
 
-  --executor-menu-bg: var(--vscode-menu-background);
+  --executor-menu-bg: #252526;
   --executor-menu-shadow:
     0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) var(--ui-shadow-tone),
     0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 56%, transparent);
-  --executor-menu-row-hover-bg: var(--vscode-menu-selectionBackground);
+  --executor-menu-row-hover-bg: #094771;
 
-  --task-bar-bg: var(--vscode-sideBar-background);
+  --task-bar-bg: #252526;
   --task-bar-backdrop-filter: none;
-  --task-bar-border-color: var(--vscode-panel-border);
+  --task-bar-border-color: #454545;
 
-  --menu-panel-bg: var(--vscode-menu-background);
+  --menu-panel-bg: #1f1f1f;
   --divider-soft: color-mix(in srgb, var(--border) 60%, transparent);
 
-  --panel-fill: var(--vscode-sideBar-background);
-  --panel-fill-hover: var(--vscode-list-hoverBackground);
-  --card-fill: var(--vscode-input-background);
-  --card-fill-hover: var(--vscode-list-hoverBackground);
+  --panel-fill: #252526;
+  --panel-fill-hover: #2a2d2e;
+  --card-fill: #2d2d30;
+  --card-fill-hover: #2a2d2e;
 
   --guide-card-border: color-mix(in srgb, var(--accent) 25%, transparent);
   --guide-card-bg:
