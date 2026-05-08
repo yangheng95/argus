@@ -38,7 +38,7 @@ Injected skills can declare \`required_tools\` in their frontmatter. When a
 build-stage skill declares required tools, \`status='passed'\` is rejected by
 BuildAgent unless every required tool completed in the build session. Mirror
 extraction tools are not build-stage tools; visual/page references must arrive
-from design_analysis as PRD/SPEC decision-log entries plus task.design_specs.
+from design_analysis as PRD/SPEC decision-log entries plus optional task.design_specs anchors.
 Delivery owns rendered browser evidence and visual hard gates.`,
   design_analyst: `## Skill-system invariants (design-analysis)
 

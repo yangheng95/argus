@@ -1,12 +1,11 @@
 /**
- * Design Analyst Agent — produces a VisualSpec[] visual contract from
- * screenshots / mockups / live URLs.
+ * Design Analyst Agent — produces a mirror-grounded PRD/SPEC from screenshots /
+ * mockups / live URLs.
  *
- * The specs land on `engine_task.design_specs` and are rendered in the delivery
- * agent's prompt as a visual contract checklist. There is no deterministic
- * scorer at registration time — delivery decides whether each spec was honored
- * when it does its adversarial visual review, and may cite a spec id in
- * `rejection_details.visual_spec_id` when a rejection traces back to one.
+ * The StructuredOutput payload lands in the design-analysis decision log and is
+ * the authoritative contract for requirements, architect, build, and delivery.
+ * `engine_task.design_specs` is no longer required for handoff; if present, it is
+ * only a compact anchor list beside the PRD/SPEC.
  *
  * Architecture constraints:
  * ✗ Cannot modify files or execute code
@@ -14,8 +13,8 @@
  * ✓ Reads codebase to discover existing design patterns/component libraries
  * ✓ Works from multimodal attachments (screenshots, PDF) and can capture a
  *   live webpage PNG via `url_screenshot` when the brief includes a visual URL.
- * ✓ Emits specs via register_*_spec tools; terminal design_system / tech_stack
- *   arrive via SessionLoop's StructuredOutput (DesignFinalSchema).
+ * ✓ Emits terminal PRD/SPEC fields via SessionLoop's StructuredOutput
+ *   (DesignFinalSchema).
  *
  * Implementation: thin shell over `runAgentSession`. The runner owns
  * model / session / prompt-composition / abort / stream-error handling.
@@ -44,6 +43,7 @@ export namespace DesignAnalystAgent {
     techStack: string[]
     productSpec: string
     frontendSpec: string
+    visualConsistencySpec: string
     backendSpec: string
     prdIterationNotes: string[]
     completenessReview: string
@@ -108,7 +108,6 @@ export namespace DesignAnalystAgent {
           ...contextTools,
           ...screenshotToolKit,
           ...readAttachmentToolKit,
-          ...outputToolKit.tools,
         },
         getCollector: () => outputToolKit.getSpecs(),
       },
@@ -147,6 +146,7 @@ export namespace DesignAnalystAgent {
       techStack: structured.tech_stack,
       productSpec: structured.product_spec,
       frontendSpec: structured.frontend_spec,
+      visualConsistencySpec: structured.visual_consistency_spec,
       backendSpec: structured.backend_spec,
       prdIterationNotes: structured.prd_iteration_notes,
       completenessReview: structured.completeness_review,
@@ -157,8 +157,8 @@ export namespace DesignAnalystAgent {
   }
 
   /**
-   * Render a VisualSpec[] into a prompt section suitable for delivery's
-   * user-prompt "Design Contract" block.
+   * Render optional VisualSpec anchors into a prompt section suitable for
+   * delivery's user-prompt "Design Contract" block.
    */
   export function renderForDelivery(specs: readonly VisualSpec[], designSystem?: string): string {
     if (specs.length === 0) return ""
@@ -237,7 +237,7 @@ function buildUserPrompt(input: {
       (hasLiveHttpUrl
         ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the mirror webpage pipeline first (`webpage_extract`, then `webpage_compile`, then `webpage_analyze`) and read the resulting artifacts before writing specs. "
         : "") +
-      "Your whole job is to derive the PRD/SPEC and visual contract from evidence, not taste.",
+      "Your whole job is to derive the PRD/SPEC and visual-consistency contract from evidence, not taste.",
     )
   } else {
     sections.push(
@@ -245,10 +245,8 @@ function buildUserPrompt(input: {
       (hasLiveHttpUrl
         ? "No screenshots, mockups, or design materials were attached yet. If the request includes a live http(s) webpage URL, use the mirror webpage pipeline first (`webpage_extract`, then `webpage_compile`, then `webpage_analyze`). If extraction fails, report the exact failure; do not invent page facts. "
         : "No screenshots, mockups, or design materials were provided. ") +
-      "Extract the visual contract from the textual brief only when no visual input is available; register specs that " +
-      "can be inferred from the request wording (e.g. named brand palettes, " +
-      "explicit typography, explicit component mentions). Do NOT invent " +
-      "specifics that have no source in the brief.",
+      "Extract the PRD/SPEC from the textual brief only when no visual input is available. Do NOT invent " +
+      "visual specifics that have no source in the brief.",
     )
   }
 
@@ -263,7 +261,7 @@ function buildUserPrompt(input: {
     "For visual webpage URLs, use the mirror pipeline — not `webfetch` and not screenshot-only analysis. " +
     "Strict order: `webpage_extract` writes `mirror/reference.png` and `mirror/extracted-page.json`; " +
     "`webpage_compile` writes `mirror/page-ir.xml`; `webpage_analyze` writes `mirror/scaffold.json` " +
-    "and `mirror/shared-context.md`. Read those artifacts before registering specs or finalizing. " +
+    "and `mirror/shared-context.md`. Read those artifacts before finalizing. " +
     "Do at least two PRD/SPEC review passes before StructuredOutput: first check page inventory and visual coverage, then check downstream frontend/backend implementability.",
   )
 

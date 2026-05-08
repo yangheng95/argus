@@ -233,9 +233,10 @@ yield a "call X first" error and you'll waste a turn — read the constraints be
 once and decide upstream:
 
   - Visual/reference tasks require `design_analysis` before every downstream stage.
-    A complete design-analysis handoff means `task.design_specs` exists and
-    decision-log phase=`design_analysis` contains `product_spec`, `frontend_spec`,
-    `backend_spec`, `prd_iteration_notes`, and `completeness_review`. If a task
+    A complete design-analysis handoff means decision-log phase=`design_analysis`
+    contains `product_spec`, `frontend_spec`, `visual_consistency_spec`,
+    `backend_spec`, `prd_iteration_notes`, `completeness_review`, and
+    `evidence_source_manifest`. If a task
     has a URL, Figma link, image/PDF visual attachment, or visual_reference system
     artifact, call `design_analysis` first and do not call requirements,
     architect, build, integrity, deliver, or publish until that handoff exists.

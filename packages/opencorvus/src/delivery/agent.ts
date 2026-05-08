@@ -24,6 +24,7 @@ import { Config } from "@/config/config"
 import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { deriveUrlSignals, resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { Provider } from "@/provider/provider"
+import { createDecisionLog } from "@/decision-log"
 import type { GoalInfo, DeliveryInfo } from "@/delivery/checks"
 import {
   DeliveryVerdict,
@@ -241,6 +242,20 @@ function buildUserPrompt(
       }
     }
     pushOptional("# Design Contract", lines.join("\n"), 6_000)
+  }
+
+  if (input.task.id) {
+    const designAnalysis = createDecisionLog(input.task.id).phasePromptSection(
+      "design_analysis",
+      "Design Analysis PRD/SPEC Source",
+    )
+    if (designAnalysis.trim().length > 0) {
+      pushOptional(
+        "# Design Analysis PRD/SPEC Source",
+        designAnalysis,
+        10_000,
+      )
+    }
   }
 
   const images = (input.attachments ?? []).filter((a) => typeof a?.mime === "string" && a.mime.startsWith("image/"))

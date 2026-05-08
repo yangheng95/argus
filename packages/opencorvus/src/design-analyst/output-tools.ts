@@ -1,18 +1,12 @@
 /**
  * Structured output tools for the Design Analyst Agent.
  *
- * Every registered spec ends up as a `VisualSpec` row on
- * `engine_task.design_specs`, read by delivery as a visual contract checklist.
- * There is no scorer or automatic verification at registration time. The tools exist to force the
- * LLM to:
+ * Structured output tools for the Design Analyst Agent.
  *
- * ① Name a category up front (pick the right register_*_spec tool)
- * ② Fill category-appropriate fields (hex value, font metric, px value, …)
- * ③ Give a stable id + an actionable applies_to + severity
- * ④ Enumerate every region/token/component (finalize gates coverage)
- *
- * Category splitting is a UX choice for the LLM, not a persistence choice —
- * every tool writes the same `VisualSpec` shape.
+ * The PRD/SPEC carried by DesignFinalSchema is the authoritative design-analysis
+ * output. VisualSpec registration tools remain available to tests and older
+ * collector call sites as optional compact anchors, but design-analysis no
+ * longer depends on registering rows before handoff.
  */
 import { tool } from "ai"
 import z from "zod"
@@ -34,6 +28,8 @@ import type { VisualSpec, VisualSpecCategory } from "./types"
 interface Collector {
   specs: VisualSpec[]
 }
+
+const DESIGN_SPEC_BUDGET = 80
 
 function emptyCollector(): Collector {
   return { specs: [] }
@@ -67,7 +63,15 @@ export const DesignFinalSchema = z.object({
     .min(1)
     .describe(
       "Frontend implementation spec: route map, component tree, layout details, visual tokens, " +
-      "assets, interactions, responsive behavior, and explicit reference to relevant vis-* specs.",
+      "assets, interactions, responsive behavior, and acceptance criteria.",
+    ),
+  visual_consistency_spec: z
+    .string()
+    .min(1)
+    .describe(
+      "Binding visual-fidelity PRD/SPEC section. Emphasize exact visual consistency: viewport inventory, " +
+      "pixel hierarchy, colors, typography, spacing, component states, charts/tables/media, responsive rules, " +
+      "comparison criteria, and reference artifacts. This is the primary visual contract for downstream agents.",
     ),
   backend_spec: z
     .string()
@@ -287,6 +291,13 @@ export function createDesignOutputTools() {
   }
 
   function push(category: VisualSpecCategory, input: any): string {
+    if (collector.specs.length >= DESIGN_SPEC_BUDGET) {
+      return (
+        `SPEC_BUDGET_REACHED: ${DESIGN_SPEC_BUDGET} visual specs are already registered. ` +
+        "Stop registering per-item visual rows; consolidate remaining detail in product_spec/frontend_spec/visual_consistency_spec/backend_spec, " +
+        "complete the two PRD/SPEC review passes, then call StructuredOutput."
+      )
+    }
     const spec: VisualSpec = {
       id: input.id,
       category,
@@ -303,28 +314,28 @@ export function createDesignOutputTools() {
   const tools = {
     register_color_spec: tool({
       description:
-        "Register an exact color constraint from the visual input. Use EXACT hex values (eyedrop the image — no 'approximately blue'). Every distinct color surface must be registered.",
+        "Register an exact reusable color constraint from the visual input. Use exact hex values and consolidate repeated rows/items under one role spec instead of per-item specs.",
       inputSchema: ColorSchema,
       execute: async (input) => assertIdFree(input.id) ?? push("color", input),
     }),
 
     register_typography_spec: tool({
       description:
-        "Register an exact typography constraint (font family + size + weight, plus line-height and letter-spacing when discernible). Every distinct typographic role — headings, body, captions, mono, labels — must be registered.",
+        "Register an exact reusable typography constraint (font family + size + weight, plus line-height and letter-spacing when discernible). Register roles, not every repeated text instance.",
       inputSchema: TypographySchema,
       execute: async (input) => assertIdFree(input.id) ?? push("typography", input),
     }),
 
     register_spacing_spec: tool({
       description:
-        "Register an exact spacing constraint (margin / padding / gap / inset). Measure from the image; round to the underlying scale the design uses (often 4 / 8 px).",
+        "Register an exact reusable spacing constraint (margin / padding / gap / inset). Measure from the image and consolidate repeated grids/lists/tables under one spacing role.",
       inputSchema: SpacingSchema,
       execute: async (input) => assertIdFree(input.id) ?? push("spacing", input),
     }),
 
     register_layout_spec: tool({
       description:
-        "Register a layout section (header, sidebar, hero, etc.) with position + dimensions + layout method. Register parents before children and reference parents via parent_id to build the layout tree.",
+        "Register a reusable layout section (header, sidebar, hero, chart panel, data row group, etc.) with position + dimensions + layout method. Register parents before children and avoid one spec per repeated row/card.",
       inputSchema: LayoutSchema,
       execute: async (input) => {
         const existErr = assertIdFree(input.id)
@@ -343,7 +354,7 @@ export function createDesignOutputTools() {
 
     register_component_spec: tool({
       description:
-        "Register a UI component (button, card, nav item, input, badge, chart, etc.). Reference the layout it lives in via within_layout_id and list the color/typography/spacing spec ids that style it via visual_refs.",
+        "Register a reusable UI component (button, card, nav item, input, badge, chart, repeated list row, etc.). Reference the layout it lives in and avoid one spec per repeated data item.",
       inputSchema: ComponentSchema,
       execute: async (input) => {
         const existErr = assertIdFree(input.id)

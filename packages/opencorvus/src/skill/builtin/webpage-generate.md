@@ -22,9 +22,9 @@ You are not implementing the page. You are producing the authoritative PRD/SPEC 
 2. Run `webpage_compile` after extraction finishes.
 3. Run `webpage_analyze` after extraction finishes.
 4. Read `mirror/reference.png`, `mirror/extracted-page.json`, `mirror/page-ir.xml`, `mirror/scaffold.json`, and `mirror/shared-context.md`.
-5. Register visual specs for tokens, layout, components, interactions, and responsive rules.
+5. Write visual consistency requirements directly into `visual_consistency_spec`: reusable tokens, layout, components, interactions, responsive rules, and dense repeated surfaces. Do not create one row per repeated table row, ticker, text instance, candle, or data point.
 6. Perform at least two PRD/SPEC review passes: inventory coverage, then downstream frontend/backend implementability.
-7. Finalize with StructuredOutput fields: `product_spec`, `frontend_spec`, `backend_spec`, `prd_iteration_notes`, `completeness_review`, `reference_artifacts`, and `open_questions`. Put every source file/image URL and mirror artifact name you used into `reference_artifacts`; the orchestrator will publish them as `evidence_source_manifest` for downstream agents.
+7. Finalize with StructuredOutput fields: `product_spec`, `frontend_spec`, `visual_consistency_spec`, `backend_spec`, `prd_iteration_notes`, `completeness_review`, `reference_artifacts`, and `open_questions`. Put every source file/image URL and mirror artifact name you used into `reference_artifacts`; the orchestrator will publish them as `evidence_source_manifest` for downstream agents.
 
 The extraction steps are strictly serial because compile/analyze read artifacts written by extract.
 
@@ -38,4 +38,4 @@ The extraction steps are strictly serial because compile/analyze read artifacts 
 
 ## Downstream Contract
 
-Build agents consume the persisted SPEC and `task.design_specs`. They do not call mirror tools. Delivery owns rendered browser evidence and visual hard gates.
+Build agents consume the persisted PRD/SPEC, especially `visual_consistency_spec`, plus optional `task.design_specs` anchors. They do not call mirror tools. Delivery owns rendered browser evidence and visual hard gates.

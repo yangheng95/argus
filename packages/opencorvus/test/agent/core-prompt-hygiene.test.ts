@@ -215,15 +215,17 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("required runtime flow cannot be")
   })
 
-  test("design-analysis and delivery agree that design_specs are delivery-verified", async () => {
+  test("design-analysis and delivery agree that visual_consistency_spec is delivery-gated", async () => {
     const design = await readPrompt("designAnalyst")
     const delivery = await readPrompt("delivery")
     expect(design).not.toContain("ADVISORY")
     expect(design).not.toContain("not automatically scored or gated")
     expect(design).not.toContain("soft preference")
-    expect(design).toContain("part of delivery's visual contract")
-    expect(delivery).toContain("When design specs exist, both `must` and `should`")
-    expect(delivery).toContain("specs are gating")
+    expect(design).toContain("`visual_consistency_spec`: binding visual-fidelity specification")
+    expect(design).not.toContain("register_color_spec")
+    expect(design).not.toContain("register_layout_spec")
+    expect(delivery).toContain("the design-analysis")
+    expect(delivery).toContain("`visual_consistency_spec` is gating")
   })
 
   test("no core prompt smuggles JS template-literal escapes into raw text", async () => {

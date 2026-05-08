@@ -77,8 +77,10 @@ export namespace ArchitectAgent {
     requirements?: ParsedRequirement[]
     /** Runtime / framework / test decisions produced by Requirements. */
     requirementDecisions?: RequirementsDecision[]
-    /** Advisory visual contract produced by design_analysis. */
+    /** Optional visual anchors produced by design_analysis. */
     designSpecs?: VisualSpec[]
+    /** Authoritative PRD/SPEC entries produced by design_analysis. */
+    designAnalysis?: string
     /** Delivery feedback that triggered this re-run. Absent on first pass. */
     retryContext?: ArchitectRetryContext
     /** Multimodal attachments the user uploaded with the task (images, PDFs,
@@ -111,7 +113,7 @@ export namespace ArchitectAgent {
     const outputToolKit = createArchitectOutputTools({
       existingGoals: seedGoals,
       designSpecs: input.designSpecs,
-      requireReferenceCoverage: (input.designSpecs?.length ?? 0) > 0,
+      requireReferenceCoverage: (input.designSpecs?.length ?? 0) > 0 || Boolean(input.designAnalysis?.trim()),
     })
     const contextTools = await filterAgentTools(createAgentContextTools(), "architect")
 
@@ -281,6 +283,10 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
         "Use them when decomposing frontend goals, source/reference coverage, owned paths, interaction work, and integrity coverage.",
       ],
     }))
+  }
+
+  if (input.designAnalysis && input.designAnalysis.trim().length > 0) {
+    sections.push(input.designAnalysis)
   }
 
   if (input.requirements && input.requirements.length > 0) {

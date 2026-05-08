@@ -5,7 +5,7 @@ import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
 import { PermissionNext } from "../../src/permission/next"
 import { ToolRegistry } from "../../src/tool/registry"
-import { MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
+import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_DELIVERY_TOOL_IDS, MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
 
 // Helper to evaluate permission for a tool with wildcard pattern
 function evalPerm(agent: Agent.Info | undefined, permission: string): PermissionNext.Action | undefined {
@@ -513,7 +513,7 @@ test("design-analyst advertises url_screenshot and omits webfetch", async () => 
   })
 })
 
-test("only design-analyst receives mirror tools from the registry", async () => {
+test("only design-analyst receives mirror analysis tools from the registry", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -522,8 +522,11 @@ test("only design-analyst receives mirror tools from the registry", async () => 
       expect(designAnalyst).toBeDefined()
       const designTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, designAnalyst)
       const designToolIds = new Set(designTools.map((tool) => tool.id))
-      for (const id of MIRROR_TOOL_IDS) {
+      for (const id of MIRROR_ANALYSIS_TOOL_IDS) {
         expect(designToolIds.has(id)).toBe(true)
+      }
+      for (const id of MIRROR_DELIVERY_TOOL_IDS) {
+        expect(designToolIds.has(id)).toBe(false)
       }
 
       for (const name of ["build", "general", "explore", "requirements", "architect", "integrity", "prosecutor"]) {

@@ -66,7 +66,7 @@ afterAll(() => {
 
 describe("design-analyst agent (real-LLM smoke)", () => {
   liveTest(
-    "produces VisualSpec[] plus PRD/SPEC fields from a text-only brief",
+    "produces PRD/SPEC fields from a text-only brief",
     async () => {
       await Instance.provide({
         directory: PACKAGE_ROOT,
@@ -92,6 +92,8 @@ describe("design-analyst agent (real-LLM smoke)", () => {
           expect(result.productSpec.length).toBeGreaterThan(0)
           expect(typeof result.frontendSpec).toBe("string")
           expect(result.frontendSpec.length).toBeGreaterThan(0)
+          expect(typeof result.visualConsistencySpec).toBe("string")
+          expect(result.visualConsistencySpec.length).toBeGreaterThan(0)
           expect(typeof result.backendSpec).toBe("string")
           expect(result.backendSpec.length).toBeGreaterThan(0)
           expect(Array.isArray(result.prdIterationNotes)).toBe(true)

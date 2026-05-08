@@ -316,23 +316,14 @@ describe("build agent prompt context", () => {
         designAnalysis:
           "# Design Analysis PRD/SPEC Source\n\n" +
           "- key=product_spec value=AMD dashboard\n" +
+          "- key=visual_consistency_spec value=Match AMD page geometry and chart/table styling\n" +
           "- key=evidence_source_manifest value=references/url-amd.png",
-        designSpecs: [
-          {
-            id: "vis-layout-header",
-            category: "layout",
-            title: "Header layout",
-            requirement: "Header matches reference",
-            applies_to: "header",
-            severity: "must",
-          },
-        ],
       },
     )
 
     expect(prompt).toContain("## Design Analysis PRD/SPEC Source")
+    expect(prompt).toContain("visual_consistency_spec")
     expect(prompt).toContain("evidence_source_manifest")
     expect(prompt).toContain("references/url-amd.png")
-    expect(prompt).toContain("Header layout")
   })
 })
