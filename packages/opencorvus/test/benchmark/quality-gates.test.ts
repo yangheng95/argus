@@ -56,7 +56,6 @@ describe("benchmark quality gates", () => {
       },
       taskStatus: "completed",
       evaluationVerdict: "accepted",
-      localVerifyExitCode: 0,
     })
 
     expect(verdict.verdict).toBe("blocked")
@@ -95,7 +94,6 @@ describe("benchmark quality gates", () => {
       runMetrics: metrics,
       taskStatus: "completed",
       evaluationVerdict: "accepted",
-      localVerifyExitCode: 0,
     })
 
     expect(audit.out_of_scope_file_count).toBe(1)
@@ -144,7 +142,6 @@ describe("benchmark quality gates", () => {
       runMetrics: metrics,
       taskStatus: "completed",
       evaluationVerdict: "accepted",
-      localVerifyExitCode: 0,
     })
 
     expect(moduleBlocks).toEqual([{
@@ -154,5 +151,50 @@ describe("benchmark quality gates", () => {
     expect(audit.out_of_scope_files).toEqual(["package.json", "bun.lock"])
     expect(verdict.verdict).toBe("rejected")
     expect(verdict.primary_failure).toBe("scope_drift")
+  })
+
+  test("quality gate acceptance does not depend on vacuous local verify exit code", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.mkdir(path.join(tmp.path, "src"), { recursive: true })
+    await Bun.write(path.join(tmp.path, "src", "feature.ts"), "export const feature = 1\n")
+
+    const metrics = await deriveRunMetrics({
+      rootDir: tmp.path,
+      changedFiles: ["src/feature.ts"],
+      completedAt: Date.now(),
+      evaluationChecks: [{ status: "passed", name: "build" }],
+      events: [{ summary: "implemented feature" }],
+    })
+    const audit = await auditWorkspace({
+      rootDir: tmp.path,
+      changedFiles: ["src/feature.ts"],
+      request: "Implement the feature.",
+    })
+    const verdict = evaluateQualityGates({
+      artifactAudit: audit,
+      runMetrics: metrics,
+      taskStatus: "completed",
+      evaluationVerdict: "accepted",
+    })
+
+    expect(verdict.verdict).toBe("accepted")
+    expect(verdict.failures.some((item) => item.evidence.includes("localVerifyExitCode"))).toBe(false)
+  })
+
+  test("package lockfiles are config files, not scaffold expansion flags", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Bun.write(path.join(tmp.path, "package-lock.json"), "{}\n")
+    await Bun.write(path.join(tmp.path, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n")
+    await Bun.write(path.join(tmp.path, "yarn.lock"), "# yarn lockfile\n")
+
+    const audit = await auditWorkspace({
+      rootDir: tmp.path,
+      changedFiles: ["package-lock.json", "pnpm-lock.yaml", "yarn.lock"],
+      request: "Create a web project with a committed lockfile.",
+    })
+
+    expect(audit.config_files_added).toBe(3)
+    expect(audit.scaffold_expansion_flags).toEqual([])
+    expect(audit.scaffold_noise_count).toBe(0)
   })
 })

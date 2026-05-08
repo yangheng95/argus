@@ -1469,7 +1469,6 @@ async function buildBenchmarkReport(error?: unknown) {
     runMetrics,
     taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
     evaluationVerdict: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
-    localVerifyExitCode: localVerify.exitCode,
   }), reportError)
   const screenshot = page ? await takeBenchmarkScreenshot(page) : null
   const currentOverlay = page ? await overlaySnapshot(page).catch((cause) => ({ error: String(cause) })) : { error: "no-browser mode" }
@@ -1580,7 +1579,6 @@ async function buildBenchmarkReport(error?: unknown) {
       delivery: {
         pass: (progress?.task?.status || currentFinalBoard?.task?.status) === "completed" &&
             (progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict) === "accepted" &&
-            localVerify.exitCode === 0 &&
             qualityVerdict.verdict === "accepted",
         sample: {
           taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
