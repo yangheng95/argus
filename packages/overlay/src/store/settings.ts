@@ -5,6 +5,7 @@ import { createStore } from "solid-js/store";
 import { DEFAULT_SERVER } from "../services/default-server";
 import { getHostTransport } from "../services/host-transport";
 import { requireInitialVsCodeHostTheme } from "../services/host-theme";
+import { DEFAULT_THEME_ID, sanitizeThemeForHost } from "../services/theme-registry";
 import { sanitizeLocale } from "../utils/i18n";
 
 // ── Types ──
@@ -62,13 +63,7 @@ export interface OverlaySettings {
 // ── Sanitisers ──
 
 function sanitizeTheme(value: any): string {
-  const text = String(value || "").trim();
-  return text === "light" ||
-    text === "dark" ||
-    text === "vscode-dark" ||
-    text === "system"
-    ? text
-    : "light";
+  return sanitizeThemeForHost(value);
 }
 
 function settingsTheme(input: Partial<OverlaySettings>): string {
@@ -131,7 +126,7 @@ const DEFAULT_LOCALE = sanitizeLocale(
 
 // ── Defaults ──
 
-export const DEFAULT_THEME = "light";
+export const DEFAULT_THEME = DEFAULT_THEME_ID;
 
 export const DEFAULT_SETTINGS: OverlaySettings = {
   serverUrl: DEFAULT_SERVER,
