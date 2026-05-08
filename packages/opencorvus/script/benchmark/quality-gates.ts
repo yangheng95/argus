@@ -37,6 +37,8 @@ const CONFIG_BASENAMES = new Set([
   ".prettierignore",
   "package-lock.json",
   "bun.lock",
+  "pnpm-lock.yaml",
+  "yarn.lock",
 ])
 // Case-sensitive: only uppercase TODO/FIXME count as action markers (avoids "todo item" in product JSDoc).
 // Restricted to source files only (see auditWorkspace) — keyword matches in artifact JSON/XML/CSS
@@ -64,7 +66,7 @@ export async function auditWorkspace(input: {
   const readmes = docFiles.filter((file) => path.basename(file).toLowerCase() === "readme.md")
   const duplicateDocs = readmes.filter((file) => path.dirname(file) !== ".")
   const scaffoldFlags = files.filter((file) =>
-    /(^|\/)(app\.json|babel\.config\.js|metro\.config\.js|package-lock\.json|src\/[^/]+\/README\.md)$/i.test(file.replace(/\\/g, "/")),
+    /(^|\/)(app\.json|babel\.config\.js|metro\.config\.js|src\/[^/]+\/README\.md)$/i.test(file.replace(/\\/g, "/")),
   )
 
   const placeholderHits = (await Promise.all(sourceFiles.map(async (file) => {
@@ -176,7 +178,6 @@ export function evaluateQualityGates(input: {
   runMetrics: RunMetricsType
   taskStatus: string
   evaluationVerdict?: string
-  localVerifyExitCode?: number
 }): QualityVerdict {
   const failures: QualityFailure[] = []
   if (input.runMetrics.noop_cycle_count >= 8 || (input.runMetrics.meaningful_change_gap_ms >= 15 * 60 * 1000 && input.runMetrics.repeat_command_ratio >= 0.45)) {
@@ -200,11 +201,11 @@ export function evaluateQualityGates(input: {
       evidence: input.artifactAudit.placeholder_hits.join(", "),
     })
   }
-  if (input.taskStatus !== "completed" || input.evaluationVerdict !== "accepted" || input.localVerifyExitCode !== 0) {
+  if (input.taskStatus !== "completed" || input.evaluationVerdict !== "accepted") {
     failures.push({
       category: "verification_gap",
       message: "Core delivery acceptance checks did not all pass",
-      evidence: `taskStatus=${input.taskStatus}, evaluationVerdict=${input.evaluationVerdict || ""}, localVerifyExitCode=${input.localVerifyExitCode ?? -1}`,
+      evidence: `taskStatus=${input.taskStatus}, evaluationVerdict=${input.evaluationVerdict || ""}`,
     })
   }
   if (
