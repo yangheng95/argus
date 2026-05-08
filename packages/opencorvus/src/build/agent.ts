@@ -42,6 +42,7 @@ import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { EngineConfig } from "@/engine/config"
 import { ExecutorRegistry } from "@/executor/registry"
 import { record, structuredInput, type CodingEventInfo, type CodingProvider, type CodingProviderOptions } from "@/executor/contract"
+import { extractExecutorSessionRef, persistExecutorSessionRef } from "@/executor/session-ref"
 import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
 import { MCPServe } from "@/mcp/serve"
@@ -1325,6 +1326,10 @@ async function runWithExternalProviderImpl(args: {
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   }
   await Session.updateMessage(assistantMessage)
+  await persistExecutorSessionRef({
+    sessionID: session.id,
+    provider: args.executor,
+  })
 
   const prompt = promptText
   const events: CodingEventInfo[] = []
@@ -1430,6 +1435,21 @@ async function runWithExternalProviderImpl(args: {
     for await (const event of provider.run(runInput)) {
       gate.observe()
       events.push(event)
+      const sessionRef = extractExecutorSessionRef(event)
+      if (sessionRef) {
+        await persistExecutorSessionRef({
+          sessionID: session.id,
+          provider: args.executor,
+          ref: sessionRef,
+        }).catch((error) => {
+          log.warn("build agent (external): persist executor session ref failed", {
+            executor: args.executor,
+            taskID: args.taskID,
+            sessionID: session.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }
       switch (event.type) {
         case "text_delta": {
           textCharCount += event.text.length

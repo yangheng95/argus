@@ -176,17 +176,17 @@ export function CardHeader(props: {
     if (!props.onRewind || !canRewind()) return;
     if (rewinding()) return;
     const choice = await showAppDialog({
-      title: t("card.rewind_confirm.title") || "Rewind",
-      message: t("card.rewind_confirm.message") || "Choose how to rewind this step.",
+      title: t("card.rewind_confirm.title"),
+      message: t("card.rewind_confirm.message"),
       select: true,
       selectValue: "view",
       selectOptions: [
-        { value: "view", label: t("card.rewind_confirm.audit_only") || "Rewind view only" },
-        { value: "worktree", label: t("card.rewind_confirm.with_worktree") || "Rewind view and files" },
+        { value: "view", label: t("card.rewind_confirm.audit_only") },
+        { value: "worktree", label: t("card.rewind_confirm.with_worktree") },
       ],
-      okLabel: t("card.rewind_confirm.apply") || "Rewind",
+      okLabel: t("card.rewind_confirm.apply"),
       cancel: true,
-      cancelLabel: t("common.cancel") || "Cancel",
+      cancelLabel: t("common.cancel"),
     });
     if (!choice.confirmed || !choice.value) return;
     setRewinding(true);
@@ -273,8 +273,8 @@ export function CardHeader(props: {
               type="button"
               class="card__error-reason"
               classList={{ "card__error-reason--copied": copied() }}
-              title={(props.node.errorReason || "") + " — click to copy"}
-              aria-label={"Error reason: " + (props.node.errorReason || "")}
+              title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
+              aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
               onClick={async (e) => {
                 e.stopPropagation();
                 const reason = props.node.errorReason || "";
@@ -406,8 +406,8 @@ export function CardHeader(props: {
             type="button"
             class="card__trace"
             classList={{ "card__trace--open": !!props.traceOpen }}
-            title="Inspect AgentTrace for this session"
-            aria-label="Inspect AgentTrace for this session"
+            title={t("card.inspect_agent_trace")}
+            aria-label={t("card.inspect_agent_trace")}
             aria-pressed={!!props.traceOpen}
             onClick={(e) => {
               e.stopPropagation();
@@ -448,8 +448,8 @@ export function CardHeader(props: {
             type="button"
             class="card__rewind"
             classList={{ "card__rewind--pending": rewinding() }}
-            title={t("card.rewind") || "回到这一步"}
-            aria-label={t("card.rewind") || "rewind to this step"}
+            title={t("card.rewind")}
+            aria-label={t("card.rewind_step")}
             disabled={rewinding()}
             onClick={onRewind}
             onKeyDown={(e) => {

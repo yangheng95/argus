@@ -43,7 +43,7 @@
   background: var(--oc-tab-bg);
   color: var(--oc-tab-color);
   font: var(--oc-header-title-font);
-  letter-spacing: var(--oc-header-title-letter-spacing);
+  letter-spacing: var(--ui-letter-spacing-normal);
   text-transform: var(--oc-header-title-transform);
   white-space: nowrap;
   cursor: pointer;

@@ -2,7 +2,7 @@ import { splitProps } from "solid-js";
 import type { JSX } from "solid-js";
 
 export const BUTTON_VARIANTS = ["solid", "outline", "ghost"] as const;
-export const BUTTON_SIZES = ["sm", "md", "icon"] as const;
+export const BUTTON_SIZES = ["mini", "sm", "md", "icon"] as const;
 export const BUTTON_TONES = ["neutral", "accent", "danger"] as const;
 
 export type ButtonVariant = (typeof BUTTON_VARIANTS)[number];

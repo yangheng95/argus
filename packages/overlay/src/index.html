@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OpenCorvus</title>
   <link rel="stylesheet" href="styles/tokens/design-language.css">
+  <link rel="stylesheet" href="styles/cascade/base.css">
   <link rel="stylesheet" href="styles/cascade/dark.css">
   <link rel="stylesheet" href="styles/cascade/vscode-dark.css">
   <link rel="stylesheet" href="styles/cascade/light.css">
-  <link rel="stylesheet" href="styles/cascade/base.css">
   <link rel="stylesheet" href="styles/cascade/typography.css">
   <link rel="stylesheet" href="styles/primitives/button.css">
   <link rel="stylesheet" href="styles/primitives/tabs.css">
@@ -34,26 +34,12 @@
   <link rel="stylesheet" href="styles/surfaces/conn-banner.css">
   <link rel="stylesheet" href="styles/surfaces/notifications.css">
   <link rel="stylesheet" href="styles/surfaces/ndjson-log.css">
-  <link rel="stylesheet" href="styles/surfaces/btn.css">
   <link rel="stylesheet" href="styles/surfaces/empty-state.css">
   <link rel="stylesheet" href="styles/surfaces/inline-pill.css">
   <link rel="stylesheet" href="styles/surfaces/header.css">
   <link rel="stylesheet" href="styles/surfaces/card.css">
 </head>
 <body data-page="overlay" data-theme="light">
-  <script>
-    // Pre-render theme init: apply the default theme before host settings load.
-    // The main bundle applies the persisted host-owned theme during init.
-    (function () {
-      try {
-        document.documentElement.dataset.theme = "light";
-        document.body.dataset.theme = "light";
-      } catch {
-        document.documentElement.dataset.theme = "light";
-        document.body.dataset.theme = "light";
-      }
-    })();
-  </script>
   <!-- Titlebar (draggable) -->
   <header class="titlebar" id="titlebar">
     <div class="titlebar-left" data-tauri-drag-region>
@@ -242,8 +228,10 @@
             <span class="chat-count" id="chatCount"></span>
             <button
               type="button"
-              class="btn btn-ghost mini"
+              class="oc-button"
               id="btnChatCopyAll"
+              data-variant="ghost"
+              data-size="mini"
               data-i18n="chat.copy_all"
               data-i18n-title="chat.copy_all"
               data-i18n-aria-label="chat.copy_all"
@@ -252,8 +240,10 @@
             >Copy All</button>
             <button
               type="button"
-              class="btn btn-ghost mini workspace-toggle"
+              class="oc-button workspace-toggle"
               id="btnWorkspaceToggle"
+              data-variant="ghost"
+              data-size="mini"
               data-i18n-title="workspace.toggle"
               data-i18n-aria-label="workspace.toggle"
               title="Toggle workspace"

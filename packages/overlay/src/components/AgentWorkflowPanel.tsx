@@ -145,7 +145,7 @@ export function AgentWorkflowPanel() {
                 class="agent-workflow-stack"
                 style={{
                   "--stack-size": String(stack.records.length),
-                  "--stack-pad": `${Math.min(Math.max(stack.records.length - 1, 0), 3) * 7}px`,
+                  "--stack-pad-steps": String(Math.min(Math.max(stack.records.length - 1, 0), 3)),
                 }}
               >
                 <For each={stack.records}>
@@ -157,7 +157,7 @@ export function AgentWorkflowPanel() {
                       data-stack-index={index()}
                       style={{
                         "--stack-index": String(index()),
-                        "--stack-offset": `${Math.min(index(), 3) * 7}px`,
+                        "--stack-offset-steps": String(Math.min(index(), 3)),
                       }}
                       onClick={() => setSelected(record)}
                     >

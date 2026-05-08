@@ -22,7 +22,7 @@
   background: color-mix(in srgb, var(--bad) 18%, var(--surface-strong));
   color: var(--text-strong);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 56%, transparent);
-  box-shadow: 0 calc(18px * var(--ui-scale)) calc(40px * var(--ui-scale)) color-mix(in srgb, black 32%, transparent);
+  box-shadow: 0 calc(18px * var(--ui-scale)) calc(40px * var(--ui-scale)) var(--ui-shadow-tone);
   font-size: var(--ui-font-control);
 }
 
@@ -37,7 +37,7 @@
   border-radius: 50%;
   background: var(--bad);
   box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 40%, transparent);
-  animation: conn-banner-pulse 1.4s ease-in-out infinite;
+  animation: conn-banner-pulse var(--ui-duration-loop-connection-pulse) ease-in-out infinite;
 }
 
 .conn-banner[data-status="connecting"] .conn-banner__dot {
@@ -88,6 +88,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .conn-banner__dot {
-    animation: none !important;
+    animation: none;
   }
 }

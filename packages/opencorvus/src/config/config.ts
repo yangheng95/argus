@@ -1291,6 +1291,14 @@ export namespace Config {
             })
             .optional()
             .describe("Chunk-driven inactivity gates. Single source of truth for streaming layers (session LLM, executor events, task queue)."),
+          debug: z
+            .object({
+              fail_on_information_missing: z.boolean().optional().describe(
+                "When true, the host injects an INFORMATION MISSING fallback section into every agent's system prompt and exits the process with code 99 the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.",
+              ),
+            })
+            .optional()
+            .describe("Operator-toggled debug behaviour. Settings here are diagnostic — they affect host runtime decisions and prompt content."),
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure"),
           max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups"),

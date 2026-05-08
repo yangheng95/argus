@@ -119,14 +119,14 @@ export function TaskProgressBar() {
           <div
             class="task-progress__bar-fill"
             style={{
-              width: `${counts().total === 0 ? 0 : Math.round((counts().passed / counts().total) * 100)}%`,
+              "--progress-passed": `${counts().total === 0 ? 0 : Math.round((counts().passed / counts().total) * 100)}%`,
             }}
           />
           <Show when={counts().failed > 0}>
             <div
               class="task-progress__bar-fail"
               style={{
-                width: `${Math.round((counts().failed / counts().total) * 100)}%`,
+                "--progress-failed": `${Math.round((counts().failed / counts().total) * 100)}%`,
               }}
             />
           </Show>

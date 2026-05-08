@@ -1,6 +1,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as vscode from "vscode"
+import type { HostTheme } from "@opencorvus-ai/transport-protocol"
 
 /**
  * Load and transform the bundled overlay index.html for VS Code webview
@@ -42,6 +43,8 @@ export interface RenderOptions {
   mediaUiUri: vscode.Uri
   /** VS Code UI language (`vscode.env.language`), e.g. "zh-cn", "en". */
   hostLocale: string
+  /** Initial overlay theme resolved from the active VS Code color theme. */
+  vscodeInitialTheme: HostTheme
 }
 
 export function renderOverlayHtml(opts: RenderOptions): RenderedWebviewHtml {
@@ -90,7 +93,7 @@ export function renderOverlayHtml(opts: RenderOptions): RenderedWebviewHtml {
   const headInjection = [
     `<meta http-equiv="Content-Security-Policy" content="${buildCsp(cspSource, nonce)}">`,
     `<base href="${baseHref}">`,
-    `<script nonce="${nonce}">window.__OPENCORVUS_LOCALE__=${JSON.stringify(locale)};window.__OPENCORVUS_ASSET_BASE__=${JSON.stringify(baseHref)};</script>`,
+    `<script nonce="${nonce}">window.__OPENCORVUS_LOCALE__=${JSON.stringify(locale)};window.__OPENCORVUS_ASSET_BASE__=${JSON.stringify(baseHref)};window.__OC_VSCODE_INITIAL_THEME__=${JSON.stringify(opts.vscodeInitialTheme)};</script>`,
   ].join("\n")
   html = html.replace(/<head\b[^>]*>/i, (tag) => `${tag}\n${headInjection}`)
 

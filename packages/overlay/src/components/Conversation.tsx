@@ -97,6 +97,10 @@ export function Conversation(props: { container: HTMLElement }) {
         setTracking(true);
       }
     };
+    // Conversation is rendered directly into an existing `.chat-scroll`
+    // host (see main.tsx and TaskDetailOverlay). Keeping the passive
+    // listener on that host preserves `.chat-scroll > .card` layout and
+    // browser scroll performance without introducing a wrapper element.
     el.addEventListener("scroll", resumeTracking, { passive: true });
     onCleanup(() => {
       el.removeEventListener("scroll", resumeTracking);

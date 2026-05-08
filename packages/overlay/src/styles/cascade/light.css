@@ -12,8 +12,10 @@
    :root because they are theme-independent.
    ───────────────────────────────────────────────────────────── */
 
+:root[data-theme="light"],
 body[data-theme="light"] {
   color-scheme: light;
+  --text-on-accent: #ffffff;
   --bg: #eef3ff;
   --surface: rgba(255, 255, 255, 0.82);
   --surface-hover: rgba(243, 247, 255, 0.96);
@@ -74,6 +76,17 @@ body[data-theme="light"] {
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
   --dialog-bg: #ffffff;
   --dialog-backdrop: rgba(0, 0, 0, 0.4);
+  --ui-scrim: color-mix(in srgb, black 40%, transparent);
+  --ui-shadow-tone: color-mix(in srgb, black 12%, transparent);
+  --ui-highlight-tone: color-mix(in srgb, white 56%, transparent);
+  --ui-glass-tint: color-mix(in srgb, white 62%, transparent);
+  --executor-menu-bg: #ffffff;
+  --executor-menu-shadow:
+    0 calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale)) var(--ui-shadow-tone);
+  --executor-menu-row-hover-bg: var(--subtle-5);
+  --task-bar-bg: var(--ui-glass-tint);
+  --task-bar-backdrop-filter: blur(calc(18px * var(--ui-scale)));
+  --task-bar-border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
   --menu-panel-bg: rgba(255, 255, 255, 0.96);
   --divider-soft: rgba(92, 112, 163, 0.12);
   --panel-fill:

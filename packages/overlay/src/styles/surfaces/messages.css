@@ -21,7 +21,7 @@
     calc(var(--ui-input-padding-x) + calc(12px * var(--ui-scale)));
   border-radius: var(--oc-radius-large);
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 2.8%, transparent), color-mix(in srgb, white 0%, transparent) 72%),
+    linear-gradient(180deg, var(--ui-highlight-tone), transparent 72%),
     color-mix(in srgb, var(--surface-inset) 82%, transparent);
   border: none;
   box-shadow: none;
@@ -95,7 +95,7 @@
   background: var(--subtle-3);
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.03em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
 }
 .tool-status[data-status="completed"] {
@@ -342,6 +342,7 @@
 .msg-todo-card__progress-fill {
   display: block;
   height: 100%;
+  width: var(--todo-progress, 0%);
   border-radius: inherit;
   background: linear-gradient(90deg, var(--accent) 0%, var(--good) 100%);
 }
@@ -361,7 +362,7 @@
   color: var(--text-muted);
   font-size: var(--ui-font-small);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.03em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
 }
 .msg-todo-card__stat[data-status="in_progress"] {
@@ -416,12 +417,19 @@
   border: var(--oc-border-width) solid var(--subtle-4);
 }
 .msg-todo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   width: calc(16px * var(--ui-scale));
-  text-align: center;
-  font-family: var(--mono);
+  height: calc(16px * var(--ui-scale));
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 1;
+}
+
+.msg-todo-icon svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
 }
 .msg-todo-content {
   flex: 1 1 auto;
@@ -458,7 +466,7 @@
   border-radius: var(--oc-radius-soft);
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
   color: var(--text-muted);
   background: var(--subtle-3);
@@ -647,7 +655,7 @@
   color: var(--accent);
   font-size: var(--ui-font-small);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   line-height: 1.5;
   white-space: nowrap;
   text-transform: uppercase;
@@ -661,7 +669,7 @@
   min-width: 0;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 520px) { /* breakpoint: --ui-breakpoint-sm */
   .msg-reasoning {
     gap: calc(4px * var(--ui-scale));
   }

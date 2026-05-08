@@ -21,13 +21,10 @@
    ───────────────────────────────────────────────────────────── */
 
 :root {
-  color-scheme: dark;
   --ui-scale: 1;
   --ui-window-opacity: var(--ui-opacity-full);
 
-  --text-on-accent: #ffffff;
   --session-scrollbar-size: calc(12px * var(--ui-scale));
-  --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
 
   --ui-font-label: var(--ui-font-meta);
   --ui-gap-xs: calc(4px * var(--ui-scale));
@@ -116,22 +113,20 @@ a {
   text-decoration: none;
 }
 
+/* Default: hide scrollbar UI everywhere. The chrome-style "scrollbar
+ * on every overflow:auto" is visual noise — most containers
+ * (dialogs, inspector cards, executor menus, markdown blocks) only
+ * need the *ability* to scroll on overflow, not the gutter. Below,
+ * `#chatScroll` and `#taskListPanel` opt back into a visible
+ * scrollbar because they are the primary content lists where the
+ * gutter doubles as a position indicator. New opt-ins use the same
+ * id-or-class override pattern, not a global toggle. */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-width: none;
 }
-::-webkit-scrollbar {
-  width: calc(5px * var(--ui-scale));
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: var(--oc-radius-soft);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 #chatScroll,

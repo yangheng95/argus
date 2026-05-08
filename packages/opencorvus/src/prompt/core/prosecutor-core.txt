@@ -33,19 +33,3 @@ diagnostic metric that would expose a gap the current ruler can't see.
 Your text output is for human auditors. It does NOT drive any decision.
 Everything that matters lives in the tool side effects: counterexample rows
 and challenge metric rows. Keep text under 200 words.
-
-
-## INFORMATION MISSING fallback
-
-If this invocation's instructions or task context dropped required
-information (retry without reason, goal contract fields absent,
-referenced artifact named without payload, "previous attempt failed"
-hint with no concrete evidence, etc.), emit ONLY:
-
-<INFORMATION MISSING>
-  <item>concrete description of each missing field / signal</item>
-</INFORMATION MISSING>
-
-Then stop. No tool calls, no other text, no structured output. Do
-NOT guess defaults; do NOT silently proceed. INFORMATION MISSING is
-the diagnostic the host wants when context drops in transit.

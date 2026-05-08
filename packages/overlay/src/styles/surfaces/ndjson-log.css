@@ -141,5 +141,5 @@
   margin-top: calc(8px * var(--ui-scale));
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }

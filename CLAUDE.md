@@ -27,9 +27,21 @@
 
 **4.** 不要只关注特定的 Agent、LLM 等的问题，由于继承和多态的特性，任何一个问题都可能是系统性的。你需要从整体上分析问题，找到根本原因，而不是只修复表面症状。
 
+**4.1（rule 4 应用细则 — INFORMATION MISSING 调试信号）**：所有 agent 的 system prompt 都注入了 `## INFORMATION MISSING fallback` 段（见 `packages/opencorvus/src/prompt/core/*-core.txt`，`test/agent/information-missing-fallback.test.ts` pin）。当任何 agent 在 stream 输出形如：
+
+```xml
+<INFORMATION MISSING>
+  <item>...</item>
+</INFORMATION MISSING>
+```
+
+的 XML 块时，那是上游 dispatcher 信息丢失的**结构化信号**——查 dispatcher（orchestrator / build wrapper / integrity caller 等）而非 agent 自己。修 dispatcher 的 input 构造或 prompt template，**不要**改 agent prompt 让它"宽容"这种缺失（rule 6.1 — 这是 prompt-over-host 的反向应用，agent 已经在做对的事）。
+
 **5.** 遵守第一性原因，禁止任何形式的过度工程。所有的设计和实现必须以实际需求为导向，禁止为了追求完美或过度抽象而引入不必要的复杂性。
 
 **6.** 禁止过度工程，承认 LLM 模型的能力足够解决大多数问题，不要为了追求完美而引入不必要的复杂性。相反，要利用 LLM 的智能来简化设计和实现，确保系统的灵活性和可维护性。
+
+**6.1（rule 6 应用细则 — prompt-over-host-invariant）**：当 bug 表现为"LLM 选错工具 / 走错升级路径 / 反复重启而不用细粒度工具"时，**默认修复路径是 prompt**——不是 host 端 preflight invariant、route bypass、状态机式守门。host-side 守门只在两类场景合理：(a) 数据完整性（Zod schema、DB constraint、worktree 三件套是否完整等纯数据形态）；(b) 显式不可逆操作的二次确认。其他形式的"教 LLM 应该走哪条路"必须通过 prompt 实现。reviewer 必须在自己起草方案时拦截这种倾向（rule 11），不要等用户来纠正。教训日：2026-05-07，spec `orchestrator-grain-discipline-2026-05-07.md` §0 worked example。
 
 ---
 
@@ -115,7 +127,7 @@
 
 **32.** 编写方案必须落盘，实施的时候查看硬盘上的方案。当改动涉及已有设计决策、架构约束或历史方案时，应先查看相关记录再修改。
 
-**33.** 必须主动在任何改动前后 commit + push（不绕 hook；hook 是质量门，pre-push 跑 typecheck / api:routes-check / docs:check，失败时修根因再 push，不要传 `--no-verify`）。commit message 必须清晰描述改动内容和原因，禁止使用模糊或无意义的 message，如 "fix bug"、"update code" 等。每次改动都必须有明确的 commit 记录，以便追踪历史和回滚。
+**33.** 必须主动在任何改动前后 commit + push（不绕 hook；hook 是质量门，pre-push 跑 typecheck / api:routes-check / docs:check，失败时修根因再 push，不要传 `--no-verify`），以便追踪历史和回滚。
 
 **35.** 方案落盘前必须穷举调用点，禁止凭单点采样泛化。任何方案、设计、修复在落盘前，必须对涉及的 API / 函数 / 错误类 / 路由 / 配置项做一次**全仓 grep**，把所有调用点 / 同名兄弟 / 已存在的命名错误 / 已存在的接口路径列入方案。**遗漏一处即视为 rule 8（禁止双源）违规**。具体要求：
 
@@ -123,7 +135,7 @@
 - 新增错误类前：grep 已有的同语义命名错误（如 `WorktreeNotGitError`、`InvalidDirectoryError`），优先复用，禁止再造。
 - 引用接口路径时：grep 实际路由定义（`*Routes.ts`、`describeRoute`、`.post("/...")`），不得凭印象写路径。
 - 提议正则 / 路径校验时：grep 现有的同类规则（如 `windowsPath` 的 mount 集合），复用同一来源；禁止平行实现。
-- 二次审查（rule 24 / codex / 用户）发现遗漏时，原方案必须显式标注"codex 审查反馈"并附修订内容，禁止静默重写。
+- 重大重构和修改必须二次审查（rule 24 / codex / 用户）发现遗漏时，原方案必须显式标注"codex 审查反馈"并附修订内容，禁止静默重写。
 
 **36.** 任何代码修改必须配单元测试或 e2e 测试，没有测试的修改不算完成。规则同 rule 28，但前者只覆盖"修复"，本条扩展到所有改动（重构、新功能、配置）。具体要求：
 

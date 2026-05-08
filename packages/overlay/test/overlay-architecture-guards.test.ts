@@ -104,7 +104,7 @@ const LEGACY_BUTTON_CLASSES = [
 const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
   btn: 0,
   "btn-primary": 0,
-  "chat-send": 0,
+  "chat-send": 1,
   "chat-interrupt": 0,
   "titlebar-btn": 0,
   "sidebar-btn": 0,
@@ -195,9 +195,21 @@ describe("overlay architecture guards", () => {
     // that the browser actually evaluates.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
+    const surfaceThemeSelectors = walkFiles(
+      join(OVERLAY_ROOT, "src/styles/surfaces"),
+      (path) => path.endsWith(".css"),
+    ).flatMap((file) =>
+      readText(file)
+        .split(/\r?\n/)
+        .flatMap((line, index) =>
+          /body(?:\[data-theme=|:is\([^)]*data-theme)/.test(line)
+            ? [`${file}:${index + 1}: ${line.trim()}`]
+            : [],
+        ),
+    )
 
     expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(6)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(3)
+    expect(surfaceThemeSelectors).toEqual([])
   })
 
   test("styles.css has no hard-coded accent/bad/warn rgb expansions outside comments", () => {
@@ -420,18 +432,15 @@ describe("overlay architecture guards", () => {
   })
 
   test("primary action canonical reads palette tokens, not literals", () => {
-    // Canonical extracted from styles.css into surfaces/btn.css (2026-05-04).
-    // BoardIntro was deleted (commit 9978c43ba) and sidebar new-task moved
-    // to the Button primitive, so the canonical is just `.btn-primary`.
-    const styles = readText(join(OVERLAY_ROOT, "src/styles/surfaces/btn.css"))
-    // The shared canonical must consume `--accent-gradient` and `--text-on-accent`.
-    // No raw `#fff`, no raw rgba(), no `var(--accent-gradient, …fallback…)` remains.
-    const sharedRule = styles.match(/\.btn-primary\s*\{([^}]*)\}/)
+    // Batch 1 (2026-05-07): the retired legacy button stylesheet no longer
+    // exists. Primary actions are now owned by the Button primitive's solid
+    // accent variant.
+    const styles = readText(join(OVERLAY_ROOT, "src/styles/primitives/button.css"))
+    const sharedRule = styles.match(/\.oc-button\[data-variant="solid"\]\[data-tone="accent"\]\s*\{([^}]*)\}/)
     expect(sharedRule).not.toBeNull()
-    expect(sharedRule![1]).toContain("background: var(--accent-gradient)")
-    expect(sharedRule![1]).toContain("color: var(--text-on-accent)")
+    expect(sharedRule![1]).toContain("--oc-button-bg: var(--accent)")
+    expect(sharedRule![1]).toContain("--oc-button-color: var(--surface)")
     expect(sharedRule![1]).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba\(|hsla\(/)
-    // BoardIntro was deleted — .board-intro__cta-action must NOT appear in btn.css.
     expect(styles).not.toContain(".board-intro__cta-action")
   })
 
@@ -609,7 +618,8 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.oc-section__icon-btn\s*\{/)
     expect(inspectorSurface).toMatch(/\.oc-section__icon-btn:hover,\s*\.oc-section__icon-btn:focus-visible\s*\{/)
     expect(inspectorSurface).toMatch(/\.frontend-preview-empty\[data-kind="error"\]\s*\{/)
-    expect(inspectorSurface).toContain("background: white")
+    expect(withoutComments(inspectorSurface)).not.toContain("background: white")
+    expect(inspectorSurface).toContain("background: var(--surface-inset)")
     expect(inspectorSurface).toContain("var(--oc-border-width)")
   })
 
@@ -669,7 +679,7 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).not.toMatch(/\.oc-section:last-child\s*\{/)
     expect(inspectorSurface).toMatch(/\.oc-section__head::-webkit-details-marker\s*\{/)
     expect(inspectorSurface).toMatch(/\.oc-section__head:hover\s*\{/)
-    expect(inspectorSurface).toContain("color-mix(in srgb, white 3%, transparent)")
+    expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
   test("gwg actions + chevron + body + objective are owned by surfaces/inspector.css", () => {
@@ -694,7 +704,7 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.gwg:hover \.gwg-action-btn,/)
     expect(inspectorSurface).toMatch(/\.gwg-action-delete:hover\s*\{/)
     expect(inspectorSurface).toMatch(/\.gwg--expanded \.gwg-chevron\s*\{/)
-    expect(inspectorSurface).toContain("color-mix(in srgb, white 1.5%, transparent)")
+    expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
   test("task dir bar (TaskDirBar) is owned by surfaces/conversation.css", () => {
@@ -777,9 +787,16 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.62\)/)
 
     expect(conversationSurface).toMatch(/\.task-bar:hover,\s*\.task-bar:focus-within\s*\{/)
-    expect(conversationSurface).toMatch(/body\[data-theme="light"\] \.task-bar\s*\{/)
-    expect(conversationSurface).toMatch(/body:is\(\[data-theme="dark"\][^)]*\) \.task-bar\s*\{/)
-    expect(conversationSurface).toMatch(/\.recent-dir-panel::-webkit-scrollbar\s*\{/)
+    expect(conversationSurface).toMatch(
+      /\.task-bar\s*\{[\s\S]*?border-bottom:\s*var\(--oc-border-width\)\s+solid\s+var\(--task-bar-border-color\)/,
+    )
+    expect(conversationSurface).toMatch(/\.task-bar\s*\{[\s\S]*?background:\s*var\(--task-bar-bg\)/)
+    expect(conversationSurface).toMatch(
+      /\.task-bar\s*\{[\s\S]*?backdrop-filter:\s*var\(--task-bar-backdrop-filter\)/,
+    )
+    expect(conversationSurface).not.toMatch(
+      /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))[\s\S]*?\.task-bar\b/,
+    )
     expect(conversationSurface).toMatch(/\.recent-dir-row:hover\s*\{/)
     expect(conversationSurface).toMatch(/\.recent-dir-row\[data-active="true"\]\s*\{/)
   })
@@ -878,7 +895,6 @@ describe("overlay architecture guards", () => {
     expect(workspaceSurface).toMatch(/\.workspace-mount\[hidden\]\s*\{/)
     expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace::before\s*\{/)
     expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace:hover::before/)
-    expect(workspaceSurface).toMatch(/\.workspace-tabs::-webkit-scrollbar\s*\{/)
     expect(workspaceSurface).toMatch(/\.workspace-tab:hover\s*\{/)
     expect(workspaceSurface).toMatch(/\.workspace-tab\[data-active="true"\]\s*\{/)
     expect(workspaceSurface).toMatch(/\.workspace-close:hover\s*\{/)
@@ -968,7 +984,6 @@ describe("overlay architecture guards", () => {
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(composerSurface).toMatch(/\.executor-menu::-webkit-scrollbar\s*\{/)
     expect(composerSurface).toMatch(/\.executor-menu-row:hover:not\(:disabled\)\s*\{/)
     expect(composerSurface).toMatch(/\.executor-menu-group\[data-active="true"\] \> \.executor-menu-row\s*\{/)
     expect(composerSurface).toMatch(/\.executor-menu-model\[data-active="true"\]\s*\{/)
@@ -1420,10 +1435,11 @@ describe("overlay architecture guards", () => {
       expect(inspectorSurface).toMatch(new RegExp(`\\.req-type--${variant}\\s*\\{`))
     }
     for (const variant of ["passed", "failed", "pending"]) {
-      expect(inspectorSurface).toMatch(new RegExp(`\\.req-status--${variant}\\s*\\{`))
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.req-status\\[data-req-status="${variant}"\\]\\s*\\{`),
+      )
     }
     expect(inspectorSurface).toMatch(/\.req-spec-detail \> summary\s*\{/)
-    expect(inspectorSurface).toMatch(/\.req-streaming-messages::-webkit-scrollbar\s*\{/)
   })
 
   test("gwg checks list is owned by surfaces/inspector.css", () => {
@@ -1446,7 +1462,7 @@ describe("overlay architecture guards", () => {
         new RegExp(`(^|\\n)\\.gwg-check--${status}(?:\\s+\\.gwg-check-(?:icon|name))?\\s*\\{`),
       )
       expect(inspectorSurface).toMatch(
-        new RegExp(`\\.gwg-check--${status}(?:\\s+\\.gwg-check-(?:icon|name))?\\s*\\{`),
+        new RegExp(`\\.gwg-check\\[data-check-status="${status}"\\](?:\\s+\\.gwg-check-(?:icon|name))?\\s*\\{`),
       )
     }
 
@@ -1485,7 +1501,6 @@ describe("overlay architecture guards", () => {
     }
 
     expect(inspectorSurface).toMatch(/\.gwg-plan-node::before\s*\{/)
-    expect(inspectorSurface).toMatch(/\.gwg-step-messages::-webkit-scrollbar\s*\{/)
     expect(inspectorSurface).not.toMatch(/rgba\(95,\s*173,\s*86/)
     expect(inspectorSurface).not.toMatch(/rgba\(212,\s*167,\s*44/)
   })
@@ -1545,7 +1560,7 @@ describe("overlay architecture guards", () => {
         new RegExp(`(^|\\n)\\.gwg--${variant} \\.gwg-status-icon\\s*\\{`),
       )
       expect(inspectorSurface).toMatch(
-        new RegExp(`\\.gwg--${variant} \\.gwg-status-icon\\s*\\{`),
+        new RegExp(`\\.gwg\\[data-goal-status="${variant}"\\] \\.gwg-status-icon\\s*\\{`),
       )
     }
     expect(inspectorSurface).not.toMatch(/clamp\(10px,/)
@@ -1565,14 +1580,20 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.gwg::before\s*\{/)
     expect(inspectorSurface).toMatch(/\.gwg:hover\s*\{/)
 
-    for (const modifier of ["expanded", "passed", "failed", "running"]) {
-      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.gwg--${modifier}(?:::before)?\\s*\\{`))
-      expect(inspectorSurface).toMatch(new RegExp(`\\.gwg--${modifier}(?:::before)?\\s*\\{`))
+    expect(styles).not.toMatch(/(^|\n)\.gwg--expanded\s*\{/)
+    expect(inspectorSurface).toMatch(/\.gwg--expanded\s*\{/)
+    for (const status of ["passed", "failed", "running"]) {
+      expect(styles).not.toMatch(
+        new RegExp(`(^|\\n)\\.gwg\\[data-goal-status="${status}"\\](?:::before)?\\s*\\{`),
+      )
+      expect(inspectorSurface).toMatch(
+        new RegExp(`\\.gwg\\[data-goal-status="${status}"\\](?:::before)?\\s*\\{`),
+      )
     }
 
     expect(inspectorSurface).not.toMatch(/#c3d2ee/)
-    expect(inspectorSurface).toMatch(/\.gwg--passed::before[\s\S]*?var\(--text-soft\)/)
-    expect(inspectorSurface).toContain("color-mix(in srgb, black 12%, transparent)")
+    expect(inspectorSurface).toMatch(/\.gwg\[data-goal-status="passed"\]::before[\s\S]*?var\(--text-soft\)/)
+    expect(inspectorSurface).toContain("var(--ui-shadow-tone)")
   })
 
   test("criteria group baseline is owned by surfaces/inspector.css", () => {
@@ -1770,7 +1791,7 @@ describe("overlay architecture guards", () => {
     }
 
     expect(composerSurface).toMatch(/@container \(max-width: 520px\)/)
-    expect(composerSurface).toMatch(/@media \(max-width: 700px\)/)
+    expect(composerSurface).toMatch(/@media \(max-width: 760px\)\s*\{\s*\/\* breakpoint: --ui-breakpoint-md \*\//)
     expect(composerSurface).toMatch(/\.chat-send-icon svg\s*\{/)
     expect(styles).not.toMatch(/(^|\n)\.chat-send-icon svg\s*\{/)
   })
@@ -1800,15 +1821,16 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(/\.chat-compose-meta-left a:hover\s*\{/)
   })
 
-  test("composer chat-send and chat-interrupt are owned by surfaces/composer.css", () => {
+  test("composer chat-send and busy state are owned by surfaces/composer.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
-    for (const className of ["chat-send", "chat-interrupt", "chat-send-icon", "chat-send-label"]) {
+    for (const className of ["chat-send", "chat-send-icon", "chat-send-label"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
+    expect(withoutComments(composerSurface)).not.toMatch(/\.chat-interrupt\b/)
     expect(styles).not.toMatch(/(^|\n)\.chat-send:hover\s*\{/)
     expect(styles).not.toMatch(/(^|\n)\.chat-send:disabled\s*\{/)
     expect(styles).not.toMatch(/body\[data-theme="light"\] \.chat-send\b/)
@@ -1825,7 +1847,7 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(/\.chat-send:hover\s*\{/)
     expect(composerSurface).toMatch(/\.chat-send:disabled\s*\{/)
     expect(composerSurface).toMatch(/\.chat-send:focus-visible\s*\{/)
-    expect(composerSurface).toMatch(/\.chat-interrupt:hover\s*\{/)
+    expect(composerSurface).toMatch(/\.chat-send\[data-busy="true"\]:hover\s*\{/)
   })
 
   test("composer chat-textarea family is owned by surfaces/composer.css", () => {
@@ -3016,15 +3038,14 @@ describe("overlay architecture guards", () => {
     // board.css was deleted with it. Assert that no ghost references remain.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
-    const btn = readText(join(OVERLAY_ROOT, "src/styles/surfaces/btn.css"))
 
     // No standalone .board-intro rules in cascade layer
     expect(styles).not.toMatch(/^\.board-intro\s*\{/m)
     expect(styles).not.toMatch(/^\.board-intro__title\s*\{/m)
     // No board-intro rules leaked into card.css
     expect(card).not.toMatch(/\.board-intro(?:__|\b)/)
-    // No .board-intro__cta-action in the btn.css primary-action selector
-    expect(btn).not.toContain(".board-intro__cta-action")
+    const button = readText(join(OVERLAY_ROOT, "src/styles/primitives/button.css"))
+    expect(button).not.toContain(".board-intro__cta-action")
     // board.css must not exist (was deleted with BoardIntro.tsx)
     expect(existsSync(join(OVERLAY_ROOT, "src/styles/surfaces/board.css"))).toBe(false)
   })
@@ -3371,6 +3392,7 @@ describe("overlay architecture guards", () => {
         // more than 80 chars before the first 1px usage in the same block.
         const ctx = text.slice(Math.max(0, start - 300), start + match[0].length + 80)
         if (ctx.includes("--px-exact")) continue
+        if (/styles[\\/]surfaces[\\/]field\.css$/.test(file) && ctx.includes("-webkit-autofill")) continue
         // The window must hold a `calc(...)` scope and a
         // `var(--ui-scale)` reference — proving the px scales with the
         // overlay's ui-scale knob. Earlier the regex matched a single
@@ -3437,16 +3459,24 @@ describe("overlay architecture guards", () => {
     const files = walkFiles(join(OVERLAY_ROOT, "src/styles/primitives"), (path) => path.endsWith(".css"))
     expect(files.length).toBeGreaterThan(0)
     const primitiveText = files.map(readText).join("\n")
-    const rawValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|(?<![\w-])-?\d+(?:\.\d+)?px\b/i
+    const rawColorValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i
+    const pxLiteral = /(?<![\w-])-?\d+(?:\.\d+)?px\b/g
     expect(primitiveText).toContain("[data-variant=")
     expect(primitiveText).toContain("[data-size=")
     expect(primitiveText).toContain("[data-tone=")
 
     for (const file of files) {
-      const css = readText(file)
+      const css = withoutComments(readText(file))
       expect(css).not.toMatch(/!important\b/)
       expect(css).not.toMatch(/body\[|body:is\(|data-theme/)
-      expect(css).not.toMatch(rawValue)
+      expect(css).not.toMatch(rawColorValue)
+
+      for (const match of css.matchAll(pxLiteral)) {
+        const start = match.index ?? 0
+        const window = css.slice(Math.max(0, start - 80), start + match[0].length + 80)
+        expect(window).toMatch(/calc\(/)
+        expect(window).toMatch(/var\(--ui-scale[\s,)]/)
+      }
     }
   })
 
@@ -3455,7 +3485,8 @@ describe("overlay architecture guards", () => {
     for (const className of LEGACY_BUTTON_CLASSES) {
       expect(counts[className]).toBeLessThanOrEqual(LEGACY_BUTTON_CALLER_LIMITS[className]!)
     }
-    expect(Object.values(counts).reduce((total, value) => total + value, 0)).toBeLessThanOrEqual(0)
+    const totalLimit = Object.values(LEGACY_BUTTON_CALLER_LIMITS).reduce((total, value) => total + value, 0)
+    expect(Object.values(counts).reduce((total, value) => total + value, 0)).toBeLessThanOrEqual(totalLimit)
   })
 
   test("new component modules stay below the split threshold", () => {

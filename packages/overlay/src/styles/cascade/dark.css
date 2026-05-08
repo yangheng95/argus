@@ -5,12 +5,12 @@
    `:root, body[data-theme="dark"]` selector that doubled as the
    implicit fallback for any token light/vscode-dark forgot to
    redeclare was retired (rule 7 — no fallback, rule 8 — no
-   double source). Three changes:
+   double source). Follow-up Batch 4 now scopes the theme to the
+   actual theme attributes on html/body:
 
-   1. Selector is now `body:not([data-theme]), body[data-theme="dark"]`.
-      The `body:not([data-theme])` half handles the boot-time flicker
-      before the JS theme controller stamps `data-theme` on body —
-      same visual default as before, but no `:root` leak.
+   1. Selector now targets the html and body dark data-theme
+      attributes. The old unset-body boot safety net was a dead path
+      after index.html started with an explicit light data-theme.
    2. Structural tokens (font families, font sizes, layout
       dimensions, title/subhead weight + tracking) moved to
       `tokens/design-language.css` :root — they are theme-
@@ -21,9 +21,10 @@
       breaks the test.
    ───────────────────────────────────────────────────────────── */
 
-body:not([data-theme]),
+:root[data-theme="dark"],
 body[data-theme="dark"] {
   color-scheme: dark;
+  --text-on-accent: #ffffff;
   --bg: #111528;
   --surface: rgba(28, 33, 58, 0.86);
   --surface-hover: rgba(39, 45, 77, 0.96);
@@ -79,6 +80,18 @@ body[data-theme="dark"] {
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
   --dialog-bg: #1c213a;
   --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
+  --ui-scrim: color-mix(in srgb, black 60%, transparent);
+  --ui-shadow-tone: color-mix(in srgb, black 32%, transparent);
+  --ui-highlight-tone: color-mix(in srgb, white 6%, transparent);
+  --ui-glass-tint: color-mix(in srgb, white 4%, transparent);
+  --executor-menu-bg: var(--menu-panel-bg);
+  --executor-menu-shadow:
+    0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) var(--ui-shadow-tone),
+    0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 56%, transparent);
+  --executor-menu-row-hover-bg: var(--surface-hover);
+  --task-bar-bg: var(--chrome);
+  --task-bar-backdrop-filter: none;
+  --task-bar-border-color: var(--border);
   --menu-panel-bg: rgba(28, 33, 58, 0.96);
   --divider-soft: rgba(170, 183, 236, 0.11);
   --panel-fill: var(--surface);

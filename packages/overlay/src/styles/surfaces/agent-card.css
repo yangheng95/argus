@@ -60,7 +60,7 @@
 }
 
 .agent-card-header:hover {
-  background: color-mix(in srgb, var(--agent-bg) 70%, white 6%);
+  background: color-mix(in srgb, var(--agent-bg) 70%, var(--ui-highlight-tone));
   border-color: var(--agent-accent);
 }
 
@@ -124,18 +124,11 @@
   overflow-y: auto;
 }
 
-.agent-card-body::-webkit-scrollbar {
-  width: calc(4px * var(--ui-scale));
-}
-.agent-card-body::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, white 12%, transparent);
-  border-radius: var(--oc-radius-soft);
-}
 .agent-card-body--preview {
   max-height: calc(68px * var(--ui-scale));
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, currentColor 40%, transparent 100%);
+  mask-image: linear-gradient(to bottom, currentColor 40%, transparent 100%);
 }
 
 .executor-tool-entry {
@@ -199,7 +192,7 @@
 .executor-tool-output {
   margin: calc(2px * var(--ui-scale)) 0 calc(4px * var(--ui-scale)) calc(28px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  background: color-mix(in srgb, black 20%, transparent);
+  background: color-mix(in srgb, var(--ui-shadow-tone) 62%, transparent);
   border-radius: var(--oc-radius-soft);
   font-family: var(--mono);
   font-size: var(--ui-font-control);

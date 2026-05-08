@@ -9,15 +9,6 @@
   max-height: 100%;
   width: 100%;
   height: 100%;
-  /* Native `<dialog showModal()>` is hoisted to the top layer.
-   * Chromium has historically been inconsistent about propagating
-   * `color-scheme` from the originating tree into the top layer for
-   * form controls, so the body's `color-scheme: dark` would not always
-   * reach the inputs inside the dialog. Declaring `inherit` here makes
-   * the inheritance explicit and stable, which is what makes the
-   * native checkbox / scrollbar / autofill chrome inside the dialog
-   * follow the active theme instead of drifting to the UA light scheme. */
-  color-scheme: inherit;
 }
 
 #appDialog {
@@ -31,7 +22,7 @@
  * only flat overlay. Theme-driven dim contrast comes from the
  * black/transparent mix rather than per-theme overrides. */
 .dialog::backdrop {
-  background: color-mix(in srgb, black 46%, transparent);
+  background: var(--ui-scrim);
 }
 
 .dialog-form {
@@ -45,8 +36,7 @@
   /* `height: fit-content` shrinks the modal to the natural sum of its
    * flex children. Without this Chromium gives a `<dialog>:modal` in
    * the top layer enough vertical space to fill the max-height even
-   * when the children only need a fraction (the same UA quirk that
-   * makes top-layer form controls drop their inherited color-scheme).
+   * when the children only need a fraction.
    * Audited 2026-05-06 against goal / app / session dialogs — they
    * already declared their own children's heights, so shrinking the
    * frame to fit-content does not clip anything. */
@@ -90,16 +80,9 @@
   font-size: clamp(calc(18px * var(--ui-scale)), calc(19px * var(--ui-scale)), calc(22px * var(--ui-scale)));
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   line-height: 1.2;
   margin: 0;
-}
-
-.dialog-subtitle {
-  font-size: var(--ui-font-meta);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
-  margin-top: var(--ui-gap-xs);
 }
 
 .dialog-head {
@@ -115,9 +98,9 @@
   padding: calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));
   border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 5%, transparent), color-mix(in srgb, white 0%, transparent) 72%),
+    linear-gradient(180deg, var(--ui-highlight-tone), transparent 72%),
     color-mix(in srgb, var(--surface-strong) 74%, transparent);
-  box-shadow: inset 0 calc(-1px * var(--ui-scale)) 0 color-mix(in srgb, white 2%, transparent);
+  box-shadow: inset 0 calc(-1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
   flex-shrink: 0;
 }
 
@@ -150,7 +133,7 @@
   padding: calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
   border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
   background:
-    linear-gradient(0deg, color-mix(in srgb, white 4%, transparent), color-mix(in srgb, white 0%, transparent) 76%),
+    linear-gradient(0deg, var(--ui-highlight-tone), transparent 76%),
     color-mix(in srgb, var(--surface-strong) 72%, transparent);
 }
 
@@ -180,9 +163,9 @@
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: var(--oc-radius-large);
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 3.8%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
+    linear-gradient(180deg, var(--ui-highlight-tone), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 94%, transparent);
-  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, white 3%, transparent);
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
 }
 
 /* `.section-dialog-form` was deleted in the 2026-05-04 dead-code
@@ -208,12 +191,12 @@
   border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: var(--oc-radius-large);
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 3.4%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
+    linear-gradient(180deg, var(--ui-highlight-tone), color-mix(in srgb, var(--accent) 1.2%, transparent) 76%, transparent),
     color-mix(in srgb, var(--surface-inset) 95%, transparent);
   overflow: auto;
   max-height: calc(100vh - calc(180px * var(--ui-scale)));
   padding: calc(14px * var(--ui-scale));
-  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, white 2%, transparent);
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
   user-select: text;
   -webkit-user-select: text;
 }
@@ -222,7 +205,7 @@
  * components/services/index.html (rule 17 candidate for deletion;
  * preserved here pending explicit user approval rather than
  * silently dropped). */
-.session-actions .btn {
+.session-actions .oc-button {
   flex: 1 1 calc(160px * var(--ui-scale));
   min-width: calc(160px * var(--ui-scale));
 }

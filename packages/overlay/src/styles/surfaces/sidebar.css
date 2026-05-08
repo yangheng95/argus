@@ -261,17 +261,12 @@
   color: var(--text-muted);
 }
 
-.task-row-head .mini-badge {
-  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  font-size: var(--ui-font-meta);
-}
-
 .task-row-main strong {
   display: block;
   font-size: var(--ui-font-title);
   font-weight: var(--ui-font-weight-medium);
   line-height: 1.3;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   color: var(--text-strong);
   min-width: 0;
   overflow: hidden;
@@ -290,7 +285,7 @@
   text-overflow: ellipsis;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 /* Status badge: an auto-width chip with a small leading pip. The pip is
@@ -648,8 +643,8 @@
     linear-gradient(180deg, color-mix(in srgb, var(--bad) 10%, transparent), color-mix(in srgb, var(--bad) 3.4%, transparent) 72%, transparent),
     color-mix(in srgb, var(--surface-strong) 74%, transparent);
   box-shadow:
-    0 calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, black 10%, transparent),
-    inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, white 3%, transparent);
+    0 calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 31%, transparent),
+    inset 0 calc(1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
   font-size: var(--ui-font-control);
   color: var(--text-soft);
 }
@@ -758,7 +753,7 @@
   border-radius: var(--oc-radius-soft);
   background: linear-gradient(90deg, var(--subtle-1) 0%, var(--subtle-3) 50%, var(--subtle-1) 100%);
   background-size: 220% 100%;
-  animation: task-list-skeleton-shimmer 1.6s linear infinite;
+  animation: task-list-skeleton-shimmer var(--ui-duration-loop-skeleton-shimmer) linear infinite;
 }
 .task-list-skeleton-row:nth-child(2) {
   animation-delay: 0.2s;
@@ -791,7 +786,7 @@
   --oc-button-bg: var(--accent);
   --oc-button-border: 0 solid transparent;
   --oc-button-color: var(--surface);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   box-shadow: none;
 }
 
@@ -858,7 +853,7 @@
 .project-group-name {
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.015em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-strong);
 }
 

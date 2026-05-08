@@ -1,4 +1,4 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo, onCleanup } from "solid-js";
 import type { JSX } from "solid-js";
 import PromptCatalog from "./settings/PromptCatalog";
 import ChannelsPanel from "./settings/ChannelsPanel";
@@ -127,6 +127,45 @@ function runtimeTypeLabel(): string {
   return "Browser";
 }
 
+interface ResizableOptions {
+  onStart?: (event: PointerEvent) => boolean | void;
+  onMove: (dx: number, dy: number, event: PointerEvent) => void;
+  onEnd?: () => void;
+}
+
+function useResizable(opts: ResizableOptions) {
+  let cleanupSession: (() => void) | undefined;
+
+  const clearSession = () => {
+    if (!cleanupSession) return;
+    cleanupSession();
+    cleanupSession = undefined;
+    opts.onEnd?.();
+  };
+
+  const startResize = (event: PointerEvent) => {
+    clearSession();
+    if (opts.onStart?.(event) === false) return;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const onMove = (moveEvent: PointerEvent) => {
+      opts.onMove(moveEvent.clientX - startX, moveEvent.clientY - startY, moveEvent);
+    };
+    const onEnd = () => clearSession();
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+    cleanupSession = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+    };
+  };
+
+  onCleanup(clearSession);
+  return startResize;
+}
+
 export function ConfigDialogHost() {
   const sidebarStyle = createMemo<Record<string, string>>(() => {
     const width = dialogStore.config.sidebarWidth;
@@ -157,33 +196,35 @@ export function ConfigDialogHost() {
     return rows;
   });
 
-  const startResize = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
-    if (event.button !== 0) return;
-    const sidebar = document.getElementById("configSidebar");
-    const layout = sidebar?.parentElement;
-    if (!sidebar || !layout) return;
-    event.currentTarget.dataset.active = "true";
-    document.body.dataset.resizing = "true";
-    event.preventDefault();
-    const scale = currentUIScale();
-    const min = 140 * scale;
-    const max = 320 * scale;
-    const onMove = (moveEvent: PointerEvent) => {
-      const rect = layout.getBoundingClientRect();
-      const next = Math.round(Math.min(max, Math.max(min, moveEvent.clientX - rect.left)));
+  let resizeHandle: HTMLDivElement | undefined;
+  let resizeStartWidth = 0;
+  let resizeMin = 0;
+  let resizeMax = 0;
+  const startResize = useResizable({
+    onStart: (event) => {
+      if (event.button !== 0) return false;
+      const sidebar = document.getElementById("configSidebar");
+      if (!sidebar) return false;
+      resizeHandle = event.currentTarget as HTMLDivElement;
+      resizeHandle.dataset.active = "true";
+      document.body.dataset.resizing = "true";
+      event.preventDefault();
+      const scale = currentUIScale();
+      resizeStartWidth = sidebar.getBoundingClientRect().width;
+      resizeMin = 140 * scale;
+      resizeMax = 320 * scale;
+      return true;
+    },
+    onMove: (dx) => {
+      const next = Math.round(Math.min(resizeMax, Math.max(resizeMin, resizeStartWidth + dx)));
       setConfigSidebarWidth(next);
-    };
-    const onUp = () => {
-      delete event.currentTarget.dataset.active;
+    },
+    onEnd: () => {
+      if (resizeHandle) delete resizeHandle.dataset.active;
+      resizeHandle = undefined;
       delete document.body.dataset.resizing;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  };
+    },
+  });
 
   return (
     <Dialog

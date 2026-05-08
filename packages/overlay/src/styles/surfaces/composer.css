@@ -183,7 +183,7 @@
   flex-shrink: 0;
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   text-transform: none;
   box-shadow: none;
   transition:
@@ -211,18 +211,18 @@
 /* Interrupt state: same shell as chat-send but flips to the bad palette
    so the operator can tell the action is destructive (cancel an
    in-flight task). */
-.chat-interrupt {
+.chat-send[data-busy="true"] {
   border-color: color-mix(in srgb, var(--bad) 36%, transparent);
   background: var(--bad-dim);
   color: var(--bad);
   box-shadow: none;
 }
 
-.chat-interrupt:hover {
+.chat-send[data-busy="true"]:hover {
   background: color-mix(in srgb, var(--bad) 18%, var(--bad-dim));
 }
 
-.chat-interrupt:focus-visible {
+.chat-send[data-busy="true"]:focus-visible {
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--bad) 36%, transparent);
 }
 
@@ -324,7 +324,7 @@
   color: color-mix(in srgb, var(--text-muted) 72%, transparent);
   font-size: var(--ui-font-tiny);
   line-height: 1.2;
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -411,7 +411,7 @@
 /* Viewport reflow: at narrow viewports the send button drops onto its
    own row and the icon column moves to the right, so the textarea takes
    the entire first row. */
-@media (max-width: 700px) {
+@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
   .chat-compose-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -510,11 +510,8 @@
 
 /* Floating menu surfaced above the executor chip. Positioned
    absolutely just above the chip; scrollable when the model
-   list overflows. The two raw-rgba black box-shadows routed
-   through `color-mix(black, X%, transparent)`. The light-theme
-   override that swaps the surface to white + softer shadow
-   stays in styles.css as a `body[data-theme="light"]` block
-   pending palette-tokenization. */
+   list overflows. Theme-specific surface and shadow values live
+   in cascade tokens. */
 .executor-menu {
   position: absolute;
   bottom: calc(100% + calc(6px * var(--ui-scale)));
@@ -523,25 +520,12 @@
   max-width: calc(320px * var(--ui-scale));
   max-height: calc(360px * var(--ui-scale));
   overflow-y: auto;
-  background: var(--menu-panel-bg);
-  border: var(--oc-border-width) solid var(--border-strong);
+  background: var(--executor-menu-bg);
+  border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
   padding: calc(4px * var(--ui-scale));
-  box-shadow:
-    0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) color-mix(in srgb, black 32%, transparent),
-    0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, black 18%, transparent);
+  box-shadow: var(--executor-menu-shadow);
   z-index: var(--ui-z-titlebar);
-  scrollbar-width: thin;
-  scrollbar-color: var(--subtle-5) transparent;
-}
-
-.executor-menu::-webkit-scrollbar {
-  width: calc(4px * var(--ui-scale));
-}
-
-.executor-menu::-webkit-scrollbar-thumb {
-  background: var(--subtle-5);
-  border-radius: var(--oc-radius-soft);
 }
 
 .executor-menu-group {
@@ -549,8 +533,7 @@
   flex-direction: column;
 }
 
-/* Menu row: one row per executor in the menu. Hover wash uses
-   raw white-at-6% — routed through color-mix. */
+/* Menu row: one row per executor in the menu. */
 .executor-menu-row {
   display: flex;
   align-items: center;
@@ -572,7 +555,7 @@
 }
 
 .executor-menu-row:hover:not(:disabled) {
-  background: color-mix(in srgb, white 6%, transparent);
+  background: var(--executor-menu-row-hover-bg);
   color: var(--text-strong);
 }
 
@@ -625,7 +608,7 @@
 }
 
 .executor-menu-model:hover {
-  background: color-mix(in srgb, white 6%, transparent);
+  background: var(--executor-menu-row-hover-bg);
   color: var(--text-strong);
 }
 
@@ -644,23 +627,6 @@
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   color: var(--text-strong);
   font-weight: var(--ui-font-weight-strong);
-}
-
-/* Light-theme executor-menu overrides (folded from styles.css; tokenized
-   raw hex and rgba). Kept in this surface because the executor-menu
-   already lives here; palette-only diff from dark defaults. */
-body[data-theme="light"] .executor-menu {
-  background: white;
-  border-color: var(--border);
-  box-shadow:
-    0 calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale))
-    color-mix(in srgb, black 12%, transparent);
-}
-
-body[data-theme="light"] .executor-menu-row:hover:not(:disabled),
-body[data-theme="light"] .executor-menu-model:hover {
-  background: var(--subtle-5);
-  color: var(--text-strong);
 }
 
 /* ── Executor Chip (model selector pill in the chat composer bottom row) ── */
@@ -707,7 +673,7 @@ body[data-theme="light"] .executor-menu-model:hover {
 
 .executor-chip-label {
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 /* G = Global/orchestrator slot; E = Executor slot prefix */
@@ -716,7 +682,7 @@ body[data-theme="light"] .executor-menu-model:hover {
   opacity: var(--ui-opacity-disabled);
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.05em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: 0 calc(2px * var(--ui-scale)) 0 calc(4px * var(--ui-scale));
 }
 

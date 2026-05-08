@@ -3,8 +3,9 @@ import { t } from "../../utils/i18n";
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings";
 import { configure as configureApi } from "../../services/api";
 import { checkConnection } from "../../services/connection";
-import { reloadProjectScope } from "../../services/config";
+import { reloadProjectScope, patchConfig } from "../../services/config";
 import { ensureDesktopNotificationPermission } from "../../services/notify";
+import { appStore } from "../../store/app";
 import { Button } from "../ui/Button";
 import { SurfaceHeader } from "../ui/SurfaceHeader";
 
@@ -111,6 +112,27 @@ export default function GeneralPanel() {
                   saveSettings();
                   if (!enabled) return;
                   void ensureDesktopNotificationPermission("settings");
+                }}
+              />
+            </label>
+
+            <label class="config-toggle-list-item">
+              <span class="toggle-label">
+                {t("settings.fail_on_information_missing_label")}
+                <span class="toggle-hint">{t("settings.fail_on_information_missing_hint")}</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={
+                  Boolean(
+                    (appStore.config as any)?.assistant?.debug?.fail_on_information_missing,
+                  )
+                }
+                onChange={(e) => {
+                  const enabled = (e.currentTarget as HTMLInputElement).checked;
+                  void patchConfig({
+                    assistant: { debug: { fail_on_information_missing: enabled } },
+                  });
                 }}
               />
             </label>

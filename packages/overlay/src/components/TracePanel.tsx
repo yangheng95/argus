@@ -5,8 +5,8 @@
 // produced, did it succeed) so the operator can scan the trace without
 // expanding everything. Click to expand for the raw JSON payload — the
 // source-of-truth dump that drove the headline. The header carries three
-// actions: 📋 Copy (dump the entire trace as JSON to clipboard), ↻ Refresh,
-// ✕ Close (when an `onClose` is supplied).
+// actions: Copy (dump the entire trace as JSON to clipboard), Refresh,
+// Close (when an `onClose` is supplied).
 //
 // Active entry point:
 //   <TracePanel sessionID="..." /> — per-session, mounted by the 🔍 button
@@ -22,6 +22,7 @@ import { Index, Show, createMemo, createResource, createSignal, onCleanup } from
 import { fetchSessionTrace, fetchTaskTrace, invalidateTraceCache, type TraceEvent, type TraceFetchResult } from "../services/trace";
 import { Panel } from "./primitives/Panel";
 import { Icon } from "./Icon";
+import { t } from "../utils/i18n";
 
 type TracePanelProps =
   | { sessionID: string; taskID?: never; onClose?: () => void }
@@ -104,7 +105,7 @@ function eventHeadline(event: TraceEvent): string {
       const collector = summariseCollector(payload.collector);
       const errs = Array.isArray(payload.streamErrors) ? (payload.streamErrors as unknown[]).length : 0;
       const tail = [
-        structuredOK ? "structured ✓" : "structured ✗",
+        structuredOK ? "structured ok" : "structured missing",
         collector,
         errs ? `${errs} stream-err` : "",
       ].filter(Boolean).join(" · ");
@@ -276,21 +277,24 @@ export function TracePanel(props: TracePanelProps) {
               data-state={copyState()}
               title={
                 copyState() === "ok"
-                  ? "Copied"
+                  ? t("common.copied")
                   : copyState() === "err"
-                  ? "Copy failed (clipboard blocked)"
-                  : "Copy trace as JSON"
+                  ? t("trace.copy_failed")
+                  : t("trace.copy_json")
               }
-              aria-label="Copy trace as JSON"
+              aria-label={t("trace.copy_json")}
             >
-              {copyState() === "ok" ? "✓" : copyState() === "err" ? "✗" : "⧉"}
+              <Icon
+                name={copyState() === "ok" ? "check" : copyState() === "err" ? "cancel" : "copy"}
+                size={13}
+              />
             </button>
             <button type="button" class="trace-panel-refresh" onClick={refresh} title="Refresh">
-              ↻
+              <Icon name="refresh" size={13} />
             </button>
             <Show when={props.onClose}>
               <button type="button" class="trace-panel-close" onClick={() => props.onClose?.()} title="Close">
-                ✕
+                <Icon name="close" size={13} />
               </button>
             </Show>
           </span>
