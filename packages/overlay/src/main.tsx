@@ -12,6 +12,7 @@ import { TaskStatusHeader } from "./components/TaskStatusHeader";
 import { TaskDirContent, TaskWorkspaceLine } from "./components/TaskDirBar";
 import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
+import { TitlebarLayoutControls } from "./components/TitlebarLayoutControls";
 import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/TitlebarMenubar";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { FilesSection } from "./components/FilesSection";
@@ -53,7 +54,7 @@ import {
   toggleDevtools,
 } from "./services/theme";
 import { settingsStore, setSettingsStore, saveSettings } from "./store/settings";
-import { initPaneResizers, cancelPaneResize, currentUIScale } from "./services/pane";
+import { initPaneResizers, cancelPaneResize, currentUIScale, renderPaneLayout } from "./services/pane";
 import { panelMessage } from "./services/chat";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { CommandPalette } from "./components/CommandPalette";
@@ -735,6 +736,19 @@ if (titlebarMenuEl) {
   );
 }
 
+const titlebarLayoutControlsEl = document.getElementById("solidTitlebarLayoutControls");
+if (titlebarLayoutControlsEl) {
+  render(
+    () => (
+      <TitlebarLayoutControls
+        workspaceOpen={workspaceOpen}
+        onToggleWorkspace={toggleWorkspace}
+      />
+    ),
+    titlebarLayoutControlsEl,
+  );
+}
+
 const titlebarStatusEl = document.getElementById("solidTitlebarStatus");
 if (titlebarStatusEl) {
   render(() => <TitlebarStatusCluster onOpenLog={() => setLogOpen(true)} />, titlebarStatusEl);
@@ -1135,6 +1149,36 @@ disposers.push(createRoot((dispose) => {
     if (toggleBtn) toggleBtn.setAttribute("aria-pressed", open ? "true" : "false");
   });
 
+  createEffect(() => {
+    const sidebarCollapsed = settingsStore.sidebarCollapsed;
+    const rightPanelCollapsed = settingsStore.rightPanelCollapsed;
+
+    const sidebar = document.getElementById("sidebar");
+    const sections = document.getElementById("sections");
+    const leftResizer = document.getElementById("leftPaneResizer") as HTMLElement | null;
+    const rightResizer = document.getElementById("rightPaneResizer") as HTMLElement | null;
+    const sidebarToggle = document.getElementById("btnSidebarToggle");
+
+    if (sidebar) {
+      sidebar.dataset.collapsed = String(sidebarCollapsed);
+      sidebar.hidden = sidebarCollapsed;
+    }
+    if (sections) {
+      sections.dataset.collapsed = String(rightPanelCollapsed);
+      sections.hidden = rightPanelCollapsed;
+    }
+    if (leftResizer) leftResizer.hidden = sidebarCollapsed;
+    if (rightResizer) rightResizer.hidden = rightPanelCollapsed;
+    if (sidebarToggle) sidebarToggle.title = sidebarCollapsed ? t("sidebar.open") : t("sidebar.close");
+
+    renderPaneLayout({
+      sidebarCollapsed,
+      rightPanelCollapsed,
+      sidebarWidth: settingsStore.sidebarWidth,
+      sectionsWidth: settingsStore.sectionsWidth,
+    });
+  });
+
   // Task status header + elapsed timer moved to <TaskStatusHeader/> component
   // (mounted into #solidTaskStatusMount above). The component owns its own
   // visibility-gated 1Hz interval and renders all four spans (status-icon,
@@ -1150,6 +1194,7 @@ disposers.push(createRoot((dispose) => {
 const paneCallbacks = {
   getState: () => ({
     sidebarCollapsed: settingsStore.sidebarCollapsed,
+    rightPanelCollapsed: settingsStore.rightPanelCollapsed,
     sidebarWidth: settingsStore.sidebarWidth,
     sectionsWidth: settingsStore.sectionsWidth,
   }),

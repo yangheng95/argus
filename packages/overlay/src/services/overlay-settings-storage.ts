@@ -41,6 +41,7 @@ export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
     executor: read("oc_executor") || undefined,
     initGit: true,
     sidebarCollapsed: read("oc_sidebar_collapsed") === "true",
+    rightPanelCollapsed: read("oc_right_panel_collapsed") === "true",
     sidebarWidth: read("oc_sidebar_width") || undefined,
     sectionsWidth: read("oc_sections_width") || undefined,
     workspacePanelHeight: read("oc_workspace_height") || undefined,
@@ -62,6 +63,7 @@ export function saveBrowserOverlaySettings(input: BrowserOverlaySettings): boole
   write("oc_username", input.username ?? "opencorvus");
   write("oc_executor", input.executor ?? "mirrorcode");
   write("oc_sidebar_collapsed", input.sidebarCollapsed === true);
+  write("oc_right_panel_collapsed", input.rightPanelCollapsed === true);
   writeOptional("oc_sidebar_width", input.sidebarWidth);
   writeOptional("oc_sections_width", input.sectionsWidth);
   writeOptional("oc_workspace_height", input.workspacePanelHeight);

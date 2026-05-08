@@ -30,6 +30,7 @@ export interface OverlaySettings {
   executor: ExecutorID;
   initGit: boolean;
   sidebarCollapsed: boolean;
+  rightPanelCollapsed: boolean;
   sidebarWidth: number | null;
   sectionsWidth: number | null;
   workspacePanelHeight: number | null;
@@ -136,6 +137,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   executor: "mirrorcode",
   initGit: true,
   sidebarCollapsed: false,
+  rightPanelCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
   workspacePanelHeight: null,
@@ -201,6 +203,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
       sanitizeExecutor(input?.executor),
     initGit: true,
     sidebarCollapsed: input?.sidebarCollapsed === true,
+    rightPanelCollapsed: input?.rightPanelCollapsed === true,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
     workspacePanelHeight: sanitizePaneWidth(input?.workspacePanelHeight),
@@ -296,6 +299,7 @@ export function bootstrapOverlaySettings(
     executor: sanitizeExecutor(input.executor),
     initGit: true,
     sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
+    rightPanelCollapsed: input.rightPanelCollapsed ?? DEFAULT_SETTINGS.rightPanelCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,
     sectionsWidth: input.sectionsWidth || undefined,
     workspacePanelHeight: input.workspacePanelHeight || undefined,

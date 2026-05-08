@@ -27,6 +27,9 @@ export type IconName =
   | "minimize"
   | "maximize"
   | "restore"
+  | "panel-left"
+  | "panel-right"
+  | "terminal"
   // Empty-state / cwd
   | "folder"
   | "folder-open"
@@ -117,6 +120,31 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       <>
         <rect x="5" y="2.5" width="8.5" height="8.5" rx="0.5" />
         <path d="M2.5 5V13.5h8.5" />
+      </>
+    ),
+  },
+  "panel-left": {
+    body: () => (
+      <>
+        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
+        <line x1="6" y1="3" x2="6" y2="13" />
+      </>
+    ),
+  },
+  "panel-right": {
+    body: () => (
+      <>
+        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
+        <line x1="10" y1="3" x2="10" y2="13" />
+      </>
+    ),
+  },
+  terminal: {
+    body: () => (
+      <>
+        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
+        <path d="M5 6.2 7 8 5 9.8" />
+        <line x1="8.2" y1="10" x2="11" y2="10" />
       </>
     ),
   },

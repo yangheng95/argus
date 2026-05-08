@@ -370,6 +370,10 @@ code .file-link:hover {
   z-index: var(--ui-z-sticky);
 }
 
+.pane-resizer[hidden] {
+  display: none;
+}
+
 .pane-resizer::before {
   content: "";
   position: absolute;
