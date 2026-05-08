@@ -1,0 +1,140 @@
+<!doctype html><meta charset="utf-8">
+<style>
+body{margin:0;background:#0b0f14;font-family:"Microsoft YaHei",Arial,sans-serif;color:#f7fafc}
+.slide{width:1280px;height:720px;box-sizing:border-box;padding:54px 64px;background:#0b0f14;position:relative;overflow:hidden}
+.k{color:#35c2ff;font-size:14px;font-weight:700;letter-spacing:.08em;margin-bottom:18px}
+h1{font-size:42px;line-height:1.15;margin:0 0 22px}
+p{font-size:23px;line-height:1.55;color:#a9b4c0;width:880px;margin:0}
+.num{position:absolute;right:80px;top:80px;font-size:88px;color:#35c2ff;font-weight:800}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:26px}
+img{max-width:100%;max-height:390px;object-fit:contain;border:1px solid #2a3441;border-radius:12px;background:#151b22}
+.footer{position:absolute;left:64px;bottom:36px;color:#637083;font-size:13px}
+</style>
+<section class="slide" id="s1">
+<div class="k">SLIDE 01</div>
+<h1>OpenCorvus 项目生成能力实验报告</h1>
+<p>72.2/100 平均综合分；6 个生成项目，真实构建、测试和截图。</p>
+<div class="num">72.2</div>
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s2">
+<div class="k">SLIDE 02</div>
+<h1>实验范围</h1>
+<p>输入文档已放入各项目内；AI Chat、股票 baseline 与 OpenCorvus 版本均纳入。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s3">
+<div class="k">SLIDE 03</div>
+<h1>方法</h1>
+<p>可运行性 20%、需求覆盖 25%、功能成熟度 25%、UI 15%、工程质量 15%。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s4">
+<div class="k">SLIDE 04</div>
+<h1>运行总览</h1>
+<p>6 个项目均可启动截图；Kimi/Opus 通过修复依赖安装态恢复构建测试。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s5">
+<div class="k">SLIDE 05</div>
+<h1>代码规模</h1>
+<p>全样本平均 12,256 LOC；AI Chat 平均 13,792 LOC；股票 OpenCorvus 为 baseline 2.54×。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s6">
+<div class="k">SLIDE 06</div>
+<h1>AI Chat 对比</h1>
+<p>PRD DeepSeek v4 Flash 最大且测试最多：20,769 LOC / 525 tests。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s7">
+<div class="k">SLIDE 07</div>
+<h1>AI Chat 截图</h1>
+<p>登录后进入完整 Chat 工作台。</p>
+
+<div class="grid"><img src="../screenshots/aichat-prd-deepseek-v4-flash-after-login.png" /></div>
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s8">
+<div class="k">SLIDE 08</div>
+<h1>股票 PRD</h1>
+<p>核心是交易闭环：注册、行情、SSE、下单、撤单、持仓、记录与风控。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s9">
+<div class="k">SLIDE 09</div>
+<h1>股票总览</h1>
+<p>OpenCorvus：74 分；baseline：60 分。OpenCorvus 覆盖更强，但集成未收口。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s10">
+<div class="k">SLIDE 10</div>
+<h1>视觉对比</h1>
+<p>左 baseline，右 OpenCorvus。</p>
+
+<div class="grid"><img src="../screenshots/baseline-opus-4-7-market.png" /><img src="../screenshots/PRD2Code-stock-web-market.png" /></div>
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s11">
+<div class="k">SLIDE 11</div>
+<h1>后端对比</h1>
+<p>OpenCorvus 模块化 route 和测试更强；baseline 根入口服务 SPA 更完整。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s12">
+<div class="k">SLIDE 12</div>
+<h1>前端对比</h1>
+<p>OpenCorvus UI 更成熟，但存在 mock API 层和硬编码 proxy。</p>
+
+<div class="grid"><img src="../screenshots/PRD2Code-stock-web-portfolio.png" /><img src="../screenshots/PRD2Code-stock-home.png" /></div>
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s13">
+<div class="k">SLIDE 13</div>
+<h1>需求覆盖</h1>
+<p>OpenCorvus 股票 PRD 20 条 API 验收全部通过；根入口和真实 API 贯通扣分。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s14">
+<div class="k">SLIDE 14</div>
+<h1>当前完成度</h1>
+<p>已经具备复杂产品骨架生成能力，交付完成度仍卡在最后一公里。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s15">
+<div class="k">SLIDE 15</div>
+<h1>卡点</h1>
+<p>P0：前后端入口未统一；P0：前端 mock API 残留；P1：端口契约硬编码。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>
+<section class="slide" id="s16">
+<div class="k">SLIDE 16</div>
+<h1>附录</h1>
+<p>PPTX、截图、日志、生成命令均位于 artifacts/opencorvus-experiment-report-2026-05-08。</p>
+
+
+<div class="footer">HTML preview for visual QA; PPTX is editable native content.</div>
+</section>

@@ -1,0 +1,38 @@
+
+> deepseek-chat-app@0.0.1 test:run
+> vitest run
+
+
+[7m[1m[36m RUN [39m[22m[27m [36mv1.6.1[39m [90mC:/Users/chuan/myhexin-local/demos/aichat-deepseek-flash[39m
+
+ [32m✓[39m src/lib/storage/__tests__/storage.test.ts [2m ([22m[2m45 tests[22m[2m)[22m[90m 43[2mms[22m[39m
+ [32m✓[39m tests/integration/sidebar-crud.test.tsx [2m ([22m[2m7 tests[22m[2m)[22m[33m 670[2mms[22m[39m
+ [32m✓[39m src/components/sidebar/ConversationList.test.tsx [2m ([22m[2m14 tests[22m[2m)[22m[33m 565[2mms[22m[39m
+ [32m✓[39m tests/integration/settings-persistence.test.tsx [2m ([22m[2m11 tests[22m[2m)[22m[33m 840[2mms[22m[39m
+ [32m✓[39m tests/e2e/global-search.test.tsx [2m ([22m[2m7 tests[22m[2m)[22m[33m 1019[2mms[22m[39m
+ [32m✓[39m tests/integration/chat-streaming.test.tsx [2m ([22m[2m11 tests[22m[2m)[22m[33m 1147[2mms[22m[39m
+ [32m✓[39m src/components/markdown/MarkdownRenderer.test.tsx [2m ([22m[2m20 tests[22m[2m)[22m[90m 201[2mms[22m[39m
+ [32m✓[39m tests/integration/api-keys.test.tsx [2m ([22m[2m9 tests[22m[2m)[22m[33m 2000[2mms[22m[39m
+ [32m✓[39m src/features/auth/LoginPage.test.tsx [2m ([22m[2m13 tests[22m[2m)[22m[33m 1930[2mms[22m[39m
+ [32m✓[39m tests/e2e/full-user-journey.test.tsx [2m ([22m[2m7 tests[22m[2m)[22m[33m 2282[2mms[22m[39m
+ [32m✓[39m src/components/layout/UserMenu.test.tsx [2m ([22m[2m11 tests[22m[2m)[22m[33m 2405[2mms[22m[39m
+ [32m✓[39m src/pages/SettingsPage.test.tsx [2m ([22m[2m13 tests[22m[2m)[22m[33m 774[2mms[22m[39m
+ [32m✓[39m tests/integration/chat-branching.test.tsx [2m ([22m[2m3 tests[22m[2m)[22m[90m 247[2mms[22m[39m
+ [32m✓[39m tests/integration/auth-flow.test.tsx [2m ([22m[2m11 tests[22m[2m)[22m[33m 3832[2mms[22m[39m
+ [32m✓[39m src/features/auth/AuthGuard.test.tsx [2m ([22m[2m8 tests[22m[2m)[22m[90m 113[2mms[22m[39m
+ [32m✓[39m src/components/chat/ModelSelector.test.tsx [2m ([22m[2m8 tests[22m[2m)[22m[33m 306[2mms[22m[39m
+ [32m✓[39m src/components/layout/AppLayout.test.tsx [2m ([22m[2m4 tests[22m[2m)[22m[90m 297[2mms[22m[39m
+ [32m✓[39m src/components/chat/ChatInput.test.tsx [2m ([22m[2m13 tests[22m[2m)[22m[33m 1507[2mms[22m[39m
+ [32m✓[39m src/pages/ApiKeysPage.test.tsx [2m ([22m[2m9 tests[22m[2m)[22m[33m 1195[2mms[22m[39m
+ [32m✓[39m src/lib/sse/__tests__/SSEManager.test.ts [2m ([22m[2m17 tests[22m[2m)[22m[33m 4500[2mms[22m[39m
+ [32m✓[39m src/components/shortcuts/ShortcutsModal.test.tsx [2m ([22m[2m4 tests[22m[2m)[22m[33m 520[2mms[22m[39m
+ [32m✓[39m src/lib/api/__tests__/chatClient.test.ts [2m ([22m[2m6 tests[22m[2m)[22m[33m 4846[2mms[22m[39m
+ [32m✓[39m src/hooks/__tests__/useAuth.test.ts [2m ([22m[2m22 tests[22m[2m)[22m[33m 13752[2mms[22m[39m
+ [32m✓[39m src/lib/auth/__tests__/authStore.test.ts [2m ([22m[2m31 tests[22m[2m)[22m[33m 17605[2mms[22m[39m
+ [32m✓[39m src/lib/auth/__tests__/mockAuth.test.ts [2m ([22m[2m24 tests[22m[2m)[22m[33m 19157[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m25 passed[39m[22m[90m (25)[39m
+[2m      Tests [22m [1m[32m328 passed[39m[22m[90m (328)[39m
+[2m   Start at [22m 13:46:53
+[2m   Duration [22m 22.16s[2m (transform 4.42s, setup 6.25s, collect 11.50s, tests 81.75s, environment 30.21s, prepare 12.30s)[22m
+

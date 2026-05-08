@@ -1,0 +1,110 @@
+[
+  {
+    "name": "build-aichat-deepseek-flash",
+    "command": "npm run build",
+    "exitCode": 0,
+    "status": "ok",
+    "seconds": 10.1,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-aichat-deepseek-flash.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-aichat-deepseek-flash.err.log"
+  },
+  {
+    "name": "test-aichat-deepseek-flash",
+    "command": "npm run test:run",
+    "exitCode": 0,
+    "status": "ok",
+    "seconds": 24.2,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-aichat-deepseek-flash.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-aichat-deepseek-flash.err.log"
+  },
+  {
+    "name": "build-aichat-kimi-k2-5",
+    "command": "npm run build",
+    "exitCode": 1,
+    "status": "failed",
+    "seconds": 2.0,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-aichat-kimi-k2-5.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-aichat-kimi-k2-5.err.log"
+  },
+  {
+    "name": "test-aichat-kimi-k2-5",
+    "command": "npm test",
+    "exitCode": 1,
+    "status": "failed",
+    "seconds": 2.0,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-aichat-kimi-k2-5.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-aichat-kimi-k2-5.err.log"
+  },
+  {
+    "name": "build-aichat-opus4-7",
+    "command": "npm run build",
+    "exitCode": 1,
+    "status": "failed",
+    "seconds": 2.0,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-aichat-opus4-7.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-aichat-opus4-7.err.log"
+  },
+  {
+    "name": "test-aichat-opus4-7",
+    "command": "npm test",
+    "exitCode": 1,
+    "status": "failed",
+    "seconds": 2.0,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-aichat-opus4-7.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-aichat-opus4-7.err.log"
+  },
+  {
+    "name": "build-aichat-prd-deepseek-v4-flash",
+    "command": "npm run build",
+    "exitCode": 0,
+    "status": "ok",
+    "seconds": 26.2,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-aichat-prd-deepseek-v4-flash.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-aichat-prd-deepseek-v4-flash.err.log"
+  },
+  {
+    "name": "test-aichat-prd-deepseek-v4-flash",
+    "command": "npm test",
+    "exitCode": 0,
+    "status": "ok",
+    "seconds": 26.2,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-aichat-prd-deepseek-v4-flash.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-aichat-prd-deepseek-v4-flash.err.log"
+  },
+  {
+    "name": "build-baseline-opus-4-7",
+    "command": "bun run build",
+    "exitCode": 0,
+    "status": "ok",
+    "seconds": 12.1,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-baseline-opus-4-7.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-baseline-opus-4-7.err.log"
+  },
+  {
+    "name": "test-baseline-opus-4-7",
+    "command": "bun test",
+    "exitCode": 0,
+    "status": "ok",
+    "seconds": 2.0,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-baseline-opus-4-7.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-baseline-opus-4-7.err.log"
+  },
+  {
+    "name": "build-prd2code-stock",
+    "command": "bun run build",
+    "exitCode": 0,
+    "status": "ok",
+    "seconds": 8.0,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-prd2code-stock.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\build-prd2code-stock.err.log"
+  },
+  {
+    "name": "test-prd2code-stock",
+    "command": "bun test",
+    "exitCode": 0,
+    "status": "ok",
+    "seconds": 2.0,
+    "out": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-prd2code-stock.out.log",
+    "err": "C:\\Users\\chuan\\myhexin-local\\opecorvus\\artifacts\\opencorvus-experiment-report-2026-05-08\\logs\\test-prd2code-stock.err.log"
+  }
+]

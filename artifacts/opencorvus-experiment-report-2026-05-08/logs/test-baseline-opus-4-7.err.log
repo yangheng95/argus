@@ -1,0 +1,27 @@
+
+tests\api.test.ts:
+(pass) Auth > 1. 注册返回用户信息和初始资金 1,000,000 [109.00ms]
+(pass) Auth > 2. 登录返回 token，可用于后续认证请求 [94.00ms]
+(pass) Auth > 19. 未认证请求返回 401
+(pass) Auth > 20. 注册重复用户名返回 409
+(pass) Market > 3. 获取股票列表返回 10 只股票
+(pass) Market > 4. 获取当前用户信息返回余额与冻结资金
+(pass) Market > 15. SSE 行情接口返回合法事件流
+(pass) Market > 16. K 线接口返回 OHLCV + MA + MACD [15.00ms]
+(pass) Market > 18. 热力图接口返回 10 只股票且包含 change_percent
+(pass) Trading > 5. 买入成功：扣减可用资金，增加冻结资金，创建 pending 订单
+(pass) Trading > 6. 买入数量不是 100 倍数被拒绝
+(pass) Trading > 7. 资金不足买入被拒绝
+(pass) Trading > 8. 买入价格超出 ±10% 限价被拒绝
+(pass) Trading > 9. 卖出成功：建仓后释放可卖即可成交
+(pass) Trading > 10. 持仓不足卖出被拒绝
+(pass) Trading > 11. 撤单成功：恢复冻结资金，订单状态变为 cancelled [16.00ms]
+(pass) Trading > 12. 撤单已成交订单被拒绝
+(pass) Trading > 13. 用户隔离：A 不能撤 B 的单（403）
+(pass) Watchlist & News > 14. 自选股添加/删除生效，重复添加幂等
+(pass) Watchlist & News > 17. 新闻接口返回合法 sentiment 枚举
+
+ 20 pass
+ 0 fail
+ 85 expect() calls
+Ran 20 tests across 1 file. [532.00ms]
