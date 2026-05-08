@@ -54,7 +54,13 @@ import type {
   SourceCoverageEntry,
 } from "@/architect/fidelity"
 import type { FileDiff } from "@/snapshot/types"
-import { BuildAgentContractError, BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
+import {
+  BuildAgentContractError,
+  BuildResultSchema,
+  formatBuildResultSchemaError,
+  type BuildResult,
+  type BuildTarget,
+} from "./types"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { withStreamActivity } from "@/util/stream-activity"
 import { PermissionNext } from "@/permission/next"
@@ -498,6 +504,10 @@ export namespace BuildAgent {
             "If you legitimately reused a prior attempt's worktree without further edits, files_changed=[] is fine.",
           inputSchema: BuildResultSchema,
           execute: async (result) => {
+            const parsedResult = BuildResultSchema.safeParse(result)
+            if (!parsedResult.success) {
+              throw new Error(formatBuildResultSchemaError(parsedResult.error))
+            }
             // No host-side enforcement of merge_back-before-passed and no
             // diff-coverage audit. Both facts are surfaced separately on
             // RunOutput (mergeBackStatus / actualChangedFiles) and rendered
@@ -513,10 +523,8 @@ export namespace BuildAgent {
             // (rule 8 single source — the host knows the truth, not the LLM).
             const commit_ref = mergedHead
               ? mergedHead.slice(0, 12)
-              : (ownsWorktree && worktreeBranch ? "" : result.commit_ref ?? "")
-            buildCollector.result = result.status === "passed"
-              ? { ...result, commit_ref }
-              : { ...result, commit_ref }
+              : (ownsWorktree && worktreeBranch ? "" : parsedResult.data.commit_ref ?? "")
+            buildCollector.result = { ...parsedResult.data, commit_ref }
             return `PASS: build ${result.status} result recorded.`
           },
         }),
@@ -763,7 +771,9 @@ export namespace BuildAgent {
         // mirrorcode signal now flows through the catch block above.
         // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
         throw new Error(
-          `build agent: external executor structured output did not match BuildResultSchema: ${parsed?.error?.message ?? "(no parsed output)"}`,
+          `build agent: ${executor === "mirrorcode" ? "mirrorcode report_build_result" : "external executor structured output"} did not match BuildResultSchema: ${
+            parsed?.error ? formatBuildResultSchemaError(parsed.error) : "(no parsed output)"
+          }`,
         )
       }
 

@@ -85,5 +85,10 @@ Call this tool exactly once at the end:
 - `error`: concrete failure reason when status="failed"
 - `tests`: array of { name, passed, detail? } - one entry per verification command you actually ran
 
+`status="passed"` and `error` are mutually exclusive. If any blocking
+acceptance check, visual comparison, runtime check, or verification command
+failed or was below its threshold, report `status="failed"` and put the exact
+reason in `error`. Use `summary` for non-blocking caveats only.
+
 ## Language
 Respond in titles / summaries in the same language as the task request. Default to Chinese (simplified) if ambiguous.

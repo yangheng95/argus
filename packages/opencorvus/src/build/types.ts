@@ -132,6 +132,22 @@ export const BuildResultSchema = z.discriminatedUnion("status", [
 ])
 export type BuildResult = z.infer<typeof BuildResultSchema>
 
+export function formatBuildResultSchemaError(error: z.ZodError): string {
+  const issues = error.issues.map((issue) => {
+    const path = issue.path.length > 0 ? issue.path.join(".") : "<root>"
+    return `${path}: ${issue.message}`
+  })
+  const hasPassedWithError = error.issues.some((issue) =>
+    issue.code === "unrecognized_keys" &&
+    Array.isArray(issue.keys) &&
+    issue.keys.includes("error")
+  )
+  const guidance = hasPassedWithError
+    ? "status='passed' cannot include error. If any blocking verification failed, call report_build_result with status='failed' and put the reason in error; otherwise remove error and keep the caveat in summary."
+    : "Choose exactly one terminal shape: status='passed' without error, or status='failed' with a non-empty error."
+  return `${guidance} Schema issues: ${issues.join("; ")}`
+}
+
 /**
  * Typed contract violation thrown by BuildAgent.run when a MirrorCode build
  * session ends without honouring its terminal-tool contract.

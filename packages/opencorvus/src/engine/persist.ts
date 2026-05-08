@@ -1724,15 +1724,16 @@ export function finalizeBuildAttempt(input: {
   now?: number
 }): void {
   const now = input.now ?? Date.now()
-  updateGoalRun(input.goalRunID, {
+  const patch: Parameters<typeof updateGoalRun>[1] = {
     status: input.status,
     error: input.error ?? null,
-    workspace_dir: input.workspaceDir ?? undefined,
-    workspace_branch: input.workspaceBranch ?? undefined,
-    workspace_base_ref: input.workspaceBaseRef ?? undefined,
     metadata: input.commitRef ? { commit_ref: input.commitRef } : null,
     time_completed: now,
-  })
+  }
+  if (input.workspaceDir !== undefined) patch.workspace_dir = input.workspaceDir
+  if (input.workspaceBranch !== undefined) patch.workspace_branch = input.workspaceBranch
+  if (input.workspaceBaseRef !== undefined) patch.workspace_base_ref = input.workspaceBaseRef
+  updateGoalRun(input.goalRunID, patch)
   const includeDelivery =
     input.status === "completed" &&
     !!input.commitRef &&
