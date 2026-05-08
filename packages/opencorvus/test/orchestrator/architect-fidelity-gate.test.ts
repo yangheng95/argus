@@ -1,5 +1,53 @@
 import { describe, expect, test } from "bun:test"
+import { architectValidationIssues, type ArchitectCollector } from "../../src/architect/output-tools"
 import { validatePersistedArchitectFidelity } from "../../src/orchestrator/tools"
+import type { AcceptanceSpec } from "../../src/acceptance/types"
+
+const essentialDeliveryVisualSpec: AcceptanceSpec = {
+  id: "acc-final-visual-fidelity",
+  source_requirement_id: "REQ-visual",
+  goal_id: "goal_verify",
+  title: "Final rendered page matches the authoritative visual references",
+  severity: "essential",
+  trigger: "on_delivery",
+  scorers: [{
+    type: "llm_judge",
+    name: "rendered-reference-fidelity",
+    criteria: "Compare final rendered_output against the authoritative references and PRD/SPEC visual_consistency_spec.",
+  }],
+}
+
+function collectorForReferenceTask(specs: AcceptanceSpec[]): ArchitectCollector {
+  return {
+    goals: [{
+      id: "goal_verify",
+      title: "Verification",
+      objective: "Verify the final reference-driven page against the PRD/SPEC and rendered browser output.",
+      acceptance_specs: specs,
+      owned_paths: ["tests/e2e/visual.test.ts"],
+      depends_on: [],
+      exports: [],
+      imports: [],
+      priority: "blocking",
+      kind: "verification",
+      requirement_ids: ["REQ-visual"],
+    }],
+    traceability: [{ requirementID: "REQ-visual", goalIDs: ["goal_verify"] }],
+    source_coverage: [],
+    reference_coverage: [{
+      id: "ref-page",
+      surface: "final-page",
+      goal_ids: ["goal_verify"],
+      visual_spec_ids: [],
+      expectation: "Restore the authoritative reference page 1:1.",
+    }],
+    assembly_owners: [],
+    contracts: [],
+    removed_goal_ids: [],
+    summary: "",
+    finalized: false,
+  }
+}
 
 describe("orchestrator architect fidelity gate", () => {
   test("rejects build dispatch when persisted fidelity coverage is incomplete", () => {
@@ -132,5 +180,27 @@ describe("orchestrator architect fidelity gate", () => {
 
     expect(issues).not.toContain("Missing source coverage for existing owned paths: packages/opencorvus/src/orchestrator/tools.ts")
     expect(issues).toContain("Missing reference coverage for visual specs: vis-hero")
+  })
+
+  test("rejects reference-driven architecture without essential delivery visual acceptance", () => {
+    const weakVisualSpec: AcceptanceSpec = {
+      ...essentialDeliveryVisualSpec,
+      severity: "important",
+    }
+    const issues = architectValidationIssues(collectorForReferenceTask([weakVisualSpec]), {
+      requireReferenceCoverage: true,
+    })
+
+    expect(issues).toContain(
+      "Missing essential delivery visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_delivery llm_judge acceptance spec for final rendered-vs-reference fidelity.",
+    )
+  })
+
+  test("allows reference-driven architecture with essential delivery visual acceptance", () => {
+    const issues = architectValidationIssues(collectorForReferenceTask([essentialDeliveryVisualSpec]), {
+      requireReferenceCoverage: true,
+    })
+
+    expect(issues).toEqual([])
   })
 })
