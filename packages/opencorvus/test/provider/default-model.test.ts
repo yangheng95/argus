@@ -21,7 +21,7 @@ describe("Provider.defaultModel - strict config only", () => {
       directory: tmp.path,
       fn: async () => {
         const fresh = (await import("../../src/provider/provider")).Provider
-        await expect(fresh.defaultModel()).rejects.toThrow("ProviderModelNotFoundError")
+        await expect(fresh.defaultModel()).rejects.toThrow("MissingModelConfigError")
       },
     })
   })
@@ -31,7 +31,7 @@ describe("Provider.defaultModel - strict config only", () => {
     mock.module("../../src/config/config", () => ({
       Config: {
         ...Config,
-        get: async () => ({ model: "anthropic/claude-sonnet-4-20250514" }) as any,
+        get: async () => ({ model: Config.DEFAULT_MODEL }) as any,
       },
     }))
 
@@ -40,8 +40,8 @@ describe("Provider.defaultModel - strict config only", () => {
       fn: async () => {
         const fresh = (await import("../../src/provider/provider")).Provider
         await expect(fresh.defaultModel()).resolves.toEqual({
-          providerID: "anthropic",
-          modelID: "claude-sonnet-4-20250514",
+          providerID: "alibaba-coding-plan-cn",
+          modelID: "kimi-k2.5",
         })
       },
     })

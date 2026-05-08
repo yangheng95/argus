@@ -1013,7 +1013,7 @@ export namespace Provider {
     if (cfg.model) return parseModel(cfg.model)
     throw new MissingModelConfigError({
       scope: "default",
-      hint: "Set top-level `model` in opencorvus.jsonc, e.g. \"model\": \"anthropic/claude-sonnet-4-6\".",
+      hint: `Set top-level \`model\` in opencorvus.jsonc, e.g. "model": "${Config.DEFAULT_MODEL}".`,
     })
   }
 
