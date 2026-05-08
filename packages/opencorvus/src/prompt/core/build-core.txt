@@ -26,10 +26,14 @@ referenced assets. If the reference is missing, unreadable, or conflicts with
 the written contract, fail loudly through `report_build_result` with the exact
 blocker.
 For webpage replica work, implement from the design-analysis PRD/SPEC,
-`prd_iteration_notes`, `completeness_review`, and `task.design_specs`. Do not
-re-run mirror extraction or fabricate mirror artifacts. Delivery owns rendered
-browser evidence and visual hard gates; your job is to provide a runnable
-implementation and the verification evidence your acceptance specs require.
+`prd_iteration_notes`, `completeness_review`, `evidence_source_manifest`, and
+`task.design_specs`. The source manifest names the PRD/SPEC origin plus any
+files, images, URLs, staged `references/` entries, or mirror artifacts you can
+read. Open those named references when the implementation depends on pixels or
+source material. Do not re-run mirror extraction or fabricate mirror artifacts.
+Delivery owns rendered browser evidence and visual hard gates; your job is to
+provide a runnable implementation and the verification evidence your acceptance
+specs require.
 
 ## What you do
 

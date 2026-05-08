@@ -143,6 +143,11 @@ Concrete contract:
     explain its relevance to requirements extraction.
   - When you call `design_analysis`, cite each image by filename and label
     which are the visual targets vs. reference / context.
+  - After `design_analysis` completes, every downstream dispatch for a
+    visual/webpage task must mention that the canonical PRD/SPEC source is
+    `decision_log phase=design_analysis`, including `evidence_source_manifest`.
+    Cite the manifest's file/image/artifact names so the receiving agent knows
+    what can be read.
   - When you call `architect`, cite the attachments by filename that
     constrain interface contracts (API specs, data schemas, sample payloads).
   - When you call `build`, restate the relevant attachments by filename in

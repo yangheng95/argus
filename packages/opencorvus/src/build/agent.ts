@@ -92,6 +92,10 @@ export namespace BuildAgent {
      *  components, interactions). Build implementations pulling on UI must
      *  honour the relevant subset. */
     designSpecs?: VisualSpec[]
+    /** Full design-analysis PRD/SPEC and source manifest from the decision log.
+     *  This names product_spec, frontend_spec, backend_spec, review notes,
+     *  completeness audit, reference artifacts, and evidence_source_manifest. */
+    designAnalysis?: string
     /** Cross-goal interface contracts the architect committed to the
      *  decision log. Build receives the complete set so every goal sees the
      *  same architectural consensus, with this goal only highlighted in
@@ -357,7 +361,9 @@ export namespace BuildAgent {
         baseRef = result.exitCode === 0 ? result.text().trim() || undefined : undefined
       }
 
-      // Stage user-contract image attachments into `<worktree>/references/`
+      const buildReferenceAttachments = collectBuildReferenceAttachments(input.task)
+
+      // Stage authoritative visual/reference attachments into `<worktree>/references/`
       // so the build agent can pass worktree-LOCAL relative paths to tools
       // whose sandbox checks reject paths outside the worktree (notably
       // `webpage_image_extract`'s `loadImage` sandbox check). Without this,
@@ -369,21 +375,15 @@ export namespace BuildAgent {
       // agent path just invokes it. Caller-owned worktrees (input.workDir)
       // skip — the caller is responsible for staging in that path.
       let stagedAttachments: AttachmentStore.StagedAttachment[] = []
-      if (ownsWorktree && worktreeDir && Array.isArray(input.task.attachments) && input.task.attachments.length > 0) {
+      if (ownsWorktree && worktreeDir && buildReferenceAttachments.length > 0) {
         try {
           stagedAttachments = await AttachmentStore.stageToWorktree(
             Instance.project.id,
-            input.task.attachments as Array<{
-              sha?: string
-              url?: string
-              mime?: string
-              size?: number
-              filename?: string
-            }>,
+            buildReferenceAttachments,
             worktreeDir,
           )
           if (stagedAttachments.length > 0) {
-            log.info("build agent: staged task attachments into worktree references/", {
+            log.info("build agent: staged reference attachments into worktree references/", {
               taskID: input.task.id,
               count: stagedAttachments.length,
               worktreeDir,
@@ -406,22 +406,18 @@ export namespace BuildAgent {
       // for every agent — auto-detected, never stuffed into user prompt).
       const { deriveUrlSignals } = await import("@/engine/skill-inject")
       const taskSignals: import("@/engine/skill-inject").TaskSignals = {
-        has_attachment_image: Array.isArray(input.task.attachments)
-          && input.task.attachments.some((a: any) => typeof a?.mime === "string" && a.mime.startsWith("image/")),
+        has_attachment_image: buildReferenceAttachments.some((a) => typeof a?.mime === "string" && a.mime.startsWith("image/")),
         ...deriveUrlSignals(input.task.request ?? ""),
         request_text: input.task.request ?? "",
       }
 
       const buildPromptText = () => buildUserPrompt(input.target, input.context)
-      // Forward task.attachments (user's reference image, e.g. ainvest.png) as
-      // multimodal user-message parts so the build LLM physically sees what to
-      // clone — text design_specs alone don't carry pixel-level layout/colour
-      // information, root cause of "engine accepts but visual fidelity 0.237"
-      // (rule 4: root-cause not bandage).
-      const taskAttachments = (Array.isArray(input.task.attachments)
-        ? (input.task.attachments as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>)
-        : []
-      ).filter((a) => typeof a?.url === "string" && typeof a?.mime === "string")
+      // Forward the same authoritative references named in the
+      // design-analysis evidence manifest as multimodal user-message parts so
+      // the build LLM physically sees what to clone. This includes user
+      // attachments and design-analysis materialized visual artifacts
+      // (system_artifacts intent=visual_reference), not delivery retry renders.
+      const taskAttachments = buildReferenceAttachments
       const retryAttachments = (input.context?.retryAttachments ?? []).filter(
         (a) => typeof a?.url === "string" && typeof a?.mime === "string",
       ) as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
@@ -1934,6 +1930,37 @@ function compactLine(value: string, max = 320): string {
   return `${normalized.slice(0, max)}…`
 }
 
+type BuildReferenceAttachment = {
+  sha?: string
+  url: string
+  mime: string
+  size?: number
+  filename?: string
+  intent?: string
+  source?: string
+}
+
+function collectBuildReferenceAttachments(task: TaskRow): BuildReferenceAttachment[] {
+  const taskAttachments = Array.isArray(task.attachments)
+    ? task.attachments as Array<Partial<BuildReferenceAttachment>>
+    : []
+  const designArtifacts = (Array.isArray(task.system_artifacts)
+    ? task.system_artifacts as Array<Partial<BuildReferenceAttachment>>
+    : []
+  ).filter((item) => item.intent === "visual_reference")
+
+  const seen = new Set<string>()
+  const merged: BuildReferenceAttachment[] = []
+  for (const item of [...taskAttachments, ...designArtifacts]) {
+    if (typeof item?.url !== "string" || typeof item?.mime !== "string") continue
+    const key = item.sha ?? item.url
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push({ ...item, url: item.url, mime: item.mime })
+  }
+  return merged
+}
+
 /**
  * Render an UNCONDITIONAL visual-contract preamble, prepended to the build
  * agent's user prompt whenever this dispatch carries multimodal references
@@ -2099,6 +2126,12 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     }
 
     if (context?.designSpecs && context.designSpecs.length > 0) {
+      if (context.designAnalysis && context.designAnalysis.trim().length > 0) {
+        lines.push("## Design Analysis PRD/SPEC Source")
+        lines.push("")
+        lines.push(context.designAnalysis.trim())
+        lines.push("")
+      }
       lines.push(renderVisualContractPromptSection({
         specs: context.designSpecs,
         instructions: [
@@ -2221,6 +2254,22 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     contextLines.push("## Canonical Delivery Rejection Feedback")
     contextLines.push("")
     contextLines.push(context.deliveryFeedback.trim())
+    contextLines.push("")
+  }
+  if (context?.designAnalysis && context.designAnalysis.trim().length > 0) {
+    contextLines.push("## Design Analysis PRD/SPEC Source")
+    contextLines.push("")
+    contextLines.push(context.designAnalysis.trim())
+    contextLines.push("")
+  }
+  if (context?.designSpecs && context.designSpecs.length > 0) {
+    contextLines.push(renderVisualContractPromptSection({
+      specs: context.designSpecs,
+      instructions: [
+        "The visual contract below came from design_analysis. It is authoritative for this direct build request.",
+        "Use the decision-log evidence_source_manifest and staged references for any source file/image named by the PRD/SPEC.",
+      ],
+    }))
     contextLines.push("")
   }
   return [

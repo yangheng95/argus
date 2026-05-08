@@ -95,7 +95,8 @@ export const DesignFinalSchema = z.object({
     .default([])
     .describe(
       "Mirror/material artifacts used as evidence, such as mirror/reference.png, mirror/extracted-page.json, " +
-      "mirror/page-ir.xml, mirror/scaffold.json, mirror/shared-context.md, and captured attachment names.",
+      "mirror/page-ir.xml, mirror/scaffold.json, mirror/shared-context.md, captured attachment names, " +
+      "and any source file/image names downstream agents should read from the evidence_source_manifest.",
     ),
   open_questions: z
     .array(z.string().min(1))

@@ -305,4 +305,34 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("those references are authoritative")
     expect(prompt).toContain("must restore them 1:1")
   })
+
+  test("request-path build receives design-analysis PRD/SPEC source manifest", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "request",
+        text: "Clone the AMD page.",
+      },
+      {
+        designAnalysis:
+          "# Design Analysis PRD/SPEC Source\n\n" +
+          "- key=product_spec value=AMD dashboard\n" +
+          "- key=evidence_source_manifest value=references/url-amd.png",
+        designSpecs: [
+          {
+            id: "vis-layout-header",
+            category: "layout",
+            title: "Header layout",
+            requirement: "Header matches reference",
+            applies_to: "header",
+            severity: "must",
+          },
+        ],
+      },
+    )
+
+    expect(prompt).toContain("## Design Analysis PRD/SPEC Source")
+    expect(prompt).toContain("evidence_source_manifest")
+    expect(prompt).toContain("references/url-amd.png")
+    expect(prompt).toContain("Header layout")
+  })
 })
