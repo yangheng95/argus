@@ -240,6 +240,68 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("visual reference tasks require design_analysis before downstream stages", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_visual_gate_${stamp}`
+    const taskID = `tsk_visual_gate_${stamp}`
+    const goalID = `gol_visual_gate_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const workflowState = createWorkflowState(pipeline)
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Visual gate project",
+      taskTitle: "Visual gate task",
+      request: "复刻 https://example.com/dashboard 的完整前后端页面",
+      goalTitle: "Implement visual page",
+      goalSlug: "implement-visual-page",
+      objective: "Implement the page from the visual reference",
+      now,
+    })
+
+    buildAgentRunImpl = async () => {
+      throw new Error("build must not run before design_analysis")
+    }
+    architectCoordinateImpl = async () => {
+      throw new Error("architect must not run before design_analysis")
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "visual gate test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        const requirementsResult = await tools.requirements.execute({ reason: "Need requirements" }, {} as any)
+        expect(requirementsResult).toContain("blocked")
+        expect(requirementsResult).toContain("design_analysis")
+        expect(findActiveSpecForTask(taskID)).toBeDefined()
+
+        const architectResult = await tools.architect.execute({ reason: "Need goals" }, {} as any)
+        expect(architectResult).toContain("blocked")
+        expect(architectResult).toContain("design_analysis")
+
+        const buildResult = await tools.build.execute({
+          goalID,
+          reason: "Try to build visual goal",
+        }, {} as any)
+        expect(buildResult).toContain("blocked")
+        expect(buildResult).toContain("design_analysis")
+      },
+    })
+  })
+
   test("goal build re-reads dependency status before dispatch", async () => {
     const now = Date.now()
     const stamp = now.toString(16)

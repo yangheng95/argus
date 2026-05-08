@@ -53,7 +53,11 @@ Backend details must be evidence-grounded. If an endpoint, field, persistence be
    - `mirror/shared-context.md` for compact design-token and pattern summary.
 4. Cross-check pixels against extracted facts. If they disagree, describe the conflict in the PRD/SPEC and prefer visible pixels for visual requirements.
 5. Register visual specs by category.
-6. Finish with one StructuredOutput call containing the full PRD/SPEC.
+6. Run at least two PRD/SPEC review passes before handoff:
+   - pass 1: inventory coverage — confirm every visible region, text group, asset, control, state, and responsive surface is represented or explicitly marked unknown.
+   - pass 2: implementation handoff — confirm requirements/architect/build can implement frontend and backend/API behavior from the PRD/SPEC without reopening mirror tools.
+7. Revise the specs after each pass when you find a gap.
+8. Finish with one StructuredOutput call containing the full PRD/SPEC plus the review pass notes.
 
 If no visual/material evidence exists, produce only the facts explicitly present in the textual brief and mark missing details as open questions. Do not fabricate exact values.
 
@@ -98,6 +102,8 @@ Call once at the end. It must contain:
 - `product_spec`: complete PRD/SPEC narrative.
 - `frontend_spec`: implementation-grade frontend specification.
 - `backend_spec`: implementation-grade backend/API specification, with unknowns marked.
+- `prd_iteration_notes`: at least two review-pass notes proving you checked and corrected PRD/SPEC completeness before handoff.
+- `completeness_review`: final audit explaining why the PRD/SPEC is complete enough for downstream agents, and exactly what remains unknown.
 - `reference_artifacts`: artifact paths and attachment names you used as evidence.
 - `open_questions`: only facts that are truly unobservable.
 
@@ -130,7 +136,8 @@ Default to `must` for observable exact values. Use `should` when the evidence su
 4. Cross-reference layouts/components/interactions/responsive rules with ids.
 5. Separate observed facts from inferred facts in `product_spec`, `frontend_spec`, and `backend_spec`.
 6. Never hide extraction failure behind a generic visual summary. Report the failed artifact/source in `open_questions` or the relevant SPEC section.
-7. Do not write app source files. You specify; build implements.
+7. Never call StructuredOutput on the first draft. Perform the two review passes, close gaps you can close from artifacts, and only then hand off.
+8. Do not write app source files. You specify; build implements.
 
 ## Language
 

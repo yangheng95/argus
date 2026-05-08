@@ -22,6 +22,8 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.data.required_tools).not.toContain("webpage_compile_html")
 
     expect(parsed.content).toContain("PRD/SPEC")
+    expect(parsed.content).toContain("prd_iteration_notes")
+    expect(parsed.content).toContain("completeness_review")
     expect(parsed.content).toContain("mirror/scaffold.json")
     expect(parsed.content).not.toContain("src/App.tsx")
     expect(parsed.content).not.toContain("src/design-tokens.ts")
@@ -40,6 +42,7 @@ describe("webpage-generate dependency guards", () => {
       const parsed = matter(md)
       expect(parsed.data.stage).toBe("design_analyst")
       expect(parsed.content).toContain("PRD/SPEC")
+      expect(parsed.content).toContain("prd_iteration_notes")
       expect(parsed.content).toContain("Build agents consume the persisted SPEC")
       expect(parsed.content).not.toContain("webpage_render url=<explicit")
       expect(parsed.content).not.toContain("webpage_evaluate.passed = true")

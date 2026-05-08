@@ -94,6 +94,10 @@ describe("design-analyst agent (real-LLM smoke)", () => {
           expect(result.frontendSpec.length).toBeGreaterThan(0)
           expect(typeof result.backendSpec).toBe("string")
           expect(result.backendSpec.length).toBeGreaterThan(0)
+          expect(Array.isArray(result.prdIterationNotes)).toBe(true)
+          expect(result.prdIterationNotes.length).toBeGreaterThanOrEqual(2)
+          expect(typeof result.completenessReview).toBe("string")
+          expect(result.completenessReview.length).toBeGreaterThan(0)
           expect(Array.isArray(result.referenceArtifacts)).toBe(true)
           expect(Array.isArray(result.openQuestions)).toBe(true)
           // Spec count is LLM-dependent; just assert well-formed structure
