@@ -207,6 +207,59 @@ function readPersistedArchitectFidelity(task: TaskRow): ArchitectFidelityState {
   }
 }
 
+function visualReferenceSignals(task: TaskRow): string[] {
+  const signals: string[] = []
+  if (/https?:\/\/\S+/i.test(task.request)) signals.push("request_url")
+  const metadata = task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+    ? task.metadata as Record<string, unknown>
+    : {}
+  if (typeof metadata.figma_url === "string" && metadata.figma_url.trim()) signals.push("figma_url")
+
+  const materialAttachments = [
+    ...(Array.isArray(task.attachments) ? task.attachments as any[] : []),
+    ...(Array.isArray(task.system_artifacts) ? task.system_artifacts as any[] : []),
+  ]
+  for (const item of materialAttachments) {
+    const mime = typeof item?.mime === "string" ? item.mime : ""
+    const intent = typeof item?.intent === "string" ? item.intent : ""
+    if (mime.startsWith("image/") || mime === "application/pdf" || intent === "visual_reference") {
+      signals.push("visual_material")
+      break
+    }
+  }
+  return [...new Set(signals)]
+}
+
+function designAnalysisContractComplete(task: TaskRow): boolean {
+  if (!Array.isArray(task.design_specs) || task.design_specs.length === 0) return false
+  const entries = createDecisionLog(task.id).readByPhase("design_analysis")
+  const keys = new Set(entries.map((entry) => entry.key))
+  return [
+    "product_spec",
+    "frontend_spec",
+    "backend_spec",
+    "prd_iteration_notes",
+    "completeness_review",
+  ].every((key) => keys.has(key))
+}
+
+function requireDesignAnalysisBefore(stage: string, task: TaskRow) {
+  const signals = visualReferenceSignals(task)
+  if (signals.length === 0 || designAnalysisContractComplete(task)) return undefined
+  return SubAgentProtocol.yieldResult({
+    headline: `${stage}: blocked — call design_analysis before any downstream stage for visual/reference tasks.`,
+    summary:
+      `This task has visual/reference inputs (${signals.join(", ")}), but the active design-analysis contract is incomplete. ` +
+      "Run design_analysis first and require it to complete mirror extraction plus at least two PRD/SPEC review passes. " +
+      "Downstream agents must consume task.design_specs and decision_log phase=design_analysis; they must not infer from the raw URL or attachments.",
+    fields: [
+      ["next_action", "design_analysis"],
+      ["required_contract", "task.design_specs + product_spec + frontend_spec + backend_spec + prd_iteration_notes + completeness_review"],
+    ],
+    pointer: "design_analysis",
+  })
+}
+
 function acceptanceSpecsToPromptLines(raw: unknown): string[] {
   if (!Array.isArray(raw)) return []
   return raw.map((spec) => {
@@ -1415,7 +1468,8 @@ export function createOrchestratorTools(input: {
         "guess.\n" +
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
         "build agent can run against the user's text alone and `deliver` has enough " +
-        "signal in the request to verify.",
+        "signal in the request to verify. For visual/reference tasks, design_analysis is a hard prerequisite: " +
+        "do not call requirements until design_analysis has persisted task.design_specs plus PRD/SPEC review entries.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
       }),
@@ -1425,11 +1479,9 @@ export function createOrchestratorTools(input: {
         // Rule 23: no status gate. LLM may choose to re-parse requirements
         // (supersedes the prior spec and inserts a new v1 snapshot).
 
-        // No design-analysis gate here: per rule 23, phase ordering is an LLM
-        // decision (the orchestrator prompt explains when to call
-        // design_analysis). Visual specs live on task.design_specs; when
-        // present they are injected into requirements / architect / planner /
-        // build prompts from that single source of truth.
+        const designGate = requireDesignAnalysisBefore("requirements", task)
+        if (designGate) return designGate
+
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
         // Single session per sub-agent (rule 22). RequirementsAgent.run
@@ -1624,12 +1676,13 @@ export function createOrchestratorTools(input: {
     design_analysis: tool({
       description: [
         "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a mirror-grounded PRD/SPEC plus structured visual specs.",
-        "Call this BEFORE requirements when the task involves frontend/UI development AND:",
+        "Call this BEFORE every other downstream agent when the task involves frontend/UI development AND:",
         "  - Image attachments are provided (screenshots, mockups, design files)",
         "  - The request mentions a URL to replicate or analyze",
         "  - The request explicitly asks for layout/design analysis",
         "",
-        "Visual rows are persisted on task.design_specs. The full PRD/SPEC is persisted",
+        "The design-analysis agent must iterate the PRD/SPEC at least twice before handoff.",
+        "Visual rows are persisted on task.design_specs. The full PRD/SPEC plus iteration/completeness review is persisted",
         "into the decision log from the same design-analysis run so downstream stages",
         "consume one source of truth instead of re-running mirror extraction.",
         "",
@@ -2035,6 +2088,18 @@ export function createOrchestratorTools(input: {
             value: analysis.backendSpec,
             reason: "Backend/API contract needed to reproduce observed page behavior; unknowns remain explicit.",
           })
+          decisionLog.append({
+            phase: "design_analysis",
+            key: "prd_iteration_notes",
+            value: analysis.prdIterationNotes.join("\n"),
+            reason: "Design-analysis review passes completed before downstream handoff.",
+          })
+          decisionLog.append({
+            phase: "design_analysis",
+            key: "completeness_review",
+            value: analysis.completenessReview,
+            reason: "Final design-analysis completeness audit for requirements, architect, and build.",
+          })
           if (analysis.referenceArtifacts.length > 0) {
             decisionLog.append({
               phase: "design_analysis",
@@ -2076,6 +2141,7 @@ export function createOrchestratorTools(input: {
               ["responsive", String(countByCategory.responsive ?? 0)],
               ["design_system", analysis.designSystem],
               ["recommended_stack", analysis.techStack],
+              ["prd_review_passes", String(analysis.prdIterationNotes.length)],
               ["reference_artifacts", String(analysis.referenceArtifacts.length)],
               ["open_questions", String(analysis.openQuestions.length)],
             ],
@@ -2112,12 +2178,15 @@ export function createOrchestratorTools(input: {
         "re-run architect merely to widen owned_paths or bless ordinary shared-file " +
         "edits; build sessions may edit outside responsibility paths when needed " +
         "and must explain every touched file in files_changed[]. For contract-level " +
-        "point fixes prefer `modify_goal`.",
+        "point fixes prefer `modify_goal`. For visual/reference tasks, design_analysis is a hard prerequisite " +
+        "before architect even if requirements already exist.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run architect"),
       }),
       execute: async () => {
         const task = requireTask(taskID)
+        const designGate = requireDesignAnalysisBefore("architect", task)
+        if (designGate) return designGate
         const activeSpec = findActiveSpecForTask(task.id)
         if (!activeSpec) {
           return SubAgentProtocol.yieldResult({
@@ -2447,6 +2516,8 @@ export function createOrchestratorTools(input: {
         reason: z.string().optional().describe("Why you decided to run integrity review"),
       }),
       execute: async () => {
+        const designGate = requireDesignAnalysisBefore("integrity", requireTask(taskID))
+        if (designGate) return designGate
         return renderIntegrityOutcome(await runIntegrityReview())
       },
     }),
@@ -2477,6 +2548,8 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
+        const designGate = requireDesignAnalysisBefore("prosecute", task)
+        if (designGate) return designGate
         // Stateless / unconditional — physical preconditions only (a delivery
         // row to prosecute against). The "No active run" message was a
         // state-machine cache gate; same lazy-bootstrap as deliver/publish.
@@ -3213,6 +3286,8 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
+        const designGate = requireDesignAnalysisBefore("deliver", task)
+        if (designGate) return designGate
 
         // Stateless / unconditional deliver (rule 23): every task ends through
         // this agent regardless of upstream state. No "execute goals first"
@@ -4288,6 +4363,8 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
+        const designGate = requireDesignAnalysisBefore("publish_delivery", task)
+        if (designGate) return designGate
 
         // Stateless / unconditional — same intent as `deliver`. publish_delivery
         // has TWO physical preconditions (delivery row exists; verdict artifact
@@ -4653,7 +4730,8 @@ export function createOrchestratorTools(input: {
         "the rejection feedback in the prompt, then deliver again. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
-        "per-goal build → deliver (the pipeline workflow).",
+        "per-goal build → deliver (the pipeline workflow). For visual/reference tasks, design_analysis must " +
+        "already have produced task.design_specs and PRD/SPEC review entries before any build dispatch.",
       inputSchema: z.object({
         request: z
           .string()
@@ -4677,6 +4755,9 @@ export function createOrchestratorTools(input: {
         const task = requireTask(taskID)
         const requestText = request.trim()
         log.info("build tool invoked", { taskID, reason, requestLen: request.length, goalID: goalID || "" })
+
+        const designGate = requireDesignAnalysisBefore("build", task)
+        if (designGate) return designGate
 
         // Inherit goalID from the parent agent session if one isn't explicitly
         // passed — this nests the build card under the originating goal in the

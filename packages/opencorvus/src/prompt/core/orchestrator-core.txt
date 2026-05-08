@@ -197,8 +197,8 @@ without crossing the task-kind contract.
 Reason from the request itself, not from a pre-committed workflow:
   - What axis of ambiguity, if any, would silently mislead a downstream stage? → that
     decides whether `analyze_intent` is worth running.
-  - Are there visual references the build agent cannot interpret without spec extraction?
-    → that decides `design_analysis`.
+  - Are there visual references, webpage URLs, Figma links, screenshots, mockups, or captured visual artifacts?
+    → `design_analysis` MUST be first. It must complete mirror extraction and at least two PRD/SPEC review passes before requirements, architect, build, integrity, or delivery consume the task.
   - Is the work multi-file with implicit acceptance criteria the build agent would have
     to guess? → that decides `requirements` and (if you decompose into goals) `architect`.
   - Did architect produce a non-trivial graph (multiple goals, cross-goal contracts,
@@ -227,6 +227,13 @@ Some agents have prerequisites. If you skip the prereq, the dependent tool will
 yield a "call X first" error and you'll waste a turn — read the constraints below
 once and decide upstream:
 
+  - Visual/reference tasks require `design_analysis` before every downstream stage.
+    A complete design-analysis handoff means `task.design_specs` exists and
+    decision-log phase=`design_analysis` contains `product_spec`, `frontend_spec`,
+    `backend_spec`, `prd_iteration_notes`, and `completeness_review`. If a task
+    has a URL, Figma link, image/PDF visual attachment, or visual_reference system
+    artifact, call `design_analysis` first and do not call requirements,
+    architect, build, integrity, deliver, or publish until that handoff exists.
   - `architect` requires a requirements spec snapshot. If you call it without
     requirements, it has no REQ-N rows to decompose against.
   - `integrity` requires architect goals on the active spec snapshot. It records

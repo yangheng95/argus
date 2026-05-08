@@ -76,6 +76,20 @@ export const DesignFinalSchema = z.object({
       "Backend/API spec required to reproduce the page: endpoints, request/response shapes, mock data, " +
       "state transitions, and error/loading behavior. Mark unobservable details as unknown instead of inventing them.",
     ),
+  prd_iteration_notes: z
+    .array(z.string().min(1))
+    .min(2)
+    .describe(
+      "At least two PRD/SPEC review passes completed before handoff. Each item must name what was checked, " +
+      "what was missing or corrected, and why the resulting PRD/SPEC is now safe for downstream agents.",
+    ),
+  completeness_review: z
+    .string()
+    .min(1)
+    .describe(
+      "Final completeness audit covering inventory, layout, components, interactions, frontend spec, backend/API spec, " +
+      "reference artifacts, and remaining open questions. Do not finalize until this audit says the PRD/SPEC is complete enough to hand off.",
+    ),
   reference_artifacts: z
     .array(z.string().min(1))
     .default([])

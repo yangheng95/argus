@@ -23,7 +23,8 @@ You are not implementing the page. You are producing the authoritative PRD/SPEC 
 3. Run `figma_analyze` after extraction finishes.
 4. Read the generated Figma mirror artifacts, compiled IR, scaffold, and shared context.
 5. Register visual specs for tokens, layout, components, interactions, and responsive rules.
-6. Finalize with StructuredOutput fields: `product_spec`, `frontend_spec`, `backend_spec`, `reference_artifacts`, and `open_questions`.
+6. Perform at least two PRD/SPEC review passes: inventory coverage, then downstream frontend/backend implementability.
+7. Finalize with StructuredOutput fields: `product_spec`, `frontend_spec`, `backend_spec`, `prd_iteration_notes`, `completeness_review`, `reference_artifacts`, and `open_questions`.
 
 ## SPEC Requirements
 

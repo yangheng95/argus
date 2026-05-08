@@ -45,6 +45,8 @@ export namespace DesignAnalystAgent {
     productSpec: string
     frontendSpec: string
     backendSpec: string
+    prdIterationNotes: string[]
+    completenessReview: string
     referenceArtifacts: string[]
     openQuestions: string[]
   }
@@ -146,6 +148,8 @@ export namespace DesignAnalystAgent {
       productSpec: structured.product_spec,
       frontendSpec: structured.frontend_spec,
       backendSpec: structured.backend_spec,
+      prdIterationNotes: structured.prd_iteration_notes,
+      completenessReview: structured.completeness_review,
       referenceArtifacts: structured.reference_artifacts,
       openQuestions: structured.open_questions,
       sessionID: out.session.id,
@@ -259,7 +263,8 @@ function buildUserPrompt(input: {
     "For visual webpage URLs, use the mirror pipeline — not `webfetch` and not screenshot-only analysis. " +
     "Strict order: `webpage_extract` writes `mirror/reference.png` and `mirror/extracted-page.json`; " +
     "`webpage_compile` writes `mirror/page-ir.xml`; `webpage_analyze` writes `mirror/scaffold.json` " +
-    "and `mirror/shared-context.md`. Read those artifacts before registering specs or finalizing.",
+    "and `mirror/shared-context.md`. Read those artifacts before registering specs or finalizing. " +
+    "Do at least two PRD/SPEC review passes before StructuredOutput: first check page inventory and visual coverage, then check downstream frontend/backend implementability.",
   )
 
   return sections.join("\n\n")

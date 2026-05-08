@@ -22,6 +22,7 @@ The correct target is:
 3. Requirements, architect, and build consume the PRD/SPEC and `task.design_specs`; they do not re-run mirror extraction or treat the URL/screenshot as vague inspiration.
 4. Build implements from the SPEC using normal code tools. It should not depend on mirror tools being present.
 5. Delivery remains the quality gate owner for startup/runtime/visual evidence. This preserves quality gates without giving build a second source of mirror truth.
+6. For any task with real visual/reference inputs (URL, Figma link, image/PDF visual attachment, or visual_reference artifact), `design_analysis` is a hard prerequisite before requirements, architect, build, integrity, delivery, or publish.
 
 ## Product Contract for Design Analysis
 
@@ -35,6 +36,8 @@ Design-analysis output must include two layers:
    - `component_spec`: each component's visual role, states, data needs, interactions, and owning UI region.
    - `frontend_spec`: routes, client state, component tree, asset usage, chart/table behavior, interaction flows.
    - `backend_spec`: required API routes, request/response shapes, mock data, latency/error cases, persistence expectations. This must be inferred from observed UI behavior and page code artifacts, not invented.
+   - `prd_iteration_notes`: at least two review passes proving inventory coverage and downstream implementability were checked and corrected before handoff.
+   - `completeness_review`: final audit stating the PRD/SPEC is complete enough for downstream implementation and what remains unknown.
    - `open_questions`: only truly unobservable facts; do not use this as a fallback for facts mirror already exposes.
 
 ## Non-Goals
@@ -55,6 +58,7 @@ Design-analysis output must include two layers:
    - require multi-pass PRD/SPEC synthesis from both pixels and extracted DOM/code facts;
    - require backend/API contract inference from observable behavior only.
 4. Extend `DesignFinalSchema` with PRD/SPEC fields. Keep visual rows in `task.design_specs`, and persist longer PRD/SPEC text into decision log entries so downstream agents receive it through existing context plumbing.
+4a. Require at least two PRD/SPEC review passes before StructuredOutput and persist `prd_iteration_notes` plus `completeness_review`.
 5. Update `orchestrator/tools.ts` design_analysis descriptions and success result to reflect PRD/SPEC output, not only visual checklist counts.
 6. Remove mirror prompt sections from requirements, architect, and integrity. They should read design-analysis summaries and visual specs only.
 7. Replace build-stage mirror skills with design-analysis-stage spec skills or disable their build auto-detection. Build must not declare `webpage_*` / `figma_*` as required tools.
@@ -64,6 +68,7 @@ Design-analysis output must include two layers:
    - build/general/explore/orchestrator/requirements/architect/integrity/prosecutor do not receive mirror ids from `ToolRegistry.tools()`;
    - build webpage URL skill no longer injects mirror required tools;
    - design-analysis final schema requires PRD/SPEC fields;
+   - visual/reference tasks block downstream orchestrator tools until design-analysis handoff exists;
    - prompt hygiene confirms design-analysis is the only mirror owner.
 10. Run targeted tests, then run the AMD benchmark. If the benchmark fails, debug the failure against completion quality, not against the old build-stage mirror workflow.
 
