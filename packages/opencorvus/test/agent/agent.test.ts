@@ -506,6 +506,8 @@ test("design-analyst advertises url_screenshot and omits webfetch", async () => 
       const designAnalyst = await Agent.get("design-analyst")
       expect(designAnalyst?.tools?.include).toContain("url_screenshot")
       expect(designAnalyst?.tools?.include).not.toContain("webfetch")
+      expect(designAnalyst?.tools?.include).not.toContain("todoread")
+      expect(designAnalyst?.tools?.include).not.toContain("todowrite")
 
       const { createUrlScreenshotTool } = await import("../../src/design-analyst/url-screenshot-tool")
       expect(Object.keys(createUrlScreenshotTool())).toEqual(["url_screenshot"])
