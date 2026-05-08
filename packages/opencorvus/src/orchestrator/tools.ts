@@ -7,6 +7,7 @@
 import { tool } from "ai"
 import z from "zod"
 import path from "node:path"
+import fs from "node:fs/promises"
 import { Session } from "@/session"
 import { resolveAgentModel } from "@/agent/model"
 import { SessionPrompt } from "@/session/prompt"
@@ -250,11 +251,20 @@ function renderEvidenceSourceManifest(input: {
   figmaUrls: readonly string[]
   materialPaths: readonly string[]
   referenceArtifacts: readonly string[]
+  materializedFiles?: readonly string[]
 }): string {
   const lines: string[] = []
   lines.push("## PRD/SPEC Source Manifest")
-  lines.push("Canonical PRD/SPEC entries: decision_log phase=design_analysis keys product_spec, frontend_spec, visual_consistency_spec, backend_spec, prd_iteration_notes, completeness_review.")
+  lines.push("Canonical PRD/SPEC file: .opencorvus/design-analysis/prd-spec.md")
+  lines.push("Canonical source manifest file: .opencorvus/design-analysis/evidence-source-manifest.md")
+  lines.push("Canonical decision-log entries: phase=design_analysis keys product_spec, frontend_spec, visual_consistency_spec, backend_spec, prd_iteration_notes, completeness_review.")
   lines.push("Optional visual anchors: task.design_specs, when present. They are secondary to visual_consistency_spec.")
+
+  if (input.materializedFiles && input.materializedFiles.length > 0) {
+    lines.push("")
+    lines.push("### Materialized PRD/SPEC files")
+    for (const item of [...new Set(input.materializedFiles)]) lines.push(`- ${item}`)
+  }
 
   const requestUrls = [...new Set([...input.task.request.matchAll(/https?:\/\/\S+/gi)].map((m) => m[0]))]
   const urls = [...new Set([...requestUrls, ...input.liveUrls])]
@@ -306,6 +316,117 @@ function renderEvidenceSourceManifest(input: {
   }
 
   return lines.join("\n")
+}
+
+function designAnalysisArtifactPaths(projectDir: string) {
+  const relativeDir = ".opencorvus/design-analysis"
+  return {
+    relativeDir,
+    prdRelative: `${relativeDir}/prd-spec.md`,
+    manifestRelative: `${relativeDir}/evidence-source-manifest.md`,
+    prdAbsolute: path.join(projectDir, ".opencorvus", "design-analysis", "prd-spec.md"),
+    manifestAbsolute: path.join(projectDir, ".opencorvus", "design-analysis", "evidence-source-manifest.md"),
+  }
+}
+
+function renderDesignAnalysisPrdSpecDocument(input: {
+  analysis: {
+    designSystem: string
+    techStack: readonly string[]
+    productSpec: string
+    frontendSpec: string
+    visualConsistencySpec: string
+    backendSpec: string
+    prdIterationNotes: readonly string[]
+    completenessReview: string
+    referenceArtifacts: readonly string[]
+    openQuestions: readonly string[]
+  }
+  evidenceSourceManifest: string
+}): string {
+  const lines: string[] = []
+  lines.push("# Design Analysis PRD/SPEC")
+  lines.push("")
+  lines.push("This file is the materialized design-analysis source for downstream agents.")
+  lines.push("The decision log stores the same contract under phase=design_analysis.")
+  lines.push("")
+  lines.push("## Evidence Source Manifest")
+  lines.push(input.evidenceSourceManifest.trim())
+  lines.push("")
+  lines.push("## Design System")
+  lines.push(input.analysis.designSystem.trim() || "(not specified)")
+  lines.push("")
+  lines.push("## Recommended Stack")
+  if (input.analysis.techStack.length > 0) {
+    for (const item of input.analysis.techStack) lines.push(`- ${item}`)
+  } else {
+    lines.push("(not specified)")
+  }
+  lines.push("")
+  lines.push("## Product Spec")
+  lines.push(input.analysis.productSpec.trim())
+  lines.push("")
+  lines.push("## Frontend Spec")
+  lines.push(input.analysis.frontendSpec.trim())
+  lines.push("")
+  lines.push("## Visual Consistency Spec")
+  lines.push(input.analysis.visualConsistencySpec.trim())
+  lines.push("")
+  lines.push("## Backend Spec")
+  lines.push(input.analysis.backendSpec.trim())
+  lines.push("")
+  lines.push("## PRD Iteration Notes")
+  if (input.analysis.prdIterationNotes.length > 0) {
+    input.analysis.prdIterationNotes.forEach((item, index) => {
+      lines.push(`${index + 1}. ${item.trim()}`)
+    })
+  } else {
+    lines.push("(not specified)")
+  }
+  lines.push("")
+  lines.push("## Completeness Review")
+  lines.push(input.analysis.completenessReview.trim())
+  lines.push("")
+  lines.push("## Reference Artifacts")
+  if (input.analysis.referenceArtifacts.length > 0) {
+    for (const item of input.analysis.referenceArtifacts) lines.push(`- ${item}`)
+  } else {
+    lines.push("(not specified)")
+  }
+  lines.push("")
+  lines.push("## Open Questions")
+  if (input.analysis.openQuestions.length > 0) {
+    for (const item of input.analysis.openQuestions) lines.push(`- ${item}`)
+  } else {
+    lines.push("(none)")
+  }
+  return lines.join("\n").trimEnd() + "\n"
+}
+
+async function writeDesignAnalysisArtifacts(input: {
+  projectDir: string
+  analysis: Parameters<typeof renderDesignAnalysisPrdSpecDocument>[0]["analysis"]
+  evidenceSourceManifest: string
+}): Promise<{ prdRelative: string; manifestRelative: string }> {
+  const paths = designAnalysisArtifactPaths(input.projectDir)
+  await fs.mkdir(path.dirname(paths.prdAbsolute), { recursive: true })
+  await fs.writeFile(
+    paths.manifestAbsolute,
+    input.evidenceSourceManifest.trimEnd() + "\n",
+    "utf8",
+  )
+  await fs.writeFile(
+    paths.prdAbsolute,
+    renderDesignAnalysisPrdSpecDocument({
+      analysis: input.analysis,
+      evidenceSourceManifest: input.evidenceSourceManifest,
+    }),
+    "utf8",
+  )
+  return {
+    prdRelative: paths.prdRelative,
+    manifestRelative: paths.manifestRelative,
+  }
 }
 
 function requireDesignAnalysisBefore(stage: string, task: TaskRow) {
@@ -2098,7 +2219,7 @@ export function createOrchestratorTools(input: {
           await updateTask(
             freshTask,
             { design_specs: analysis.specs },
-            `Visual contract stored (${analysis.specs.length} specs)`,
+            `Design PRD/SPEC stored (optional visual anchors: ${analysis.specs.length})`,
           )
 
           await trackStepComplete("design_analysis")
@@ -2108,12 +2229,33 @@ export function createOrchestratorTools(input: {
             return acc
           }, {})
           const taskAfterDesignSpecs = requireTask(taskID)
+          const materializedDesignFiles = designAnalysisArtifactPaths(Instance.directory)
           const evidenceSourceManifest = renderEvidenceSourceManifest({
             task: taskAfterDesignSpecs,
             liveUrls,
             figmaUrls,
             materialPaths,
             referenceArtifacts: analysis.referenceArtifacts,
+            materializedFiles: [
+              materializedDesignFiles.prdRelative,
+              materializedDesignFiles.manifestRelative,
+            ],
+          })
+          const writtenDesignArtifacts = await writeDesignAnalysisArtifacts({
+            projectDir: Instance.directory,
+            analysis: {
+              designSystem: analysis.designSystem,
+              techStack: analysis.techStack,
+              productSpec: analysis.productSpec,
+              frontendSpec: analysis.frontendSpec,
+              visualConsistencySpec: analysis.visualConsistencySpec,
+              backendSpec: analysis.backendSpec,
+              prdIterationNotes: analysis.prdIterationNotes,
+              completenessReview: analysis.completenessReview,
+              referenceArtifacts: analysis.referenceArtifacts,
+              openQuestions: analysis.openQuestions,
+            },
+            evidenceSourceManifest,
           })
 
           const { createDecisionLog } = await import("@/decision-log")
@@ -2218,7 +2360,7 @@ export function createOrchestratorTools(input: {
               "SUCCESS: Mirror-grounded PRD/SPEC and visual_consistency_spec persisted in decision log. " +
               "NEXT: call requirements for functional decomposition.",
             fields: [
-              ["total_specs", String(analysis.specs.length)],
+              ["optional_visual_anchors", String(analysis.specs.length)],
               ["color", String(countByCategory.color ?? 0)],
               ["typography", String(countByCategory.typography ?? 0)],
               ["spacing", String(countByCategory.spacing ?? 0)],
@@ -2231,6 +2373,8 @@ export function createOrchestratorTools(input: {
               ["prd_review_passes", String(analysis.prdIterationNotes.length)],
               ["reference_artifacts", String(analysis.referenceArtifacts.length)],
               ["source_manifest", "decision_log:design_analysis/evidence_source_manifest"],
+              ["prd_spec_file", writtenDesignArtifacts.prdRelative],
+              ["source_manifest_file", writtenDesignArtifacts.manifestRelative],
               ["open_questions", String(analysis.openQuestions.length)],
             ],
             pointer: "decision_log phase=design_analysis",
