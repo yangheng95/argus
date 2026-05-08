@@ -47,38 +47,38 @@ afterEach(() => {
 });
 
 describe("host-scoped overlay themes", () => {
-  test("Tauri and browser theme controls do not expose VS Code passthrough theme", () => {
-    expect(themeOptionsForHost("tauri").map((theme) => theme.id)).toEqual(["dark", "light", "system"]);
-    expect(themeOptionsForHost("browser").map((theme) => theme.id)).toEqual(["dark", "light", "system"]);
-  });
-
-  test("VS Code webview theme controls expose the host passthrough theme", () => {
-    expect(themeOptionsForHost("vscode").map((theme) => theme.id)).toEqual(["vscode-dark", "light", "system"]);
+  test("all hosts expose the complete built-in theme set", () => {
+    const expected = ["dark", "vscode-dark", "light", "system"];
+    expect(themeOptionsForHost("tauri").map((theme) => theme.id)).toEqual(expected);
+    expect(themeOptionsForHost("browser").map((theme) => theme.id)).toEqual(expected);
+    expect(themeOptionsForHost("vscode").map((theme) => theme.id)).toEqual(expected);
   });
 
   test("current-host registry follows the transport singleton", () => {
     __setHostTransportForTest(fakeTransport("tauri"));
-    expect(themeOptionsForCurrentHost().map((theme) => theme.id)).not.toContain("vscode-dark");
+    expect(themeOptionsForCurrentHost().map((theme) => theme.id)).toContain("vscode-dark");
+    expect(themeOptionsForCurrentHost().map((theme) => theme.id)).toContain("dark");
 
     __setHostTransportForTest(fakeTransport("vscode"));
     expect(themeOptionsForCurrentHost().map((theme) => theme.id)).toContain("vscode-dark");
+    expect(themeOptionsForCurrentHost().map((theme) => theme.id)).toContain("dark");
   });
 
-  test("persisted vscode-dark is not accepted in Tauri settings", () => {
+  test("persisted vscode-dark is accepted in Tauri settings", () => {
     __setHostTransportForTest(fakeTransport("tauri"));
     applySettings({ ...DEFAULT_SETTINGS, theme: "vscode-dark" });
 
-    expect(settingsStore.theme).toBe("light");
-    expect(sanitizeThemeForHost("vscode-dark", "tauri")).toBe("light");
+    expect(settingsStore.theme).toBe("vscode-dark");
+    expect(sanitizeThemeForHost("vscode-dark", "tauri")).toBe("vscode-dark");
   });
 
-  test("applyTheme keeps non-VS Code documents off vscode-dark", () => {
+  test("applyTheme can apply vscode-dark outside VS Code", () => {
     const cleanupDocument = installDocument();
     __setHostTransportForTest(fakeTransport("browser"));
     try {
       applyTheme("vscode-dark");
-      expect(document.documentElement.dataset.theme).toBe("light");
-      expect(document.body.dataset.theme).toBe("light");
+      expect(document.documentElement.dataset.theme).toBe("vscode-dark");
+      expect(document.body.dataset.theme).toBe("vscode-dark");
     } finally {
       cleanupDocument();
     }

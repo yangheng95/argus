@@ -12,18 +12,14 @@ export const DEFAULT_THEME_ID: OverlayThemeID = "light";
 
 const DESKTOP_THEME_OPTIONS: OverlayThemeOption[] = [
   { id: "dark", i18nSlug: "dark" },
-  { id: "light", i18nSlug: "light" },
-  { id: "system", i18nSlug: "system" },
-];
-
-const VSCODE_THEME_OPTIONS: OverlayThemeOption[] = [
   { id: "vscode-dark", i18nSlug: "vscode_dark" },
   { id: "light", i18nSlug: "light" },
   { id: "system", i18nSlug: "system" },
 ];
 
 export function themeOptionsForHost(host: HostKind): OverlayThemeOption[] {
-  return host === "vscode" ? VSCODE_THEME_OPTIONS : DESKTOP_THEME_OPTIONS;
+  void host;
+  return DESKTOP_THEME_OPTIONS;
 }
 
 export function themeOptionsForCurrentHost(): OverlayThemeOption[] {

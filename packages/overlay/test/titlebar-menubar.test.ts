@@ -391,7 +391,7 @@ test(
       })
       await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
       await page.waitForSelector('[data-menu-trigger="workspace"]', { visible: true })
-      await page.waitForFunction(() => document.documentElement.dataset.theme === "light")
+      await page.waitForFunction(() => document.documentElement.dataset.theme === "vscode-dark")
       expect(await page.evaluate(() => localStorage.getItem("oc_theme"))).toBe("vscode-dark")
 
       const shellBackgrounds = await page.evaluate(() => {
@@ -404,7 +404,7 @@ test(
       expect(shellBackgrounds.sections).not.toBe("rgba(0, 0, 0, 0)")
       expect(shellBackgrounds.panelBody).not.toBe("rgba(0, 0, 0, 0)")
 
-      const lightTriggerState = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
+      const vscodeDarkTriggerState = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
         const el = node as HTMLElement
         return {
           color: getComputedStyle(el).color,
@@ -412,8 +412,8 @@ test(
           ariaKeyshortcuts: el.getAttribute("aria-keyshortcuts"),
         }
       })
-      expect(lightTriggerState).toEqual({
-        color: "rgb(16, 21, 39)",
+      expect(vscodeDarkTriggerState).toEqual({
+        color: "rgb(212, 212, 212)",
         accessKey: "p",
         ariaKeyshortcuts: "Alt+P",
       })
@@ -426,7 +426,7 @@ test(
         '[data-menu-trigger="workspace"]',
         (node) => getComputedStyle(node as HTMLElement).color,
       )
-      expect(darkTriggerColor).toBe("rgb(246, 248, 255)")
+      expect(darkTriggerColor).toBe("rgb(232, 236, 241)")
 
       await page.keyboard.down("Alt")
       await page.keyboard.up("Alt")
@@ -438,7 +438,7 @@ test(
       await page.keyboard.press("v")
       await page.keyboard.up("Alt")
       await page.waitForSelector('[data-testid="titlebar-menu-view"]', { visible: true })
-      expect(await page.$('[data-testid="titlebar-theme-vscode-dark"]')).toBeNull()
+      expect(await page.$('[data-testid="titlebar-theme-vscode-dark"]')).not.toBeNull()
       const altOpenState = await page.evaluate(() => ({
         expanded: document.querySelector('[data-menu-trigger="view"]')?.getAttribute("aria-expanded"),
         focusedMenuText: (document.activeElement as HTMLElement | null)?.textContent?.trim() || "",

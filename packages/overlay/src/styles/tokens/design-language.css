@@ -176,10 +176,10 @@
      for each available theme. These previews are metadata about *other*
      themes, not the active one, so the gradients are deliberately fixed
      hex literals routed through tokens instead of palette tokens. */
-  --oc-theme-swatch-dark: linear-gradient(135deg, #1e1f22 50%, #2b2d30 50%);
+  --oc-theme-swatch-dark: linear-gradient(135deg, #1a1b1e 50%, #26282c 50%);
   --oc-theme-swatch-light: linear-gradient(135deg, #f2f2f2 50%, #ffffff 50%);
   --oc-theme-swatch-vscode-dark: linear-gradient(135deg, #1e1e1e 50%, #252526 50%);
-  --oc-theme-swatch-system: linear-gradient(135deg, #1e1f22 50%, #f2f2f2 50%);
+  --oc-theme-swatch-system: linear-gradient(135deg, #1a1b1e 50%, #f2f2f2 50%);
 
   /* Markdown / hljs (highlight.js) syntax palette. The fixed GitHub-Dark
      hue set is intentional metadata — code listings keep a stable
