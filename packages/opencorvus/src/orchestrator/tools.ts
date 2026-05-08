@@ -684,21 +684,29 @@ async function loadLatestRenderedRetryAttachment(input: {
 }): Promise<import("@/build/agent").BuildAgent.BuildContext["retryAttachments"]> {
   if (!input.enabled) return undefined
   try {
-    const fsMod = await import("node:fs/promises")
-    const pathMod = await import("node:path")
-    const renderedPath = pathMod.join(
-      Instance.directory,
-      ".opencorvus",
-      "delivery-hard-gate",
-      input.taskID,
-      "rendered.png",
+    const task = requireTask(input.taskID)
+    const artifacts = Array.isArray(task.system_artifacts) ? task.system_artifacts : []
+    const rendered = [...artifacts].reverse().find((artifact) =>
+      artifact?.intent === "rendered_output" &&
+      typeof artifact.url === "string" &&
+      typeof artifact.mime === "string" &&
+      artifact.mime.startsWith("image/")
     )
-    const stat = await fsMod.stat(renderedPath).catch(() => undefined)
-    if (!stat?.isFile()) return undefined
-    const bytes = await fsMod.readFile(renderedPath)
+    if (!rendered) return undefined
+    const { AttachmentStore } = await import("@/storage/attachment-store")
+    const located = AttachmentStore.nameFromUrl(rendered.url)
+    if (!located) {
+      throw new Error(
+        `rendered_output artifact has no resolvable attachment url: ${rendered.filename ?? rendered.sha ?? rendered.url}`,
+      )
+    }
+    const abs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
+    if (!abs) {
+      throw new Error(`rendered_output artifact ${located.projectID}/${located.name} is not resolvable on disk`)
+    }
     return [{
-      url: `data:image/png;base64,${bytes.toString("base64")}`,
-      mime: "image/png",
+      url: rendered.url,
+      mime: rendered.mime,
       filename: "previous-attempt-rendered.png",
     }]
   } catch (err) {
