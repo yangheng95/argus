@@ -6,6 +6,7 @@ import { EngineProtocol } from "@/engine/protocol"
 import { Identifier } from "@/id/id"
 import type { DeliverySurfaceManifest } from "./surface-detector"
 import type { DeliverySpecialistReview } from "./specialist-review"
+import type { ProjectRuntimeReadiness } from "./checks/runtime-readiness"
 
 export type DeliveryCheckStatus = "passed" | "failed" | "skipped"
 
@@ -40,6 +41,7 @@ export type FailureSignature = {
 export type DeliveryGateVerdict = {
   status: "passed" | "failed"
   summary: string
+  failedReadinessIds?: string[]
   failedCheckIds: string[]
   failedCoverageIds: string[]
   failedRuntimeFlowIds: string[]
@@ -113,6 +115,7 @@ export type DeliveryEvidenceManifest = {
   iteration: number
   headRef?: string
   requiredChecks: DeliveryRequiredCheck[]
+  runtimeReadiness?: ProjectRuntimeReadiness
   checkResults: DeliveryCheckResult[]
   goalCoverage: DeliveryGoalCoverage[]
   requirementCoverage: DeliveryRequirementCoverage[]
@@ -127,7 +130,7 @@ export type DeliveryEvidenceManifest = {
 }
 
 export type DeliveryManifestFailureDetail = {
-  kind: "check" | "coverage" | "runtime" | "review"
+  kind: "readiness" | "check" | "coverage" | "runtime" | "review"
   id: string
   name: string
   status?: string
@@ -197,6 +200,7 @@ export function validateDeliveryEvidenceManifest(
 
   return {
     status: failedCheckIds.length === 0 ? "passed" : "failed",
+    failedReadinessIds: manifest.runtimeReadiness?.failedReadinessIds ?? [],
     failedCheckIds,
     failedCoverageIds: [],
     failedRuntimeFlowIds: [],
@@ -225,10 +229,23 @@ export function validateDeliveryCoverage(input: {
 export function deliveryManifestFailureDetails(
   manifest: DeliveryEvidenceManifest,
 ): DeliveryManifestFailureDetail[] {
+  const failedReadinessIds = new Set(manifest.finalGate.failedReadinessIds ?? [])
   const failedCheckIds = new Set(manifest.finalGate.failedCheckIds)
   const failedCoverageIds = new Set(manifest.finalGate.failedCoverageIds)
   const failedRuntimeFlowIds = new Set(manifest.finalGate.failedRuntimeFlowIds)
   const failedReviewIds = new Set(manifest.finalGate.failedReviewIds ?? [])
+
+  const readinessDetails = (manifest.runtimeReadiness?.checks ?? [])
+    .filter((item) => failedReadinessIds.has(item.id) || item.status === "failed")
+    .map((item) => ({
+      kind: "readiness" as const,
+      id: item.id,
+      name: item.name,
+      status: item.status,
+      command: item.command,
+      exitCode: item.exitCode,
+      evidence: firstEvidence(item.evidence),
+    }))
 
   const checkDetails = manifest.checkResults
     .filter((item) => failedCheckIds.has(item.id) || item.status === "failed")
@@ -305,6 +322,7 @@ export function deliveryManifestFailureDetails(
     }))
 
   return sortFailureDetailsByFunctionalPriority(manifest, [
+    ...readinessDetails,
     ...checkDetails,
     ...missingCheckDetails,
     ...goalCoverageDetails,
@@ -471,6 +489,7 @@ export function findDeliveryEvidenceManifestHistory(input: {
 }
 
 export function deliveryFailureSignatureKeys(manifest: DeliveryEvidenceManifest): string[] {
+  const readinessKeys = (manifest.finalGate.failedReadinessIds ?? []).map((item) => `readiness:${item}`)
   const checkKeys = manifest.checkResults
     .filter((item) => item.status === "failed")
     .map((item) =>
@@ -487,7 +506,7 @@ export function deliveryFailureSignatureKeys(manifest: DeliveryEvidenceManifest)
         .filter((finding) => finding.proposedSeverity === "blocking")
         .map((finding) => `specialist:${review.reviewer}:${finding.category}:${finding.claim}`),
     )
-  return [...new Set([...checkKeys, ...coverageKeys, ...runtimeKeys, ...reviewKeys, ...specialistKeys])].sort()
+  return [...new Set([...readinessKeys, ...checkKeys, ...coverageKeys, ...runtimeKeys, ...reviewKeys, ...specialistKeys])].sort()
 }
 
 export function repeatedDeliveryFailureSignatures(input: {

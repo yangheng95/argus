@@ -14,13 +14,12 @@ export type DeliveryArbiterDecision = {
 
 /**
  * Delivery gate semantics:
- *   - Blocking: acceptance-spec coverage gaps only.
- *   - Advisory: required checks (build/typecheck/test/lint), runtime probes,
- *     architecture review (integrity), workspace_export reviews, and
- *     specialist reviews. The delivery agent (LLM) reads the full evidence
- *     (including integrity's complete review_markdown) and decides whether
- *     they materially block acceptance. Spec
- *     architecture-rework-loosening-plan-2026-05-06.md (C3 + C5).
+ *   - Blocking: runtime-readiness failures, acceptance-spec coverage gaps,
+ *     failed runtime probes, and required integrity review failures.
+ *   - Advisory: required checks (build/typecheck/test/lint),
+ *     workspace_export reviews, and specialist reviews. The delivery agent
+ *     (LLM) reads the full evidence and decides whether they materially block
+ *     acceptance.
  *
  * functionalAssessment.primaryFailureIds is the ground truth for the
  * blocking set; the gate just mirrors it. This keeps a single source of
@@ -29,6 +28,7 @@ export type DeliveryArbiterDecision = {
  */
 export function arbitrateDeliveryGate(input: {
   checks: DeliveryGateVerdict
+  failedReadinessIds?: string[]
   failedCoverageIds: string[]
   failedRuntimeFlowIds?: string[]
   failedReviewIds?: string[]
@@ -39,6 +39,7 @@ export function arbitrateDeliveryGate(input: {
   const status = input.functionalAssessment.primaryFailureIds.length === 0 ? "passed" : "failed"
   return {
     status,
+    failedReadinessIds: input.failedReadinessIds ?? [],
     failedCheckIds: input.checks.failedCheckIds,
     failedCoverageIds: input.failedCoverageIds,
     failedRuntimeFlowIds,
@@ -46,6 +47,7 @@ export function arbitrateDeliveryGate(input: {
     functionalAssessment: input.functionalAssessment,
     summary: deliveryGateSummary({
       status,
+      readiness: input.failedReadinessIds?.length ?? 0,
       checks: input.checks.failedCheckIds.length,
       coverage: input.failedCoverageIds.length,
       runtime: failedRuntimeFlowIds.length,
@@ -57,6 +59,7 @@ export function arbitrateDeliveryGate(input: {
 
 function deliveryGateSummary(input: {
   status: "passed" | "failed"
+  readiness: number
   checks: number
   coverage: number
   runtime: number
@@ -67,7 +70,7 @@ function deliveryGateSummary(input: {
     return input.functionalAssessment.summary
   }
   const counts =
-    `${input.checks} required check(s), ${input.coverage} coverage item(s), ` +
+    `${input.readiness} readiness item(s), ${input.checks} required check(s), ${input.coverage} coverage item(s), ` +
     `${input.runtime} runtime flow(s), and ${input.reviews} review item(s)`
   const primary = input.functionalAssessment.primaryFailureIds.join(", ") || "none"
   const auxiliary = input.functionalAssessment.auxiliaryFailureIds.join(", ") || "none"
