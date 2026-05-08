@@ -12,9 +12,14 @@ describe("overlay default theme", () => {
       path.join(import.meta.dir, "..", "src", "services", "theme.ts"),
       "utf8",
     );
-    expect(settings).toContain('export const DEFAULT_THEME = "light";');
+    const registry = await fs.readFile(
+      path.join(import.meta.dir, "..", "src", "services", "theme-registry.ts"),
+      "utf8",
+    );
+    expect(registry).toContain('export const DEFAULT_THEME_ID: OverlayThemeID = "light";');
+    expect(settings).toContain("export const DEFAULT_THEME = DEFAULT_THEME_ID;");
     expect(settings).toContain("theme: DEFAULT_THEME");
-    expect(theme).toContain("return DEFAULT_THEME;");
+    expect(theme).toContain("return sanitizeThemeForHost(value);");
   });
 
   test("pre-render theme bootstrap uses static light attributes without inline writes", async () => {
@@ -55,6 +60,7 @@ describe("overlay default theme", () => {
     );
     expect(source).toContain("const [settingsHydrated, setSettingsHydrated] = createSignal(false)");
     expect(source).toContain("if (!settingsHydrated()) return;");
-    expect(source).toContain("onSettingsLoaded: () => setSettingsHydrated(true)");
+    expect(source).toContain("onSettingsLoaded:");
+    expect(source).toContain("setSettingsHydrated(true);");
   });
 });

@@ -85,10 +85,13 @@ test(
                   if (command === "overlay_settings_load") {
                     return {
                       serverUrl: location.origin,
-                      autoServer: false,
+                      autoServer: true,
                       locale: value,
                       directory: "D:/overlay/workspace/app",
                     }
+                  }
+                  if (command === "overlay_server_info") {
+                    return { url: location.origin, pid: 12345 }
                   }
                   if (command === "overlay_settings_save") return true
                   if (command === "overlay_create_temp_dir") return "D:/overlay/temp"
@@ -128,11 +131,6 @@ test(
             compact: "P",
             accessKey: "p",
           })
-          await page.evaluate(() => {
-            const app = window as typeof window & { state?: { serverPid?: number } }
-            if (app.state) app.state.serverPid = 12345
-          })
-
           const geometry = await page.evaluate(() => {
             const titlebar = document.querySelector("#titlebar") as HTMLElement | null
             if (!titlebar) throw new Error("Missing titlebar")
@@ -358,7 +356,7 @@ test(
       const page = await browser.newPage()
       await page.setViewport({ width: 960, height: 720 })
       await page.evaluateOnNewDocument(() => {
-        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_theme", "vscode-dark")
         localStorage.setItem("oc_locale", "en-US")
         window.__TAURI__ = {
           core: {
@@ -367,7 +365,7 @@ test(
                 return {
                   serverUrl: location.origin,
                   autoServer: false,
-                  theme: "light",
+                  theme: "vscode-dark",
                   locale: "en-US",
                   directory: "D:/overlay/workspace/app",
                 }
@@ -394,6 +392,17 @@ test(
       await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
       await page.waitForSelector('[data-menu-trigger="workspace"]', { visible: true })
       await page.waitForFunction(() => document.documentElement.dataset.theme === "light")
+      expect(await page.evaluate(() => localStorage.getItem("oc_theme"))).toBe("vscode-dark")
+
+      const shellBackgrounds = await page.evaluate(() => {
+        const sidebar = getComputedStyle(document.querySelector<HTMLElement>(".sidebar")!).backgroundColor
+        const sections = getComputedStyle(document.querySelector<HTMLElement>(".sections")!).backgroundColor
+        const panelBody = getComputedStyle(document.querySelector<HTMLElement>("#panelBody")!).backgroundColor
+        return { sidebar, sections, panelBody }
+      })
+      expect(shellBackgrounds.sidebar).not.toBe("rgba(0, 0, 0, 0)")
+      expect(shellBackgrounds.sections).not.toBe("rgba(0, 0, 0, 0)")
+      expect(shellBackgrounds.panelBody).not.toBe("rgba(0, 0, 0, 0)")
 
       const lightTriggerState = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
         const el = node as HTMLElement
@@ -429,6 +438,7 @@ test(
       await page.keyboard.press("v")
       await page.keyboard.up("Alt")
       await page.waitForSelector('[data-testid="titlebar-menu-view"]', { visible: true })
+      expect(await page.$('[data-testid="titlebar-theme-vscode-dark"]')).toBeNull()
       const altOpenState = await page.evaluate(() => ({
         expanded: document.querySelector('[data-menu-trigger="view"]')?.getAttribute("aria-expanded"),
         focusedMenuText: (document.activeElement as HTMLElement | null)?.textContent?.trim() || "",
@@ -596,7 +606,7 @@ test(
       await page.setViewport({ width: 1600, height: 900 })
       await page.evaluateOnNewDocument((portValue) => {
         localStorage.setItem("oc_locale", "en-US")
-        localStorage.setItem("oc_theme", "vscode-dark")
+        localStorage.setItem("oc_theme", "dark")
         localStorage.removeItem("oc_sidebar_width")
         localStorage.removeItem("oc_sections_width")
         window.__TAURI__ = {
@@ -607,7 +617,7 @@ test(
                   serverUrl: `http://127.0.0.1:${portValue}`,
                   autoServer: false,
                   locale: "en-US",
-                  theme: "vscode-dark",
+                  theme: "dark",
                   directory: "D:/overlay/workspace/app",
                 }
               }

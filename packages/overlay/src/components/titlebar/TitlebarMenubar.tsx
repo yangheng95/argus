@@ -6,6 +6,7 @@ import { settingsStore, setSettingsStore, saveSettings } from "../../store/setti
 import { patchConfig, reloadProjectScope } from "../../services/config";
 import { openConfigDialog } from "../../services/dialog";
 import { applyOpacity, applyTheme, applyZoom, sanitizeOpacity, sanitizeZoom, toggleDevtools } from "../../services/theme";
+import { themeOptionsForCurrentHost } from "../../services/theme-registry";
 import {
   PROJECT_EDITORS,
   browseDirectory,
@@ -349,6 +350,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
   const maxGroups = createMemo(() => clampInt(configNumber("max_executor_groups"), 1, 10));
   const opacityPercent = createMemo(() => Math.round(settingsStore.opacity * 100));
   const zoomPercent = createMemo(() => Math.round(settingsStore.zoom * 100));
+  const themeOptions = themeOptionsForCurrentHost();
 
   return (
     /* OpenCorvus is the product brand name, so this menubar landmark keeps the literal brand label. */
@@ -479,24 +481,19 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                 <Show when={menu.id === "view"}>
                   <MenuGroup title={t("titlebar.menu.view")}>
                     <div class="titlebar-theme-options titlebar-theme-options-menubar" role="radiogroup" aria-label={t("settings.theme.label")}>
-                      <For each={[
-                        ["vscode-dark", t("settings.theme.vscode_dark")],
-                        ["dark", t("settings.theme.dark")],
-                        ["light", t("settings.theme.light")],
-                        ["system", t("settings.theme.system")],
-                      ]}>
+                      <For each={themeOptions}>
                         {(item) => (
                           <button
                             type="button"
                             class="titlebar-theme-option"
                             role="radio"
-                            aria-checked={settingsStore.theme === item[0]}
-                            data-active={settingsStore.theme === item[0] ? "true" : "false"}
-                            data-testid={`titlebar-theme-${item[0]}`}
-                            onClick={() => setTheme(item[0])}
+                            aria-checked={settingsStore.theme === item.id}
+                            data-active={settingsStore.theme === item.id ? "true" : "false"}
+                            data-testid={`titlebar-theme-${item.id}`}
+                            onClick={() => setTheme(item.id)}
                           >
-                            <span class="titlebar-theme-option-swatch" data-theme={item[0]} aria-hidden="true" />
-                            <span class="titlebar-theme-option-label">{item[1]}</span>
+                            <span class="titlebar-theme-option-swatch" data-theme={item.id} aria-hidden="true" />
+                            <span class="titlebar-theme-option-label">{t(`settings.theme.${item.i18nSlug}`)}</span>
                           </button>
                         )}
                       </For>

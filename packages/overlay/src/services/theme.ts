@@ -10,12 +10,15 @@
 
 import {
   MIN_WINDOW_OPACITY,
-  DEFAULT_THEME,
   sanitizeOpacity,
   settingsStore,
 } from "../store/settings";
 import { getHostTransport } from "./host-transport";
 import { readInitialVsCodeHostTheme } from "./host-theme";
+import {
+  sanitizeThemeForHost,
+  type OverlayThemeID,
+} from "./theme-registry";
 
 export { MIN_WINDOW_OPACITY, sanitizeOpacity } from "../store/settings";
 
@@ -39,14 +42,7 @@ const systemThemeMedia: MediaQueryList | null =
 // "light" | "system" → returned as-is; everything else → default theme
 
 export function sanitizeTheme(value: any): string {
-  if (
-    value === "light" ||
-    value === "dark" ||
-    value === "system" ||
-    value === "vscode-dark"
-  )
-    return value as string;
-  return DEFAULT_THEME;
+  return sanitizeThemeForHost(value);
 }
 
 // ── sanitizeZoom ──
@@ -70,14 +66,16 @@ export function resolvedTheme(): string {
 }
 
 function resolveThemeValue(theme: string): string {
-  if (theme === "system") {
-    if (getHostTransport().kind === "vscode") {
+  const host = getHostTransport().kind;
+  const hostScopedTheme: OverlayThemeID = sanitizeThemeForHost(theme, host);
+  if (hostScopedTheme === "system") {
+    if (host === "vscode") {
       const hostTheme = readInitialVsCodeHostTheme();
       if (hostTheme) return hostTheme;
     }
     return systemThemeMedia?.matches ? "light" : "dark";
   }
-  return theme;
+  return hostScopedTheme;
 }
 
 // ── applyTheme ──

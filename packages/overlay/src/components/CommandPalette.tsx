@@ -21,6 +21,7 @@ import { For, Show, createMemo, createSignal, createEffect } from "solid-js";
 import { boardStore } from "../store/board";
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
 import { applyTheme } from "../services/theme";
+import { themeOptionsForCurrentHost } from "../services/theme-registry";
 import { selectTask } from "../services/task";
 import { openConfigDialog, switchConfigTab } from "../services/dialog";
 import { setLocale } from "../utils/i18n";
@@ -53,13 +54,6 @@ const SETTINGS_TABS: Array<{ tab: string; labelKey: string; group: string }> = [
 // `t(\`cmdk.theme.${slug}\`)` resolves at the call site as a template
 // literal the static check-panel-i18n scanner can see (the head
 // `cmdk.theme.` prefix-covers every descendant key).
-const THEMES: Array<{ id: string; slug: string }> = [
-  { id: "dark", slug: "dark" },
-  { id: "light", slug: "light" },
-  { id: "vscode-dark", slug: "vscode_dark" },
-  { id: "system", slug: "system" },
-];
-
 const LOCALES: Array<{ id: string; label: string }> = [
   { id: "en-US", label: "English (US)" },
   { id: "zh-CN", label: "中文 (简体)" },
@@ -127,10 +121,10 @@ export function CommandPalette() {
       });
     }
 
-    for (const theme of THEMES) {
+    for (const theme of themeOptionsForCurrentHost()) {
       cmds.push({
         id: `theme:${theme.id}`,
-        label: `${t("cmdk.theme_prefix")}: ${t(`cmdk.theme.${theme.slug}`)}`,
+        label: `${t("cmdk.theme_prefix")}: ${t(`cmdk.theme.${theme.i18nSlug}`)}`,
         group: t("cmdk.group.appearance"),
         keywords: `theme ${theme.id}`,
         run: () => {
