@@ -85,3 +85,15 @@ Design-analysis output must include two layers:
 1. `bun test packages/opencorvus/test/agent/agent.test.ts packages/opencorvus/test/agent/runner-tool-scope.test.ts packages/opencorvus/test/engine/skill-inject.test.ts packages/opencorvus/test/mirror/webpage-generate.test.ts`
 2. `bun run --cwd packages/opencorvus typecheck`
 3. AMD page replica benchmark through `packages/opencorvus/script/benchmark/overlay-web-benchmark.ts` using `specs/amd-replica.txt`.
+
+## Iteration 2026-05-09: Handoff Compaction and Permission Closure
+
+Benchmark evidence from `amd-design-analysis-first-20260509-025933` proved that `design_analysis` now runs first and materializes the PRD/SPEC, but downstream build payloads still grew past 700K characters because the full design-analysis decision-log section was copied into later prompts.
+
+The architectural correction is:
+
+1. The materialized PRD/SPEC and source manifest files are the canonical downstream source:
+   - `.opencorvus/design-analysis/prd-spec.md`
+   - `.opencorvus/design-analysis/evidence-source-manifest.md`
+2. Requirements, architect, build, and delivery receive a compact handoff reference with those paths, the `design_analysis` phase name, and bounded decision-log excerpts only. They must read the files when they need detail.
+3. Non-design native agents receive explicit mirror permission denies after user permission config is merged. This aligns permission logs with the registry boundary and prevents custom config from reopening mirror access outside design-analysis.

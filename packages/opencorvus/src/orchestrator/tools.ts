@@ -26,6 +26,7 @@ import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
+import { renderDesignAnalysisHandoffReference } from "@/design-analyst/handoff"
 import {
   EngineArtifactTable,
   EngineGoalTable,
@@ -1683,7 +1684,7 @@ export function createOrchestratorTools(input: {
           const { RequirementsAgent } = await import("@/requirements")
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
-          const designAnalysis = decisionLog.phasePromptSection("design_analysis", "Design Analysis PRD/SPEC Source")
+          const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
 
           // Stage-level retry was removed in step 5/7 (rule 8 — single
           // source). Transient LLM-call failures are now retried inside
@@ -2463,7 +2464,7 @@ export function createOrchestratorTools(input: {
             value: d.value,
             reason: d.reason,
           }))
-          const designAnalysis = decisionLog.phasePromptSection("design_analysis", "Design Analysis PRD/SPEC Source")
+          const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
 
           const { ArchitectAgent } = await import("@/architect/agent")
           const { copyRequirementsToSpecSnapshot, upsertGoalsFromArchitect } = await import("@/engine/persist")
@@ -5285,7 +5286,7 @@ export function createOrchestratorTools(input: {
             const designSpecs = Array.isArray(task.design_specs)
               ? (task.design_specs as any)
               : undefined
-            const designAnalysis = decisionLog.phasePromptSection("design_analysis", "Design Analysis PRD/SPEC Source")
+            const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
 
             // Retry feedback from decision log (per-goal "retry" entries the
             // orchestrator wrote on prior delivery rejection).
@@ -5352,7 +5353,7 @@ export function createOrchestratorTools(input: {
             const designSpecs = Array.isArray(task.design_specs)
               ? (task.design_specs as any)
               : undefined
-            const designAnalysis = createDecisionLog(taskID).phasePromptSection("design_analysis", "Design Analysis PRD/SPEC Source")
+            const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
             context = deliveryFeedback || retryAttachments || designSpecs || designAnalysis.trim().length > 0
               ? {
                   designSpecs,

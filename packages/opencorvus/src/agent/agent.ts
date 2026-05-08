@@ -85,22 +85,6 @@ export namespace Agent {
       task: "allow",
       webfetch: "allow",
       websearch: "allow",
-      // Mirror tools are available only to the design-analyst agent through
-      // ToolRegistry. These permission defaults stay permissive so that one
-      // stage can run unattended; tool availability is the hard boundary.
-      webpage_extract: "allow",
-      webpage_compile: "allow",
-      webpage_analyze: "allow",
-      webpage_image_extract: "allow",
-      webpage_image_compile: "allow",
-      webpage_image_analyze: "allow",
-      webpage_render: "allow",
-      webpage_evaluate: "allow",
-      webpage_text_diff: "allow",
-      webpage_vision_judge: "allow",
-      figma_extract: "allow",
-      figma_compile: "allow",
-      figma_analyze: "allow",
       external_code_search: "allow",
       lsp: "allow",
       memory: "allow",
@@ -116,6 +100,11 @@ export namespace Agent {
       read: "allow",
     })
     const user = PermissionNext.fromConfig(cfg.permission ?? {})
+    const mirrorDenied = PermissionNext.fromConfig(
+      Object.fromEntries(MIRROR_TOOL_IDS.map((id) => [id, "deny"])),
+    )
+    const nonDesignPermissions = (...rulesets: PermissionNext.Ruleset[]) =>
+      PermissionNext.merge(defaults, ...rulesets, user, mirrorDenied)
 
     const result: Record<string, Info> = {
       build: {
@@ -124,13 +113,11 @@ export namespace Agent {
         tools: { exclude: ["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS] },
         options: {},
         prompt: PROMPT_BUILD,
-        permission: PermissionNext.merge(
-          defaults,
+        permission: nonDesignPermissions(
           PermissionNext.fromConfig({
             question: "allow",
             webfetch: "allow",
           }),
-          user,
         ),
         mode: "primary",
         native: true,
@@ -139,14 +126,14 @@ export namespace Agent {
         name: "general",
         description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
         tools: { exclude: ["planner", "panel", "task_report", "analytics", "task", "todoread", "todowrite", ...MIRROR_TOOL_IDS] },
-        permission: PermissionNext.merge(defaults, user),
+        permission: nonDesignPermissions(),
         options: {},
         mode: "subagent",
         native: true,
       },
       explore: {
         name: "explore",
-        permission: PermissionNext.merge(defaults, user),
+        permission: nonDesignPermissions(),
         description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
         tools: { include: ["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"] },
         prompt: PROMPT_EXPLORE,
@@ -161,7 +148,7 @@ export namespace Agent {
         native: true,
         hidden: true,
         prompt: PROMPT_COMPACTION,
-        permission: PermissionNext.merge(defaults, user),
+        permission: nonDesignPermissions(),
         options: {},
       },
       title: {
@@ -172,7 +159,7 @@ export namespace Agent {
         native: true,
         hidden: true,
         temperature: 0.5,
-        permission: PermissionNext.merge(defaults, user),
+        permission: nonDesignPermissions(),
         prompt: PROMPT_TITLE,
       },
       // ── Stage agents (dispatched through SessionPrompt) ─
@@ -212,7 +199,7 @@ export namespace Agent {
         tools: { include: [] as string[] },
         // Permission remains merged for consistency with the shared Agent.Info
         // shape, but registry tool exposure above is the delivery authority.
-        permission: PermissionNext.merge(defaults, user),
+        permission: nonDesignPermissions(),
         options: {},
         prompt: DELIVERY_AGENT_SYSTEM,
         mode: "primary",
@@ -396,7 +383,7 @@ export namespace Agent {
         item = result[key] = {
           name: key,
           mode: "all",
-          permission: PermissionNext.merge(defaults, user),
+          permission: nonDesignPermissions(),
           options: {},
           native: false,
         }

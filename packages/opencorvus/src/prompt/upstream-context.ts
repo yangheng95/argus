@@ -1,4 +1,5 @@
 import { createDecisionLog } from "@/decision-log"
+import { renderDesignAnalysisHandoffReference } from "@/design-analyst/handoff"
 import { findActiveSpecForTask, findRequirements, listGoals } from "@/engine/store"
 
 const ARCHITECT_CONTRACT_VALUE_CAP = 4_000
@@ -16,7 +17,7 @@ export function buildGoalUpstreamAgentContextSections(taskID: string, goalID: st
   const decisionLog = createDecisionLog(taskID)
   return [
     decisionLog.phasePromptSectionForGoal("requirements", goalID, "Requirements Decisions"),
-    decisionLog.phasePromptSectionForGoal("design_analysis", goalID, "Design Analysis Summary"),
+    renderDesignAnalysisHandoffReference(taskID, { valueCap: 300 }),
     decisionLog.phasePromptSectionForGoal(
       "architect",
       goalID,
@@ -42,11 +43,9 @@ export function buildTaskUpstreamAgentContextSections(taskID: string): string[] 
   return [
     buildRequirementsCatalogSection(taskID),
     buildArchitectureContractCatalogSection(taskID),
-    // Design-analysis is narrative but authoritative: the PRD/SPEC decision-log
-    // entries include the visual_consistency_spec and source manifest delivery
-    // evaluates against. Optional task.design_specs anchors may be rendered
-    // separately when present.
-    createDecisionLog(taskID).phasePromptSection("design_analysis", "Design Analysis Summary"),
+    // Design-analysis is authoritative, but hot-path prompts should carry the
+    // materialized PRD/SPEC source location instead of cloning the full spec.
+    renderDesignAnalysisHandoffReference(taskID, { valueCap: 500 }),
   ].filter(hasContent)
 }
 
