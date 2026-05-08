@@ -2076,10 +2076,38 @@ describe("orchestrator tools", () => {
         const result = await tools.deliver.execute({ reason: "All goals are ready for final delivery" }, {} as any)
 
         expect(result).toContain("stop_after_delivery_service")
+        expect(result).toContain("persisted as a structured rejection")
         expect(order).toEqual(["integrity", "verify"])
         expect(verifySawIntegrity).toBe(true)
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         expect(artifact?.label).toBe("verdict-pass")
+        const throwArtifact = Database.use((db) =>
+          db.select().from(EngineArtifactTable)
+            .where(and(
+              eq(EngineArtifactTable.task_id, taskID),
+              eq(EngineArtifactTable.kind, "delivery_verification_threw"),
+            ))
+            .get(),
+        )
+        expect(throwArtifact?.payload).toMatchObject({
+          error: "stop_after_delivery_service",
+          verdict: "rejected",
+        })
+        const verdictArtifact = Database.use((db) =>
+          db.select().from(EngineArtifactTable)
+            .where(and(
+              eq(EngineArtifactTable.task_id, taskID),
+              eq(EngineArtifactTable.label, "delivery-agent-verdict"),
+            ))
+            .get(),
+        )
+        expect(verdictArtifact?.payload).toMatchObject({
+          verdict: "rejected",
+          rejection_details: [{
+            category: "runtime",
+            error: expect.stringContaining("stop_after_delivery_service"),
+          }],
+        })
       },
     })
   })

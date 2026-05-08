@@ -26,6 +26,7 @@ import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import {
+  EngineArtifactTable,
   EngineGoalTable,
   EngineTaskTable,
 } from "@/engine/engine.sql"
@@ -544,6 +545,77 @@ async function sinkDeliveryVerdictToCriteria(
   })
 
   await EngineService.upsertTaskCriteria(taskID, checks)
+}
+
+async function persistDeliveryVerificationThrow(input: {
+  taskID: string
+  runID?: string | null
+  deliveryID: string
+  error: string
+  iteration: number
+}): Promise<import("@/delivery/agent").DeliveryVerdictType> {
+  const now = Date.now()
+  const detail = `DeliveryService.verify threw before producing a verdict: ${input.error}`
+  const verdict: import("@/delivery/agent").DeliveryVerdictType = {
+    verdict: "rejected",
+    summary: detail,
+    startup_verification: {
+      attempted: false,
+      success: false,
+      output: input.error,
+    },
+    deferred_checks: [{
+      name: "delivery_verification",
+      result: "failed",
+      evidence: detail,
+    }],
+    tool_call_evidence: [{
+      tool: "DeliveryService.verify",
+      passed: false,
+      detail,
+    }],
+    rejection_details: [{
+      category: "runtime",
+      error: detail,
+      suggestion: "Repair the delivery verification path and run deliver again in the same task context.",
+    }],
+  }
+  Database.use((db) => {
+    db.insert(EngineArtifactTable).values({
+      id: Identifier.ascending("artifact"),
+      task_id: input.taskID,
+      run_id: input.runID ?? null,
+      delivery_id: input.deliveryID,
+      kind: "delivery_verification_threw",
+      label: "delivery_verification_threw",
+      payload: {
+        error: input.error,
+        iteration: input.iteration,
+        verdict: "rejected",
+      },
+      time_created: now,
+      time_updated: now,
+    }).run()
+    db.insert(EngineArtifactTable).values({
+      id: Identifier.ascending("artifact"),
+      task_id: input.taskID,
+      run_id: input.runID ?? null,
+      delivery_id: input.deliveryID,
+      kind: "verdict",
+      label: "delivery-agent-verdict",
+      payload: verdict,
+      time_created: now,
+      time_updated: now,
+    }).run()
+  })
+  await sinkDeliveryVerdictToCriteria(input.taskID, verdict)
+  updateEvaluationFromDeliveryVerdict({
+    deliveryID: input.deliveryID,
+    verdict: "rejected",
+    summary: verdict.summary,
+    now,
+  })
+  return verdict
 }
 
 // Re-export the stateful-tool registry (defined in a dependency-free module
@@ -4147,15 +4219,22 @@ export function createOrchestratorTools(input: {
           } catch {
             /* best effort */
           }
+          await persistDeliveryVerificationThrow({
+            taskID,
+            runID: run?.id,
+            deliveryID,
+            error: msg,
+            iteration: iterationErr,
+          })
 
           return (
-            `Delivery verification threw (not a structured rejection): ${msg}. ` +
+            `Delivery verification threw and was persisted as a structured rejection: ${msg}. ` +
             `Iteration ${iterationErr}. No goals were reset — the throw is an ` +
             `infrastructure fault and carries no per-goal attribution. Read the ` +
-            `decision log entry delivery_verification_threw_${iterationErr} and ` +
-            `continue in this task context: repair the delivery tool path if it is ` +
-            `broken, build({ goalID }) on a suspect goal, or modify_goal if the ` +
-            `contract looks wrong.`
+            `delivery_verification_threw artifact, the delivery-agent-verdict artifact, ` +
+            `and decision log entry delivery_verification_threw_${iterationErr}; then ` +
+            `continue in this task context: repair the delivery tool path if it is broken, ` +
+            `build({ goalID }) on a suspect goal, or modify_goal if the contract looks wrong.`
           )
         }
       },
