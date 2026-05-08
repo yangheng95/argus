@@ -51,13 +51,42 @@ export const DesignFinalSchema = z.object({
     .array(z.string().min(1))
     .min(1)
     .describe(
-      "Recommended FRONTEND stack only: UI framework, CSS approach, component library, font family. " +
-      "Examples: ['React 18', 'Tailwind CSS', 'shadcn/ui', 'Inter font']; " +
-      "['Vanilla HTML/CSS/JS', 'CSS variables for design tokens', 'Microsoft YaHei + Arial']. " +
-      "Out-of-lane — DO NOT include backend frameworks (Node.js, Express, FastAPI, Spring, Rails, etc.), " +
-      "API protocols (REST API, GraphQL, gRPC, etc.), databases, runtimes, or any server-side concern. " +
-      "Architect (downstream) owns backend / runtime / data-layer decisions. Stay strictly frontend.",
+      "Recommended implementation stack hints for restoring this page, including frontend, backend/API, " +
+      "mock-data, and runtime choices when the observed page requires them. Keep this grounded in the " +
+      "existing repo and observed reference behavior; do not invent backend technology that the task does not need.",
     ),
+  product_spec: z
+    .string()
+    .min(1)
+    .describe(
+      "Complete PRD/SPEC for downstream requirements and architect. Include page purpose, sections, " +
+      "user-visible behavior, data requirements, edge/loading/error states, and acceptance criteria.",
+    ),
+  frontend_spec: z
+    .string()
+    .min(1)
+    .describe(
+      "Frontend implementation spec: route map, component tree, layout details, visual tokens, " +
+      "assets, interactions, responsive behavior, and explicit reference to relevant vis-* specs.",
+    ),
+  backend_spec: z
+    .string()
+    .min(1)
+    .describe(
+      "Backend/API spec required to reproduce the page: endpoints, request/response shapes, mock data, " +
+      "state transitions, and error/loading behavior. Mark unobservable details as unknown instead of inventing them.",
+    ),
+  reference_artifacts: z
+    .array(z.string().min(1))
+    .default([])
+    .describe(
+      "Mirror/material artifacts used as evidence, such as mirror/reference.png, mirror/extracted-page.json, " +
+      "mirror/page-ir.xml, mirror/scaffold.json, mirror/shared-context.md, and captured attachment names.",
+    ),
+  open_questions: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Only truly unobservable product/API facts that downstream agents must not hallucinate."),
 })
 export type DesignFinal = z.infer<typeof DesignFinalSchema>
 

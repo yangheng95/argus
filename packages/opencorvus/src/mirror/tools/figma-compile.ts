@@ -4,7 +4,7 @@
  * Figma2code's analogue of `webpage_compile` / `webpage_image_compile`.
  * Reads `figma-design.json` and emits the same compact XML dialect every
  * compile target produces. Output filename is `page-ir.xml` — identical to
- * URL and image flows so downstream codegen never branches per source.
+ * URL and image flows so design-analysis consumes one artifact contract.
  */
 
 import fs from "node:fs/promises"
@@ -19,13 +19,13 @@ import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 export const FigmaCompileTool = Tool.define("figma_compile", {
   description: `Compile a CompressedDesign JSON into a compact XML IR (zero LLM, deterministic).
 
-Same XML dialect that webpage_compile (URL) and webpage_image_compile (image) produce — downstream codegen does not branch per source.
+Same XML dialect that webpage_compile (URL) and webpage_image_compile (image) produce — design-analysis consumes one artifact contract across sources.
 
 Reads \`<outputDir>/figma-design.json\` (from figma_extract). Writes \`<outputDir>/page-ir.xml\`. Returns a preview of the first 2KB and total byte size.
 
 Artifact-dependent: do NOT call until \`figma_extract\` has finished and written \`figma-design.json\`. Never batch in the same assistant turn.
 
-Step 2 of the figma2code workflow. Pure function, no network or LLM.`,
+Step 2 of the design-analysis Figma PRD/SPEC workflow. Pure function, no network or LLM.`,
   parameters: z.object({
     outputDir: z
       .string()
@@ -75,7 +75,7 @@ Step 2 of the figma2code workflow. Pure function, no network or LLM.`,
         ir.xml.length > preview.length ? "<!-- truncated -->" : "",
         "```",
         "",
-        "Next: call `figma_analyze` to get the ProjectScaffold, shared-context.md, and generated React source.",
+        "Next: call `figma_analyze`, then read `page-ir.xml`, `scaffold.json`, and `shared-context.md` before writing the PRD/SPEC.",
       ].join("\n"),
       metadata: {
         irPath,

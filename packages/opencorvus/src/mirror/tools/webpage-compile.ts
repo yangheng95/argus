@@ -2,7 +2,7 @@
  * `webpage_compile` tool — wraps `mirror/url/compile::compilePageToXML`.
  *
  * Reads a previously-extracted `extracted-page.json` and emits a compact XML
- * IR that codegen agents can read directly. Writes to `<outputDir>/page-ir.xml`.
+ * IR that design-analysis can read directly. Writes to `<outputDir>/page-ir.xml`.
  */
 
 import fs from "node:fs/promises"
@@ -23,7 +23,7 @@ Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes \`<outp
 
 This tool is artifact-dependent: do NOT call it until \`webpage_extract\` has completed and written \`extracted-page.json\`. Never batch it in the same assistant turn as \`webpage_extract\`.
 
-Use as step 2 of the webpage-generate workflow. Pure function, no network or browser.`,
+Use as step 2 of the design-analysis webpage PRD/SPEC workflow. Pure function, no network or browser.`,
   parameters: z.object({
     outputDir: z
       .string()
@@ -80,7 +80,7 @@ Use as step 2 of the webpage-generate workflow. Pure function, no network or bro
         ir.xml.length > preview.length ? "<!-- truncated -->" : "",
         "```",
         "",
-        "Next: call `webpage_analyze` to get the ProjectScaffold, or just use this IR directly in codegen prompts.",
+        "Next: call `webpage_analyze`, then read `page-ir.xml`, `scaffold.json`, and `shared-context.md` before writing the PRD/SPEC.",
       ].join("\n"),
       metadata: {
         irPath,

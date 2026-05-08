@@ -46,25 +46,7 @@ describe("mcp.serve", () => {
   })
 
   test("exposes the executor MCP toolset", async () => {
-    expect(MCPServe.executorToolNames().sort()).toEqual(
-      [
-        "figma_analyze",
-        "figma_compile",
-        "figma_extract",
-        "memory",
-        "task_report",
-        "webpage_analyze",
-        "webpage_compile",
-        "webpage_evaluate",
-        "webpage_extract",
-        "webpage_image_analyze",
-        "webpage_image_compile",
-        "webpage_image_extract",
-        "webpage_render",
-        "webpage_text_diff",
-        "webpage_vision_judge",
-      ].sort(),
-    )
+    expect(MCPServe.executorToolNames().sort()).toEqual(["memory", "task_report"].sort())
   })
 
   test("exports Claude-compatible object input schemas", async () => {
@@ -83,12 +65,15 @@ describe("mcp.serve", () => {
     })
   })
 
-  test("maps executor tools to coding executor MCP-prefixed names", () => {
-    expect(MCPServe.codingExecutorToolName("webpage_extract")).toBe("mcp__opencorvus__webpage_extract")
-    expect(MCPServe.normalizeCodingExecutorToolName("mcp__opencorvus__webpage_compile")).toBe("webpage_compile")
+  test("maps executor tools to coding executor MCP-prefixed names without mirror aliases", () => {
+    expect(MCPServe.codingExecutorToolName("memory")).toBe("mcp__opencorvus__memory")
+    expect(MCPServe.normalizeCodingExecutorToolName("mcp__opencorvus__task_report")).toBe("task_report")
     const prompt = MCPServe.codingExecutorPromptSection()
-    expect(prompt).toContain("webpage_extract => mcp__opencorvus__webpage_extract")
-    expect(prompt).toContain("Mirror extraction artifacts and generated source must come from the mirror MCP toolchain")
+    expect(prompt).toContain("memory => mcp__opencorvus__memory")
+    expect(prompt).toContain("task_report => mcp__opencorvus__task_report")
+    expect(prompt).not.toContain("webpage_extract =>")
+    expect(prompt).not.toContain("figma_extract =>")
+    expect(prompt).toContain("Mirror extraction artifacts are produced by the upstream design_analysis stage")
   })
 
   test("includes proxied external MCP tools in definitions", async () => {

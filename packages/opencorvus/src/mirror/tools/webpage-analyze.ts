@@ -3,10 +3,10 @@
  * deterministic file generators.
  *
  * Reads `extracted-page.json`, runs pattern detection + token extraction, and
- * writes mirror facts plus deterministic React source that a codegen agent then consumes:
+ * writes mirror facts plus deterministic scaffold artifacts that design-analysis consumes:
  *   - `<outputDir>/scaffold.json`         full ProjectScaffold
  *   - `<outputDir>/shared-context.md`     compact token + pattern summary
- *   - generated source paths declared by the materialized scaffold
+ *   - source paths declared by the materialized scaffold for analysis only
  *
  * Returns only the summary so the tool output stays small.
  */
@@ -31,21 +31,21 @@ import { writeGeneratedSourceFiles } from "./generated-source"
 export const WebpageAnalyzeTool = Tool.define("webpage_analyze", {
   description: `Analyze an ExtractedPage into a deterministic ProjectScaffold (section list, component-pattern catalog, design-token system, file contracts). Zero LLM.
 
-Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror facts plus generated React source:
+Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror facts plus scaffold artifacts:
   - scaffold.json           full ProjectScaffold
   - shared-context.md       compact token + pattern summary for prompts
-  - sourcePaths             React source files from the scaffold contract
+  - sourcePaths             scaffold-generated source files for analysis only
 
 Returns a summary: section list, pattern list, token counts. The agent should \`read\` scaffold.json for full detail when needed.
 
 This tool is artifact-dependent: do NOT call it until \`webpage_extract\` has completed and written \`extracted-page.json\`. Never batch it in the same assistant turn as \`webpage_extract\`.
 
-Use as step 3 of the webpage-generate workflow. Pure function, no network.`,
+Use as step 3 of the design-analysis webpage PRD/SPEC workflow. Pure function, no network.`,
   parameters: z.object({
     outputDir: z
       .string()
       .describe(
-        `Directory containing extracted-page.json. Writes scaffold.json and shared-context.md here, and generated React source under the worktree source layout. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract's default).`,
+        `Directory containing extracted-page.json. Writes scaffold.json and shared-context.md here, plus scaffold-generated source files for analysis only. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract's default).`,
       )
       .optional(),
   }),
@@ -125,7 +125,7 @@ Use as step 3 of the webpage-generate workflow. Pure function, no network.`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
         `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: run the generated React source and iterate it with `webpage_render` + `webpage_vision_judge`.",
+        "Next: read `scaffold.json`, `shared-context.md`, and `page-ir.xml`, then write the PRD/SPEC and visual specs. Do not treat generated source as the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,

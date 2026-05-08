@@ -27,6 +27,7 @@ import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { Instance } from "@/project/instance"
+import { deriveUrlSignals } from "@/engine/skill-inject"
 import type { VisualSpec } from "./types"
 import { createDesignOutputTools, DesignFinalSchema, type DesignFinal } from "./output-tools"
 import { createReadAttachmentTool } from "./read-attachment-tool"
@@ -41,6 +42,11 @@ export namespace DesignAnalystAgent {
     specs: VisualSpec[]
     designSystem: string
     techStack: string[]
+    productSpec: string
+    frontendSpec: string
+    backendSpec: string
+    referenceArtifacts: string[]
+    openQuestions: string[]
   }
 
   export interface AnalyzeInput {
@@ -111,6 +117,11 @@ export namespace DesignAnalystAgent {
         retryCount: 2,
       },
       skillsStage: "design_analyst",
+      skillTaskSignals: {
+        has_attachment_image: (input.attachments ?? []).some((item) => item.mime.startsWith("image/")),
+        ...deriveUrlSignals(input.request),
+        request_text: input.request,
+      },
     })
 
     const structured = out.structured as DesignFinal | undefined
@@ -132,6 +143,11 @@ export namespace DesignAnalystAgent {
       specs,
       designSystem: structured.design_system,
       techStack: structured.tech_stack,
+      productSpec: structured.product_spec,
+      frontendSpec: structured.frontend_spec,
+      backendSpec: structured.backend_spec,
+      referenceArtifacts: structured.reference_artifacts,
+      openQuestions: structured.open_questions,
       sessionID: out.session.id,
     }
   }
@@ -215,15 +231,15 @@ function buildUserPrompt(input: {
       "the pixels directly. Do NOT use webfetch. Prefer these attached " +
       "screenshots over re-capturing the same page. " +
       (hasLiveHttpUrl
-        ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, call `url_screenshot` first to capture it as a PNG. "
+        ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the mirror webpage pipeline first (`webpage_extract`, then `webpage_compile`, then `webpage_analyze`) and read the resulting artifacts before writing specs. "
         : "") +
-      "Your whole job is to derive the visual contract from what is in front of you.",
+      "Your whole job is to derive the PRD/SPEC and visual contract from evidence, not taste.",
     )
   } else {
     sections.push(
       "# No visual references attached\n\n" +
       (hasLiveHttpUrl
-        ? "No screenshots, mockups, or design materials were attached yet. If the request includes a live http(s) webpage URL, call `url_screenshot` first to capture a PNG visual reference. If capture fails, work from the textual brief only. "
+        ? "No screenshots, mockups, or design materials were attached yet. If the request includes a live http(s) webpage URL, use the mirror webpage pipeline first (`webpage_extract`, then `webpage_compile`, then `webpage_analyze`). If extraction fails, report the exact failure; do not invent page facts. "
         : "No screenshots, mockups, or design materials were provided. ") +
       "Extract the visual contract from the textual brief only when no visual input is available; register specs that " +
       "can be inferred from the request wording (e.g. named brand palettes, " +
@@ -240,9 +256,10 @@ function buildUserPrompt(input: {
 
   sections.push(
     "# Live URL Capture\n\n" +
-    "For visual webpage URLs, use `url_screenshot` — not `webfetch`. " +
-    "`url_screenshot` returns a PNG as a multimodal tool result so you can inspect the pixels directly. " +
-    "Do NOT use `webpage_extract`; that mirror pipeline belongs to later build-stage cloning work, not this design-analysis step.",
+    "For visual webpage URLs, use the mirror pipeline — not `webfetch` and not screenshot-only analysis. " +
+    "Strict order: `webpage_extract` writes `mirror/reference.png` and `mirror/extracted-page.json`; " +
+    "`webpage_compile` writes `mirror/page-ir.xml`; `webpage_analyze` writes `mirror/scaffold.json` " +
+    "and `mirror/shared-context.md`. Read those artifacts before registering specs or finalizing.",
   )
 
   return sections.join("\n\n")

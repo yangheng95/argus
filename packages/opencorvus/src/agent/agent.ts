@@ -22,6 +22,7 @@ import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Plugin } from "@/plugin"
 import { entries, values as objectValues } from "@/util/object"
+import { MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
 
 export namespace Agent {
   export const Info = z
@@ -84,10 +85,9 @@ export namespace Agent {
       task: "allow",
       webfetch: "allow",
       websearch: "allow",
-      // Mirror tools — the canonical pipeline for any URL work (extract →
-      // compile | analyze → render → evaluate → text_diff). `allow` for ALL
-      // six so unattended benchmark / pipeline runs cannot stall mid-pipeline.
-      // Restrictive installs can override any of them via user config.
+      // Mirror tools are available only to the design-analyst agent through
+      // ToolRegistry. These permission defaults stay permissive so that one
+      // stage can run unattended; tool availability is the hard boundary.
       webpage_extract: "allow",
       webpage_compile: "allow",
       webpage_analyze: "allow",
@@ -121,7 +121,7 @@ export namespace Agent {
       build: {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
-        tools: { exclude: ["panel", "task_report", "analytics"] },
+        tools: { exclude: ["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS] },
         options: {},
         prompt: PROMPT_BUILD,
         permission: PermissionNext.merge(
@@ -138,7 +138,7 @@ export namespace Agent {
       general: {
         name: "general",
         description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
-        tools: { exclude: ["planner", "panel", "task_report", "analytics", "task", "todoread", "todowrite"] },
+        tools: { exclude: ["planner", "panel", "task_report", "analytics", "task", "todoread", "todowrite", ...MIRROR_TOOL_IDS] },
         permission: PermissionNext.merge(defaults, user),
         options: {},
         mode: "subagent",
@@ -319,12 +319,25 @@ export namespace Agent {
       },
       "design-analyst": {
         name: "design-analyst",
-        description: "Design analyst agent. Analyzes visual references (images, URLs) to produce structured design specifications.",
+        description: "Design analyst agent. Uses visual evidence and mirror artifacts to produce a complete PRD/SPEC for faithful frontend and backend restoration.",
         prompt: DESIGN_ANALYST_CORE,
-        // design-analyst uses dedicated url_screenshot + read_attachment/output
-        // tools in its factory; shared context tools listed here are the only
-        // ones filtered by include/exclude.
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot", "todoread", "todowrite"] },
+        // design-analyst is the only stage that owns mirror extraction.
+        // Requirements / architect / build consume the persisted SPEC and
+        // visual specs rather than calling mirror tools themselves.
+        tools: {
+          include: [
+            "read_file",
+            "find_files",
+            "search_code",
+            "list_directory",
+            "memory_search",
+            "memory_get",
+            "url_screenshot",
+            "todoread",
+            "todowrite",
+            ...MIRROR_TOOL_IDS,
+          ],
+        },
         options: {},
         mode: "primary",
         native: true,

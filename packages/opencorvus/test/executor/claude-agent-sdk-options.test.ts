@@ -80,7 +80,7 @@ describe("claude agent sdk options", () => {
     expect("env" in (servers?.opencorvus ?? {})).toBe(false)
   })
 
-  test("teaches Claude Code the MCP-prefixed OpenCorvus tool names", async () => {
+  test("teaches Claude Code the MCP-prefixed OpenCorvus executor tool names", async () => {
     await collect(
       ClaudeAgentExecutor.createSdk().run({ prompt: "build", system: "base system", cwd: "D:\\repo\\worktree" }),
     )
@@ -88,10 +88,11 @@ describe("claude agent sdk options", () => {
     const options = calls[0]?.options as Record<string, unknown> | undefined
     const systemPrompt = options?.systemPrompt as { append?: string } | undefined
     expect(systemPrompt?.append).toContain("base system")
-    expect(systemPrompt?.append).toContain("webpage_extract => mcp__opencorvus__webpage_extract")
-    expect(systemPrompt?.append).toContain("webpage_compile => mcp__opencorvus__webpage_compile")
-    expect(systemPrompt?.append).toContain("webpage_analyze => mcp__opencorvus__webpage_analyze")
-    expect(systemPrompt?.append).toContain("Do not create, copy, or handwrite")
+    expect(systemPrompt?.append).toContain("memory => mcp__opencorvus__memory")
+    expect(systemPrompt?.append).toContain("task_report => mcp__opencorvus__task_report")
+    expect(systemPrompt?.append).not.toContain("webpage_extract => mcp__opencorvus__webpage_extract")
+    expect(systemPrompt?.append).not.toContain("figma_extract => mcp__opencorvus__figma_extract")
+    expect(systemPrompt?.append).toContain("Mirror extraction artifacts are produced by the upstream design_analysis stage")
   })
 
   test("omits options.resume on a fresh run so Claude starts a new session", async () => {

@@ -26,8 +26,8 @@ Your strengths:
 ## Web Research
 
 - Use websearch when the task requires external knowledge not in the codebase.
-- For URLs you want to clone / render / analyze visually, use `webpage_extract` and the `webpage_*` pipeline — NOT `webfetch`. `webfetch` is a fallback for pure-text content only (API docs, README, plain JSON).
-- Always check the "Mirror Cache" section (when present) before fetching — if a URL was already captured, read the existing `mirror/` artifacts instead of re-fetching.
+- For URLs you want to clone / render / analyze visually, report that the caller should dispatch `design_analysis`. You do not own mirror extraction.
+- Use `webfetch` only for pure-text content (API docs, README, plain JSON), not visual cloning.
 - Prefer official documentation and primary sources.
 
 ## Quality

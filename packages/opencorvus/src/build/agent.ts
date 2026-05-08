@@ -1380,13 +1380,11 @@ async function runWithExternalProviderImpl(args: {
   }
 
   // Auto-detect build-stage skills for the same taskSignals the in-process
-  // MirrorCode path uses, and append the skill bundle (stage invariant + matched
-  // skill bodies, e.g. webpage-generate.md / image-generate.md) to the system
-  // prompt forwarded to the external coding provider. Without this, claude-code
-  // / codex never see the mirror SOP, the hard "no text-only fallback" rule, or
-  // the `webpage_vision_judge` acceptance gate, and degrade to writing HTML by
-  // hand from the visual contract alone (rule 22: single source of truth for
-  // skill teaching is the skill file, NOT a stripped-down prompt section).
+  // MirrorCode path uses, and append the skill bundle (stage invariant +
+  // matched skill bodies) to the system prompt forwarded to the external
+  // coding provider. Reference extraction skills now belong to
+  // design_analysis; build-stage skills describe implementation and
+  // verification only.
   const orchCfg = await EngineConfig.get()
   const buildSkillsCfg = (orchCfg as unknown as { build?: { skills?: string[] } }).build?.skills ?? []
   const { resolveStageSkills } = await import("@/engine/skill-inject")

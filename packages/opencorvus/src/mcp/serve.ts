@@ -20,21 +20,6 @@ import type { Message } from "@/session"
 import { Tool } from "@/tool/tool"
 import { MemoryTool } from "@/tool/memory"
 import { TaskReportTool } from "@/tool/task-report"
-import {
-  WebpageExtractTool,
-  WebpageCompileTool,
-  WebpageAnalyzeTool,
-  WebpageImageExtractTool,
-  WebpageImageCompileTool,
-  WebpageImageAnalyzeTool,
-  WebpageRenderTool,
-  WebpageEvaluateTool,
-  WebpageTextDiffTool,
-  WebpageVisionJudgeTool,
-  FigmaExtractTool,
-  FigmaCompileTool,
-  FigmaAnalyzeTool,
-} from "@/mirror/tools"
 import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
 import path from "path"
@@ -50,9 +35,10 @@ const DEFAULT_SERVER_NAME = "opencorvus"
 // shell/read/edit/write/glob/grep/web-fetch/web-search tools. Re-exposing
 // those over MCP creates a double-source surface (CLAUDE.md rule 22) and
 // confuses the LLM about which one to call. Only expose the OpenCorvus
-// toolset that the host environment doesn't provide natively:
-//   - mirror toolchain (webpage_* / figma_*) — visual cloning pipeline
-//   - memory / task_report — OpenCorvus-specific coordination surface
+// toolset that the host environment doesn't provide natively. Mirror tools are
+// intentionally absent here: design-analysis owns mirror extraction, and
+// external coding executors implement the persisted SPEC rather than calling
+// webpage_* / figma_* through MCP.
 const EXECUTOR_TOOLS = {
   memory: {
     name: "memory",
@@ -64,103 +50,12 @@ const EXECUTOR_TOOLS = {
     name: "task_report",
     annotations: {},
   },
-  webpage_extract: {
-    name: "webpage_extract",
-    annotations: {
-      openWorld: true,
-    },
-  },
-  webpage_compile: {
-    name: "webpage_compile",
-    annotations: {
-      readOnly: true,
-    },
-  },
-  webpage_analyze: {
-    name: "webpage_analyze",
-    annotations: {
-      destructive: true,
-    },
-  },
-  webpage_image_extract: {
-    name: "webpage_image_extract",
-    annotations: {
-      openWorld: true,
-    },
-  },
-  webpage_image_compile: {
-    name: "webpage_image_compile",
-    annotations: {
-      readOnly: true,
-    },
-  },
-  webpage_image_analyze: {
-    name: "webpage_image_analyze",
-    annotations: {
-      destructive: true,
-    },
-  },
-  webpage_render: {
-    name: "webpage_render",
-    annotations: {
-      destructive: true,
-    },
-  },
-  webpage_evaluate: {
-    name: "webpage_evaluate",
-    annotations: {
-      destructive: true,
-    },
-  },
-  webpage_text_diff: {
-    name: "webpage_text_diff",
-    annotations: {
-      readOnly: true,
-    },
-  },
-  webpage_vision_judge: {
-    name: "webpage_vision_judge",
-    annotations: {
-      openWorld: true,
-    },
-  },
-  figma_extract: {
-    name: "figma_extract",
-    annotations: {
-      openWorld: true,
-    },
-  },
-  figma_compile: {
-    name: "figma_compile",
-    annotations: {
-      readOnly: true,
-    },
-  },
-  figma_analyze: {
-    name: "figma_analyze",
-    annotations: {
-      destructive: true,
-    },
-  },
 } as const
 
 type ExecutorToolID = keyof typeof EXECUTOR_TOOLS
 const EXECUTOR_TOOL_IMPLS: Record<ExecutorToolID, Tool.Info> = {
   memory: MemoryTool,
   task_report: TaskReportTool,
-  webpage_extract: WebpageExtractTool,
-  webpage_compile: WebpageCompileTool,
-  webpage_analyze: WebpageAnalyzeTool,
-  webpage_image_extract: WebpageImageExtractTool,
-  webpage_image_compile: WebpageImageCompileTool,
-  webpage_image_analyze: WebpageImageAnalyzeTool,
-  webpage_render: WebpageRenderTool,
-  webpage_evaluate: WebpageEvaluateTool,
-  webpage_text_diff: WebpageTextDiffTool,
-  webpage_vision_judge: WebpageVisionJudgeTool,
-  figma_extract: FigmaExtractTool,
-  figma_compile: FigmaCompileTool,
-  figma_analyze: FigmaAnalyzeTool,
 }
 
 export namespace MCPServe {
@@ -211,8 +106,7 @@ export namespace MCPServe {
       "",
       aliases,
       "",
-      "Mirror extraction artifacts and generated source must come from the mirror MCP toolchain. Do not create, copy, or handwrite mirror/reference.png, mirror/extracted-page.json, mirror/page-ir.xml, mirror/scaffold.json, mirror/shared-context.md, or generated src/** scaffold files to satisfy file-existence checks when a mirror tool is required.",
-      "If a required OpenCorvus MCP tool is missing, unavailable, or fails to start, stop and report that tool availability failure instead of fabricating the artifact.",
+      "Mirror extraction artifacts are produced by the upstream design_analysis stage. If the build prompt needs facts that are absent from the persisted PRD/SPEC, report the missing design-analysis evidence instead of fabricating mirror artifacts.",
     ].join("\n")
   }
 

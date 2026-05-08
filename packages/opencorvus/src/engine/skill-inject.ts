@@ -36,11 +36,16 @@ const STAGE_INVARIANTS: Record<string, string> = {
 
 Injected skills can declare \`required_tools\` in their frontmatter. When a
 build-stage skill declares required tools, \`status='passed'\` is rejected by
-BuildAgent unless every required tool completed in the build session. For
-\`webpage_evaluate\`, BuildAgent also reads \`mirror/eval-result.json\` from the
-current worktree and rejects stale or sub-target visual evidence. A webpage
-clone is not passed until the freshly rendered current \`index.html\` scores at
-least 95 against the reference.`,
+BuildAgent unless every required tool completed in the build session. Mirror
+extraction tools are not build-stage tools; visual/page references must arrive
+from design_analysis as PRD/SPEC decision-log entries plus task.design_specs.
+Delivery owns rendered browser evidence and visual hard gates.`,
+  design_analyst: `## Skill-system invariants (design-analysis)
+
+Design-analysis is the only stage that owns mirror extraction. Use the matched
+reference skill to gather mirror artifacts, then persist both visual specs and
+the complete PRD/SPEC through StructuredOutput. Do not implement application
+source files in this stage.`,
   delivery: `## Skill-system invariants (enforced by submit_verdict)
 
 The delivery verdict schema carries a \`tool_call_evidence[]\` array. Injected

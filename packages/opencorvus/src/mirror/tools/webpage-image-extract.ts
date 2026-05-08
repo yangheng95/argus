@@ -32,9 +32,9 @@ export const WebpageImageExtractTool = Tool.define("webpage_image_extract", {
 
 Reads each image from disk, sends it to a vision-capable model, and infers the page's structure (recursive element tree with bounds + roles), tokens (palette / fonts / text styles), and overall description. Multiple images are analyzed in parallel and merged into a single ImageAnalysis (palettes union, trees stacked under per-image wrapper containers).
 
-Writes \`<outputDir>/image-analysis.json\` (the full ImageAnalysis) and a copy of the first reference image as \`<outputDir>/reference.png\` so downstream \`webpage_render\` / \`webpage_evaluate\` find the same artifact path layout url2code uses.
+Writes \`<outputDir>/image-analysis.json\` (the full ImageAnalysis) and a copy of the first reference image as \`<outputDir>/reference.png\` so design-analysis has the same artifact path layout url2code uses.
 
-Use as step 1 of the image-generate workflow. Requires a vision-capable model â€” falls back loudly if the configured model has \`capabilities.input.image=false\`.`,
+Use as step 1 of the design-analysis image PRD/SPEC workflow. Requires a vision-capable model â€” fails loudly if the configured model has \`capabilities.input.image=false\`.`,
   parameters: z.object({
     images: z
       .array(z.string())
@@ -102,9 +102,8 @@ Use as step 1 of the image-generate workflow. Requires a vision-capable model â€
     const analysisPath = path.join(outputDir, "image-analysis.json")
     await fs.writeFile(analysisPath, JSON.stringify(analysis, null, 2), "utf8")
 
-    // Copy the FIRST reference image to `<outputDir>/reference.png` so the
-    // downstream loop (webpage_render / webpage_evaluate / webpage_vision_judge)
-    // finds the same path layout the URL flow produces. Only the first image
+    // Copy the FIRST reference image to `<outputDir>/reference.png` so design-analysis
+    // sees the same artifact layout the URL flow produces. Only the first image
     // becomes the canonical reference â€” multi-image inputs still merge in
     // analysis but visual evaluation needs one ground-truth pixel target.
     const firstImage = params.images[0]
@@ -143,7 +142,7 @@ Use as step 1 of the image-generate workflow. Requires a vision-capable model â€
         `**Analysis JSON:** \`${analysisPath}\``,
         `**Reference image:** \`${referencePath}\``,
         "",
-        "Next: call `webpage_image_compile` to get compact XML IR, then implement and iterate against `webpage_render` / `webpage_vision_judge`.",
+        "Next: call `webpage_image_compile`, then `webpage_image_analyze`, then read the artifacts before writing the PRD/SPEC.",
       ].join("\n"),
       metadata: summary,
     }

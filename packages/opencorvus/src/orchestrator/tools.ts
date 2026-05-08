@@ -1623,15 +1623,15 @@ export function createOrchestratorTools(input: {
 
     design_analysis: tool({
       description: [
-        "Analyze visual references (images, URLs) to produce a structured design specification.",
+        "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a mirror-grounded PRD/SPEC plus structured visual specs.",
         "Call this BEFORE requirements when the task involves frontend/UI development AND:",
         "  - Image attachments are provided (screenshots, mockups, design files)",
         "  - The request mentions a URL to replicate or analyze",
         "  - The request explicitly asks for layout/design analysis",
         "",
-        "The design specification is persisted on task.design_specs and injected into",
-        "requirements, architect, planner, and build prompts from that single source of truth.",
-        "This enables downstream stages to derive more accurate pixel-level requirements and implementation plans.",
+        "Visual rows are persisted on task.design_specs. The full PRD/SPEC is persisted",
+        "into the decision log from the same design-analysis run so downstream stages",
+        "consume one source of truth instead of re-running mirror extraction.",
         "",
         "SKIP this step when:",
         "  - No visual references are available",
@@ -1650,12 +1650,12 @@ export function createOrchestratorTools(input: {
           .describe(
             "Any number of design-reference URLs: live pages, design-tool share links " +
             "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
-            "Non-Figma URLs are screenshot-rendered in Chromium and attached as visual_reference; " +
-            "Figma URLs use the REST API path. design-analyst receives those PNGs directly and does not use webfetch.",
+            "Non-Figma URLs are available to design-analyst for mirror extraction and may also be materialized " +
+            "as screenshot references. Figma URLs use the REST API path. Do not route URL/page extraction to build.",
           ),
         figma_url: z.string().optional().describe(
           "Figma file URL rendered via the Figma REST API (figma.com/file/... or figma.com/design/...). " +
-          "Requires FIGMA_API_TOKEN in env.",
+          "Requires FIGMA_API_TOKEN in env. The design-analysis stage owns Figma mirror extraction.",
         ),
         materials: z
           .array(z.string())
@@ -2012,9 +2012,43 @@ export function createOrchestratorTools(input: {
           if (analysis.techStack.length > 0) {
             decisionLog.append({
               phase: "design_analysis",
-              key: "recommended_frontend_stack",
+              key: "recommended_stack",
               value: analysis.techStack.join(", "),
-              reason: "Design-analyst's FRONTEND-only stack hints (UI framework / CSS / component library / fonts). Backend / runtime / data-layer choices are out-of-lane and remain architect's call.",
+              reason: "Design-analyst's implementation stack hints grounded in the PRD/SPEC and observed reference behavior.",
+            })
+          }
+          decisionLog.append({
+            phase: "design_analysis",
+            key: "product_spec",
+            value: analysis.productSpec,
+            reason: "Mirror-grounded PRD/SPEC produced before requirements decomposition.",
+          })
+          decisionLog.append({
+            phase: "design_analysis",
+            key: "frontend_spec",
+            value: analysis.frontendSpec,
+            reason: "Frontend implementation specification derived from visual evidence and mirror artifacts.",
+          })
+          decisionLog.append({
+            phase: "design_analysis",
+            key: "backend_spec",
+            value: analysis.backendSpec,
+            reason: "Backend/API contract needed to reproduce observed page behavior; unknowns remain explicit.",
+          })
+          if (analysis.referenceArtifacts.length > 0) {
+            decisionLog.append({
+              phase: "design_analysis",
+              key: "reference_artifacts",
+              value: analysis.referenceArtifacts.join("\n"),
+              reason: "Evidence artifacts used by design-analysis.",
+            })
+          }
+          if (analysis.openQuestions.length > 0) {
+            decisionLog.append({
+              phase: "design_analysis",
+              key: "open_questions",
+              value: analysis.openQuestions.join("\n"),
+              reason: "Facts design-analysis could not observe and downstream agents must not hallucinate.",
             })
           }
 
@@ -2029,8 +2063,8 @@ export function createOrchestratorTools(input: {
 
           return SubAgentProtocol.yieldResult({
             headline:
-              "SUCCESS: Visual contract persisted on task.design_specs. Subsequent stages will inject " +
-              "it from that single source of truth. NEXT: call requirements for functional decomposition.",
+              "SUCCESS: Mirror-grounded PRD/SPEC persisted in decision log and visual contract persisted on task.design_specs. " +
+              "NEXT: call requirements for functional decomposition.",
             fields: [
               ["total_specs", String(analysis.specs.length)],
               ["color", String(countByCategory.color ?? 0)],
@@ -2042,8 +2076,10 @@ export function createOrchestratorTools(input: {
               ["responsive", String(countByCategory.responsive ?? 0)],
               ["design_system", analysis.designSystem],
               ["recommended_stack", analysis.techStack],
+              ["reference_artifacts", String(analysis.referenceArtifacts.length)],
+              ["open_questions", String(analysis.openQuestions.length)],
             ],
-            pointer: "task.design_specs (JSON column on engine_task)",
+            pointer: "task.design_specs + decision_log phase=design_analysis",
           })
         } catch (err) {
           await trackStepComplete("design_analysis", undefined, true)

@@ -9,48 +9,41 @@ import imageGenerateMd from "../../src/skill/builtin/image-generate.md" with { t
 import figmaGenerateMd from "../../src/skill/builtin/figma-generate.md" with { type: "text" }
 
 describe("webpage-generate dependency guards", () => {
-  test("skill declares generated React source pipeline and build-required tools", () => {
+  test("skill declares design-analysis PRD/SPEC mirror pipeline only", () => {
     const parsed = matter(webpageGenerateMd)
-    // Required tools cover extract → compile → analyze (serial), then the
-    // render/evaluate/text-diff loop. The deterministic compile-html tool is
-    // gone (rule 22 — single-source generation strategy lives in
-    // src/mirror/url/prompt.ts) so the skill must NOT name it.
+    expect(parsed.data.stage).toBe("design_analyst")
     expect(parsed.data.required_tools).toContain("webpage_extract")
     expect(parsed.data.required_tools).toContain("webpage_compile")
     expect(parsed.data.required_tools).toContain("webpage_analyze")
-    expect(parsed.data.required_tools).toContain("webpage_render")
-    expect(parsed.data.required_tools).toContain("webpage_evaluate")
-    expect(parsed.data.required_tools).toContain("webpage_text_diff")
+    expect(parsed.data.required_tools).not.toContain("webpage_render")
+    expect(parsed.data.required_tools).not.toContain("webpage_evaluate")
+    expect(parsed.data.required_tools).not.toContain("webpage_text_diff")
+    expect(parsed.data.required_tools).not.toContain("webpage_vision_judge")
     expect(parsed.data.required_tools).not.toContain("webpage_compile_html")
-    // Content invariants: generated source contract, strictly-serial
-    // extract/compile/analyze, no old static-page branch.
-    expect(parsed.content).toContain("Generated React source")
-    expect(parsed.content).toContain("sourcePaths")
+
+    expect(parsed.content).toContain("PRD/SPEC")
     expect(parsed.content).toContain("mirror/scaffold.json")
     expect(parsed.content).not.toContain("src/App.tsx")
     expect(parsed.content).not.toContain("src/design-tokens.ts")
-    expect(parsed.content).toContain("Steps 1–3 are **strictly serial**")
-    expect(parsed.content).toContain("Refine the generated React source")
+    expect(parsed.content).toContain("The extraction steps are strictly serial")
+    expect(parsed.content).toContain("Do not implement application source")
     expect(parsed.content).not.toMatch(/Tailwind CDN|cdn\.tailwindcss\.com/)
     expect(parsed.content).not.toContain("`webpage_compile_html`")
-    expect(parsed.content).toContain("webpage_render url=<explicit HTTP URL>")
     expect(parsed.content).not.toContain("single-file static")
-    expect(parsed.content).toContain("webpage_evaluate.passed = true")
-    expect(parsed.content).toContain("overallScore >= 85")
-    expect(parsed.content).toContain("webpage_vision_judge.accepted = true")
-    expect(parsed.content).toContain("85/100 numeric threshold")
     expect(parsed.content).not.toMatch(/\b9[05]\/100\b|\b95\+\b/)
     expect(parsed.content).not.toMatch(/\bbun run dev\b|\bnpm start\b/i)
     expect(parsed.content).not.toMatch(/static mode|Live-server mode/i)
   })
 
-  test("visual generation skills keep one URL render path and one acceptance signal", () => {
+  test("reference generation skills are design-analysis only and never claim delivery gates", () => {
     for (const md of [webpageGenerateMd, imageGenerateMd, figmaGenerateMd]) {
       const parsed = matter(md)
-      expect(parsed.content).toMatch(/webpage_render url=<explicit (HTTP )?URL>/)
-      expect(parsed.content).toContain("webpage_evaluate.passed = true")
-      expect(parsed.content).toContain("overallScore >= 85")
-      expect(parsed.content).toContain("webpage_vision_judge.accepted = true")
+      expect(parsed.data.stage).toBe("design_analyst")
+      expect(parsed.content).toContain("PRD/SPEC")
+      expect(parsed.content).toContain("Build agents consume the persisted SPEC")
+      expect(parsed.content).not.toContain("webpage_render url=<explicit")
+      expect(parsed.content).not.toContain("webpage_evaluate.passed = true")
+      expect(parsed.content).not.toContain("webpage_vision_judge.accepted = true")
       expect(parsed.content).not.toMatch(/\b9[05]\/100\b|\b95\+\b/)
       expect(parsed.content).not.toMatch(/\bbun run dev\b|\bnpm start\b/i)
       expect(parsed.content).not.toMatch(/static mode|Live-server mode|defaults render `<worktree>/i)
