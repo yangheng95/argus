@@ -52,6 +52,17 @@ export async function updateTask(
       if (resolved.time_started === undefined && row.time_started == null) {
         resolved.time_started = now
       }
+      // Re-activating a previously terminal task (restart_from_stage / retry
+      // after a fail_task or cancel) must clear time_completed too — otherwise
+      // deriveTaskStatus still sees `time_completed != null` and reports
+      // completed/failed regardless of how `error` is set. Symptom (real,
+      // 2026-05-07 tsk_e0265e83b001R63v1bqRw1lFjm): fail_task at 12:59:42
+      // stamped time_completed; restart_from_stage at 12:59:48 only cleared
+      // error, leaving the task derived as `completed` while orchestrator +
+      // requirements + architect kept running on it for 20+ more minutes.
+      if (resolved.time_completed === undefined && row.time_completed != null) {
+        resolved.time_completed = null
+      }
       break
     case "completed":
       if (resolved.time_completed === undefined) resolved.time_completed = now

@@ -37,6 +37,7 @@ import { ensureDefaultDirectory } from "./workspace";
 import { workspaceRestoreDirectory } from "../store/settings";
 import { selectTask } from "./task";
 import { ensureDesktopNotificationPermission } from "./notify";
+import { installHostThemeHandshakeSubscription } from "./host-theme-handshake";
 
 // ── Types ──
 
@@ -46,6 +47,11 @@ export interface InitOptions {
  * trigger any render-side updates that depend on live data.
  */
   onConnected?: () => void | Promise<void>;
+  /**
+ * Called after settings are loaded into settingsStore, before API, locale,
+ * connection, and data initialization continue.
+ */
+  onSettingsLoaded?: () => void | Promise<void>;
   /**
  * Called on every successful reconnect (after an offline period).
  */
@@ -118,6 +124,7 @@ async function loadInitialData(): Promise<boolean> {
 export async function initApp(options: InitOptions = {}): Promise<void> {
   const {
     onConnected,
+    onSettingsLoaded,
     onReconnect,
     reconnectInterval = 10_000,
   } = options;
@@ -127,9 +134,11 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
  //    early host messages — e.g. an attach fired before the user even
  //    saw the panel — still land on the chat composer (plan §19.2.6).
   installComposerAttachSubscription();
+  installHostThemeHandshakeSubscription();
 
  // 1. Load settings into the Solid store
   await loadSettings();
+  await onSettingsLoaded?.();
 
  // 2. Push settings into the API client (server URL + auth)
   syncApiConfig();

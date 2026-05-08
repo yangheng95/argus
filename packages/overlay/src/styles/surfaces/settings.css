@@ -145,7 +145,7 @@
   background: var(--hover-accent-wash);
   border-color: var(--hover-accent-border);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     var(--hover-accent-shadow);
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
@@ -349,7 +349,7 @@
   background: var(--hover-accent-wash);
   border-color: var(--hover-accent-border);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     var(--hover-accent-shadow);
   transform: translateY(calc(-1px * var(--ui-scale)));
 }
@@ -362,7 +362,7 @@
 
 /* Extension row: one card per installed extension. The row's
    `--surface-inset` background was moved into this canonical
-   directly during iter30 because the late `!important` reset
+   directly during iter30 because the late forced reset
    was forcing the rendered bg anyway (see styles.css note for
    the iter30 audit). */
 .extension-row {
@@ -474,7 +474,7 @@
   color: var(--text-muted);
 }
 
-.channel-doc-card .btn {
+.channel-doc-card .oc-button {
   white-space: nowrap;
 }
 
@@ -579,7 +579,7 @@
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
   padding: calc(10px * var(--ui-scale)) 0;
-  border-bottom: var(--oc-border-width) solid color-mix(in srgb, white 4%, transparent);
+  border-bottom: var(--oc-border-width) solid var(--ui-highlight-tone);
   content-visibility: auto;
   contain-intrinsic-size: 0 calc(48px * var(--ui-scale));
 }
@@ -944,8 +944,8 @@
    group). Hover/focus-within wash uses raw rgba on `--accent`
    (rgb(91,141,239) is the literal expansion of `--accent`,
    `#548af7`) — routed through `color-mix(var(--accent) X%,
-   transparent)`. Inset white highlight at 4% alpha was
-   replaced with `color-mix(white X%, transparent)` direct. */
+   transparent)`. The inset highlight reads the shared UI
+   highlight tone token. */
 .config-section {
   border: 0;
   border-radius: var(--oc-radius-soft);
@@ -975,7 +975,7 @@
     ),
     var(--subtle-1);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     var(--hover-accent-shadow);
 }
 
@@ -1001,7 +1001,7 @@
   font-size: var(--ui-font-title);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   line-height: 1.2;
   box-sizing: border-box;
   min-height: calc(32px * var(--ui-scale));
@@ -1061,7 +1061,7 @@
   border-bottom-color: var(--hover-accent-border);
   border-left-color: var(--hover-accent-border);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     0 0 0 var(--oc-border-width) var(--hover-accent-border);
 }
 
@@ -1091,7 +1091,7 @@
     );
   border-color: color-mix(in srgb, var(--accent) 12%, transparent);
   border-top-color: transparent;
-  box-shadow: inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 3%, transparent);
+  box-shadow: inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone);
 }
 
 /* Inner collapsible (one per group inside Extensions). Mirrors
@@ -1125,7 +1125,7 @@
     ),
     var(--surface-inset);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     var(--hover-accent-shadow);
 }
 
@@ -1197,7 +1197,7 @@
   border-bottom-color: var(--hover-accent-border);
   border-left-color: var(--hover-accent-border);
   box-shadow:
-    inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     0 0 0 var(--oc-border-width) var(--hover-accent-border);
 }
 
@@ -1227,7 +1227,7 @@
     );
   border-color: color-mix(in srgb, var(--accent) 12%, transparent);
   border-top-color: transparent;
-  box-shadow: inset 0 var(--oc-border-width) 0 color-mix(in srgb, white 3%, transparent);
+  box-shadow: inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone);
 }
 
 /* Flat (non-collapsible) groups inside the Extensions tab —
@@ -1281,8 +1281,8 @@
 
 /* ── About panel (settings tab) ──────────────────────────── */
 
-.about-body {
-  gap: calc(20px * var(--ui-scale)) !important;
+.config-tab-panel > .config-section-body.about-body {
+  gap: calc(20px * var(--ui-scale));
 }
 
 .about-section {
@@ -1448,7 +1448,7 @@
 .prompt-card-copy strong {
   font-size: var(--ui-font-control);
   color: var(--text-strong);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .prompt-card-copy span,
@@ -1762,7 +1762,7 @@
   color: var(--text-muted);
   margin-bottom: var(--ui-gap-sm);
 }
-@media (max-width: 820px) {
+@media (max-width: 900px) { /* breakpoint: --ui-breakpoint-lg */
   .provider-search-field {
     width: 100%;
   }
@@ -1794,7 +1794,7 @@
   border: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: agent-models-spin 0.7s linear infinite;
+  animation: agent-models-spin var(--ui-duration-loop-agent-spin) linear infinite;
 }
 @keyframes agent-models-spin {
   to {
@@ -1876,7 +1876,7 @@
   transition: transform var(--ui-duration-slow) var(--ui-timing-standard);
 }
 .provider-refresh-btn[data-spinning="true"] .provider-refresh-icon {
-  animation: provider-refresh-spin 1s linear infinite;
+  animation: provider-refresh-spin var(--ui-duration-loop-provider-refresh-spin) linear infinite;
 }
 @keyframes provider-refresh-spin {
   from {
@@ -2002,14 +2002,14 @@
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-medium);
   color: var(--text-soft);
-  letter-spacing: normal;
+  letter-spacing: var(--ui-letter-spacing-normal);
 }
 
 .config-panel-card .dialog-actions {
   padding-top: calc(4px * var(--ui-scale));
 }
 
-.config-content .btn.mini {
+.config-content .oc-button[data-size="mini"] {
   font-size: var(--ui-font-control);
 }
 
@@ -2234,7 +2234,7 @@
   max-height: calc(220px * var(--ui-scale));
 }
 
-@media (max-width: 760px) {
+@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
   .detail-grid-row {
     grid-template-columns: 1fr;
   }
@@ -2313,7 +2313,7 @@
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
   text-transform: none;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
 }
 
 .config-inline-form {
@@ -2376,7 +2376,7 @@
   color: var(--bad);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
   .config-field-row {
     grid-template-columns: 1fr;
   }

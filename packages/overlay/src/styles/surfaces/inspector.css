@@ -27,11 +27,10 @@
   min-height: calc(16px * var(--ui-scale));
 }
 
-/* Section card stack: scrollable body that holds inspector cards. The
-   scrollbar is hidden because the panel uses a reflow-based scroll
-   indicator instead of a visual gutter. Stack gap + outer padding
-   share `--ui-gap-sm` (6px) so the space above the first card matches
-   the gap between siblings — the right-rail's single spacing rhythm. */
+/* Section card stack: scrollable body that holds inspector cards.
+   Stack gap + outer padding share `--ui-gap-sm` (6px) so the space
+   above the first card matches the gap between siblings — the
+   right-rail's single spacing rhythm. */
 .sections-stack {
   display: flex;
   flex: 1 1 0;
@@ -40,12 +39,6 @@
   gap: var(--ui-gap-sm);
   padding: var(--ui-gap-sm);
   overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.sections-stack::-webkit-scrollbar {
-  width: 0;
-  height: 0;
 }
 
 /* Tab body container: each top-level inspector tab (workflow,
@@ -198,7 +191,7 @@
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-medium);
   color: var(--text-strong);
-  letter-spacing: 0.03em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: none;
 }
 
@@ -218,7 +211,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   white-space: nowrap;
 }
 
@@ -241,7 +234,7 @@
 .oc-section__badge[data-variant="metric"] {
   padding-left: 0;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .oc-section__badge[data-variant="metric"]::before {
@@ -358,7 +351,7 @@
 
 .oc-section__head:hover {
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 74%),
+    linear-gradient(180deg, var(--ui-highlight-tone), transparent 74%),
     color-mix(in srgb, var(--surface-strong) 66%, var(--surface-inset) 34%);
 }
 
@@ -405,7 +398,7 @@
 
 .oc-section[data-phase-state="active"] > .oc-section__head {
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 72%),
+    linear-gradient(180deg, var(--ui-highlight-tone), transparent 72%),
     color-mix(in srgb, var(--accent) 7%, var(--surface-strong));
   box-shadow: none;
   animation: none;
@@ -458,7 +451,7 @@
   font-size: var(--ui-font-control);
   color: var(--text-soft);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .eval-error-detail {
@@ -586,7 +579,7 @@
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .criteria-group-count {
@@ -633,29 +626,29 @@
 }
 
 .gwg:hover {
-  box-shadow: 0 calc(9px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, black 12%, transparent);
+  box-shadow: 0 calc(9px * var(--ui-scale)) calc(18px * var(--ui-scale)) var(--ui-shadow-tone);
 }
 
 .gwg--expanded {
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, white 2.8%, transparent),
+      var(--ui-highlight-tone),
       color-mix(in srgb, var(--accent) 1.2%, transparent)
     ),
     color-mix(in srgb, var(--surface) 96%, transparent);
 }
 
-/* `.gwg--*` status modifiers — rail tone via `::before`. */
-.gwg--passed::before {
+/* Goal status rail tone is data-driven by the backend goal status. */
+.gwg[data-goal-status="passed"]::before {
   background: color-mix(in srgb, var(--accent) 52%, var(--text-soft));
 }
 
-.gwg--failed::before {
-  background: color-mix(in srgb, var(--bad) 82%, white 4%);
+.gwg[data-goal-status="failed"]::before {
+  background: color-mix(in srgb, var(--bad) 82%, var(--text-on-accent) 4%);
 }
 
-.gwg--running::before {
+.gwg[data-goal-status="running"]::before {
   background: var(--accent);
   box-shadow: none;
 }
@@ -724,19 +717,19 @@
   box-shadow: none;
 }
 
-.gwg--passed .gwg-status-icon {
+.gwg[data-goal-status="passed"] .gwg-status-icon {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
   box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 24%, transparent) inset;
 }
 
-.gwg--failed .gwg-status-icon {
+.gwg[data-goal-status="failed"] .gwg-status-icon {
   background: var(--bad-dim);
   color: var(--bad);
   box-shadow: none;
 }
 
-.gwg--running .gwg-status-icon {
+.gwg[data-goal-status="running"] .gwg-status-icon {
   background: var(--accent-dim);
   color: var(--accent);
   box-shadow: none;
@@ -751,7 +744,7 @@
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-strong);
   line-height: 1.28;
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-strong);
 }
 
@@ -760,7 +753,7 @@
   font-variant-numeric: tabular-nums;
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
@@ -843,7 +836,7 @@
   gap: var(--ui-gap-sm);
   padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-top: var(--oc-border-width) solid color-mix(in srgb, var(--subtle-3) 72%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, white 1.5%, transparent), transparent 26%);
+  background: linear-gradient(180deg, var(--ui-highlight-tone), transparent 26%);
 }
 
 /* Objective block: Architect-written 1-2 sentence execution
@@ -860,7 +853,7 @@
 .gwg-objective-label {
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-muted);
   margin-bottom: calc(3px * var(--ui-scale));
 }
@@ -885,7 +878,7 @@
 .gwg-done-definition-label {
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-muted);
   margin-bottom: calc(3px * var(--ui-scale));
 }
@@ -970,7 +963,7 @@
   flex: 1;
   font-weight: var(--ui-font-weight-medium);
   color: var(--text);
-  letter-spacing: 0.005em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -987,7 +980,7 @@
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   background: var(--subtle-2);
@@ -1189,7 +1182,7 @@
   font-weight: var(--ui-font-weight-strong);
   color: var(--text);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .gwg-diff-additions {
@@ -1243,7 +1236,7 @@
   color: var(--text);
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   cursor: pointer;
   transition:
     background var(--ui-duration-base) var(--ui-timing-standard),
@@ -1267,7 +1260,7 @@
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   font-variant-numeric: tabular-nums;
   line-height: 1.4;
 }
@@ -1301,7 +1294,7 @@
 }
 
 /* Step message log — scrollable container for live agent output
-   inside the step body. Custom thin scrollbar via webkit pseudos. */
+   inside the step body. */
 .gwg-step-messages {
   display: flex;
   flex-direction: column;
@@ -1309,19 +1302,6 @@
   max-height: calc(240px * var(--ui-scale));
   overflow-y: auto;
   padding-right: calc(2px * var(--ui-scale));
-}
-
-.gwg-step-messages::-webkit-scrollbar {
-  width: calc(4px * var(--ui-scale));
-}
-
-.gwg-step-messages::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: var(--oc-radius-soft);
-}
-
-.gwg-step-messages::-webkit-scrollbar-track {
-  background: transparent;
 }
 
 /* Eval checks list — itemized pass/fail rows shown after the
@@ -1395,25 +1375,25 @@
   border-radius: var(--oc-radius-soft);
 }
 
-/* Status modifiers — passed / failed / pending. Inset rings'
+/* Status data attributes — passed / failed / pending. Inset rings'
    raw rgba on --good / --bad routed through color-mix. */
-.gwg-check--passed .gwg-check-icon {
+.gwg-check[data-check-status="passed"] .gwg-check-icon {
   background: var(--good-dim);
   color: var(--good);
   box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--good) 35%, transparent) inset;
 }
 
-.gwg-check--failed .gwg-check-icon {
+.gwg-check[data-check-status="failed"] .gwg-check-icon {
   background: var(--bad-dim);
   color: var(--bad);
   box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 35%, transparent) inset;
 }
 
-.gwg-check--failed .gwg-check-name {
+.gwg-check[data-check-status="failed"] .gwg-check-name {
   color: var(--bad);
 }
 
-.gwg-check--pending .gwg-check-icon {
+.gwg-check[data-check-status="pending"] .gwg-check-icon {
   background: var(--subtle-2);
   color: var(--text-muted);
 }
@@ -1482,7 +1462,7 @@
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
   border-radius: var(--oc-radius-pill);
   flex-shrink: 0;
@@ -1503,17 +1483,17 @@
   color: var(--text-muted);
 }
 
-.req-status--passed {
+.req-status[data-req-status="passed"] {
   background: var(--good-dim);
   color: var(--good);
 }
 
-.req-status--failed {
+.req-status[data-req-status="failed"] {
   background: var(--bad-dim);
   color: var(--bad);
 }
 
-.req-status--pending {
+.req-status[data-req-status="pending"] {
   background: var(--subtle-2);
   color: var(--text-muted);
 }
@@ -1569,15 +1549,6 @@
   overflow-y: auto;
   padding-left: var(--ui-gap-sm);
   border-left: calc(2px * var(--ui-scale)) solid var(--accent-dim);
-}
-
-.req-streaming-messages::-webkit-scrollbar {
-  width: calc(4px * var(--ui-scale));
-}
-
-.req-streaming-messages::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: var(--oc-radius-soft);
 }
 
 /* Spec-detail collapsible: shows the raw spec text under a
@@ -1649,7 +1620,7 @@
   font-size: var(--ui-font-small);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 
 .integrity__list {
@@ -1736,7 +1707,7 @@
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
   border-radius: var(--oc-radius-pill);
   background: var(--warn-dim);
@@ -2093,17 +2064,17 @@
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
   color: var(--text-muted);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 .criteria-item .criteria-name {
   font-family: var(--mono);
   font-size: var(--ui-font-small);
   color: var(--text);
 }
-.criteria-item--failed .criteria-name {
+.criteria-item[data-criteria-status="failed"] .criteria-name {
   color: var(--bad);
 }
-.criteria-item--skipped .criteria-name {
+.criteria-item[data-criteria-status="skipped"] .criteria-name {
   color: var(--text-muted);
 }
 .criteria-evidence {
@@ -2213,36 +2184,49 @@
 }
 
 .criteria-status {
-  width: calc(7px * var(--ui-scale));
-  height: calc(7px * var(--ui-scale));
-  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
   flex-shrink: 0;
+}
+
+.criteria-status svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
 }
 .criteria-result {
   min-width: calc(40px * var(--ui-scale));
   font-size: var(--ui-font-control);
   font-family: var(--mono);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-muted);
   text-align: right;
 }
 .criteria-status[data-result="pending"] {
-  background: var(--subtle-5);
+  background: var(--subtle-2);
+  color: var(--text-muted);
 }
 .criteria-status[data-result="passed"] {
-  background: var(--good);
+  background: var(--good-dim);
+  color: var(--good);
   box-shadow: 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--good) 40%, transparent);
 }
 .criteria-status[data-result="failed"] {
-  background: var(--bad);
+  background: var(--bad-dim);
+  color: var(--bad);
   box-shadow: 0 0 calc(4px * var(--ui-scale)) color-mix(in srgb, var(--bad) 40%, transparent);
 }
 .criteria-status[data-result="skipped"] {
-  background: var(--text-muted);
+  background: var(--subtle-2);
+  color: var(--text-muted);
 }
 .criteria-status[data-result="off"] {
   background: transparent;
+  color: var(--text-muted);
   border: var(--oc-border-width) solid var(--subtle-5);
   box-shadow: none;
 }
@@ -2275,10 +2259,10 @@ details.goal-item {
   transition: background var(--ui-duration-fast);
 }
 details.goal-item:hover {
-  background: color-mix(in srgb, white 2%, transparent);
+  background: var(--ui-glass-tint);
 }
 details.goal-item[open] {
-  background: color-mix(in srgb, white 2%, transparent);
+  background: var(--ui-glass-tint);
 }
 
 .goal-item-head {
@@ -2316,7 +2300,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-medium);
   color: var(--text-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 .goal-title-brief {
   flex: 1;
@@ -2342,7 +2326,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 .goal-item-id:hover {
   opacity: var(--ui-opacity-full);
-  background: color-mix(in srgb, white 8%, transparent);
+  background: var(--ui-glass-tint);
 }
 
 .goal-item-body {
@@ -2419,7 +2403,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-small);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   flex-shrink: 0;
@@ -2457,14 +2441,14 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   padding: var(--ui-gap-sm) var(--ui-section-padding-x);
 }
 
-/* Two .task-actions-buttons .btn rules previously lived in styles.css
+/* Two task-actions button rules previously lived in styles.css
  * (base padding/font-size near plan-version, then deeper presentation
  * with positioning + ::before dot 1500 lines lower). The deeper rule's
  * padding shorthand stomped the base rule's padding; merging here
  * collapses both into a single canonical so the cascade has one
  * source. The font-size from the base rule is preserved because the
  * deeper rule never set it. */
-.task-actions-buttons .btn {
+.task-actions-buttons .oc-button {
   min-height: auto;
   padding: 0 0 0 var(--ui-btn-mini-padding-x);
   border: none;
@@ -2477,7 +2461,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-control);
 }
 
-.task-actions-buttons .btn::before {
+.task-actions-buttons .oc-button::before {
   content: "";
   position: absolute;
   left: 0;
@@ -2489,27 +2473,27 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   transform: translateY(-50%);
 }
 
-.task-actions-buttons .btn:hover {
+.task-actions-buttons .oc-button:hover {
   background: transparent;
   color: var(--text-strong);
   box-shadow: none;
 }
 
-.task-actions-buttons .btn:focus-visible {
+.task-actions-buttons .oc-button:focus-visible {
   outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 36%, transparent);
   outline-offset: calc(2px * var(--ui-scale));
   box-shadow: none;
 }
 
-.task-actions-buttons .btn[data-task-action="retry"] {
+.task-actions-buttons .oc-button[data-task-action="retry"] {
   color: var(--accent);
 }
 
-.task-actions-buttons .btn[data-task-action="retry"]::before {
+.task-actions-buttons .oc-button[data-task-action="retry"]::before {
   background: color-mix(in srgb, var(--accent) 84%, transparent);
 }
 
-.task-actions-buttons .btn:disabled {
+.task-actions-buttons .oc-button:disabled {
   background: transparent;
 }
 
@@ -2520,7 +2504,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   line-height: 1.4;
 }
 .verdict-pill[data-verdict="pass"],
@@ -2570,7 +2554,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .session-msg[data-role="assistant"] {
   border-color: color-mix(in srgb, var(--accent) 16%, var(--border));
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), color-mix(in srgb, var(--accent) 1.2%, transparent) 74%, transparent),
+    linear-gradient(180deg, var(--ui-highlight-tone), color-mix(in srgb, var(--accent) 1.2%, transparent) 74%, transparent),
     color-mix(in srgb, var(--surface) 88%, transparent);
 }
 
@@ -2584,7 +2568,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-soft);
 }
 
@@ -2673,7 +2657,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   flex-wrap: wrap;
 }
 
-.section-actions .btn {
+.section-actions .oc-button {
   padding: calc(4px * var(--ui-scale)) var(--ui-section-padding-x);
   font-size: var(--ui-font-control);
 }

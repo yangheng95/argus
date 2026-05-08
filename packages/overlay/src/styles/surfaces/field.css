@@ -83,9 +83,8 @@
 }
 
 /* Chromium's autofill burns a `background-color: rgb(232, 240, 254)`
- * onto credential fields with `!important` priority that ordinary
- * declarations cannot override. The canonical workaround is an inset
- * `box-shadow` thick enough to repaint the entire field; the long
+ * onto credential fields at browser priority. The canonical workaround
+ * is an inset `box-shadow` thick enough to repaint the entire field; the long
  * transition keeps Chromium from animating back to the autofill colour
  * a few hundred milliseconds after focus.
  *
@@ -99,6 +98,10 @@
   -webkit-box-shadow: 0 0 0 1000px var(--surface-inset) inset !important;
   -webkit-text-fill-color: var(--text-strong) !important;
   caret-color: var(--text-strong);
+  /* Chrome autofill yellow bg suppression: keep the literal 9999s
+   * here. This is a browser hack to make autofill effectively never
+   * trigger the inset shadow's transition; tokenizing would weaken
+   * the hack. Documented exception per spec Batch 8. */
   transition: background-color 9999s ease-in-out 0s;
 }
 textarea.field-input {

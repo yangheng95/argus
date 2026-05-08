@@ -698,7 +698,7 @@ export default function ProvidersPanel() {
                           aria-live="polite"
                         >
                           <span class="provider-test-result-icon" aria-hidden="true">
-                            {result().ok ? "✓" : "✗"}
+                            <Icon name={result().ok ? "status-completed" : "status-failed"} size={13} />
                           </span>
                           <span class="provider-test-result-msg">
                             {result().ok
@@ -731,7 +731,7 @@ export default function ProvidersPanel() {
                 <input
                   class="field-input"
                   type="text"
-                  placeholder="e.g. hexin, my-gateway"
+                  placeholder={t("provider.form.id_placeholder", { value: "hexin, my-gateway" })}
                   value={formId()}
                   onInput={(e) => setFormId(e.currentTarget.value)}
                 />
@@ -743,7 +743,7 @@ export default function ProvidersPanel() {
               <input
                 class="field-input"
                 type="text"
-                placeholder="e.g. Hexin OpenAI Gateway"
+                placeholder={t("provider.form.name_placeholder", { value: "Hexin OpenAI Gateway" })}
                 value={formName()}
                 onInput={(e) => setFormName(e.currentTarget.value)}
               />
@@ -756,7 +756,7 @@ export default function ProvidersPanel() {
                 type="url"
                 pattern="https?://.+"
                 required
-                placeholder="e.g. https://my-gateway.com/v1"
+                placeholder={t("provider.form.api_placeholder", { value: "https://my-gateway.com/v1" })}
                 value={formApi()}
                 onInput={(e) => setFormApi(e.currentTarget.value)}
                 onBlur={(e) => {
@@ -775,7 +775,7 @@ export default function ProvidersPanel() {
               <input
                 class="field-input"
                 type="text"
-                placeholder="e.g. MY_API_KEY"
+                placeholder={t("provider.form.env_placeholder", { value: "MY_API_KEY" })}
                 value={formEnvKey()}
                 onInput={(e) => setFormEnvKey(e.currentTarget.value)}
               />
@@ -799,6 +799,7 @@ export default function ProvidersPanel() {
 
             <label class="field">
               <span class="field-label">Models (one per line: id:display_name)</span>
+              {/* Fixed model mapping examples; these are literal IDs/display names, not instructional prose. */}
               <textarea
                 class="field-input provider-models-textarea"
                 rows={4}

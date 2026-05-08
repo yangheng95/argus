@@ -1,4 +1,4 @@
-import { createEffect, createMemo, onCleanup } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { renderMarkdown } from "../utils/markdown";
 
 /**
@@ -48,96 +48,83 @@ function splitBlocks(text: string): string[] {
 }
 
 export function TextPart(props: { text: string }) {
-  let containerRef: HTMLDivElement | undefined;
-
   // Frozen block cache: index → rendered HTML string.
   // Once a block is frozen its HTML never changes.
-  const frozen = new Map<number, string>();
-  // DOM nodes for frozen blocks — kept alive, never re-created.
-  const frozenNodes = new Map<number, HTMLElement>();
-  let prevBlockCount = 0;
-  let activeEl: HTMLElement | null = null;
+  const [frozenHtml, setFrozenHtml] = createSignal<string[]>([]);
+  let frozenSources: string[] = [];
 
-  // rAF throttle state — coalesce rapid text deltas into one render per frame.
+  // rAF throttle state — coalesce rapid text deltas into one signal write per frame.
   let pendingRAF = 0;
   let pendingActiveText = "";
+  const [activeText, setActiveText] = createSignal("");
 
-  function renderActiveBlock() {
+  function commitActiveText() {
     pendingRAF = 0;
-    if (!activeEl) return;
+    setActiveText(pendingActiveText);
+  }
+
+  const activeHtml = createMemo(() => {
+    const text = activeText();
+    if (!text) return "";
     const t0 = performance.now();
-    activeEl.innerHTML = renderMarkdown(pendingActiveText);
+    const html = renderMarkdown(text);
     const dt = performance.now() - t0;
     if (dt > 8) {
       console.warn(
-        `[perf] TextPart renderMarkdown: ${dt.toFixed(1)}ms, block ${pendingActiveText.length} chars`,
+        `[perf] TextPart renderMarkdown: ${dt.toFixed(1)}ms, block ${text.length} chars`,
       );
     }
-  }
+    return html;
+  });
 
   createEffect(() => {
     const text = props.text || "";
-    const container = containerRef;
-    if (!container) return;
-
     const blocks = splitBlocks(text);
     const total = blocks.length;
     // All blocks except the last are "complete" (frozen).
     const frozenCount = Math.max(0, total - 1);
+    const nextFrozenSources = blocks.slice(0, frozenCount);
 
-    // 1. Freeze newly completed blocks — render once, cache forever.
-    //    Frozen blocks are rendered synchronously (they only run once per
-    //    block lifetime, so latency is irrelevant).
-    for (let i = prevBlockCount; i < frozenCount; i++) {
-      if (!frozen.has(i)) {
-        const html = renderMarkdown(blocks[i]);
-        frozen.set(i, html);
-        const node = document.createElement("div");
-        node.className = "md-frozen-block";
-        node.innerHTML = html;
-        frozenNodes.set(i, node);
-        // Insert before the active element (or append)
-        if (activeEl && activeEl.parentNode === container) {
-          container.insertBefore(node, activeEl);
-        } else {
-          container.appendChild(node);
-        }
-      }
+    const cacheStillValid =
+      frozenSources.length <= nextFrozenSources.length &&
+      frozenSources.every((source, index) => source === nextFrozenSources[index]);
+    if (!cacheStillValid) {
+      frozenSources = nextFrozenSources;
+      setFrozenHtml(nextFrozenSources.map((source) => renderMarkdown(source)));
+    } else if (nextFrozenSources.length > frozenSources.length) {
+      const additions = nextFrozenSources
+        .slice(frozenSources.length)
+        .map((source) => renderMarkdown(source));
+      frozenSources = nextFrozenSources;
+      setFrozenHtml((prev) => [...prev, ...additions]);
     }
 
     // 2. Update the active (trailing) block via rAF throttle.
     //    During high-frequency streaming (register_goal, large tool output)
     //    Solid fires this effect on every text delta — potentially 20+/s from
-    //    the 50ms SSE flush interval. Deferring to rAF coalesces multiple
-    //    deltas into a single renderMarkdown + innerHTML write per vsync
-    //    frame, freeing the main thread for input events and scroll.
-    if (total > 0) {
-      if (!activeEl) {
-        activeEl = document.createElement("div");
-        activeEl.className = "md-active-block";
-        container.appendChild(activeEl);
-      }
-      pendingActiveText = blocks[total - 1];
-      if (!pendingRAF) {
-        pendingRAF = requestAnimationFrame(renderActiveBlock);
-      }
-    } else if (activeEl) {
-      activeEl.innerHTML = "";
-    }
-
-    prevBlockCount = frozenCount;
+    //    the 50ms SSE flush interval. Deferring the signal write to rAF
+    //    coalesces multiple deltas into a single sanitized markdown render
+    //    per vsync frame while keeping DOM ownership inside Solid.
+    pendingActiveText = total > 0 ? blocks[total - 1] : "";
+    if (!pendingRAF) pendingRAF = requestAnimationFrame(commitActiveText);
   });
 
   onCleanup(() => {
     if (pendingRAF) cancelAnimationFrame(pendingRAF);
     pendingRAF = 0;
-    frozen.clear();
-    frozenNodes.clear();
-    activeEl = null;
-    prevBlockCount = 0;
+    frozenSources = [];
   });
 
-  return <div class="msg-text" ref={containerRef} />;
+  return (
+    <div class="msg-text">
+      <For each={frozenHtml()}>
+        {(html) => <div class="md-frozen-block" innerHTML={html} />}
+      </For>
+      <Show when={activeText()}>
+        <div class="md-active-block" innerHTML={activeHtml()} />
+      </Show>
+    </div>
+  );
 }
 
 /**

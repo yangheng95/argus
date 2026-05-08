@@ -5,6 +5,7 @@ import { createEventQueue, type EventQueue } from "@/util/event-queue"
 import { EngineConfig } from "@/engine/config"
 import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingProviderOptions, type ExecutorStatusInfo } from "./contract"
 import type { ExecutorAdapter } from "./contract"
+import { extractExecutorSessionRef, persistExecutorSessionRef, readExecutorSessionRef } from "./session-ref"
 
 const log = Log.create({ service: "managed-executor" })
 
@@ -32,6 +33,7 @@ type Notify = {
 type State = {
   id: string
   sessionID: string
+  provider: string
   externalSessionID?: string
   status: Status
   error: string | null
@@ -135,6 +137,7 @@ export const ManagedCodingExecutor = {
         const state: State = {
           id,
           sessionID: input.sessionID,
+          provider: provider.name,
           status: "queued",
           error: null,
           output: "",
@@ -145,6 +148,10 @@ export const ManagedCodingExecutor = {
         }
         tasks.set(id, state)
         latest.set(input.sessionID, id)
+        await persistExecutorSessionRef({
+          sessionID: input.sessionID,
+          provider: provider.name,
+        })
         push(state, {
           type: "executor.progress",
           summary: "queued",
@@ -203,10 +210,13 @@ export const ManagedCodingExecutor = {
       async resume(input) {
         const id = Identifier.ascending("task")
         const prev = pick(tasks, latest, { sessionID: input.sessionID })
+        const metadata = prev?.externalSessionID ? undefined : await readExecutorSessionRef(input.sessionID)
+        const persisted = metadata?.provider === provider.name ? metadata : undefined
         const state: State = {
           id,
           sessionID: input.sessionID,
-          externalSessionID: prev?.externalSessionID,
+          provider: provider.name,
+          externalSessionID: prev?.externalSessionID ?? persisted?.nativeSessionID,
           status: "retrying",
           error: null,
           output: "",
@@ -216,6 +226,11 @@ export const ManagedCodingExecutor = {
         }
         tasks.set(id, state)
         latest.set(input.sessionID, id)
+        await persistExecutorSessionRef({
+          sessionID: input.sessionID,
+          provider: provider.name,
+          ref: state.externalSessionID ? { nativeSessionID: state.externalSessionID } : undefined,
+        })
         push(state, {
           type: "executor.progress",
           summary: "retrying",
@@ -322,7 +337,20 @@ async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, lat
     if (eventCount <= 5 || eventCount % 20 === 0) {
       log.info("consume event", { sessionID: state.sessionID, queueTaskID: state.id, eventCount, type: event.type })
     }
-    sync(state, event)
+    const ref = sync(state, event)
+    if (ref) {
+      await persistExecutorSessionRef({
+        sessionID: state.sessionID,
+        provider: state.provider,
+        ref,
+      }).catch((error) => {
+        log.warn("persist executor session ref failed", {
+          sessionID: state.sessionID,
+          queueTaskID: state.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    }
     push(state, map(state, event))
 
     if (event.type === "text_delta") {
@@ -380,19 +408,24 @@ function pick(tasks: Map<string, State>, latest: Map<string, string>, input: { s
 }
 
 function sync(state: State, event: CodingEventInfo) {
-  if (event.type === "done" && event.sessionID) {
-    state.externalSessionID = event.sessionID
-    return
+  const ref = extractExecutorSessionRef(event)
+  if (ref?.nativeSessionID) {
+    state.externalSessionID = ref.nativeSessionID
+    return ref
   }
-  if (event.type !== "progress" || !event.meta) return
+  if (event.type !== "progress" || !event.meta) return ref
   if (typeof event.meta.session_id === "string" && event.meta.session_id) {
     state.externalSessionID = event.meta.session_id
-    return
+    return { nativeSessionID: event.meta.session_id }
   }
   const response = event.meta.response
   if (!response || typeof response !== "object") return
   const item = response as Record<string, unknown>
-  if (typeof item.id === "string" && item.id) state.externalSessionID = item.id
+  if (typeof item.id === "string" && item.id) {
+    state.externalSessionID = item.id
+    return { nativeSessionID: item.id }
+  }
+  return ref
 }
 
 function push(state: State, event: Notify) {

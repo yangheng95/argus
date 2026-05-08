@@ -172,6 +172,7 @@ describe("schema snapshot (audit F8)", () => {
       "stream.error",
       "stream.close",
       "ui-command",
+      "host:theme",
     ])
   })
 
@@ -191,6 +192,7 @@ describe("schema snapshot (audit F8)", () => {
       { protocol: PROTOCOL_VERSION, type: "stream.error", id: "x", message: "boom" },
       { protocol: PROTOCOL_VERSION, type: "stream.close", id: "x", reason: "done" },
       { protocol: PROTOCOL_VERSION, type: "ui-command", kind: "composer.attach", payload: { foo: 1 } },
+      { protocol: PROTOCOL_VERSION, type: "host:theme", theme: "vscode-dark" },
       { type: "protocol-mismatch", expected: 1, received: 2 },
     ]
     for (const s of samples) {

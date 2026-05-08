@@ -1,78 +1,132 @@
 /* ─────────────────────────────────────────────────────────────
-   VS Code dark theme palette.
+   VS Code dark palette — 100% passthrough (theme-vscode-
+   passthrough-2026-05-07).
 
-   Theme-architecture Step 0 (2026-05-04): aligned with dark/light
-   to declare the **same palette token set** (rule 8 — single
-   source). Previously this file was missing `--accent-shadow`,
-   `--dialog-backdrop` (fell through to dark's :root values — that
-   leak is now closed). The structural tokens that used to live
-   here moved to `tokens/design-language.css` :root because they
-   are theme-independent.
+   Theme isolation contract (user 2026-05-07: "完全隔离，不要耦合"):
+
+   1. Every palette token MUST resolve through `var(--vscode-*)` or
+      `color-mix()` derived from one. No hex / rgb / rgba literals.
+      No `var(--vscode-*, hexFallback)` — the fallback is itself a
+      coupling to a hand-picked Default Dark+ value and defeats the
+      whole point of passthrough.
+
+   2. No reference to tokens defined in cascade/dark.css or
+      cascade/light.css. Those are Tauri / browser palettes and do
+      not belong in a webview-driven theme.
+
+   3. Black / white CSS keywords are allowed inside color-mix() for
+      structural scrims, high-lights, and shadow tones — they are
+      structural, not theme color (matches every major design system:
+      Material, Carbon, FAST).
+
+   4. If this theme accidentally activates outside a VS Code webview
+      (Tauri / browser), tokens resolve to nothing and the UI breaks
+      visibly. That is the intended behavior — silent fallback to a
+      hand-coded "VSCode-ish" palette is exactly the bleed the user
+      complained about for 4 hours.
+
+   The token name set is symmetric with cascade/dark.css and
+   cascade/light.css; only the values differ. flat-redesign-theme-
+   symmetry.test.ts pins the parity. flat-redesign-vscode-theme-
+   passthrough.test.ts pins the no-literal / passthrough discipline.
    ───────────────────────────────────────────────────────────── */
 
+:root[data-theme="vscode-dark"],
 body[data-theme="vscode-dark"] {
   color-scheme: dark;
-  --bg: #1e1e1e;
-  --surface: rgba(37, 37, 38, 0.92);
-  --surface-hover: rgba(45, 45, 48, 0.98);
-  --surface-inset: rgba(30, 30, 30, 0.96);
-  --surface-strong: rgba(51, 51, 51, 0.94);
-  --rail-surface: #252526;
-  --chat-canvas: #1e1e1e;
-  --inspector-surface: #252526;
 
-  --body-bg: var(--bg);
-  --panel-body-bg: #1e1e1e;
+  --text-on-accent: var(--vscode-button-foreground);
+  --bg: var(--vscode-editor-background);
+  --surface: var(--vscode-sideBar-background);
+  --surface-hover: var(--vscode-list-hoverBackground);
+  --surface-inset: var(--vscode-input-background);
+  --surface-strong: var(--vscode-titleBar-activeBackground);
+  --rail-surface: var(--vscode-sideBar-background);
+  --chat-canvas: var(--vscode-editor-background);
+  --inspector-surface: var(--vscode-sideBar-background);
+
+  --body-bg: var(--vscode-editor-background);
+  --panel-body-bg: var(--vscode-panel-background);
   --panel-body-blur: none;
-  --chrome: rgba(60, 60, 60, 0.84);
-  --border: rgba(255, 255, 255, 0.1);
-  --border-hover: rgba(0, 122, 204, 0.42);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --text: #cccccc;
-  --text-strong: #f0f0f0;
-  --text-soft: #a6a6a6;
-  --text-muted: #7a7a7a;
-  --accent: #007acc;
-  --accent-dim: rgba(0, 122, 204, 0.16);
-  --accent-hover: #3794ff;
-  --accent-start: #007acc;
-  --accent-mid: #0e639c;
-  --accent-end: #3794ff;
+  --chrome: var(--vscode-titleBar-activeBackground);
+  --border: var(--vscode-panel-border);
+  --border-hover: var(--vscode-focusBorder);
+  --border-strong: var(--vscode-input-border);
+
+  --text: var(--vscode-foreground);
+  --text-strong: var(--vscode-editor-foreground);
+  --text-soft: var(--vscode-descriptionForeground);
+  --text-muted: var(--vscode-disabledForeground);
+
+  --accent: var(--vscode-button-background);
+  --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-hover: var(--vscode-button-hoverBackground);
+  --accent-start: var(--accent);
+  --accent-mid: var(--accent);
+  --accent-end: var(--accent-hover);
   --accent-gradient: var(--accent);
   --accent-gradient-hover: var(--accent-hover);
   --accent-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 28%, transparent);
-  --accent-ring: rgba(0, 122, 204, 0.3);
-  --accent-glow: color-mix(in srgb, var(--accent) 28%, transparent);
-  --hover-accent-border: rgba(0, 122, 204, 0.36);
-  --hover-accent-wash: rgba(0, 122, 204, 0.1);
-  --hover-accent-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
-  --info: #3794ff;
-  --info-dim: rgba(55, 148, 255, 0.12);
-  --good: #73c991;
-  --good-dim: rgba(115, 201, 145, 0.14);
-  --warn: #cca700;
-  --warn-dim: rgba(204, 167, 0, 0.15);
-  --bad: #f48771;
-  --bad-dim: rgba(244, 135, 113, 0.14);
-  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.045);
-  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --scrollbar-thumb: rgba(121, 121, 121, 0.4);
-  --scrollbar-thumb-hover: rgba(121, 121, 121, 0.6);
-  --session-scrollbar-track: rgba(255, 255, 255, 0.035);
-  --subtle-1: rgba(255, 255, 255, 0.035);
-  --subtle-2: rgba(255, 255, 255, 0.055);
-  --subtle-3: rgba(255, 255, 255, 0.075);
-  --subtle-4: rgba(255, 255, 255, 0.105);
-  --subtle-5: rgba(255, 255, 255, 0.145);
-  --dialog-bg: #1f2339;
+  --accent-ring: color-mix(in srgb, var(--accent) 30%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
+  --hover-accent-border: color-mix(in srgb, var(--accent) 36%, transparent);
+  --hover-accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
+  --hover-accent-shadow: 0 18px 40px color-mix(in srgb, black 50%, transparent);
+
+  --info: var(--vscode-charts-blue);
+  --info-dim: color-mix(in srgb, var(--info) 12%, transparent);
+  --good: var(--vscode-charts-green);
+  --good-dim: color-mix(in srgb, var(--good) 14%, transparent);
+  --warn: var(--vscode-charts-yellow);
+  --warn-dim: color-mix(in srgb, var(--warn) 15%, transparent);
+  --bad: var(--vscode-charts-red);
+  --bad-dim: color-mix(in srgb, var(--bad) 14%, transparent);
+
+  /* High-lights (white inset) and shadow tones (black scrim) are
+   * structural, not theme color — they shape edges and depth, and
+   * every dark UI uses the same physics regardless of palette. Black
+   * and white CSS keywords here are the standard expression of that
+   * structural concern (cf. Material elevation overlays, Carbon
+   * shadow scale). */
+  --shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+  --shadow-md: inset 0 1px 0 color-mix(in srgb, white 4.5%, transparent);
+  --shadow-lg: inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+
+  --scrollbar-thumb: var(--vscode-scrollbarSlider-background);
+  --scrollbar-thumb-hover: var(--vscode-scrollbarSlider-hoverBackground);
+  --session-scrollbar-track: color-mix(in srgb, var(--text) 4%, transparent);
+
+  --subtle-1: color-mix(in srgb, var(--accent) 4%, transparent);
+  --subtle-2: color-mix(in srgb, var(--accent) 6%, transparent);
+  --subtle-3: color-mix(in srgb, var(--accent) 8%, transparent);
+  --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
+  --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
+
+  --dialog-bg: var(--vscode-editor-background);
   --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
-  --menu-panel-bg: rgba(31, 35, 57, 0.96);
-  --divider-soft: rgba(178, 190, 235, 0.1);
-  --panel-fill: var(--surface);
-  --panel-fill-hover: var(--surface-hover);
-  --card-fill: var(--surface-inset);
-  --card-fill-hover: var(--surface-hover);
+  --ui-scrim: color-mix(in srgb, black 60%, transparent);
+  --ui-shadow-tone: color-mix(in srgb, black 32%, transparent);
+  --ui-highlight-tone: color-mix(in srgb, white 4%, transparent);
+  --ui-glass-tint: color-mix(in srgb, white 3%, transparent);
+
+  --executor-menu-bg: var(--vscode-menu-background);
+  --executor-menu-shadow:
+    0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) var(--ui-shadow-tone),
+    0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 56%, transparent);
+  --executor-menu-row-hover-bg: var(--vscode-menu-selectionBackground);
+
+  --task-bar-bg: var(--vscode-sideBar-background);
+  --task-bar-backdrop-filter: none;
+  --task-bar-border-color: var(--vscode-panel-border);
+
+  --menu-panel-bg: var(--vscode-menu-background);
+  --divider-soft: color-mix(in srgb, var(--border) 60%, transparent);
+
+  --panel-fill: var(--vscode-sideBar-background);
+  --panel-fill-hover: var(--vscode-list-hoverBackground);
+  --card-fill: var(--vscode-input-background);
+  --card-fill-hover: var(--vscode-list-hoverBackground);
+
   --guide-card-border: color-mix(in srgb, var(--accent) 25%, transparent);
   --guide-card-bg:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 44%),

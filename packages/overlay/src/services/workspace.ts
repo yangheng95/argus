@@ -669,7 +669,7 @@ export async function setDirectory(
   options: ApplyDirectoryOptions = {},
 ): Promise<void> {
   const next = typeof value === "string" ? value.trim() : "";
-  if (!next) throw new Error(t("cwd.path_required") || "Directory path required");
+  if (!next) throw new Error(t("cwd.path_required"));
   await applyDirectory(next, { ...options, save: true });
 }
 

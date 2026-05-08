@@ -137,19 +137,6 @@ export function architectValidationIssues(
   }
 
   for (const g of collector.goals) {
-    if (
-      g.kind !== "verification" &&
-      g.kind !== "system" &&
-      g.exports.length === 0
-    ) {
-      issues.push(`Goal ${g.id}: ${g.kind} goal must declare at least one export`)
-    }
-    const nonBootstrapDeps = g.depends_on.filter(
-      (depID) => !bootstrapGoals.some((bootstrap) => bootstrap.id === depID),
-    )
-    if (nonBootstrapDeps.length > 0 && g.imports.length === 0) {
-      issues.push(`Goal ${g.id}: depends_on is set but imports is empty`)
-    }
     for (const spec of g.acceptance_specs) {
       if (spec.goal_id !== g.id) {
         issues.push(`Goal ${g.id}: acceptance spec ${spec.id} has mismatched goal_id "${spec.goal_id}"`)
@@ -161,51 +148,10 @@ export function architectValidationIssues(
       }
       requiredTraceability.get(requirementID)!.add(g.id)
     }
-    if (
-      g.exports.length === 0 &&
-      g.kind !== "verification" &&
-      g.kind !== "system"
-    ) {
-      const hasConsumers = collector.goals.some((other) =>
-        other.depends_on.includes(g.id),
-      )
-      if (hasConsumers) {
-        issues.push(
-          `Goal ${g.id}: has dependents but no exports - dependents can't code against its interfaces`,
-        )
-      }
-    }
     for (const dep of g.depends_on) {
       if (!collector.goals.some((gl) => gl.id === dep)) {
         issues.push(`Goal ${g.id}: depends_on "${dep}" not registered`)
       }
-    }
-
-  }
-
-  const verificationGoals = collector.goals.filter((g) => g.kind === "verification")
-  if (verificationGoals.length === 0) {
-    issues.push("Missing dedicated verification goal - register exactly one kind=\"verification\" test goal")
-  } else if (verificationGoals.length > 1) {
-    issues.push(`Exactly one dedicated verification goal is required; found ${verificationGoals.length}`)
-  } else {
-    const verificationGoal = verificationGoals[0]
-    const missingFeatureDeps = collector.goals
-      .filter((g) => g.kind === "feature")
-      .map((g) => g.id)
-      .filter((id) => !verificationGoal.depends_on.includes(id))
-    if (missingFeatureDeps.length > 0) {
-      issues.push(
-        `Verification goal ${verificationGoal.id}: missing depends_on feature goals ${missingFeatureDeps.join(", ")}`,
-      )
-    }
-    const invalidOwnedPaths = verificationGoal.owned_paths.filter(
-      (p) => !/^tests[\\/](integration|e2e|regression)[\\/]/.test(p),
-    )
-    if (invalidOwnedPaths.length > 0) {
-      issues.push(
-        `Verification goal ${verificationGoal.id}: owned_paths must stay under tests/integration, tests/e2e, or tests/regression: ${invalidOwnedPaths.join(", ")}`,
-      )
     }
   }
 

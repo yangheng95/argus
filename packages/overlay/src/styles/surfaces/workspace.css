@@ -116,10 +116,6 @@
   flex: 1;
   min-width: 0;
   overflow-x: auto;
-  scrollbar-width: none;
-}
-.workspace-tabs::-webkit-scrollbar {
-  display: none;
 }
 
 /* Sub-tab strip inside the workspace body — subordinate to the parent
@@ -152,7 +148,7 @@
 }
 .workspace-tab:hover {
   color: var(--text-strong);
-  background: color-mix(in srgb, white 4%, transparent);
+  background: var(--ui-glass-tint);
 }
 .workspace-tab[data-active="true"] {
   color: var(--text-strong);
@@ -412,16 +408,22 @@ body[data-resizing="row"] {
   cursor: row-resize;
   user-select: none;
 }
-body[data-resizing="row"] * {
-  cursor: row-resize !important;
+body[data-resizing="row"] *,
+body[data-resizing="row"] .pane-resizer,
+body[data-resizing="row"] .pane-resizer::before,
+body[data-resizing="row"] .pane-resizer::after {
+  cursor: row-resize;
 }
 
 body[data-resizing="true"] {
   cursor: col-resize;
   user-select: none;
 }
-body[data-resizing="true"] * {
-  cursor: col-resize !important;
+body[data-resizing="true"] *,
+body[data-resizing="true"] .pane-resizer,
+body[data-resizing="true"] .pane-resizer::before,
+body[data-resizing="true"] .pane-resizer::after {
+  cursor: col-resize;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -516,7 +518,7 @@ body[data-resizing="true"] * {
 /* ─────────────────────────────────────────────────────────────
    Workspace shell zero-overrides (extracted 2026-05-04): kill any
    inherited gap / margin / padding / border on .panel-body and
-   .workspace-main, plus the responsive @media (max-width: 1120px)
+   .workspace-main, plus the responsive --ui-breakpoint-xl
    stack-collapse for the panel-body, sidebar, and sections.
    ───────────────────────────────────────────────────────────── */
 
@@ -539,12 +541,12 @@ body[data-resizing="true"] * {
 }
 
 .oc-section[open] > .oc-section__head,
-.config-section[open] > .config-section-head,
-.config-subsection[open] > .config-subsection-head {
+.config-section[open] > summary,
+.config-subsection[open] > summary {
   border-bottom: 0;
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 1120px) { /* breakpoint: --ui-breakpoint-xl */
   .panel-body {
     flex-direction: column;
   }

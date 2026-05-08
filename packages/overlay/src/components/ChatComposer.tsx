@@ -462,7 +462,7 @@ export function ChatComposer(props: ChatComposerProps) {
                 <button
                   type="button"
                   class="chat-attachment-remove"
-                  aria-label="Remove"
+                  aria-label={t("chat.attachment.remove")}
                   onClick={() => removeAttachment(index())}
                 >
                   &times;
@@ -566,8 +566,9 @@ export function ChatComposer(props: ChatComposerProps) {
         {/* Send / Stop button */}
         <button
           id={props.busy ? "btnTaskInterrupt" : "chatSend"}
-          class={`chat-send${props.busy ? " chat-interrupt" : ""}`}
+          class="chat-send"
           type={props.busy ? "button" : "submit"}
+          data-busy={props.busy ? "true" : undefined}
           data-mode={props.busy ? "stop" : "send"}
           disabled={sendDisabled()}
           title={sendTitle()}

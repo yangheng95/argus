@@ -11,6 +11,7 @@ import { notifyError, notifyProgress, notifySuccess, notifyWarning } from "../se
 import { useArmedConfirm } from "../solid/armed-confirm";
 import { useAsyncAction } from "../solid/async-action";
 import { t } from "../utils/i18n";
+import { TASK_STATUS_PRIORITY } from "../utils/status-mapping";
 import { stamp, fullStampWithRelative } from "../utils/time";
 import { Icon } from "./Icon";
 import { Button } from "./ui/Button";
@@ -92,10 +93,10 @@ function priorityBucket(item: any): number {
 
 function sortActiveItems(items: any[]): any[] {
   return [...items].sort((a, b) => {
-    const ap = a?._pending ? 0 : a?.task?.status === "active" ? 1 : a?.task?.status === "queued" ? 2 : 3;
-    const bp = b?._pending ? 0 : b?.task?.status === "active" ? 1 : b?.task?.status === "queued" ? 2 : 3;
+    const ap = a?._pending ? -1 : (TASK_STATUS_PRIORITY[a?.task?.status ?? ""] ?? 99);
+    const bp = b?._pending ? -1 : (TASK_STATUS_PRIORITY[b?.task?.status ?? ""] ?? 99);
     if (ap !== bp) return ap - bp;
-    if (ap === 2) {
+    if (ap === TASK_STATUS_PRIORITY.queued) {
       const priorityDelta = priorityBucket(a) - priorityBucket(b);
       if (priorityDelta !== 0) return priorityDelta;
       const orderDelta = queueOrder(a) - queueOrder(b);
@@ -704,7 +705,7 @@ export function TaskList(props: TaskListProps) {
       <Show when={boardStore.tasksError}>
         <div class="task-list-error" role="alert">
           <div class="task-list-error-msg">
-            {t("task.load_failed") || "Failed to load tasks"}: {boardStore.tasksError}
+            {t("task.load_failed")}: {boardStore.tasksError}
           </div>
           <Button
             type="button"
@@ -715,7 +716,7 @@ export function TaskList(props: TaskListProps) {
             disabled={retrying()}
             onClick={handleRetry}
           >
-            {retrying() ? (t("common.loading") || "…") : (t("common.retry") || "Retry")}
+            {retrying() ? t("common.loading") : t("common.retry")}
           </Button>
         </div>
       </Show>

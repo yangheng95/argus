@@ -358,28 +358,33 @@ export function Card(props: { node: CardNode; depth: number }) {
         {(counts) => (
           <div
             class="card__foot"
-            title={`messages ${counts().messages} · tools ${counts().tools} · agents ${counts().agents} · skills ${counts().skills}`}
+            title={t("card.activity_summary", {
+              messages: counts().messages,
+              tools: counts().tools,
+              agents: counts().agents,
+              skills: counts().skills,
+            })}
           >
             <Show when={counts().tools > 0}>
-              <span class="card__stat" data-kind="tools" title={`${counts().tools} tool calls`}>
+              <span class="card__stat" data-kind="tools" title={t("card.activity.tools", { count: counts().tools })}>
                 <span class="card__stat-icon" aria-hidden="true">{"\u{1F6E0}"}</span>
                 <span class="card__stat-value">{counts().tools}</span>
               </span>
             </Show>
             <Show when={counts().messages > 0}>
-              <span class="card__stat" data-kind="messages" title={`${counts().messages} messages`}>
+              <span class="card__stat" data-kind="messages" title={t("card.activity.messages", { count: counts().messages })}>
                 <span class="card__stat-icon" aria-hidden="true">{"\u{1F4AC}"}</span>
                 <span class="card__stat-value">{counts().messages}</span>
               </span>
             </Show>
             <Show when={counts().agents > 0}>
-              <span class="card__stat" data-kind="agents" title={`${counts().agents} agent spawns`}>
+              <span class="card__stat" data-kind="agents" title={t("card.activity.agents", { count: counts().agents })}>
                 <span class="card__stat-icon" aria-hidden="true">{"\u{1F916}"}</span>
                 <span class="card__stat-value">{counts().agents}</span>
               </span>
             </Show>
             <Show when={counts().skills > 0}>
-              <span class="card__stat" data-kind="skills" title={`${counts().skills} skill invocations`}>
+              <span class="card__stat" data-kind="skills" title={t("card.activity.skills", { count: counts().skills })}>
                 <span class="card__stat-icon" aria-hidden="true">{"\u{1F3AF}"}</span>
                 <span class="card__stat-value">{counts().skills}</span>
               </span>

@@ -27,8 +27,8 @@
 
 /* Card surface + tone aliases — declared on `body` so the var()
  * substitution for the underlying surface / accent / good / warn /
- * bad tokens happens at body scope, where the active
- * `body[data-theme="..."]` palette overrides are in effect. Putting
+ * bad tokens happens at body scope, where the active theme palette
+ * overrides are in effect. Putting
  * these on `:root` resolves them once against :root's dark surface +
  * accent tokens and the resolved value then inherits unchanged into
  * the light theme — that is exactly the bug that made every
@@ -298,7 +298,7 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -318,10 +318,10 @@ body {
   color: var(--text-soft);
   flex: none;
   padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   /* --border carries enough contrast across all themes (≥10% in dark, ≥12%
      in light, satisfies WCAG AA over the canonical surface). The previous
-     body[data-theme="light"] override is gone — palette token differs by
+     light theme override is gone — palette token differs by
      theme on its own. */
   background: var(--border);
   border-radius: var(--oc-radius-soft);
@@ -332,7 +332,7 @@ body {
 .card__round--lead {
   margin-right: calc(4px * var(--ui-scale));
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: color-mix(in srgb, var(--card-stage) 90%, var(--text));
   background: color-mix(in srgb, var(--card-stage) 18%, transparent);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--card-stage) 28%, transparent);
@@ -438,7 +438,7 @@ body {
   flex: 0 0 auto;
   font-size: calc(var(--card-sub-size) - calc(1px * var(--ui-scale)));
   border-radius: var(--oc-radius-soft);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   opacity: var(--ui-opacity-subtle);
 }
 
@@ -476,7 +476,7 @@ body {
   border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 18%, transparent);
   color: var(--text-muted);
   box-shadow: none;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   line-height: 1.1;
 }
 .card__stat[data-kind="messages"] {
@@ -504,7 +504,7 @@ body {
 
 .card__stat-value {
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: color-mix(in srgb, var(--text) 90%, transparent);
 }
 
@@ -599,7 +599,7 @@ body {
   background: var(--surface);
   color: var(--text-muted);
   box-shadow: none;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
 }
 .card__badge--done { background: var(--good-dim); color: var(--good); border-color: color-mix(in srgb, var(--good) 28%, transparent); }
 .card__badge--error { background: var(--bad-dim); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
@@ -623,7 +623,7 @@ body {
   border-radius: 50%;
   border: calc(1.6px * var(--ui-scale)) solid var(--warn-dim);
   border-top-color: var(--warn);
-  animation: card-spin 0.8s linear infinite;
+  animation: card-spin var(--ui-duration-loop-spin) linear infinite;
 }
 @keyframes card-spin {
   to { transform: rotate(360deg); }
@@ -727,11 +727,6 @@ body {
   font-family: var(--mono);
   font-size: calc(var(--card-sub-size) - calc(0.2px * var(--ui-scale)));
   line-height: 1.46;
-  scrollbar-width: auto;
-}
-
-.card[data-kind="tool"].card--expanded .card__subtitle::-webkit-scrollbar {
-  display: initial;
 }
 
 /* ── Body ────────────────────────────────────────────────── */
@@ -777,7 +772,7 @@ body {
   color: var(--text-soft);
   font-size: var(--card-meta-size);
   line-height: 1.3;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   cursor: pointer;
   transition: color var(--ui-duration-base) var(--ui-timing-standard);
 }
@@ -869,7 +864,7 @@ body {
   color: color-mix(in srgb, var(--card-stage) 78%, var(--text-muted));
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-medium);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
 }
 
@@ -934,7 +929,7 @@ body {
   font-size: var(--ui-font-tiny);
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--ui-letter-spacing-loose);
 }
 .card-boundary:not(:first-child) {
   margin-top: calc(6px * var(--ui-scale));
@@ -1007,7 +1002,7 @@ body {
 .card[data-kind="message"][data-role="system"] > .card__head .card__title {
   font-size: var(--ui-font-tiny);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--card-system-rail);
   font-weight: var(--ui-font-weight-strong);
 }
@@ -1043,7 +1038,7 @@ body {
   font-size: calc(10px * var(--ui-scale));
   font-variant-numeric: tabular-nums;
   border-radius: var(--oc-radius-soft);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   color: var(--text-soft);
   opacity: var(--ui-opacity-faint);
   white-space: nowrap;
@@ -1067,7 +1062,7 @@ body {
   padding: 0 calc(6px * var(--ui-scale));
   font-size: calc(10px * var(--ui-scale));
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-soft);
   opacity: var(--ui-opacity-disabled);
   white-space: nowrap;
@@ -1090,7 +1085,7 @@ body {
   padding: 0 calc(4px * var(--ui-scale));
   font-size: calc(10px * var(--ui-scale));
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-muted);
   opacity: var(--ui-opacity-dim);
   white-space: nowrap;
@@ -1177,7 +1172,7 @@ body {
   font-weight: var(--ui-font-weight-strong);
   color: var(--card-stage);
   margin-bottom: calc(6px * var(--ui-scale));
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   line-height: 1.35;
 }
 .interaction-card__icon {
@@ -1255,7 +1250,7 @@ body {
   gap: calc(6px * var(--ui-scale));
   margin-top: calc(4px * var(--ui-scale));
 }
-.interaction-card__actions .btn {
+.interaction-card__actions .oc-button {
   padding: calc(3px * var(--ui-scale)) calc(10px * var(--ui-scale));
   font-size: var(--card-sub-size);
 }
@@ -1264,7 +1259,7 @@ body {
   outline-offset: calc(2px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
 }
-.interaction-card__actions .btn:focus-visible {
+.interaction-card__actions .oc-button:focus-visible {
   outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: calc(2px * var(--ui-scale));
 }
@@ -1591,7 +1586,7 @@ body {
 }
 .task-progress__heading {
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
   color: var(--text-muted);
   font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
@@ -1613,6 +1608,7 @@ body {
 .task-progress__bar-fill {
   position: absolute;
   inset: 0 auto 0 0;
+  width: var(--progress-passed, 0%);
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--good) 80%, transparent),
@@ -1623,6 +1619,7 @@ body {
 .task-progress__bar-fail {
   position: absolute;
   inset: 0 0 0 auto;
+  width: var(--progress-failed, 0%);
   background: color-mix(in srgb, var(--bad) 80%, transparent);
 }
 
@@ -1659,7 +1656,7 @@ body {
   flex: none;
   font-variant-numeric: tabular-nums;
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-letter-spacing-loose);
   font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
   color: color-mix(in srgb, var(--text-muted) 92%, var(--text-soft));
 }
@@ -1685,7 +1682,7 @@ body {
   background: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
   border-color: color-mix(in srgb, var(--warn) 36%, var(--card-border));
   color: color-mix(in srgb, var(--warn) 70%, var(--text-strong));
-  animation: task-progress-pulse 1.6s ease-in-out infinite;
+  animation: task-progress-pulse var(--ui-duration-loop-pulse) ease-in-out infinite;
 }
 .task-progress__pill[data-state="blocked"] {
   background: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));

@@ -71,6 +71,7 @@ import { resolveAgentModel } from "@/agent/model"
 import { Provider } from "@/provider/provider"
 import { Config } from "@/config/config"
 import { EngineConfig } from "@/engine"
+import { appendInformationMissingFallback } from "@/prompt/information-missing"
 import { resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
@@ -380,6 +381,62 @@ export function buildHardErrorFromFinalMessage(input: {
   )
 }
 
+/**
+ * Pure check: does the final assistant message carry an INFORMATION
+ * MISSING XML diagnostic block? When the operator flips
+ * `debug.fail_on_information_missing` (default OFF), the host appends
+ * the fallback section to every agent's system prompt at runtime
+ * (`appendInformationMissingFallback`); the prompt then instructs the
+ * agent to emit this block (and ONLY this block) when invocation
+ * context drops required information, and the host treats the block
+ * as a fatal signal and exits the process. Spec — 2026-05-07
+ * INFORMATION MISSING debug toggle; `prompt/information-missing.ts`
+ * owns the fallback text. The companion test
+ * `test/agent/information-missing-fallback.test.ts` pins (a) the
+ * helper / constant surface and (b) the contract that .txt core
+ * prompts must NOT carry the section so the toggle stays binary.
+ *
+ * Detection is a typed-tag substring (rule 20 boundary): the tag
+ * `<INFORMATION MISSING>` is a structured marker the prompt asks the
+ * LLM to emit verbatim — it is NOT an LLM natural-language phrase, so
+ * substring containment is the same shape as XML element matching, not
+ * keyword-match rule logic.
+ */
+export function messageHasInformationMissing(finalMessage: {
+  info: { role: string }
+  parts: ReadonlyArray<{ type?: string; text?: string }>
+}): boolean {
+  if (finalMessage.info.role !== "assistant") return false
+  for (const part of finalMessage.parts) {
+    if (part.type !== "text") continue
+    if (typeof part.text !== "string") continue
+    if (part.text.includes("<INFORMATION MISSING>")) return true
+  }
+  return false
+}
+
+/**
+ * Returns the verbatim INFORMATION MISSING XML block from the first
+ * matching text part, or null when no part carries the marker. Used
+ * by the runner to log the agent's diagnostic before exiting.
+ */
+export function extractInformationMissingBlock(finalMessage: {
+  info: { role: string }
+  parts: ReadonlyArray<{ type?: string; text?: string }>
+}): string | null {
+  if (finalMessage.info.role !== "assistant") return null
+  for (const part of finalMessage.parts) {
+    if (part.type !== "text") continue
+    if (typeof part.text !== "string") continue
+    const start = part.text.indexOf("<INFORMATION MISSING>")
+    if (start === -1) continue
+    const end = part.text.indexOf("</INFORMATION MISSING>", start)
+    if (end === -1) return part.text.slice(start)
+    return part.text.slice(start, end + "</INFORMATION MISSING>".length)
+  }
+  return null
+}
+
 export function terminalToolMissingErrorFor(input: {
   finalMessage: { info: { role: string; error?: unknown } }
   toolName: string
@@ -465,9 +522,19 @@ export async function runAgentSession<C>(
         input.skillTaskSignals,
       )
   const liveContext = input.taskID ? TaskContext.snapshot(input.taskID) : ""
-  const systemPrompt = liveContext.trim().length > 0
+  // INFORMATION MISSING debug toggle: when on, append the fallback block
+  // to the system prompt; the matching host-side detection further down
+  // exits the process when any agent emits <INFORMATION MISSING>. Toggle
+  // is exposed via overlay GeneralPanel → PATCH /config →
+  // opencorvus.jsonc. Default off — runs go through unchanged in
+  // production. Spec — 2026-05-07 INFORMATION MISSING debug toggle.
+  const debugCfg = (await EngineConfig.get()).debug
+  const baseSystemPrompt = liveContext.trim().length > 0
     ? `${composed.prompt}\n\n${liveContext}`
     : composed.prompt
+  const systemPrompt = debugCfg.fail_on_information_missing
+    ? appendInformationMissingFallback(baseSystemPrompt)
+    : baseSystemPrompt
   const requiredTools = composed.requiredTools
 
   // ── 3. Build user prompt parts ───────────────────────────────────────
@@ -689,6 +756,35 @@ export async function runAgentSession<C>(
     }
     if (!finalMessage) {
       throw new AgentRunError(kind, "SessionPrompt.prompt returned no message")
+    }
+    // INFORMATION MISSING signal — when the operator has flipped
+    // `debug.fail_on_information_missing`, the host injected the
+    // fallback section into the system prompt above and now runs
+    // detection on the final assistant message. The agent emits
+    // `<INFORMATION MISSING><item>...</item></INFORMATION MISSING>`
+    // (and ONLY that block) when this invocation arrived with required
+    // context dropped. The host treats the block as a fatal diagnostic
+    // and exits the entire process so the operator immediately sees
+    // the upstream-context drop signal instead of a long log of
+    // guessed-default work. When the toggle is off, this guard is a
+    // no-op — production runs are unaffected. Spec — 2026-05-07
+    // INFORMATION MISSING debug toggle; detection helpers pinned via
+    // test/agent/information-missing-detection.test.ts.
+    if (debugCfg.fail_on_information_missing && messageHasInformationMissing(finalMessage)) {
+      const block = extractInformationMissingBlock(finalMessage) ?? "<INFORMATION MISSING>...</INFORMATION MISSING>"
+      log.error("INFORMATION MISSING signal — terminating process", {
+        agentName,
+        kind,
+        sessionID: session.id,
+        block: block.slice(0, 1200),
+      })
+      // eslint-disable-next-line no-console
+      console.error(
+        `\n[FATAL] INFORMATION MISSING detected in ${agentName} (${kind}) stream — terminating process.\n` +
+        `Session: ${session.id}\n` +
+        `${block}\n`,
+      )
+      process.exit(99)
     }
     // Propagate hard LLM errors (HTTP 4xx/5xx, schema-rejected payloads,
     // missing terminal-tool calls). The processor stamps them onto the

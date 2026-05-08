@@ -1,21 +1,9 @@
 import { For, Show } from "solid-js";
+import { todoStatusIconName } from "../utils/status-mapping";
 import { extractTodos, type TodoItem } from "../utils/todos";
+import { Icon } from "./Icon";
 
 export { extractTodos, type TodoItem };
-
-function statusIcon(status: string): string {
-  switch (status) {
-    case "completed":
-      return "\u2714"; // ✔
-    case "in_progress":
-      return "\u25D0"; // ◐
-    case "cancelled":
-      return "\u2715"; // ✕
-    case "pending":
-    default:
-      return "\u25CB"; // ○
-  }
-}
 
 function todoCounts(todos: TodoItem[]) {
   let completed = 0;
@@ -45,7 +33,7 @@ function TodoItems(props: { todos: TodoItem[]; listClass: string }) {
         {(todo) => (
           <li class="msg-todo-item" data-status={todo.status}>
             <span class="msg-todo-icon" aria-hidden="true">
-              {statusIcon(todo.status)}
+              <Icon name={todoStatusIconName(todo.status)} />
             </span>
             <span class="msg-todo-content">
               {todo.status === "in_progress" && todo.activeForm
@@ -92,7 +80,7 @@ export function TodoListPart(props: { todos: TodoItem[]; variant?: "inline" | "c
       <div class="msg-todo-card__progress" aria-hidden="true">
         <span
           class="msg-todo-card__progress-fill"
-          style={{ width: `${progress()}%` }}
+          style={{ "--todo-progress": `${progress()}%` }}
         />
       </div>
 

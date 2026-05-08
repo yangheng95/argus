@@ -15,6 +15,7 @@ import {
   settingsStore,
 } from "../store/settings";
 import { getHostTransport } from "./host-transport";
+import { readInitialVsCodeHostTheme } from "./host-theme";
 
 export { MIN_WINDOW_OPACITY, sanitizeOpacity } from "../store/settings";
 
@@ -65,7 +66,15 @@ export function sanitizeZoom(value: any): number {
 
 export function resolvedTheme(): string {
   const theme = sanitizeTheme(settingsStore.theme);
+  return resolveThemeValue(theme);
+}
+
+function resolveThemeValue(theme: string): string {
   if (theme === "system") {
+    if (getHostTransport().kind === "vscode") {
+      const hostTheme = readInitialVsCodeHostTheme();
+      if (hostTheme) return hostTheme;
+    }
     return systemThemeMedia?.matches ? "light" : "dark";
   }
   return theme;
@@ -80,9 +89,7 @@ export function resolvedTheme(): string {
 export function applyTheme(theme: string): void {
   if (typeof document === "undefined") return;
   const sanitized = sanitizeTheme(theme);
-  const effective = sanitized === "system"
-    ? (systemThemeMedia?.matches ? "light" : "dark")
-    : sanitized;
+  const effective = resolveThemeValue(sanitized);
   document.documentElement.dataset.theme = effective;
   document.body.dataset.theme = effective;
 }

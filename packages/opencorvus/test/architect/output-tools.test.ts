@@ -164,9 +164,6 @@ test("goal contract defaults are applied before architect validation", async () 
   expect(kit.getCollector().goals[0].exports).toEqual([])
   expect(kit.getCollector().goals[0].imports).toEqual([])
   expect(kit.getCollector().goals[0].requirement_ids).toEqual([])
-  expect(architectValidationIssues(kit.getCollector()).join("\n")).toContain(
-    "feature goal must declare at least one export",
-  )
 
   kit.reset()
   expect(kit.getCollector().goals[0].depends_on).toEqual([])
@@ -449,34 +446,18 @@ test("architect readiness stays false until every prompt-level finalize invarian
   const { tools } = kit
 
   await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
+  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
+  expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(false)
+  expect(architectValidationIssues(kit.getCollector()).join("\n")).toContain("No interface_contract or shared_type contract")
+
   await tools.register_traceability.execute!(
     { requirement_id: "REQ-1", goal_ids: ["goal_feature"] } as any,
-    {} as any,
-  )
-  expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(false)
-  expect(architectValidationIssues(kit.getCollector()).join("\n")).toContain("Missing dedicated verification goal")
-
-  await tools.register_goal.execute!(
-    {
-      ...VERIFY_GOAL,
-      depends_on: [],
-      imports: [],
-      owned_paths: ["tests/unit/router.test.ts"],
-    } as any,
     {} as any,
   )
   await tools.register_traceability.execute!(
     { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
     {} as any,
   )
-  const invalidVerificationIssues = architectValidationIssues(kit.getCollector()).join("\n")
-  expect(invalidVerificationIssues).toContain("missing depends_on feature goals goal_feature")
-  expect(invalidVerificationIssues).toContain("owned_paths must stay under tests/integration")
-
-  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
-  expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(false)
-  expect(architectValidationIssues(kit.getCollector()).join("\n")).toContain("No interface_contract or shared_type contract")
-
   await tools.register_contract.execute!(
     {
       category: "interface_contract",
@@ -511,9 +492,7 @@ test("architect validator rejects every fixable registration inconsistency befor
   })
 
   const issues = architectValidationIssues(collector).join("\n")
-  expect(issues).toContain("feature goal must declare at least one export")
   expect(issues).toContain("acceptance spec acc-goal_feature has mismatched goal_id")
-  expect(issues).toContain("Goal goal_verify: depends_on is set but imports is empty")
   expect(issues).toContain("Contract \"Missing goal contract\": references unknown goals goal_missing")
   expect(isArchitectReadyToFinalize(collector)).toBe(false)
 })

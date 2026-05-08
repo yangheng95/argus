@@ -4,6 +4,7 @@
 import { createStore } from "solid-js/store";
 import { DEFAULT_SERVER } from "../services/default-server";
 import { getHostTransport } from "../services/host-transport";
+import { requireInitialVsCodeHostTheme } from "../services/host-theme";
 import { sanitizeLocale } from "../utils/i18n";
 
 // ── Types ──
@@ -68,6 +69,16 @@ function sanitizeTheme(value: any): string {
     text === "system"
     ? text
     : "light";
+}
+
+function settingsTheme(input: Partial<OverlaySettings>): string {
+  if (typeof input?.theme === "string" && input.theme.trim()) {
+    return sanitizeTheme(input.theme);
+  }
+  if (getHostTransport().kind === "vscode") {
+    return requireInitialVsCodeHostTheme();
+  }
+  return DEFAULT_SETTINGS.theme;
 }
 
 export const MIN_WINDOW_OPACITY = 0.5;
@@ -200,7 +211,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     workspacePanelHeight: sanitizePaneWidth(input?.workspacePanelHeight),
     opacity: sanitizeOpacity(input?.opacity),
     zoom: sanitizeZoom(input?.zoom),
-    theme: sanitizeTheme(input?.theme),
+    theme: settingsTheme(input ?? {}),
     locale: sanitizeLocale(
       (typeof input?.locale === "string" ? input.locale : "") ||
         DEFAULT_SETTINGS.locale,

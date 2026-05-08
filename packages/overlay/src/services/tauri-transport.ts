@@ -11,6 +11,11 @@
  */
 
 import {
+  isPermissionGranted as tauriIsNotificationPermissionGranted,
+  requestPermission as tauriRequestNotificationPermission,
+  sendNotification as tauriSendNotification,
+} from "@tauri-apps/plugin-notification"
+import {
   apiHeaders as apiHeadersFromState,
   apiUrl as apiUrlFromState,
   onAuthChange,
@@ -65,6 +70,34 @@ function invokeTauri(command: string, args?: Record<string, unknown>): Promise<u
     throw new Error(`Tauri runtime unavailable for ${command}`)
   }
   return fn(command, args)
+}
+
+// Web Notification API fallbacks for the `browser` host (overlay against
+// `bun run dev:vite`). The Tauri host uses tauri-plugin-notification because
+// WebView2 silently drops Web `new Notification(...)` toasts when the host
+// process has no registered AppUserModelID — see `services/notify.ts`.
+function webNotificationApiAvailable(): boolean {
+  return typeof window !== "undefined" && "Notification" in window
+}
+
+function webNotificationPermission(): "granted" | "denied" | "default" | "unsupported" {
+  if (!webNotificationApiAvailable()) return "unsupported"
+  return Notification.permission
+}
+
+async function webRequestNotificationPermission(): Promise<"granted" | "denied" | "default"> {
+  if (!webNotificationApiAvailable()) return "denied"
+  return Notification.requestPermission()
+}
+
+function webSendNotification(title: string, body?: string, tag?: string): void {
+  if (!webNotificationApiAvailable()) return
+  if (Notification.permission !== "granted") return
+  try {
+    new Notification(title, { body, tag })
+  } catch (err) {
+    console.warn("[notify] failed to dispatch web notification", err)
+  }
 }
 
 function buildUrl(path: string, query?: TransportRequest["query"]): URL {
@@ -130,9 +163,9 @@ async function readResponse<T>(res: Response, kind: ResponseKind | undefined): P
 }
 
 async function readErrorResponse<T>(res: Response): Promise<T> {
-  const contentType = res.headers.get("content-type") || ""
+  const contentType = res.headers.get("content-type")
   try {
-    if (contentType.toLowerCase().includes("application/json")) {
+    if (contentType?.toLowerCase().includes("application/json")) {
       return await readResponse<T>(res, "json")
     }
     return await readResponse<T>(res, "text")
@@ -414,6 +447,12 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
             return loadBrowserOverlaySettings()
           case "settings.save":
             return saveBrowserOverlaySettings(command.payload as Record<string, unknown>)
+          case "notification.permission":
+            return webNotificationPermission()
+          case "notification.requestPermission":
+            return webRequestNotificationPermission()
+          case "notification.send":
+            return webSendNotification(command.title, command.body, command.tag)
           default:
             return nativeUnsupported("browser", command)
         }
@@ -451,6 +490,18 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
             editor: command.editor,
             path: command.path,
           })
+        case "notification.permission": {
+          const granted = await tauriIsNotificationPermissionGranted()
+          return granted ? "granted" : "default"
+        }
+        case "notification.requestPermission": {
+          const result = await tauriRequestNotificationPermission()
+          return result
+        }
+        case "notification.send": {
+          tauriSendNotification({ title: command.title, body: command.body })
+          return undefined
+        }
         default: {
           // Exhaustiveness — TypeScript narrows `command` to `never` here.
           // If a new NativeCommand kind is added without a case above, the
