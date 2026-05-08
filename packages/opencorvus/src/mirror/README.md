@@ -245,7 +245,7 @@ Bun 1.3.13 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 
 
 1. `bun run typecheck` 全绿
 2. `bun test test/mirror/**` 100% 通过
-3. **金标对比（Golden parity）**：每个移植的纯函数必须有 `test/mirror/**/golden-parity.test.ts`，**直接 import mirror 的原版**（`D:/myhexin-local/opencode-private/packages/mirror/src/...`）与 opencorvus 里的移植版跑同样的输入，断言输出**逐字节相等**。这是唯一能证明移植正确性的证据——手写的 unit test 只能证明我对算法的"理解"是自洽的，不能证明跟原版一致。
+3. 确定性回归：每个移植的纯函数必须有 `test/mirror/**` 覆盖同输入同输出、schema 边界和关键路径。URL scaffold 已经脱离原 mirror 的 `packages/app/src` 路径假设，不能再对这部分做逐字节 golden parity；应验证 OpenCorvus 的 source-layout contract。
 4. `script/mirror-smoke.ts` 本地跑通 figma/url/visual 三条链路
 5. `grep -r "Tool.define\|tool/registry" src/mirror/` 无命中
 6. `grep -r "from '@/tool" src/mirror/` 无命中
@@ -254,8 +254,8 @@ Bun 1.3.13 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 
 ### 移植纪律
 
 - 不要先写 unit test，再写实现——单测会在你同样错的地方"成功"
-- 先做金标对比，再补 edge case unit test
-- 金标对比失败时，**以 mirror 原版为准**（除非我们判定 mirror 本身有 bug 并在 README 显式记录）
+- 先证明确定性和 schema 边界，再补 edge case unit test
+- 如果原 mirror 与 OpenCorvus 的 source-layout contract 冲突，以本 README 和 `specs/new-arch/2026-05-08-mirror-emitter-promotion.md` 为准
 - pattern/* 的类型（`ProjectScaffold` 等）在 mirror 的 `types.ts` 里是 **broken import**（mirror tsc 走 skipLibCheck），本项目不照搬这个破绽——在 Phase F 根据实现反推真实 shape
 
 ---

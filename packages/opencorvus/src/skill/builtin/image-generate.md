@@ -1,6 +1,6 @@
 ---
 name: image-generate
-description: Generate a high-fidelity clone of a reference webpage given a SCREENSHOT (no live URL). The image2code mirror toolchain (`webpage_image_extract` → `webpage_image_compile`) does vision-LLM structural inference on the screenshot to produce design tokens, element tree, and visible text; you implement the page in whatever tech stack the brief or surrounding goals call for; then render an explicit URL (`file://` for local HTML or the already-started app URL) and iterate against `webpage_vision_judge` until it accepts. Activate when the user provides ONLY a reference image (no URL) and asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" the screenshot. Treat the inferred ImageAnalysis as estimates; the screenshot itself is the final visual ground truth.
+description: Generate a high-fidelity clone of a reference webpage given a SCREENSHOT (no live URL). The image2code mirror toolchain (`webpage_image_extract` → `webpage_image_compile` → `webpage_image_analyze`) does vision-LLM structural inference on the screenshot and emits generated React source; you refine that source; then render the running app URL and iterate against `webpage_vision_judge` until it accepts. Activate when the user provides ONLY a reference image (no URL) and asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" the screenshot. Treat the inferred ImageAnalysis as estimates; the screenshot itself is the final visual ground truth.
 stage: build
 auto_detect:
   task_signals:
@@ -27,14 +27,14 @@ Sister skill to `webpage-generate` — same loop shape, same downstream evaluati
 
 This skill is tech-stack-neutral. Pick what best fits the brief and the surrounding repo:
 
-- **Static single-file** (`index.html` + inline `<style>`): default — fastest convergence for landing-page-shaped clones.
-- **Framework + bundler** (React+Vite, Vue, Solid, Svelte, etc.): when an upstream goal mandates one.
-- **CSS approach**: vanilla CSS, Tailwind, CSS modules — whatever is idiomatic for the chosen stack.
+- **Generated React source** (`src/App.tsx`, `src/design-tokens.ts`, `src/components/**`): this is the only scaffold path after `webpage_image_analyze`.
+- **Project shell**: create or reuse the minimal dev-server shell required to run the generated source.
+- **CSS approach**: use the project convention, but values must come from generated design tokens and mirror artifacts.
 - **Backend**: include only if dynamic data is genuinely required.
 
 Non-negotiable regardless of stack:
 
-- The deliverable MUST expose an explicit browser URL for `webpage_render`: either a `file://` URL to a local HTML file or an `http(s)://` URL for an app server you already started.
+- The deliverable MUST expose an explicit browser URL for `webpage_render` from the running app server.
 - Design tokens (palette / fonts / sizes) come from `mirror/image-analysis.json` — do not invent hex codes or font sizes the analysis did not report.
 - Visible text comes from the analysis tree's `<Text content="…">` leaves — copy verbatim.
 - The screenshot itself (`mirror/reference.png`) is the final visual ground truth. When the inferred analysis disagrees with what you see in the pixels, trust the pixels.
@@ -67,7 +67,7 @@ LLM-driven (no network). Token usage scales with screenshot complexity.
 
 If the model returns an empty tree, refuses the image, or the schema validation fails, **STOP and escalate to the user** — report the specific failure mode and ask for a different screenshot or a clearer reference. You MUST NOT:
 
-- Hand-write an `index.html` from the brief text alone, ignoring the failure.
+- Hand-write a competing page outside the generated React source, ignoring the failure.
 - Fabricate an `image-analysis.json` payload to unblock the compile step.
 - Call any submit / accept verdict on a deliverable whose extraction never produced a valid analysis.
 
@@ -79,7 +79,7 @@ Call `webpage_image_compile` (no args needed — defaults read `mirror/image-ana
 
 ## Step 3 — Analyze tokens + scaffold
 
-Call `webpage_image_analyze` (no args needed — defaults read `mirror/image-analysis.json` and write `mirror/scaffold.json` + `mirror/design-tokens.ts` + `mirror/App.tsx` + `mirror/shared-context.md`). Same artifact filenames the URL flow's `webpage_analyze` produces — downstream codegen reads the same files regardless of source. Pure transformation, no LLM.
+Call `webpage_image_analyze` (no args needed — defaults read `mirror/image-analysis.json` and write `mirror/scaffold.json` + `mirror/shared-context.md` plus generated `src/**` React source). Same downstream contract the URL flow's `webpage_analyze` produces. Pure transformation, no LLM.
 
 ## Step 4 — Read the artefacts BEFORE writing
 
@@ -87,11 +87,11 @@ Call `webpage_image_analyze` (no args needed — defaults read `mirror/image-ana
 
 - `mirror/page-ir.xml` — element structure + visible text (your section catalogue)
 - `mirror/shared-context.md` — token + section summary
-- `mirror/design-tokens.ts` — palette / fonts / spacing / radii constants
+- `src/design-tokens.ts` — palette / fonts / spacing / radii constants
 - `mirror/scaffold.json` — full ProjectScaffold (sections, FileContracts) for fine-grained reference
 - `mirror/reference.png` — the visual target
 
-Quote the exact strings, copy the exact hex codes from `mirror/design-tokens.ts`, follow section ordering from `page-ir.xml`. Do not paraphrase headings, nav labels, or button text — and do not invent palette values not in the tokens file.
+Quote the exact strings, use the exact token values from `src/design-tokens.ts`, follow section ordering from `page-ir.xml`. Do not paraphrase headings, nav labels, or button text — and do not invent palette values not in the tokens file.
 
 ## Step 5 — Implement the page
 
@@ -104,7 +104,7 @@ Whatever shape you pick, the deliverable must:
 
 ## Step 6 — Render
 
-Call `webpage_render url=<explicit URL>` and write `mirror/rendered.png`. Use a `file://` URL for local HTML or the already-started app URL for framework/server deliverables. Returns render time + any console errors.
+Call `webpage_render url=<explicit HTTP URL>` and write `mirror/rendered.png`. Returns render time + any console errors.
 
 ## Step 7 — Evaluate
 
@@ -140,7 +140,7 @@ For each round (up to **8**, count explicitly):
 
 ## Cross-goal artifact sharing — DO NOT delete `mirror/`
 
-Subsequent goals + delivery agents read `mirror/image-analysis.json`, `mirror/page-ir.xml`, and `mirror/reference.png`. Leave them in place. The deliverable is `index.html` (or your framework's equivalent); mirror artefacts are git-tracked scratch.
+Subsequent goals + delivery agents read `mirror/image-analysis.json`, `mirror/page-ir.xml`, and `mirror/reference.png`. Leave them in place. The deliverable is the generated React source plus the project shell; mirror artefacts are git-tracked scratch.
 
 ## Hard acceptance gate — render screenshot is mandatory
 

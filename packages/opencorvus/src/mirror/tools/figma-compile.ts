@@ -75,7 +75,7 @@ Step 2 of the figma2code workflow. Pure function, no network or LLM.`,
         ir.xml.length > preview.length ? "<!-- truncated -->" : "",
         "```",
         "",
-        "Next: call `figma_analyze` to get the ProjectScaffold (scaffold.json + design-tokens.ts + App.tsx + shared-context.md).",
+        "Next: call `figma_analyze` to get the ProjectScaffold, shared-context.md, and generated React source.",
       ].join("\n"),
       metadata: {
         irPath,

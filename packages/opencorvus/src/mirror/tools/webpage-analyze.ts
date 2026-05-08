@@ -3,11 +3,10 @@
  * deterministic file generators.
  *
  * Reads `extracted-page.json`, runs pattern detection + token extraction, and
- * writes the three deterministic artifacts that a codegen agent then consumes:
+ * writes mirror facts plus deterministic React source that a codegen agent then consumes:
  *   - `<outputDir>/scaffold.json`         full ProjectScaffold
- *   - `<outputDir>/design-tokens.ts`      COLORS / FONTS / SPACING / RADII consts
- *   - `<outputDir>/App.tsx`               pre-composed section layout
  *   - `<outputDir>/shared-context.md`     compact token + pattern summary
+ *   - `<worktree>/src/**`                 tokens, App, sections, components
  *
  * Returns only the summary so the tool output stays small.
  */
@@ -19,21 +18,23 @@ import z from "zod"
 import { Tool } from "../../tool/tool"
 import {
   analyzePage,
-  generateTokensFile,
-  generateAppFile,
   buildSharedContext,
 } from "../url/pattern"
+import {
+  generateReactSourceFiles,
+  materializeScaffoldForReactSource,
+} from "../shared/scaffold-helpers"
 import { ExtractedPageSchema } from "../ir/extracted-page"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
+import { writeGeneratedSourceFiles } from "./generated-source"
 
 export const WebpageAnalyzeTool = Tool.define("webpage_analyze", {
   description: `Analyze an ExtractedPage into a deterministic ProjectScaffold (section list, component-pattern catalog, design-token system, file contracts). Zero LLM.
 
-Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes four artifacts:
+Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror facts plus generated React source:
   - scaffold.json           full ProjectScaffold
-  - design-tokens.ts        COLORS, FONTS, SPACING, RADII constants (ready to import)
-  - App.tsx                 auto-generated section composition (reference)
   - shared-context.md       compact token + pattern summary for prompts
+  - src/**                  React source files from the scaffold contract
 
 Returns a summary: section list, pattern list, token counts. The agent should \`read\` scaffold.json for full detail when needed.
 
@@ -44,7 +45,7 @@ Use as step 3 of the webpage-generate workflow. Pure function, no network.`,
     outputDir: z
       .string()
       .describe(
-        `Directory containing extracted-page.json. Writes scaffold.json, design-tokens.ts, App.tsx, shared-context.md here. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract's default).`,
+        `Directory containing extracted-page.json. Writes scaffold.json and shared-context.md here, and generated React source under the worktree source layout. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract's default).`,
       )
       .optional(),
   }),
@@ -68,9 +69,8 @@ Use as step 3 of the webpage-generate workflow. Pure function, no network.`,
     const raw = JSON.parse(extractedText)
     const page = ExtractedPageSchema.parse(raw)
 
-    const scaffold = analyzePage(page)
-    const tokensFile = generateTokensFile(scaffold)
-    const appFile = generateAppFile(scaffold)
+    const scaffold = materializeScaffoldForReactSource(analyzePage(page))
+    const sourceFiles = generateReactSourceFiles(scaffold)
     const sharedContext = buildSharedContext(scaffold, {
       url: page.url,
       title: page.title,
@@ -78,14 +78,11 @@ Use as step 3 of the webpage-generate workflow. Pure function, no network.`,
     })
 
     const scaffoldPath = path.join(outputDir, "scaffold.json")
-    const tokensPath = path.join(outputDir, "design-tokens.ts")
-    const appPath = path.join(outputDir, "App.tsx")
     const contextPath = path.join(outputDir, "shared-context.md")
+    const sourcePaths = await writeGeneratedSourceFiles(sourceFiles)
 
     await Promise.all([
       fs.writeFile(scaffoldPath, JSON.stringify(scaffold, null, 2), "utf8"),
-      fs.writeFile(tokensPath, tokensFile.code, "utf8"),
-      fs.writeFile(appPath, appFile.code, "utf8"),
       fs.writeFile(contextPath, sharedContext, "utf8"),
     ])
 
@@ -125,17 +122,15 @@ Use as step 3 of the webpage-generate workflow. Pure function, no network.`,
         "",
         `**Artifacts written:**`,
         `- \`${scaffoldPath}\` — full ProjectScaffold`,
-        `- \`${tokensPath}\` — design tokens (import COLORS/FONTS/SPACING from here)`,
-        `- \`${appPath}\` — auto-generated App composition`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
+        `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: write your clone as a single-file static \`index.html\` referencing design-tokens and page-ir.xml.",
+        "Next: run the generated React source and iterate it with `webpage_render` + `webpage_vision_judge`.",
       ].join("\n"),
       metadata: {
         scaffoldPath,
-        tokensPath,
-        appPath,
         contextPath,
+        sourcePaths,
         sectionCount: scaffold.sections.length,
         patternCount: scaffold.catalog.patterns.length,
         patternCoverage: coverage,

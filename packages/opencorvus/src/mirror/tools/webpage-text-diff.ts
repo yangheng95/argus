@@ -1,5 +1,5 @@
 /**
- * `webpage_text_diff` tool — re-extracts the agent's current `index.html`
+ * `webpage_text_diff` tool — re-extracts the agent's current rendered URL
  * via puppeteer, compares its text catalog to the reference, and returns a
  * specific list of missing phrases. This is a diagnostic feedback signal for
  * text coverage, not an acceptance source.
@@ -14,36 +14,28 @@ import path from "node:path"
 import z from "zod"
 
 import { Tool } from "../../tool/tool"
-import { Instance } from "../../project/instance"
 import { extractPage } from "../url/extract"
 import { compareText, extractTextFromTree } from "../shared/content-compare"
 import { ExtractedPageSchema } from "../ir/extracted-page"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 
-function pathToFileUrl(p: string): string {
-  const abs = path.resolve(p).replace(/\\/g, "/")
-  return abs.startsWith("/") ? `file://${abs}` : `file:///${abs}`
-}
-
 export const WebpageTextDiffTool = Tool.define("webpage_text_diff", {
-  description: `Diff the text content between a reference ExtractedPage and the agent's current \`index.html\`.
+  description: `Diff the text content between a reference ExtractedPage and the agent's current rendered URL.
 
-Re-extracts the rendered HTML via puppeteer on a \`file://\` URL and tokenises both catalogues. Returns a concrete list of reference tokens that the current clone is missing — feed this list back to the agent so it can add the specific phrases rather than guess from the diff heatmap.
+Re-extracts the rendered page via puppeteer and tokenises both catalogues. Returns a concrete list of reference tokens that the current clone is missing — feed this list back to the agent so it can add the specific phrases rather than guess from the diff heatmap.
 
 Use this tool when \`webpage_vision_judge\` flags missing or incorrect text. It pinpoints *which strings* are missing, where SSIM+pixel diff only says *where*.
 
-Reads extracted-page.json (from webpage_extract) and the clone's index.html.`,
+Reads extracted-page.json (from webpage_extract) and the explicit current render URL.`,
   parameters: z.object({
+    url: z
+      .string()
+      .url()
+      .describe("Exact browser URL for the current clone, usually the already-started dev-server HTTP route."),
     referenceDir: z
       .string()
       .describe(
         `Directory containing \`extracted-page.json\` (webpage_extract's output). Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree.`,
-      )
-      .optional(),
-    inputDir: z
-      .string()
-      .describe(
-        "Directory containing the clone's `index.html`. Defaults to the current worktree — where the executor wrote the deliverable.",
       )
       .optional(),
     limit: z
@@ -55,11 +47,7 @@ Reads extracted-page.json (from webpage_extract) and the clone's index.html.`,
   }),
   async execute(params) {
     const referenceDir = await resolveMirrorOutputDir(params.referenceDir)
-    const inputDir = params.inputDir
-      ? path.resolve(Instance.directory, params.inputDir)
-      : Instance.directory
     const extractedPath = path.join(referenceDir, "extracted-page.json")
-    const indexPath = path.join(inputDir, "index.html")
 
     const raw = JSON.parse(await fs.readFile(extractedPath, "utf8"))
     const refPage = ExtractedPageSchema.parse(raw)
@@ -67,10 +55,8 @@ Reads extracted-page.json (from webpage_extract) and the clone's index.html.`,
       refPage.tree as unknown as Parameters<typeof extractTextFromTree>[0],
     )
 
-    await fs.access(indexPath)
-
     const rendered = await extractPage({
-      url: pathToFileUrl(indexPath),
+      url: params.url,
       viewport: refPage.viewport,
       waitMs: 3000,
       noScreenshots: true,
@@ -87,8 +73,8 @@ Reads extracted-page.json (from webpage_extract) and the clone's index.html.`,
         output: [
           "# Text diff result",
           "",
-          "⚠️  The rendered `index.html` produced no visible text nodes after a 3s wait.",
-          "This usually means the HTML relies on client-side JavaScript to render content (React, Vue, etc.) — the webpage-generate skill forbids JS frameworks. Rewrite `index.html` as fully static HTML and try again.",
+          "The rendered URL produced no visible text nodes after a 3s wait.",
+          "Fix the generated source or dev-server route, then re-run this tool against the same explicit URL.",
         ].join("\n"),
         metadata: {
           referenceChars: referenceText.length,
@@ -116,7 +102,7 @@ Reads extracted-page.json (from webpage_extract) and the clone's index.html.`,
         "",
         missing.length > 0
           ? [
-              "## Missing strings (add these to index.html — keep wording verbatim)",
+              "## Missing strings (add these to the generated source — keep wording verbatim)",
               "",
               ...missing.map((t) => `- \`${t}\``),
               "",

@@ -46,6 +46,8 @@ import {
   type TokenShadow,
   type TokenSpacing,
 } from "../ir/scaffold"
+import { DEFAULT_REACT_SOURCE_LAYOUT } from "../shared/scaffold-helpers"
+import { escapeXmlAttr, escapeXmlText } from "../shared/xml-escape"
 
 // ─── Public entry ────────────────────────────────────────────────────────
 
@@ -217,13 +219,13 @@ function synthesiseSections(design: CompressedDesign): SectionContract[] {
       const sectionName = sanitiseName(`${page.name}-${frame.name || `frame-${i + 1}`}`)
       const fileName = pascalCase(sectionName)
       const file: FileContract = {
-        filePath: `packages/app/src/sections/${fileName}.tsx`,
+        filePath: `${DEFAULT_REACT_SOURCE_LAYOUT.componentsDir}/${fileName}.tsx`,
         exportName: fileName,
         isDefaultExport: false,
         propsInterface: "",
         imports: {},
         patterns: frame.componentName ? [frame.componentName] : [],
-        sectionIR: undefined,
+        sectionIR: figmaNodeToIR(frame, 0),
       }
       sections.push(
         SectionContractSchema.parse({
@@ -242,7 +244,7 @@ function synthesiseSections(design: CompressedDesign): SectionContract[] {
 
 function synthesiseTokensFileContract(): FileContract {
   return FileContractSchema.parse({
-    filePath: "packages/app/src/design-tokens.ts",
+    filePath: DEFAULT_REACT_SOURCE_LAYOUT.tokensFilePath,
     exportName: "designTokens",
     isDefaultExport: false,
     propsInterface: "",
@@ -253,13 +255,55 @@ function synthesiseTokensFileContract(): FileContract {
 
 function synthesiseAppFileContract(): FileContract {
   return FileContractSchema.parse({
-    filePath: "packages/app/src/App.tsx",
+    filePath: DEFAULT_REACT_SOURCE_LAYOUT.appFilePath,
     exportName: "App",
     isDefaultExport: false,
     propsInterface: "",
     imports: {},
     patterns: [],
   })
+}
+
+function figmaNodeToIR(node: CompressedNode, depth: number): string {
+  const indent = "  ".repeat(depth)
+  const name = escapeXmlAttr(node.name || node.type)
+  const bounds = node.bounds ?? { w: 0, h: 0 }
+  const size = `size="${bounds.w}x${bounds.h}"`
+  const styleAttrs = figmaStyleAttrs(node)
+  if (node.text?.content) {
+    const textStyle = [
+      node.text.font,
+      node.text.size ? `${node.text.size}px` : "",
+      node.text.weight ? String(node.text.weight) : "",
+      node.text.color,
+    ].filter(Boolean).join(" ")
+    return `${indent}<Text name="${name}" style="${escapeXmlAttr(textStyle)}">${escapeXmlText(node.text.content)}</Text>`
+  }
+  if (!node.children || node.children.length === 0) {
+    return `${indent}<Box name="${name}" ${size}${styleAttrs} />`
+  }
+  const layout = node.layout?.mode ? ` layout="${escapeXmlAttr(figmaLayoutAttr(node))}"` : ""
+  const children = node.children.map((child) => figmaNodeToIR(child, depth + 1)).join("\n")
+  return [`${indent}<Container name="${name}" ${size}${layout}${styleAttrs}>`, children, `${indent}</Container>`].join("\n")
+}
+
+function figmaLayoutAttr(node: CompressedNode): string {
+  const parts: string[] = []
+  if (node.layout?.mode === "VERTICAL") parts.push("VERTICAL")
+  if (node.layout?.mode === "HORIZONTAL") parts.push("HORIZONTAL")
+  if (node.layout?.mode === "GRID") parts.push("GRID")
+  if (node.layout?.gap) parts.push(`gap:${node.layout.gap}px`)
+  return parts.join(" ")
+}
+
+function figmaStyleAttrs(node: CompressedNode): string {
+  const attrs: string[] = []
+  if (node.style?.bg) attrs.push(`bg="${escapeXmlAttr(node.style.bg)}"`)
+  if (node.style?.border) attrs.push(`border="${escapeXmlAttr(node.style.border)}"`)
+  if (typeof node.style?.borderRadius === "number") attrs.push(`radius="${node.style.borderRadius}px"`)
+  if (node.style?.shadow) attrs.push(`shadow="${escapeXmlAttr(node.style.shadow)}"`)
+  if (node.layout?.padding) attrs.push(`padding="${node.layout.padding.map((value) => `${value}px`).join(" ")}"`)
+  return attrs.length > 0 ? " " + attrs.join(" ") : ""
 }
 
 function synthesiseCatalog(frames: CompressedNode[]): ComponentCatalog {

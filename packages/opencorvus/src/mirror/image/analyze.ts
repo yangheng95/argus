@@ -52,6 +52,8 @@ import {
   type TokenSpacing,
   type TokenShadow,
 } from "../ir/scaffold"
+import { DEFAULT_REACT_SOURCE_LAYOUT } from "../shared/scaffold-helpers"
+import { escapeXmlAttr, escapeXmlText } from "../shared/xml-escape"
 
 // ─── Public entry ────────────────────────────────────────────────────────
 
@@ -206,13 +208,13 @@ function synthesiseSections(analysis: ImageAnalysis): SectionContract[] {
     const fileName = pascalCase(name)
     const elementCount = countElements(el)
     const file: FileContract = {
-      filePath: `packages/app/src/sections/${fileName}.tsx`,
+      filePath: `${DEFAULT_REACT_SOURCE_LAYOUT.componentsDir}/${fileName}.tsx`,
       exportName: fileName,
       isDefaultExport: false,
       propsInterface: "",
       imports: {},
       patterns: el.componentHint ? [el.componentHint] : [],
-      sectionIR: undefined,
+      sectionIR: imageElementToIR(el, 0),
     }
     const section: SectionContract = {
       name,
@@ -228,7 +230,7 @@ function synthesiseSections(analysis: ImageAnalysis): SectionContract[] {
 
 function synthesiseTokensFileContract(): FileContract {
   return FileContractSchema.parse({
-    filePath: "packages/app/src/design-tokens.ts",
+    filePath: DEFAULT_REACT_SOURCE_LAYOUT.tokensFilePath,
     exportName: "designTokens",
     isDefaultExport: false,
     propsInterface: "",
@@ -239,13 +241,54 @@ function synthesiseTokensFileContract(): FileContract {
 
 function synthesiseAppFileContract(): FileContract {
   return FileContractSchema.parse({
-    filePath: "packages/app/src/App.tsx",
+    filePath: DEFAULT_REACT_SOURCE_LAYOUT.appFilePath,
     exportName: "App",
     isDefaultExport: false,
     propsInterface: "",
     imports: {},
     patterns: [],
   })
+}
+
+function imageElementToIR(el: ImageElement, depth: number): string {
+  const indent = "  ".repeat(depth)
+  const name = escapeXmlAttr(el.role || el.name)
+  const size = `size="${el.bounds.w}x${el.bounds.h}"`
+  const styleAttrs = imageStyleAttrs(el)
+  if (el.text?.content) {
+    const textStyle = [
+      el.text.font,
+      el.text.size ? `${el.text.size}px` : "",
+      el.text.weight ? String(el.text.weight) : "",
+      el.text.color,
+    ].filter(Boolean).join(" ")
+    return `${indent}<Text name="${name}" style="${escapeXmlAttr(textStyle)}">${escapeXmlText(el.text.content)}</Text>`
+  }
+  if (!el.children || el.children.length === 0) {
+    return `${indent}<Box name="${name}" ${size}${styleAttrs} />`
+  }
+  const layout = el.layout?.direction ? ` layout="${escapeXmlAttr(imageLayoutAttr(el))}"` : ""
+  const children = el.children.map((child) => imageElementToIR(child, depth + 1)).join("\n")
+  return [`${indent}<Container name="${name}" ${size}${layout}${styleAttrs}>`, children, `${indent}</Container>`].join("\n")
+}
+
+function imageLayoutAttr(el: ImageElement): string {
+  const parts: string[] = []
+  if (el.layout?.direction === "vertical") parts.push("VERTICAL")
+  if (el.layout?.direction === "horizontal") parts.push("HORIZONTAL")
+  if (el.layout?.direction === "grid") parts.push("GRID")
+  if (el.layout?.gap) parts.push(`gap:${el.layout.gap}px`)
+  if (el.layout?.gridCols) parts.push(`cols:${el.layout.gridCols}`)
+  return parts.join(" ")
+}
+
+function imageStyleAttrs(el: ImageElement): string {
+  const attrs: string[] = []
+  if (el.style?.bg) attrs.push(`bg="${escapeXmlAttr(el.style.bg)}"`)
+  if (el.style?.borderRadius) attrs.push(`radius="${el.style.borderRadius}px"`)
+  if (el.style?.shadow) attrs.push(`shadow="${escapeXmlAttr(el.style.shadow)}"`)
+  if (el.style?.padding) attrs.push(`padding="${el.style.padding.map((value) => `${value}px`).join(" ")}"`)
+  return attrs.length > 0 ? " " + attrs.join(" ") : ""
 }
 
 function synthesiseCatalog(analysis: ImageAnalysis): ComponentCatalog {

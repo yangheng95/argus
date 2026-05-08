@@ -3,8 +3,9 @@
  *
  * All six mirror tools (extract / compile / analyze / render / evaluate /
  * text_diff) produce intermediate artifacts (reference.png, extracted-page.json,
- * page-ir.xml, scaffold.json, design-tokens.ts, App.tsx, shared-context.md,
- * rendered.png, diff.png, images/).
+ * page-ir.xml, scaffold.json, shared-context.md, rendered.png, diff.png,
+ * images/). Analyze tools write generated React source under the worktree
+ * source layout, not under this artifact directory.
  *
  * The default lives at `<worktree>/mirror/` — a single top-level folder that
  * is both git-visible (so `git add -A` picks it up for the delivery commit)

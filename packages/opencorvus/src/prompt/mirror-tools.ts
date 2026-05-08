@@ -18,6 +18,12 @@
  *    architectural payoff of centralising mirror artifacts in the first place
  *    (`src/mirror/tools/output-dir.ts`) — prompts must actually surface it.
  *
+ * 3. **Ground-truth enforcement + materialisation** — captured artifacts
+ *    (`scaffold.json`, `shared-context.md`) and generated `src/` files are
+ *    the authoritative source for any visual clone of the URL. Sub-agents
+ *    must refine the generated source in place instead of copying old mirror
+ *    reference files or writing a competing scaffold.
+ *
  * Static teaching is short (~150 tokens) to keep overhead low for tasks that
  * have nothing to do with webpages. The cache listing only appears when the
  * mirror dir is non-empty.
@@ -63,16 +69,16 @@ export function buildMirrorToolsPromptSection(opts: { cwd: string }): string {
     "                        (DOM tree + ~33 CSS props/element + tokens + assets)",
     "  2. `webpage_compile`  extracted-page.json → `page-ir.xml` (compact XML IR)",
     "  3. `webpage_analyze`  extracted-page.json → `scaffold.json` +",
-    "                        `design-tokens.ts` + `App.tsx` + `shared-context.md`",
-    "  4. (agent writes `index.html` / source)",
-    "  5. `webpage_render`   url=<file://... or http(s)://...> → `rendered.png`",
+    "                        `shared-context.md` + generated `src/**` React source",
+    "  4. (agent refines generated source)",
+    "  5. `webpage_render`   url=<http(s)://...> → `rendered.png`",
     "  6. `webpage_vision_judge` (reference.png, rendered.png) → acceptance verdict",
     "  7. `webpage_evaluate` (reference.png, rendered.png) → diagnostic score + `diff.png`",
-    "  8. `webpage_text_diff` (diagnostic only) → list of missing text tokens",
+    "  8. `webpage_text_diff` url=<http(s)://...> (diagnostic only) → list of missing text tokens",
     "",
     "Steps 2/3 MUST NOT share a turn with step 1 — `extracted-page.json` has",
     "to be written to disk first. Steps 5/6 MUST NOT share a turn with the",
-    "edit that produced the current `index.html`.",
+    "edit that produced the current generated source.",
   ].join("\n")
 
   if (cache.length === 0) {
@@ -97,6 +103,28 @@ export function buildMirrorToolsPromptSection(opts: { cwd: string }): string {
     "`webpage_extract` or `webfetch` on them again — read the existing",
     "artifacts directly. Re-extraction overwrites the previous capture and",
     "invalidates any downstream work that cited it.",
+    "",
+    "**The cached artifacts are ground truth, not reference material.** For",
+    "any visual clone of these URLs, the implementation MUST be built on",
+    "top of the captured `scaffold.json` / `shared-context.md` and generated",
+    "`src/**` files.",
+    "",
+    "Required action: refine the generated `src/App.tsx`, `src/design-tokens.ts`,",
+    "and `src/components/**` files in place. Read `mirror/shared-context.md`,",
+    "`mirror/page-ir.xml`, and `mirror/scaffold.json` before changing layout,",
+    "copy, assets, or component boundaries.",
+    "",
+    "Forbidden:",
+    "  - redefining the same tokens (colors, typography, spacing) with",
+    "    different values from generated `src/design-tokens.ts`;",
+    "  - demoting the captured artifacts to \"supplementary\" / \"reference\"",
+    "    while shipping a competing theme or scaffold of your own design;",
+    "  - implementing the page from the screenshot or your own taste while",
+    "    leaving the generated `src/App.tsx` and section components unused.",
+    "",
+    "If you believe a captured artifact is wrong (token mismatch, missing",
+    "section, misclassified component), raise the conflict explicitly in",
+    "your decision log and stop — do not silently override it.",
     "",
     ...cacheLines,
   ].join("\n")
