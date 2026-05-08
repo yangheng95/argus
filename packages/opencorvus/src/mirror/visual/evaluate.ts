@@ -47,6 +47,12 @@ export const EvaluationReportSchema = z.object({
 })
 export type EvaluationReport = z.infer<typeof EvaluationReportSchema>
 
+export const WEBPAGE_EVALUATE_PASS_SCORE = 85
+
+export function isEvaluationReportPassing(report: Pick<EvaluationReport, "overallScore">): boolean {
+  return report.overallScore >= WEBPAGE_EVALUATE_PASS_SCORE
+}
+
 // ─── Internal helpers ────────────────────────────────────────────────────
 
 /** Decode a PNG from data URL or file path. */

@@ -49,8 +49,9 @@ ${iterationHeader}
 # Goal
 Refine the generated React source paths declared by \`scaffold.json\` so the
 running app visually reproduces ${input.referenceUrl}. The acceptance source is
+\`webpage_evaluate.overallScore >= ${input.targetScore}\` and
 \`webpage_vision_judge.accepted = true\` after rendering the deliverable with an
-explicit browser URL. SSIM/pixel scores are diagnostic progress signals only.
+explicit browser URL. Do not invent a higher score target.
 
 # Viewport
 ${input.viewport.width} × ${input.viewport.height} (logical).
@@ -129,14 +130,14 @@ export function buildCloneFeedback(input: BuildCloneFeedbackInput): string {
 
   const stagnationWarning =
     input.consecutiveNoImprovement >= 3
-      ? `\n**Stagnation HARD STOP**: ${input.consecutiveNoImprovement} consecutive diagnostic-score iterations failed to raise the best score (${input.bestScore}/100). Stop score-chasing and hand off the current blocking visual differences for \`webpage_vision_judge\` review.\n`
+      ? `\n**Stagnation HARD STOP**: ${input.consecutiveNoImprovement} consecutive numeric-score iterations failed to raise the best score (${input.bestScore}/100). Stop score-chasing and hand off the current blocking visual differences for \`webpage_vision_judge\` review.\n`
       : input.consecutiveNoImprovement >= 1
-        ? `\n**Stagnation watch**: ${input.consecutiveNoImprovement}/3 diagnostic-score iterations with no new high score. Use the visual judge differences as the work queue.\n`
+        ? `\n**Stagnation watch**: ${input.consecutiveNoImprovement}/3 numeric-score iterations with no new high score. Use the visual judge differences as the work queue.\n`
         : ""
 
   return `
-Previous iteration diagnostic score: ${r.overallScore}/100.
-Best diagnostic score so far: ${input.bestScore}/100. Diagnostic-score iterations without improvement: ${input.consecutiveNoImprovement}/3.
+Previous iteration numeric score: ${r.overallScore}/100.
+Best numeric score so far: ${input.bestScore}/100. Numeric threshold: ${input.targetScore}/100. Numeric-score iterations without improvement: ${input.consecutiveNoImprovement}/3.
 
 Metrics (track them across iterations as a progress / regression signal):
   - SSIM structural similarity: ${r.ssimScore.toFixed(3)}

@@ -6,8 +6,31 @@ import {
   type DeliveryEvidenceManifest,
 } from "../../src/delivery/manifest"
 import { affectedGoalIDs, type DeliveryVerdictType } from "../../src/delivery/verdict"
+import { Event as EngineEvent } from "../../src/engine/model"
 
 describe("delivery arbiter", () => {
+  test("delivery evidence event accepts readiness failure details", () => {
+    const parsed = EngineEvent.DeliveryEvidenceUpdated.properties.safeParse({
+      taskID: "tsk_ready",
+      deliveryID: "dlv_ready",
+      manifestID: "art_ready",
+      iteration: 1,
+      status: "failed",
+      summary: "Runtime readiness failed.",
+      failedCheckCount: 0,
+      failedRuntimeFlowCount: 0,
+      failedReviewCount: 0,
+      failureDetails: [{
+        kind: "readiness",
+        id: "runtime-readiness:package-json",
+        name: "package.json",
+        status: "failed",
+        evidence: "package.json missing",
+      }],
+    })
+    expect(parsed.success).toBe(true)
+  })
+
   test("arbitrates manifest gate failures from evidence inputs", () => {
     const verdict = arbitrateDeliveryGate({
       checks: {

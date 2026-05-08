@@ -1,6 +1,6 @@
 ---
 name: webpage-generate
-description: 'Generate a high-fidelity clone of a reference webpage. The mirror toolchain (`webpage_extract` → `webpage_compile` → `webpage_analyze`) extracts structure, design tokens, copy, assets, and generated React source deterministically; you refine that generated source; then iterate against `webpage_render` + `webpage_vision_judge` until the vision verdict accepts. Call `webpage_render` with the exact HTTP route for the running app. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (specific URL, screenshot). Always pull palette / text / structure from the mirror artifacts and generated source — never invent hex codes, copy, or section structure.'
+description: 'Generate a high-fidelity clone of a reference webpage. The mirror toolchain (`webpage_extract` → `webpage_compile` → `webpage_analyze`) extracts structure, design tokens, copy, assets, and generated React source deterministically; you refine that generated source; then iterate against `webpage_render`, `webpage_evaluate`, and `webpage_vision_judge` until the numeric score is at least 85/100 and the vision verdict accepts. Call `webpage_render` with the exact HTTP route for the running app. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (specific URL, screenshot). Always pull palette / text / structure from the mirror artifacts and generated source — never invent hex codes, copy, or section structure.'
 stage: build
 auto_detect:
   task_signals:
@@ -133,7 +133,7 @@ Call `webpage_render url=<explicit HTTP URL>` and write `mirror/rendered.png`. R
 
 ## Step 7 — Evaluate
 
-### 7a. Visual judge (THE acceptance gate)
+### 7a. Visual judge (qualitative acceptance gate)
 
 Call `webpage_vision_judge` (no args needed — defaults read `mirror/reference.png` + `mirror/rendered.png`). It does a single-shot vision-LLM call with no system prompt and no tool list — just the two images and a request to enumerate visible differences. Output goes to `mirror/vision-judge.json` and includes:
 
@@ -142,15 +142,15 @@ Call `webpage_vision_judge` (no args needed — defaults read `mirror/reference.
 
 Why this is the gate: SSIM numbers and pixel-diff heatmaps are proxies that let the agent skip looking at pixels (score plateau at ~94 with logo, search-box layout, and floating buttons visibly wrong). Vision-judge forces an actual visual comparison every round.
 
-### 7b. SSIM score (diagnostic signal)
+### 7b. SSIM score (numeric acceptance gate)
 
-Call `webpage_evaluate reference=reference.png rendered=rendered.png` (both inside `mirror/`). Writes `mirror/eval-result.json`. Returns a 0–100 score (`round(ssim × 50 + (100 − pixelDiff%) × 0.5)`).
+Call `webpage_evaluate reference=reference.png rendered=rendered.png` (both inside `mirror/`). Writes `mirror/eval-result.json`. Returns a 0–100 score (`round(ssim × 50 + (100 − pixelDiff%) × 0.5)`), `passThreshold: 85`, and `passed`.
 
-Track the score across iterations: rising = your edits are helping, falling = a refactor regressed something. The score alone cannot decide acceptance — vision-judge does that — but a sudden drop is a real signal worth investigating.
+Track the score across iterations: rising = your edits are helping, falling = a refactor regressed something. The numeric visual gate is `overallScore >= 85`; do not invent a higher threshold. The score alone cannot replace visual inspection or the qualitative `webpage_vision_judge` verdict.
 
 ## Step 8 — Iterate on specific gaps
 
-**Target:** `webpage_vision_judge.accepted = true`. `webpage_evaluate` is a diagnostic trend signal only.
+**Target:** `webpage_evaluate.passed = true` (`overallScore >= 85`) and `webpage_vision_judge.accepted = true`.
 
 **Stagnation guard (HARD STOP):** if **3 consecutive iterations** repeat the same blocking vision-judge differences, STOP iterating and report those differences. The remaining gap is either dynamic content, a missing asset, or a structural decision the next pass (delivery / orchestrator) needs to handle. Do not burn rounds 4–8 grinding on the same plateau — record the final verdict and hand off.
 
@@ -169,7 +169,7 @@ For each round (up to **8**, count explicitly):
 3. Re-run `webpage_render url=<explicit URL>`.
 4. Re-run `webpage_vision_judge` AND `webpage_evaluate`.
 5. **Decide:**
-   - If `webpage_vision_judge.accepted = true` → goal done, proceed to acceptance.
+   - If `webpage_evaluate.passed = true` and `webpage_vision_judge.accepted = true` → goal done, proceed to acceptance.
    - If 3 consecutive rounds repeat the same blocking vision-judge differences → STOP (stagnation guard above). Report the final diagnostic score, the biggest remaining critical/major diffs from vision-judge, and any obvious blockers (dynamic content, missing asset). Hand off to delivery.
    - If you've completed 8 rounds without acceptance → STOP. Same handoff as the stagnation case.
    - Otherwise go back to step 1.
@@ -183,9 +183,9 @@ The mirror toolchain output MUST stay in the worktree. Subsequent goals + delive
 You MUST NOT mark the goal `passed` or call `goal_report` / `StructuredOutput` until you have:
 
 1. Run `webpage_render url=<explicit URL>` and produced `mirror/rendered.png` for the CURRENT deliverable (re-run after every edit pass — a stale rendered.png from before your last edit does NOT count).
-2. Run `webpage_vision_judge` against the freshly-rendered `mirror/rendered.png` and confirmed the verdict file `mirror/vision-judge.json` reports `accepted: true`. This is the SINGLE primary acceptance signal — SSIM scores alone are NOT enough.
+2. Run `webpage_vision_judge` against the freshly-rendered `mirror/rendered.png` and confirmed the verdict file `mirror/vision-judge.json` reports `accepted: true`. This is the qualitative acceptance signal — SSIM scores alone are NOT enough.
 3. Read `mirror/rendered.png` (the actual image, not just its bytes count) and visually compared it against `mirror/reference.png`. Confirm in your structured output that you inspected both images.
-4. Run `webpage_evaluate` against the freshly-rendered `mirror/rendered.png` and recorded the score in `mirror/eval-result.json` (secondary trend signal).
+4. Run `webpage_evaluate` against the freshly-rendered `mirror/rendered.png`, recorded the score in `mirror/eval-result.json`, and confirmed `passed: true` against the 85/100 numeric threshold.
 
 The render screenshot is the SINGLE source of truth for "does this look like the reference". DOM diffs, text-presence checks, file-existence asserts, and DOCTYPE greps are sanity checks — they are NEVER a substitute for looking at the rendered image. A goal that compiled, committed, and passes every textual check but renders to a blank page or a broken layout is a FAILED goal regardless of what the structural checks say. Catch that before delivery does.
 
@@ -199,6 +199,6 @@ A working clone — whatever shape your stack produced — that passes `webpage_
 - All images referenced by their local `mirror/images/` paths
 - Design tokens applied through whichever idiomatic mechanism the chosen stack uses (`:root` custom properties, Tailwind theme extension, design-token export, etc.) — never invented hex codes or font sizes
 - `mirror/rendered.png` exists, was visually inspected against `mirror/reference.png`, and matches
-- `webpage_vision_judge.accepted = true` against the freshly-rendered screenshot; `webpage_evaluate` is recorded only as a diagnostic trend
+- `webpage_evaluate.passed = true` against the 85/100 numeric threshold and `webpage_vision_judge.accepted = true` against the freshly-rendered screenshot
 
 Report the final score and `vision_judge` verdict, cite the render screenshot path in your goal_report, and list the sections that are still below pixel parity (usually dynamic content — rotating placeholders, ads, personalisation).

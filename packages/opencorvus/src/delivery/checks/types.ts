@@ -99,13 +99,14 @@ export interface DeliveryInfo {
   manifestGate?: {
     status: "passed" | "failed"
     summary: string
+    failedReadinessIds?: string[]
     failedCheckIds: string[]
     failedCoverageIds: string[]
     failedRuntimeFlowIds: string[]
     failedReviewIds: string[]
   }
   manifestFailureDetails?: Array<{
-    kind: "check" | "coverage" | "runtime" | "review"
+    kind: "readiness" | "check" | "coverage" | "runtime" | "review"
     id: string
     name: string
     status?: string

@@ -43,7 +43,7 @@ test("buildClonePrompt enforces generated React source contract", () => {
   const p = buildClonePrompt({
     iter: 1,
     referenceUrl: "https://example.com/",
-    targetScore: 95,
+    targetScore: 85,
     viewport: { width: 1440, height: 900 },
     outputDir: "/tmp/x",
     sharedContext: "ctx",
@@ -57,6 +57,8 @@ test("buildClonePrompt enforces generated React source contract", () => {
   expect(p).not.toContain("src/App.tsx")
   expect(p).not.toContain("src/design-tokens.ts")
   expect(p).toContain("not create a parallel deliverable")
+  expect(p).toContain("webpage_evaluate.overallScore >= 85")
+  expect(p).toContain("Do not invent a higher score target")
   expect(p).not.toContain("cdn.tailwindcss.com")
   expect(p).not.toMatch(/use tailwind|with tailwind/i)
   expect(p).not.toContain("vanilla CSS")
@@ -66,7 +68,7 @@ test("buildClonePrompt iter > 1 instructs edit-not-rewrite", () => {
   const p = buildClonePrompt({
     iter: 2,
     referenceUrl: "https://example.com/",
-    targetScore: 95,
+    targetScore: 85,
     viewport: { width: 1440, height: 900 },
     outputDir: "/tmp/x",
     sharedContext: "ctx",
@@ -94,12 +96,13 @@ test("buildCloneFeedback surfaces score, missing tokens, regression guard", () =
     } satisfies EvaluationReport,
     diffPath: "/tmp/diff.png",
     referencePath: "/tmp/reference.png",
-    targetScore: 95,
+    targetScore: 85,
     bestScore: 75,
     consecutiveNoImprovement: 0,
     missingTokens: ["新闻", "百度一下"],
   })
   expect(fb).toContain("70/100")
+  expect(fb).toContain("Numeric threshold: 85/100")
   expect(fb).toContain("新闻")
   expect(fb).toContain("百度一下")
   expect(fb).toContain("Regression guard")
@@ -120,7 +123,7 @@ test("buildCloneFeedback omits regression guard when current is best", () => {
     } satisfies EvaluationReport,
     diffPath: "/tmp/diff.png",
     referencePath: "/tmp/reference.png",
-    targetScore: 95,
+    targetScore: 85,
     bestScore: 90,
     consecutiveNoImprovement: 0,
     missingTokens: [],

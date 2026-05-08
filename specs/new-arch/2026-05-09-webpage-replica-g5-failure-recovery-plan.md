@@ -28,7 +28,7 @@ The failed task is not a simple frontend or backend test failure.
   - `mirror/eval-result.json` reports `overallScore=85`.
   - `ssimScore=0.8139054716236321`.
   - `pixelDiffPercent=12.252237654320988`.
-  - Target threshold recorded by the agent was 95+.
+  - The agent recorded an invented 95+ target; the product threshold is now 85/100.
 - The build agent result for G5 included a top-level `error` field while also reporting `status="passed"`.
 - The executor rejected that result because `BuildResultSchema` did not allow the top-level `error` key.
 - The final task/run failure message then overwrote the quality failure with a recovery story:
@@ -43,7 +43,7 @@ The failed task is not a simple frontend or backend test failure.
 
 The rendered clone was not visually close enough to the reference. The artifacts prove the app rendered, dimensions matched, and functional tests passed, but the visual score was too low for acceptance.
 
-This is a real product failure, not noise. A page replica task cannot be considered complete when visual fidelity is 85/100 against a 95+ target.
+The product decision on 2026-05-09 lowers the webpage replica numeric visual threshold to 85/100. Under that contract, this evidence is not a numeric visual-threshold failure. The remaining engine failure is the invalid mixed build result shape: `status="passed"` with a top-level `error`.
 
 ### 2.2 Result Protocol Root Cause
 
@@ -60,7 +60,7 @@ The current result boundary allowed the agent to create a semantically contradic
 
 After the structured output rejection, recovery attempted to continue the same verification goal. The failed attempt artifact lacked `workspace_branch`, even though the running attempt artifact and local git branch still proved the branch existed.
 
-The orchestrator then treated the missing branch field as a workspace metadata inconsistency and wrote that inferred explanation into `task.error`. That made the final debug output misleading: it hid the primary failure chain of visual threshold failure followed by invalid build result shape.
+The orchestrator then treated the missing branch field as a workspace metadata inconsistency and wrote that inferred explanation into `task.error`. That made the final debug output misleading: it hid the primary failure chain of an invented visual target followed by invalid build result shape.
 
 ## 3. Immediate Recovery Plan For This Task
 
@@ -82,7 +82,7 @@ Goal: finish this task honestly, without hiding the visual mismatch.
    - Compare `reference.png` and `rendered.png`.
    - Prioritize high-impact differences listed by the agent: navigation bar, chart type, sidebar, technical indicators.
    - Re-render after each visual change.
-   - Continue until SSIM reaches 95+ or a human explicitly lowers the acceptance threshold.
+   - Continue until `webpage_evaluate.overallScore >= 85` or record a concrete blocker.
 
 4. Re-run verification.
    - Run integration and E2E tests.
@@ -105,7 +105,7 @@ Required behavior:
 - A blocking acceptance failure must produce `status="failed"`.
 - A passed build result must reject any failure-only fields such as `error`.
 - A failed build result must require a structured failure reason and evidence references.
-- The G5 case should produce a valid failed build result whose reason is visual threshold failure, not schema rejection.
+- A below-threshold visual case should produce a valid failed build result whose reason is visual threshold failure, not schema rejection.
 
 Tests:
 
@@ -131,8 +131,8 @@ Required behavior:
 
 Tests:
 
-- Given `overallScore=85` and threshold `95`, evidence status is failed.
-- Given `overallScore=96` and matching dimensions, evidence status is passed.
+- Given `overallScore=84` and threshold `85`, evidence status is failed.
+- Given `overallScore=85` and matching dimensions, evidence status is passed.
 - Missing judge verdict does not erase numeric visual evidence.
 
 ### Phase C: Preserve Workspace Metadata In Failed Attempt Artifacts
@@ -168,7 +168,7 @@ Files to inspect first:
 Required behavior:
 
 - The task final error should keep a causal chain:
-  1. visual threshold failed.
+  1. build result schema rejected mixed pass/error payload.
   2. build result schema rejected mixed pass/error payload.
   3. recovery/debug inference saw a failed artifact missing `workspace_branch`.
 - The latest recovery failure may be the terminal reason, but it must not overwrite the original product failure.
@@ -196,7 +196,7 @@ Implementation loop:
 3. Fix one visual region at a time.
 4. Re-render at 1440x900 after each region.
 5. Recompute SSIM and pixel diff.
-6. Stop only at 95+ or after recording an explicit impossible-condition finding.
+6. Stop only at 85+ or after recording an explicit impossible-condition finding.
 
 Rules:
 
@@ -213,7 +213,7 @@ This plan is complete only when all of the following are true:
 - Task debug info shows the causal chain instead of replacing visual failure with a workspace cleanup error.
 - Failed attempt artifact persistence does not erase known workspace branch metadata.
 - Windows cleanup reports locking process evidence when it cannot remove a worktree.
-- The webpage replica task reaches SSIM 95+ or remains honestly failed with visual evidence.
+- The webpage replica task reaches score 85+ or remains honestly failed with visual evidence.
 
 ## 7. Non-Goals
 

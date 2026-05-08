@@ -1,6 +1,11 @@
 import { describe, test, expect } from "bun:test"
 import { PNG } from "pngjs"
-import { evaluateVisual, EvaluationReportSchema } from "../../../src/mirror/visual/evaluate"
+import {
+  WEBPAGE_EVALUATE_PASS_SCORE,
+  evaluateVisual,
+  EvaluationReportSchema,
+  isEvaluationReportPassing,
+} from "../../../src/mirror/visual/evaluate"
 import { EvaluateError } from "../../../src/mirror/errors"
 
 // Golden parity — mirror's original service
@@ -95,6 +100,12 @@ describe("evaluateVisual — shape + Zod validation", () => {
     expect(events).toContain("pixelmatch")
     expect(events).toContain("ssim")
     expect(events).toContain("score")
+  })
+
+  test("webpage numeric pass threshold is 85/100", () => {
+    expect(WEBPAGE_EVALUATE_PASS_SCORE).toBe(85)
+    expect(isEvaluationReportPassing({ overallScore: 85 })).toBe(true)
+    expect(isEvaluationReportPassing({ overallScore: 84 })).toBe(false)
   })
 })
 

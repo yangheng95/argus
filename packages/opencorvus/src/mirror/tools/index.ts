@@ -9,7 +9,7 @@
  *   - webpage_image_extract   Image(s) → ImageAnalysis (vision-LLM)
  *   - webpage_image_compile   ImageAnalysis → XML IR (same dialect as URL flow)
  *   - webpage_render          explicit browser URL → PNG screenshot
- *   - webpage_evaluate        (reference, rendered) → diagnostic score + diff PNG
+ *   - webpage_evaluate        (reference, rendered) → numeric score + 85/100 verdict
  *   - webpage_text_diff       reference DOM vs rendered DOM → missing tokens
  *   - webpage_vision_judge    (reference, rendered) → acceptance verdict + ranked diffs
  *
