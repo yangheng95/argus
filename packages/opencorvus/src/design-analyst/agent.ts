@@ -112,7 +112,7 @@ export namespace DesignAnalystAgent {
         getCollector: () => outputToolKit.getSpecs(),
       },
       buildUserPrompt: () => buildUserPrompt(input),
-      buildUserParts: () => buildPromptParts(buildUserPrompt(input), input.attachments),
+      buildUserParts: () => buildPromptParts(input),
       format: {
         schema: z.toJSONSchema(DesignFinalSchema) as Record<string, unknown>,
         retryCount: 2,
@@ -196,13 +196,31 @@ export namespace DesignAnalystAgent {
 // Prompt construction
 // ---------------------------------------------------------------------------
 
-async function buildPromptParts(
-  text: string,
-  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
-) {
-  const enrichedText = text + AttachmentStore.renderAttachmentInventory(attachments)
-  const inlineParts = await AttachmentStore.inlineFileParts(attachments)
+async function buildPromptParts(input: {
+  title: string
+  request: string
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
+}) {
+  const text = buildUserPrompt(input)
+  const hasLiveHttpUrl = hasHttpUrl(input.request)
+  const inlineAttachments = (input.attachments ?? []).filter((attachment) =>
+    shouldInlineDesignAttachment(attachment, hasLiveHttpUrl),
+  )
+  const enrichedText = text + AttachmentStore.renderAttachmentInventory(inlineAttachments)
+  const inlineParts = await AttachmentStore.inlineFileParts(inlineAttachments)
   return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
+}
+
+function shouldInlineDesignAttachment(
+  attachment: { source?: string },
+  hasLiveHttpUrl: boolean,
+): boolean {
+  if (hasLiveHttpUrl && attachment.source === "url-screenshot") return false
+  return true
+}
+
+function hasHttpUrl(text: string): boolean {
+  return /https?:\/\/\S+/i.test(text)
 }
 
 function buildUserPrompt(input: {
@@ -218,7 +236,7 @@ function buildUserPrompt(input: {
   // not a keyword policy: the agent decides whether to propose a
   // `url_screenshot` capture based on whether a web URL is even
   // available in the brief. Not a rule-11 violation.
-  const hasLiveHttpUrl = /https?:\/\/\S+/i.test(input.request)
+  const hasLiveHttpUrl = hasHttpUrl(input.request)
 
   const visualAttachments = (input.attachments ?? []).filter(
     (a) => (a.intent ?? "") === "visual_reference" || a.mime.startsWith("image/") || a.mime === "application/pdf",
@@ -229,14 +247,17 @@ function buildUserPrompt(input: {
       const source = a.source ? ` — captured from ${a.source}` : ""
       return `${i + 1}. \`${name}\` (${a.mime})${source}`
     }).join("\n")
+    const allVisualsAreUrlScreenshots = visualAttachments.every((a) => a.source === "url-screenshot")
+    const visualReferenceMode =
+      hasLiveHttpUrl && allVisualsAreUrlScreenshots
+        ? "These URL screenshot captures are stored for provenance but are not inlined into this prompt. Use the mirror webpage pipeline first (`webpage_extract`, then `webpage_compile`, then `webpage_analyze`) and use `mirror/reference.png`, `mirror/page-ir.xml`, `mirror/shared-context.md`, and bounded scaffold details as the PRD/SPEC evidence surface. "
+        : "These files are attached to this message as multimodal content — read the pixels directly. Do NOT use webfetch. Prefer these attached screenshots over re-capturing the same page. " +
+          (hasLiveHttpUrl
+            ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the mirror webpage pipeline first (`webpage_extract`, then `webpage_compile`, then `webpage_analyze`) and read the resulting artifacts before writing specs. "
+            : "")
     sections.push(
-      `# Visual References (already attached)\n\n${lines}\n\n` +
-      "These files are attached to this message as multimodal content — read " +
-      "the pixels directly. Do NOT use webfetch. Prefer these attached " +
-      "screenshots over re-capturing the same page. " +
-      (hasLiveHttpUrl
-        ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the mirror webpage pipeline first (`webpage_extract`, then `webpage_compile`, then `webpage_analyze`) and read the resulting artifacts before writing specs. "
-        : "") +
+      `# Visual References\n\n${lines}\n\n` +
+      visualReferenceMode +
       "Your whole job is to derive the PRD/SPEC and visual-consistency contract from evidence, not taste.",
     )
   } else {
@@ -261,9 +282,14 @@ function buildUserPrompt(input: {
     "For visual webpage URLs, use the mirror pipeline — not `webfetch` and not screenshot-only analysis. " +
     "Strict order: `webpage_extract` writes `mirror/reference.png` and `mirror/extracted-page.json`; " +
     "`webpage_compile` writes `mirror/page-ir.xml`; `webpage_analyze` writes `mirror/scaffold.json` " +
-    "and `mirror/shared-context.md`. Read those artifacts before finalizing. " +
+    "and `mirror/shared-context.md`. Read the compact artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the PRD/SPEC prompt. " +
     "Do at least two PRD/SPEC review passes before StructuredOutput: first check page inventory and visual coverage, then check downstream frontend/backend implementability.",
   )
 
   return sections.join("\n\n")
+}
+
+export const DesignAnalystTestHooks = {
+  buildPromptParts,
+  buildUserPrompt,
 }
