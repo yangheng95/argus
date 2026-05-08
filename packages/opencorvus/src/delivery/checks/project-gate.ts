@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
-import { spawn } from "node:child_process"
+import { spawn, type ChildProcess } from "node:child_process"
 import { Instance } from "@/project/instance"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
@@ -20,7 +20,7 @@ import type { DeliverySurfaceManifest } from "../surface-detector"
 import { arbitrateDeliveryGate } from "../arbiter"
 import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
 import { runSecurityDataReview } from "../specialists/security-data"
-import { isLoopbackHttpUrl, resolveFrontendPreview } from "@/preview/frontend"
+import { isLoopbackHttpUrl, probeFrontendDocument } from "@/preview/frontend"
 import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
@@ -40,6 +40,8 @@ import {
 import type { DeliverySpecialistReview } from "../specialist-review"
 
 const COMMAND_TIMEOUT_MS = 180_000
+const PREVIEW_START_IDLE_TIMEOUT_MS = 30_000
+const PREVIEW_READY_TIMEOUT_MS = 15_000
 const CHECK_WORKSPACE_EXCLUDED_NAMES = new Set([
   ".git",
   ".opencorvus",
@@ -198,19 +200,17 @@ async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
 }
 
 /**
- * Blocking criteria — these failures require a plan rework, not a re-run of
- * the same code:
+ * Blocking criteria — these failures mean delivery completion is not proven:
  *   - failedCoverageIds: blocking goals without acceptance specs.
+ *   - failedRuntimeFlowIds: requested frontend/runtime surfaces did not render.
+ *   - review:integrity: required architecture integrity evidence is missing or
+ *     contains corrections/missing goals.
  *
  * Advisory criteria — the delivery agent (LLM) weighs these in context and
  * decides whether they materially block acceptance:
  *   - failedCheckIds: build / typecheck / lint / unit-test commands.
- *   - failedRuntimeFlowIds: puppeteer / runtime / visual probes.
- *   - all review-shaped evidence (review:integrity, review:workspace_export,
- *     specialist:*): the delivery agent reads the full markdown evidence and
- *     decides — host-side blocker classification on architecture review is
- *     a state machine (CLAUDE.md rule 13). Spec
- *     architecture-rework-loosening-plan-2026-05-06.md (C3 + C5).
+ *   - non-integrity review-shaped evidence (review:workspace_export,
+ *     specialist:*): the delivery agent reads the full evidence and decides.
  */
 function assessFunctionalCompletion(input: {
   failedCheckIds: string[]
@@ -219,11 +219,16 @@ function assessFunctionalCompletion(input: {
   failedReviewIds: string[]
   specialistReviews: DeliverySpecialistReview[]
 }): DeliveryManifestFunctionalAssessment {
-  const primaryFailureIds = [...input.failedCoverageIds]
+  const blockingReviewIds = input.failedReviewIds.filter((id) => id === "review:integrity")
+  const blockingReviewIdSet = new Set<string>(blockingReviewIds)
+  const primaryFailureIds = [
+    ...input.failedCoverageIds,
+    ...input.failedRuntimeFlowIds,
+    ...blockingReviewIds,
+  ]
   const auxiliaryFailureIds = [
     ...input.failedCheckIds,
-    ...input.failedRuntimeFlowIds,
-    ...input.failedReviewIds,
+    ...input.failedReviewIds.filter((id) => !blockingReviewIdSet.has(id)),
   ]
   const status = primaryFailureIds.length === 0 ? "complete" : "incomplete"
   const advisoryNote = auxiliaryFailureIds.length > 0
@@ -231,7 +236,7 @@ function assessFunctionalCompletion(input: {
     : ""
   const summary = status === "complete"
     ? `Functional completion passed (acceptance-spec coverage satisfied).${advisoryNote}`
-    : `Functional completion failed with ${primaryFailureIds.length} coverage blocker(s).${advisoryNote}`
+    : `Functional completion failed with ${primaryFailureIds.length} blocker(s).${advisoryNote}`
   return {
     status,
     primaryFailureIds: [...new Set(primaryFailureIds)].sort(),
@@ -349,17 +354,12 @@ function buildReviewEvidence(input: {
   const reviewMarkdown = typeof payload.review_markdown === "string" && payload.review_markdown.length > 0
     ? payload.review_markdown
     : undefined
-  // Architecture review is advisory in delivery: it never blocks accept
-  // by itself. The delivery agent reads the full markdown evidence
-  // (issues / corrections / missing_goals) and decides whether the
-  // architectural concerns warrant rejecting the deliverable. CLAUDE.md
-  // rule 13 + spec architecture-rework-loosening-plan-2026-05-06.md (C3).
-  // Only an explicit `verdict=fail` (which the integrity dimensions don't
-  // produce — only pass/concerns/needs_correction are valid) or an
-  // unknown / missing verdict still surfaces as failed evidence to flag
-  // a wiring bug to the delivery agent.
+  // Integrity review is mandatory for non-trivial goal graphs. Correction-free
+  // concerns are review notes; missing reviews, unknown verdicts, explicit
+  // correction requests, and missing-goal findings mean architecture soundness
+  // has not been proven and must block delivery.
   const status: "passed" | "failed" =
-    verdict === "pass" || verdict === "concerns" || verdict === "needs_correction"
+    verdict === "pass" || (verdict === "concerns" && correctionsCount === 0 && missingCount === 0)
       ? "passed"
       : "failed"
   return [{
@@ -370,10 +370,13 @@ function buildReviewEvidence(input: {
     specSnapshotId: input.specSnapshotID,
     verdict,
     evidence: [
-      `verdict=${verdict} (advisory; delivery agent decides)`,
+      `verdict=${verdict}`,
       `issues_count=${payload.issues_count ?? 0}`,
       `corrections_count=${correctionsCount}`,
       `missing_count=${missingCount}`,
+      verdict === "concerns" && correctionsCount === 0 && missingCount === 0
+        ? "concerns_without_corrections_are_advisory"
+        : undefined,
       payload.reason ? `reason=${payload.reason}` : undefined,
       // Surface the full review markdown so delivery LLM reads the same
       // evidence the integrity LLM produced (issues / corrections /
@@ -461,47 +464,61 @@ async function runRuntimeFlows(input: {
     })
     return flows
   }
-  const explicitPreviewUrl = previewUrlFromMetadata(input.metadata)
-  const preview = explicitPreviewUrl
-    ? { url: explicitPreviewUrl }
-    : await resolveFrontendPreview({
-        directory: root,
-        requireOwnedProcess: true,
-      })
-  const report = await computeRuntimeEvidence({
-    projectDir: root,
-    previewUrl: preview.url ?? undefined,
-    outDir: path.join(
-      root,
-      ".opencorvus",
-      "delivery-runtime-flow",
-      input.taskID ?? "no-task",
-      String(input.iteration),
-    ),
-    viewport: { width: 1440, height: 900 },
-    requireInteraction,
-  })
-  flows.push({
-    id,
-    name: requireInteraction ? "Web Runtime Render and Interaction" : "Web Runtime Render",
-    status: report.passed ? "passed" : "failed",
-    evidence: report.passed
-      ? [
-          [
-            `rendered ${report.evidence.previewUrl ?? "live preview"}`,
-            `text=${report.evidence.dom?.textLength ?? "n/a"}`,
-            `nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
-            report.evidence.interaction
-              ? `interactions=${report.evidence.interaction.attemptedInteractionCount}/${report.evidence.interaction.visibleControlCount}`
-              : undefined,
-          ].filter(Boolean).join(" "),
-        ]
-      : report.violations.map((item) => `${item.kind}: ${item.detail}`),
-    screenshotPath: report.evidence.renderedPngPath,
-    previewUrl: report.evidence.previewUrl,
-    dom: report.evidence.dom,
-    interaction: report.evidence.interaction,
-  })
+  let preview: Awaited<ReturnType<typeof resolveRuntimeFlowPreview>> | undefined
+  try {
+    preview = await resolveRuntimeFlowPreview({
+      projectDir: root,
+      metadata: input.metadata,
+    })
+    const report = await computeRuntimeEvidence({
+      projectDir: root,
+      previewUrl: preview.url,
+      outDir: path.join(
+        root,
+        ".opencorvus",
+        "delivery-runtime-flow",
+        input.taskID ?? "no-task",
+        String(input.iteration),
+      ),
+      viewport: { width: 1440, height: 900 },
+      requireInteraction,
+    })
+    flows.push({
+      id,
+      name: requireInteraction ? "Web Runtime Render and Interaction" : "Web Runtime Render",
+      status: report.passed ? "passed" : "failed",
+      evidence: report.passed
+        ? [
+            [
+              ...preview.evidence,
+              `rendered ${report.evidence.previewUrl ?? "live preview"}`,
+              `text=${report.evidence.dom?.textLength ?? "n/a"}`,
+              `nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
+              report.evidence.interaction
+                ? `interactions=${report.evidence.interaction.attemptedInteractionCount}/${report.evidence.interaction.visibleControlCount}`
+                : undefined,
+            ].filter(Boolean).join(" "),
+          ]
+        : [
+            ...preview.evidence,
+            ...report.violations.map((item) => `${item.kind}: ${item.detail}`),
+          ],
+      screenshotPath: report.evidence.renderedPngPath,
+      previewUrl: report.evidence.previewUrl,
+      dom: report.evidence.dom,
+      interaction: report.evidence.interaction,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    flows.push({
+      id,
+      name: requireInteraction ? "Web Runtime Render and Interaction" : "Web Runtime Render",
+      status: "failed",
+      evidence: [`runtime_flow_error: ${message}`],
+    })
+  } finally {
+    await preview?.dispose()
+  }
   return flows
 }
 
@@ -510,6 +527,139 @@ function previewUrlFromMetadata(metadata: Record<string, unknown> | undefined): 
   if (typeof raw !== "string") return undefined
   const trimmed = raw.trim()
   return isLoopbackHttpUrl(trimmed) ? trimmed : undefined
+}
+
+async function resolveRuntimeFlowPreview(input: {
+  projectDir: string
+  metadata?: Record<string, unknown>
+}): Promise<{ url: string; evidence: string[]; dispose: () => Promise<void> }> {
+  const explicitPreviewUrl = previewUrlFromMetadata(input.metadata)
+  if (explicitPreviewUrl) {
+    return {
+      url: explicitPreviewUrl,
+      evidence: [`preview_url=${explicitPreviewUrl}`, "preview_source=metadata"],
+      dispose: async () => {},
+    }
+  }
+  return startManagedFrontendPreview(input.projectDir)
+}
+
+async function startManagedFrontendPreview(projectDir: string): Promise<{
+  url: string
+  evidence: string[]
+  dispose: () => Promise<void>
+}> {
+  const pkg = await readRuntimePackage(projectDir)
+  if (!pkg.scripts?.dev) {
+    throw new Error(`no_preview_start_script: ${projectDir} package.json must define scripts.dev for frontend runtime evaluation`)
+  }
+  const manager = packageManagerName(pkg)
+  if (!manager) {
+    throw new Error(`no_package_manager: ${projectDir} package.json must define packageManager for frontend runtime evaluation`)
+  }
+  const child = spawn(manager, ["run", "dev"], {
+    cwd: projectDir,
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  })
+  const evidence = [`managed_preview_command=${manager} run dev`]
+  try {
+    const url = await waitForManagedPreviewUrl(child)
+    evidence.push(`preview_url=${url}`)
+    return {
+      url,
+      evidence,
+      dispose: async () => {
+        await stopManagedPreview(child)
+      },
+    }
+  } catch (error) {
+    await stopManagedPreview(child)
+    throw error
+  }
+}
+
+async function waitForManagedPreviewUrl(child: ChildProcess): Promise<string> {
+  let output = ""
+  let candidateUrl: string | undefined
+  let candidateSeenAt = 0
+  let lastOutputAt = Date.now()
+  child.stdout?.on("data", (chunk) => {
+    lastOutputAt = Date.now()
+    output += Buffer.from(chunk).toString("utf8")
+    candidateUrl = candidateUrl ?? firstLoopbackUrl(output)
+    if (candidateUrl && candidateSeenAt === 0) candidateSeenAt = Date.now()
+  })
+  child.stderr?.on("data", (chunk) => {
+    lastOutputAt = Date.now()
+    output += Buffer.from(chunk).toString("utf8")
+    candidateUrl = candidateUrl ?? firstLoopbackUrl(output)
+    if (candidateUrl && candidateSeenAt === 0) candidateSeenAt = Date.now()
+  })
+
+  let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined
+  child.once("exit", (code, signal) => {
+    exited = { code, signal }
+  })
+
+  while (true) {
+    if (candidateUrl) {
+      if (await probeFrontendDocument(candidateUrl)) return candidateUrl
+      if (Date.now() - candidateSeenAt > PREVIEW_READY_TIMEOUT_MS) {
+        throw new Error(`preview_not_ready: ${candidateUrl} did not serve an HTML document before timeout`)
+      }
+    }
+    if (exited) {
+      throw new Error(`preview_process_exited: code=${exited.code ?? "null"} signal=${exited.signal ?? "null"}`)
+    }
+    if (!candidateUrl && Date.now() - lastOutputAt > PREVIEW_START_IDLE_TIMEOUT_MS) {
+      throw new Error("preview_start_idle_timeout: dev script did not print a loopback preview URL")
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+}
+
+function firstLoopbackUrl(output: string): string | undefined {
+  const matches = output.match(/https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|::1):\d+\/?/g) ?? []
+  return matches.find((url) => isLoopbackHttpUrl(url))
+}
+
+async function stopManagedPreview(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  if (process.platform === "win32" && child.pid) {
+    await new Promise<void>((resolve) => {
+      const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: ["ignore", "ignore", "ignore"],
+      })
+      killer.once("exit", () => resolve())
+      killer.once("error", () => resolve())
+    })
+    return
+  }
+  child.kill()
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, 2_000)
+    child.once("exit", () => {
+      clearTimeout(timer)
+      resolve()
+    })
+  })
+}
+
+async function readRuntimePackage(projectDir: string): Promise<{
+  scripts?: Record<string, string>
+  packageManager?: string
+}> {
+  const raw = await fs.readFile(path.join(projectDir, "package.json"), "utf8")
+  return JSON.parse(raw) as { scripts?: Record<string, string>; packageManager?: string }
+}
+
+function packageManagerName(pkg: { packageManager?: string }) {
+  const raw = pkg.packageManager?.trim()
+  if (!raw) return undefined
+  const manager = raw.split("@", 1)[0]
+  return /^[a-z0-9._-]+$/i.test(manager) ? manager : undefined
 }
 
 function buildCoverage(goals: Array<{

@@ -220,7 +220,30 @@ describe("delivery arbiter", () => {
       expect(verdict.status).toBe("failed")
     })
 
-    test("build/test/lint, runtime probes, and non-integrity reviews are advisory only", () => {
+    test("runtime flow failure is a primary blocker for frontend completion", () => {
+      const verdict = arbitrateDeliveryGate({
+        checks: {
+          status: "passed",
+          summary: "",
+          failedCheckIds: [],
+          failedCoverageIds: [],
+          failedRuntimeFlowIds: [],
+          failedReviewIds: [],
+        },
+        failedCoverageIds: [],
+        failedRuntimeFlowIds: ["runtime:web:."],
+        failedReviewIds: [],
+        functionalAssessment: {
+          status: "incomplete",
+          summary: "runtime failed",
+          primaryFailureIds: ["runtime:web:."],
+          auxiliaryFailureIds: [],
+        },
+      })
+      expect(verdict.status).toBe("failed")
+    })
+
+    test("build/test/lint and non-integrity reviews are advisory only", () => {
       const verdict = arbitrateDeliveryGate({
         checks: {
           status: "passed",
@@ -231,7 +254,7 @@ describe("delivery arbiter", () => {
           failedReviewIds: [],
         },
         failedCoverageIds: [],
-        failedRuntimeFlowIds: ["runtime:web:."],
+        failedRuntimeFlowIds: [],
         failedReviewIds: ["review:workspace_export", "specialist:frontend"],
         functionalAssessment: {
           status: "complete",
@@ -240,7 +263,6 @@ describe("delivery arbiter", () => {
           auxiliaryFailureIds: [
             "check:build",
             "check:test",
-            "runtime:web:.",
             "review:workspace_export",
             "specialist:frontend",
           ],

@@ -48,9 +48,8 @@ describe("delivery project evidence gate", () => {
     expect(manifest.checkResults.find((item) => item.name === "test")?.status).toBe("passed")
     expect(manifest.checkResults.find((item) => item.name === "lint")?.status).toBe("failed")
     expect(manifest.checkResults.find((item) => item.name === "lint")?.failureSignature?.checkId).toBe("lint#1")
-    // Lint (and other required programmatic checks) are advisory under the
-    // current model — only acceptance-spec coverage and `review:integrity`
-    // are blocking. The lint failure surfaces in failedCheckIds and
+    // Lint (and other required programmatic checks) is advisory under the
+    // current model. The lint failure surfaces in failedCheckIds and
     // auxiliaryFailureIds so the LLM agent can weigh it, but the gate
     // status itself is `passed`.
     expect(manifest.finalGate.status).toBe("passed")
@@ -103,9 +102,9 @@ describe("delivery project evidence gate", () => {
     const lint = manifest.checkResults.find((item) => item.name === "lint")
     expect(lint?.status).toBe("failed")
     expect(lint?.failureReason).toContain("Forbidden shell success coercion")
-    // Forbidden shell coercion is detected and surfaced as a failed check,
-    // but lint itself is advisory. Coverage / integrity stay clean here, so
-    // the gate is `passed` while failedCheckIds carries the diagnostic.
+    // Forbidden shell coercion is detected and surfaced as a failed check, but
+    // lint itself is advisory. Coverage / integrity stay clean here, so the
+    // gate is `passed` while failedCheckIds carries the diagnostic.
     expect(manifest.finalGate.status).toBe("passed")
     expect(manifest.finalGate.failedCheckIds).toContain("lint#1")
   })
@@ -368,7 +367,55 @@ console.log("lint scope ok", cwd())
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual([])
   })
 
-  test("attaches surface manifest and uses it for frontend runtime classification", async () => {
+  test("starts the frontend dev script and captures runtime flow evidence", async () => {
+    const dir = await packageFixture(
+      { dev: "bun scripts/dev-server.ts" },
+      {
+        dependencies: { react: "latest" },
+        files: {
+          "src/App.tsx": "export function App() { return <main>Calculator</main> }\n",
+          "scripts/dev-server.ts": `
+const rows = Array.from({ length: 80 }, (_, index) => "<li>Runtime calculator row " + index + ": keys, functions, history, display, and controls are visible.</li>").join("");
+const server = Bun.serve({
+  port: 0,
+  hostname: "127.0.0.1",
+  fetch() {
+    return new Response("<!doctype html><html><body><main><h1>Scientific Calculator</h1><ol>" + rows + "</ol></main></body></html>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  },
+});
+console.log("Local: http://127.0.0.1:" + server.port + "/");
+await new Promise(() => {});
+`,
+        },
+      },
+    )
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_runtime_managed_preview",
+        runID: "run_runtime_managed_preview",
+        deliveryID: "dlv_runtime_managed_preview",
+        changedFiles: ["src/App.tsx"],
+      }),
+    })
+
+    expect(manifest.surfaceManifest?.surfaces).toContain("frontend")
+    expect(manifest.surfaceManifest?.surfaces).toContain("visual_runtime")
+    expect(manifest.runtimeFlows).toMatchObject([{
+      id: "runtime:web:.",
+      name: "Web Runtime Render",
+      status: "passed",
+    }])
+    expect(manifest.runtimeFlows[0]?.evidence.join("\n")).toContain("managed_preview_command=bun run dev")
+    expect(manifest.runtimeFlows[0]?.previewUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//)
+    expect(manifest.finalGate.failedRuntimeFlowIds).toEqual([])
+    expect(manifest.finalGate.status).toBe("passed")
+  }, 60_000)
+
+  test("attaches surface manifest and fails frontend runtime classification when no dev script exists", async () => {
     const dir = await packageFixture(
       { build: "bun -e \"process.exit(1)\"" },
       {
@@ -395,8 +442,9 @@ console.log("lint scope ok", cwd())
       name: "Web Runtime Render",
       status: "failed",
     }])
-    expect(manifest.runtimeFlows[0]?.evidence[0]).toContain("no_live_preview")
+    expect(manifest.runtimeFlows[0]?.evidence[0]).toContain("no_preview_start_script")
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual(["runtime:web:."])
+    expect(manifest.finalGate.status).toBe("failed")
   })
 
   test("runs security data review for security-sensitive files and blocks concrete flaws", async () => {
@@ -427,9 +475,9 @@ console.log("lint scope ok", cwd())
       claim: expect.stringContaining("hardcoded secret-like value"),
     })
     expect(manifest.finalGate.failedReviewIds).toContain("specialist:security_data")
-    // Specialist reviews are advisory under the current model. The host
-    // gate stays `passed`; the security_data finding surfaces in
-    // failedReviewIds + auxiliaryFailureIds for the LLM agent to weigh.
+    // Specialist reviews are advisory under the current model. The host gate
+    // stays `passed`; the security_data finding surfaces in failedReviewIds
+    // + auxiliaryFailureIds for the LLM agent to weigh.
     expect(manifest.functionalAssessment?.primaryFailureIds).not.toContain("specialist:security_data")
     expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("specialist:security_data")
     expect(manifest.finalGate.status).toBe("passed")
