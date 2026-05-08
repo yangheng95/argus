@@ -32,24 +32,19 @@ export type WorkspaceMode = "offline" | "task" | "empty";
 export interface ProjectEditor {
   id: ProjectEditorID;
   label: string;
-  shortLabel: string;
 }
 
 // IDE means Integrated Development Environment; these IDs are the public
 // choices surfaced by the workspace UI and handled by the native host.
 export const PROJECT_EDITORS: ProjectEditor[] = [
-  { id: "vscode", label: "VS Code", shortLabel: "VS" },
-  { id: "pycharm", label: "PyCharm", shortLabel: "Py" },
-  { id: "webstorm", label: "WebStorm", shortLabel: "WS" },
-  { id: "intellij", label: "IntelliJ IDEA", shortLabel: "IJ" },
-  { id: "cursor", label: "Cursor", shortLabel: "Cu" },
+  { id: "vscode", label: "VS Code" },
+  { id: "pycharm", label: "PyCharm" },
+  { id: "webstorm", label: "WebStorm" },
+  { id: "intellij", label: "IntelliJ IDEA" },
+  { id: "cursor", label: "Cursor" },
 ];
 
 export const QUICK_PROJECT_EDITORS: ProjectEditor[] = PROJECT_EDITORS.slice(0, 2);
-
-export function isProjectEditorID(value: string): value is ProjectEditorID {
-  return PROJECT_EDITORS.some((item) => item.id === value);
-}
 
 export interface ClearWorkspaceRuntimeOptions {
   /** When true, the in-flight chat request is NOT cancelled. */

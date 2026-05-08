@@ -12,6 +12,7 @@ import { TaskStatusHeader } from "./components/TaskStatusHeader";
 import { TaskDirContent, TaskWorkspaceLine } from "./components/TaskDirBar";
 import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
+import { WorkspaceEditorLaunchers } from "./components/WorkspaceEditorLaunchers";
 import { WorkspaceLayoutControls } from "./components/WorkspaceLayoutControls";
 import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/TitlebarMenubar";
 import { ConnectionBadge } from "./components/ConnectionBadge";
@@ -76,9 +77,7 @@ import {
   applyDirectory,
   browseDirectory,
   createDirectory,
-  isProjectEditorID,
   openDirectory,
-  openDirectoryInEditor,
   setDirectory,
   activeDirectory,
   loadRecentDirectories,
@@ -749,6 +748,11 @@ if (workspaceLayoutControlsEl) {
   );
 }
 
+const workspaceEditorLaunchersEl = document.getElementById("solidWorkspaceEditorLaunchers");
+if (workspaceEditorLaunchersEl) {
+  render(() => <WorkspaceEditorLaunchers />, workspaceEditorLaunchersEl);
+}
+
 const titlebarStatusEl = document.getElementById("solidTitlebarStatus");
 if (titlebarStatusEl) {
   render(() => <TitlebarStatusCluster onOpenLog={() => setLogOpen(true)} />, titlebarStatusEl);
@@ -1342,7 +1346,7 @@ function closeRecentDirPanel(): void {
 document.getElementById("taskCwdDropdown")?.addEventListener("click", (event) => {
   const target = event.target as HTMLElement | null;
   if (!target) return;
-  if (target.closest("[data-path-action],[data-path-open],[data-path-set],[data-path-editor]")) return;
+  if (target.closest("[data-path-action],[data-path-open],[data-path-set]")) return;
   event.stopPropagation();
   openRecentDirPanel();
 });
@@ -1350,23 +1354,19 @@ document.getElementById("taskCwdDropdown")?.addEventListener("keydown", (event) 
   const e = event as KeyboardEvent;
   if (e.key !== "Enter" && e.key !== " ") return;
   const target = event.target as HTMLElement | null;
-  if (target && target.closest("[data-path-action],[data-path-open],[data-path-set],[data-path-editor]")) return;
+  if (target && target.closest("[data-path-action],[data-path-open],[data-path-set]")) return;
   e.preventDefault();
   openRecentDirPanel();
 });
 
 document.getElementById("taskDir")?.addEventListener("click", async (event) => {
-  const button = eventClosest(event, "[data-path-action],[data-path-open],[data-path-set],[data-path-editor]");
+  const button = eventClosest(event, "[data-path-action],[data-path-open],[data-path-set]");
   if (!button || (button as HTMLButtonElement).disabled) return;
   const el = button as HTMLElement;
   const action = el.dataset.pathAction || "";
   if (action === "browse") { await browseDirectory(); return; }
   if (action === "create") { await createDirectory(); return; }
   if (el.dataset.pathOpen) { await openDirectory(el.dataset.pathOpen); return; }
-  if (el.dataset.pathEditor && isProjectEditorID(el.dataset.pathEditor)) {
-    await openDirectoryInEditor(el.dataset.pathEditor);
-    return;
-  }
   const target = el.dataset.pathSet || "";
   if (!target) return;
   try { await setDirectory(target); } catch (e) {

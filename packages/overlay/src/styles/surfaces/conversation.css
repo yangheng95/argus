@@ -511,6 +511,37 @@
   min-width: 0;
 }
 
+.workspace-command-dock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(6px * var(--ui-scale));
+  margin-left: auto;
+  padding-left: var(--ui-gap-sm);
+  border-left: var(--oc-border-width) solid var(--border);
+  flex-shrink: 0;
+  min-width: max-content;
+}
+
+.workspace-command-divider {
+  width: var(--oc-border-width);
+  height: calc(20px * var(--ui-scale));
+  background: var(--border);
+  opacity: var(--ui-opacity-subtle);
+}
+
+.workspace-editor-launchers {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--oc-control-border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--oc-control-bg);
+  box-shadow: var(--oc-control-shadow);
+  flex-shrink: 0;
+}
+
 .workspace-layout-controls {
   display: inline-flex;
   align-items: center;
@@ -523,6 +554,7 @@
   flex-shrink: 0;
 }
 
+.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"],
 .workspace-layout-controls .oc-button[data-size="icon"] {
   --oc-button-height: calc(28px * var(--ui-scale));
   --oc-button-padding-x: 0;
@@ -533,6 +565,30 @@
   width: calc(28px * var(--ui-scale));
   height: calc(28px * var(--ui-scale));
   box-shadow: none;
+}
+
+.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"] {
+  --oc-button-color: var(--workspace-editor-color, var(--text-soft));
+}
+
+.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"][data-editor="vscode"] {
+  --workspace-editor-color: var(--accent);
+}
+
+.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"][data-editor="pycharm"] {
+  --workspace-editor-color: var(--good);
+}
+
+.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"][data-editor="webstorm"] {
+  --workspace-editor-color: var(--accent-start);
+}
+
+.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"][data-editor="intellij"] {
+  --workspace-editor-color: var(--accent-end);
+}
+
+.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"][data-editor="cursor"] {
+  --workspace-editor-color: var(--text-strong);
 }
 
 .workspace-layout-controls .oc-button[aria-pressed="true"] {
@@ -711,20 +767,6 @@
 .task-dir-tool:hover {
   background: var(--subtle-3);
   color: var(--text-strong);
-}
-
-.task-dir-editor {
-  font-size: calc(10px * var(--ui-scale));
-  font-weight: var(--ui-font-weight-strong);
-  letter-spacing: var(--ui-letter-spacing-normal);
-}
-
-.task-dir-tool-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: calc(14px * var(--ui-scale));
-  line-height: 1;
 }
 
 /* The "danger" affordance on the delete tool tints with --bad.

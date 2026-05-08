@@ -30,6 +30,11 @@ export type IconName =
   | "panel-left"
   | "panel-right"
   | "terminal"
+  | "editor-vscode"
+  | "editor-pycharm"
+  | "editor-webstorm"
+  | "editor-intellij"
+  | "editor-cursor"
   // Empty-state / cwd
   | "folder"
   | "folder-open"
@@ -145,6 +150,58 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
         <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
         <path d="M5 6.2 7 8 5 9.8" />
         <line x1="8.2" y1="10" x2="11" y2="10" />
+      </>
+    ),
+  },
+  "editor-vscode": {
+    body: () => (
+      <path
+        d="M12.6 2.4 6.6 7 3.9 4.9 2.5 6.1 4.9 8 2.5 9.9 3.9 11.1 6.6 9 12.6 13.6 14 12.9V3.1Z"
+        fill="currentColor"
+        stroke="none"
+      />
+    ),
+  },
+  "editor-pycharm": {
+    body: () => (
+      <>
+        <path
+          d="M3 4.1 7.1 2.4 13 3.6v8.8l-5.9 1.2L3 11.9Z"
+          fill="currentColor"
+          stroke="none"
+        />
+        <rect x="5.1" y="5.2" width="5.8" height="5.8" rx="0.5" fill="var(--task-bar-bg)" stroke="none" />
+        <path d="M6.4 9.6h3.2" />
+      </>
+    ),
+  },
+  "editor-webstorm": {
+    body: () => (
+      <>
+        <path
+          d="M3.1 4 8.2 2.4 13 4.4l-.8 8.1-5.7 1.1L3 10.9Z"
+          fill="currentColor"
+          stroke="none"
+        />
+        <rect x="5" y="5" width="6" height="6" rx="0.6" fill="var(--task-bar-bg)" stroke="none" />
+        <path d="M6.3 8.4 7 6.7l1 1.7 1-1.7.8 1.7" />
+      </>
+    ),
+  },
+  "editor-intellij": {
+    body: () => (
+      <>
+        <path d="M2.8 3.8 7.6 2.3l5.6 2.2v7.7l-5.6 1.5-4.8-2.2Z" fill="currentColor" stroke="none" />
+        <rect x="5" y="5.1" width="6" height="5.8" rx="0.6" fill="var(--task-bar-bg)" stroke="none" />
+        <path d="M6.5 9.5h3" />
+      </>
+    ),
+  },
+  "editor-cursor": {
+    body: () => (
+      <>
+        <path d="M3 2.6 13 8 8.2 9.1 6.6 13.4Z" fill="currentColor" stroke="none" />
+        <path d="M6.4 5.7 9.7 7.6 7.8 8 7 10.1Z" fill="var(--task-bar-bg)" stroke="none" />
       </>
     ),
   },

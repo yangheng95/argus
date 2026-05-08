@@ -44,7 +44,7 @@ test("openDirectoryInEditor routes the selected project editor through HostTrans
   ])
 })
 
-test("cwd breadcrumb exposes quick project editor actions", () => {
+test("cwd breadcrumb keeps editor launchers out of the directory control", () => {
   setLocaleData("en-US", {
     "cwd.browse": "Browse",
     "cwd.new": "New",
@@ -55,8 +55,9 @@ test("cwd breadcrumb exposes quick project editor actions", () => {
 
   const html = pathBreadcrumb("D:/workspace/app")
 
-  expect(html).toContain('data-path-editor="vscode"')
-  expect(html).toContain('data-path-editor="pycharm"')
-  expect(html).toContain("Open in VS Code")
-  expect(html).toContain("Open in PyCharm")
+  expect(html).not.toContain("data-path-editor")
+  expect(html).not.toContain("Open in VS Code")
+  expect(html).not.toContain("Open in PyCharm")
+  expect(html).not.toContain(">VS<")
+  expect(html).not.toContain(">Py<")
 })

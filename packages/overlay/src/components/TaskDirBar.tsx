@@ -10,7 +10,8 @@
 // so we render two independent Solid components mounted into the original
 // slots — preserving the layout + the document-level event delegation that
 // reads `data-path-action` / `data-path-set` / `data-path-open` from the
-// breadcrumb buttons.
+// breadcrumb buttons. IDE launchers live in WorkspaceEditorLaunchers so the
+// directory control does not own editor shortcuts.
 //
 // pathBreadcrumb() still returns an HTML string (its buttons are clicked
 // via document-level delegation in main.tsx); innerHTML on a Solid element

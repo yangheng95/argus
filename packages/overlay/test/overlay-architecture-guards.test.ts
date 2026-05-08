@@ -731,8 +731,6 @@ describe("overlay architecture guards", () => {
       "task-dir-node",
       "task-dir-step",
       "task-dir-empty",
-      "task-dir-editor",
-      "task-dir-tool-label",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -761,6 +759,10 @@ describe("overlay architecture guards", () => {
       "task-status",
       "status-label",
       "task-flag",
+      "workspace-command-dock",
+      "workspace-command-divider",
+      "workspace-editor-launchers",
+      "workspace-layout-controls",
       "recent-dir-panel",
       "recent-dir-row",
       "recent-dir-label",

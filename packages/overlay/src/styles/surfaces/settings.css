@@ -1281,7 +1281,7 @@
 
 /* ── About panel (settings tab) ──────────────────────────── */
 
-.config-tab-panel > .config-section-body.about-body {
+.about-body {
   gap: calc(20px * var(--ui-scale));
 }
 
