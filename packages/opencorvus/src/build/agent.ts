@@ -160,9 +160,10 @@ export namespace BuildAgent {
     /** Pre-formatted multimodal file parts produced by upstream evidence —
      *  typically the previous attempt's rendered.png from delivery's visual
      *  hard gate so the build LLM can see what it actually produced versus
-     *  the user reference. Each entry's `url` MUST already be a data URL or
-     *  resolvable; the build agent splices these directly into the user
-     *  message after `task.attachments`. */
+     *  the user reference. Each entry's `url` MUST be the canonical
+     *  `/attachment/<projectID>/<name>` URL; AttachmentStore is the single
+     *  source that reads bytes and splices them into the user message after
+     *  `task.attachments`. */
     retryAttachments?: Array<{ url: string; mime: string; filename?: string }>
   }
 

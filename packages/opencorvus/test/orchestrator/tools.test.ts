@@ -12,6 +12,7 @@ import { goalStatusByID } from "../../src/engine/describe"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
 import { beginBuildAttempt, insertRequirements, recordIntegrityAttempt, startNewAttempt, updateGoalRun } from "../../src/engine/persist"
+import { AttachmentStore } from "../../src/storage/attachment-store"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { findActivePlanForTask, findActiveSpecForTask, findGoal, findGoalLatestWorkspace, findLatestIntegrityAttemptArtifact, findRequirements, listGoalRunsByGoal } from "../../src/engine/store"
@@ -2493,6 +2494,124 @@ describe("orchestrator tools", () => {
         expect(await Filesystem.exists(tmp.path)).toBe(true)
         expect(findGoalLatestWorkspace(goalID).directory).toBe(tmp.path)
         expect(listGoalRunsByGoal(goalID)[0]?.workspace_dir).toBe(tmp.path)
+      },
+    })
+  })
+
+  test("goal build retry forwards previous rendered screenshot through attachment store URL", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_retry_render_${stamp}`
+    const taskID = `tsk_retry_render_${stamp}`
+    const goalID = `goal_retry_render_${stamp}`
+    let capturedContext: any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "retry rendered attachment test" })
+        insertWorkflowTaskWithGoal({
+          projectID,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Retry rendered attachment test",
+          taskTitle: "Retry rendered attachment task",
+          request: "Build a visual UI and retry from delivery feedback",
+          goalTitle: "Visual goal",
+          goalSlug: "visual-goal",
+          objective: "Verify retry screenshots keep canonical attachment URLs",
+          now,
+        })
+
+        const rendered = await AttachmentStore.write(
+          projectID,
+          Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+          "image/png",
+          "rendered.png",
+        )
+        Database.use((db) => {
+          db.update(EngineTaskTable)
+            .set({
+              system_artifacts: [{
+                ...rendered,
+                filename: rendered.filename,
+                intent: "rendered_output",
+                source: "runtime_capture",
+              }],
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run()
+        })
+        createDecisionLog(taskID).append({
+          phase: "retry",
+          goalID,
+          key: "delivery_rejection",
+          value: "Previous rendered page missed the reference layout.",
+          reason: "Delivery rejected visual fidelity.",
+        })
+        for (const key of [
+          "product_spec",
+          "frontend_spec",
+          "visual_consistency_spec",
+          "backend_spec",
+          "prd_iteration_notes",
+          "completeness_review",
+          "evidence_source_manifest",
+        ]) {
+          createDecisionLog(taskID).append({
+            phase: "design_analysis",
+            key,
+            value: `${key} complete for retry attachment regression.`,
+            reason: "Visual build gate requires complete design-analysis PRD/SPEC first.",
+          })
+        }
+
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input)
+          capturedContext = input.context
+          return {
+            result: {
+              status: "passed",
+              summary: "Goal built after retry screenshot",
+              files_changed: [{
+                path: "src/index.ts",
+                summary: "Updated visual implementation.",
+                reason: "Required by the mocked retry build.",
+              }],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_retry_render",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute({
+          goalID,
+          request: "Apply delivery visual feedback",
+          reason: "Retry after delivery rejection.",
+        }, {} as any)
+
+        expect(result).toContain("status=passed")
+        expect(capturedContext?.retryAttachments).toHaveLength(1)
+        const retryAttachment = capturedContext.retryAttachments[0]
+        expect(retryAttachment.url).toBe(rendered.url)
+        expect(retryAttachment.url).toStartWith(`/attachment/${projectID}/`)
+        await expect(AttachmentStore.inlineFileParts([retryAttachment])).resolves.toHaveLength(1)
       },
     })
   })
