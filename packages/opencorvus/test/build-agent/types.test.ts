@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BuildResultSchema, BuildTarget } from "../../src/build/types"
+import { BuildResultSchema, BuildTarget, formatBuildResultSchemaError } from "../../src/build/types"
 
 describe("BuildResultSchema", () => {
   test("accepts a passed result with commit ref and test evidence", () => {
@@ -98,6 +98,21 @@ describe("BuildResultSchema", () => {
       error: "should not exist on passed branch",
     })
     expect(parsed.success).toBe(false)
+  })
+
+  test("explains passed plus error as a mutually exclusive terminal shape", () => {
+    const parsed = BuildResultSchema.safeParse({
+      status: "passed",
+      summary: "functional tests passed but visual score is below threshold",
+      files_changed: [{ path: "mirror/eval-result.json", summary: "Recorded visual score", reason: "Visual evidence" }],
+      error: "SSIM 85/100 is below the 95+ threshold",
+    })
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      const message = formatBuildResultSchemaError(parsed.error)
+      expect(message).toContain("status='passed' cannot include error")
+      expect(message).toContain("status='failed'")
+    }
   })
 
   test("accepts passed result with empty files_changed (B1: 0-edit reuse legal)", () => {

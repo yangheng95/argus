@@ -6,7 +6,7 @@ import {
   EngineGoalTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
-import { beginBuildAttempt, startNewAttempt, updateGoalWorkspace } from "../../src/engine/persist"
+import { beginBuildAttempt, finalizeBuildAttempt, startNewAttempt, updateGoalWorkspace } from "../../src/engine/persist"
 import { goalStatusByID } from "../../src/engine/describe"
 import { findGoalLatestWorkspace, findGoalRun, getGoalRetryCount } from "../../src/engine/store"
 import { resetDatabase } from "../fixture/db"
@@ -314,5 +314,33 @@ describe("Goal.startNewAttempt — options", () => {
     expect(getGoalRetryCount(goalID)).toBe(1)
     expect(findGoalRun(gr)?.superseded_reason).toBe("build_retry")
     expect(findGoalRun(nextRunID)?.retry_count).toBe(1)
+  })
+
+  test("finalizeBuildAttempt preserves workspace branch when failed finalize omits it", () => {
+    const nextRunID = beginBuildAttempt({
+      taskID,
+      goalID,
+      runID,
+      workspaceDir: "C:/tmp/ws-preserve",
+      workspaceBranch: "opencorvus/ws-preserve",
+      workspaceBaseRef: "abc123",
+    })
+
+    finalizeBuildAttempt({
+      goalRunID: nextRunID,
+      taskID,
+      goalID,
+      runID,
+      status: "failed",
+      workspaceDir: "C:/tmp/ws-preserve",
+      error: "BuildResultSchema rejected passed result with error",
+      summary: "BuildAgent.run threw before producing a verdict",
+    })
+
+    const row = findGoalRun(nextRunID)
+    expect(row?.status).toBe("failed")
+    expect(row?.workspace_dir).toBe("C:/tmp/ws-preserve")
+    expect(row?.workspace_branch).toBe("opencorvus/ws-preserve")
+    expect(row?.workspace_base_ref).toBe("abc123")
   })
 })

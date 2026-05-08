@@ -5204,6 +5204,8 @@ export function createOrchestratorTools(input: {
                   runID: coordinatorRunID,
                   status: "failed",
                   workspaceDir: managedWorktree?.directory,
+                  workspaceBranch: managedWorktree?.branch,
+                  workspaceBaseRef: managedWorktree?.baseRef ?? undefined,
                   error: errMsg,
                   summary: `BuildAgent.run threw before producing a verdict: ${errMsg.slice(0, 240)}`,
                 })
