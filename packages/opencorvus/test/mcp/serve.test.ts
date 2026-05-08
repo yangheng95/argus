@@ -88,7 +88,7 @@ describe("mcp.serve", () => {
     expect(MCPServe.normalizeCodingExecutorToolName("mcp__opencorvus__webpage_compile")).toBe("webpage_compile")
     const prompt = MCPServe.codingExecutorPromptSection()
     expect(prompt).toContain("webpage_extract => mcp__opencorvus__webpage_extract")
-    expect(prompt).toContain("Mirror extraction artifacts must come from the mirror MCP toolchain")
+    expect(prompt).toContain("Mirror extraction artifacts and generated source must come from the mirror MCP toolchain")
   })
 
   test("includes proxied external MCP tools in definitions", async () => {

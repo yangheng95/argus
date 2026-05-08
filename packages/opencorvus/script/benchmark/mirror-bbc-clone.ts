@@ -13,13 +13,13 @@
  *   5. hand scaffold to build agent (SessionPrompt.prompt, model kimi-k2.5)
  *   6. render the output           (mirror/visual/render)
  *   7. score vs reference          (mirror/visual/evaluate)
- *   8. loop with diff feedback until score ≥ 95 or budget exhausted
+ *   8. loop with diff feedback until score ≥ 85 or budget exhausted
  *
  * Model: `alibaba-coding-plan-cn/kimi-k2.5` (override via `BENCHMARK_MODEL` env).
  *
  * Usage:
  *   bun script/benchmark/mirror-bbc-clone.ts \
- *     [--output-dir=<path>] [--max-iterations=5] [--target-score=95] \
+ *     [--output-dir=<path>] [--max-iterations=5] [--target-score=85] \
  *     [--reference-url=https://www.bbc.com/] [--viewport=1440x900]
  */
 
@@ -35,7 +35,7 @@ import { compilePageToXML } from "../../src/mirror/url/compile"
 import { analyzePage, generateTokensFile, generateAppFile, buildSharedContext } from "../../src/mirror/url/pattern"
 import { buildClonePrompt, buildCloneFeedback } from "../../src/mirror/url/prompt"
 import { renderFiles } from "../../src/mirror/visual/render"
-import { evaluateVisual } from "../../src/mirror/visual/evaluate"
+import { WEBPAGE_EVALUATE_PASS_SCORE, evaluateVisual } from "../../src/mirror/visual/evaluate"
 import { compareText, extractTextFromTree } from "../../src/mirror/shared/content-compare"
 import type { ExtractedPage, ExtractedElement } from "../../src/mirror/ir/extracted-page"
 import type { ProjectScaffold } from "../../src/mirror/ir/scaffold"
@@ -61,7 +61,7 @@ function flag(name: string, fallback?: string): string | undefined {
 }
 
 const REFERENCE_URL = flag("--reference-url", "https://www.bbc.com/") ?? "https://www.bbc.com/"
-const TARGET_SCORE = Number(flag("--target-score", "95"))
+const TARGET_SCORE = Number(flag("--target-score", String(WEBPAGE_EVALUATE_PASS_SCORE)))
 const MAX_ITERATIONS = Number(flag("--max-iterations", "5"))
 const ITERATION_TIMEOUT_MS = Number(flag("--iteration-timeout-ms", String(40 * 60 * 1000)))
 const VIEWPORT = (() => {

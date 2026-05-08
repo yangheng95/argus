@@ -1153,7 +1153,7 @@ export const Event = {
       failedRuntimeFlowCount: z.number(),
       failedReviewCount: z.number(),
       failureDetails: z.array(z.object({
-        kind: z.enum(["check", "coverage", "runtime", "review"]),
+        kind: z.enum(["readiness", "check", "coverage", "runtime", "review"]),
         id: z.string(),
         name: z.string(),
         status: z.string().optional(),

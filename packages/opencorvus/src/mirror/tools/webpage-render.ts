@@ -17,7 +17,7 @@ import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 export const WebpageRenderTool = Tool.define("webpage_render", {
   description: `Render an explicit webpage URL in a visible browser and write a PNG screenshot.
 
-Returns the screenshot path + render time. Use as step 5 of the webpage-generate workflow. Follow with \`webpage_vision_judge\`; \`webpage_evaluate\` is diagnostic only.`,
+Returns the screenshot path + render time. Use as step 5 of the webpage-generate workflow. Follow with \`webpage_evaluate\` for the 85/100 numeric threshold and \`webpage_vision_judge\` for qualitative differences.`,
   parameters: z.object({
     url: z
       .string()
@@ -84,7 +84,7 @@ Returns the screenshot path + render time. Use as step 5 of the webpage-generate
           ? `- Console errors (${render.consoleErrors.length}): ${render.consoleErrors.slice(0, 3).join(" | ")}`
           : "",
         "",
-        "Next: call `webpage_vision_judge` with `rendered` pointing at the screenshot above. Use `webpage_evaluate` only as a diagnostic signal.",
+        "Next: call `webpage_evaluate` with `rendered` pointing at the screenshot above, then call `webpage_vision_judge` for qualitative differences.",
       ].filter(Boolean).join("\n"),
       metadata: {
         renderedPath: pngPath,

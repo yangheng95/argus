@@ -25,6 +25,10 @@ inspiration, do not silently simplify them into a new design, and do not ignore
 referenced assets. If the reference is missing, unreadable, or conflicts with
 the written contract, fail loudly through `report_build_result` with the exact
 blocker.
+For webpage replica numeric visual evaluation, the configured threshold is
+`webpage_evaluate.overallScore >= 85` (`passed: true`). Do not invent a higher
+target. If the score is at least 85 and other required qualitative
+visual checks pass, do not put the score in `error`.
 
 ## What you do
 

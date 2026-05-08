@@ -105,7 +105,7 @@ describe("BuildResultSchema", () => {
       status: "passed",
       summary: "functional tests passed but visual score is below threshold",
       files_changed: [{ path: "mirror/eval-result.json", summary: "Recorded visual score", reason: "Visual evidence" }],
-      error: "SSIM 85/100 is below the 95+ threshold",
+      error: "Visual score 84/100 is below the 85 threshold",
     })
     expect(parsed.success).toBe(false)
     if (!parsed.success) {

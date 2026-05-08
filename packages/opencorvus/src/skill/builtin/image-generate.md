@@ -115,13 +115,13 @@ Call `webpage_vision_judge`. Single-shot vision-LLM comparison of `mirror/refere
 - `accepted: true|false` — the acceptance signal
 - `differences[]` — ranked list with `severity` + `region` + `observed` + `expected` + concrete `fix_hint`
 
-### 7b. SSIM score (diagnostic signal)
+### 7b. SSIM score (numeric acceptance gate)
 
-Call `webpage_evaluate reference=reference.png rendered=rendered.png` (both inside `mirror/`). Returns 0–100 score.
+Call `webpage_evaluate reference=reference.png rendered=rendered.png` (both inside `mirror/`). Returns 0–100 score, `passThreshold: 85`, and `passed`.
 
 ## Step 8 — Iterate
 
-**Target:** `webpage_vision_judge.accepted = true`. `webpage_evaluate` is diagnostic only; do not turn its score into a separate acceptance source.
+**Target:** `webpage_evaluate.passed = true` (`overallScore >= 85`) and `webpage_vision_judge.accepted = true`.
 
 **Stagnation guard (HARD STOP):** if **3 consecutive iterations** repeat the same blocking vision-judge differences, STOP and report those differences. Vision extraction is inherently lossy; some gaps are unrecoverable without the original DOM or missing assets.
 
@@ -136,7 +136,7 @@ For each round (up to **8**, count explicitly):
    - Preserve every element + rule that already renders correctly.
 3. Re-run `webpage_render url=<explicit URL>`.
 4. Re-run `webpage_vision_judge` AND `webpage_evaluate`.
-5. **Decide:** vision accepted → done; repeated blocking differences → handoff; 8 rounds → handoff; else loop.
+5. **Decide:** evaluate passed and vision accepted → done; repeated blocking differences → handoff; 8 rounds → handoff; else loop.
 
 ## Cross-goal artifact sharing — DO NOT delete `mirror/`
 
@@ -149,7 +149,7 @@ You MUST NOT mark the goal `passed` until you have:
 1. Run `webpage_render url=<explicit URL>` and produced `mirror/rendered.png` for the CURRENT deliverable (re-run after every edit pass — a stale render does NOT count).
 2. Run `webpage_vision_judge` and confirmed `mirror/vision-judge.json` reports `accepted: true`.
 3. Read `mirror/rendered.png` and visually compared it against `mirror/reference.png`.
-4. Run `webpage_evaluate` and recorded the score.
+4. Run `webpage_evaluate`, recorded the score, and confirmed `passed: true` against the 85/100 numeric threshold.
 
 The render screenshot is THE source of truth for "does this look like the reference". Structural / text-presence checks are sanity gates, never substitutes for inspecting the rendered image.
 
@@ -159,6 +159,6 @@ The render screenshot is THE source of truth for "does this look like the refere
 - `webpage_image_compile` produced `mirror/page-ir.xml`
 - All canonical text from the analysis present verbatim in the deliverable
 - `mirror/rendered.png` exists, was visually inspected, and matches the reference
-- `webpage_vision_judge.accepted = true`
+- `webpage_evaluate.passed = true` against the 85/100 numeric threshold and `webpage_vision_judge.accepted = true`
 
 Report the final score and `vision_judge` verdict in your goal_report. List any remaining structural gaps the vision extraction could not recover.
