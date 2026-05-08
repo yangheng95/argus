@@ -215,7 +215,28 @@ export function architectValidationIssues(
     }),
   )
 
+  if (input?.requireReferenceCoverage) {
+    const visualAcceptanceOwners = collector.goals.filter((goal) =>
+      goal.priority === "blocking" &&
+      (goal.kind === "verification" || goal.kind === "integration") &&
+      goal.acceptance_specs.some(isEssentialDeliveryJudgeSpec),
+    )
+    if (visualAcceptanceOwners.length === 0) {
+      issues.push(
+        "Missing essential delivery visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_delivery llm_judge acceptance spec for final rendered-vs-reference fidelity.",
+      )
+    }
+  }
+
   return issues
+}
+
+function isEssentialDeliveryJudgeSpec(spec: AcceptanceSpec): boolean {
+  return (
+    spec.severity === "essential" &&
+    spec.trigger === "on_delivery" &&
+    spec.scorers.some((scorer) => scorer.type === "llm_judge")
+  )
 }
 
 export function isArchitectReadyToFinalize(
