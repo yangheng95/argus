@@ -30,14 +30,13 @@ Design-analysis output must include two layers:
 
 1. `task.design_specs`: compact, delivery-checkable visual rows with stable `vis-*` ids.
 2. Decision-log PRD/SPEC entries:
-   - `reference_artifacts`: mirror paths, source URL, viewport, capture status, confidence.
-   - `page_inventory`: sections, visible text, assets, tables/charts, forms, menus, dialogs, empty/error/loading states.
-   - `layout_spec`: desktop/mobile dimensions, hierarchy, spacing, typography, color tokens, responsive rules.
-   - `component_spec`: each component's visual role, states, data needs, interactions, and owning UI region.
-   - `frontend_spec`: routes, client state, component tree, asset usage, chart/table behavior, interaction flows.
+   - `product_spec`: page purpose, inventory, visible text, assets, tables/charts, forms, menus, dialogs, empty/error/loading states, and acceptance criteria.
+   - `frontend_spec`: desktop/mobile dimensions, hierarchy, spacing, typography, color tokens, component tree, routes, client state, asset usage, chart/table behavior, responsive rules, and interaction flows.
    - `backend_spec`: required API routes, request/response shapes, mock data, latency/error cases, persistence expectations. This must be inferred from observed UI behavior and page code artifacts, not invented.
    - `prd_iteration_notes`: at least two review passes proving inventory coverage and downstream implementability were checked and corrected before handoff.
    - `completeness_review`: final audit stating the PRD/SPEC is complete enough for downstream implementation and what remains unknown.
+   - `evidence_source_manifest`: the source manifest for all downstream agents, including PRD/SPEC decision-log location, `task.design_specs`, live URLs, Figma URLs, local material paths, user attachments, design-analysis materialized images/files, and mirror artifact names that can be read.
+   - `reference_artifacts`: mirror paths, source URL, viewport, capture status, confidence, and source file/image names referenced by the manifest.
    - `open_questions`: only truly unobservable facts; do not use this as a fallback for facts mirror already exposes.
 
 ## Non-Goals
@@ -59,6 +58,7 @@ Design-analysis output must include two layers:
    - require backend/API contract inference from observable behavior only.
 4. Extend `DesignFinalSchema` with PRD/SPEC fields. Keep visual rows in `task.design_specs`, and persist longer PRD/SPEC text into decision log entries so downstream agents receive it through existing context plumbing.
 4a. Require at least two PRD/SPEC review passes before StructuredOutput and persist `prd_iteration_notes` plus `completeness_review`.
+4b. Persist `evidence_source_manifest` from the orchestrator, not the LLM alone, so downstream agents know the exact PRD/SPEC source plus readable files/images/artifacts.
 5. Update `orchestrator/tools.ts` design_analysis descriptions and success result to reflect PRD/SPEC output, not only visual checklist counts.
 6. Remove mirror prompt sections from requirements, architect, and integrity. They should read design-analysis summaries and visual specs only.
 7. Replace build-stage mirror skills with design-analysis-stage spec skills or disable their build auto-detection. Build must not declare `webpage_*` / `figma_*` as required tools.
@@ -69,6 +69,7 @@ Design-analysis output must include two layers:
    - build webpage URL skill no longer injects mirror required tools;
    - design-analysis final schema requires PRD/SPEC fields;
    - visual/reference tasks block downstream orchestrator tools until design-analysis handoff exists;
+   - build prompts surface design-analysis PRD/SPEC source and `evidence_source_manifest`;
    - prompt hygiene confirms design-analysis is the only mirror owner.
 10. Run targeted tests, then run the AMD benchmark. If the benchmark fails, debug the failure against completion quality, not against the old build-stage mirror workflow.
 

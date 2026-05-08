@@ -286,6 +286,7 @@ describe("orchestrator tools", () => {
         const requirementsResult = await tools.requirements.execute({ reason: "Need requirements" }, {} as any)
         expect(requirementsResult).toContain("blocked")
         expect(requirementsResult).toContain("design_analysis")
+        expect(requirementsResult).toContain("evidence_source_manifest")
         expect(findActiveSpecForTask(taskID)).toBeDefined()
 
         const architectResult = await tools.architect.execute({ reason: "Need goals" }, {} as any)
@@ -298,6 +299,7 @@ describe("orchestrator tools", () => {
         }, {} as any)
         expect(buildResult).toContain("blocked")
         expect(buildResult).toContain("design_analysis")
+        expect(buildResult).toContain("evidence_source_manifest")
       },
     })
   })

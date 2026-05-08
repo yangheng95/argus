@@ -240,7 +240,72 @@ function designAnalysisContractComplete(task: TaskRow): boolean {
     "backend_spec",
     "prd_iteration_notes",
     "completeness_review",
+    "evidence_source_manifest",
   ].every((key) => keys.has(key))
+}
+
+function renderEvidenceSourceManifest(input: {
+  task: TaskRow
+  liveUrls: readonly string[]
+  figmaUrls: readonly string[]
+  materialPaths: readonly string[]
+  referenceArtifacts: readonly string[]
+}): string {
+  const lines: string[] = []
+  lines.push("## PRD/SPEC Source Manifest")
+  lines.push("Canonical PRD/SPEC entries: decision_log phase=design_analysis keys product_spec, frontend_spec, backend_spec, prd_iteration_notes, completeness_review.")
+  lines.push("Canonical visual rows: task.design_specs.")
+
+  const requestUrls = [...new Set([...input.task.request.matchAll(/https?:\/\/\S+/gi)].map((m) => m[0]))]
+  const urls = [...new Set([...requestUrls, ...input.liveUrls])]
+  if (urls.length > 0) {
+    lines.push("")
+    lines.push("### Live URL sources")
+    for (const item of urls) lines.push(`- ${item}`)
+  }
+
+  if (input.figmaUrls.length > 0) {
+    lines.push("")
+    lines.push("### Figma sources")
+    for (const item of [...new Set(input.figmaUrls)]) lines.push(`- ${item}`)
+  }
+
+  if (input.materialPaths.length > 0) {
+    lines.push("")
+    lines.push("### Local material sources")
+    for (const item of [...new Set(input.materialPaths)]) lines.push(`- ${item}`)
+  }
+
+  const renderArtifactRows = (title: string, artifacts: readonly unknown[]) => {
+    if (artifacts.length === 0) return
+    lines.push("")
+    lines.push(`### ${title}`)
+    artifacts.forEach((raw, index) => {
+      const item = raw && typeof raw === "object" && !Array.isArray(raw)
+        ? raw as Record<string, unknown>
+        : {}
+      const filename = typeof item.filename === "string" && item.filename.trim()
+        ? item.filename
+        : `attachment-${index + 1}`
+      const mime = typeof item.mime === "string" && item.mime.trim() ? item.mime : "application/octet-stream"
+      const source = typeof item.source === "string" && item.source.trim() ? ` source=${item.source}` : ""
+      const intent = typeof item.intent === "string" && item.intent.trim() ? ` intent=${item.intent}` : ""
+      const sha = typeof item.sha === "string" && item.sha.trim() ? ` sha=${item.sha}` : ""
+      const url = typeof item.url === "string" && item.url.trim() ? ` url=${item.url}` : ""
+      lines.push(`- ${filename} — ${mime}${source}${intent}${sha}${url}`)
+    })
+  }
+
+  renderArtifactRows("User/task attachments", Array.isArray(input.task.attachments) ? input.task.attachments as unknown[] : [])
+  renderArtifactRows("Design-analysis materialized artifacts", Array.isArray(input.task.system_artifacts) ? input.task.system_artifacts as unknown[] : [])
+
+  if (input.referenceArtifacts.length > 0) {
+    lines.push("")
+    lines.push("### Mirror artifacts cited by design-analysis")
+    for (const item of input.referenceArtifacts) lines.push(`- ${item}`)
+  }
+
+  return lines.join("\n")
 }
 
 function requireDesignAnalysisBefore(stage: string, task: TaskRow) {
@@ -251,10 +316,10 @@ function requireDesignAnalysisBefore(stage: string, task: TaskRow) {
     summary:
       `This task has visual/reference inputs (${signals.join(", ")}), but the active design-analysis contract is incomplete. ` +
       "Run design_analysis first and require it to complete mirror extraction plus at least two PRD/SPEC review passes. " +
-      "Downstream agents must consume task.design_specs and decision_log phase=design_analysis; they must not infer from the raw URL or attachments.",
+      "Downstream agents must consume task.design_specs and decision_log phase=design_analysis, including evidence_source_manifest; they must not infer from the raw URL or attachments.",
     fields: [
       ["next_action", "design_analysis"],
-      ["required_contract", "task.design_specs + product_spec + frontend_spec + backend_spec + prd_iteration_notes + completeness_review"],
+      ["required_contract", "task.design_specs + product_spec + frontend_spec + backend_spec + prd_iteration_notes + completeness_review + evidence_source_manifest"],
     ],
     pointer: "design_analysis",
   })
@@ -1683,7 +1748,8 @@ export function createOrchestratorTools(input: {
         "",
         "The design-analysis agent must iterate the PRD/SPEC at least twice before handoff.",
         "Visual rows are persisted on task.design_specs. The full PRD/SPEC plus iteration/completeness review is persisted",
-        "into the decision log from the same design-analysis run so downstream stages",
+        "into the decision log from the same design-analysis run. The decision log also includes evidence_source_manifest,",
+        "which names the source files, images, URLs, materialized artifacts, and mirror artifacts downstream stages can read so they",
         "consume one source of truth instead of re-running mirror extraction.",
         "",
         "SKIP this step when:",
@@ -2040,6 +2106,14 @@ export function createOrchestratorTools(input: {
             acc[s.category] = (acc[s.category] ?? 0) + 1
             return acc
           }, {})
+          const taskAfterDesignSpecs = requireTask(taskID)
+          const evidenceSourceManifest = renderEvidenceSourceManifest({
+            task: taskAfterDesignSpecs,
+            liveUrls,
+            figmaUrls,
+            materialPaths,
+            referenceArtifacts: analysis.referenceArtifacts,
+          })
 
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
@@ -2100,6 +2174,12 @@ export function createOrchestratorTools(input: {
             value: analysis.completenessReview,
             reason: "Final design-analysis completeness audit for requirements, architect, and build.",
           })
+          decisionLog.append({
+            phase: "design_analysis",
+            key: "evidence_source_manifest",
+            value: evidenceSourceManifest,
+            reason: "Source manifest naming the PRD/SPEC origin, task files, materialized images, and mirror artifacts downstream agents can read.",
+          })
           if (analysis.referenceArtifacts.length > 0) {
             decisionLog.append({
               phase: "design_analysis",
@@ -2143,6 +2223,7 @@ export function createOrchestratorTools(input: {
               ["recommended_stack", analysis.techStack],
               ["prd_review_passes", String(analysis.prdIterationNotes.length)],
               ["reference_artifacts", String(analysis.referenceArtifacts.length)],
+              ["source_manifest", "decision_log:design_analysis/evidence_source_manifest"],
               ["open_questions", String(analysis.openQuestions.length)],
             ],
             pointer: "task.design_specs + decision_log phase=design_analysis",
@@ -5046,6 +5127,7 @@ export function createOrchestratorTools(input: {
             const designSpecs = Array.isArray(task.design_specs)
               ? (task.design_specs as any)
               : undefined
+            const designAnalysis = decisionLog.phasePromptSection("design_analysis", "Design Analysis PRD/SPEC Source")
 
             // Retry feedback from decision log (per-goal "retry" entries the
             // orchestrator wrote on prior delivery rejection).
@@ -5091,6 +5173,7 @@ export function createOrchestratorTools(input: {
               dependencies: dependencies.length > 0 ? dependencies : undefined,
               collaborationGoals,
               designSpecs,
+              designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
               fidelity: taskFidelity,
               retryGuidance: requestText.length > 0 ? requestText : undefined,
               retryFeedback,
@@ -5108,8 +5191,14 @@ export function createOrchestratorTools(input: {
               taskID,
               enabled: Boolean(deliveryFeedback),
             })
-            context = deliveryFeedback || retryAttachments
+            const designSpecs = Array.isArray(task.design_specs)
+              ? (task.design_specs as any)
+              : undefined
+            const designAnalysis = createDecisionLog(taskID).phasePromptSection("design_analysis", "Design Analysis PRD/SPEC Source")
+            context = deliveryFeedback || retryAttachments || designSpecs || designAnalysis.trim().length > 0
               ? {
+                  designSpecs,
+                  designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
                   deliveryFeedback,
                   retryAttachments,
                 }

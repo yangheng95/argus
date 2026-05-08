@@ -104,7 +104,7 @@ Call once at the end. It must contain:
 - `backend_spec`: implementation-grade backend/API specification, with unknowns marked.
 - `prd_iteration_notes`: at least two review-pass notes proving you checked and corrected PRD/SPEC completeness before handoff.
 - `completeness_review`: final audit explaining why the PRD/SPEC is complete enough for downstream agents, and exactly what remains unknown.
-- `reference_artifacts`: artifact paths and attachment names you used as evidence.
+- `reference_artifacts`: artifact paths, source file names, image names, attachment names, and mirror outputs you used as evidence. The orchestrator will persist a separate `evidence_source_manifest` decision-log entry from these references plus task attachments/materialized artifacts so downstream agents know exactly which files/images/URLs they can read.
 - `open_questions`: only facts that are truly unobservable.
 
 ## Id Conventions

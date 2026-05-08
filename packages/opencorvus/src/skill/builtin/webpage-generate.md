@@ -24,7 +24,7 @@ You are not implementing the page. You are producing the authoritative PRD/SPEC 
 4. Read `mirror/reference.png`, `mirror/extracted-page.json`, `mirror/page-ir.xml`, `mirror/scaffold.json`, and `mirror/shared-context.md`.
 5. Register visual specs for tokens, layout, components, interactions, and responsive rules.
 6. Perform at least two PRD/SPEC review passes: inventory coverage, then downstream frontend/backend implementability.
-7. Finalize with StructuredOutput fields: `product_spec`, `frontend_spec`, `backend_spec`, `prd_iteration_notes`, `completeness_review`, `reference_artifacts`, and `open_questions`.
+7. Finalize with StructuredOutput fields: `product_spec`, `frontend_spec`, `backend_spec`, `prd_iteration_notes`, `completeness_review`, `reference_artifacts`, and `open_questions`. Put every source file/image URL and mirror artifact name you used into `reference_artifacts`; the orchestrator will publish them as `evidence_source_manifest` for downstream agents.
 
 The extraction steps are strictly serial because compile/analyze read artifacts written by extract.
 
