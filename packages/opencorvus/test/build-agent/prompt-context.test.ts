@@ -321,7 +321,7 @@ describe("build agent prompt context", () => {
       },
     )
 
-    expect(prompt).toContain("## Design Analysis PRD/SPEC Source")
+    expect(prompt).toContain("Design Analysis PRD/SPEC Source")
     expect(prompt).toContain("visual_consistency_spec")
     expect(prompt).toContain("evidence_source_manifest")
     expect(prompt).toContain("references/url-amd.png")

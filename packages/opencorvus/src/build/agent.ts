@@ -2126,8 +2126,6 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     }
 
     if (context?.designAnalysis && context.designAnalysis.trim().length > 0) {
-      lines.push("## Design Analysis PRD/SPEC Source")
-      lines.push("")
       lines.push(context.designAnalysis.trim())
       lines.push("")
     }
@@ -2258,8 +2256,6 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     contextLines.push("")
   }
   if (context?.designAnalysis && context.designAnalysis.trim().length > 0) {
-    contextLines.push("## Design Analysis PRD/SPEC Source")
-    contextLines.push("")
     contextLines.push(context.designAnalysis.trim())
     contextLines.push("")
   }

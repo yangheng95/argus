@@ -538,6 +538,14 @@ test("only design-analyst receives mirror analysis tools from the registry", asy
           expect(toolIds.has(id)).toBe(false)
         }
       }
+
+      for (const name of ["build", "general", "explore", "compaction", "title", "delivery"]) {
+        const agent = await Agent.get(name)
+        expect(agent).toBeDefined()
+        for (const id of MIRROR_TOOL_IDS) {
+          expect(evalPerm(agent, id)).toBe("deny")
+        }
+      }
     },
   })
 })
