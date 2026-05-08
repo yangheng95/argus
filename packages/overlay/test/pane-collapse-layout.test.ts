@@ -18,7 +18,7 @@ function send(value: unknown, init?: ResponseInit) {
   });
 }
 
-test("titlebar layout controls collapse both side panes without residual width", async () => {
+test("workspace layout controls collapse both side panes without residual width", async () => {
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -51,10 +51,12 @@ test("titlebar layout controls collapse both side panes without residual width",
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`);
     }, server.port);
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector('[data-ui="titlebar-left-panel-toggle"]');
+    await page.waitForSelector('[data-ui="workspace-left-panel-toggle"]');
+    expect(await page.$("#titlebar .workspace-layout-controls")).toBeNull();
+    expect(await page.$(".task-bar .workspace-layout-controls")).not.toBeNull();
 
-    await page.click('[data-ui="titlebar-left-panel-toggle"]');
-    await page.click('[data-ui="titlebar-right-panel-toggle"]');
+    await page.click('[data-ui="workspace-left-panel-toggle"]');
+    await page.click('[data-ui="workspace-right-panel-toggle"]');
 
     const collapsed = await page.evaluate(() => {
       const measure = (selector: string) => {

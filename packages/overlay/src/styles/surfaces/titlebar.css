@@ -74,36 +74,6 @@
   min-width: 0;
 }
 
-.titlebar-layout-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--oc-control-border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--oc-control-bg);
-  box-shadow: var(--oc-control-shadow);
-  -webkit-app-region: no-drag;
-}
-
-.titlebar-layout-controls .oc-button[data-size="icon"] {
-  --oc-button-height: calc(28px * var(--ui-scale));
-  --oc-button-padding-x: 0;
-  --oc-button-border: var(--oc-border-width) solid transparent;
-  --oc-button-bg: transparent;
-  --oc-button-color: var(--text-soft);
-
-  width: calc(28px * var(--ui-scale));
-  height: calc(28px * var(--ui-scale));
-  box-shadow: none;
-}
-
-.titlebar-layout-controls .oc-button[aria-pressed="true"] {
-  --oc-button-border: var(--oc-border-width) solid var(--oc-control-border-hover);
-  --oc-button-bg: var(--oc-control-bg-hover);
-  --oc-button-color: var(--text-strong);
-}
-
 /* Single source after iter23: grid placement + flex container live together.
    The flex container layout is harmless when the parent is grid (icons flow
    flex-end inside the grid cell), and inside the narrow-width @media the

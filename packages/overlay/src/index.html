@@ -91,7 +91,6 @@
         </div>
       </div>
       <div id="solidTitlebarMenu"></div>
-      <div id="solidTitlebarLayoutControls"></div>
     </div>
     <div class="titlebar-spacer" data-tauri-drag-region></div>
     <div class="titlebar-utility">
@@ -110,13 +109,16 @@
     <section class="task-bar">
       <div class="task-meta">
         <div class="task-cwd">
-          <div class="task-dir-shell task-cwd-dropdown" id="taskCwdDropdown" data-open="false" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" data-i18n-aria-label="cwd.recent" data-i18n-title="cwd.recent">
-            <span id="solidTaskDirMount"></span>
-            <div class="task-dir-actions">
-              <span class="task-cwd-caret" id="taskCwdCaret" aria-hidden="true">▾</span>
+          <div class="task-project-cluster">
+            <div class="task-dir-shell task-cwd-dropdown" id="taskCwdDropdown" data-open="false" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" data-i18n-aria-label="cwd.recent" data-i18n-title="cwd.recent">
+              <span id="solidTaskDirMount"></span>
+              <div class="task-dir-actions">
+                <span class="task-cwd-caret" id="taskCwdCaret" aria-hidden="true">▾</span>
+              </div>
             </div>
+            <span id="solidTaskWorkspaceLineMount"></span>
           </div>
-          <span id="solidTaskWorkspaceLineMount"></span>
+          <div id="solidWorkspaceLayoutControls"></div>
         </div>
       </div>
     </section>
