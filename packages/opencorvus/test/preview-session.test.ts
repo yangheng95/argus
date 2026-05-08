@@ -6,6 +6,7 @@ import path from "node:path"
 import {
   ensureManagedPreviewSession,
   getManagedPreviewSession,
+  previewLaunchCommand,
   stopAllManagedPreviewSessions,
   stopManagedPreviewSession,
 } from "../src/preview/session"
@@ -18,6 +19,17 @@ afterEach(async () => {
 })
 
 describe("managed frontend preview session", () => {
+  test("starts Vite previews on IPv4 loopback", () => {
+    expect(previewLaunchCommand({
+      manager: "bun",
+      devScript: "vite",
+    })).toEqual({
+      executable: "bun",
+      args: ["run", "dev", "--", "--host", "127.0.0.1"],
+      command: "bun run dev -- --host 127.0.0.1",
+    })
+  })
+
   test("starts an explicit dev command and keeps a task-scoped preview URL", async () => {
     const dir = await packageFixture({
       "scripts/dev-server.ts": `

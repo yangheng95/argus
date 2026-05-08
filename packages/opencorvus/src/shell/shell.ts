@@ -299,13 +299,13 @@ export namespace Shell {
   }
 
   export const preferred = lazy(() => {
-    const s = process.env.SHELL
+    const s = fromEnv(process.env.SHELL, process.platform)
     if (s) return s
     return platformDefault()
   })
 
   export const acceptable = lazy(() => {
-    const s = process.env.SHELL
+    const s = fromEnv(process.env.SHELL, process.platform)
     if (s && !BLACKLIST.has(process.platform === "win32" ? path.win32.basename(s) : path.basename(s))) return s
     return platformDefault()
   })

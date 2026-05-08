@@ -77,9 +77,8 @@ export async function ensureManagedPreviewSession(input: {
     throw new Error(`no_package_manager: ${workspaceDir} package.json must define packageManager for frontend runtime evaluation`)
   }
 
-  const executable = packageManagerExecutable(manager)
-  const command = `${manager} run dev`
-  const child = spawn(executable, ["run", "dev"], {
+  const launch = previewLaunchCommand({ manager, devScript: pkg.scripts.dev })
+  const child = spawn(launch.executable, launch.args, {
     cwd: workspaceDir,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
@@ -89,10 +88,10 @@ export async function ensureManagedPreviewSession(input: {
     key,
     taskID,
     workspaceDir,
-    command,
+    command: launch.command,
     status: "starting",
     child,
-    evidence: [`managed_preview_command=${command}`],
+    evidence: [`managed_preview_command=${launch.command}`],
     startedAt: now,
     updatedAt: now,
   }
@@ -208,6 +207,21 @@ async function waitForManagedPreviewUrl(child: ChildProcess): Promise<string> {
 function firstLoopbackUrl(output: string): string | undefined {
   const matches = stripAnsi(output).match(/https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|::1):\d+\/?/g) ?? []
   return matches.find((url) => isLoopbackHttpUrl(url))
+}
+
+export function previewLaunchCommand(input: {
+  manager: NonNullable<ReturnType<typeof packageManagerName>>
+  devScript: string
+}) {
+  const executable = packageManagerExecutable(input.manager)
+  const viteArgs = /\bvite(?:\s|$)/.test(input.devScript)
+    ? ["--", "--host", "127.0.0.1"]
+    : []
+  return {
+    executable,
+    args: ["run", "dev", ...viteArgs],
+    command: [input.manager, "run", "dev", ...viteArgs].join(" "),
+  }
 }
 
 async function stopLiveSession(
