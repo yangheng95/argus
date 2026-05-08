@@ -323,8 +323,6 @@ export namespace Agent {
             "memory_search",
             "memory_get",
             "url_screenshot",
-            "todoread",
-            "todowrite",
             ...MIRROR_ANALYSIS_TOOL_IDS,
           ],
         },

@@ -283,7 +283,8 @@ function buildUserPrompt(input: {
     "Strict order: `webpage_extract` writes `mirror/reference.png` and `mirror/extracted-page.json`; " +
     "`webpage_compile` writes `mirror/page-ir.xml`; `webpage_analyze` writes `mirror/scaffold.json` " +
     "and `mirror/shared-context.md`. Read the compact artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the PRD/SPEC prompt. " +
-    "Do at least two PRD/SPEC review passes before StructuredOutput: first check page inventory and visual coverage, then check downstream frontend/backend implementability.",
+    "Do at least two PRD/SPEC review passes before StructuredOutput: first check page inventory and visual coverage, then check downstream frontend/backend implementability. " +
+    "Do not use todo or scratchpad tools for PRD iteration; write the review-pass findings directly into the final PRD/SPEC fields.",
   )
 
   return sections.join("\n\n")
