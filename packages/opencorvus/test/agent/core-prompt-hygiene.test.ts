@@ -159,6 +159,19 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("unverified Unix-only helpers")
   })
 
+  test("architect and build prompts require explicit browser dev scripts for delivery preview", async () => {
+    const architect = await readPrompt("architect")
+    const build = await readPrompt("build")
+
+    expect(architect).toContain("For any browser/UI/webpage deliverable")
+    expect(architect).toContain("explicit `packageManager` and `scripts.dev`")
+    expect(architect).toContain("managed preview session")
+
+    expect(build).toContain("Never deliver a browser/UI/webpage project without")
+    expect(build).toContain("declares both `packageManager` and `scripts.dev`")
+    expect(build).toContain("serve the real page over loopback HTTP from the repository root")
+  })
+
   test("build prompt requires failed report_build_result instead of prose stop", async () => {
     const build = await readPrompt("build")
     expect(build).toContain("report_build_result")
@@ -197,6 +210,9 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("rewritten to match broken current behavior")
     expect(text).toContain("Hand-edited generated or compiled runtime artifacts")
     expect(text).toContain("Inspect source/runtime entry alignment")
+    expect(text).toContain("`start_frontend_preview`")
+    expect(text).toContain("board `delivery.previewUrl`")
+    expect(text).toContain("required runtime flow cannot be")
   })
 
   test("design-analysis and delivery agree that design_specs are delivery-verified", async () => {

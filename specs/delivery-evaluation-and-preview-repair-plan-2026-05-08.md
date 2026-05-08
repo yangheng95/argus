@@ -48,12 +48,12 @@
   - capture 层不得推断 package manager，不得启动静态文件服务。
   - 没有 URL 时，应由上游 agent 启动项目或暴露 preview URL。
 - `docs/superpowers/specs/2026-05-05-inspector-panel-redesign.md`
-  - 右侧面板目标结构是单一滚动 Inspector 列。
-  - 旧 Workflow / Inspector / Preview 三 tab 应移除。
-  - Preview section 只在存在 `boardStore.delivery?.previewUrl` 时渲染。
+  - 该文档曾要求右侧面板目标结构是单一滚动 Inspector 列。
+  - 2026-05-08 用户复核后明确纠正：右侧 Workflow / Inspector / Preview 三个顶级 tab 必须保留。
+  - 本修复以用户复核后的产品事实为准：恢复顶级 tab，但 Preview tab 只消费 `delivery.previewUrl`。
 - `docs/superpowers/plans/2026-05-05-inspector-panel-redesign.md`
-  - `FrontendPreviewPanel` 的内部逻辑复用，但外层 chrome 应并入 `InspectorPanel`。
-  - 旧 tab mount 和 tab switching 逻辑应从 `main.tsx` 删除。
+  - 该计划中的 `InspectorPanel` 单列迁移不再作为本次验收目标。
+  - 旧 tab mount 和 tab switching 不是废弃逻辑，必须保留并由测试覆盖。
 - `docs/delivery-completion-first-2026-05-02.md`
   - Delivery 应先判断交付完成度，再处理辅助检查。
 - `benchmark-debug-template`
@@ -66,7 +66,7 @@
 1. Delivery 评估结果和 Overlay 展示一致：阻断项失败时不能 accepted。
 2. Preview 面板有单一、明确、可追踪的 URL 来源。
 3. 运行时 evidence、Delivery manifest、Overlay Preview 使用同一个 managed preview session 事实。
-4. 右侧面板不再保留旧三 tab 与新 Inspector 结构的双路设计。
+4. 右侧面板保留 Workflow / Inspector / Preview 三个顶级 tab，禁止再引入并行的单列 InspectorPanel 根。
 5. benchmark 可以用一个简单前端 case 复现并验证修复。
 
 ## 非目标
@@ -103,6 +103,17 @@ Delivery 检测到任务存在前端 runtime surface 时：
 
 这样保持 capture 单一来源，同时把“启动页面”的责任放在上游 runtime orchestration 层。
 
+### 2a. DeliveryAgent 专用 preview tool
+
+DeliveryAgent 必须拥有显式工具 `start_frontend_preview`：
+
+- 该工具是 DeliveryAgent 启动前端页面的唯一工具入口。
+- 工具内部调用 managed preview session，不做端口猜测、不启动静态文件服务器、不推断 package manager。
+- 启动成功后立即把 session 投影为 `engine_artifact.kind='delivery_preview'`，以当前 `delivery_id` 归属。
+- Workbench board 从当前 delivery 的 `delivery_preview` artifact 或最终 manifest runtime flow 读取同一个 URL，并暴露为 `delivery.previewUrl`。
+- Overlay Preview tab 只消费 board 的 `delivery.previewUrl`；tool 成功后 Preview tab iframe 应显示该 URL。
+- `screenshot` 与 `verify_page_integrity` 只消费 `start_frontend_preview` 返回的 URL，不再各自负责启动页面。
+
 ### 3. Board API 暴露 delivery preview URL
 
 Workbench board snapshot 应直接包含：
@@ -126,19 +137,18 @@ Overlay 只能从 board snapshot 读取 Preview URL，不再自己猜。
 
 产品链路应改为：
 
-`task delivery workspace -> managed preview session -> delivery.previewUrl -> Overlay Inspector Preview`
+`task delivery workspace -> managed preview session -> delivery.previewUrl -> Overlay Preview tab`
 
-### 5. 右侧面板完成 InspectorPanel 迁移
+### 5. 右侧面板恢复顶级 tab
 
-当前旧三 tab 结构已经与新设计文档冲突。应一次性切到单一 Inspector 列：
+用户复核后，右侧顶级 tab 是当前产品契约的一部分，必须恢复：
 
-- 删除 `rightPanelTab`、`rightPanelManualKey`、`selectRightPanelTab()`。
-- 删除 `rightPanelWorkflow`、`rightPanelInspector`、`rightPanelPreview` 三个 mount。
-- 新建或完成 `InspectorPanel`。
-- Preview section 只在 `delivery.previewUrl` 存在时渲染。
-- Preview section 内提供 URL 展示、刷新、外部打开按钮和 iframe。
-
-说明：旧 tab 结构属于过时代码。执行删除前需要明确确认，因为项目规则要求发现废弃逻辑时先说明并确认删除。
+- 保留 `rightPanelTab`、`rightPanelManualKey`、`selectRightPanelTab()`。
+- 保留 `rightPanelWorkflow`、`rightPanelInspector`、`rightPanelPreview` 三个 mount。
+- 删除本次误引入的单列 `InspectorPanel` 根，避免双路右栏结构。
+- Preview tab 始终挂载 `FrontendPreviewPanel`。
+- 当 board snapshot 出现 `delivery.previewUrl` 时，Preview tab 的 iframe 使用该 URL 渲染真实页面。
+- 自动切换只在用户没有对同一 snapshot 手动选择 tab 时发生，避免覆盖用户显式选择。
 
 ## Delivery gate 修复策略
 
@@ -193,13 +203,9 @@ Delivery final gate 的主阻断项应为：
   - 不提供任意地址输入。
   - “地址栏”只展示当前 managed preview URL，不作为第二个 URL 输入源。
 
-- `packages/overlay/src/components/InspectorPanel.tsx`
-  - Preview section 并入统一右侧面板。
-  - 没有 URL 时不渲染 Preview section，或者显示明确的 managed preview failure row。
-
 - `packages/overlay/src/main.tsx`
-  - 删除旧三 tab 切换。
-  - 只挂载一个 InspectorPanel。
+  - 恢复右侧 Workflow / Inspector / Preview 顶级 tab 切换。
+  - Preview tab 挂载 `FrontendPreviewPanel`，只消费 board delivery URL。
 
 ## Benchmark 方案
 
@@ -239,7 +245,7 @@ benchmark 必须同时满足：
 - `runtimeFlows[].status` 全部 passed。
 - `review:integrity` passed，或 concerns 且 corrections/missing 均为 0。
 - Overlay board snapshot 包含 `delivery.previewUrl`。
-- 右侧 Inspector Preview 在视觉浏览器中显示非空页面。
+- 右侧 Preview tab 在视觉浏览器中显示非空页面。
 - benchmark 通过后人工二次 review 交付物。
 
 ## 测试计划
@@ -270,22 +276,18 @@ benchmark 必须同时满足：
   - 拒绝 Overlay 自身 origin。
   - 不再把 `/preview/frontend` 作为自动产品来源。
 
-- `packages/overlay/test/inspector-panel.test.ts`
-  - 有 `delivery.previewUrl` 时渲染 Preview section。
-  - 无 `delivery.previewUrl` 时不渲染 Preview iframe。
-  - Preview section 展示 URL、refresh、external open 控件。
-
 - `packages/overlay/test/delivery-panel-mount.test.ts`
-  - 旧三 tab mount 被移除。
-  - 只存在一个 InspectorPanel mount。
+  - 右侧三顶级 tab mount 存在。
+  - 单列 InspectorPanel mount 不存在。
+  - DeliveryPanel 仍在 Inspector tab 内位于 Files 之前。
+  - PreviewPanel 在 Preview tab 中挂载。
 
 ### 可视化验证
 
 必须用 headed browser 或 Codex in-app browser 打开 Overlay：
 
-- 右侧没有 Workflow / Inspector / Preview 三 tab。
-- 右侧是单一 Inspector 列。
-- Preview section 出现时 iframe 非空。
+- 右侧存在 Workflow / Inspector / Preview 三个顶级 tab。
+- Preview tab 出现时 iframe 非空。
 - URL 展示与 delivery manifest 中 `previewUrl` 一致。
 - 刷新不会切到别的任务 URL。
 - 任务切换后旧 iframe 不残留。
@@ -297,7 +299,7 @@ benchmark 必须同时满足：
 3. 将 failed runtime flow 与 `review:integrity` 纳入 primary blocker。
 4. 将 board snapshot 提升 `delivery.previewUrl`。
 5. 改 Overlay preview service，只消费 board delivery URL。
-6. 完成 InspectorPanel 单列迁移，删除旧三 tab。
+6. 恢复右侧顶级 tab，删除误引入的单列 InspectorPanel 根。
 7. 跑后端、Overlay、benchmark 三层验证。
 8. 通过后进行人工二次 review。
 9. 每次改动 commit，push 前必须通过 hook，不使用 `--no-verify`。
@@ -310,8 +312,8 @@ benchmark 必须同时满足：
 - 风险：dev server 输出不打印 URL。
   - 处理：显式 command 同时配置 expected port 或由启动契约返回 URL；不能扫描所有端口兜底。
 
-- 风险：旧 Preview tab 删除影响用户习惯。
-  - 处理：这是已落盘设计要求；若执行删除，需要先确认废弃逻辑删除。
+- 风险：历史 InspectorPanel 单列计划再次被误当成当前事实。
+  - 处理：本方案明确记录 2026-05-08 用户复核后的产品契约，并用测试固定右侧三顶级 tab。
 
 - 风险：benchmark 通过但页面骨架被破坏。
   - 处理：benchmark 通过后必须人工二次 review，并检查截图、DOM、交互、功能需求是否同时满足。
@@ -322,9 +324,9 @@ benchmark 必须同时满足：
 
 - 失败 runtime flow 不能再产生 accepted。
 - 缺失或失败的 `review:integrity` 不能再产生 accepted。
-- Overlay 右侧 Preview 的 URL 来自唯一 managed preview session。
+- Overlay 右侧 Preview tab 的 URL 来自唯一 managed preview session。
 - Preview iframe 在可视化验证中显示真实页面。
-- 旧三 tab 与新 InspectorPanel 不再双路并存。
+- 右侧 Workflow / Inspector / Preview 三个顶级 tab 存在，单列 InspectorPanel 根不存在。
 - 相关测试全部通过。
 - overlay benchmark 简单 case 通过。
 - 人工二次 review 通过。

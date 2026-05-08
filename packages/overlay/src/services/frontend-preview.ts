@@ -1,8 +1,8 @@
-import { apiJson, getServerUrl } from "./api";
+import { getServerUrl } from "./api";
 
 export type RightPanelTab = "workflow" | "inspector" | "preview";
 
-export type FrontendPreviewSource = "delivery" | "port_probe";
+export type FrontendPreviewSource = "delivery";
 
 export type FrontendPreviewResolution = {
   url: string | null;
@@ -31,26 +31,25 @@ export function nextTabForPreviewResolution(input: PreviewAutoActivationInput): 
 
 export async function resolveFrontendPreviewFromBoard(board: unknown): Promise<FrontendPreviewResolution> {
   const structured = structuredPreviewUrlFromBoard(board);
-  if (structured) return structured;
-  const response = await apiJson("preview/frontend") as FrontendPreviewResolution;
-  if (!response?.url) return {
+  return structured ?? {
     url: null,
     source: null,
     port: null,
-    checkedPorts: Array.isArray(response?.checkedPorts) ? response.checkedPorts : [],
-    reason: typeof response?.reason === "string" ? response.reason : "not_detected",
-  };
-  return {
-    url: response.url,
-    source: response.source === "port_probe" ? "port_probe" : null,
-    port: typeof response.port === "number" ? response.port : null,
-    checkedPorts: Array.isArray(response.checkedPorts) ? response.checkedPorts : [],
-    reason: typeof response.reason === "string" ? response.reason : undefined,
+    checkedPorts: [],
+    reason: "no_delivery_preview_url",
   };
 }
 
 export function structuredPreviewUrlFromBoard(board: unknown): FrontendPreviewResolution | null {
   const delivery = deliveryFromBoard(board);
+  const deliveryUrl = typeof delivery?.previewUrl === "string" ? delivery.previewUrl : "";
+  if (isLoopbackHttpUrl(deliveryUrl) && !sameOriginAsOverlay(deliveryUrl)) {
+    return {
+      url: deliveryUrl,
+      source: "delivery",
+      port: portFromUrl(deliveryUrl),
+    };
+  }
   const flows = delivery?.evidenceManifest?.runtimeFlows;
   if (!Array.isArray(flows)) return null;
   for (const flow of flows) {

@@ -2,18 +2,37 @@ import { expect, test } from "bun:test";
 import {
   isLoopbackHttpUrl,
   nextTabForPreviewResolution,
+  resolveFrontendPreviewFromBoard,
   structuredPreviewUrlFromBoard,
 } from "../src/services/frontend-preview";
 
-test("structured preview URL is read from delivery runtime flow only", () => {
+test("structured preview URL prefers delivery.previewUrl over runtime flow rows", () => {
   const result = structuredPreviewUrlFromBoard({
     candidateDelivery: {
+      previewUrl: "http://127.0.0.1:3000/",
       evidenceManifest: {
         runtimeFlows: [
           {
             id: "runtime:web:.",
             evidence: ["Rendered http://127.0.0.1:9999 but this text is not a source"],
           },
+          {
+            id: "runtime:web:app",
+            previewUrl: "http://127.0.0.1:5173/",
+          },
+        ],
+      },
+    },
+  });
+  expect(result?.url).toBe("http://127.0.0.1:3000/");
+  expect(result?.source).toBe("delivery");
+});
+
+test("structured preview URL can read from runtime flow when delivery.previewUrl is absent", () => {
+  const result = structuredPreviewUrlFromBoard({
+    candidateDelivery: {
+      evidenceManifest: {
+        runtimeFlows: [
           {
             id: "runtime:web:app",
             previewUrl: "http://127.0.0.1:5173/",
@@ -38,25 +57,50 @@ test("structured preview URL rejects non-loopback URLs", () => {
   })).toBeNull();
 });
 
-test("auto activation only moves inspector to preview for the current unmodified key", () => {
+test("preview resolver does not call the port-probe route when board has no delivery URL", async () => {
+  const result = await resolveFrontendPreviewFromBoard({ candidateDelivery: {} });
+  expect(result).toEqual({
+    url: null,
+    source: null,
+    port: null,
+    checkedPorts: [],
+    reason: "no_delivery_preview_url",
+  });
+});
+
+test("preview tab auto-activates only from unmanaged Inspector state", () => {
   expect(nextTabForPreviewResolution({
     activeTab: "inspector",
-    manualKey: "",
-    requestKey: "task:1",
-    resolution: { url: "http://127.0.0.1:5173/", source: "port_probe", port: 5173 },
+    manualKey: "task:old",
+    requestKey: "task:new",
+    resolution: {
+      url: "http://127.0.0.1:5173/",
+      source: "delivery",
+      port: 5173,
+    },
   })).toBe("preview");
+
+  expect(nextTabForPreviewResolution({
+    activeTab: "workflow",
+    manualKey: "task:old",
+    requestKey: "task:new",
+    resolution: {
+      url: "http://127.0.0.1:5173/",
+      source: "delivery",
+      port: 5173,
+    },
+  })).toBe("workflow");
+
   expect(nextTabForPreviewResolution({
     activeTab: "inspector",
-    manualKey: "task:1",
-    requestKey: "task:1",
-    resolution: { url: "http://127.0.0.1:5173/", source: "port_probe", port: 5173 },
+    manualKey: "task:new",
+    requestKey: "task:new",
+    resolution: {
+      url: "http://127.0.0.1:5173/",
+      source: "delivery",
+      port: 5173,
+    },
   })).toBe("inspector");
-  expect(nextTabForPreviewResolution({
-    activeTab: "preview",
-    manualKey: "",
-    requestKey: "task:1",
-    resolution: null,
-  })).toBe("preview");
 });
 
 test("static html preview path is absent", async () => {

@@ -63,6 +63,7 @@ type VerifyInput = {
   /** Legacy passthrough; not wired after the SessionPrompt migration. */
   stream?: TextHooks
   signal?: AbortSignal
+  deliveryID?: string
 }
 
 export namespace DeliveryAgent {
@@ -120,6 +121,7 @@ export namespace DeliveryAgent {
         const reviewTools = createDeliveryTools({
           sessionID: input.task.sessionID,
           taskID: input.task.id,
+          deliveryID: input.deliveryID,
           goals: input.goals,
           delivery: input.delivery,
           attachments: input.attachments,

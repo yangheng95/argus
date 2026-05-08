@@ -11,13 +11,17 @@ import z from "zod"
 import fs from "fs/promises"
 import path from "path"
 import { createCodebaseTools } from "@/engine/codebase-tools"
+import { EngineArtifactTable } from "@/engine/engine.sql"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Shell } from "@/shell/shell"
+import { Database } from "@/storage/db"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { EngineService } from "@/task-api"
 import { findTask } from "@/engine/store"
+import { Identifier } from "@/id/id"
+import { ensureManagedPreviewSession, type ManagedPreviewSession } from "@/preview/session"
 import {
   captureRuntimePage,
   normalizeRuntimeCaptureRequest,
@@ -45,6 +49,7 @@ type DeliveryToolAttachment = {
 type DeliveryToolContext = {
   sessionID?: string
   taskID?: string
+  deliveryID?: string
   goals?: GoalInfo[]
   delivery?: DeliveryInfo
   attachments?: DeliveryToolAttachment[]
@@ -62,6 +67,38 @@ export function normalizeVerifyPageIntegrityInput(args: RuntimeCaptureRequest) {
   return normalizeRuntimeCaptureRequest(args)
 }
 
+function persistDeliveryPreviewSession(input: {
+  taskID: string
+  deliveryID?: string
+  session: ManagedPreviewSession
+}) {
+  if (!input.deliveryID) return
+  const now = Date.now()
+  Database.use((db) =>
+    db.insert(EngineArtifactTable).values({
+      id: Identifier.ascending("artifact"),
+      task_id: input.taskID,
+      run_id: null,
+      delivery_id: input.deliveryID,
+      kind: "delivery_preview",
+      label: "delivery-managed-preview",
+      payload: {
+        status: input.session.status,
+        url: input.session.url,
+        reason: input.session.reason,
+        command: input.session.command,
+        workspace_dir: input.session.workspaceDir,
+        evidence: input.session.evidence,
+        session_key: input.session.key,
+        started_at: input.session.startedAt,
+        updated_at: input.session.updatedAt,
+      },
+      time_created: now,
+      time_updated: now,
+    }).run(),
+  )
+}
+
 /**
  * Creates the tool set for the DeliveryAgent.
  *
@@ -75,6 +112,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
   const projectId = Instance.project.id
   const projectDir = Filesystem.resolve(Instance.directory)
   const taskID = input?.taskID
+  const deliveryID = input?.deliveryID
   const deliveryContext = {
     taskID,
     goals: input?.goals ?? [],
@@ -439,6 +477,59 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
       },
     }),
 
+    start_frontend_preview: tool({
+      description:
+        "Start and hold the managed frontend preview for this delivery task, then publish the ready URL to the Workbench board so the Overlay Preview tab renders the delivered page. " +
+        "This is the only delivery tool that starts the browser-facing app for preview. It requires an explicit package.json packageManager and scripts.dev, accepts only loopback HTTP URLs, and never guesses ports or serves static files.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        if (!taskID) return JSON.stringify({
+          ok: false,
+          status: "failed",
+          reason: "start_frontend_preview: no task context available",
+        }, null, 2)
+
+        try {
+          const task = findTask(taskID)
+          const session = await ensureManagedPreviewSession({
+            taskID,
+            workspaceDir: projectDir,
+            metadata: task?.metadata as Record<string, unknown> | undefined,
+          })
+          persistDeliveryPreviewSession({ taskID, deliveryID, session })
+          return JSON.stringify({
+            ok: session.status === "ready" && !!session.url,
+            status: session.status,
+            url: session.url,
+            command: session.command,
+            workspace_dir: session.workspaceDir,
+            evidence: session.evidence,
+            board_preview_url: session.status === "ready" ? session.url : undefined,
+            reason: session.reason,
+          }, null, 2)
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err)
+          const failedSession: ManagedPreviewSession = {
+            key: `${taskID}:${projectDir}`,
+            taskID,
+            workspaceDir: projectDir,
+            command: "start_frontend_preview",
+            status: "failed",
+            reason,
+            evidence: [reason],
+            startedAt: Date.now(),
+            updatedAt: Date.now(),
+          }
+          persistDeliveryPreviewSession({ taskID, deliveryID, session: failedSession })
+          return JSON.stringify({
+            ok: false,
+            status: "failed",
+            reason,
+          }, null, 2)
+        }
+      },
+    }),
+
     run_command: tool({
       description:
         "Run a shell command in the project directory and capture stdout/stderr/exit code. " +
@@ -487,7 +578,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "inside Puppeteer only; it never changes the host display resolution. The PNG bytes are not attached to the delivery " +
         "context; use compare_visual_artifacts when a visual comparison needs image bytes.",
       inputSchema: z.object({
-        url: z.string().describe("Absolute http(s) URL for an already running app. If you only have files, start the app with run_command or use the frontend preview resolver first; this tool never starts servers or serves static files."),
+        url: z.string().describe("Absolute http(s) URL for an already running app. If this delivery has a frontend surface, call start_frontend_preview first and pass its returned URL; this tool never starts servers or serves static files."),
         viewport_width: z.number().int().min(100).max(4096).default(1440).describe("Viewport width in CSS pixels."),
         viewport_height: z.number().int().min(100).max(4096).default(1080).describe("Viewport height in CSS pixels."),
         label: z.string().optional().describe("Short label used in the output filename, e.g. 'after-fix-1' or 'chart-area'. Alphanum / dash only."),
@@ -557,7 +648,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "JSON in submit_verdict.tool_call_evidence with detail=the failure list (or the key numbers " +
         "when passed).",
       inputSchema: z.object({
-        url: z.string().describe("http(s):// URL the app is listening on. If you only have a local file path, run the project's server first via run_command and target the listening URL."),
+        url: z.string().describe("http(s):// URL the app is listening on. For frontend deliveries, call start_frontend_preview first and target the returned managed preview URL."),
         viewport_width: z.number().int().min(100).max(4096).default(1440),
         viewport_height: z.number().int().min(100).max(4096).default(1080),
         min_dom_descendants: z.number().int().min(1).max(10000).default(20).describe("Minimum descendant count under document.body. 20 is a reasonable floor for any non-trivial app shell."),

@@ -3296,16 +3296,17 @@ export function createOrchestratorTools(input: {
               )
           if (imageAttachments.length > 0) {
             const { captureRuntimePage } = await import("@/delivery/runtime-capture")
-            const { resolveFrontendPreview } = await import("@/preview/frontend")
+            const { ensureManagedPreviewSession } = await import("@/preview/session")
             const { AttachmentStore } = await import("@/storage/attachment-store")
-            const preview = await resolveFrontendPreview({
-              directory: Instance.directory,
-              requireOwnedProcess: true,
+            const preview = await ensureManagedPreviewSession({
+              taskID,
+              workspaceDir: Instance.directory,
+              metadata: liveTask.metadata as Record<string, unknown> | undefined,
             })
-            if (!preview.url) {
+            if (preview.status !== "ready" || !preview.url) {
               renderFailure = {
                 kind: "no_live_preview",
-                detail: `merged worktree at ${Instance.directory} has no live preview URL — visual deliverable cannot be rendered`,
+                detail: `merged worktree at ${Instance.directory} has no live preview URL — visual deliverable cannot be rendered; status=${preview.status} reason=${preview.reason ?? "none"}`,
               }
             } else {
               // Pick the first image attachment to size the viewport. All

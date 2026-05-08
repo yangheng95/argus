@@ -15,9 +15,7 @@ export function FrontendPreviewPanel(props: {
     if (props.loading) return t("frontend_preview.loading");
     if (props.error) return props.error;
     if (!url()) return t("frontend_preview.empty");
-    return props.resolution?.source === "delivery"
-      ? t("frontend_preview.source.delivery")
-      : t("frontend_preview.source.port_probe", { port: props.resolution?.port ?? "" });
+    return t("frontend_preview.source.delivery");
   };
 
   const openExternal = async () => {

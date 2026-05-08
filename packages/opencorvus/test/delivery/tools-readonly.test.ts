@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import { mkdtemp } from "node:fs/promises"
 import os from "node:os"
@@ -6,9 +6,14 @@ import path from "node:path"
 import { createDeliveryTools } from "../../src/delivery/tools"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
+import { stopAllManagedPreviewSessions } from "../../src/preview/session"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
+
+afterEach(async () => {
+  await stopAllManagedPreviewSessions()
+})
 
 describe("delivery review-only tool surface", () => {
   test("does not expose file mutation tools", async () => {
@@ -21,6 +26,7 @@ describe("delivery review-only tool surface", () => {
           expect(Object.keys(tools)).not.toContain("write_file")
           expect(Object.keys(tools)).not.toContain("edit_file")
           expect(Object.keys(tools)).toContain("run_command")
+          expect(Object.keys(tools)).toContain("start_frontend_preview")
           expect(Object.keys(tools)).toContain("screenshot")
           expect(Object.keys(tools)).toContain("inspect_delivery_context")
           expect(Object.keys(tools)).toContain("compare_visual_artifacts")
@@ -40,6 +46,8 @@ describe("delivery review-only tool surface", () => {
     expect(prompt).toContain("review-only acceptance gate")
     expect(prompt).toContain("MUST NOT edit the deliverable")
     expect(prompt).toContain("orchestrator can send the affected goal(s) back")
+    expect(prompt).toContain("start_frontend_preview")
+    expect(prompt).toContain("publishes the ready URL to the Overlay")
     expect(prompt).not.toContain("write_file")
     expect(prompt).not.toContain("edit_file")
     expect(prompt).not.toContain("Fix aggressively")
@@ -93,4 +101,46 @@ describe("delivery review-only tool surface", () => {
       await fs.rm(dir, { recursive: true, force: true })
     }
   })
+
+  test("start_frontend_preview starts the declared dev command and returns the board URL", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "opencorvus-delivery-preview-tool-"))
+    try {
+      await fs.writeFile(path.join(dir, "package.json"), JSON.stringify({
+        type: "module",
+        packageManager: "bun@1.3.13",
+        scripts: { dev: "bun scripts/dev-server.ts" },
+      }, null, 2))
+      await fs.mkdir(path.join(dir, "scripts"), { recursive: true })
+      await fs.writeFile(path.join(dir, "scripts", "dev-server.ts"), `
+const server = Bun.serve({
+  port: 0,
+  hostname: "127.0.0.1",
+  fetch() {
+    return new Response("<!doctype html><html><body><main>delivery preview tool</main></body></html>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  },
+});
+console.log("Local: http://127.0.0.1:" + server.port + "/");
+await new Promise(() => {});
+`)
+      await Instance.provide({
+        directory: dir,
+        fn: async () => {
+          const tools = createDeliveryTools({ taskID: "tsk_delivery_preview_tool" })
+          const output = await tools.start_frontend_preview.execute!({}, {} as any) as string
+          const parsed = JSON.parse(output)
+
+          expect(parsed.ok).toBe(true)
+          expect(parsed.status).toBe("ready")
+          expect(parsed.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//)
+          expect(parsed.board_preview_url).toBe(parsed.url)
+          expect(parsed.evidence).toContain("managed_preview_command=bun run dev")
+        },
+      })
+    } finally {
+      await stopAllManagedPreviewSessions()
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  }, 60_000)
 })
