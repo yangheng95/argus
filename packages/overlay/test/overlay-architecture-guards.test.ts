@@ -554,7 +554,6 @@ describe("overlay architecture guards", () => {
 
     for (const className of [
       "sidebar",
-      "sidebar-toolset",
       "sidebar-title",
       "sidebar-subtitle",
       "sidebar-header-actions",
@@ -564,11 +563,12 @@ describe("overlay architecture guards", () => {
     }
 
     expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\]\s*\{/)
-    expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\] \[data-ui="sidebar-toggle-button"\] svg/)
-    expect(html).toContain('data-ui="sidebar-refresh-button"')
-    expect(html).toContain('data-ui="sidebar-toggle-button"')
+    expect(sidebarSurface).not.toContain("sidebar-toolset")
+    expect(html).not.toContain('data-ui="sidebar-refresh-button"')
+    expect(html).not.toContain('data-ui="sidebar-toggle-button"')
     expect(html).toContain('data-ui="sidebar-new-task-button"')
     expect(html).not.toContain('class="sidebar-tool"')
+    expect(html).not.toContain('class="sidebar-toggle"')
     expect(html).not.toContain('class="sidebar-btn sidebar-btn-primary"')
 
     const sidebarAt = html.indexOf('href="styles/surfaces/sidebar.css"')
@@ -2322,12 +2322,12 @@ describe("overlay architecture guards", () => {
           selector,
         )
         const hasHeaderControl =
-          /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|workspace-toggle)\b/.test(selector) ||
-          /\[data-ui="sidebar-(?:refresh|toggle|new-task)-button"\]/.test(selector)
+          /\.(?:task-dir-shell|task-cwd-dropdown|workspace-toggle)\b/.test(selector) ||
+          /\[data-ui="sidebar-new-task-button"\]/.test(selector)
         if (!isThemeSelector || !hasHeaderControl) continue
 
         expect(selector).not.toMatch(
-          /\.(?:task-dir-shell|task-cwd-dropdown|sidebar-toolset|workspace-toggle)\b|\[data-ui="sidebar-(?:refresh|toggle|new-task)-button"\]/,
+          /\.(?:task-dir-shell|task-cwd-dropdown|workspace-toggle)\b|\[data-ui="sidebar-new-task-button"\]/,
         )
       }
     }
@@ -2349,13 +2349,9 @@ describe("overlay architecture guards", () => {
     const sidebarSurface = withoutComments(
       readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")),
     )
-    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("gap: calc(2px * var(--ui-scale))")
-    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("padding: calc(2px * var(--ui-scale))")
-    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
-    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("border-radius: var(--oc-radius-soft)")
-    expect(soloRuleBody(sidebarSurface, ".sidebar-toolset")).toContain("background: var(--oc-control-bg)")
-    expect(sidebarSurface).toContain('.sidebar-toolset .oc-button[data-ui="sidebar-refresh-button"]')
-    expect(sidebarSurface).toContain('.sidebar-toolset .oc-button[data-ui="sidebar-toggle-button"]')
+    expect(sidebarSurface).not.toContain("sidebar-toolset")
+    expect(sidebarSurface).not.toContain('data-ui="sidebar-refresh-button"')
+    expect(sidebarSurface).not.toContain('data-ui="sidebar-toggle-button"')
     expect(sidebarSurface).toContain('.oc-button[data-ui="sidebar-new-task-button"]')
     const workspaceSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
     expect(soloRuleBody(workspaceSurface, ".workspace-toggle")).toContain("border-radius: var(--oc-radius-soft)")
