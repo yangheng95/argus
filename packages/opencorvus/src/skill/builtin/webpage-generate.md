@@ -21,7 +21,7 @@ You are not implementing the page. You are producing the authoritative PRD/SPEC 
 1. Run `webpage_extract` for the live URL.
 2. Run `webpage_compile` after extraction finishes.
 3. Run `webpage_analyze` after extraction finishes.
-4. Read `mirror/reference.png`, `mirror/extracted-page.json`, `mirror/page-ir.xml`, `mirror/scaffold.json`, and `mirror/shared-context.md`.
+4. Read `mirror/reference.png`, `mirror/page-ir.xml`, `mirror/shared-context.md`, and mirror tool summaries. Use `mirror/scaffold.json` only for bounded targeted gaps. Do not read `mirror/extracted-page.json` wholesale; it is the raw source artifact for compile/analyze and the downstream manifest, not the PRD/SPEC working surface.
 5. Write visual consistency requirements directly into `visual_consistency_spec`: reusable tokens, layout, components, interactions, responsive rules, and dense repeated surfaces. Do not create one row per repeated table row, ticker, text instance, candle, or data point.
 6. Perform at least two PRD/SPEC review passes: inventory coverage, then downstream frontend/backend implementability.
 7. Finalize with StructuredOutput fields: `product_spec`, `frontend_spec`, `visual_consistency_spec`, `backend_spec`, `prd_iteration_notes`, `completeness_review`, `reference_artifacts`, and `open_questions`. Put every source file/image URL and mirror artifact name you used into `reference_artifacts`; the orchestrator will publish them as `evidence_source_manifest` and materialize `.opencorvus/design-analysis/prd-spec.md` plus `.opencorvus/design-analysis/evidence-source-manifest.md` for downstream agents.

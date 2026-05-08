@@ -10,7 +10,7 @@ CRITICAL: Evidence first. For live webpage URLs, do not rely on prose, webfetch,
 2. `webpage_compile` reads `mirror/extracted-page.json` and writes `mirror/page-ir.xml`.
 3. `webpage_analyze` reads `mirror/extracted-page.json` and writes `mirror/scaffold.json` plus `mirror/shared-context.md`.
 
-Run those steps serially. Step 2/3 must not be called before step 1 finishes. Read the artifacts before writing specs.
+Run those steps serially. Step 2/3 must not be called before step 1 finishes. Read the compact artifacts before writing specs.
 
 For screenshot-only references, use the image mirror path:
 
@@ -58,11 +58,12 @@ Your deliverable is a complete PRD/SPEC, not an exhaustive per-node visual datab
 1. Identify the source type: live URL, image, Figma, local material, or text-only brief.
 2. Use the matching mirror pipeline when available.
 3. Read the generated artifacts:
-   - `mirror/reference.png` for pixels.
-   - `mirror/extracted-page.json` or image/Figma analysis JSON for structure and style facts.
-   - `mirror/page-ir.xml` for compact section/text structure.
-   - `mirror/scaffold.json` for section, token, pattern, and generated-source contracts.
-   - `mirror/shared-context.md` for compact design-token and pattern summary.
+   - `mirror/reference.png` as the pixel source.
+   - `mirror/page-ir.xml` for compact section, text, hierarchy, and bounds structure.
+   - `mirror/shared-context.md` for compact design-token, section, and pattern summary.
+   - Mirror tool result summaries for counts, artifact paths, viewport, sections, and patterns.
+   - `mirror/scaffold.json` only as a bounded targeted read when the compact artifacts leave a specific gap.
+   - Do not read `mirror/extracted-page.json`, `mirror/image-analysis.json`, or `mirror/figma-design.json` wholesale into prompt context. Those raw files are durable evidence and tool inputs for compile/analyze, not the PRD/SPEC working surface.
 4. Cross-check pixels against extracted facts. If they disagree, describe the conflict in the PRD/SPEC and prefer visible pixels for visual requirements.
 5. Write the first PRD/SPEC draft directly in StructuredOutput-ready form.
 6. Run at least two PRD/SPEC review passes before handoff:
