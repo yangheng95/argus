@@ -58,10 +58,10 @@ describe("webpage-generate dependency guards", () => {
     }
   })
 
-  test("read_file refuses unbounded dense mirror artifacts", async () => {
+  test("read_file refuses raw mirror extraction JSON and unbounded dense mirror artifacts", async () => {
     const { createCodebaseTools } = await import("../../src/engine/codebase-tools")
     await using tmp = await tmpdir()
-    await Bun.write(`${tmp.path}/mirror/extracted-page.json`, "[\n{}\n]\n")
+    await Bun.write(`${tmp.path}/mirror/extracted-page.json`, `[{"screenshotUrl":"${"x".repeat(5000)}"}]\n`)
     await Bun.write(`${tmp.path}/mirror/scaffold.json`, "[\n{}\n]\n")
 
     const tools = createCodebaseTools(tmp.path)
@@ -71,11 +71,28 @@ describe("webpage-generate dependency guards", () => {
     expect(raw).toContain("raw mirror extraction JSON")
     expect(raw).toContain("mirror/page-ir.xml")
 
+    const rawBounded = await readFile.execute({ path: "mirror/extracted-page.json", max_lines: 1 }, {})
+    expect(rawBounded).toContain("not a prompt-readable artifact")
+    expect(rawBounded).not.toContain("xxxxx")
+
     const scaffold = await readFile.execute({ path: "mirror/scaffold.json", max_lines: 1000 }, {})
     expect(scaffold).toContain("dense mirror scaffold JSON")
 
     const bounded = await readFile.execute({ path: "mirror/scaffold.json", max_lines: 20 }, {})
     expect(bounded).toContain("1 | [")
+  })
+
+  test("read_file truncates pathological long text lines", async () => {
+    const { createCodebaseTools } = await import("../../src/engine/codebase-tools")
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/notes.txt`, `${"a".repeat(2000)}\n`)
+
+    const tools = createCodebaseTools(tmp.path)
+    const readFile = tools.read_file as any
+    const output = await readFile.execute({ path: "notes.txt", max_lines: 1 }, {})
+
+    expect(output).toContain("line truncated")
+    expect(output.length).toBeLessThan(1400)
   })
 
   test("compile and analyze surface an actionable missing-artifact error", async () => {
