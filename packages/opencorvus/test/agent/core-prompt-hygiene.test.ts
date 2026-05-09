@@ -275,12 +275,15 @@ describe("core prompt hygiene", () => {
     }
   })
 
-  test("orchestrator prompt keeps direct build behind task-kind contract", async () => {
+  test("orchestrator prompt treats direct build as supported but not always recommended", async () => {
     const text = await readPrompt("orchestrator")
     expect(text).not.toContain("A trivial bug fix calls `build → deliver`, full stop.")
     expect(text).not.toContain("NOT a prescriptive workflow")
-    expect(text).toContain("Fresh `Kind: workflow` cannot start with task-level `build({ request })`")
-    expect(text).toContain("never violate the task-kind contract")
+    expect(text).not.toContain("Fresh `Kind: workflow` cannot start with task-level `build({ request })`")
+    expect(text).not.toContain("never violate the task-kind contract")
+    const normalized = text.replace(/\s+/g, " ")
+    expect(normalized).toContain("task-level `build({ request })` is still supported")
+    expect(normalized).toContain("direct `build({ request })` is allowed")
   })
 
   test("orchestrator prompt forbids `deliver` while non-terminal goals remain", async () => {
