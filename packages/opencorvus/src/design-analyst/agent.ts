@@ -76,6 +76,7 @@ export namespace DesignAnalystAgent {
     const contextTools = await filterAgentTools(createAgentContextTools(), "design-analyst")
     const screenshotToolKit = createUrlScreenshotTool()
     const outputToolKit = createDesignOutputTools()
+    const submitDesignPrdSpecTool = selectDesignSubmitTool(outputToolKit)
     const projectID = (() => {
       try {
         return Instance.project.id
@@ -108,7 +109,7 @@ export namespace DesignAnalystAgent {
           ...contextTools,
           ...screenshotToolKit,
           ...readAttachmentToolKit,
-          ...outputToolKit.tools,
+          ...submitDesignPrdSpecTool,
         },
         getCollector: () => outputToolKit.getCollector(),
       },
@@ -246,6 +247,12 @@ function hasHttpUrl(text: string): boolean {
   return /https?:\/\/\S+/i.test(text)
 }
 
+function selectDesignSubmitTool(outputToolKit: ReturnType<typeof createDesignOutputTools>) {
+  return {
+    submit_design_prd_spec: outputToolKit.tools.submit_design_prd_spec,
+  }
+}
+
 function buildUserPrompt(input: {
   title: string
   request: string
@@ -316,4 +323,5 @@ function buildUserPrompt(input: {
 export const DesignAnalystTestHooks = {
   buildPromptParts,
   buildUserPrompt,
+  selectDesignSubmitTool,
 }

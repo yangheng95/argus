@@ -48,4 +48,11 @@ describe("design-analyst prompt assembly", () => {
     expect(collector.final?.visual_consistency_spec).toBe("视觉一致性规格")
     expect(collector.final?.prd_iteration_notes).toHaveLength(2)
   })
+
+  test("agent exposes direct PRD/SPEC submit instead of register tools", () => {
+    const tools = DesignAnalystTestHooks.selectDesignSubmitTool(createDesignOutputTools())
+
+    expect(Object.keys(tools)).toEqual(["submit_design_prd_spec"])
+    expect(Object.keys(tools).some((name) => name.startsWith("register_"))).toBe(false)
+  })
 })

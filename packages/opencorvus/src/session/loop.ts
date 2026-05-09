@@ -49,6 +49,10 @@ IMPORTANT:
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
+export function terminalToolSystemPrompt(toolName: string): string {
+  return `IMPORTANT: The current task is ready for terminal handoff. You MUST call the ${toolName} tool to provide your final response. Do NOT respond with plain text - you MUST call ${toolName} with input matching its schema.`
+}
+
 // Terminal-call recovery runs through provider-level toolChoice where possible.
 // If the provider/model still stops in prose, the current assistant message is
 // stamped with a typed error and the caller sees the contract violation.
@@ -1024,6 +1028,14 @@ export namespace SessionLoop {
     ]
     if (format.type === "json_schema") {
       system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+    }
+    if (
+      format.type !== "json_schema" &&
+      terminalToolContract &&
+      !terminalToolContract.isSatisfied() &&
+      terminalToolContract.shouldExposeOnlyTerminalTool()
+    ) {
+      system.push(terminalToolSystemPrompt(terminalToolContract.toolName))
     }
 
     const memoryQuery = (lastUserMsg?.parts ?? [])
