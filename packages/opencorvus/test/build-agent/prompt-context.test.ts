@@ -110,6 +110,21 @@ describe("build agent prompt context", () => {
     expect(prompt.indexOf("## Canonical Delivery Rejection Feedback")).toBeLessThan(prompt.indexOf("# Request"))
   })
 
+  test("request-path exposes no-edit analysis terminal-report instructions", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "request",
+        text: "请做探索性分析，不要生成任何代码。",
+      },
+      {},
+    )
+
+    expect(prompt).toContain("exploration, investigation, or analysis")
+    expect(prompt).toContain("skip commit / merge_back")
+    expect(prompt).toContain('status="passed"')
+    expect(prompt).toContain("files_changed: []")
+  })
+
   test("retryGuidance section is dropped when undefined / empty / whitespace-only", () => {
     const baseTarget = {
       kind: "goal" as const,

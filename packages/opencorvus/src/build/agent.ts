@@ -497,8 +497,8 @@ export namespace BuildAgent {
             "and does NOT audit your files_changed[] against the actual git diff. " +
             "Both facts are returned to the orchestrator alongside your report (merge_back_status, actual_changed_files), " +
             "so the orchestrator LLM cross-checks honesty itself. " +
-            "Be honest: if you didn't merge, report status='failed' with a concrete error. " +
-            "If you legitimately reused a prior attempt's worktree without further edits, files_changed=[] is fine.",
+            "Be honest: if you changed project files but didn't merge, report status='failed' with a concrete error. " +
+            "If you legitimately reused a prior attempt's worktree without further edits, or completed an explicit no-edit analysis request with a clean worktree, status='passed' with files_changed=[] is fine.",
           inputSchema: BuildResultSchema,
           execute: async (result) => {
             const parsedResult = BuildResultSchema.safeParse(result)
@@ -2275,6 +2275,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "",
     "Orchestrator is asking build to implement this request, verify it, and report the result.",
     "If the request depends on screenshots, webpage references, uploaded visuals, or staged `references/` files, those references are authoritative and the implementation must restore them 1:1 rather than treating them as inspiration.",
+    "If this request explicitly asks only for exploration, investigation, or analysis and says not to generate code, keep the worktree clean, skip commit / merge_back, and report the findings through the terminal build report with `status=\"passed\"` and `files_changed: []`.",
     "",
     ...contextLines,
     "# Request",
