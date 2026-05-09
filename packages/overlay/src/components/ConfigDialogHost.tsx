@@ -16,6 +16,7 @@ import { closeConfigDialog, setConfigSidebarWidth, switchConfigTab } from "../se
 import { dialogStore, type ConfigDialogTab } from "../store/dialog";
 import { getHostTransport } from "../services/host-transport";
 import { t } from "../utils/i18n";
+import { OVERLAY_VERSION } from "../utils/version";
 import { currentUIScale } from "../services/pane";
 import { Icon } from "./Icon";
 
@@ -181,7 +182,7 @@ export function ConfigDialogHost() {
   const aboutRows = createMemo(() => {
     const config = appStore.config;
     const rows: Array<[string, string]> = [
-      [t("about.rt_overlay"), "v0.0.1-alpha"],
+      [t("about.rt_overlay"), `v${OVERLAY_VERSION}`],
       [t("about.rt_core"), (config as any)?.version || t("about.rt_unavailable")],
       [t("about.rt_server"), settingsStore.serverUrl || "-"],
       [t("about.rt_pid"), typeof appStore.serverPid === "number" ? String(appStore.serverPid) : "-"],

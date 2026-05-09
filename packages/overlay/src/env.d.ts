@@ -1,0 +1,1 @@
+declare const __OPENCORVUS_OVERLAY_VERSION__: string;
