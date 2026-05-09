@@ -24,6 +24,12 @@ import { Plugin } from "@/plugin"
 import { entries, values as objectValues } from "@/util/object"
 import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
 
+const ORCHESTRATOR_RUNTIME_PROMPT = [
+  "You are the OpenCorvus Orchestrator.",
+  "Follow the per-wake orchestrator instructions and task context supplied by the orchestrator runtime.",
+  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `design_analysis`, `architect`, `build`, `deliver`, and `refine`.",
+].join("\n")
+
 export namespace Agent {
   export const Info = z
     .object({
@@ -216,8 +222,11 @@ export namespace Agent {
         name: "orchestrator",
         description: "Orchestrator (master) agent. Drives the end-to-end task lifecycle through one of the two built-in workflows (direct or pipeline).",
         // Prompt is constructed dynamically per-wake in src/orchestrator/agent.ts
-        // (buildSystemParts). No static core prompt — the orchestrator's
-        // context depends on live task/goal/run state.
+        // (buildSystemParts). This minimal agent prompt exists only to stop
+        // SessionLoop from inheriting the generic assistant core header, whose
+        // Task-tool policy is invalid for the orchestrator's explicit tool
+        // surface. Live task/goal/run context still comes from buildSystemParts.
+        prompt: ORCHESTRATOR_RUNTIME_PROMPT,
         // Step cap raised to 1000 (effectively unlimited). Per user 2026-04-25
         // the per-agent step budget should not constrain normal flow. A tight
         // per-session cap was the dominant failure mode (3-goal pipeline

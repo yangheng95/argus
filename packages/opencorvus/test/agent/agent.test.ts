@@ -160,6 +160,21 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
   })
 })
 
+test("orchestrator does not inherit the generic task-tool prompt policy", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const orchestrator = await Agent.get("orchestrator")
+      expect(orchestrator).toBeDefined()
+      expect(orchestrator?.prompt).toBeDefined()
+      expect(orchestrator?.prompt).toContain("The generic `task` tool is not an orchestrator tool")
+      expect(orchestrator?.prompt).not.toContain("Use the Task tool")
+      expect(orchestrator?.prompt).not.toContain("Proactively use the Task tool")
+    },
+  })
+})
+
 test("compaction agent exposes no tools while permissions default to allow", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
