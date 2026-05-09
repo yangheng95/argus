@@ -26,15 +26,15 @@ import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 const log = Log.create({ service: "mirror.tool.figma_extract" })
 
 export const FigmaExtractTool = Tool.define("figma_extract", {
-  description: `Fetch a Figma file (or sub-tree by nodeId) via the Figma REST API and emit a CompressedDesign IR + canonical reference screenshot. Step 1 of the figma2code workflow.
+  description: `Fetch a Figma file (or sub-tree by nodeId) via the Figma REST API and emit a CompressedDesign IR + canonical reference screenshot.
 
 Writes to the output directory (defaults to \`mirror/\` under the worktree):
   - figma-design.json   the full CompressedDesign (frames + tokens + components + images map)
   - reference.png       the first rendered frame — visual target for downstream render/evaluate/vision-judge
 
-Returns a compact summary (pages, frame count, token counts, image-export count). The agent should call \`figma_compile\` and \`figma_analyze\`, then use the compiled IR, shared context, and tool summaries as prompt-facing evidence. \`figma-design.json\` is the raw source artifact for deterministic tools and the evidence manifest; do not read it wholesale into prompt context.
+Returns a compact summary (pages, frame count, token counts, image-export count). \`figma-design.json\` is the raw source artifact for deterministic tools and the evidence manifest; do not read it wholesale into prompt context.
 
-Authentication: requires FIGMA_API_TOKEN environment variable, or pass \`token\` explicitly. Throws a typed MirrorFigmaFetchError when the token is missing or the URL is malformed.`,
+Use this only when Figma evidence is missing for the requested output directory. Do not rerun it for the same Figma source/outputDir once \`reference.png\` and \`figma-design.json\` exist. Authentication: requires FIGMA_API_TOKEN environment variable, or pass \`token\` explicitly. Throws a typed MirrorFigmaFetchError when the token is missing or the URL is malformed.`,
   parameters: z.object({
     figma_url: z
       .string()
@@ -161,7 +161,7 @@ Authentication: requires FIGMA_API_TOKEN environment variable, or pass \`token\`
         `**Design JSON:** \`${designPath}\``,
         referencePath ? `**Reference image:** \`${referencePath}\`` : "_Reference image unavailable — visual judge will fail without it._",
         "",
-        "Next: call `figma_compile` to get compact XML IR, then `figma_analyze` for the ProjectScaffold.",
+        "Figma evidence acquired. Do not rerun extraction for this source/outputDir unless the source changed. Use compact mirror artifacts for PRD/SPEC synthesis; do not read `figma-design.json` wholesale.",
       ].join("\n"),
       metadata: summary,
     }

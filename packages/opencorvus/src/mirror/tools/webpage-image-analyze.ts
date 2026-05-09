@@ -31,11 +31,11 @@ Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes t
   - shared-context.md       compact token + section summary for prompts
   - sourcePaths             scaffold-generated source files for analysis only
 
-Returns a summary: section list, token counts. The agent should read \`shared-context.md\` and \`page-ir.xml\` first, then use bounded targeted \`scaffold.json\` reads only for specific gaps.
+Returns a summary: section list and token counts. Once these artifacts exist, use \`shared-context.md\` and \`page-ir.xml\` for PRD/SPEC synthesis; bounded targeted \`scaffold.json\` reads are only for specific gaps.
 
-This tool is artifact-dependent: do NOT call it until \`webpage_image_extract\` has completed and written \`image-analysis.json\`. Never batch it in the same assistant turn as \`webpage_image_extract\`.
+This tool is artifact-dependent: do NOT call it until \`image-analysis.json\` exists in the output directory. Never batch it with the image extraction call that creates that file.
 
-Use as step 3 of the design-analysis image PRD/SPEC workflow. Pure function, no network or LLM.`,
+Use this only when scaffold artifacts are missing. Do not rerun it once \`shared-context.md\` exists for the current evidence package. Pure function, no network or LLM.`,
   parameters: z.object({
     outputDir: z
       .string()
@@ -55,7 +55,7 @@ Use as step 3 of the design-analysis image PRD/SPEC workflow. Pure function, no 
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         throw new Error(
           `Missing ${analysisPath}. \`webpage_image_analyze\` depends on \`webpage_image_extract\` output. ` +
-            `Run \`webpage_image_extract\` first and wait for it to finish before calling \`webpage_image_analyze\`.`,
+            `Create the image evidence package first and retry only after \`image-analysis.json\` exists.`,
         )
       }
       throw error
@@ -101,7 +101,7 @@ Use as step 3 of the design-analysis image PRD/SPEC workflow. Pure function, no 
         `- \`${contextPath}\` — compact prompt-ready summary`,
         `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: read `shared-context.md` and `page-ir.xml`, then use bounded targeted `scaffold.json` reads only for missing details before writing the PRD/SPEC. Do not treat generated source as the deliverable.",
+        "Image scaffold artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use compact artifacts for PRD/SPEC synthesis; generated source is not the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,

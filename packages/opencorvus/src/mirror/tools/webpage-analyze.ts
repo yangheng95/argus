@@ -111,11 +111,11 @@ Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror 
   - prd-evidence-summary.md direct PRD/SPEC drafting surface
   - sourcePaths             scaffold-generated source files for analysis only
 
-Returns a summary: section list, pattern list, token counts, and the PRD/SPEC evidence summary path. The agent should submit the PRD/SPEC after two review passes once these artifacts exist; bounded targeted \`scaffold.json\` reads are only for specific gaps.
+Returns a summary: section list, pattern list, token counts, and the PRD/SPEC evidence summary path. Once these artifacts exist, use them for PRD/SPEC synthesis; bounded targeted \`scaffold.json\` reads are only for specific gaps.
 
-This tool is artifact-dependent: do NOT call it until \`webpage_extract\` has completed and written \`extracted-page.json\`. Never batch it in the same assistant turn as \`webpage_extract\`.
+This tool is artifact-dependent: do NOT call it until \`extracted-page.json\` exists in the output directory. Never batch it with the URL extraction call that creates that file.
 
-Use as step 3 of the design-analysis webpage PRD/SPEC workflow. Pure function, no network.`,
+Use this only when scaffold and PRD evidence artifacts are missing. Do not rerun it once \`shared-context.md\` and \`prd-evidence-summary.md\` exist for the current evidence package. Pure function, no network.`,
   parameters: z.object({
     outputDir: z
       .string()
@@ -135,7 +135,7 @@ Use as step 3 of the design-analysis webpage PRD/SPEC workflow. Pure function, n
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         throw new Error(
           `Missing ${extractedPath}. \`webpage_analyze\` depends on \`webpage_extract\` output. ` +
-          `Run \`webpage_extract\` first and wait for it to finish before calling \`webpage_analyze\`.`,
+          `Create the URL evidence package first and retry only after \`extracted-page.json\` exists.`,
         )
       }
       throw error
@@ -213,7 +213,7 @@ Use as step 3 of the design-analysis webpage PRD/SPEC workflow. Pure function, n
         `- \`${prdEvidencePath}\` — direct PRD/SPEC evidence summary`,
         `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: use the PRD/SPEC evidence summary above plus `shared-context.md` and `page-ir.xml` as the working surface. Perform two PRD/SPEC review passes, then call `submit_design_prd_spec`. Do not treat generated source as the deliverable.",
+        "PRD/SPEC evidence artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use `prd-evidence-summary.md`, `shared-context.md`, and `page-ir.xml` as the working surface; generated source is not the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,
