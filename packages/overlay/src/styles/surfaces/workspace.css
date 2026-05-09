@@ -21,7 +21,8 @@
 
 /* ── Row-resize pane handle (workspace variant) ──
  * Double-class (.pane-resizer.pane-resizer-workspace) bumps specificity
- * above the generic .pane-resizer col-resize rule in styles.css. */
+ * above the generic .pane-resizer col-resize rule. The handle remains
+ * interactive but no longer paints a divider line. */
 .pane-resizer.pane-resizer-workspace {
   flex: 0 0 var(--ui-resizer-width);
   align-self: stretch;
@@ -34,29 +35,6 @@
 .pane-resizer.pane-resizer-workspace[hidden] {
   display: none;
 }
-.pane-resizer.pane-resizer-workspace::before {
-  content: "";
-  position: absolute;
-  left: calc(14px * var(--ui-scale));
-  right: calc(14px * var(--ui-scale));
-  top: 50%;
-  bottom: auto;
-  width: auto;
-  transform: translateY(-50%);
-  height: calc(1px * var(--ui-scale));
-  background: color-mix(in srgb, var(--border) 42%, transparent);
-  border-radius: var(--oc-radius-pill);
-  transition:
-    background var(--ui-duration-fast) var(--ui-timing-standard),
-    box-shadow var(--ui-duration-fast) var(--ui-timing-standard);
-}
-.pane-resizer.pane-resizer-workspace:hover::before,
-.pane-resizer.pane-resizer-workspace[data-active="true"]::before {
-  background: var(--accent);
-  height: calc(2px * var(--ui-scale));
-  box-shadow: none;
-}
-
 /* ── Workspace Panel ──
  * Flat-redesign Step 2 (2026-05-04): the panel-self border + drop-shadow +
  * border-radius were retired. Visual edge with the panel-body sibling is
@@ -645,23 +623,6 @@ code .file-link:hover {
   display: none;
 }
 
-.pane-resizer::before {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  top: calc(8px * var(--ui-scale));
-  bottom: calc(8px * var(--ui-scale));
-  left: 50%;
-  width: var(--oc-border-width);
-  transform: translateX(-50%);
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--border) 42%, transparent);
-  transition:
-    background var(--ui-duration-fast) var(--ui-timing-standard),
-    box-shadow var(--ui-duration-fast) var(--ui-timing-standard),
-    width var(--ui-duration-fast) var(--ui-timing-standard);
-}
-
 .pane-resizer::after {
   content: "";
   position: absolute;
@@ -670,13 +631,6 @@ code .file-link:hover {
   left: calc(-5px * var(--ui-scale));
   right: calc(-5px * var(--ui-scale));
   cursor: col-resize;
-}
-
-.pane-resizer:hover::before,
-.pane-resizer[data-active="true"]::before {
-  background: var(--accent);
-  width: calc(2px * var(--ui-scale));
-  box-shadow: none;
 }
 
 body[data-resizing="row"] {

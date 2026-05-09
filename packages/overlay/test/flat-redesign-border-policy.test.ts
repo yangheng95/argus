@@ -14,8 +14,8 @@
  *           is retired.
  *
  *   Rule C (no border-color flip on state changes): hover/active/status
- *           state changes use background tint, not border-color. Active
- *           emphasis is rendered via accent left-stripe (`::after`).
+ *           state changes use background tint, not border-color or stray
+ *           decorative rails.
  *
  * The guard is targeted — it only inspects the specific selectors the
  * 2026-05-04 user critique identified. Adding a `border:` rule to one of
@@ -148,13 +148,13 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
     expect(body).not.toMatch(/border-color\s*:/)
   })
 
-  test(".oc-section[data-phase-state=\"active\"] uses left-stripe via ::after, not border-color", () => {
+  test(".oc-section[data-phase-state=\"active\"] uses bg-tint only, not border-color or rails", () => {
     const body = ruleBody(inspector, '.oc-section[data-phase-state="active"]')
     expect(body).not.toMatch(/border-color\s*:/)
     // Outer drop-shadow chrome was the other half of the active state — also retired.
     expect(body).not.toMatch(/box-shadow\s*:\s*[^;]*\binset\b/)
-    // The accent left-stripe `::after` rule must exist.
-    expect(inspector).toMatch(/\.oc-section\[data-phase-state="active"\]::after\s*\{/)
+    expect(body).toMatch(/background\s*:/)
+    expect(inspector).not.toMatch(/\.oc-section\[data-phase-state="active"\]::after\s*\{/)
   })
 
   test(".executor-selector[data-open=\"true\"] .executor-chip uses bg-tint, not border-color", () => {

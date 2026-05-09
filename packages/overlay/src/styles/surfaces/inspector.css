@@ -383,10 +383,8 @@
  *
  * Flat-redesign Step 2 (2026-05-04): the per-state `border-color`
  * flip + outer drop-shadow that announced "active" were retired
- * (rule §2.2 C). Active state is now a 2px accent left-stripe
- * rendered via `::after`, plus the existing background wash. The
- * stripe pattern matches `.delivery-panel::before` in this same
- * file, which is the established left-rail accent idiom. */
+ * (rule §2.2 C). Active state now uses only the existing background
+ * wash; extra vertical rails were visually ambiguous in narrow panes. */
 .oc-section[data-phase-state="related"] {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 3%, transparent), transparent 72%),
@@ -405,17 +403,6 @@
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 74%),
     color-mix(in srgb, var(--surface) 92%, var(--surface-inset) 8%);
-}
-
-.oc-section[data-phase-state="active"]::after {
-  content: "";
-  position: absolute;
-  inset-block: calc(6px * var(--ui-scale));
-  inset-inline-start: 0;
-  width: calc(2px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  background: var(--accent);
-  pointer-events: none;
 }
 
 .oc-section[data-phase-state="active"] > .oc-section__head {
@@ -617,9 +604,9 @@
   padding: 0;
 }
 
-/* GWG (Goal-Workflow-Graph) card — flat shell with a left-rail
-   ::before accent stripe whose tone rotates with the goal status
-   modifier. The richer `.gwg-header` / `-title` / `-revision` /
+/* GWG (Goal-Workflow-Graph) card — flat shell. Status is carried by
+   the icon and header/body content, not a decorative left rail. The
+   richer `.gwg-header` / `-title` / `-revision` /
    `-objective` / `-step` / `-verdict` / `-checks` family still
    lives in styles.css until each block gets a token sweep —
    relocating them piecemeal would explode the surface size before
@@ -630,21 +617,6 @@
   background: var(--surface-inset);
   overflow: hidden;
   transition: background var(--ui-duration-slow) var(--ui-timing-standard);
-}
-
-.gwg::before {
-  content: "";
-  position: absolute;
-  left: calc(11px * var(--ui-scale));
-  top: calc(12px * var(--ui-scale));
-  bottom: calc(12px * var(--ui-scale));
-  width: calc(2px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--subtle-5) 86%, transparent);
-  transition:
-    background var(--ui-duration-slow) var(--ui-timing-standard),
-    box-shadow var(--ui-duration-slow) var(--ui-timing-standard);
-  pointer-events: none;
 }
 
 .gwg:hover {
@@ -659,20 +631,6 @@
       color-mix(in srgb, var(--accent) 1.2%, transparent)
     ),
     color-mix(in srgb, var(--surface) 96%, transparent);
-}
-
-/* Goal status rail tone is data-driven by the backend goal status. */
-.gwg[data-goal-status="passed"]::before {
-  background: color-mix(in srgb, var(--accent) 52%, var(--text-soft));
-}
-
-.gwg[data-goal-status="failed"]::before {
-  background: color-mix(in srgb, var(--bad) 82%, var(--text-on-accent) 4%);
-}
-
-.gwg[data-goal-status="running"]::before {
-  background: var(--accent);
-  box-shadow: none;
 }
 
 /* GWG header bar: clickable summary row carrying the status icon,
