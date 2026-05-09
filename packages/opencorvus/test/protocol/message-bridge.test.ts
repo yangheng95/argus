@@ -26,7 +26,7 @@ describe("message-bridge persistence guard", () => {
     expect(bridgeSource).toContain("ProtocolStore.appendEvent")
     expect(bridgeSource).toMatch(/Bus\.subscribe\(SessionStatus\.Event\.Status,[\s\S]*bridgeSessionLifecycle/)
     expect(bridgeSource).toMatch(/Bus\.subscribe\(SessionStatus\.Event\.Idle,[\s\S]*bridgeSessionLifecycle/)
-    expect(bridgeSource).toMatch(/Bus\.subscribe\(Session\.Event\.Error,[\s\S]*bridgeSessionError/)
+    expect(bridgeSource).toMatch(/Bus\.subscribe\(SessionEvents\.Error,[\s\S]*bridgeSessionError/)
   })
 
   test("uses dispatchEphemeral for every Message.Event subscription", () => {

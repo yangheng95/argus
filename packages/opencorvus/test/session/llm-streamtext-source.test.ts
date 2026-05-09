@@ -50,10 +50,10 @@ test("the streamText call passes timeoutMs: false to disable the wrapper's soft 
   expect(src).toMatch(/timeoutMs:\s*false/)
 })
 
-test("streamText onError publishes Session.Event.Error for overlay visibility", () => {
+test("streamText onError publishes session error events for overlay visibility", () => {
   expect(src).toMatch(/onError\(event\)\s*\{[\s\S]*Message\.fromError\(event\.error/)
-  expect(src).toMatch(/onError\(event\)\s*\{[\s\S]*Bus\.publish\(Session\.Event\.Error/)
-  expect(src).toMatch(/Bus\.publish\(Session\.Event\.Error,[\s\S]*sessionID:\s*input\.sessionID/)
+  expect(src).toMatch(/onError\(event\)\s*\{[\s\S]*Bus\.publish\(SessionEvents\.Error/)
+  expect(src).toMatch(/Bus\.publish\(SessionEvents\.Error,[\s\S]*sessionID:\s*input\.sessionID/)
 })
 
 test("session system prompt is passed through the SDK system field, not messages", () => {

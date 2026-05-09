@@ -16,6 +16,7 @@ import { ProjectTable } from "../project/project.sql"
 import { Storage } from "@/storage/storage"
 import { Log } from "../util/log"
 import { Message } from "./message"
+import { SessionEvents } from "./events"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
 import path from "path"
@@ -221,13 +222,7 @@ export namespace Session {
         diff: Snapshot.FileDiff.array(),
       }),
     ),
-    Error: BusEvent.define(
-      "session.error",
-      z.object({
-        sessionID: z.string().optional(),
-        error: Message.Assistant.shape.error,
-      }),
-    ),
+    Error: SessionEvents.Error,
   }
 
   export const create = fn(
