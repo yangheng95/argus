@@ -2,7 +2,7 @@ import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { Instance } from "@/project/instance"
 import { ProtocolStore } from "@/protocol/store"
-import { Session } from "@/session"
+import { SessionEvents } from "@/session/events"
 import { Message } from "@/session/message"
 import { SessionStatus } from "@/session/status"
 import { Log } from "@/util/log"
@@ -444,8 +444,8 @@ const CROSS_INSTANCE_HANDLERS: Record<string, (props: Record<string, unknown>) =
   [SessionStatus.Event.Idle.type]: (props) => {
     bridgeSessionLifecycle(SessionStatus.Event.Idle.type, props)
   },
-  [Session.Event.Error.type]: (props) => {
-    bridgeSessionError(Session.Event.Error.type, props)
+  [SessionEvents.Error.type]: (props) => {
+    bridgeSessionError(SessionEvents.Error.type, props)
   },
 }
 
@@ -478,8 +478,8 @@ export function ensureTaskMessageProtocolBridge() {
   Bus.subscribe(SessionStatus.Event.Idle, (event) => {
     bridgeSessionLifecycle(SessionStatus.Event.Idle.type, event.properties)
   })
-  Bus.subscribe(Session.Event.Error, (event) => {
-    bridgeSessionError(Session.Event.Error.type, event.properties)
+  Bus.subscribe(SessionEvents.Error, (event) => {
+    bridgeSessionError(SessionEvents.Error.type, event.properties)
   })
 
   // Cross-Instance bridge: executor sessions run in worktree Instances whose

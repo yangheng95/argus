@@ -16,8 +16,8 @@ import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
-import { Session } from "."
 import { Message } from "./message"
+import { SessionEvents } from "./events"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
@@ -204,7 +204,7 @@ export namespace LLM {
     const result = streamText({
       onError(event) {
         const error = Message.fromError(event.error, { providerID: input.model.providerID })
-        Bus.publish(Session.Event.Error, {
+        Bus.publish(SessionEvents.Error, {
           sessionID: input.sessionID,
           error,
         })
