@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { buildAgentWorkflow } from "../src/utils/agent-workflow";
 
 test("agent workflow projection stacks repeated retry sessions by parent and agent", () => {
@@ -92,4 +94,14 @@ test("agent workflow projection uses live phase cards when trace is not availabl
   expect(projection.records[0]?.sessionID).toBe("ses_build_live");
   expect(projection.records[0]?.status).toBe("running");
   expect(projection.records[0]?.report?.summary).toBe("Editing the component");
+});
+
+test("agent workflow panel renders one current card per retry stack", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/components/AgentWorkflowPanel.tsx"), "utf8");
+
+  expect(source).toContain("currentStackRecord");
+  expect(source).toContain("stackAttemptTotal");
+  expect(source).not.toContain("<For each={stack.records}>");
+  expect(source).toContain('current: String(attemptTotal())');
+  expect(source).toContain('trace.loading && records().length === 0 ? t("common.loading") : t("common.refresh")');
 });
