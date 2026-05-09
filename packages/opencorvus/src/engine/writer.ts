@@ -3,15 +3,16 @@
  *
  * Both process-restart recovery and operator-driven restart_from_stage need
  * to abort the same kinds of rows — live goal_runs, live executor_sessions,
- * live runs — and optionally clean up per-goal workspaces. Historically
+ * live runs — while preserving per-goal workspaces. Historically
  * each call site had its own copy of the "loop + abort" logic, which
- * drifted: recovery cleaned goal workspaces but restart_from_stage did not,
- * executor session aborts in some paths went through the writer layer and
- * in others didn't, error messages formatted differently, and new rows
+ * drifted: executor session aborts in some paths went through the writer
+ * layer and in others didn't, error messages formatted differently, and new rows
  * were created with raw `db.insert` side-stepping the state-machine writers.
  *
  * This module keeps the primitives in one place so callers only choose the
- * scope filter (project vs task) and the cleanup policy. All status writes
+ * scope filter (project vs task) and the cleanup policy. Cleanup itself is
+ * success-only: a workspace can be deleted only when the latest goal_run is
+ * completed. All status writes
  * go through `updateGoalRun` / `updateExecutorSessionStatus*` / `updateRun`,
  * which enforce CAS + state-machine transitions + event emission (for
  * task/run).
@@ -152,6 +153,15 @@ export async function cleanupGoalWorkspaceForGoal(goalID: string): Promise<boole
   const { findGoalLatestWorkspace } = await import("@/engine/store")
   const live = findGoalLatestWorkspace(goalID)
   if (!live.directory) return false
+  if (live.status !== "completed") {
+    log.warn("cleanupGoalWorkspaceForGoal skipped non-completed latest goal_run", {
+      goalID,
+      goalRunID: live.goalRunID,
+      status: live.status,
+      directory: live.directory,
+    })
+    return false
+  }
 
   const { cleanupGoalWorkspace } = await import("@/goal/runner")
   await cleanupGoalWorkspace(live.directory)
@@ -259,8 +269,9 @@ export interface AbortLiveResult {
  *   - runs in any live status (LIVE_RUN_STATUSES)
  *   - executor_sessions attached to the task
  *
- * Goal workspaces are goal-scoped, not goal_run-scoped. By default terminal
- * task-level aborts clean the owning goals' workspaces.
+ * Goal workspaces are goal-scoped, not goal_run-scoped. Task-level aborts
+ * preserve workspaces by default. Physical deletion is success-only and is
+ * guarded in cleanupGoalWorkspaceForGoal by the latest goal_run status.
  */
 export async function abortLiveExecutionForTask(input: {
   taskID: string
@@ -280,7 +291,7 @@ export async function abortLiveExecutionForTask(input: {
   const sessionRows = listLiveExecutorSessionsForTask(input.taskID)
   const executorSessions = abortExecutorSessions(sessionRows)
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
-  const cleanupGoals = input.cleanupGoalWorkspaces ?? true
+  const cleanupGoals = input.cleanupGoalWorkspaces === true
     ? listGoals(input.taskID).map((goal) => goal.id)
     : []
   await cleanupGoalWorkspaces(cleanupGoals)

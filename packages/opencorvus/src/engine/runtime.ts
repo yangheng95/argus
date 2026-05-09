@@ -256,7 +256,7 @@ export namespace EngineRuntime {
     if (queue.status === "running") {
       // Single-session operator runs: use DB timestamps for inactivity detection.
       // (GoalPool-managed runs don't reach this path.)
-      const RUN_STALL_MS = 30 * 60 * 1000 // 30 min
+      const RUN_STALL_MS = 60 * 60 * 1000 // 60 min
       const lastActivity = run.time_updated ?? run.time_started ?? run.time_created ?? Date.now()
       const inactiveMs = Date.now() - lastActivity
       if (inactiveMs > RUN_STALL_MS) {
