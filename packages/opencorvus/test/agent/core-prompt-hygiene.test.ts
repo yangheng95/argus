@@ -230,11 +230,20 @@ describe("core prompt hygiene", () => {
 
   test("design-analysis treats raw mirror JSON as evidence, not PRD working context", async () => {
     const design = await readPrompt("designAnalyst")
-    expect(design).toContain("Read the compact artifacts before writing specs")
+    expect(design).toContain("After the compact artifacts exist, stop calling mirror acquisition tools")
     expect(design).toContain("`mirror/page-ir.xml` for compact section")
     expect(design).toContain("`mirror/shared-context.md` for compact design-token")
     expect(design).toContain("Do not read `mirror/extracted-page.json`, `mirror/image-analysis.json`, or `mirror/figma-design.json` wholesale")
     expect(design).not.toContain("`mirror/extracted-page.json` or image/Figma analysis JSON for structure and style facts")
+  })
+
+  test("design-analysis core prompt does not repeat raw webpage mirror workflow", async () => {
+    const design = await readPrompt("designAnalyst")
+    expect(design).not.toContain("webpage_extract")
+    expect(design).not.toContain("webpage_compile")
+    expect(design).not.toContain("webpage_analyze")
+    expect(design).not.toContain("Strict order")
+    expect(design).not.toContain("Run those steps serially")
   })
 
   test("design-analysis forbids unobserved backend infrastructure in PRD/SPEC", async () => {

@@ -23,7 +23,10 @@ describe("design-analyst prompt assembly", () => {
     expect(parts).toHaveLength(1)
     expect(parts[0]?.type).toBe("text")
     expect(parts[0]?.text).toContain("stored for provenance but are not inlined")
-    expect(parts[0]?.text).toContain("Use the mirror webpage pipeline first")
+    expect(parts[0]?.text).toContain("Use the matched webpage reference skill")
+    expect(parts[0]?.text).not.toContain("webpage_extract")
+    expect(parts[0]?.text).not.toContain("webpage_compile")
+    expect(parts[0]?.text).not.toContain("webpage_analyze")
     expect(parts[0]?.text).not.toContain("[inlined as file part]")
   })
 

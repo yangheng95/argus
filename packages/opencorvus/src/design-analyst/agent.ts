@@ -270,10 +270,10 @@ function buildUserPrompt(input: {
     const allVisualsAreUrlScreenshots = visualAttachments.every((a) => a.source === "url-screenshot")
     const visualReferenceMode =
       hasLiveHttpUrl && allVisualsAreUrlScreenshots
-        ? "These URL screenshot captures are stored for provenance but are not inlined into this prompt. Use the mirror webpage pipeline first (`webpage_extract`, then `webpage_compile`, then `webpage_analyze`) and use `mirror/reference.png`, `mirror/page-ir.xml`, `mirror/shared-context.md`, and bounded scaffold details as the PRD/SPEC evidence surface. "
+        ? "These URL screenshot captures are stored for provenance but are not inlined into this prompt. Use the matched webpage reference skill to acquire any missing evidence once, then read the compact artifacts and write the PRD/SPEC. "
         : "These files are attached to this message as multimodal content — read the pixels directly. Do NOT use webfetch. Prefer these attached screenshots over re-capturing the same page. " +
           (hasLiveHttpUrl
-            ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the mirror webpage pipeline first (`webpage_extract`, then `webpage_compile`, then `webpage_analyze`) and read the resulting artifacts before writing specs. "
+            ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, use the matched webpage reference skill to acquire missing evidence once before writing specs. "
             : "")
     sections.push(
       `# Visual References\n\n${lines}\n\n` +
@@ -284,7 +284,7 @@ function buildUserPrompt(input: {
     sections.push(
       "# No visual references attached\n\n" +
       (hasLiveHttpUrl
-        ? "No screenshots, mockups, or design materials were attached yet. If the request includes a live http(s) webpage URL, use the mirror webpage pipeline first (`webpage_extract`, then `webpage_compile`, then `webpage_analyze`). If extraction fails, report the exact failure; do not invent page facts. "
+        ? "No screenshots, mockups, or design materials were attached yet. If the request includes a live http(s) webpage URL, use the matched webpage reference skill to acquire missing evidence once. If evidence acquisition fails, report the exact failure; do not invent page facts. "
         : "No screenshots, mockups, or design materials were provided. ") +
       "Extract the PRD/SPEC from the textual brief only when no visual input is available. Do NOT invent " +
       "visual specifics that have no source in the brief.",
@@ -299,10 +299,8 @@ function buildUserPrompt(input: {
 
   sections.push(
     "# Live URL Capture\n\n" +
-    "For visual webpage URLs, use the mirror pipeline — not `webfetch` and not screenshot-only analysis. " +
-    "Strict order: `webpage_extract` writes `mirror/reference.png` and `mirror/extracted-page.json`; " +
-    "`webpage_compile` writes `mirror/page-ir.xml`; `webpage_analyze` writes `mirror/scaffold.json` " +
-    "and `mirror/shared-context.md`. Read the compact artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the PRD/SPEC prompt. " +
+    "For visual webpage URLs, use the matched webpage reference skill — not `webfetch` and not screenshot-only analysis. " +
+    "Acquire missing reference evidence once, then stop acquiring and read the compact artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the PRD/SPEC prompt. " +
     "Do at least two PRD/SPEC review passes before `submit_design_prd_spec`: first check page inventory and visual coverage, then check downstream frontend/backend implementability. " +
     "Do not use todo or scratchpad tools for PRD iteration; write the review-pass findings directly into the final PRD/SPEC fields.",
   )
