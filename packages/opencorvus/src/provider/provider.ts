@@ -50,6 +50,22 @@ export namespace Provider {
     languageModel(modelId: string): LanguageModel
   }
 
+  const DEFAULT_INACTIVITY_TIMEOUT_MS = 300_000
+  const PROVIDER_INACTIVITY_TIMEOUT_MS: Record<string, number> = {
+    "alibaba-coding-plan-cn": 60_000,
+  }
+
+  export function resolveFetchInactivityMs(providerID: string, configuredTimeout: unknown): number {
+    const providerTimeout = PROVIDER_INACTIVITY_TIMEOUT_MS[providerID]
+    const selectedTimeout = configuredTimeout !== undefined && configuredTimeout !== null
+      ? configuredTimeout
+      : (providerTimeout ?? DEFAULT_INACTIVITY_TIMEOUT_MS)
+
+    if (selectedTimeout === false || typeof selectedTimeout !== "number" || selectedTimeout <= 0) return 0
+    if (providerTimeout !== undefined) return Math.min(selectedTimeout, providerTimeout)
+    return Math.max(selectedTimeout, DEFAULT_INACTIVITY_TIMEOUT_MS)
+  }
+
   function googleVertexVars(options: Record<string, any>) {
     const project =
       options["project"] ?? Env.get("GOOGLE_CLOUD_PROJECT") ?? Env.get("GCP_PROJECT") ?? Env.get("GCLOUD_PROJECT")
@@ -668,25 +684,15 @@ export namespace Provider {
 
       const customFetch = options["fetch"]
 
-      // Default inactivity timeout: abort if no data flows for this duration.
-      // Unlike a fixed timeout from request start, this only fires when the
-      // stream goes silent — active streaming (even slow) keeps it alive.
-      const DEFAULT_INACTIVITY_TIMEOUT_MS = 300_000
       options["fetch"] = async (input: any, init?: BunFetchRequestInit) => {
         // Preserve custom fetch if it exists, wrap it with timeout logic
         const fetchFn = customFetch ?? fetch
         const opts = init ?? {}
 
-        const configuredTimeout = (options["timeout"] !== undefined && options["timeout"] !== null)
-          ? options["timeout"]
-          : DEFAULT_INACTIVITY_TIMEOUT_MS
-        // Enforce a minimum inactivity timeout: upstream SDKs may set very
-        // short timeouts (30s) which abort during model thinking.
-        // 5 minutes minimum covers extended thinking models (sonnet, opus).
-        const MIN_INACTIVITY_TIMEOUT_MS = 300_000
-        const inactivityMs = configuredTimeout !== false && typeof configuredTimeout === "number" && configuredTimeout > 0
-          ? Math.max(configuredTimeout, MIN_INACTIVITY_TIMEOUT_MS)
-          : 0
+        // Stable providers retain the 5min minimum for long model thinking.
+        // alibaba-coding-plan-cn is documented to hang during peak hours, so
+        // it is clamped fail-fast and never burns the orchestrator for 5min.
+        const inactivityMs = resolveFetchInactivityMs(model.providerID, options["timeout"])
 
         // Inactivity-based abort: fires if no activity for the configured period.
         // The timer starts NOW (covers the initial connection phase) and resets
