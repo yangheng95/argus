@@ -306,7 +306,7 @@
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  opacity: 0.72;
+  opacity: var(--ui-opacity-dim);
   transition:
     opacity var(--ui-duration-base),
     color var(--ui-duration-base),
@@ -314,7 +314,7 @@
 }
 
 .workspace-terminal-tab-close:hover {
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
   color: var(--bad);
   background: color-mix(in srgb, var(--bad) 12%, transparent);
 }
@@ -623,6 +623,11 @@ code .file-link:hover {
   display: none;
 }
 
+.pane-resizer[data-disabled="true"] {
+  cursor: default;
+  pointer-events: none;
+}
+
 .pane-resizer::after {
   content: "";
   position: absolute;
@@ -631,6 +636,10 @@ code .file-link:hover {
   left: calc(-5px * var(--ui-scale));
   right: calc(-5px * var(--ui-scale));
   cursor: col-resize;
+}
+
+.pane-resizer[data-disabled="true"]::after {
+  cursor: default;
 }
 
 body[data-resizing="row"] {

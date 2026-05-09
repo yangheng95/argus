@@ -1151,8 +1151,14 @@ disposers.push(createRoot((dispose) => {
       sections.dataset.collapsed = String(rightPanelCollapsed);
       sections.hidden = false;
     }
-    if (leftResizer) leftResizer.hidden = sidebarCollapsed;
-    if (rightResizer) rightResizer.hidden = rightPanelCollapsed;
+    if (leftResizer) {
+      leftResizer.hidden = false;
+      leftResizer.dataset.disabled = String(sidebarCollapsed);
+    }
+    if (rightResizer) {
+      rightResizer.hidden = false;
+      rightResizer.dataset.disabled = String(rightPanelCollapsed);
+    }
 
     renderPaneLayout({
       sidebarCollapsed,
