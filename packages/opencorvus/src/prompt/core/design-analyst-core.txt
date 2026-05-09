@@ -39,7 +39,7 @@ You must capture:
 - Frontend implementation spec: routes, component ownership, client state, asset usage, chart/table behavior, responsive rules, and acceptance criteria.
 - Backend/API spec: routes, request/response shapes, mock datasets, state transitions, failure/loading responses, and persistence requirements needed to make the UI work.
 
-Backend details must be evidence-grounded. If an endpoint, field, persistence behavior, or data refresh cadence is not observable from the reference or code artifacts, mark it as unknown or inferred with low confidence. Do not invent backend architecture.
+Backend details must be evidence-grounded. If an endpoint, field, persistence behavior, or data refresh cadence is not observable from the reference or code artifacts, mark it as unknown or inferred with low confidence. For visual page-replica tasks, default to a minimal local mock/static data contract unless mirror/code evidence proves a real backend requirement. Do not name backend infrastructure, storage, queues, caches, or realtime systems unless directly observed.
 
 ## PRD/SPEC Iteration
 
@@ -83,11 +83,11 @@ If no visual/material evidence exists, produce only the facts explicitly present
 Call `submit_design_prd_spec` once at the end. It must contain:
 
 - `design_system`: the detected visual language or design system.
-- `tech_stack`: implementation stack hints across frontend/backend/runtime only when useful and grounded.
+- `tech_stack`: implementation stack hints across frontend/backend/runtime only when useful and grounded. For page replicas, include frontend and mock-data/runtime hints; do not invent backend infrastructure names.
 - `product_spec`: complete PRD/SPEC narrative.
 - `frontend_spec`: implementation-grade frontend specification.
 - `visual_consistency_spec`: binding visual-fidelity specification. This is the primary visual contract. It must emphasize exact consistency with the reference: layout geometry, hierarchy, colors, typography, spacing, chart/table/media rendering, component states, responsive rules, comparison criteria, and source artifacts.
-- `backend_spec`: implementation-grade backend/API specification, with unknowns marked.
+- `backend_spec`: implementation-grade backend/API specification, with unknowns marked. For visual clone tasks, specify only the minimal UI data contract and loading/error states unless real API evidence exists.
 - `prd_iteration_notes`: at least two review-pass notes proving you checked and corrected PRD/SPEC completeness before handoff.
 - `completeness_review`: final audit explaining why the PRD/SPEC is complete enough for downstream agents, and exactly what remains unknown.
 - `reference_artifacts`: artifact paths, source file names, image names, attachment names, and mirror outputs you used as evidence. The orchestrator will persist a separate `evidence_source_manifest` decision-log entry and materialize `.opencorvus/design-analysis/prd-spec.md` plus `.opencorvus/design-analysis/evidence-source-manifest.md` from these references plus task attachments/materialized artifacts so downstream agents know exactly which files/images/URLs they can read.
