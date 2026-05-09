@@ -55,4 +55,8 @@ describe("design-analyst prompt assembly", () => {
     expect(Object.keys(tools)).toEqual(["submit_design_prd_spec"])
     expect(Object.keys(tools).some((name) => name.startsWith("register_"))).toBe(false)
   })
+
+  test("agent keeps evidence read tools available before PRD/SPEC submission", () => {
+    expect(DesignAnalystTestHooks.shouldScopeDesignSubmitTool()).toBe(false)
+  })
 })

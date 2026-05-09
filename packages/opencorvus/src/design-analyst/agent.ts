@@ -18,8 +18,6 @@
  * Implementation: thin shell over `runAgentSession`. The runner owns
  * model / session / prompt-composition / abort / stream-error handling.
  */
-import fs from "node:fs"
-import path from "node:path"
 import { runAgentSession } from "@/agent/runner"
 import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
@@ -118,7 +116,7 @@ export namespace DesignAnalystAgent {
       terminalTool: {
         toolName: "submit_design_prd_spec",
         isSatisfied: (collector: DesignOutputCollector) => !!collector.final,
-        shouldExposeOnlyTerminalTool: () => shouldPinDesignSubmitTool(input),
+        shouldExposeOnlyTerminalTool: shouldScopeDesignSubmitTool,
         recovery: {
           maxTurns: 2,
           buildUserPrompt: () =>
@@ -201,19 +199,11 @@ export namespace DesignAnalystAgent {
   }
 }
 
-function shouldPinDesignSubmitTool(input: {
-  request: string
-  attachments?: Array<{ mime: string; intent?: string; source?: string }>
-}): boolean {
-  if (!hasHttpUrl(input.request)) return true
-  return mirrorPromptArtifactsReady()
-}
-
-function mirrorPromptArtifactsReady(): boolean {
-  const mirrorDir = path.join(Instance.directory, "mirror")
-  return ["reference.png", "page-ir.xml", "shared-context.md", "scaffold.json"].every((name) =>
-    fs.existsSync(path.join(mirrorDir, name)),
-  )
+function shouldScopeDesignSubmitTool(): boolean {
+  // PRD = Product Requirements Document; SPEC = implementation specification.
+  // Design analysis must keep evidence-read tools available until the final
+  // PRD/SPEC submission so it can read mirror artifacts and close gaps.
+  return false
 }
 
 // ---------------------------------------------------------------------------
@@ -324,4 +314,5 @@ export const DesignAnalystTestHooks = {
   buildPromptParts,
   buildUserPrompt,
   selectDesignSubmitTool,
+  shouldScopeDesignSubmitTool,
 }
