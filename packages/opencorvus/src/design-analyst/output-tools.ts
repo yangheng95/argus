@@ -46,8 +46,9 @@ export const DesignFinalSchema = z.object({
     .min(1)
     .describe(
       "Recommended implementation stack hints for restoring this page, including frontend, backend/API, " +
-      "mock-data, and runtime choices when the observed page requires them. Keep this grounded in the " +
-      "existing repo and observed reference behavior; do not invent backend technology that the task does not need.",
+      "mock-data, and runtime choices when the observed page requires them. For visual page-replica tasks, " +
+      "prefer existing repo stack plus local static/mock API data unless the artifacts expose real API needs. " +
+      "Do not name backend infrastructure, storage, queues, caches, or realtime systems unless directly observed.",
     ),
   product_spec: z
     .string()
@@ -76,7 +77,8 @@ export const DesignFinalSchema = z.object({
     .min(1)
     .describe(
       "Backend/API spec required to reproduce the page: endpoints, request/response shapes, mock data, " +
-      "state transitions, and error/loading behavior. Mark unobservable details as unknown instead of inventing them.",
+      "state transitions, and error/loading behavior. For visual clone tasks, specify the minimal mock/static " +
+      "data contract needed by the UI. Mark unobservable details as unknown instead of inventing backend architecture.",
     ),
   prd_iteration_notes: z
     .array(z.string().min(1))

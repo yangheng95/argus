@@ -237,6 +237,13 @@ describe("core prompt hygiene", () => {
     expect(design).not.toContain("`mirror/extracted-page.json` or image/Figma analysis JSON for structure and style facts")
   })
 
+  test("design-analysis forbids unobserved backend infrastructure in PRD/SPEC", async () => {
+    const design = await readPrompt("designAnalyst")
+    expect(design).toContain("default to a minimal local mock/static data contract")
+    expect(design).toContain("Do not name backend infrastructure, storage, queues, caches, or realtime systems unless directly observed")
+    expect(design).toContain("do not invent backend infrastructure names")
+  })
+
   test("no core prompt smuggles JS template-literal escapes into raw text", async () => {
     // Earlier prompts lived in TS template literals where backticks had to be
     // escaped (\`). When they were extracted to .txt the escapes were left
