@@ -36,14 +36,14 @@ describe("vscode-dark overlay palette — no host-token passthrough", () => {
     expect(VSCODE_DARK).not.toContain("--vscode-")
   })
 
-  test("semantic anchors are the historical fixed Overlay values", () => {
-    expect(themeToken(VSCODE_DARK, "--bg")).toBe("#1e1e1e")
-    expect(themeToken(VSCODE_DARK, "--surface")).toBe("#252526")
-    expect(themeToken(VSCODE_DARK, "--surface-inset")).toBe("#181818")
-    expect(themeToken(VSCODE_DARK, "--chrome")).toBe("#3c3c3c")
+  test("semantic anchors are fixed Overlay values with transparent backing", () => {
+    expect(themeToken(VSCODE_DARK, "--bg")).toBe("rgba(30, 30, 30, 0.78)")
+    expect(themeToken(VSCODE_DARK, "--surface")).toBe("rgba(37, 37, 38, 0.74)")
+    expect(themeToken(VSCODE_DARK, "--surface-inset")).toBe("rgba(24, 24, 24, 0.72)")
+    expect(themeToken(VSCODE_DARK, "--chrome")).toBe("rgba(60, 60, 60, 0.76)")
     expect(themeToken(VSCODE_DARK, "--text")).toBe("#cccccc")
     expect(themeToken(VSCODE_DARK, "--accent")).toBe("#007acc")
-    expect(themeToken(VSCODE_DARK, "--menu-panel-bg")).toBe("#1f1f1f")
+    expect(themeToken(VSCODE_DARK, "--menu-panel-bg")).toBe("rgba(31, 31, 31, 0.9)")
   })
 })
 

@@ -708,7 +708,7 @@
 
 .workspace-terminal-select-icon[data-terminal-icon="powershell"],
 .workspace-terminal-option-icon[data-terminal-icon="powershell"] {
-  color: #2671be;
+  color: var(--info);
 }
 
 .workspace-terminal-select-icon[data-terminal-icon="command-prompt"],

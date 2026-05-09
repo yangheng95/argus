@@ -20,6 +20,7 @@ import { nativeConfirm, nativeOpen, nativePrompt, nativeSelect } from "../../uti
 import { nativeMessage } from "../../services/app-dialog";
 import { Icon } from "../Icon";
 import { Button } from "../ui/Button";
+import { SurfaceHeader } from "../ui/SurfaceHeader";
 
 function describeFailure(e: unknown): string {
   if (e instanceof ApiError) return e.message;
@@ -531,10 +532,15 @@ export default function ProvidersPanel() {
         <div class="provider-command">
           <div class="provider-command-main">
             <div class="provider-title-block">
-              <h3 class="provider-page-title">{t("provider.title")}</h3>
-              <div class="provider-toolbar-count">
-                {t("provider.search.count", { shown: visibleProviderCount(), total: totalProviderCount() })}
-              </div>
+              <SurfaceHeader
+                variant="settings-group"
+                title={t("provider.title")}
+                actions={
+                  <div class="provider-toolbar-count">
+                    {t("provider.search.count", { shown: visibleProviderCount(), total: totalProviderCount() })}
+                  </div>
+                }
+              />
             </div>
             <div class="provider-stat-strip" aria-label={t("provider.stats.label")}>
               <div class="provider-stat">

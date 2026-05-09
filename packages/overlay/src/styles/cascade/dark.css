@@ -93,7 +93,7 @@ body[data-theme="dark"] {
   --task-bar-bg: var(--chrome);
   --task-bar-backdrop-filter: none;
   --task-bar-border-color: var(--border);
-  --menu-panel-bg: #202226;
+  --menu-panel-bg: rgba(32, 34, 38, 0.9);
   --divider-soft: rgba(255, 255, 255, 0.06);
   --panel-fill: var(--surface);
   --panel-fill-hover:
