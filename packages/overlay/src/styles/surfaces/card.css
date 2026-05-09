@@ -459,43 +459,39 @@ body {
 .card__stat {
   display: inline-flex;
   align-items: center;
-  gap: calc(3px * var(--ui-scale));
-  min-height: calc(18px * var(--ui-scale, 1));
-  padding: 0 calc(5px * var(--ui-scale, 1));
+  gap: calc(5px * var(--ui-scale));
+  min-height: calc(20px * var(--ui-scale, 1));
+  padding: calc(2px * var(--ui-scale, 1)) calc(7px * var(--ui-scale, 1));
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-2);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 18%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 16%, transparent);
   color: var(--text-muted);
   box-shadow: none;
   letter-spacing: var(--ui-letter-spacing-normal);
   line-height: 1.1;
 }
 .card__stat[data-kind="messages"] {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 .card__stat[data-kind="tools"] {
-  background: color-mix(in srgb, var(--warn) 14%, transparent);
-  border-color: color-mix(in srgb, var(--warn) 22%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 28%, transparent);
 }
 .card__stat[data-kind="agents"] {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 .card__stat[data-kind="skills"] {
-  background: color-mix(in srgb, var(--good) 14%, transparent);
   border-color: color-mix(in srgb, var(--good) 24%, transparent);
 }
 
-.card__stat-icon {
+.card__stat-label {
   font-size: calc(var(--card-sub-size) - calc(1px * var(--ui-scale)));
+  font-weight: var(--ui-font-weight-medium);
+  color: color-mix(in srgb, var(--text-soft) 88%, transparent);
   line-height: 1;
-  opacity: var(--ui-opacity-subtle);
 }
 
 .card__stat-value {
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: var(--ui-letter-spacing-loose);
   color: color-mix(in srgb, var(--text) 90%, transparent);
 }
 
@@ -1215,47 +1211,79 @@ body {
   margin-top: calc(8px * var(--ui-scale));
   padding: calc(8px * var(--ui-scale));
   border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 82%, transparent);
   border: var(--oc-border-width) solid var(--border);
   cursor: default;
+}
+
+.card__agent-reply-field {
+  position: relative;
 }
 
 .card__agent-reply-input {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
-  min-height: calc(64px * var(--ui-scale));
+  min-height: calc(104px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  padding:
+    calc(10px * var(--ui-scale))
+    calc(92px * var(--ui-scale))
+    calc(46px * var(--ui-scale))
+    calc(12px * var(--ui-scale));
   color: var(--text);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   font: inherit;
   line-height: 1.45;
   user-select: text;
+  outline: none;
+  transition:
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    background-color var(--ui-duration-base) var(--ui-timing-standard);
 }
 
-.card__agent-reply-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: calc(6px * var(--ui-scale));
+.card__agent-reply-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  background: var(--surface);
 }
 
 .card__agent-reply-send {
+  position: absolute;
+  right: calc(10px * var(--ui-scale));
+  bottom: calc(10px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(5px * var(--ui-scale));
+  min-height: calc(30px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 70%, transparent);
   border-radius: var(--oc-radius-pill);
-  padding: calc(4px * var(--ui-scale)) calc(11px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
   font-size: var(--card-sub-size);
   font-weight: var(--ui-font-weight-strong);
   cursor: pointer;
   color: var(--surface);
   background: var(--accent);
+  box-shadow: 0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.card__agent-reply-send svg {
+  width: calc(13px * var(--ui-scale));
+  height: calc(13px * var(--ui-scale));
+  transform: rotate(180deg);
+}
+
+.card__agent-reply-send:not(:disabled):hover,
+.card__agent-reply-send:not(:disabled):focus-visible {
+  background: var(--accent-hover);
+  border-color: color-mix(in srgb, var(--accent-hover) 76%, transparent);
 }
 
 .card__agent-reply-send:disabled {
   cursor: default;
   opacity: var(--ui-opacity-disabled);
+  box-shadow: none;
 }
 
 /* Reply send-failure chip — sits above the action row so the operator's
