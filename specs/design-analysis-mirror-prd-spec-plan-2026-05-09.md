@@ -128,3 +128,19 @@ The corrected design is:
 5. The tests should guard against reintroducing repeated raw mirror workflow wording into the design-analysis prompt path.
 
 This keeps the existing architecture goal while removing the instruction pattern that caused repeated mirror calls.
+
+## Iteration 2026-05-09: Session Prompt Single Source and Scaffold Read Closure
+
+Benchmark evidence from `amd-design-evidence-package-20260509-093620` refined the previous conclusion:
+
+1. The design-analysis agent no longer repeated mirror acquisition. It called `webpage_extract` once, then `webpage_compile`/`webpage_analyze` once, and moved to compact evidence reads.
+2. `read_file` was not denied generally. The agent successfully read `mirror/shared-context.md`, `mirror/page-ir.xml`, and `mirror/prd-evidence-summary.md`.
+3. The observed refusal was specifically for unbounded/general `mirror/scaffold.json` access. That file is a dense mirror scaffold, not the primary PRD/SPEC working surface.
+4. The LLM request trace still showed a prompt-surface bug: the resolved system prompt was recorded separately and also injected as a `role=system` message inside `messages`, causing AI SDK system-message warnings and making prompt hygiene harder to verify.
+
+The correction is:
+
+1. `LLM.stream` passes the resolved session prompt through the SDK `system` field for non-OpenAI-OAuth calls and leaves `messages` as conversation history only.
+2. Trace continues to record the resolved `system` text separately, but the LLM-visible `messages` payload no longer starts with duplicated system messages.
+3. The `scaffold.json` guard now tells the agent not to retry general discovery reads. Only one first excerpt (`start_line=1`, `max_lines<=120`) is allowed when the agent has named a specific unresolved scaffold gap.
+4. Design-analysis core and reference skills state the same scaffold rule, so the prompt no longer invites a broad `max_lines=300` scaffold read.

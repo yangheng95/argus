@@ -90,6 +90,8 @@ describe("webpage-generate dependency guards", () => {
 
     const scaffold = await readFile.execute({ path: "mirror/scaffold.json", max_lines: 1000 }, {})
     expect(scaffold).toContain("dense mirror scaffold JSON")
+    expect(scaffold).toContain("Do not retry this read for general page discovery")
+    expect(scaffold).toContain("max_lines <= 120")
 
     const bounded = await readFile.execute({ path: "mirror/scaffold.json", max_lines: 20 }, {})
     expect(bounded).toContain("1 | [")

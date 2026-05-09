@@ -176,15 +176,8 @@ export namespace LLM {
         : ProviderLLM.baseHeaders(input.model, input.sessionID)),
       ...headers,
     }
-    const requestMessages = [
-      ...system.map(
-        (x): ModelMessage => ({
-          role: "system",
-          content: x,
-        }),
-      ),
-      ...input.messages,
-    ]
+    const systemText = system.join("\n")
+    const requestMessages = input.messages
 
     if (AgentTrace.isEnabled()) {
       AgentTrace.recordLLMRequest({
@@ -243,6 +236,7 @@ export namespace LLM {
       activeTools: Object.keys(tools),
       tools,
       toolChoice,
+      ...(isOpenaiOauth ? {} : { system: systemText }),
       maxOutputTokens,
       abortSignal: input.abort,
       // Disable the wrapper's 5 s default soft timeout — the LLM-activity

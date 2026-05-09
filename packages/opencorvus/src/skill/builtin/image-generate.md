@@ -25,7 +25,7 @@ For screenshot-only references, create the mirror evidence package once if it do
 - `mirror/reference.png`
 - `mirror/page-ir.xml`
 - `mirror/shared-context.md`
-- bounded access to `mirror/scaffold.json` for named unresolved gaps only
+- no general `mirror/scaffold.json` browsing; if one named unresolved gap remains, read one first excerpt only (`start_line=1`, `max_lines<=120`)
 
 After that package exists, stop acquiring mirror evidence and move to PRD/SPEC synthesis. The session's main deliverable is the PRD/SPEC, not another extraction pass.
 
