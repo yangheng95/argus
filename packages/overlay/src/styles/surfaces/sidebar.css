@@ -19,12 +19,11 @@
 }
 
 .sidebar[data-collapsed="true"] {
-  display: none;
-  width: 0;
-  min-width: 0;
-  max-width: 0;
-  flex-basis: 0;
-  flex-shrink: 1;
+  width: var(--ui-collapsed-pane-width);
+  min-width: var(--ui-collapsed-pane-width);
+  max-width: var(--ui-collapsed-pane-width);
+  flex: 0 0 var(--ui-collapsed-pane-width);
+  flex-shrink: 0;
 }
 
 /* Sidebar header text lanes: panel collapse control, title, then
@@ -834,26 +833,19 @@
 
 .sidebar[data-collapsed="true"] .sidebar-title,
 .sidebar[data-collapsed="true"] .sidebar-body,
+.sidebar[data-collapsed="true"] .sidebar-header-actions,
 .sidebar[data-collapsed="true"] .sidebar-btn-label {
   display: none;
 }
 
 .sidebar[data-collapsed="true"] .sidebar-header {
-  flex-direction: column;
-  align-items: stretch;
-  padding: calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  justify-content: center;
+  padding-inline: calc(4px * var(--ui-scale));
 }
 
-.sidebar[data-collapsed="true"] .sidebar-header-actions {
-  width: 100%;
-  flex-direction: column;
-  gap: calc(8px * var(--ui-scale));
-}
-
-.sidebar[data-collapsed="true"] .oc-button[data-ui="sidebar-new-task-button"] {
+.sidebar[data-collapsed="true"] .panel-header-collapse-mount {
   width: 100%;
   justify-content: center;
-  padding-inline: calc(10px * var(--ui-scale));
 }
 
 .sidebar[data-collapsed="true"] + .pane-resizer-left {
