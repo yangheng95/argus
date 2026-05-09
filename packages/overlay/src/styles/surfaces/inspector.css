@@ -21,13 +21,6 @@
   backdrop-filter: none;
 }
 
-.sections[data-collapsed="true"] {
-  width: var(--ui-collapsed-pane-width);
-  min-width: var(--ui-collapsed-pane-width);
-  max-width: var(--ui-collapsed-pane-width);
-  flex: 0 0 var(--ui-collapsed-pane-width);
-}
-
 .sections[data-collapsed="true"] .sections-title,
 .sections[data-collapsed="true"] .sections-tabs,
 .sections[data-collapsed="true"] .sections-tab-body {
@@ -35,12 +28,12 @@
 }
 
 .sections[data-collapsed="true"] .sections-header-actions {
-  justify-content: center;
+  justify-content: flex-end;
   padding: 0;
 }
 
 .sections[data-collapsed="true"] .panel-header-collapse-mount {
-  width: 100%;
+  width: auto;
 }
 
 .sections-title {

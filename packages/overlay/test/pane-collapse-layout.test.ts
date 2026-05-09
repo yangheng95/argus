@@ -18,7 +18,7 @@ function send(value: unknown, init?: ResponseInit) {
   });
 }
 
-test("panel header controls collapse side panes to expandable header rails", async () => {
+test("panel header controls collapse side panes in place", async () => {
   const codingCliOpenBodies: Record<string, unknown>[] = [];
   const server = Bun.serve({
     idleTimeout: 255,
@@ -238,6 +238,29 @@ test("panel header controls collapse side panes to expandable header rails", asy
     expect(headerPlacement.leftHeight).toBeLessThanOrEqual(28);
     expect(headerPlacement.rightHeight).toBeLessThanOrEqual(28);
 
+    const beforeCollapse = await page.evaluate(() => {
+      const measure = (selector: string) => {
+        const node = document.querySelector<HTMLElement>(selector);
+        if (!node) throw new Error(`Missing ${selector}`);
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return {
+          hidden: node.hidden,
+          display: style.display,
+          width: rect.width,
+          height: rect.height,
+          disabled: node.dataset.disabled || "",
+        };
+      };
+      return {
+        sidebar: measure("#sidebar"),
+        leftResizer: measure("#leftPaneResizer"),
+        chat: measure("#chatSection"),
+        sections: measure("#sections"),
+        rightResizer: measure("#rightPaneResizer"),
+      };
+    });
+
     await page.click('[data-ui="sidebar-header-collapse-toggle"]');
     await page.click('[data-ui="right-panel-header-collapse-toggle"]');
 
@@ -246,16 +269,20 @@ test("panel header controls collapse side panes to expandable header rails", asy
         const node = document.querySelector<HTMLElement>(selector);
         if (!node) throw new Error(`Missing ${selector}`);
         const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
         return {
           hidden: node.hidden,
           display: style.display,
-          width: node.getBoundingClientRect().width,
+          width: rect.width,
+          height: rect.height,
+          disabled: node.dataset.disabled || "",
         };
       };
       const exists = (selector: string) => document.querySelector(selector) != null;
       return {
         sidebar: measure("#sidebar"),
         leftResizer: measure("#leftPaneResizer"),
+        chat: measure("#chatSection"),
         sections: measure("#sections"),
         rightResizer: measure("#rightPaneResizer"),
         leftToggle: measure('[data-ui="sidebar-header-collapse-toggle"]'),
@@ -269,14 +296,22 @@ test("panel header controls collapse side panes to expandable header rails", asy
 
     expect(collapsed.sidebar.hidden).toBe(false);
     expect(collapsed.sidebar.display).toBe("flex");
-    expect(collapsed.sidebar.width).toBeGreaterThan(0);
-    expect(collapsed.sidebar.width).toBeLessThanOrEqual(36);
-    expect(collapsed.leftResizer).toEqual({ hidden: true, display: "none", width: 0 });
+    expect(Math.abs(collapsed.sidebar.width - beforeCollapse.sidebar.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(collapsed.sidebar.height - beforeCollapse.sidebar.height)).toBeLessThanOrEqual(1);
+    expect(collapsed.leftResizer.hidden).toBe(false);
+    expect(collapsed.leftResizer.display).not.toBe("none");
+    expect(collapsed.leftResizer.disabled).toBe("true");
+    expect(Math.abs(collapsed.leftResizer.width - beforeCollapse.leftResizer.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(collapsed.chat.width - beforeCollapse.chat.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(collapsed.chat.height - beforeCollapse.chat.height)).toBeLessThanOrEqual(1);
     expect(collapsed.sections.hidden).toBe(false);
     expect(collapsed.sections.display).toBe("flex");
-    expect(collapsed.sections.width).toBeGreaterThan(0);
-    expect(collapsed.sections.width).toBeLessThanOrEqual(36);
-    expect(collapsed.rightResizer).toEqual({ hidden: true, display: "none", width: 0 });
+    expect(Math.abs(collapsed.sections.width - beforeCollapse.sections.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(collapsed.sections.height - beforeCollapse.sections.height)).toBeLessThanOrEqual(1);
+    expect(collapsed.rightResizer.hidden).toBe(false);
+    expect(collapsed.rightResizer.display).not.toBe("none");
+    expect(collapsed.rightResizer.disabled).toBe("true");
+    expect(Math.abs(collapsed.rightResizer.width - beforeCollapse.rightResizer.width)).toBeLessThanOrEqual(1);
     expect(collapsed.leftToggle.hidden).toBe(false);
     expect(collapsed.leftToggle.display).not.toBe("none");
     expect(collapsed.rightToggle.hidden).toBe(false);
@@ -298,6 +333,7 @@ test("panel header controls collapse side panes to expandable header rails", asy
           hidden: node.hidden,
           display: style.display,
           width: node.getBoundingClientRect().width,
+          disabled: node.dataset.disabled || "",
         };
       };
       return {
@@ -309,11 +345,13 @@ test("panel header controls collapse side panes to expandable header rails", asy
     });
 
     expect(expanded.sidebar.hidden).toBe(false);
-    expect(expanded.sidebar.width).toBeGreaterThan(120);
+    expect(Math.abs(expanded.sidebar.width - beforeCollapse.sidebar.width)).toBeLessThanOrEqual(1);
     expect(expanded.leftResizer.hidden).toBe(false);
+    expect(expanded.leftResizer.disabled).toBe("false");
     expect(expanded.sections.hidden).toBe(false);
-    expect(expanded.sections.width).toBeGreaterThan(120);
+    expect(Math.abs(expanded.sections.width - beforeCollapse.sections.width)).toBeLessThanOrEqual(1);
     expect(expanded.rightResizer.hidden).toBe(false);
+    expect(expanded.rightResizer.disabled).toBe("false");
   } finally {
     await browser.close();
     server.stop(true);

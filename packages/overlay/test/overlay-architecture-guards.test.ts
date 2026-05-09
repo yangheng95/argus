@@ -386,7 +386,7 @@ describe("overlay architecture guards", () => {
     }
   })
 
-  test("vscode-dark :root surfaces solid palette tokens for shell columns", () => {
+  test("vscode-dark :root surfaces transparent palette tokens for shell columns", () => {
     // Theme palette block moved to styles/cascade/vscode-dark.css 2026-05-04.
     const styles = readText(join(OVERLAY_ROOT, "src/styles/cascade/vscode-dark.css"))
     const headRe = /body\[data-theme="vscode-dark"\]\s*\{/g
@@ -399,9 +399,9 @@ describe("overlay architecture guards", () => {
       lastBlock = styles.slice(open + 1, close)
     }
     expect(lastBlock).not.toBeNull()
-    expect(lastBlock!).toMatch(/--rail-surface:\s*#252526\b/)
-    expect(lastBlock!).toMatch(/--chat-canvas:\s*#1e1e1e\b/)
-    expect(lastBlock!).toMatch(/--inspector-surface:\s*#252526\b/)
+    expect(lastBlock!).toMatch(/--rail-surface:\s*var\(--surface\)/)
+    expect(lastBlock!).toMatch(/--chat-canvas:\s*var\(--bg\)/)
+    expect(lastBlock!).toMatch(/--inspector-surface:\s*var\(--surface\)/)
   })
 
   test("inline-pill family has no theme chrome override", () => {
@@ -559,7 +559,8 @@ describe("overlay architecture guards", () => {
       expect(sidebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\]\s*\{/)
+    expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\] \.sidebar-title,/)
+    expect(sidebarSurface).not.toMatch(/\.sidebar\[data-collapsed="true"\]\s*\{[\s\S]*?(?:width|min-width|max-width|flex)\s*:/)
     expect(sidebarSurface).not.toContain("sidebar-toolset")
     expect(html).not.toContain('data-ui="sidebar-refresh-button"')
     expect(html).not.toContain('data-ui="sidebar-toggle-button"')
@@ -590,6 +591,7 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.sections-tab-body\[data-active="false"\]/)
     expect(inspectorSurface).toMatch(/\.sections-tab-body\[data-panel-tab="inspector"\]/)
     expect(inspectorSurface).toContain("var(--inspector-surface)")
+    expect(inspectorSurface).not.toMatch(/\.sections\[data-collapsed="true"\]\s*\{[\s\S]*?(?:width|min-width|max-width|flex)\s*:/)
 
     const inspectorAt = html.indexOf('href="styles/surfaces/inspector.css"')
     expect(inspectorAt).toBeGreaterThan(-1)

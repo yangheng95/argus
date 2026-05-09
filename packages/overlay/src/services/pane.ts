@@ -87,28 +87,6 @@ export function defaultRailWidth(): number {
   return clampNumber(panelWidth * 0.22, 220 * scale, 380 * scale);
 }
 
-export function collapsedPaneWidth(): number {
-  if (typeof document === "undefined") {
-    throw new Error("Cannot resolve --ui-collapsed-pane-width without a document");
-  }
-  const probe = document.createElement("div");
-  probe.style.position = "absolute";
-  probe.style.visibility = "hidden";
-  probe.style.pointerEvents = "none";
-  probe.style.width = "var(--ui-collapsed-pane-width)";
-  probe.style.height = "0";
-  probe.style.overflow = "hidden";
-  (document.body || document.documentElement).appendChild(probe);
-  const value = Number.parseFloat(
-    getComputedStyle(probe).width,
-  );
-  probe.remove();
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error("Missing positive --ui-collapsed-pane-width token");
-  }
-  return value;
-}
-
 /**
  * Read the --ui-scale CSS custom property (
  */
@@ -152,12 +130,8 @@ export function resolvedPaneWidths(state: PaneState): {
   const chatPreferred = 500 * scale;
   const chatMin = 300 * scale;
 
-  const leftHandle = state.sidebarCollapsed
-    ? 0
-    : paneHandleWidth(document.getElementById("leftPaneResizer"));
-  const rightHandle = state.rightPanelCollapsed
-    ? 0
-    : paneHandleWidth(document.getElementById("rightPaneResizer"));
+  const leftHandle = paneHandleWidth(document.getElementById("leftPaneResizer"));
+  const rightHandle = paneHandleWidth(document.getElementById("rightPaneResizer"));
 
   const total = panelWidth - leftHandle - rightHandle;
   const railMax = Math.max(railMin, total - chatMin - railMin);
@@ -171,11 +145,10 @@ export function resolvedPaneWidths(state: PaneState): {
     railMin,
     railMax,
   );
-  const collapsedWidth = collapsedPaneWidth();
-  let actualSidebar = state.sidebarCollapsed ? collapsedWidth : sidebar;
-  let actualSections = state.rightPanelCollapsed ? collapsedWidth : sections;
-  const sidebarFloor = state.sidebarCollapsed ? collapsedWidth : railMin;
-  const sectionsFloor = state.rightPanelCollapsed ? collapsedWidth : railMin;
+  let actualSidebar = sidebar;
+  let actualSections = sections;
+  const sidebarFloor = railMin;
+  const sectionsFloor = railMin;
 
  // First overflow pass — prefer-chat reduction
   if (actualSidebar + actualSections + chatPreferred > total) {
@@ -193,11 +166,8 @@ export function resolvedPaneWidths(state: PaneState): {
       const sectionsShrink = Math.min(sectionsCap, overflow);
       actualSections -= sectionsShrink;
       overflow -= sectionsShrink;
-      if (overflow > 0 && !state.sidebarCollapsed) {
-        const extraSidebar = Math.min(
-          Math.max(0, actualSidebar - railMin),
-          overflow,
-        );
+      if (overflow > 0) {
+        const extraSidebar = Math.min(Math.max(0, actualSidebar - railMin), overflow);
         actualSidebar -= extraSidebar;
       }
     }
@@ -212,7 +182,7 @@ export function resolvedPaneWidths(state: PaneState): {
     );
     actualSections -= sectionsShrink;
     const remaining = overflow - sectionsShrink;
-    if (remaining > 0 && !state.sidebarCollapsed) {
+    if (remaining > 0) {
       actualSidebar -= Math.min(
         Math.max(0, actualSidebar - railMin),
         remaining,

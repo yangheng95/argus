@@ -18,14 +18,6 @@
   overflow: hidden;
 }
 
-.sidebar[data-collapsed="true"] {
-  width: var(--ui-collapsed-pane-width);
-  min-width: var(--ui-collapsed-pane-width);
-  max-width: var(--ui-collapsed-pane-width);
-  flex: 0 0 var(--ui-collapsed-pane-width);
-  flex-shrink: 0;
-}
-
 /* Sidebar header text lanes: panel collapse control, title, then
    right-side actions. */
 .sidebar-title {
@@ -839,20 +831,11 @@
 }
 
 .sidebar[data-collapsed="true"] .sidebar-header {
-  justify-content: center;
-  padding-inline: calc(4px * var(--ui-scale));
+  justify-content: flex-start;
 }
 
 .sidebar[data-collapsed="true"] .panel-header-collapse-mount {
-  width: 100%;
-  justify-content: center;
-}
-
-.sidebar[data-collapsed="true"] + .pane-resizer-left {
-  flex-basis: 0;
-  min-width: 0;
-  opacity: var(--ui-opacity-hidden);
-  pointer-events: none;
+  width: auto;
 }
 
 /* ─────────────────────────────────────────────────────────────
