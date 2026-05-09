@@ -27368,6 +27368,7 @@
                     "kind": {
                       "type": "string",
                       "enum": [
+                        "readiness",
                         "check",
                         "coverage",
                         "runtime",
@@ -32401,7 +32402,7 @@
             }
           },
           "model": {
-            "description": "Model to use in the format of provider/model, eg anthropic/claude-2",
+            "description": "Model to use in the format of provider/model, eg alibaba-coding-plan-cn/kimi-k2.5",
             "type": "string"
           },
           "small_model": {
