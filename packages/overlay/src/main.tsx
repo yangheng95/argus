@@ -1169,11 +1169,11 @@ disposers.push(createRoot((dispose) => {
 
     if (sidebar) {
       sidebar.dataset.collapsed = String(sidebarCollapsed);
-      sidebar.hidden = sidebarCollapsed;
+      sidebar.hidden = false;
     }
     if (sections) {
       sections.dataset.collapsed = String(rightPanelCollapsed);
-      sections.hidden = rightPanelCollapsed;
+      sections.hidden = false;
     }
     if (leftResizer) leftResizer.hidden = sidebarCollapsed;
     if (rightResizer) rightResizer.hidden = rightPanelCollapsed;

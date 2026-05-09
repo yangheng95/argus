@@ -87,6 +87,18 @@ export function defaultRailWidth(): number {
   return clampNumber(panelWidth * 0.22, 220 * scale, 380 * scale);
 }
 
+export function collapsedPaneWidth(): number {
+  const value = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(
+      "--ui-collapsed-pane-width",
+    ),
+  );
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error("Missing positive --ui-collapsed-pane-width token");
+  }
+  return value;
+}
+
 /**
  * Read the --ui-scale CSS custom property (
  */
@@ -149,10 +161,11 @@ export function resolvedPaneWidths(state: PaneState): {
     railMin,
     railMax,
   );
-  let actualSidebar = state.sidebarCollapsed ? 0 : sidebar;
-  let actualSections = state.rightPanelCollapsed ? 0 : sections;
-  const sidebarFloor = state.sidebarCollapsed ? 0 : railMin;
-  const sectionsFloor = state.rightPanelCollapsed ? 0 : railMin;
+  const collapsedWidth = collapsedPaneWidth();
+  let actualSidebar = state.sidebarCollapsed ? collapsedWidth : sidebar;
+  let actualSections = state.rightPanelCollapsed ? collapsedWidth : sections;
+  const sidebarFloor = state.sidebarCollapsed ? collapsedWidth : railMin;
+  const sectionsFloor = state.rightPanelCollapsed ? collapsedWidth : railMin;
 
  // First overflow pass — prefer-chat reduction
   if (actualSidebar + actualSections + chatPreferred > total) {
