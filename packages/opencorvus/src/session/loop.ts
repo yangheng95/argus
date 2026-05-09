@@ -482,7 +482,7 @@ export namespace SessionLoop {
     systemChars: number
     toolSchemaChars: number
     messagePayloadChars: number
-    imageTokensEst: number
+    mediaTokensEst: number
     toolSchemaBudgetRatio: number
     minResidueChars?: number
     lastFinishedSummary: boolean
@@ -498,7 +498,7 @@ export namespace SessionLoop {
     const minResidueChars = input.minResidueChars ?? COMPACTION_MIN_RESIDUE_CHARS
     const nonCompressibleChars = input.systemChars + input.toolSchemaChars
     const postCompactionMinTokens =
-      Math.round((nonCompressibleChars + minResidueChars) / 4) + input.imageTokensEst
+      Math.round((nonCompressibleChars + minResidueChars) / 4) + input.mediaTokensEst
     if (postCompactionMinTokens > input.limit) {
       return { kind: "fail-prompt-budget", reason: "post-compaction-still-over" }
     }
@@ -661,6 +661,113 @@ export namespace SessionLoop {
       })
     })
     return rows.sort((a, b) => b.chars - a.chars).slice(0, limit)
+  }
+
+  type MediaKind = "image" | "pdf" | "audio" | "video"
+
+  export type ModelMessagePayloadEstimate = {
+    messagePayloadChars: number
+    mediaCounts: Record<MediaKind, number>
+    mediaTokensEst: number
+  }
+
+  const MEDIA_TOKENS_PER_PART: Record<MediaKind, number> = {
+    image: 1_600,
+    pdf: 3_200,
+    audio: 1_600,
+    video: 1_600,
+  }
+
+  function mediaKindFromMime(mime: unknown): MediaKind | undefined {
+    if (typeof mime !== "string") return undefined
+    const normalized = mime.toLowerCase()
+    if (normalized.startsWith("image/")) return "image"
+    if (normalized === "application/pdf") return "pdf"
+    if (normalized.startsWith("audio/")) return "audio"
+    if (normalized.startsWith("video/")) return "video"
+    return undefined
+  }
+
+  function mediaKindFromDataUrl(value: unknown): MediaKind | undefined {
+    if (typeof value !== "string" || !value.startsWith("data:")) return undefined
+    const match = /^data:([^;,]+)/i.exec(value)
+    return mediaKindFromMime(match?.[1])
+  }
+
+  function mediaKindFromPart(part: Record<string, unknown>): MediaKind | undefined {
+    const byMime = mediaKindFromMime(part.mediaType ?? part.mime)
+    if (byMime) return byMime
+
+    const type = typeof part.type === "string" ? part.type.toLowerCase() : ""
+    if (type === "image" || type === "image-data") return "image"
+    if (type === "pdf") return "pdf"
+
+    return mediaKindFromDataUrl(part.url) ??
+      mediaKindFromDataUrl(part.data) ??
+      mediaKindFromDataUrl(part.image) ??
+      mediaKindFromDataUrl(part.media)
+  }
+
+  function isMediaPayloadField(key: string): boolean {
+    return key === "url" || key === "data" || key === "image" || key === "media"
+  }
+
+  /**
+   * Estimate text-token pressure without treating inline media bytes as text.
+   * AI SDK model messages carry image/PDF/audio/video parts as data URLs, but
+   * provider tokenization charges those as media inputs, not as base64 prose.
+   * Predictive compaction must therefore sanitize media payload fields before
+   * `JSON.stringify(...).length / 4`, then add a bounded per-media budget.
+   */
+  export function estimateModelMessagePayload(messages: ModelMessage[]): ModelMessagePayloadEstimate {
+    const mediaCounts: Record<MediaKind, number> = {
+      image: 0,
+      pdf: 0,
+      audio: 0,
+      video: 0,
+    }
+
+    const sanitize = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(sanitize)
+
+      if (value && typeof value === "object") {
+        const record = value as Record<string, unknown>
+        const mediaKind = mediaKindFromPart(record)
+        if (mediaKind) mediaCounts[mediaKind]++
+
+        const out: Record<string, unknown> = {}
+        for (const [key, child] of Object.entries(record)) {
+          if (mediaKind && isMediaPayloadField(key) && typeof child === "string") {
+            out[key] = `[${mediaKind} bytes omitted from text-token estimate]`
+            continue
+          }
+          out[key] = sanitize(child)
+        }
+        return out
+      }
+
+      const dataUrlKind = mediaKindFromDataUrl(value)
+      if (dataUrlKind) {
+        mediaCounts[dataUrlKind]++
+        return `[${dataUrlKind} data URL omitted from text-token estimate]`
+      }
+
+      return value
+    }
+
+    let messagePayloadChars = 0
+    try {
+      messagePayloadChars = JSON.stringify(sanitize(messages)).length
+    } catch {
+      messagePayloadChars = 0
+    }
+
+    const mediaTokensEst = Object.entries(mediaCounts).reduce(
+      (sum, [kind, count]) => sum + MEDIA_TOKENS_PER_PART[kind as MediaKind] * count,
+      0,
+    )
+
+    return { messagePayloadChars, mediaCounts, mediaTokensEst }
   }
 
   export function normalizeExtraToolResult(input: unknown): {
@@ -1116,7 +1223,6 @@ export namespace SessionLoop {
     const toolCount = Object.keys(tools).length
     let userMsgCount = 0
     let assistantMsgCount = 0
-    let imageCount = 0
     let toolCallCount = 0
 
     for (const msg of modelMessages) {
@@ -1124,7 +1230,6 @@ export namespace SessionLoop {
       if (msg.role === "assistant") assistantMsgCount++
       if (Array.isArray(msg.content)) {
         for (const part of msg.content) {
-          if ("type" in part && part.type === "image") imageCount++
           if ("type" in part && (part.type === "tool-call" || part.type === "tool-result")) toolCallCount++
         }
       }
@@ -1136,17 +1241,14 @@ export namespace SessionLoop {
     // the provider rejects the request. Keep this estimate aligned with the
     // streamText payload shape: model messages and tool definitions are
     // prompt input; system is estimated separately above.
-    let messagePayloadChars: number
-    try {
-      messagePayloadChars = JSON.stringify(modelMessages).length
-    } catch {
-      messagePayloadChars = 0
-    }
+    const payloadEstimate = estimateModelMessagePayload(modelMessages)
+    const messagePayloadChars = payloadEstimate.messagePayloadChars
     const toolSchemaChars = estimateToolPayloadChars(tools)
     const totalContentChars = messagePayloadChars + toolSchemaChars
     const contentTokensEst = Math.round(totalContentChars / 4)
-    const imageTokensEst = imageCount * 1600
-    const totalTokensEst = systemTokensEst + contentTokensEst + imageTokensEst
+    const mediaTokensEst = payloadEstimate.mediaTokensEst
+    const mediaCount = Object.values(payloadEstimate.mediaCounts).reduce((sum, count) => sum + count, 0)
+    const totalTokensEst = systemTokensEst + contentTokensEst + mediaTokensEst
     log.info("context-diagnostics", {
       step: input.step,
       systemPromptParts: system.length,
@@ -1161,8 +1263,9 @@ export namespace SessionLoop {
       toolSchemaChars,
       totalContentChars,
       contentTokensEst,
-      imageCount,
-      imageTokensEst,
+      mediaCount,
+      mediaCounts: payloadEstimate.mediaCounts,
+      mediaTokensEst,
       toolCallCount,
       totalTokensEst,
     })
@@ -1211,7 +1314,7 @@ export namespace SessionLoop {
         systemChars,
         toolSchemaChars,
         messagePayloadChars,
-        imageTokensEst,
+        mediaTokensEst,
         toolSchemaBudgetRatio,
         lastFinishedSummary: input.lastFinished?.summary === true,
       })
