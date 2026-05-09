@@ -20,7 +20,7 @@ describe("SessionLoop.predictiveCompactionDecision", () => {
     systemChars: 4_000,
     toolSchemaChars: 20_000,
     messagePayloadChars: 40_000,
-    imageTokensEst: 0,
+    mediaTokensEst: 0,
     toolSchemaBudgetRatio: 0.5,
     lastFinishedSummary: false,
   }
@@ -130,5 +130,39 @@ describe("SessionLoop.predictiveCompactionDecision", () => {
       toolSchemaBudgetRatio: 0.5,
     })
     expect(out.kind).toBe("compact")
+  })
+})
+
+describe("SessionLoop.estimateModelMessagePayload", () => {
+  test("does not count inline image base64 as text payload", () => {
+    const base64 = "a".repeat(1_600_000)
+    const estimate = SessionLoop.estimateModelMessagePayload([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "please inspect chat ui.png" },
+          {
+            type: "file",
+            mediaType: "image/png",
+            filename: "chat ui.png",
+            url: `data:image/png;base64,${base64}`,
+          },
+        ],
+      },
+    ] as any)
+
+    expect(estimate.mediaCounts.image).toBe(1)
+    expect(estimate.mediaTokensEst).toBe(1_600)
+    expect(estimate.messagePayloadChars).toBeLessThan(1_000)
+  })
+
+  test("keeps ordinary jumbo text as compressible message payload", () => {
+    const text = "x".repeat(120_000)
+    const estimate = SessionLoop.estimateModelMessagePayload([
+      { role: "user", content: [{ type: "text", text }] },
+    ] as any)
+
+    expect(estimate.mediaTokensEst).toBe(0)
+    expect(estimate.messagePayloadChars).toBeGreaterThan(120_000)
   })
 })
