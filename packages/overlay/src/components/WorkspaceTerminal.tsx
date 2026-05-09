@@ -42,6 +42,12 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
   const [panelError, setPanelError] = createSignal("");
 
   const activeSession = () => sessions().find((session) => session.info.id === activeID()) ?? null;
+  const activeMeta = () => {
+    const session = activeSession();
+    if (!session) return props.directory || "";
+    const parts = [session.info.cwd, `process ${session.info.pid}`];
+    return parts.filter(Boolean).join("  ");
+  };
 
   onMount(() => {
     openXterm();
@@ -212,10 +218,26 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
       lineHeight: 1.2,
       scrollback: 5000,
       theme: {
-        background: "#0b0f14",
-        foreground: "#d8dee9",
-        cursor: "#f5f7fb",
-        selectionBackground: "#334155",
+        background: "#101418",
+        foreground: "#d7dde6",
+        cursor: "#f8fafc",
+        selectionBackground: "#2e425b",
+        black: "#0b0f14",
+        blue: "#6aa4ff",
+        brightBlack: "#667085",
+        brightBlue: "#8bb7ff",
+        brightCyan: "#7dd3fc",
+        brightGreen: "#8ee6a8",
+        brightMagenta: "#d7a6ff",
+        brightRed: "#ff9a9a",
+        brightWhite: "#ffffff",
+        brightYellow: "#f4d06f",
+        cyan: "#67c7e6",
+        green: "#70d690",
+        magenta: "#c993ff",
+        red: "#ff7b7b",
+        white: "#d7dde6",
+        yellow: "#e7bf4f",
       },
     });
     fitAddon = new FitAddon();
@@ -271,56 +293,63 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
   return (
     <section class="workspace-terminal">
       <header class="workspace-terminal-header">
-        <div class="workspace-terminal-tabs" role="tablist" aria-label={t("terminal.sessions")}>
-          <For each={sessions()}>
-            {(session) => (
-              <div
-                class="workspace-terminal-tab"
-                data-active={activeID() === session.info.id ? "true" : "false"}
-                data-connected={session.connected ? "true" : "false"}
-              >
-                <button
-                  type="button"
-                  class="workspace-terminal-tab-main"
-                  role="tab"
-                  aria-selected={activeID() === session.info.id}
-                  onClick={() => setActiveID(session.info.id)}
+        <div class="workspace-terminal-sessionbar">
+          <div class="workspace-terminal-tabs" role="tablist" aria-label={t("terminal.sessions")}>
+            <For each={sessions()}>
+              {(session) => (
+                <div
+                  class="workspace-terminal-tab"
+                  data-active={activeID() === session.info.id ? "true" : "false"}
+                  data-connected={session.connected ? "true" : "false"}
+                  data-exited={session.exited ? "true" : "false"}
                 >
-                  <span class="workspace-terminal-tab-status" aria-hidden="true" />
-                  <span class="workspace-terminal-tab-title">{session.info.title}</span>
-                </button>
-                <button
-                  type="button"
-                  class="workspace-terminal-tab-close"
-                  title={t("terminal.close")}
-                  aria-label={t("terminal.close")}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void closeTerminal(session.info.id);
-                  }}
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-            )}
-          </For>
+                  <button
+                    type="button"
+                    class="workspace-terminal-tab-main"
+                    role="tab"
+                    aria-selected={activeID() === session.info.id}
+                    onClick={() => setActiveID(session.info.id)}
+                  >
+                    <span class="workspace-terminal-tab-status" aria-hidden="true" />
+                    <span class="workspace-terminal-tab-title">{session.info.title}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="workspace-terminal-tab-close"
+                    title={t("terminal.close")}
+                    aria-label={t("terminal.close")}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void closeTerminal(session.info.id);
+                    }}
+                  >
+                    <Icon name="close" />
+                  </button>
+                </div>
+              )}
+            </For>
+          </div>
+          <div class="workspace-terminal-meta" title={activeMeta()}>{activeMeta()}</div>
         </div>
         <Button
           type="button"
           variant="ghost"
           size="sm"
           tone="neutral"
+          title={t("terminal.new")}
           onClick={() => void newTerminal()}
           disabled={loading()}
+          data-ui="workspace-terminal-new"
         >
           <Icon name="terminal" />
-          {t("terminal.new")}
         </Button>
       </header>
       <Show when={panelError()}>
         <div class="workspace-terminal-banner" data-kind="error">{panelError()}</div>
       </Show>
-      <div class="workspace-terminal-body" ref={hostEl} />
+      <div class="workspace-terminal-body">
+        <div class="workspace-terminal-viewport" ref={hostEl} />
+      </div>
       <Show when={loading()}>
         <div class="workspace-terminal-loading">{t("common.loading")}</div>
       </Show>
