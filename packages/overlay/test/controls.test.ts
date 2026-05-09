@@ -614,6 +614,8 @@ test(
         }
         if (path === "/global/tasks") return send(data.tasks)
         if (path === "/executor") return send(data.executors)
+        if (path === "/pty/profiles") return send({ profiles: [] })
+        if (path === "/coding/cli/profiles") return send({ profiles: [] })
         if (path === "/preview/frontend") {
           return send({ url: null, source: null, port: null, checkedPorts: [], reason: "not_detected" })
         }
@@ -1126,10 +1128,10 @@ test(
       await page.click('[data-menu-trigger="help"]')
       await page.waitForFunction(() => !document.querySelector('[data-testid="titlebar-menu-help"]'))
 
-      await ensureMenuOpen("tools")
-      await page.waitForSelector('[data-testid="titlebar-open-tools"]')
-      seen.push('[data-testid="titlebar-open-tools"]')
-      await tap('[data-testid="titlebar-open-tools"]')
+      await ensureMenuOpen("skill")
+      await page.waitForSelector('[data-testid="titlebar-open-skills"]')
+      seen.push('[data-testid="titlebar-open-skills"]')
+      await tap('[data-testid="titlebar-open-skills"]')
       await page.waitForFunction(
         () =>
           (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
@@ -1145,7 +1147,7 @@ test(
       const stub = await page.evaluate(
         () => (window as typeof window & { __overlayTest: Record<string, unknown> }).__overlayTest,
       )
-      expect(seen).toContain('[data-testid="titlebar-open-tools"]')
+      expect(seen).toContain('[data-testid="titlebar-open-skills"]')
       expect(stub.open).toBeDefined()
       expect(stub.close).toBe(0)
       expect(errors).toEqual([])
