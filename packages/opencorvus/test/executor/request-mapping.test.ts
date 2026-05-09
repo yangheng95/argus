@@ -74,6 +74,7 @@ describe("executor request mapping", () => {
     })
     expect(out).toEqual([
       { type: "text_delta", text: "Hel" },
+      { type: "tool_delta", id: "call_1", name: "read_file", delta: "{\"path\":\"README.md\"" },
       { type: "tool_call", id: "call_1", name: "read_file", input: "{\"path\":\"README.md\"}" },
       { type: "done", sessionID: "resp_1", output: "Hello", meta: { id: "resp_1", output_text: "Hello" } },
     ])

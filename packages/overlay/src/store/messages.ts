@@ -514,23 +514,33 @@ function applyMessageEvent(event: any): boolean {
   }
 
   if (type === "message.part.updated") {
-    const part = properties.part;
-    if (!part?.id || !part?.messageID) return false;
-    let message = messageById(part.messageID);
+    const incomingPart = properties.part;
+    if (!incomingPart?.id || !incomingPart?.messageID) return false;
+    let message = messageById(incomingPart.messageID);
     if (!message) {
       // Buffer: message.updated hasn't arrived yet. Store part for later.
-      const existing = _pendingParts.get(part.messageID);
+      const normalizedPendingPart = normalizeToolPartRecord(incomingPart) as any;
+      const existing = _pendingParts.get(incomingPart.messageID);
       if (existing) {
-        existing.parts.push(part);
+        const partIdx = existing.parts.findIndex((item: any) => item?.id === normalizedPendingPart?.id);
+        if (partIdx >= 0) {
+          existing.parts[partIdx] = normalizeToolPartRecord(normalizedPendingPart, existing.parts[partIdx]);
+        } else {
+          existing.parts.push(normalizedPendingPart);
+        }
       } else {
-        _pendingParts.set(part.messageID, { parts: [part] });
+        _pendingParts.set(incomingPart.messageID, { parts: [normalizedPendingPart] });
       }
       return true;
     }
     const idx = store.messages.indexOf(message);
     const sid = sessionKeyOf(message);
     const sIdx = sessionBucketIndexOf(sid, message);
-    const partIdx = message.parts.findIndex((p: Part) => p.id === part.id);
+    const partIdx = message.parts.findIndex((p: Part) => p.id === incomingPart.id);
+    const part = normalizeToolPartRecord(
+      incomingPart,
+      partIdx >= 0 ? message.parts[partIdx] : undefined,
+    ) as Part;
     if (partIdx >= 0) {
       setStore("messages", idx, "parts", partIdx, part);
       if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, part);
@@ -644,7 +654,7 @@ function coalesceDeltas(events: any[]): any[] {
     const p = ev?.properties;
     if (
       ev?.type === "message.part.delta" &&
-      p?.field === "text" &&
+      (p?.field === "text" || p?.field === "raw") &&
       typeof p?.delta === "string" &&
       out.length > 0
     ) {
@@ -652,7 +662,7 @@ function coalesceDeltas(events: any[]): any[] {
       const pp = prev?.properties;
       if (
         prev?.type === "message.part.delta" &&
-        pp?.field === "text" &&
+        pp?.field === p.field &&
         pp?.partID === p.partID &&
         pp?.messageID === p.messageID
       ) {

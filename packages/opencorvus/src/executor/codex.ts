@@ -115,15 +115,16 @@ export namespace CodexExecutor {
         if (type === "response.function_call_arguments.delta") {
           const key = keyOf(item)
           if (!key) return []
+          const delta = text(item.delta || item.arguments_delta)
           const prev = calls.get(key) ?? {
             id: typeof item.call_id === "string" ? item.call_id : key,
             name: typeof item.name === "string" ? item.name : "",
             input: "",
           }
-          prev.input += text(item.delta || item.arguments_delta)
+          prev.input += delta
           if (typeof item.name === "string" && item.name) prev.name = item.name
           setCall(calls, [key, prev.id, typeof item.item_id === "string" ? item.item_id : "", typeof item.call_id === "string" ? item.call_id : ""], prev)
-          return []
+          return delta ? [{ type: "tool_delta", id: prev.id, name: prev.name || undefined, delta }] : []
         }
 
         if (type === "response.function_call_arguments.done") {

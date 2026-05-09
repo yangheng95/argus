@@ -483,6 +483,20 @@ function map(state: State, event: CodingEventInfo): Notify {
       },
     }
   }
+  if (event.type === "tool_delta") {
+    return {
+      type: "tool.delta",
+      summary: event.name ? `Generating tool call: ${event.name}` : "Generating tool call",
+      payload: {
+        sessionID: state.sessionID,
+        queueTaskID: state.id,
+        id: event.id,
+        ...(event.name ? { name: event.name } : {}),
+        delta: event.delta,
+        ...(event.meta ?? {}),
+      },
+    }
+  }
   if (event.type === "tool_result") {
     return {
       type: "tool.result",
