@@ -1,36 +1,9 @@
 /* ── Workspace Panel Surface ──
- * Owns: workspace-toggle button, workspace-mount shell,
+ * Owns: workspace-mount shell,
  * pane-resizer (row variant), workspace panel + tabs + body,
  * diff-preview panel, file-view panel, code .file-link inline.
  * Loaded in index.html before styles.css.
  * Do not add solo rules for these classes anywhere else. */
-
-/* ── Workspace Toggle (show/hide workspace panel button) ── */
-.workspace-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--oc-density-control-height);
-  padding: 0 calc(8px * var(--ui-scale));
-  border: var(--oc-border-width) solid transparent;
-  border-radius: var(--oc-radius-soft);
-  background: transparent;
-  color: var(--text-soft);
-  transition:
-    background var(--ui-duration-fast),
-    border-color var(--ui-duration-fast),
-    color var(--ui-duration-fast);
-}
-.workspace-toggle:hover {
-  background: var(--oc-control-bg-hover);
-  border-color: var(--oc-control-border-hover);
-  color: var(--text-strong);
-}
-.workspace-toggle[aria-pressed="true"] {
-  color: var(--accent);
-  background: var(--accent-dim);
-  border-color: var(--accent);
-}
 
 /* ── Workspace Mount Shell ── */
 .workspace-mount {
@@ -212,13 +185,16 @@
 
 /* ── Workspace Terminal ── */
 .workspace-terminal {
+  --workspace-terminal-bg: var(--surface-strong);
+  --workspace-terminal-fg: var(--text-strong);
+
   flex: 1;
   min-height: 0;
   position: relative;
   display: flex;
   flex-direction: column;
-  background: #0b0f14;
-  color: #d8dee9;
+  background: var(--workspace-terminal-bg);
+  color: var(--workspace-terminal-fg);
 }
 
 .workspace-terminal-header {
@@ -228,8 +204,8 @@
   justify-content: space-between;
   gap: calc(8px * var(--ui-scale));
   padding: 0 calc(10px * var(--ui-scale));
-  background: color-mix(in srgb, #0b0f14 84%, white);
-  border-bottom: var(--oc-border-width) solid color-mix(in srgb, white 12%, transparent);
+  background: color-mix(in srgb, var(--workspace-terminal-bg) 84%, var(--surface));
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--workspace-terminal-fg) 12%, transparent);
 }
 
 .workspace-terminal-tabs {
@@ -265,7 +241,7 @@
   padding: 0 calc(8px * var(--ui-scale));
   border: 0;
   background: transparent;
-  color: #d8dee9;
+  color: var(--workspace-terminal-fg);
   cursor: pointer;
 }
 
@@ -298,20 +274,20 @@
   border: 0;
   border-radius: var(--oc-radius-soft);
   background: transparent;
-  color: color-mix(in srgb, #d8dee9 72%, transparent);
+  color: color-mix(in srgb, var(--workspace-terminal-fg) 72%, transparent);
   cursor: pointer;
 }
 
 .workspace-terminal-tab-close:hover {
-  color: #ffffff;
-  background: color-mix(in srgb, white 10%, transparent);
+  color: var(--text-strong);
+  background: color-mix(in srgb, var(--workspace-terminal-fg) 10%, transparent);
 }
 
 .workspace-terminal-banner {
   flex: 0 0 auto;
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  color: #fecaca;
-  background: color-mix(in srgb, var(--bad) 24%, #0b0f14);
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 24%, var(--workspace-terminal-bg));
   font-size: var(--ui-font-control);
 }
 
@@ -332,8 +308,8 @@
   bottom: calc(12px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
-  background: color-mix(in srgb, #0b0f14 70%, white);
-  color: #d8dee9;
+  background: color-mix(in srgb, var(--workspace-terminal-bg) 70%, var(--surface));
+  color: var(--workspace-terminal-fg);
   font-size: var(--ui-font-small);
 }
 

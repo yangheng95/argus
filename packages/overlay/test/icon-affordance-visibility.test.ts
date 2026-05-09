@@ -63,12 +63,11 @@ describe("icon affordances stay visible at rest", () => {
     expect(soloRuleBody(css, ".card__collapse-toggle-label")).toContain("color: var(--text-strong);")
   })
 
-  test("workspace toggle stays visible without dim opacity", () => {
+  test("chat header no longer owns a workspace toggle affordance", () => {
     const css = read("src/styles/surfaces/conversation.css")
-    const body = soloRuleBody(css, ".chat-header-meta .workspace-toggle")
-    expect(body).toContain("color: var(--text-soft);")
-    expect(body).toContain("opacity: var(--ui-opacity-full);")
-    expect(body).not.toContain("opacity: var(--ui-opacity-dim);")
+    const html = read("src/index.html")
+    expect(html).not.toContain("btnWorkspaceToggle")
+    expect(css).not.toContain(".workspace-toggle")
   })
 
   test("task row icon actions keep a visible resting shell", () => {

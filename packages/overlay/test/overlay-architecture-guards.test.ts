@@ -94,7 +94,6 @@ const LEGACY_BUTTON_CLASSES = [
   "titlebar-btn",
   "sidebar-btn",
   "sidebar-tool",
-  "workspace-toggle",
   "right-panel-tab",
   "executor-chip",
   "chat-toolbar-btn",
@@ -109,7 +108,6 @@ const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
   "titlebar-btn": 0,
   "sidebar-btn": 0,
   "sidebar-tool": 0,
-  "workspace-toggle": 0,
   "right-panel-tab": 0,
   "executor-chip": 0,
   "chat-toolbar-btn": 0,
@@ -843,7 +841,6 @@ describe("overlay architecture guards", () => {
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
     for (const className of [
-      "workspace-toggle",
       "workspace-mount",
       "workspace",
       "workspace-header",
@@ -892,8 +889,8 @@ describe("overlay architecture guards", () => {
     const workspaceAt = html.indexOf('href="styles/surfaces/workspace.css"')
     expect(workspaceAt).toBeGreaterThan(-1)
 
-    expect(workspaceSurface).toMatch(/\.workspace-toggle:hover\s*\{/)
-    expect(workspaceSurface).toMatch(/\.workspace-toggle\[aria-pressed="true"\]\s*\{/)
+    expect(html).not.toContain("btnWorkspaceToggle")
+    expect(workspaceSurface).not.toContain(".workspace-toggle")
     expect(workspaceSurface).toMatch(/\.workspace-mount\[hidden\]\s*\{/)
     expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace::before\s*\{/)
     expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace:hover::before/)
@@ -2322,12 +2319,12 @@ describe("overlay architecture guards", () => {
           selector,
         )
         const hasHeaderControl =
-          /\.(?:task-dir-shell|task-cwd-dropdown|workspace-toggle)\b/.test(selector) ||
+          /\.(?:task-dir-shell|task-cwd-dropdown)\b/.test(selector) ||
           /\[data-ui="sidebar-new-task-button"\]/.test(selector)
         if (!isThemeSelector || !hasHeaderControl) continue
 
         expect(selector).not.toMatch(
-          /\.(?:task-dir-shell|task-cwd-dropdown|workspace-toggle)\b|\[data-ui="sidebar-new-task-button"\]/,
+          /\.(?:task-dir-shell|task-cwd-dropdown)\b|\[data-ui="sidebar-new-task-button"\]/,
         )
       }
     }
@@ -2354,8 +2351,7 @@ describe("overlay architecture guards", () => {
     expect(sidebarSurface).not.toContain('data-ui="sidebar-toggle-button"')
     expect(sidebarSurface).toContain('.oc-button[data-ui="sidebar-new-task-button"]')
     const workspaceSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
-    expect(soloRuleBody(workspaceSurface, ".workspace-toggle")).toContain("border-radius: var(--oc-radius-soft)")
-    expect(soloRuleBody(workspaceSurface, ".workspace-toggle")).toContain("border: var(--oc-border-width) solid transparent")
+    expect(workspaceSurface).not.toContain(".workspace-toggle")
   })
 
   test("right-panel empty hint density is canonical, not theme scoped", () => {

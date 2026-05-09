@@ -230,39 +230,6 @@
   box-shadow: none;
 }
 
-/* Workspace toggle scoped to the chat header: a circular icon-only
-   button that flips accent when pressed. */
-.chat-header-meta .workspace-toggle {
-  min-width: calc(28px * var(--ui-scale));
-  width: calc(28px * var(--ui-scale));
-  height: calc(28px * var(--ui-scale));
-  min-height: calc(28px * var(--ui-scale));
-  padding: 0;
-  border: 0 solid transparent;
-  border-radius: var(--oc-radius-pill);
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-soft);
-  opacity: var(--ui-opacity-full);
-}
-
-.chat-header-meta .workspace-toggle:hover {
-  background: transparent;
-  color: var(--text-strong);
-}
-
-.chat-header-meta .workspace-toggle[aria-pressed="true"] {
-  background: transparent;
-  color: var(--accent);
-  opacity: var(--ui-opacity-full);
-}
-
-.chat-header-meta .workspace-toggle:focus-visible {
-  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
-  outline-offset: calc(2px * var(--ui-scale));
-  box-shadow: none;
-}
-
 /* Goals strip (inline goal status above the chat scroll). The HTML
    element is currently a stub (`#chatGoalsStrip` is never populated by
    any runtime path), but the chrome stays so a future re-enable does
