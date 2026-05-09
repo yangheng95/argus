@@ -398,6 +398,11 @@ function openWorkspaceFile(filePath: string): void {
   openWorkspace({ kind: "file", filePath });
 }
 
+/** Open (or switch to) the workspace terminal. */
+function openWorkspaceTerminal(): void {
+  openWorkspace({ kind: "terminal" });
+}
+
 // Exposed for services and window-level bridges that need to trigger the
 // workspace from outside this module (e.g. ChangesPanel clicks).
 (window as any).openWorkspaceDiff = openWorkspaceDiff;
@@ -530,6 +535,7 @@ if (workspaceMountEl) {
         view={workspaceView()}
         onSelectView={setWorkspaceView}
         onClose={closeWorkspace}
+        directory={activeDirectory()}
       />
     ),
     workspaceMountEl,
@@ -741,8 +747,8 @@ if (workspaceLayoutControlsEl) {
   render(
     () => (
       <WorkspaceLayoutControls
-        workspaceOpen={workspaceOpen}
-        onToggleWorkspace={toggleWorkspace}
+        terminalOpen={() => workspaceOpen() && workspaceView().kind === "terminal"}
+        onOpenTerminal={openWorkspaceTerminal}
       />
     ),
     workspaceLayoutControlsEl,

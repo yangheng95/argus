@@ -4,9 +4,25 @@ import { Instance } from "../../src/project/instance"
 import { Pty } from "../../src/pty"
 import { tmpdir } from "../fixture/fixture"
 
+function terminalConfig(args: string[]) {
+  return {
+    terminal: {
+      default_profile_id: "test",
+      profiles: {
+        test: {
+          label: "Test terminal",
+          command: process.execPath,
+          args,
+          env: { TERM: "xterm-256color" },
+        },
+      },
+    },
+  }
+}
+
 describe("pty lifecycle", () => {
   test("removes exited sessions without double delete", async () => {
-    await using dir = await tmpdir({ git: true })
+    await using dir = await tmpdir({ git: true, config: terminalConfig(["-e", "process.exit(0)"]) })
 
     await Instance.provide({
       directory: dir.path,
@@ -17,8 +33,10 @@ describe("pty lifecycle", () => {
 
         try {
           const session = await Pty.create({
-            command: process.execPath,
-            args: ["-e", "process.exit(0)"],
+            profileID: "test",
+            cwd: dir.path,
+            cols: 80,
+            rows: 24,
             title: "exit",
           })
 

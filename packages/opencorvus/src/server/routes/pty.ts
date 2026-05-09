@@ -3,9 +3,11 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import { upgradeWebSocket } from "hono/bun"
 import z from "zod"
 import { Pty } from "@/pty"
+import { TerminalProfile } from "@/pty/profile"
 import { NotFoundError } from "../../storage/db"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { HTTPException } from "hono/http-exception"
 
 export const PtyRoutes = lazy(() =>
   new Hono()
@@ -50,7 +52,12 @@ export const PtyRoutes = lazy(() =>
       }),
       validator("json", Pty.CreateInput),
       async (c) => {
-        const info = await Pty.create(c.req.valid("json"))
+        const info = await Pty.create(c.req.valid("json")).catch((error) => {
+          if (error instanceof TerminalProfile.ConfigError) {
+            throw new HTTPException(400, { message: error.data.message })
+          }
+          throw error
+        })
         return c.json(info)
       },
     )
@@ -159,6 +166,7 @@ export const PtyRoutes = lazy(() =>
           return parsed
         })()
         let handler: ReturnType<typeof Pty.connect>
+        let currentSocket: Socket | undefined
         if (!Pty.get(id)) throw new Error("Session not found")
 
         type Socket = {
@@ -182,11 +190,29 @@ export const PtyRoutes = lazy(() =>
               ws.close()
               return
             }
+            currentSocket = socket
             handler = Pty.connect(id, socket, cursor)
           },
           onMessage(event) {
-            if (typeof event.data !== "string") return
-            handler?.onMessage(event.data)
+            const data = event.data
+            if (typeof data === "string" || data instanceof ArrayBuffer) {
+              handler?.onMessage(data)
+              return
+            }
+            if (ArrayBuffer.isView(data)) {
+              const view = data as unknown as ArrayBufferView
+              const copied = new Uint8Array(view.byteLength)
+              copied.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength))
+              handler?.onMessage(copied.buffer)
+              return
+            }
+            if (typeof Blob !== "undefined" && data instanceof Blob) {
+              void data.arrayBuffer()
+                .then((buffer) => handler?.onMessage(buffer))
+                .catch(() => currentSocket?.close(1003, "Unsupported terminal WebSocket message"))
+              return
+            }
+            currentSocket?.close(1003, "Unsupported terminal WebSocket message")
           },
           onClose() {
             handler?.onClose()

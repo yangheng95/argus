@@ -3,15 +3,41 @@ import { Instance } from "../../src/project/instance"
 import { Pty } from "../../src/pty"
 import { tmpdir } from "../fixture/fixture"
 
+function terminalConfig() {
+  return {
+    terminal: {
+      default_profile_id: "test",
+      profiles: {
+        test: {
+          label: "Test terminal",
+          command: process.execPath,
+          args: ["-e", "process.stdin.on('data', c => process.stdout.write(c.toString()))"],
+          env: { TERM: "xterm-256color" },
+        },
+      },
+    },
+  }
+}
+
+function createInput(cwd: string, title: string): Pty.CreateInput {
+  return {
+    profileID: "test",
+    cwd,
+    cols: 80,
+    rows: 24,
+    title,
+  }
+}
+
 describe("pty", () => {
   test("does not leak output when websocket objects are reused", async () => {
-    await using dir = await tmpdir({ git: true })
+    await using dir = await tmpdir({ git: true, config: terminalConfig() })
 
     await Instance.provide({
       directory: dir.path,
       fn: async () => {
-        const a = await Pty.create({ command: "cat", title: "a" })
-        const b = await Pty.create({ command: "cat", title: "b" })
+        const a = await Pty.create(createInput(dir.path, "a"))
+        const b = await Pty.create(createInput(dir.path, "b"))
         try {
           const outA: string[] = []
           const outB: string[] = []
@@ -55,12 +81,12 @@ describe("pty", () => {
   })
 
   test("does not leak output when Bun recycles websocket objects before re-connect", async () => {
-    await using dir = await tmpdir({ git: true })
+    await using dir = await tmpdir({ git: true, config: terminalConfig() })
 
     await Instance.provide({
       directory: dir.path,
       fn: async () => {
-        const a = await Pty.create({ command: "cat", title: "a" })
+        const a = await Pty.create(createInput(dir.path, "a"))
         try {
           const outA: string[] = []
           const outB: string[] = []
@@ -99,12 +125,12 @@ describe("pty", () => {
   })
 
   test("treats in-place socket data mutation as the same connection", async () => {
-    await using dir = await tmpdir({ git: true })
+    await using dir = await tmpdir({ git: true, config: terminalConfig() })
 
     await Instance.provide({
       directory: dir.path,
       fn: async () => {
-        const a = await Pty.create({ command: "cat", title: "a" })
+        const a = await Pty.create(createInput(dir.path, "a"))
         try {
           const out: string[] = []
 
@@ -144,12 +170,12 @@ describe("pty", () => {
   })
 
   test("does not leak output when socket data changes between primitive values", async () => {
-    await using dir = await tmpdir({ git: true })
+    await using dir = await tmpdir({ git: true, config: terminalConfig() })
 
     await Instance.provide({
       directory: dir.path,
       fn: async () => {
-        const a = await Pty.create({ command: "cat", title: "a" })
+        const a = await Pty.create(createInput(dir.path, "a"))
         try {
           const outA: string[] = []
           const outB: string[] = []
