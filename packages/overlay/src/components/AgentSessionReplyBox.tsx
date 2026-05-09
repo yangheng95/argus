@@ -56,20 +56,39 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      <textarea
-        class="card__agent-reply-input"
-        value={text()}
-        rows={2}
-        placeholder={t("card.agent_reply_placeholder")}
-        disabled={sending()}
-        onInput={(event) => setText(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            void submit(event);
-          }
-        }}
-      />
+      <div class="card__agent-reply-field">
+        <textarea
+          class="card__agent-reply-input"
+          value={text()}
+          rows={3}
+          placeholder={t("card.agent_reply_placeholder")}
+          disabled={sending()}
+          onInput={(event) => setText(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void submit(event);
+            }
+          }}
+        />
+        <button
+          type="submit"
+          class="card__agent-reply-send"
+          disabled={!canSend()}
+          aria-label={sending() ? t("card.agent_reply_sending") : t("card.agent_reply_send")}
+          title={sending() ? t("card.agent_reply_sending") : t("card.agent_reply_send")}
+        >
+          <Icon name="send" />
+          <span>
+            <Show
+              when={!sending()}
+              fallback={t("card.agent_reply_sending")}
+            >
+              {t("card.agent_reply_send")}
+            </Show>
+          </span>
+        </button>
+      </div>
       <Show when={error()}>
         <div class="card__agent-reply-error" role="alert">
           <span class="card__agent-reply-error-msg">{error()}</span>
@@ -84,20 +103,6 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
           </button>
         </div>
       </Show>
-      <div class="card__agent-reply-actions">
-        <button
-          type="submit"
-          class="card__agent-reply-send"
-          disabled={!canSend()}
-        >
-          <Show
-            when={!sending()}
-            fallback={t("card.agent_reply_sending")}
-          >
-            {t("card.agent_reply_send")}
-          </Show>
-        </button>
-      </div>
     </form>
   );
 }
