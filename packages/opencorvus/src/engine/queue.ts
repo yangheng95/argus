@@ -154,7 +154,7 @@ async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefin
  *
  * Single authoritative bind point between per-invocation loop lifecycle
  * and serial-queue progression. All paths that start a loop (initial
- * claim, resume, retrigger on already-active task) route through here so
+ * claim, operator retrigger on already-active task) route through here so
  * the "loop exited → advance siblings" contract is written exactly once.
  *
  * Idempotent against overlapping invocations for the same task: the Set
@@ -256,7 +256,7 @@ export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefi
 }
 
 /**
- * List active tasks for a cwd. Used by restart recovery.
+ * List active tasks for a cwd.
  */
 export function listActiveForCwd(cwd: string): TaskRow[] {
   if (!cwd) return []
@@ -280,7 +280,6 @@ export function listActiveForCwd(cwd: string): TaskRow[] {
 
 /**
  * List distinct cwds that have any queued tasks for the given project.
- * Used by restart recovery to decide which cwds need an advanceQueue.
  */
 export function listQueuedCwdsInProject(projectID: string): string[] {
   const rows = Database.use((db) =>
@@ -305,7 +304,6 @@ export function listQueuedCwdsInProject(projectID: string): string[] {
 
 /**
  * List active tasks in a project that have no in-flight loop.
- * Used by restart recovery and the poll safety net.
  */
 export function listOrphanedActiveInProject(projectID: string): TaskRow[] {
   const rows = Database.use((db) =>
@@ -327,7 +325,7 @@ export function listOrphanedActiveInProject(projectID: string): TaskRow[] {
 /**
  * Advance the queue for a cwd: if the cwd is idle, claim the next queued
  * task and start its loop. Called from every dispatch site (createTask,
- * retryTask, restart recovery, loop exit).
+ * retryTask, operator message, loop exit).
  *
  * Idempotent: calling advanceQueue multiple times for the same cwd is safe.
  * The atomic claim ensures only one call will actually start a loop.
@@ -372,30 +370,7 @@ export async function dispatchTaskLoop(input: {
 }
 
 /**
- * Resume a task whose status is already `active` but has no in-flight loop.
- * Used by restart recovery and the poll safety net.
- *
- * Does NOT go through claim (the task is already active). Caller must have
- * verified the task is not already tracked in loopInFlight.
- */
-export async function resumeActiveTaskLoop(taskID: string): Promise<void> {
-  if (loopInFlight.has(taskID)) return
-  const task = findTask(taskID)
-  if (!task) return
-  if (!isTaskActive(task)) return
-  const cwd = taskCwd(taskID)
-  if (!cwd) {
-    log.warn("resumeActiveTaskLoop: task has no cwd", { taskID })
-    return
-  }
-  // No synthesised event here — the loop re-enters and reads the describe
-  // snapshot to decide what to do. Phase 2's goal is to stop synthesising
-  // "created" / "batch_complete" labels from state columns.
-  await startLoopForTask(task, undefined, cwd)
-}
-
-/**
- * Internal: actually start the loop for a claimed/resumed task.
+ * Internal: actually start the loop for a claimed or operator-dispatched task.
  * Serial dispatch is guaranteed by the DB claim SQL, not by blocking the
  * caller; advance-on-exit is wired via `attachLoopCompletion`.
  *
@@ -412,9 +387,4 @@ async function startLoopForTask(
     return
   }
   attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, event))
-}
-
-/** Check if a task loop is currently running in this process. */
-export function isLoopInFlight(taskID: string): boolean {
-  return loopInFlight.has(taskID)
 }

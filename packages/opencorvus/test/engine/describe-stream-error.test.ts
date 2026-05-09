@@ -14,15 +14,14 @@ import { tmpdir } from "../fixture/fixture"
  * Regression for the engine-wedge-2026-04-30 fix
  * (specs/engine-stream-error-wedge-2026-04-30.md). Pre-fix,
  * `recordOrchestratorStreamError` wrote `orchestrator-stream-error`
- * artifacts but `describe.ts` never read them, and `reviveZombieTasks`
- * refused to wake the task — autonomous bench mode wedged forever after
- * a single transient HTTP 401 (_session-r2-glm5.out 14:47:25).
+ * artifacts but `describe.ts` never read them, so the orchestrator had no
+ * evidence on its next wake after a transient HTTP 401
+ * (_session-r2-glm5.out 14:47:25).
  *
  * The fix surfaces those artifacts through the describe layer so the
  * orchestrator LLM sees them on its next wake and decides retry /
  * restart_from_stage / fail itself. This test seeds the artifacts
- * directly and asserts the projection + rendering — the runtime-side
- * unwedge is covered by `zombie-task-revive.test.ts`.
+ * directly and asserts the projection + rendering.
  */
 
 let projectID = ""

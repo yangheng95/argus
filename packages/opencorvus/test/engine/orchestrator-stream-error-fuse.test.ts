@@ -22,9 +22,10 @@ import { tmpdir } from "../fixture/fixture"
  *
  * Three orchestrator-stream-error artifacts within
  * ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS for the same task transitions
- * the task to `failed` so reviveZombieTasks stops waking it. This caps the
- * deterministic-replay loop observed on tsk_e078e1f2a001t4ZwUl5SWgoG8o
- * (277 identical DeepSeek 400s in 2.5 minutes).
+ * the task to `failed`, so repeated operator wakes do not keep replaying
+ * an unrecoverable prompt. This caps the deterministic-replay loop observed
+ * on tsk_e078e1f2a001t4ZwUl5SWgoG8o (277 identical DeepSeek 400s in
+ * 2.5 minutes).
  */
 
 let projectID = ""

@@ -110,4 +110,4 @@ It guarantees a stable snapshot; concurrent modifications cannot contaminate in-
 
 ## Durable state
 
-All state lives in SQLite (default: `~/.opencorvus/opencorvus.db`) and persists across process and session boundaries. A crashed Task can resume after server restart as long as its worktree is intact.
+All state lives in SQLite (default: `~/.opencorvus/opencorvus.db`) and persists across process and session boundaries. After a server restart, the overlay restores the task context and waits for the next user message before the orchestrator continues.
