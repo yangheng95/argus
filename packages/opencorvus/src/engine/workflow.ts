@@ -149,7 +149,7 @@ const DIRECT: MiniWorkflow = {
       id: "build",
       tool: "build",
       label: "Build",
-      hint: "调用 build agent 实现请求（read/write/edit/bash）。无 goalID 只用于显式 kind=build 或 delivery 拒绝后的整体 rework；Pipeline shape (有 goalID) 在 architect 之后用。完成后必须 call deliver。",
+      hint: "调用 build agent 实现请求（read/write/edit/bash）。无 goalID 是受支持的 direct build：推荐用于显式 kind=build、delivery 拒绝后的整体 rework，或编排器明确判断无需 goal 分解的 scoped workflow 任务；Pipeline 推荐链路在 architect 之后用有 goalID 的 per-goal build。完成后必须 call deliver。",
       scope: "task",
       skippable: false,
       after: ["analyze_intent"],

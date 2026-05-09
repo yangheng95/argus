@@ -979,21 +979,6 @@ export function createOrchestratorTools(input: {
     })
   }
 
-  function taskLevelBuildEligibility(task: TaskRow): { allowed: true } | { allowed: false; reason: string } {
-    if (task.kind === "build") return { allowed: true }
-    const latestDelivery = findLatestDeliveryVerdictArtifact(task.id)
-    const latestPayload = (latestDelivery?.payload ?? {}) as Record<string, unknown>
-    if (latestPayload.verdict === "rejected") return { allowed: true }
-    return {
-      allowed: false,
-      reason:
-        "task-level build without goalID is only valid for explicit kind=build tasks " +
-        "or whole-task rework after a rejected delivery verdict. This task is kind=workflow " +
-        "and has not reached a rejected delivery cycle; continue through requirements, " +
-        "architect, and per-goal build({ goalID }) instead.",
-    }
-  }
-
   function activeGoalChoices(limit = 16) {
     const activePlan = findActivePlanForTask(taskID)
     if (!activePlan) return ""
@@ -4848,10 +4833,12 @@ export function createOrchestratorTools(input: {
         "concrete guidance for the next attempt — the goal contract (objective / acceptance_specs / " +
         "owned_paths) is preserved untouched and your `request` is rendered as a separate " +
         "'Retry Guidance From Orchestrator' section ahead of historical retry feedback, so filling it " +
-        "never costs you any architect-committed contract. `build({ request })` without goalID is valid only " +
-        "when the task itself is explicit `kind=build`, or after a rejected delivery verdict when the " +
-        "whole integrated tree needs rework. Fresh `kind=workflow` tasks MUST go through requirements / " +
-        "architect before build, even if the request looks simple. " +
+        "never costs you any architect-committed contract. `build({ request })` without goalID is a task-level " +
+        "direct build. It is supported for explicit `kind=build` tasks, whole-task rework after delivery " +
+        "rejection, and operator/orchestrator decisions to bypass goal decomposition for a scoped workflow " +
+        "task. For fresh `kind=workflow` tasks, requirements → architect → per-goal build remains the " +
+        "recommended path, but this tool does not hard-reject a direct build when the orchestrator gives a " +
+        "specific reason. " +
         "After build returns, you MUST call `deliver` next: build does NOT auto-complete the task; the only " +
         "way to mark a task accepted is through delivery's adversarial verification. Build → deliver loops " +
         "until Arbiter accepts (or hits stalled/abort). On rejection, call build again with " +
@@ -4870,7 +4857,7 @@ export function createOrchestratorTools(input: {
         reason: z
           .string()
           .describe(
-            "One sentence explaining why this build is valid now: either explicit kind=build, per-goal pipeline execution, or post-delivery whole-task rework.",
+            "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-delivery whole-task rework, or a conscious direct-build decision for this workflow task.",
           ),
         goalID: z
           .string()
@@ -4898,17 +4885,8 @@ export function createOrchestratorTools(input: {
         const isTaskLevelBuild = !attachedGoalID
 
         if (isTaskLevelBuild) {
-          const eligibility = taskLevelBuildEligibility(task)
-          if (!eligibility.allowed) {
-            log.warn("build: task-level build rejected by task kind contract", {
-              taskID,
-              taskKind: task.kind,
-              reason: eligibility.reason,
-            })
-            return `build: rejected task-level build. ${eligibility.reason}`
-          }
           if (requestText.length === 0) {
-            return `build: rejected task-level build. request is required when build is not scoped to a goal. Use build({ goalID }) for workflow goals or build({ request }) for direct/post-delivery whole-task rework.`
+            return `build: rejected task-level build. request is required when build is not scoped to a goal.`
           }
           await switchExplicitBuildTaskToDirectWorkflow(attachedGoalID)
           await trackStepStart("build")
@@ -4927,15 +4905,13 @@ export function createOrchestratorTools(input: {
         // Coordinator Run lazy-create: the unified-teardown spec collapsed
         // dispatch_goal/create_run/exec_goal into this single `build` tool,
         // but stripped the run-creation step that dispatch_goal used to do.
-        // Without a parent kind="run" artifact, deliver's
-        // `findActiveRunForTask` short-circuits with "No active run", and
-        // `listGoalRunsForRun` finds no goal_run_attempts (they were being
-        // written with run_id=null). Restore the invariant: when build is
+        // Restore the invariant for goal-scoped builds: when build is
         // dispatched against a goal, ensure a coordinator Run exists for
         // this task so the goal_run_attempt + per-goal delivery artifacts
         // anchor to it (rule 22 — single source: build is the dispatcher,
-        // build owns the run). Task-level (request-only) builds skip this;
-        // they have no goal to bind to and deliver isn't part of that path.
+        // build owns the run). Task-level request builds skip this because
+        // they have no goal row to bind to; deliver supports the run-less
+        // path and judges the integrated workspace directly.
         if (attachedGoalID) {
           const { findGoal } = await import("@/engine/store")
           const goal = findGoal(attachedGoalID)

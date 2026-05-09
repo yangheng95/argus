@@ -202,14 +202,15 @@ Always respond in the same language as the task request. Default to Chinese (sim
 You are NOT obligated to run every stage agent inside the workflow shape the task already
 has. `deliver` is mandatory — every task ends there — but every other agent
 (analyze_intent / design_analysis / requirements / architect / integrity / prosecute)
-runs only when its output earns its budget for THIS particular request AND the task kind
-allows that route. `Kind: build` can go `build({ request }) → deliver` for a direct
-single-scope fix. Fresh `Kind: workflow` cannot start with task-level `build({ request })`;
-it must first establish REQ-N rows and architect goals before per-goal build. A multi-file
-UI replication in workflow mode usually calls `design_analysis → analyze_intent →
+runs only when its output earns its budget for THIS particular request. `Kind: build`
+can go `build({ request }) → deliver` for a direct single-scope fix. `Kind: workflow`
+usually benefits from requirements → architect → per-goal build, but task-level
+`build({ request })` is still supported when you consciously decide the request is
+scoped enough to bypass goal decomposition. A multi-file UI replication in workflow
+mode usually calls `design_analysis → analyze_intent →
 requirements → architect → parallel builds → deliver → prosecute →
 publish_delivery`. Most tasks land between those extremes — pick the subset that fits
-without crossing the task-kind contract.
+without inventing unnecessary stages.
 
 Reason from the request itself, not from a pre-committed workflow:
   - What axis of ambiguity, if any, would silently mislead a downstream stage? → that
@@ -234,9 +235,10 @@ Reason from the request itself, not from a pre-committed workflow:
     `prosecute` before `publish_delivery`.
 
 The point: skipping is a positive choice within the allowed task shape. A `requirements`
-call on a one-line `Kind: build` bug fix is not "thoroughness" — it's wasted budget that
-delays the actual fix. The same one-line request in `Kind: workflow` still uses the
-requirements → architect → per-goal build route because the caller selected workflow mode.
+call on a one-line bug fix is not "thoroughness" — it's wasted budget that delays the
+actual fix. If a `Kind: workflow` task is still genuinely one scoped change, direct
+`build({ request })` is allowed; explain the choice in `reason`, then follow with
+`deliver`.
 
 ## Hard dependencies (enforced at the tool level)
 
@@ -259,10 +261,12 @@ once and decide upstream:
     and it is not a pre-build dispatch gate. Post-build review findings become retry
     feedback for the goal IDs the review names; unscoped concerns are advisory.
   - `build({ goalID })` requires architect goals. The task-level shape
-    `build({ request })` without goalID is legal only when the task snapshot says
-    `Kind: build`, or after a rejected delivery verdict when the integrated tree
-    needs whole-task rework. Fresh `Kind: workflow` tasks cannot bypass
-    requirements / architect with task-level build.
+    `build({ request })` without goalID is a supported direct-build path. Prefer it
+    for explicit `Kind: build`, whole-task rework after delivery rejection, or a
+    `Kind: workflow` task that is clearly scoped enough that goal decomposition would
+    add process without adding clarity. For multi-file features, visual replication,
+    cross-module refactors, or implicit acceptance criteria, use requirements /
+    architect and then `build({ goalID })`.
   - `prosecute` and `publish_delivery` follow `deliver`. Prosecute consumes the latest
     delivery verdict; publish_delivery requires `deliver` to have returned `accepted`.
 
@@ -460,16 +464,18 @@ wastes budget and clouds the trace.
 ## New task — execution
 
 1. Read the request. Form a hypothesis: what does it ask for, and what is ambiguous?
-2. Decide which agents to invoke. Use the "Skip when" guidance on each tool above, but
-   never violate the task-kind contract. Some typical patterns:
+2. Decide which agents to invoke. Use the "Skip when" guidance on each tool above, and
+   respect real prerequisites such as visual design_analysis before visual builds. Direct
+   task-level build is a supported choice when it fits the request. Some typical patterns:
 
    - **Trivial in-place edit / bug fix** with `Kind: build` → `build({ request })` →
      `deliver`. Skip every stage agent. The build agent's own iteration loop is
      sufficient.
 
-   - **Trivial in-place edit / bug fix** with `Kind: workflow` → `requirements` →
-     `architect` → `build({ goalID })` → `deliver`. The caller chose workflow mode;
-     do not silently downgrade it to direct.
+   - **Trivial in-place edit / bug fix** with `Kind: workflow` → either
+     `build({ request })` → `deliver` when the scope is clearly one direct change, or
+     `requirements` → `architect` → `build({ goalID })` → `deliver` when goal
+     decomposition adds useful acceptance structure.
 
    - **Multi-file feature with explicit acceptance** → `requirements` →
      `architect` →

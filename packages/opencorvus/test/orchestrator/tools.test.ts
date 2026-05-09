@@ -195,7 +195,7 @@ describe("orchestrator tools", () => {
     await tmp?.[Symbol.asyncDispose]?.()
   })
 
-  test("workflow tasks reject task-level build before delivery rework", async () => {
+  test("workflow tasks allow task-level direct build when the orchestrator chooses it", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_build_${stamp}`
@@ -217,7 +217,7 @@ describe("orchestrator tools", () => {
         project_id: projectID,
         source: "test",
         title: "Build workflow contract task",
-        request: "Verify workflow task-level build cannot bypass requirements and architect",
+        request: "Verify workflow task-level build can be selected directly",
         kind: "workflow",
         priority: "normal",
         time_created: now,
@@ -225,6 +225,24 @@ describe("orchestrator tools", () => {
         time_started: now,
       }).run()
     })
+
+    buildAgentRunImpl = async (input: any) => {
+      expect(input.target).toEqual({
+        kind: "request",
+        text: "Implement the page directly.",
+      })
+      return {
+        result: {
+          status: "passed",
+          summary: "Direct workflow build completed.",
+          files_changed: [],
+          tests: [],
+        },
+        sessionID: "ses_direct_workflow_build",
+        worktreeDir: tmp.path,
+        diffs: [],
+      }
+    }
 
     await Instance.provide({
       directory: tmp.path,
@@ -241,12 +259,11 @@ describe("orchestrator tools", () => {
 
         const result = await tools.build.execute({
           request: "Implement the page directly.",
-          reason: "Try to bypass the workflow.",
+          reason: "Scoped workflow task; direct build is enough.",
         }, {} as any)
 
-        expect(result).toContain("rejected task-level build")
-        expect(result).toContain("kind=workflow")
-        expect(result).toContain("requirements, architect, and per-goal build")
+        expect(result).toContain("Build agent finished")
+        expect(result).toContain("Direct workflow build completed")
         expect(workflowState.workflowID).toBe("pipeline")
       },
     })
