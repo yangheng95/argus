@@ -58,7 +58,7 @@ export function terminalToolSystemPrompt(toolName: string): string {
 // stamped with a typed error and the caller sees the contract violation.
 
 export namespace SessionLoop {
-  const { log, state, cancel, flushCallbacks, start, resume } = SessionPromptState
+  const { log, state, cancel, finish, flushCallbacks, start, resume } = SessionPromptState
 
   type StrictAITool = AITool & { strict?: boolean }
 
@@ -1579,7 +1579,7 @@ export namespace SessionLoop {
         }
       } finally {
         const s = state()[sessionID]
-        if (s?.abort.signal === abort) cancel(sessionID)
+        if (s?.abort.signal === abort) finish(sessionID, abort)
       }
     })()
 
