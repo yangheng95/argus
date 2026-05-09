@@ -74,11 +74,19 @@ describe("ExecutorSelector chip surfaces orchestrator + external executor models
     // so the two-segment layout is visually consistent
     // regardless of which executor is selected.
     expect(SRC).toMatch(/data-source="executor"/)
-    expect(SRC).toMatch(
-      /\{executorModel\(\) \|\| t\("agent_models\.option_not_set"\)\}/,
-    )
+    expect(SRC).toMatch(/executorModelText/)
+    expect(SRC).toMatch(/executor\.same_as_plan/)
     expect(SRC).not.toMatch(/data-source="external"/)
     expect(SRC).not.toMatch(/<Show when=\{isExternalExecutor\(\) && /)
+  })
+
+  test("splits provider and model into scan-friendly fields", () => {
+    expect(SRC).toMatch(/splitModelID/)
+    expect(SRC).toMatch(/executor-chip-provider/)
+    expect(SRC).toMatch(/executor-chip-name/)
+    expect(SRC).toMatch(/executor-menu-summary/)
+    expect(SRC).toMatch(/executor-menu-model-provider/)
+    expect(SRC).toMatch(/executor-menu-model-name/)
   })
 
   test("the chip carries a tooltip explaining both models", () => {
@@ -100,6 +108,10 @@ describe("i18n keys for the dual-model explainer exist in both locales", () => {
     "executor.model_explainer_internal",
     "executor.model_explainer_external",
     "executor.model_explainer_pair",
+    "executor.change_model",
+    "executor.role_edit",
+    "executor.role_plan",
+    "executor.same_as_plan",
   ]) {
     test(`${key} present in en-US.json`, () => {
       expect(typeof EN[key]).toBe("string")

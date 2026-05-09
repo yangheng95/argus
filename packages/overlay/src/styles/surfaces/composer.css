@@ -484,26 +484,34 @@
 }
 
 .executor-selector .oc-button[data-ui="executor-chip"] {
-  --oc-button-height: var(--oc-density-control-height);
-  --oc-button-padding-x: calc(var(--oc-header-gap) * 0.75);
-  --oc-button-gap: calc(var(--oc-header-gap) * 0.75);
-  --oc-button-border: 0 solid transparent;
-  --oc-button-bg: transparent;
+  --oc-button-height: auto;
+  --oc-button-padding-x: calc(8px * var(--ui-scale));
+  --oc-button-gap: calc(8px * var(--ui-scale));
+  --oc-button-border: var(--oc-border-width) solid var(--border);
+  --oc-button-bg: color-mix(in srgb, var(--surface-inset) 88%, transparent);
   --oc-button-color: var(--text-soft);
 
-  border-radius: var(--oc-radius-pill);
+  align-items: stretch;
+  border-radius: var(--oc-radius-soft);
+  min-height: calc(42px * var(--ui-scale));
+  max-width: min(calc(520px * var(--ui-scale)), calc(100vw - 32px));
+  padding-top: calc(5px * var(--ui-scale));
+  padding-bottom: calc(5px * var(--ui-scale));
   font-size: var(--ui-font-meta);
   font-weight: var(--ui-font-weight-strong);
-  line-height: 1.2;
-  white-space: nowrap;
+  line-height: 1.15;
+  white-space: normal;
 }
 
 .executor-selector[data-open="true"] .oc-button[data-ui="executor-chip"] {
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 45%, transparent);
+  --oc-button-bg: color-mix(in srgb, var(--accent) 12%, var(--surface-inset));
   --oc-button-color: var(--text-strong);
 }
 
-.executor-selector .oc-button[data-ui="executor-chip"][data-has-external="true"] .executor-chip-model {
-  max-width: calc(var(--oc-density-control-height) * 5);
+.executor-selector .oc-button[data-ui="executor-chip"]:hover {
+  --oc-button-bg: var(--subtle-4);
+  --oc-button-color: var(--text-strong);
 }
 
 /* ── ExecutorSelector dropdown menu ──────────────────────── */
@@ -516,16 +524,67 @@
   position: absolute;
   bottom: calc(100% + calc(6px * var(--ui-scale)));
   left: 0;
-  min-width: calc(220px * var(--ui-scale));
-  max-width: calc(320px * var(--ui-scale));
+  width: min(calc(560px * var(--ui-scale)), calc(100vw - 24px));
+  min-width: calc(360px * var(--ui-scale));
+  max-width: calc(560px * var(--ui-scale));
   max-height: calc(360px * var(--ui-scale));
   overflow-y: auto;
   background: var(--executor-menu-bg);
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
-  padding: calc(4px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale));
   box-shadow: var(--executor-menu-shadow);
   z-index: var(--ui-z-titlebar);
+}
+
+.executor-menu-summary {
+  display: grid;
+  gap: calc(6px * var(--ui-scale));
+  margin-bottom: calc(6px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--surface-inset) 78%, transparent);
+}
+
+.executor-menu-summary-title {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0;
+}
+
+.executor-menu-summary-title span:last-child {
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-medium);
+}
+
+.executor-menu-summary-grid {
+  display: grid;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.executor-menu-summary-row {
+  display: grid;
+  grid-template-columns: calc(44px * var(--ui-scale)) minmax(0, 1fr);
+  align-items: baseline;
+  gap: calc(8px * var(--ui-scale));
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+}
+
+.executor-menu-summary-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-weight: var(--ui-font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .executor-menu-group {
@@ -548,6 +607,7 @@
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0;
   cursor: pointer;
   transition:
     background var(--ui-duration-fast),
@@ -589,7 +649,10 @@
 }
 
 .executor-menu-model {
-  display: block;
+  display: grid;
+  grid-template-columns: calc(96px * var(--ui-scale)) minmax(0, 1fr);
+  gap: calc(8px * var(--ui-scale));
+  align-items: baseline;
   width: 100%;
   text-align: left;
   border: var(--oc-border-width) solid transparent;
@@ -600,11 +663,24 @@
   font-size: var(--ui-font-small);
   cursor: pointer;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   transition:
     background var(--ui-duration-fast),
     color var(--ui-duration-fast);
+}
+
+.executor-menu-model-provider {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  text-overflow: ellipsis;
+}
+
+.executor-menu-model-name {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
 }
 
 .executor-menu-model:hover {
@@ -642,67 +718,73 @@
  * `--surface-strong` fill — the lightness step is the boundary. The
  * `[data-open="true"]` open state used to flip border-color → accent;
  * now it lifts the bg to `--accent-dim` per rule §2.2 C. */
-.executor-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  border: 0;
-  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
-  color: var(--text-soft);
-  border-radius: var(--oc-radius-pill);
-  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  font-size: var(--ui-font-meta);
-  line-height: 1.2;
-  font-weight: var(--ui-font-weight-strong);
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    background var(--ui-duration-fast),
-    color var(--ui-duration-fast);
-}
-
-.executor-chip:hover {
-  background: var(--subtle-4);
-  color: var(--text-strong);
-}
-
-.executor-selector[data-open="true"] .executor-chip {
-  background: var(--accent-dim);
-  color: var(--text-strong);
+.executor-chip-identity {
+  display: grid;
+  align-content: center;
+  gap: calc(2px * var(--ui-scale));
+  min-width: calc(92px * var(--ui-scale));
+  padding-right: calc(8px * var(--ui-scale));
+  border-right: var(--oc-border-width) solid color-mix(in srgb, var(--border) 74%, transparent);
 }
 
 .executor-chip-label {
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: var(--ui-letter-spacing-loose);
+  letter-spacing: 0;
+  color: var(--text-strong);
 }
 
-/* G = Global/orchestrator slot; E = Executor slot prefix */
-.executor-chip-sep {
+.executor-chip-action {
   color: var(--text-muted);
-  opacity: var(--ui-opacity-disabled);
   font-size: var(--ui-font-tiny);
-  font-weight: var(--ui-font-weight-strong);
-  letter-spacing: var(--ui-letter-spacing-loose);
-  padding: 0 calc(2px * var(--ui-scale)) 0 calc(4px * var(--ui-scale));
+  font-weight: var(--ui-font-weight-medium);
+  letter-spacing: 0;
 }
 
-.executor-chip-arrow {
-  color: var(--text-muted);
-  opacity: var(--ui-opacity-disabled);
-  font-size: var(--ui-font-tiny);
-  padding: 0 calc(1px * var(--ui-scale));
+.executor-chip-models {
+  display: grid;
+  grid-template-columns: minmax(calc(120px * var(--ui-scale)), 1fr) minmax(calc(120px * var(--ui-scale)), 1fr);
+  gap: calc(6px * var(--ui-scale));
+  min-width: 0;
 }
 
 .executor-chip-model {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  min-width: 0;
+  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 66%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  max-width: calc(180px * var(--ui-scale));
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.executor-chip[data-has-external="true"] .executor-chip-model {
-  max-width: calc(120px * var(--ui-scale));
+.executor-chip-role {
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0;
+}
+
+.executor-chip-provider {
+  max-width: calc(74px * var(--ui-scale));
+  overflow: hidden;
+  color: color-mix(in srgb, var(--text-muted) 78%, transparent);
+  font-size: var(--ui-font-tiny);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.executor-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: var(--ui-font-meta);
+  font-weight: var(--ui-font-weight-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .executor-chip-model[data-empty="true"] {
@@ -711,20 +793,17 @@
   font-variant-numeric: normal;
 }
 
-.executor-chip-model[data-source="executor"]::before {
-  content: "";
-  display: inline-block;
-  width: calc(4px * var(--ui-scale));
-  height: calc(4px * var(--ui-scale));
-  margin-right: calc(4px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  background: var(--accent);
-  vertical-align: middle;
-  opacity: var(--ui-opacity-disabled);
+.executor-chip-model[data-source="executor"] {
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+}
+
+.executor-chip-model[data-same="true"] {
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .executor-chip-caret {
   display: inline-flex;
+  align-items: center;
   color: var(--text-muted);
   margin-left: calc(2px * var(--ui-scale));
 }
