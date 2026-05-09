@@ -195,7 +195,7 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
               type="matrix"
               values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"
             />
-            <feBlend mode="overlay" in2="BackgroundImageFix" result="effect1_dropShadow" />
+            <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow" />
             <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
           </filter>
           <filter
@@ -219,7 +219,7 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
               type="matrix"
               values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"
             />
-            <feBlend mode="overlay" in2="BackgroundImageFix" result="effect1_dropShadow" />
+            <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow" />
             <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
           </filter>
           <linearGradient

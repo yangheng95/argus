@@ -14,7 +14,6 @@ import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
 import { WorkspaceEditorLaunchers } from "./components/WorkspaceEditorLaunchers";
 import { WorkspaceLayoutControls } from "./components/WorkspaceLayoutControls";
-import { PaneEdgeControls } from "./components/PaneEdgeControls";
 import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/TitlebarMenubar";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { FilesSection } from "./components/FilesSection";
@@ -747,11 +746,6 @@ if (workspaceLayoutControlsEl) {
     ),
     workspaceLayoutControlsEl,
   );
-}
-
-const paneEdgeControlsEl = document.getElementById("solidPaneEdgeControls");
-if (paneEdgeControlsEl) {
-  render(() => <PaneEdgeControls />, paneEdgeControlsEl);
 }
 
 const workspaceEditorLaunchersEl = document.getElementById("solidWorkspaceEditorLaunchers");

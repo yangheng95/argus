@@ -52,34 +52,40 @@ test("workspace layout controls collapse both side panes without residual width"
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`);
     }, server.port);
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector('[data-ui="workspace-left-panel-toggle"]');
+    await page.waitForSelector('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]');
     expect(await page.$("#titlebar .workspace-layout-controls")).toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-layout-controls")).not.toBeNull();
-    expect(await page.$('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]')).toBeNull();
-    expect(await page.$('.workspace-command-dock [data-ui="workspace-right-panel-toggle"]')).toBeNull();
-    expect(await page.$('.pane-edge-controls [data-ui="workspace-left-panel-toggle"]')).not.toBeNull();
-    expect(await page.$('.pane-edge-controls [data-ui="workspace-right-panel-toggle"]')).not.toBeNull();
+    expect(await page.$('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]')).not.toBeNull();
+    expect(await page.$('.workspace-command-dock [data-ui="workspace-right-panel-toggle"]')).not.toBeNull();
+    expect(await page.$('.pane-edge-controls [data-ui="workspace-left-panel-toggle"]')).toBeNull();
+    expect(await page.$('.pane-edge-controls [data-ui="workspace-right-panel-toggle"]')).toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-editor-launchers")).not.toBeNull();
     expect(await page.$('#taskDir [data-path-editor]')).toBeNull();
     expect(await page.$('[data-editor="pycharm"] svg')).not.toBeNull();
     expect(await page.$eval('[data-editor="pycharm"]', (node) => node.textContent)).toBe("");
 
-    const openEdgePlacement = await page.evaluate(() => {
+    const dockPlacement = await page.evaluate(() => {
+      const dock = document.querySelector<HTMLElement>(".workspace-command-dock")!.getBoundingClientRect();
+      const layout = document.querySelector<HTMLElement>(".workspace-command-dock .workspace-layout-controls")!.getBoundingClientRect();
       const left = document.querySelector<HTMLElement>('[data-ui="workspace-left-panel-toggle"]')!.getBoundingClientRect();
       const right = document.querySelector<HTMLElement>('[data-ui="workspace-right-panel-toggle"]')!.getBoundingClientRect();
-      const chat = document.querySelector<HTMLElement>("#chatSection")!.getBoundingClientRect();
-      const panel = document.querySelector<HTMLElement>("#panelBody")!.getBoundingClientRect();
       return {
-        leftNearChat: Math.abs(left.left - chat.left),
-        rightNearChat: Math.abs(right.right - chat.right),
-        leftCenterDelta: Math.abs((left.top + left.height / 2) - (panel.top + panel.height / 2)),
-        rightCenterDelta: Math.abs((right.top + right.height / 2) - (panel.top + panel.height / 2)),
+        layoutInsideDock: layout.left >= dock.left && layout.right <= dock.right,
+        leftInsideLayout: left.left >= layout.left && left.right <= layout.right,
+        rightInsideLayout: right.left >= layout.left && right.right <= layout.right,
+        leftHeight: Math.round(left.height),
+        rightHeight: Math.round(right.height),
+        leftWidth: Math.round(left.width),
+        rightWidth: Math.round(right.width),
       };
     });
-    expect(openEdgePlacement.leftNearChat).toBeLessThanOrEqual(3);
-    expect(openEdgePlacement.rightNearChat).toBeLessThanOrEqual(3);
-    expect(openEdgePlacement.leftCenterDelta).toBeLessThanOrEqual(1);
-    expect(openEdgePlacement.rightCenterDelta).toBeLessThanOrEqual(1);
+    expect(dockPlacement.layoutInsideDock).toBe(true);
+    expect(dockPlacement.leftInsideLayout).toBe(true);
+    expect(dockPlacement.rightInsideLayout).toBe(true);
+    expect(dockPlacement.leftWidth).toBeLessThanOrEqual(32);
+    expect(dockPlacement.rightWidth).toBeLessThanOrEqual(32);
+    expect(dockPlacement.leftHeight).toBeLessThanOrEqual(32);
+    expect(dockPlacement.rightHeight).toBeLessThanOrEqual(32);
 
     await page.click('[data-ui="workspace-left-panel-toggle"]');
     await page.click('[data-ui="workspace-right-panel-toggle"]');
@@ -95,7 +101,7 @@ test("workspace layout controls collapse both side panes without residual width"
           width: node.getBoundingClientRect().width,
         };
       };
-      const edge = (selector: string) => {
+      const rectOf = (selector: string) => {
         const node = document.querySelector<HTMLElement>(selector);
         if (!node) throw new Error(`Missing ${selector}`);
         const rect = node.getBoundingClientRect();
@@ -111,9 +117,9 @@ test("workspace layout controls collapse both side panes without residual width"
         leftResizer: measure("#leftPaneResizer"),
         sections: measure("#sections"),
         rightResizer: measure("#rightPaneResizer"),
-        leftToggle: edge('[data-ui="workspace-left-panel-toggle"]'),
-        rightToggle: edge('[data-ui="workspace-right-panel-toggle"]'),
-        panel: edge("#panelBody"),
+        leftToggle: rectOf('[data-ui="workspace-left-panel-toggle"]'),
+        rightToggle: rectOf('[data-ui="workspace-right-panel-toggle"]'),
+        dock: rectOf(".workspace-command-dock"),
       };
     });
 
@@ -121,12 +127,12 @@ test("workspace layout controls collapse both side panes without residual width"
     expect(collapsed.leftResizer).toEqual({ hidden: true, display: "none", width: 0 });
     expect(collapsed.sections).toEqual({ hidden: true, display: "none", width: 0 });
     expect(collapsed.rightResizer).toEqual({ hidden: true, display: "none", width: 0 });
-    expect(collapsed.leftToggle.left).toBe(collapsed.panel.left);
-    expect(collapsed.rightToggle.right).toBe(collapsed.panel.right);
-    expect(collapsed.leftToggle.width).toBeLessThanOrEqual(22);
-    expect(collapsed.rightToggle.width).toBeLessThanOrEqual(22);
-    expect(collapsed.leftToggle.height).toBeGreaterThan(collapsed.leftToggle.width);
-    expect(collapsed.rightToggle.height).toBeGreaterThan(collapsed.rightToggle.width);
+    expect(collapsed.leftToggle.left).toBeGreaterThanOrEqual(collapsed.dock.left);
+    expect(collapsed.rightToggle.right).toBeLessThanOrEqual(collapsed.dock.right);
+    expect(collapsed.leftToggle.width).toBeLessThanOrEqual(32);
+    expect(collapsed.rightToggle.width).toBeLessThanOrEqual(32);
+    expect(collapsed.leftToggle.height).toBeLessThanOrEqual(32);
+    expect(collapsed.rightToggle.height).toBeLessThanOrEqual(32);
   } finally {
     await browser.close();
     server.stop(true);
