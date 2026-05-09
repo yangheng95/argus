@@ -11,7 +11,7 @@
 - 当前运行时的真源不是 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 里的 mailbox/registry 协议，而是 `ChannelIngress / ControlMessage / EngineService / Orchestrator tools / GoalPool / task subagent` 的混合路径。
 - `planner` 当前不是 Orchestrator 的显式 tool 目标；它在 pipeline build 路径里由 `engine/goal-pool.ts` 调用 `planGoal()`。
 - `intent-analysis` 已有 agent 实现，但源码明确写着“not wired yet”；当前 runtime 里没有接线。
-- `build -> general/explore`、`deliver -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径。
+- `build -> general/explore`、`deliver -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；`general -> general` 自递归被权限拒绝。
 - [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的“双向都要声明”规则，`general -> explore` 在 spec 文本上并不成立。
 
 ## 节点缩写
@@ -117,7 +117,7 @@ flowchart LR
 | P | - | - | - | - | - | - | - | - | - | - |
 | B | RT | - | - | - | - | - | - | Q | Q | - |
 | D | RT | - | - | - | - | - | - | Q | Q | - |
-| G | - | - | - | - | - | RQ | RQ | Q/RQ | Q | - |
+| G | - | - | - | - | - | RQ | RQ | - | Q | - |
 | E | - | - | - | - | - | RQ | RQ | RQ | - | - |
 | I | - | - | - | - | - | - | - | - | - | - |
 
@@ -125,7 +125,7 @@ flowchart LR
 
 - `O -> P` 在当前实现里不是 direct tool，所以这一格刻意留空。
 - `I` 整行整列为空，不是“没画”，而是“当前 runtime 确实没接线”。
-- `G -> G` 代表 `general` 允许通过 `task` 再拉起一个 `general` subagent；这是当前实现真实存在的递归路径。
+- `G -> G` 被显式拒绝，避免 `general` 自递归；`general -> explore` 仍是当前实现真实存在的二级探索路径。
 
 ## 实际矩阵二：当前代码里的间接传递（只列高信号链路）
 
@@ -202,7 +202,6 @@ flowchart LR
   D -->|task| E
   E -->|task result| D
 
-  G -->|task| G
   G -->|task| E
   E -->|task result| G
 ```

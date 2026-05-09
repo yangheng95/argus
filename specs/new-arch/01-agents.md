@@ -135,6 +135,8 @@ orchestrator/loop.ts — runTaskLoop()
 
 `planner` **不**出现在 orchestrator tools 中——它的调用埋在 build tool 内部，由 build executor 按需触发；详见 [13-agent-communication-matrix.md](13-agent-communication-matrix.md)。
 
+`panel` control-plane tool **不**属于 orchestrator。Gateway 入口独占 panel capability action；orchestrator 只能通过自身的 workflow / task-control tools 推进任务。
+
 ## Decision Log
 
 - 全局共享 append-only 上下文（`src/decision-log/`）

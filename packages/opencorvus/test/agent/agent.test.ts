@@ -122,7 +122,7 @@ test("explore agent allows external directories and Truncate.GLOB", async () => 
   })
 })
 
-test("general agent removes recursive tools from its exposed tool list", async () => {
+test("general agent exposes subtask dispatch without allowing self-recursion", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -131,11 +131,31 @@ test("general agent removes recursive tools from its exposed tool list", async (
       expect(general).toBeDefined()
       expect(general?.mode).toBe("subagent")
       expect(general?.hidden).toBeUndefined()
-      expect(general?.tools?.exclude).toContain("task")
+      expect(general?.tools?.exclude).not.toContain("task")
       expect(general?.tools?.exclude).toContain("todoread")
       expect(general?.tools?.exclude).toContain("todowrite")
+      expect(PermissionNext.evaluate("task", "explore", general!.permission).action).toBe("allow")
+      expect(PermissionNext.evaluate("task", "general", general!.permission).action).toBe("deny")
       expect(evalPerm(general, "todoread")).toBe("allow")
       expect(evalPerm(general, "todowrite")).toBe("allow")
+
+      const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, general)
+      expect(tools.map((tool) => tool.id)).toContain("task")
+    },
+  })
+})
+
+test("orchestrator does not receive the control-plane panel tool", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const orchestrator = await Agent.get("orchestrator")
+      expect(orchestrator).toBeDefined()
+      expect(orchestrator?.tools?.include).not.toContain("panel")
+
+      const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, orchestrator)
+      expect(tools.map((tool) => tool.id)).not.toContain("panel")
     },
   })
 })
