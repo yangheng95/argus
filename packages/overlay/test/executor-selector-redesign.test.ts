@@ -132,10 +132,18 @@ test("executor selector separates long plan and edit models", async () => {
     )
     const chip = await page.$eval('[data-ui="executor-chip"]', (node) => {
       const el = node as HTMLElement
+      const style = getComputedStyle(el)
+      const action = el.querySelector<HTMLElement>(".executor-chip-action")
+      const model = el.querySelector<HTMLElement>(".executor-chip-model")
+      const modelStyle = model ? getComputedStyle(model) : null
       return {
         text: el.innerText,
         clientWidth: el.clientWidth,
         scrollWidth: el.scrollWidth,
+        height: el.getBoundingClientRect().height,
+        borderTopWidth: style.borderTopWidth,
+        actionDisplay: action ? getComputedStyle(action).display : "",
+        modelBorderTopWidth: modelStyle?.borderTopWidth ?? "",
         slotCount: el.querySelectorAll(".executor-chip-model").length,
       }
     })
@@ -145,6 +153,10 @@ test("executor selector separates long plan and edit models", async () => {
     expect(chip.text).toContain("gpt-5.5-pro-priority-editing-profile")
     expect(chip.slotCount).toBe(2)
     expect(chip.scrollWidth).toBeLessThanOrEqual(chip.clientWidth + 1)
+    expect(chip.height).toBeLessThanOrEqual(34)
+    expect(chip.borderTopWidth).toBe("0px")
+    expect(chip.actionDisplay).toBe("none")
+    expect(chip.modelBorderTopWidth).toBe("0px")
 
     await page.click('[data-ui="executor-chip"]')
     await page.waitForSelector(".executor-menu-summary")
