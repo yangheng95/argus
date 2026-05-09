@@ -226,6 +226,11 @@ export function applyEvent(event: any): void {
   if (type === "session.status") {
     return handleSessionStatus(event);
   }
+  // session.error carries provider/stream failures that can precede a later
+  // secondary lifecycle status. Show the original error on the card directly.
+  if (type === "session.error") {
+    return handleSessionError(event);
+  }
   // session.idle is published alongside session.status when status flips to
   // idle. We already handle the lifecycle via session.status, so it's noop
   // here.
@@ -577,6 +582,13 @@ function projectSessionStatus(event: any): ProjectedSessionStatus {
 }
 
 function applyProjectedSessionStatus(cardID: string, projected: ProjectedSessionStatus): void {
+  if (
+    projected.cardStatus === "idle" &&
+    cardTreeStore.cards[cardID]?.status === "error" &&
+    cardTreeStore.cards[cardID]?.errorReason
+  ) {
+    return;
+  }
   setCardTreeStore("cards", cardID, "status", projected.cardStatus);
   if (projected.terminalReason) {
     setCardTreeStore("cards", cardID, "terminalReason", projected.terminalReason);
@@ -593,6 +605,31 @@ function applyProjectedSessionStatus(cardID: string, projected: ProjectedSession
   }
 }
 
+function streamErrorMessage(event: any): string {
+  const props = propsOf(event);
+  const error = props.error;
+  if (error && typeof error === "object") {
+    const dataMessage = (error as any).data?.message;
+    if (typeof dataMessage === "string" && dataMessage.length > 0) return dataMessage;
+    const message = (error as any).message;
+    if (typeof message === "string" && message.length > 0) return message;
+    const name = (error as any).name;
+    if (typeof name === "string" && name.length > 0) return name;
+  }
+  const summary = props.summary ?? event?.summary;
+  if (typeof summary === "string" && summary.length > 0) return summary;
+  throw new Error("session.error missing error message");
+}
+
+function projectSessionError(event: any): ProjectedSessionStatus {
+  return {
+    cardStatus: "error",
+    terminalReason: "error",
+    errorReason: streamErrorMessage(event),
+    timeCompleted: Number(event?.emittedAt || event?.emitted_at || Date.now()),
+  };
+}
+
 function handleSessionStatus(event: any): void {
   const props = propsOf(event);
   const sessionID = String(props.sessionID || "");
@@ -603,6 +640,21 @@ function handleSessionStatus(event: any): void {
   const info = sessions.get(sessionID);
   if (!info || !cardTreeStore.cards[info.cardID]) {
     // Card not yet materialized — hold until ensureSessionCard runs.
+    pendingSessionStatus.set(sessionID, projected);
+    return;
+  }
+  applyProjectedSessionStatus(info.cardID, projected);
+}
+
+function handleSessionError(event: any): void {
+  const props = propsOf(event);
+  const sessionID = String(props.sessionID || "");
+  if (!sessionID) {
+    throw new Error("session.error missing sessionID");
+  }
+  const projected = projectSessionError(event);
+  const info = sessions.get(sessionID);
+  if (!info || !cardTreeStore.cards[info.cardID]) {
     pendingSessionStatus.set(sessionID, projected);
     return;
   }
