@@ -107,3 +107,24 @@ The `amd-design-analysis-handoff-20260509-033126` benchmark confirmed the new ha
 3. Goal worktree cleanup used only 5 filesystem remove retries while goal cleanup uses 50. The benchmark produced `EBUSY` cleanup failures on Windows after build/test/server processes released handles slowly.
 
 The correction is to make shell selection enforce the existing no-PowerShell rule, start Vite previews with `--host 127.0.0.1`, and use the same 50-retry filesystem cleanup budget for worktree removal.
+
+## Iteration 2026-05-09: Prompt Protocol Correction After Repeated Mirror Calls
+
+Benchmark evidence from `amd-design-read-evidence-20260509-091320` showed a different design-analysis failure than the original architecture plan described. The design-analysis stage started first and the mirror tools were available, but the agent repeatedly called `webpage_extract`, `webpage_compile`, and `webpage_analyze` instead of reading the artifacts and submitting `submit_design_prd_spec`.
+
+The root cause is prompt/protocol pollution, not model selection:
+
+1. `design-analyst-core.txt` teaches the three raw mirror tool names as an ordered workflow.
+2. `webpage-generate.md` repeats the same ordered workflow.
+3. `DesignAnalystAgent.buildUserPrompt` repeats the same ordered workflow again for live URLs and URL screenshots.
+4. The raw mirror tools also return "Next: call ..." text, so every turn contains fresh language that can restart the tool sequence.
+
+The corrected design is:
+
+1. Design-analysis is still the only stage that may use mirror evidence for reference acquisition.
+2. The prompt surface must not make the mirror pipeline the agent's identity. The identity is PRD/SPEC synthesis.
+3. The visible instructions should say: acquire the missing evidence once, then stop using mirror tools, read the compact artifacts, perform two PRD/SPEC review passes, and submit the PRD/SPEC.
+4. The live URL user prompt must not restate raw mirror tool names. Stage core and the matched skill are enough.
+5. The tests should guard against reintroducing repeated raw mirror workflow wording into the design-analysis prompt path.
+
+This keeps the existing architecture goal while removing the instruction pattern that caused repeated mirror calls.
