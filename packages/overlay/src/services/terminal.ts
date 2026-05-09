@@ -36,6 +36,8 @@ export interface TerminalSocket {
   close(): void;
 }
 
+const MAX_PENDING_CLIENT_MESSAGES = 1024;
+
 export async function listTerminals(): Promise<TerminalInfo[]> {
   return await apiJson("pty");
 }
@@ -70,7 +72,19 @@ export function connectTerminal(
   handlers: TerminalSocketHandlers,
 ): TerminalSocket {
   const ws = new WebSocket(apiWebSocketUrl(`pty/${encodeURIComponent(id)}/connect?cursor=${cursor}`));
-  ws.addEventListener("open", () => handlers.onOpen?.());
+  const pending: string[] = [];
+  function sendEncoded(encoded: string): void {
+    ws.send(encoded);
+  }
+  function flushPending(): void {
+    while (pending.length > 0) {
+      sendEncoded(pending.shift()!);
+    }
+  }
+  ws.addEventListener("open", () => {
+    handlers.onOpen?.();
+    flushPending();
+  });
   ws.addEventListener("message", (event) => {
     if (typeof event.data !== "string") {
       handlers.onError?.(new Error("Terminal server sent a non-text message"));
@@ -86,13 +100,24 @@ export function connectTerminal(
   ws.addEventListener("error", () => {
     handlers.onError?.(new Error("Terminal WebSocket error"));
   });
-  ws.addEventListener("close", (event) => handlers.onClose?.(event));
+  ws.addEventListener("close", (event) => {
+    pending.length = 0;
+    handlers.onClose?.(event);
+  });
   return {
     send(message) {
-      if (ws.readyState !== WebSocket.OPEN) {
-        throw new Error("Terminal WebSocket is not open");
+      const encoded = JSON.stringify(message);
+      if (ws.readyState === WebSocket.CONNECTING) {
+        if (pending.length >= MAX_PENDING_CLIENT_MESSAGES) {
+          throw new Error("Terminal WebSocket pending send queue is full");
+        }
+        pending.push(encoded);
+        return;
       }
-      ws.send(JSON.stringify(message));
+      if (ws.readyState !== WebSocket.OPEN) {
+        throw new Error("Terminal WebSocket is closed");
+      }
+      sendEncoded(encoded);
     },
     close() {
       ws.close();

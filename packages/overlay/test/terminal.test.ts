@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { apiWebSocketUrl, configure } from "../src/services/api";
-import { parseServerMessage } from "../src/services/terminal";
+import { connectTerminal, parseServerMessage } from "../src/services/terminal";
 
 const root = join(import.meta.dir, "..");
 
@@ -46,6 +46,60 @@ describe("terminal client", () => {
     expect(parseServerMessage(JSON.stringify({ type: "output", cursor: 3, data: "abc" })).ok).toBe(true);
     expect(parseServerMessage("not-json").ok).toBe(false);
     expect(parseServerMessage(JSON.stringify({ type: "output", cursor: 3 })).ok).toBe(false);
+  });
+
+  test("connectTerminal queues client messages until the websocket opens", () => {
+    const originalWebSocket = globalThis.WebSocket;
+    const sent: string[] = [];
+    const listeners = new Map<string, Array<(event: unknown) => void>>();
+
+    class FakeWebSocket {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSING = 2;
+      static CLOSED = 3;
+      readyState = FakeWebSocket.CONNECTING;
+      constructor(readonly url: string) {}
+      addEventListener(type: string, listener: (event: unknown) => void) {
+        const items = listeners.get(type) ?? [];
+        items.push(listener);
+        listeners.set(type, items);
+      }
+      send(data: string) {
+        sent.push(data);
+      }
+      close() {
+        this.readyState = FakeWebSocket.CLOSED;
+      }
+      open() {
+        this.readyState = FakeWebSocket.OPEN;
+        for (const listener of listeners.get("open") ?? []) listener({});
+      }
+    }
+
+    try {
+      configure({ serverUrl: "http://127.0.0.1:4099", password: "", directory: "C:/work/project" });
+      let socketInstance: FakeWebSocket | undefined;
+      (globalThis as any).WebSocket = class extends FakeWebSocket {
+        constructor(url: string) {
+          super(url);
+          socketInstance = this;
+        }
+      };
+      (globalThis as any).WebSocket.CONNECTING = FakeWebSocket.CONNECTING;
+      (globalThis as any).WebSocket.OPEN = FakeWebSocket.OPEN;
+      (globalThis as any).WebSocket.CLOSED = FakeWebSocket.CLOSED;
+
+      const socket = connectTerminal("pty_123", 0, { onMessage() {} });
+      socket.send({ type: "input", data: "echo queued\r" });
+      expect(sent).toEqual([]);
+
+      socketInstance?.open();
+
+      expect(sent).toEqual([JSON.stringify({ type: "input", data: "echo queued\r" })]);
+    } finally {
+      globalThis.WebSocket = originalWebSocket;
+    }
   });
 
   test("WorkspaceTerminal uses xterm and does not spawn a local shell", () => {
