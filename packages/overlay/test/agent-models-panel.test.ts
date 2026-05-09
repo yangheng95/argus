@@ -147,8 +147,8 @@ test("agent model selects patch independent per-agent overrides", async () => {
     }, `http://127.0.0.1:${server.port}`)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
-    await page.waitForSelector('[data-menu-trigger="model"]')
-    await page.click('[data-menu-trigger="model"]')
+    await page.waitForSelector('[data-menu-trigger="agent"]')
+    await page.click('[data-menu-trigger="agent"]')
     await page.waitForSelector('[data-testid="titlebar-open-agent-models"]')
     await page.click('[data-testid="titlebar-open-agent-models"]')
     await page.waitForSelector('[data-testid="agent-model-select-build"]')

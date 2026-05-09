@@ -28,6 +28,12 @@ const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>([
   "about",
 ]);
 
+const CONFIG_SECTION_TARGETS: Record<string, { tab: ConfigDialogTab; elementID?: string }> = {
+  skill: { tab: "tools", elementID: "skillList" },
+  "skill-market": { tab: "tools", elementID: "skillMarketList" },
+  mcp: { tab: "tools", elementID: "mcpList" },
+};
+
 function normalizeConfigTab(tabName: string): ConfigDialogTab {
   return CONFIG_DIALOG_TABS.has(tabName as ConfigDialogTab)
     ? (tabName as ConfigDialogTab)
@@ -77,11 +83,18 @@ export function switchConfigTab(tabName: string): void {
  */
 export function focusConfigSection(name: string): void {
   if (!name) return;
-  switchConfigTab(name);
+  const target = CONFIG_SECTION_TARGETS[name];
+  switchConfigTab(target?.tab ?? name);
   if (name === "channel") {
     queueMicrotask(() => {
       const channelList = document.getElementById("channelList") as HTMLElement | null;
       channelList?.scrollTo?.({ top: 0 });
+    });
+  }
+  if (target?.elementID) {
+    queueMicrotask(() => {
+      const element = document.getElementById(target.elementID!) as HTMLElement | null;
+      element?.scrollIntoView?.({ block: "start" });
     });
   }
 }

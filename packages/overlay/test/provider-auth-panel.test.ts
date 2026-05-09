@@ -191,7 +191,7 @@ async function withOverlay(data: HarnessData, handler: (input: {
 }
 
 async function openProviderSettings(tab: Page) {
-  await tab.click('[data-menu-trigger="model"]')
+  await tab.click('[data-menu-trigger="agent"]')
   await tab.waitForSelector('[data-testid="titlebar-open-providers"]')
   await tab.click('[data-testid="titlebar-open-providers"]')
   await tab.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)
@@ -360,8 +360,8 @@ test("provider settings search filters catalog and custom providers", async () =
       await tab.waitForSelector('[data-testid="provider-catalog-row-openai"]')
       const layout = await tab.evaluate(() => {
         const content = document.querySelector("#configContent")!.getBoundingClientRect()
-        const toolbar = document.querySelector(".provider-toolbar")!.getBoundingClientRect()
-        const title = document.querySelector(".provider-toolbar-title")!.getBoundingClientRect()
+        const toolbar = document.querySelector(".provider-command")!.getBoundingClientRect()
+        const title = document.querySelector(".provider-title-block .oc-surface-header")!.getBoundingClientRect()
         const search = document.querySelector('[data-testid="provider-search-input"]')!.getBoundingClientRect()
         const actions = document.querySelector(".provider-head-actions")!.getBoundingClientRect()
         const save = document.querySelector('[data-testid="provider-api-key-save-anthropic"]')!.getBoundingClientRect()
