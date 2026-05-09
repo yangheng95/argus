@@ -150,12 +150,10 @@ const log = Log.create({ service: "assistant" })
 const CANCEL_ABORT_TIMEOUT_MS = 5_000
 
 /**
- * Per-call deadline for the cleanup pass (`abortLiveExecutionForTask` with
- * `cleanupGoalWorkspaces: true`). The cleanup walks worktrees and runs
- * multiple `git worktree remove` invocations — Phase-1 of the systemic
- * sweep migrates those to `util/git`'s timeout, but the aggregate still
- * needs an outer bound. 60s covers ~30 worktrees at ~2s each before we
- * give up and let updateTask publish so the API unblocks.
+ * Per-call deadline for the abort writer pass. Worktree cleanup is no
+ * longer part of cancel; only successful goal completion may delete a
+ * worktree. Keep the bound because aborting live rows still must not block
+ * the API forever.
  */
 const CANCEL_CLEANUP_TIMEOUT_MS = 60_000
 
@@ -1355,7 +1353,7 @@ export namespace EngineService {
       abortLiveExecutionForTask({
         taskID,
         reason: "task cancelled",
-        cleanupGoalWorkspaces: true,
+        cleanupGoalWorkspaces: false,
         includeRuns: false,
       }),
       cleanupTimeoutMs,

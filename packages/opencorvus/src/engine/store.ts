@@ -525,13 +525,17 @@ export function findGoalLatestWorkspace(goalID: string): {
   directory: string | null
   branch: string | null
   baseRef: string | null
+  status: EngineGoalRunStatus | null
+  goalRunID: string | null
 } {
   const tip = findLatestTipGoalRun(goalID)
-  if (!tip) return { directory: null, branch: null, baseRef: null }
+  if (!tip) return { directory: null, branch: null, baseRef: null, status: null, goalRunID: null }
   return {
     directory: tip.workspace_dir,
     branch: tip.workspace_branch,
     baseRef: tip.workspace_base_ref,
+    status: tip.status,
+    goalRunID: tip.id,
   }
 }
 

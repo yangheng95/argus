@@ -6,7 +6,7 @@
 
 ## 0 · TL;DR
 
-将 per-goal worktree 的生命周期**从 `goal_run` 绑到 `goal`**，对齐 Claude Code 的 "preserve-when-changes-exist" 策略。取消每次失败都 `cleanupGoalWorkspace` 的行为；worktree 只在明确终态（goal passed / 永久 failed / task cancel / restart_from_stage）才清。retry 时**复用前次 worktree**，executor 以"上次停留的现场 + 反馈"为起点修，而不是每次空 worktree 从零写。
+将 per-goal worktree 的生命周期**从 `goal_run` 绑到 `goal`**，对齐 Claude Code 的 "preserve-when-changes-exist" 策略。取消每次失败都 `cleanupGoalWorkspace` 的行为；worktree 只在最新 goal_run 明确成功完成后才清。failed / aborted / cancel / restart_from_stage 都必须保留现场。retry 时**复用前次 worktree**，executor 以"上次停留的现场 + 反馈"为起点修，而不是每次空 worktree 从零写。
 
 ## 1 · 问题陈述
 
@@ -53,46 +53,51 @@ Claude Code 本地 worktree 会话的清理策略（公开文档）：
 - 对 crash / interrupted parallel run 遗留的 orphaned **subagent** worktree：仅在 `older > cleanupPeriodDays` + `无 uncommitted` + `无 untracked` + `无 unpushed commits` 时自动清
 - 官方能确认的是上面这些退出/清理条件；不能外推成"所有有改动的 worktree 在任何模式下都永不自动删"
 
-本方案借鉴其保守原则：**默认不删除仍可能承载在途修改的 worktree；只有 clean 或明确终态时才清**。
+本方案借鉴其保守原则：**默认不删除仍可能承载在途修改的 worktree；只有最新 goal_run 成功完成时才清**。
 
 ### 2.2 生命周期绑定改 goal
 | 状态 | worktree 生命周期 |
 |---|---|
 | 当前 | goal_run ↔ worktree 1:1，每 run 建、每 run 清 |
-| 新设计 | **goal ↔ worktree 1:1**，goal 首次 dispatch 建，goal 终态才清 |
+| 新设计 | **goal ↔ worktree 1:1**，goal 首次 dispatch 建，最新 goal_run 成功完成后才清 |
 
 依据：同 goal 的多个 goal_run（supersede chain）本质上是"同一任务的多次 attempt"，共享工作空间更合理。并发安全由 `LIVE_GOAL_RUN_STATUSES` 保证——同 goal 同时只有一个 live goal_run。
 
 ### 2.3 什么是终态
 触发 worktree 清理的时机（**只有这些**）：
-1. **goal.status = passed**：delivery cherry-pick 合并成功后
-2. **goal.cascade_state = failed**（永久失败）：orchestrator 基于证据显式判定无法继续提升，或 dispatch 前抛
-3. **task cancel**（`abortLiveExecutionForTask`）
-4. **restart_from_stage**
-5. **orchestrator 判断任务无法继续提升并显式终止**
-6. **engine-recovery 启动孤儿清理**（配合 Claude Code 式 3-gate：age + clean + no untracked + no unpushed commits）
+1. **最新 goal_run.status = completed**：build passed / accept_build 成功，并且 merge_back 已经落到 primary 后。
+
+禁止清理的时机：
+- `failed`：失败现场是下一轮修复的输入。
+- `aborted`：abort 只能终止调度状态，不能删除仍可能被 executor 持有的源码目录。
+- `task cancel`：用户取消不等于用户同意删除工作现场。
+- `restart_from_stage`：重启阶段只重置编排状态，不能清理 goal worktree。
+- `engine-recovery`：恢复流程只能中止失联运行，不能把失联 worktree 当作成功交付物删除。
 
 ### 2.4 可重试失败不清
 原三处 `cleanupGoalWorkspace` 调用（pipeline-error / conformance gate / eval-reject）**全部删除**。这些都是"可重试失败"，worktree 保留供下次 retry 复用。
 
 ## 3 · 数据模型
 
-### 3.1 engine_goal 新增字段
+### 3.1 goal_run_attempt 保存当前 workspace 指针
 ```
-engine_goal:
-  + workspace_dir   text    -- 当前 live worktree 绝对路径（goal 级单例）
-  + workspace_branch text   -- 对应 git branch
+goal_run_attempt payload:
+  workspace_dir       -- 当前 live worktree 绝对路径
+  workspace_branch    -- 对应 git branch
+  workspace_base_ref  -- 对应 base ref
+  status              -- cleanup 资格必须读取同一条 tip 的 status
 ```
 
-新增字段的语义：
-- goal 首次 dispatch 时写入
-- goal 终态清理时 SET NULL + 删物理 worktree
-- goal_run.workspace_dir 仍保留（历史记录），但**不再权威**——goal.workspace_dir 才是活的
+语义：
+- goal 首次 dispatch 时写入最新 attempt。
+- retry / supersede 后，最新 tip attempt 继续承载 workspace 指针。
+- cleanup 只能读取最新 tip；只有 `status=completed` 才能物理删除并把同一 tip 的 workspace 字段置空。
+- `engine_goal.workspace_*` 已删除，不能恢复双源字段。
 
 ### 3.2 engine_goal_run 字段语义调整
 - `workspace_dir`：记录这个 goal_run **使用的**（复用或创建）worktree。不负责生命周期。
 - `base_ref` / `merge_ref`：保留，每 attempt 独立。
-- `retry_count`：保留，用于判断终态。
+- `status`：cleanup 资格的唯一状态来源。
 
 ## 4 · 行为规范（状态迁移）
 
@@ -100,8 +105,7 @@ engine_goal:
 ```
 pool.dispatchGoal(goal) where goal.workspace_dir IS NULL
   → Worktree.create({ name: `goal-${goalId.slice(-8)}`, checkout: "sync" })
-  → UPDATE engine_goal SET workspace_dir=<dir>, workspace_branch=<branch>
-  → createGoalRun({ workspace_dir: <dir> })
+  → createGoalRun({ workspace_dir: <dir>, workspace_branch: <branch>, workspace_base_ref: <baseRef> })
   → 继续走现有 pipeline
 ```
 
@@ -115,47 +119,44 @@ pool.dispatchGoal(goal) where goal.workspace_dir IS NOT NULL AND exists-on-disk
   → retry prompt 真实描述："前次 attempt 文件就在这个 worktree 里，修它们即可"
 ```
 
-### 4.3 Worktree 缺失（恢复兜底）
+### 4.3 Worktree 缺失（异常）
 ```
 pool.dispatchGoal(goal) where goal.workspace_dir IS NOT NULL BUT not-exists-on-disk
   → 这是异常状态（process crash 后磁盘被清）
-  → 不是 fallback，而是明确的 recovery：从 goal.workspace_dir 抛 WorktreeMissingError
-  → orchestrator 把 goal 标 cascade_failed，要求重新走 dispatch 路径
-  → OR：log.error + UPDATE goal SET workspace_dir=NULL + 重新 Worktree.create
-  → 选哪条由 Codex 拍板
+  → 抛 WorktreeMissingError
+  → orchestrator 必须暴露异常并由明确工具决策重新派发；禁止静默置空后重建
 ```
 
 ### 4.4 Goal 终态 passed
 ```
 deliver 阶段成功 cherry-pick merge → goal.status = passed
   → trigger cleanup
-  → await cleanupGoalWorkspace(goal.workspace_dir)
-  → UPDATE engine_goal SET workspace_dir=NULL, workspace_branch=NULL
+  → await cleanupGoalWorkspace(latestGoalRun.workspace_dir)
+  → updateGoalWorkspace({ workspaceDir: null, workspaceBranch: null, workspaceBaseRef: null })
 ```
 
-### 4.5 Goal 终态 cascade_failed（orchestrator 显式终止）
+### 4.5 Goal failed / aborted
 ```
 orchestrator calls fail_task / records a terminal failure decision from evidence
   → updateGoalCascadeFailed(goalID)
-  → trigger cleanup
-  → UPDATE engine_goal SET workspace_dir=NULL, workspace_branch=NULL
+  → preserve workspace_dir / workspace_branch / workspace_base_ref
+  → 禁止物理 cleanup
 ```
 
 ### 4.6 Task cancel / restart_from_stage
 ```
 abortLiveExecutionForTask 已有入口（writer.ts）
-  → listGoalsForTask + 对每个有 workspace_dir 的 goal 做 cleanup
-  → UPDATE engine_goal SET workspace_dir=NULL, workspace_branch=NULL
+  → abort live goal_run / run / executor_session
+  → preserve workspace_dir / workspace_branch / workspace_base_ref
+  → 禁止物理 cleanup
 ```
 
 ### 4.7 启动孤儿清理（engine-recovery）
-对齐 Claude Code 的 3-gate：
 ```
 listLiveGoalRunsForProject → 每个关联的 goal.workspace_dir：
-  if (不存在 live goal_run) AND (age > cleanupPeriodDays) AND (git-clean 检查: no uncommitted + no untracked + no unpushed commits):
-    清理物理目录 + UPDATE goal SET workspace_dir=NULL
-  else:
-    留着，日志告警（"goal X workspace preserved: has in-progress state"）
+  abort lost live rows
+  preserve workspace_dir / workspace_branch / workspace_base_ref
+  log warning for operator / orchestrator follow-up
 ```
 
 ## 5 · 代码变更面
@@ -169,22 +170,20 @@ listLiveGoalRunsForProject → 每个关联的 goal.workspace_dir：
   - NULL → 走首次 dispatch 路径
   - NOT NULL + exists → 复用
   - NOT NULL + not-exists → 抛 WorktreeMissingError
-- 成功首次 create worktree 后 UPDATE engine_goal 的 workspace_dir/workspace_branch
+- 成功首次 create worktree 后写入 goal_run_attempt 的 workspace_dir/workspace_branch/workspace_base_ref
 - **删除所有失败路径的 `cleanupGoalWorkspace` 调用**（3 处）
 
-### 5.3 engine/goal-pool.ts / engine/runtime.ts · 终态 cleanup
-- 新增 `cleanupGoalOnTerminal(goalID)`：
+### 5.3 engine/writer.ts · success-only cleanup
+- `cleanupGoalWorkspaceForGoal(goalID)` 必须读取 `findGoalLatestWorkspace(goalID)`：
   ```
-  const row = findGoal(goalID)
-  if (row.workspace_dir) {
-    await cleanupGoalWorkspace(row.workspace_dir)
-    updateGoal(goalID, { workspace_dir: null, workspace_branch: null })
-  }
+  if (!live.directory) return false
+  if (live.status !== "completed") return false
+  await cleanupGoalWorkspace(live.directory)
+  updateGoalWorkspace(...null workspace fields...)
   ```
 - 调用点：
-  - deliver 成功 cherry-pick 之后（对所有 task goals 循环调用）
-  - updateGoalCascadeFailed 之后
-  - abortLiveExecutionForTask 内（替代原 cleanupWorkspace 选项）
+  - build passed / accept_build 成功 merge_back 之后
+  - deliver 发布完成时对已 completed goals 的幂等清理
 
 ### 5.4 goal/runner.ts::cleanupGoalWorkspace
 - 函数**保留原样**（物理清目录 + remove worktree + branch）
@@ -200,17 +199,14 @@ listLiveGoalRunsForProject → 每个关联的 goal.workspace_dir：
   ```
 
 ### 5.6 engine/writer.ts::abortLiveExecutionForTask
-- 加参数 `cleanupGoalWorkspaces?: boolean`（默认 true）
-- true 时遍历 task 的 goals，对有 workspace_dir 的调 cleanup
+- `cleanupGoalWorkspaces?: boolean` 默认 false。
+- 即使调用方显式传 true，`cleanupGoalWorkspaceForGoal` 也必须按最新 tip status 做 success-only gate。
 - 保持现有 abortGoalRuns 逻辑不变
 
 ### 5.7 engine/recovery.ts · 启动孤儿清理
-- 读所有 project 的 engine_goal
-- 对 workspace_dir 非空的：
-  - 检查目录存在
-  - 检查 git 状态（uncommitted / untracked / unpushed）
-  - 检查 goal 状态（如果 goal.status 是 terminal 但 workspace_dir 未清，可能是上次 crash —— 清）
-  - 非 terminal + 有在途 = 保留（等下次 dispatch 复用）
+- 读所有 project 的 live goal_run。
+- 恢复流程只中止失联执行状态，不删除非 completed workspace。
+- completed cleanup 仍统一走 `cleanupGoalWorkspaceForGoal`，禁止 recovery 自己实现第二套删除条件。
 
 ## 6 · Claude Code 对齐检查
 

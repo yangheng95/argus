@@ -43,6 +43,10 @@ function counts(events: LLMActivityEvent[]) {
   }
 }
 
+test("DefaultLLMActivityPolicy uses a one hour total deadline", () => {
+  expect(DefaultLLMActivityPolicy.totalMs).toBe(60 * 60_000)
+})
+
 test("happy path: returns value, exactly one started + one terminal=done", async () => {
   const { events, sink } = record()
   const ext = new AbortController()

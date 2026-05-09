@@ -288,7 +288,7 @@ export const TuiRoutes = lazy(() =>
             .number()
             .int()
             .min(1000)
-            .max(30 * 60 * 1000)
+            .max(60 * 60 * 1000)
             .default(5 * 60 * 1000)
             .optional(),
         }),

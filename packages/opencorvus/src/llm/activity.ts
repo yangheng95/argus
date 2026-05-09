@@ -345,7 +345,7 @@ function backoffMs(cls: ErrorClass, attempt: number, remainingTotalMs: number): 
 }
 
 export const DefaultLLMActivityPolicy: LLMActivityPolicy = {
-  totalMs: 30 * 60_000,
+  totalMs: 60 * 60_000,
   idleMs: 180_000,
   firstByteMs: 60_000,
   maxRetries: { default: 5, rate_limit: 15 },
