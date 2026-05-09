@@ -48,6 +48,15 @@ function statusGlyph(status: AgentWorkflowRecord["status"]): string {
   return "*";
 }
 
+function currentStackRecord(stack: { records: AgentWorkflowRecord[] }): AgentWorkflowRecord | null {
+  return stack.records[stack.records.length - 1] || null;
+}
+
+function stackAttemptTotal(stack: { records: AgentWorkflowRecord[] }): number {
+  const latest = currentStackRecord(stack);
+  return Math.max(latest?.attempts || 1, stack.records.length);
+}
+
 export function AgentWorkflowPanel() {
   const taskID = createMemo(() => boardStore.selectedTaskID || boardStore.board?.task?.id || "");
   const [refreshTick, setRefreshTick] = createSignal(0);
@@ -105,7 +114,7 @@ export function AgentWorkflowPanel() {
               title={t("agent_workflow.refresh")}
               onClick={refresh}
             >
-              {trace.loading ? t("common.loading") : t("common.refresh")}
+              {trace.loading && records().length === 0 ? t("common.loading") : t("common.refresh")}
             </button>
           </>
         }
@@ -125,74 +134,69 @@ export function AgentWorkflowPanel() {
 
       <div class="agent-workflow-canvas" role="list">
         <For each={stacks()}>
-          {(stack, stackIndex) => (
-            <div
-              class="agent-workflow-row"
-              role="listitem"
-              style={{ "--workflow-depth": String(Math.min(stack.depth, 6)) }}
-              data-stacked={stack.records.length > 1 ? "true" : "false"}
-            >
-              <div class="agent-workflow-rail" aria-hidden="true">
-                <span class="agent-workflow-orb">
-                  {String(stackIndex() + 1).padStart(2, "0")}
-                </span>
-                <svg class="agent-workflow-beam" viewBox="0 0 28 104" preserveAspectRatio="none">
-                  <path class="agent-workflow-beam-base" d="M14 0 C14 28 4 30 4 52 C4 74 14 76 14 104" />
-                  <path class="agent-workflow-beam-flow" d="M14 0 C14 28 4 30 4 52 C4 74 14 76 14 104" />
-                </svg>
-              </div>
-              <div
-                class="agent-workflow-stack"
-                style={{
-                  "--stack-size": String(stack.records.length),
-                  "--stack-pad-steps": String(Math.min(Math.max(stack.records.length - 1, 0), 3)),
-                }}
-              >
-                <For each={stack.records}>
-                  {(record, index) => (
-                    <button
-                      type="button"
-                      class="agent-workflow-card"
-                      data-status={record.status}
-                      data-stack-index={index()}
-                      style={{
-                        "--stack-index": String(index()),
-                        "--stack-offset-steps": String(Math.min(index(), 3)),
-                      }}
-                      onClick={() => setSelected(record)}
-                    >
-                      <span class="agent-workflow-card-head">
-                        <span class="agent-workflow-agent-wrap">
-                          <span class="agent-workflow-status-dot" aria-hidden="true">
-                            {statusGlyph(record.status)}
+          {(stack, stackIndex) => {
+            const record = () => currentStackRecord(stack);
+            const attemptTotal = () => stackAttemptTotal(stack);
+            return (
+              <Show when={record()} keyed>
+                {(current) => (
+                  <div
+                    class="agent-workflow-row"
+                    role="listitem"
+                    style={{ "--workflow-depth": String(Math.min(stack.depth, 6)) }}
+                    data-stacked={attemptTotal() > 1 ? "true" : "false"}
+                  >
+                    <div class="agent-workflow-rail" aria-hidden="true">
+                      <span class="agent-workflow-orb">
+                        {String(stackIndex() + 1).padStart(2, "0")}
+                      </span>
+                      <svg class="agent-workflow-beam" viewBox="0 0 28 104" preserveAspectRatio="none">
+                        <path class="agent-workflow-beam-base" d="M14 0 C14 28 4 30 4 52 C4 74 14 76 14 104" />
+                        <path class="agent-workflow-beam-flow" d="M14 0 C14 28 4 30 4 52 C4 74 14 76 14 104" />
+                      </svg>
+                    </div>
+                    <div class="agent-workflow-stack">
+                      <button
+                        type="button"
+                        class="agent-workflow-card"
+                        data-status={current.status}
+                        data-stack-index="0"
+                        style={{ "--stack-index": "0", "--stack-offset-steps": "0" }}
+                        onClick={() => setSelected(current)}
+                      >
+                        <span class="agent-workflow-card-head">
+                          <span class="agent-workflow-agent-wrap">
+                            <span class="agent-workflow-status-dot" aria-hidden="true">
+                              {statusGlyph(current.status)}
+                            </span>
+                            <span class="agent-workflow-agent">{agentStageLabel(current.agentName)}</span>
                           </span>
-                          <span class="agent-workflow-agent">{agentStageLabel(record.agentName)}</span>
+                          <span class="agent-workflow-time">{formatClock(current.startedAt)}</span>
                         </span>
-                        <span class="agent-workflow-time">{formatClock(record.startedAt)}</span>
-                      </span>
-                      <span class="agent-workflow-card-body">
-                        {recordSummary(record)}
-                      </span>
-                      <span class="agent-workflow-card-foot">
-                        <span class="agent-workflow-session">{compactSessionID(record.sessionID)}</span>
-                        <Show when={record.attempts > 1 || stack.records.length > 1}>
-                          <span class="agent-workflow-attempt">
-                            {t("agent_workflow.attempt", {
-                              current: String(index() + 1),
-                              total: String(Math.max(record.attempts, stack.records.length)),
-                            })}
-                          </span>
-                        </Show>
-                        <Show when={durationLabel(record)}>
-                          <span>{durationLabel(record)}</span>
-                        </Show>
-                      </span>
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-          )}
+                        <span class="agent-workflow-card-body">
+                          {recordSummary(current)}
+                        </span>
+                        <span class="agent-workflow-card-foot">
+                          <span class="agent-workflow-session">{compactSessionID(current.sessionID)}</span>
+                          <Show when={attemptTotal() > 1}>
+                            <span class="agent-workflow-attempt">
+                              {t("agent_workflow.attempt", {
+                                current: String(attemptTotal()),
+                                total: String(attemptTotal()),
+                              })}
+                            </span>
+                          </Show>
+                          <Show when={durationLabel(current)}>
+                            <span>{durationLabel(current)}</span>
+                          </Show>
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </Show>
+            );
+          }}
         </For>
       </div>
 
