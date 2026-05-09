@@ -382,12 +382,6 @@ function closeWorkspace(): void {
   setWorkspaceOpen(false);
 }
 
-/** Toggle the workspace open/closed, restoring the remembered view. */
-function toggleWorkspace(): void {
-  if (workspaceOpen()) closeWorkspace();
-  else openWorkspace();
-}
-
 /** Open (or switch to) a diff file in the workspace. */
 function openWorkspaceDiff(target: DiffTarget): void {
   openWorkspace({ kind: "diff", target });
@@ -1046,9 +1040,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ── Initialise application ──
 
-document.getElementById("btnWorkspaceToggle")?.addEventListener("click", () => {
-  toggleWorkspace();
-});
 document.getElementById("btnChatCopyAll")?.addEventListener("click", () => {
   void copyChatConversation();
 });
@@ -1152,10 +1143,6 @@ disposers.push(createRoot((dispose) => {
     const resizer = document.getElementById("workspaceResizer");
     if (mount) (mount as HTMLElement).hidden = !open;
     if (resizer) (resizer as HTMLElement).hidden = !open;
-
-    // Reflect open state on the toggle button for visual/a11y feedback.
-    const toggleBtn = document.getElementById("btnWorkspaceToggle");
-    if (toggleBtn) toggleBtn.setAttribute("aria-pressed", open ? "true" : "false");
   });
 
   createEffect(() => {

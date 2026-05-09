@@ -861,7 +861,6 @@
    ───────────────────────────────────────────────────────────── */
 
 .chat-header .chat-task-status,
-.chat-header .workspace-toggle,
 .chat-header-meta #btnChatCopyAll {
   height: calc(22px * var(--ui-scale));
   min-height: calc(22px * var(--ui-scale));

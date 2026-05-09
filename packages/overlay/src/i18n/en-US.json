@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "c347a4442955dfce"
+    "panel_revision": "57413dbef619fe38"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -739,7 +739,6 @@
   "workspace.file_binary": "Binary file — preview not supported.",
   "workspace.file_error": "Failed to load file: {{message}}",
   "workspace.editor_launchers": "IDE launchers",
-  "workspace.toggle": "Toggle workspace",
   "terminal.title": "Terminal",
   "terminal.open": "Open terminal",
   "terminal.new": "New terminal",

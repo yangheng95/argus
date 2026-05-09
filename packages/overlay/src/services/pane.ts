@@ -88,11 +88,21 @@ export function defaultRailWidth(): number {
 }
 
 export function collapsedPaneWidth(): number {
+  if (typeof document === "undefined") {
+    throw new Error("Cannot resolve --ui-collapsed-pane-width without a document");
+  }
+  const probe = document.createElement("div");
+  probe.style.position = "absolute";
+  probe.style.visibility = "hidden";
+  probe.style.pointerEvents = "none";
+  probe.style.width = "var(--ui-collapsed-pane-width)";
+  probe.style.height = "0";
+  probe.style.overflow = "hidden";
+  (document.body || document.documentElement).appendChild(probe);
   const value = Number.parseFloat(
-    getComputedStyle(document.documentElement).getPropertyValue(
-      "--ui-collapsed-pane-width",
-    ),
+    getComputedStyle(probe).width,
   );
+  probe.remove();
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error("Missing positive --ui-collapsed-pane-width token");
   }

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "c347a4442955dfce"
+    "panel_revision": "57413dbef619fe38"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -739,7 +739,6 @@
   "workspace.file_binary": "二进制文件，无法预览。",
   "workspace.file_error": "加载文件失败：{{message}}",
   "workspace.editor_launchers": "IDE 快捷入口",
-  "workspace.toggle": "切换工作区",
   "terminal.title": "终端",
   "terminal.open": "打开终端",
   "terminal.new": "新终端",
