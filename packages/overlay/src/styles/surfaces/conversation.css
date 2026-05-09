@@ -468,6 +468,19 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-workspace:hover,
+.task-workspace:focus-visible {
+  color: var(--accent);
+  outline: none;
 }
 
 .task-workspace-row {

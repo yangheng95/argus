@@ -20,7 +20,7 @@
 import { createMemo, Show } from "solid-js";
 import { boardStore } from "../store/board";
 import { pathBreadcrumb } from "../utils/dom-utils";
-import { activeDirectory, currentExecutionDirectory } from "../services/workspace";
+import { activeDirectory, currentExecutionDirectory, openDirectory } from "../services/workspace";
 import { t } from "../utils/i18n";
 
 function relativePathFrom(base: string, target: string): string {
@@ -151,14 +151,18 @@ export function TaskWorkspaceLine() {
   return (
     <span class="task-workspace-row">
       <VcsBadge />
-      <span
+      <button
+        type="button"
         class="task-workspace"
         id="taskWorkspaceDir"
         hidden={!meta().show}
         title={meta().title}
+        aria-label={`${t("cwd.open")}: ${meta().title}`}
+        data-ui="execution-workspace-open"
+        onClick={() => void openDirectory(meta().title)}
       >
         {meta().label}
-      </span>
+      </button>
     </span>
   );
 }
