@@ -1223,14 +1223,16 @@ body {
 .card__agent-reply-input {
   width: 100%;
   box-sizing: border-box;
-  resize: vertical;
-  min-height: calc(104px * var(--ui-scale));
+  resize: none;
+  height: calc(58px * var(--ui-scale));
+  min-height: calc(58px * var(--ui-scale));
+  max-height: calc(58px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
   padding:
-    calc(10px * var(--ui-scale))
-    calc(92px * var(--ui-scale))
-    calc(46px * var(--ui-scale))
+    calc(8px * var(--ui-scale))
+    calc(104px * var(--ui-scale))
+    calc(8px * var(--ui-scale))
     calc(12px * var(--ui-scale));
   color: var(--text);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
@@ -1251,7 +1253,8 @@ body {
 .card__agent-reply-send {
   position: absolute;
   right: calc(10px * var(--ui-scale));
-  bottom: calc(10px * var(--ui-scale));
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
