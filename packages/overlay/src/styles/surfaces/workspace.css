@@ -210,6 +210,133 @@
   display: none;
 }
 
+/* ── Workspace Terminal ── */
+.workspace-terminal {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #0b0f14;
+  color: #d8dee9;
+}
+
+.workspace-terminal-header {
+  min-height: var(--ui-panel-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: 0 calc(10px * var(--ui-scale));
+  background: color-mix(in srgb, #0b0f14 84%, white);
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, white 12%, transparent);
+}
+
+.workspace-terminal-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: calc(4px * var(--ui-scale));
+  overflow-x: auto;
+}
+
+.workspace-terminal-tab {
+  min-width: calc(150px * var(--ui-scale));
+  max-width: calc(260px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border-bottom: calc(2px * var(--ui-scale)) solid transparent;
+}
+
+.workspace-terminal-tab[data-active="true"] {
+  border-bottom-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.workspace-terminal-tab-main {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--ui-panel-header-height);
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  border: 0;
+  background: transparent;
+  color: #d8dee9;
+  cursor: pointer;
+}
+
+.workspace-terminal-tab-status {
+  width: calc(7px * var(--ui-scale));
+  height: calc(7px * var(--ui-scale));
+  flex: 0 0 auto;
+  border-radius: var(--oc-radius-pill);
+  background: var(--bad);
+}
+
+.workspace-terminal-tab[data-connected="true"] .workspace-terminal-tab-status {
+  background: var(--good);
+}
+
+.workspace-terminal-tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ui-font-control);
+}
+
+.workspace-terminal-tab-close {
+  width: var(--oc-density-icon-button);
+  height: var(--oc-density-icon-button);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: color-mix(in srgb, #d8dee9 72%, transparent);
+  cursor: pointer;
+}
+
+.workspace-terminal-tab-close:hover {
+  color: #ffffff;
+  background: color-mix(in srgb, white 10%, transparent);
+}
+
+.workspace-terminal-banner {
+  flex: 0 0 auto;
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  color: #fecaca;
+  background: color-mix(in srgb, var(--bad) 24%, #0b0f14);
+  font-size: var(--ui-font-control);
+}
+
+.workspace-terminal-body {
+  flex: 1;
+  min-height: 0;
+  padding: calc(8px * var(--ui-scale));
+  overflow: hidden;
+}
+
+.workspace-terminal-body .xterm {
+  height: 100%;
+}
+
+.workspace-terminal-loading {
+  position: absolute;
+  right: calc(14px * var(--ui-scale));
+  bottom: calc(12px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, #0b0f14 70%, white);
+  color: #d8dee9;
+  font-size: var(--ui-font-small);
+}
+
 /* ── Diff Preview Panel ── */
 .diff-preview-panel {
   flex: 1;

@@ -1,19 +1,18 @@
-import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
+import { BusEvent } from "@/bus/bus-event"
+import { Plugin } from "@/plugin"
+import { lazy } from "@opencorvus-ai/util/lazy"
 import z from "zod"
 import { Identifier } from "../id/id"
-import { Log } from "../util/log"
 import { Instance } from "../project/instance"
-import { lazy } from "@opencorvus-ai/util/lazy"
-import { Shell } from "@/shell/shell"
-import { Plugin } from "@/plugin"
+import { Log } from "../util/log"
+import { TerminalProfile } from "./profile"
 
 export namespace Pty {
   const log = Log.create({ service: "pty" })
 
   const BUFFER_LIMIT = 1024 * 1024 * 2
   const BUFFER_CHUNK = 64 * 1024
-  const encoder = new TextEncoder()
 
   interface Proc {
     pid: number
@@ -33,16 +32,6 @@ export namespace Pty {
     close: (code?: number, reason?: string) => void
   }
 
-  // WebSocket control frame: 0x00 + UTF-8 JSON.
-  const meta = (cursor: number) => {
-    const json = JSON.stringify({ cursor })
-    const bytes = encoder.encode(json)
-    const out = new Uint8Array(bytes.length + 1)
-    out[0] = 0
-    out.set(bytes, 1)
-    return out
-  }
-
   const pty = lazy(async () => {
     const { spawn } = await import("bun-pty")
     return spawn as Spawn
@@ -51,23 +40,25 @@ export namespace Pty {
   export const Info = z
     .object({
       id: Identifier.schema("pty"),
+      profileID: z.string(),
       title: z.string(),
       command: z.string(),
       args: z.array(z.string()),
       cwd: z.string(),
       status: z.enum(["running", "exited"]),
       pid: z.number(),
+      cursor: z.number().int().nonnegative(),
     })
     .meta({ ref: "Pty" })
 
   export type Info = z.infer<typeof Info>
 
   export const CreateInput = z.object({
-    command: z.string().optional(),
-    args: z.array(z.string()).optional(),
-    cwd: z.string().optional(),
+    profileID: z.string().min(1),
+    cwd: z.string().min(1),
+    cols: z.number().int().positive(),
+    rows: z.number().int().positive(),
     title: z.string().optional(),
-    env: z.record(z.string(), z.string()).optional(),
   })
 
   export type CreateInput = z.infer<typeof CreateInput>
@@ -76,13 +67,28 @@ export namespace Pty {
     title: z.string().optional(),
     size: z
       .object({
-        rows: z.number(),
-        cols: z.number(),
+        rows: z.number().int().positive(),
+        cols: z.number().int().positive(),
       })
       .optional(),
   })
 
   export type UpdateInput = z.infer<typeof UpdateInput>
+
+  const ClientMessage = z.discriminatedUnion("type", [
+    z.object({ type: z.literal("input"), data: z.string() }),
+    z.object({ type: z.literal("resize"), cols: z.number().int().positive(), rows: z.number().int().positive() }),
+    z.object({ type: z.literal("kill") }),
+  ])
+
+  export type ClientMessage = z.infer<typeof ClientMessage>
+
+  export type ServerMessage =
+    | { type: "ready"; cursor: number; info: Info }
+    | { type: "output"; cursor: number; data: string }
+    | { type: "history_truncated"; requestedCursor: number; oldestCursor: number }
+    | { type: "exit"; exitCode: number }
+    | { type: "error"; message: string }
 
   export const Event = {
     Created: BusEvent.define("pty.created", z.object({ info: Info })),
@@ -146,20 +152,21 @@ export namespace Pty {
 
   export async function create(input: CreateInput) {
     const id = Identifier.create("pty", false)
-    const command = input.command || Shell.preferred()
-    const args = input.args || []
-    if (command.endsWith("sh")) {
-      args.push("-l")
-    }
+    const profile = await TerminalProfile.resolve(input.profileID)
+    const cwd = await TerminalProfile.validateCwd(input.cwd)
 
-    const cwd = input.cwd || Instance.directory
     const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
     const shellVars = shellEnv.env as Record<string, string>
-    const term = input.env?.TERM || shellVars.TERM || process.env.TERM || "xterm-256color"
+    const term = profile.env.TERM
+    if (!term) {
+      throw new TerminalProfile.ConfigError({
+        message: `Terminal profile ${profile.id} must configure TERM`,
+      })
+    }
     const env = {
       ...process.env,
-      ...input.env,
       ...shellVars,
+      ...profile.env,
       TERM: term,
       OPENCORVUS_TERMINAL: "1",
     } as Record<string, string>
@@ -169,24 +176,28 @@ export namespace Pty {
       env.LC_CTYPE = "C.UTF-8"
       env.LANG = "C.UTF-8"
     }
-    log.info("creating session", { id, cmd: command, args, cwd })
+
+    log.info("creating session", { id, profileID: profile.id, cmd: profile.command, args: profile.args, cwd })
 
     const spawn = await pty()
-    const ptyProcess = spawn(command, args, {
+    const ptyProcess = spawn(profile.command, profile.args, {
       name: term,
       cwd,
       env,
     })
+    ptyProcess.resize(input.cols, input.rows)
 
-    const info = {
+    const info: Info = {
       id,
-      title: input.title || `Terminal ${id.slice(-4)}`,
-      command,
-      args,
+      profileID: profile.id,
+      title: input.title ?? profile.label,
+      command: profile.command,
+      args: profile.args,
       cwd,
       status: "running",
       pid: ptyProcess.pid,
-    } as const
+      cursor: 0,
+    }
     const session: ActiveSession = {
       info,
       process: ptyProcess,
@@ -198,6 +209,7 @@ export namespace Pty {
     state().set(id, session)
     ptyProcess.onData((chunk) => {
       session.cursor += chunk.length
+      session.info.cursor = session.cursor
 
       for (const [key, sub] of session.subscribers.entries()) {
         if (!current(sub)) {
@@ -206,7 +218,7 @@ export namespace Pty {
         }
 
         try {
-          sub.ws.send(chunk)
+          send(sub.ws, { type: "output", cursor: session.cursor, data: chunk })
         } catch {
           session.subscribers.delete(key)
         }
@@ -222,6 +234,17 @@ export namespace Pty {
       if (session.info.status === "exited") return
       log.info("session exited", { id, exitCode })
       session.info.status = "exited"
+      for (const [key, sub] of session.subscribers.entries()) {
+        if (!current(sub)) {
+          session.subscribers.delete(key)
+          continue
+        }
+        try {
+          send(sub.ws, { type: "exit", exitCode })
+        } catch {
+          session.subscribers.delete(key)
+        }
+      }
       Bus.publish(Event.Exited, { id, exitCode })
       void remove(id)
     })
@@ -308,9 +331,19 @@ export namespace Pty {
 
     const start = session.bufferCursor
     const end = session.cursor
-
     const from =
       cursor === -1 ? end : typeof cursor === "number" && Number.isSafeInteger(cursor) ? Math.max(0, cursor) : 0
+
+    try {
+      send(ws, { type: "ready", cursor: end, info: session.info })
+      if (from < start) {
+        send(ws, { type: "history_truncated", requestedCursor: from, oldestCursor: start })
+      }
+    } catch {
+      cleanup()
+      ws.close()
+      return
+    }
 
     const data = (() => {
       if (!session.buffer) return ""
@@ -322,8 +355,10 @@ export namespace Pty {
 
     if (data) {
       try {
+        const replayStart = Math.max(from, start)
         for (let i = 0; i < data.length; i += BUFFER_CHUNK) {
-          ws.send(data.slice(i, i + BUFFER_CHUNK))
+          const chunk = data.slice(i, i + BUFFER_CHUNK)
+          send(ws, { type: "output", cursor: replayStart + i + chunk.length, data: chunk })
         }
       } catch {
         cleanup()
@@ -332,21 +367,54 @@ export namespace Pty {
       }
     }
 
-    try {
-      ws.send(meta(end))
-    } catch {
-      cleanup()
-      ws.close()
-      return
-    }
     return {
       onMessage: (message: string | ArrayBuffer) => {
-        session.process.write(String(message))
+        const raw = typeof message === "string" ? message : Buffer.from(message).toString("utf8")
+        const parsed = parseClientMessage(raw)
+        if (!parsed.success) {
+          send(ws, { type: "error", message: parsed.message })
+          ws.close(1002, parsed.message)
+          cleanup()
+          return
+        }
+        if (session.info.status !== "running") {
+          send(ws, { type: "error", message: "Terminal session has exited" })
+          ws.close(1008, "Terminal session has exited")
+          cleanup()
+          return
+        }
+        if (parsed.message.type === "input") {
+          session.process.write(parsed.message.data)
+        } else if (parsed.message.type === "resize") {
+          session.process.resize(parsed.message.cols, parsed.message.rows)
+        } else {
+          void remove(id)
+        }
       },
       onClose: () => {
         log.info("client disconnected from session", { id })
         cleanup()
       },
     }
+  }
+
+  function send(ws: Socket, message: ServerMessage) {
+    ws.send(JSON.stringify(message))
+  }
+
+  function parseClientMessage(raw: string):
+    | { success: true; message: ClientMessage }
+    | { success: false; message: string } {
+    let json: unknown
+    try {
+      json = JSON.parse(raw)
+    } catch {
+      return { success: false, message: "Terminal WebSocket message must be JSON" }
+    }
+    const parsed = ClientMessage.safeParse(json)
+    if (!parsed.success) {
+      return { success: false, message: parsed.error.issues.map((issue) => issue.message).join("; ") }
+    }
+    return { success: true, message: parsed.data }
   }
 }

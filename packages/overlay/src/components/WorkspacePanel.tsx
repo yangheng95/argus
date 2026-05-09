@@ -6,13 +6,15 @@
 import { Show } from "solid-js";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { FileViewPanel } from "./FileViewPanel";
+import { WorkspaceTerminal } from "./WorkspaceTerminal";
 import type { DiffTarget } from "../services/diff";
 import { t } from "../utils/i18n";
 import { Icon } from "./Icon";
 
 export type WorkspaceView =
   | { kind: "diff"; target: DiffTarget }
-  | { kind: "file"; filePath: string };
+  | { kind: "file"; filePath: string }
+  | { kind: "terminal" };
 
 export interface WorkspacePanelProps {
   /** Current view to foreground. */
@@ -21,11 +23,14 @@ export interface WorkspacePanelProps {
   onSelectView: (view: WorkspaceView) => void;
   /** Called when the user clicks the close (×) button. */
   onClose: () => void;
+  /** Active project directory for workspace-owned tools. */
+  directory: string;
 }
 
 export function WorkspacePanel(props: WorkspacePanelProps) {
   const isDiff = () => props.view.kind === "diff";
   const isFile = () => props.view.kind === "file";
+  const isTerminal = () => props.view.kind === "terminal";
   const diffTarget = () =>
     props.view.kind === "diff" ? props.view.target : null;
   const diffFilePath = () =>
@@ -41,6 +46,11 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
   function selectFile() {
     if (props.view.kind !== "file") {
       props.onSelectView({ kind: "file", filePath: "" });
+    }
+  }
+  function selectTerminal() {
+    if (props.view.kind !== "terminal") {
+      props.onSelectView({ kind: "terminal" });
     }
   }
 
@@ -84,6 +94,17 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
               </Show>
             </span>
           </button>
+          <button
+            type="button"
+            class="workspace-tab"
+            role="tab"
+            aria-selected={isTerminal()}
+            data-active={isTerminal() ? "true" : "false"}
+            onClick={selectTerminal}
+          >
+            <Icon name="terminal" />
+            <span class="workspace-tab-label">{t("terminal.title")}</span>
+          </button>
         </div>
         <button
           type="button"
@@ -113,6 +134,15 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
           data-active={isFile() ? "true" : "false"}
         >
           <FileViewPanel filePath={fileFilePath()} />
+        </div>
+        <div
+          class="workspace-view"
+          data-kind="terminal"
+          data-active={isTerminal() ? "true" : "false"}
+        >
+          <Show when={isTerminal()}>
+            <WorkspaceTerminal directory={props.directory} />
+          </Show>
         </div>
       </div>
     </section>

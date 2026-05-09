@@ -1027,6 +1027,30 @@ export namespace Config {
     })
   export type Provider = z.infer<typeof Provider>
 
+  export const TerminalProfile = z
+    .object({
+      label: z.string().min(1).describe("Human-readable terminal profile label"),
+      command: z.string().min(1).describe("Executable path or command resolved by the configured environment"),
+      args: z.array(z.string()).optional().default([]).describe("Executable arguments, not shell-split from a string"),
+      env: z.record(z.string(), z.string()).optional().default({}).describe("Profile-owned terminal environment variables"),
+    })
+    .strict()
+    .meta({
+      ref: "TerminalProfileConfig",
+    })
+  export type TerminalProfile = z.infer<typeof TerminalProfile>
+
+  export const Terminal = z
+    .object({
+      default_profile_id: z.string().min(1).optional().describe("Default terminal profile id used by Overlay"),
+      profiles: z.record(z.string(), TerminalProfile).optional().describe("Server-owned terminal profiles"),
+    })
+    .strict()
+    .meta({
+      ref: "TerminalConfig",
+    })
+  export type Terminal = z.infer<typeof Terminal>
+
   export const Info = z
     .object({
       $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
@@ -1191,6 +1215,7 @@ export namespace Config {
         })
         .optional()
         .describe("Frontend preview configuration."),
+      terminal: Terminal.optional().describe("Server-owned Overlay terminal configuration."),
       compaction: z
         .object({
           auto: z.boolean().optional().describe("Enable automatic compaction when context is full"),
