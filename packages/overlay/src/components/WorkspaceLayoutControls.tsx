@@ -6,7 +6,7 @@ import {
   type TerminalProfile,
   type TerminalProfileIcon,
 } from "../services/terminal";
-import { settingsStore } from "../store/settings";
+import { activeDirectory } from "../services/workspace";
 import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
 
@@ -38,7 +38,7 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
   let buttonRef: HTMLButtonElement | undefined;
   let menuRef: HTMLDivElement | undefined;
 
-  const disabled = () => !settingsStore.directory || loading() || profiles().length === 0;
+  const disabled = () => !activeDirectory() || loading() || profiles().length === 0;
   const selectedProfile = createMemo(() =>
     profiles().find((profile) => profile.id === selectedProfileID()) ??
     profiles().find((profile) => profile.id === defaultProfileID()) ??
@@ -58,7 +58,7 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
   }
 
   async function reloadProfiles() {
-    if (!settingsStore.directory) {
+    if (!activeDirectory()) {
       setProfiles([]);
       setDefaultProfileID("");
       setSelectedProfileID("");
@@ -161,7 +161,7 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
   });
 
   createEffect(() => {
-    settingsStore.directory;
+    activeDirectory();
     void reloadProfiles();
   });
 

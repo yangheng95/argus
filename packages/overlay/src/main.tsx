@@ -1082,7 +1082,7 @@ disposers.push(createRoot((dispose) => {
       serverUrl: settingsStore.serverUrl,
       username: settingsStore.username,
       password: settingsStore.password,
-      directory: settingsStore.directory,
+      directory: activeDirectory(),
     });
   });
 

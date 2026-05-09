@@ -19,9 +19,8 @@
 
 import { createMemo, Show } from "solid-js";
 import { boardStore } from "../store/board";
-import { settingsStore } from "../store/settings";
 import { pathBreadcrumb } from "../utils/dom-utils";
-import { currentExecutionDirectory } from "../services/workspace";
+import { activeDirectory, currentExecutionDirectory } from "../services/workspace";
 import { t } from "../utils/i18n";
 
 function relativePathFrom(base: string, target: string): string {
@@ -38,8 +37,7 @@ function shortPath(p: string): string {
   return parts.length <= 2 ? p : `…/${parts.slice(-2).join("/")}`;
 }
 
-const directoryMemo = () =>
-  settingsStore.directory || boardStore.board?.task?.directory || "";
+const directoryMemo = () => activeDirectory();
 
 export function TaskDirContent() {
   const dir = createMemo(directoryMemo);

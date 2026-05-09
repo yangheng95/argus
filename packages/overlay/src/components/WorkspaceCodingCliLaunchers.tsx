@@ -7,7 +7,7 @@ import {
   type CodingCliIcon,
   type CodingCliProfile,
 } from "../services/coding-cli";
-import { settingsStore } from "../store/settings";
+import { activeDirectory } from "../services/workspace";
 import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
 
@@ -37,12 +37,12 @@ export function WorkspaceCodingCliLaunchers(props: WorkspaceCodingCliLaunchersPr
   let menuRef: HTMLDivElement | undefined;
 
   const disabled = () =>
-    !settingsStore.directory || !props.terminalProfileID() || loading() || profiles().length === 0;
+    !activeDirectory() || !props.terminalProfileID() || loading() || profiles().length === 0;
   const title = () => error() || t("coding_cli.open");
   const triggerIcon = createMemo(() => profiles()[0]?.icon ? CLI_ICONS[profiles()[0].icon] : "coding-cli");
 
   async function reloadProfiles() {
-    if (!settingsStore.directory) {
+    if (!activeDirectory()) {
       setProfiles([]);
       return;
     }
@@ -88,7 +88,8 @@ export function WorkspaceCodingCliLaunchers(props: WorkspaceCodingCliLaunchersPr
   }
 
   async function launch(profile: CodingCliProfile) {
-    if (!settingsStore.directory) throw new Error("Workspace directory is required");
+    const directory = activeDirectory();
+    if (!directory) throw new Error("Workspace directory is required");
     const terminalProfileID = props.terminalProfileID();
     if (!terminalProfileID) throw new Error("Terminal profile ID is required");
     close();
@@ -97,7 +98,7 @@ export function WorkspaceCodingCliLaunchers(props: WorkspaceCodingCliLaunchersPr
       await openCodingCli({
         cliID: profile.id,
         terminalProfileID,
-        cwd: settingsStore.directory,
+        cwd: directory,
       });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -139,7 +140,7 @@ export function WorkspaceCodingCliLaunchers(props: WorkspaceCodingCliLaunchersPr
   });
 
   createEffect(() => {
-    settingsStore.directory;
+    activeDirectory();
     void reloadProfiles();
   });
 
