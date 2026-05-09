@@ -1441,11 +1441,16 @@ export namespace EngineService {
 
   export async function retryTask(taskID: string) {
     const task = requireTask(taskID)
-    if (!isTaskTerminal(task)) {
-      throw new Error(`task ${taskID} is already active`)
-    }
+    const metadata =
+      task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+        ? { ...(task.metadata as Record<string, unknown>) }
+        : {}
+    delete metadata.cancelled
     // Reset to queued and hand scheduling back to the single queue/coordinator entry.
-    await updateTask(task, { status: "queued", error: null }, "Retry requested by operator")
+    // The previous terminal-only guard treated derived status as a lifecycle
+    // gate. Status is now display/audit context; retry is a user/operator
+    // action that may be applied to the same task from any displayed state.
+    await updateTask(task, { status: "queued", error: null, metadata }, "Retry requested by operator")
     void dispatchTaskLoop({ taskID, event: { note: OrchestratorEventNote.retry(task) } })
     return viewTask(requireTask(taskID))
   }
@@ -1480,7 +1485,7 @@ export namespace EngineService {
     }
     const nextRunID = await EngineRuntime.createOperatorRun(openedTask, run, note)
     void dispatchTaskLoop({ taskID: task.id, event: { note: OrchestratorEventNote.retry(task) } })
-    return { resumed: true, status: "active" as const }
+    return { resumed: true, status: deriveTaskStatus(requireTask(taskID)) as string }
   }
 
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
@@ -1546,7 +1551,7 @@ export namespace EngineService {
   /**
    * 向正在运行的 task 注入消息。
    * 如果当前 run 正在执行且 executor 支持 resume，直接注入到 session；
-   * 否则退化为 operator note（创建新 run）。
+   * 否则记录为 operator note，并由编排器决定是否创建新 run。
    *
    * orchestrator-loop wake 与 executor resume 是两个独立动作:
    *   - executor.resume = 把消息送进正在跑的 build agent sub-session
@@ -1580,7 +1585,7 @@ export namespace EngineService {
       },
       interrupt: true,
     })
-    return { resumed: true, status: "active" as const }
+    return { resumed: true, status: deriveTaskStatus(requireTask(taskID)) as string }
   }
 
   /**

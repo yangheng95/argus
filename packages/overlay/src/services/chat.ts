@@ -456,14 +456,9 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
       throw new Error("Task creation returned no task_id");
     }
     // Every status (active, queued, blocked, cancelled, completed, failed) →
-    // send message directly to the task. The backend's handleTaskMessage
-    // path unconditionally revives terminal tasks (status flips back to
-    // active, time_completed cleared, dispatchTaskLoop fires) — see
-    // memory feedback_task_terminal_state_revivable.md and
-    // engine/task-message-open.ts. The previous "completed → fork new task"
-    // branch contradicted that rule by severing conversation history at
-    // the task boundary; users sending a follow-up to a completed task
-    // expect the same conversation to continue, not a brand-new task.
+    // send message directly to the task. Status is display/audit context, not
+    // a routing gate; users sending a follow-up to any task expect the same
+    // conversation to continue, not a brand-new task.
     const result = await apiJson(
       `task/${encodeURIComponent(taskID)}/message`,
       {

@@ -352,7 +352,7 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
             executor: EXECUTOR,
             title: TASK_TITLE,
             request: TASK_REQUEST,
-            budget: { maxRuns: 2, maxReplans: 1 },
+            budget: { maxExecutorGroups: 2 },
             checks: {
               build: false,
               lint: false,

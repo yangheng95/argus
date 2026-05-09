@@ -93,7 +93,7 @@ while (session 活跃) {
 
 1. **各阶段的输入/输出契约不同**：spec 产出结构化规格，plan 产出有序步骤，eval 产出 verdict+证据。混在一起 LLM 会遗漏检查。
 2. **失败要能精确回滚**：spec 写错→重 spec；plan 走错→重 plan；执行错→retry；这种分级重试在"单体 agent"里做不到。
-3. **预算可控**：每阶段独立超时、独立重试次数。`.opencorvus/opencorvus.jsonc` 里的 `assistant.requirements.max_steps` / `evaluator.tier` / `max_runs` / `max_goal_retries` 都是分阶段可配置的。
+3. **并行可控**：流式活动超时仍按层控制；`.opencorvus/opencorvus.jsonc` 里的 `assistant.max_executor_groups` 控制同一任务内 goal/build 的并行上限，默认 3。
 4. **人机协作粒度**：permission 审批、follow-up 消息都发生在 Task 循环里，不会污染单次 LLM 上下文。
 
 ## Worktree 并行

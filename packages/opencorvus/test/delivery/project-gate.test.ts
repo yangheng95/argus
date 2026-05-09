@@ -920,7 +920,7 @@ describe("delivery repeated failure tracking", () => {
       { key: "delivery_repeated_failure_signature_1" },
       { key: "delivery_other" },
       { key: "delivery_repeated_failure_signature_2" },
-      { key: "delivery_budget_exhausted_3" },
+      { key: "delivery_other_budget_signal_3" },
     ])).toBe(2)
   })
 
@@ -931,15 +931,16 @@ describe("delivery repeated failure tracking", () => {
     )
 
     expect(orchestratorTools).toContain("delivery_repeated_failure_signature_")
-    expect(orchestratorTools).toContain("delivery_budget_exhausted_")
+    expect(orchestratorTools).not.toContain(["delivery", "budget", "exhausted_"].join("_"))
     expect(orchestratorTools).not.toContain("delivery_loop_hard_fail")
     expect(orchestratorTools).not.toContain("delivery_repeated_loop_hard_escalation")
     expect(orchestratorTools).not.toContain("Task hard-failed")
     expect(orchestratorTools).not.toContain("shouldHardFailRepeatedDelivery")
     expect(orchestratorTools).not.toContain("countPriorRepeatedDeliveryFailureEscalates")
     expect(orchestratorTools).not.toContain("requestStopAfterCurrentStep(\"delivery_repeated_failure_signature\")")
-    expect(orchestratorTools).not.toContain("requestStopAfterCurrentStep(\"delivery_budget_exhausted\")")
     expect(orchestratorTools).not.toContain("requestStopAfterCurrentStep(\"delivery_threw\")")
+    expect(orchestratorTools).not.toContain("forced plan restart")
+    expect(orchestratorTools).not.toContain("Task was automatically restarted from plan")
     expect(orchestratorTools).not.toContain("call fail_task with a final summary")
     expect(orchestratorTools).not.toContain("fail_task if the failure is fundamental")
     expect(orchestratorTools).not.toContain("status: \"failed\", error: hardFailReason")

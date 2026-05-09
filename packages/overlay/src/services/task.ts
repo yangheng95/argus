@@ -71,7 +71,6 @@ export interface CreateTaskOptions {
   metadata?: Record<string, unknown>;
   signal?: AbortSignal;
   budget?: {
-    maxRuns?: number;
     maxExecutorGroups?: number;
   };
 }

@@ -156,7 +156,6 @@ Purpose: execution defaults for the next task. Active-task commands stay in task
 
 - Executor selector
 - Per-executor model quick switch
-- Max execution runs
 - Parallel goal limit
 - Auto-question behavior
 - Default permission profile shortcut
@@ -165,7 +164,6 @@ Source of truth:
 
 - `settingsStore.executor`
 - `/executor` data through `appStore.executors`
-- `appStore.config.assistant.max_runs`
 - `appStore.config.assistant.max_executor_groups`
 - `appStore.config.experimental.auto_question`
 - `settingsStore.toolPermissions`

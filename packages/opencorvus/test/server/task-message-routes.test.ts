@@ -144,7 +144,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/message opens a failed task without clearing context", async () => {
+  test("POST /task/:taskID/message appends to a failed task without clearing status facts", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -199,9 +199,9 @@ describe("task message routes", () => {
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
         expect(row).toBeDefined()
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
-        expect(row?.time_completed).toBeNull()
-        expect(row?.error).toBeNull()
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("failed")
+        expect(row?.time_completed).toBe(completedAt)
+        expect(row?.error).toBe("previous failure")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
@@ -259,13 +259,13 @@ describe("task message routes", () => {
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
   })
 
-  test("POST /task/:taskID/message opens a cancelled task without retry gate", async () => {
+  test("POST /task/:taskID/message appends to a cancelled task without retry gate", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -318,13 +318,13 @@ describe("task message routes", () => {
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
-        expect((row?.metadata as { cancelled?: boolean } | null)?.cancelled).toBeUndefined()
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
+        expect((row?.metadata as { cancelled?: boolean } | null)?.cancelled).toBe(true)
       },
     })
   })
 
-  test("POST /task/:taskID/message opens a completed task without deleting task context", async () => {
+  test("POST /task/:taskID/message appends to a completed task without deleting task context", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -373,7 +373,7 @@ describe("task message routes", () => {
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("completed")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
@@ -450,7 +450,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/inject opens terminal task even without active run", async () => {
+  test("POST /task/:taskID/inject appends to terminal task even without active run", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -495,13 +495,13 @@ describe("task message routes", () => {
         expect(response.status).toBe(200)
         const body = await response.json() as { resumed: boolean; status: string }
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(body).toEqual({ resumed: true, status: "active" })
+        expect(body).toEqual({ resumed: true, status: "failed" })
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
 
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("failed")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })

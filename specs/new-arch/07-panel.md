@@ -140,7 +140,7 @@ goalWorkflows: Array<GoalWorkflowGroup>    // per-goal 工作流状态
   → PATCH /config { assistant: { architect: { ... } } }
 
 ▼ Orchestration
-  max_runs: 10 · max_fix_runs: 5 · max_executor_groups: 1
+  max_executor_groups: 3
   Adaptive Pipeline: [on/off]
 
 ▼ Behavior                                ← 来自 Config.Info.experimental

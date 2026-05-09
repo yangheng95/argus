@@ -53,7 +53,7 @@
 
 1. Spec 是否本身就缺 acceptance criteria
 2. `done_definition` 里的命令是否可执行（见 [Evaluator](../opencorvus/evaluator.md)）
-3. `max_runs` 是否配太大（默认 3，过大会烧预算）
+3. `assistant.max_executor_groups` 是否过大（默认 3，过大会同时启动更多 goal/build）
 
 ### 权限审批无限等待
 

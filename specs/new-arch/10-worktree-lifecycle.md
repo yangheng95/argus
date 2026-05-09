@@ -66,10 +66,10 @@ Claude Code 本地 worktree 会话的清理策略（公开文档）：
 ### 2.3 什么是终态
 触发 worktree 清理的时机（**只有这些**）：
 1. **goal.status = passed**：delivery cherry-pick 合并成功后
-2. **goal.cascade_state = failed**（永久失败）：达到 `max_goal_retries` 或 dispatch 前抛
+2. **goal.cascade_state = failed**（永久失败）：orchestrator 基于证据显式判定无法继续提升，或 dispatch 前抛
 3. **task cancel**（`abortLiveExecutionForTask`）
 4. **restart_from_stage**
-5. **max_runs 耗尽**
+5. **orchestrator 判断任务无法继续提升并显式终止**
 6. **engine-recovery 启动孤儿清理**（配合 Claude Code 式 3-gate：age + clean + no untracked + no unpushed commits）
 
 ### 2.4 可重试失败不清
@@ -133,9 +133,9 @@ deliver 阶段成功 cherry-pick merge → goal.status = passed
   → UPDATE engine_goal SET workspace_dir=NULL, workspace_branch=NULL
 ```
 
-### 4.5 Goal 终态 cascade_failed（达 max_goal_retries）
+### 4.5 Goal 终态 cascade_failed（orchestrator 显式终止）
 ```
-goal_run.retry_count >= max_goal_retries AND latest goal_run failed
+orchestrator calls fail_task / records a terminal failure decision from evidence
   → updateGoalCascadeFailed(goalID)
   → trigger cleanup
   → UPDATE engine_goal SET workspace_dir=NULL, workspace_branch=NULL
@@ -269,7 +269,7 @@ supersedeGoalRun → dispatchGoal 之间有 gap，期间同 goal 不会有第二
 1. §4.3 worktree 磁盘缺失（process crash 后）：抛错 vs 自动重建？我倾向抛错（rule 1 no fallback）。
 2. §5.6 abortLiveExecutionForTask 默认 cleanup 所有 goals 还是 opt-in？
 3. §8.5 branch 复用是否需要在 retry 间 reset base（`git reset --hard baseRef` 再让 executor 重写）？还是完全累积？
-4. max_goal_retries 达到后的清理和 delivery 成功清理是否需要不同延迟（例如保留最后一次失败的 worktree 几分钟供 debug）？
+4. orchestrator 显式终止后的清理和 delivery 成功清理是否需要不同延迟（例如保留最后一次失败的 worktree 几分钟供 debug）？
 5. 是否要暴露 Config 选项给用户（`experimental.preserve_worktree_on_retry` 默认 true）以便紧急关闭？我倾向不加（rule 2）。
 
 ## 11 · 验收标准

@@ -53,10 +53,8 @@ function clampInt(value: unknown, min: number, max: number): number | null {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-function configNumber(path: "max_runs" | "max_executor_groups"): number | null {
-  const raw = path === "max_runs"
-    ? (appStore.config as any)?.assistant?.max_runs
-    : (appStore.config as any)?.assistant?.max_executor_groups;
+function configNumber(path: "max_executor_groups"): number | null {
+  const raw = (appStore.config as any)?.assistant?.max_executor_groups;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -232,8 +230,8 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
     closeMenu();
   }
 
-  async function handlePatchBudget(key: "max_runs" | "max_executor_groups", value: number) {
-    await patchConfig({ assistant: { [key]: value } });
+  async function handlePatchGoalParallelism(value: number) {
+    await patchConfig({ assistant: { max_executor_groups: value } });
   }
 
   function setTheme(value: string) {
@@ -347,7 +345,6 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
     if (openMenu()) setOpenMenu(next);
   }
 
-  const maxRuns = createMemo(() => clampInt(configNumber("max_runs"), 1, 30));
   const maxGroups = createMemo(() => clampInt(configNumber("max_executor_groups"), 1, 10));
   const opacityPercent = createMemo(() => Math.round(settingsStore.opacity * 100));
   const zoomPercent = createMemo(() => Math.round(settingsStore.zoom * 100));
@@ -449,22 +446,13 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                       />
                     </label>
                     <MenuRange
-                      label={t("titlebar.budget_max_runs")}
-                      value={maxRuns() ?? 1}
-                      min={1}
-                      max={30}
-                      step={1}
-                      disabled={maxRuns() === null}
-                      onChange={(value) => handlePatchBudget("max_runs", value)}
-                    />
-                    <MenuRange
                       label={t("titlebar.budget_max_executor_groups")}
                       value={maxGroups() ?? 1}
                       min={1}
                       max={10}
                       step={1}
                       disabled={maxGroups() === null}
-                      onChange={(value) => handlePatchBudget("max_executor_groups", value)}
+                      onChange={(value) => handlePatchGoalParallelism(value)}
                     />
                   </MenuGroup>
                 </Show>

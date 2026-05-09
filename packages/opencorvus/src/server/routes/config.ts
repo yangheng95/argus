@@ -14,6 +14,16 @@ import { lazy } from "../../util/lazy"
 
 const log = Log.create({ service: "server" })
 
+async function configResponse() {
+  const [raw, orch] = await Promise.all([Config.get(), EngineConfig.get()])
+  const userAsst = raw.assistant || {}
+  const assistant = {
+    ...userAsst,
+    max_executor_groups: userAsst.max_executor_groups ?? orch.max_executor_groups,
+  }
+  return { ...raw, assistant }
+}
+
 export const ConfigRoutes = lazy(() =>
   new Hono()
     .get(
@@ -34,17 +44,7 @@ export const ConfigRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const [raw, orch] = await Promise.all([Config.get(), EngineConfig.get()])
-        // Merge effective scalar assistant values so the frontend can display correct defaults.
-        // Spread userAsst first so that the explicitly-computed ?? fallbacks always win.
-        const userAsst = raw.assistant || {}
-        const assistant = {
-          ...userAsst,
-          max_runs: userAsst.max_runs ?? orch.max_runs,
-          max_fix_runs: userAsst.max_fix_runs ?? orch.max_fix_runs,
-          max_executor_groups: userAsst.max_executor_groups ?? orch.max_executor_groups,
-        }
-        return c.json({ ...raw, assistant })
+        return c.json(await configResponse())
       },
     )
     .patch(
@@ -105,7 +105,7 @@ export const ConfigRoutes = lazy(() =>
         await ChannelSupervisor.sync(updated).catch((error) => {
           log.warn("channel runtime sync failed", { error: String(error) })
         })
-        return c.json(updated)
+        return c.json(await configResponse())
       },
     )
     .get(

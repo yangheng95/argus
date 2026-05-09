@@ -8,8 +8,6 @@ import { Answer as QuestionAnswer } from "@/question/types"
 import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 
 export const Budget = z.object({
-  maxRuns: z.number().int().positive().optional(),
-  maxFixRuns: z.number().int().positive().optional(),
   maxExecutorGroups: z.number().int().positive().optional(),
 })
 

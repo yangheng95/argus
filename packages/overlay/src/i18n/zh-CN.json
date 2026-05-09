@@ -688,7 +688,6 @@
   "titlebar.auto_question_hint": "提问超过 5 分钟无人回复时自动拒绝；关闭后会一直等待用户响应。",
   "titlebar.background_notice": "OpenCorvus 仍在后台运行。点击系统托盘图标可重新打开；如需彻底退出，请在托盘菜单中选择“退出”。",
   "titlebar.budget_max_executor_groups": "并行目标上限",
-  "titlebar.budget_max_runs": "最大执行轮次",
   "titlebar.background_notice_title": "后台运行中",
   "titlebar.close": "关闭",
   "titlebar.connection.connecting": "连接中",

@@ -40,9 +40,8 @@ describe("describe build terminal report recovery", () => {
       }],
       budget: {
         runs_used: 1,
-        max_runs: 8,
         fix_count: 0,
-        max_fix_runs: 2,
+        max_executor_groups: 3,
       },
       iterations_count: 0,
     }
