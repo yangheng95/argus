@@ -814,6 +814,7 @@ describe("overlay architecture guards", () => {
       "executor-chip-role",
       "executor-chip-provider",
       "executor-chip-name",
+      "executor-chip-custom",
       "executor-chip-caret",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))

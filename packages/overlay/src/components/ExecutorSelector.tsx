@@ -37,9 +37,9 @@ interface ModelParts {
   name: string;
 }
 
-// MirrorCode is the internal/orchestrator executor. Its model is the
-// project default model from appStore.config.model, used for planning and
-// evaluation. External executors carry their own editing model.
+// MirrorCode is the internal OpenCorvus executor. Its model is the project
+// default model from appStore.config.model. External executors carry their
+// own model and should only appear in the chip when that value exists.
 function projectModelFromConfig(): string {
   const cfg = appStore.config as { model?: unknown } | null | undefined
   return typeof cfg?.model === "string" ? cfg.model : ""
@@ -60,6 +60,19 @@ function splitModelID(modelID: string): ModelParts {
   };
 }
 
+function agentModelOverridesFromConfig(): string[] {
+  const cfg = appStore.config as { agent?: unknown } | null | undefined
+  const agents = cfg?.agent
+  if (!agents || typeof agents !== "object" || Array.isArray(agents)) return []
+  const out: string[] = []
+  for (const entry of Object.values(agents as Record<string, unknown>)) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue
+    const model = (entry as { model?: unknown }).model
+    if (typeof model === "string" && model.trim()) out.push(model.trim())
+  }
+  return out
+}
+
 export function ExecutorSelector() {
   const menu = useDisclosure();
 
@@ -71,49 +84,54 @@ export function ExecutorSelector() {
   const activeLabel = createMemo(() => executorLabel(activeID()));
   const activeModel = createMemo(() => executorCurrentModel(activeID()));
 
-  // iter50: user feedback (2026-05-03) "永远同时显示全局 LLM
-  // 和内外部外部执行器的 LLM". Both model segments now ALWAYS
-  // render — no more conditional based on executor type.
-  //
-  // - Global LLM = appStore.config.model (orchestrator-side
-  //   model that drives planning + evaluation regardless of
-  //   which executor edits the files).
-  // - Executor LLM = the active executor's own model. For
-  //   external executors (codex / claude-code) this is
-  //   `executorCurrentModel(id)`. For the internal MirrorCode
-  //   executor, mirrorcode follows the project config so the
-  //   executor LLM == global LLM (same value rendered in both
-  //   slots — visually consistent layout, semantically honest).
-  const orchestratorModel = createMemo(projectModelFromConfig)
+  // The chip has two semantic model surfaces:
+  // - OpenCorvus model: appStore.config.model, annotated when the Agent
+  //   Models panel contains per-agent overrides.
+  // - External executor model: active external executor's own model, rendered
+  //   only when that value exists. Empty external values should not produce a
+  //   visible "-- not set --" slot.
+  const openCorvusModel = createMemo(projectModelFromConfig)
   const isExternalExecutor = createMemo(() => activeID() !== INTERNAL_EXECUTOR_ID)
-  const executorModel = createMemo(() =>
-    isExternalExecutor() ? activeModel() : orchestratorModel(),
-  )
-  const sameModel = createMemo(() =>
-    !!orchestratorModel() && orchestratorModel() === executorModel(),
-  )
-  const orchestratorParts = createMemo(() => splitModelID(orchestratorModel()))
-  const executorParts = createMemo(() => splitModelID(executorModel()))
-  const executorModelText = createMemo(() =>
-    sameModel() ? t("executor.same_as_plan") : executorModel(),
-  )
+  const externalExecutorModel = createMemo(() => (isExternalExecutor() ? activeModel().trim() : ""))
+  const hasExternalExecutorModel = createMemo(() => externalExecutorModel().length > 0)
+  const hasCustomAgentModels = createMemo(() => {
+    const project = openCorvusModel().trim()
+    const overrides = agentModelOverridesFromConfig()
+    if (overrides.length === 0) return false
+    const distinctOverrides = new Set(overrides)
+    if (distinctOverrides.size > 1) return true
+    if (!project) return true
+    return overrides.some((model) => model !== project)
+  })
+  const customSuffix = createMemo(() => (hasCustomAgentModels() ? t("executor.custom_agent_models") : ""))
+  const openCorvusDisplayModel = createMemo(() => {
+    const model = openCorvusModel() || t("agent_models.option_not_set")
+    return customSuffix() ? `${model}${customSuffix()}` : model
+  })
+  const openCorvusParts = createMemo(() => splitModelID(openCorvusModel()))
+  const externalExecutorParts = createMemo(() => splitModelID(externalExecutorModel()))
 
-  // Tooltip always names both models. The pair explainer reads
-  // naturally even when the two values are equal (mirrorcode case).
+  // Tooltip names the external executor model only when one is configured.
   const chipTitle = createMemo(() => {
-    const orch = orchestratorModel() || t("agent_models.option_not_set")
-    const exec = executorModelText() || t("agent_models.option_not_set")
+    const openCorvus = openCorvusDisplayModel()
+    if (!hasExternalExecutorModel()) {
+      return [executorTitle(activeID()), t("executor.model_explainer_opencorvus", { model: openCorvus })]
+        .filter(Boolean)
+        .join("\n")
+    }
     const pair = t("executor.model_explainer_pair", {
-      orchestrator: orch,
+      opencorvus: openCorvus,
       executor: activeLabel(),
-      external: exec,
+      external: externalExecutorModel(),
     })
     return [executorTitle(activeID()), pair].filter(Boolean).join("\n")
   })
   const chipAriaLabel = createMemo(() => {
-    const orch = orchestratorModel() || t("agent_models.option_not_set")
-    const exec = executorModelText() || t("agent_models.option_not_set")
-    return `${activeLabel()}: ${t("executor.role_plan")} ${orch}; ${t("executor.role_edit")} ${exec}. ${t("executor.change_model")}`
+    const base = `${activeLabel()}: ${t("executor.role_opencorvus")} ${openCorvusDisplayModel()}`
+    const external = hasExternalExecutorModel()
+      ? `; ${activeLabel()} ${t("executor.role_external")} ${externalExecutorModel()}`
+      : ""
+    return `${base}${external}. ${t("executor.change_model")}`
   })
 
   let rootRef: HTMLDivElement | undefined;
@@ -167,7 +185,7 @@ export function ExecutorSelector() {
           tone="neutral"
           data-ui="executor-chip"
           data-active="true"
-          data-has-external="true"
+          data-has-external={hasExternalExecutorModel() ? "true" : "false"}
           aria-haspopup="listbox"
           aria-expanded={menu.open() ? "true" : "false"}
           title={chipTitle()}
@@ -184,36 +202,39 @@ export function ExecutorSelector() {
           <span class="executor-chip-models" aria-hidden="true">
             <span
               class="executor-chip-model"
-              data-source="orchestrator"
-              data-empty={orchestratorModel() ? "false" : "true"}
-              title={t("executor.model_explainer_internal")}
-            >
-              <span class="executor-chip-role">{t("executor.role_plan")}</span>
-              <span class="executor-chip-provider">{orchestratorParts().provider}</span>
-              <span class="executor-chip-name">
-                {orchestratorParts().name || t("agent_models.option_not_set")}
-              </span>
-            </span>
-            <span
-              class="executor-chip-model"
-              data-source="executor"
-              data-empty={executorModel() ? "false" : "true"}
-              data-same={sameModel() ? "true" : "false"}
-              title={t("executor.model_explainer_external", {
-                executor: activeLabel(),
+              data-source="opencorvus"
+              data-empty={openCorvusModel() ? "false" : "true"}
+              data-custom={hasCustomAgentModels() ? "true" : "false"}
+              title={t("executor.model_explainer_opencorvus", {
+                model: openCorvusDisplayModel(),
               })}
             >
-              <span class="executor-chip-role">{t("executor.role_edit")}</span>
-              <Show
-                when={!sameModel()}
-                fallback={<span class="executor-chip-name">{t("executor.same_as_plan")}</span>}
-              >
-                <span class="executor-chip-provider">{executorParts().provider}</span>
-                <span class="executor-chip-name">
-                  {executorParts().name || t("agent_models.option_not_set")}
-                </span>
-              </Show>
+              <span class="executor-chip-role">{t("executor.role_opencorvus")}</span>
+              <span class="executor-chip-provider">{openCorvusParts().provider}</span>
+              <span class="executor-chip-name">
+                {openCorvusParts().name || t("agent_models.option_not_set")}
+                <Show when={customSuffix()}>
+                  <span class="executor-chip-custom">{customSuffix()}</span>
+                </Show>
+              </span>
             </span>
+            <Show when={hasExternalExecutorModel()}>
+              <span
+                class="executor-chip-model"
+                data-source="executor"
+                data-empty="false"
+                title={t("executor.model_explainer_external", {
+                  executor: activeLabel(),
+                  model: externalExecutorModel(),
+                })}
+              >
+                <span class="executor-chip-role">{activeLabel()}</span>
+                <span class="executor-chip-provider">{externalExecutorParts().provider}</span>
+                <span class="executor-chip-name">
+                  {externalExecutorParts().name}
+                </span>
+              </span>
+            </Show>
           </span>
           <span class="executor-chip-caret" aria-hidden="true">
             <Icon name="caret-up" size={8} />
@@ -229,13 +250,15 @@ export function ExecutorSelector() {
               </div>
               <div class="executor-menu-summary-grid">
                 <div class="executor-menu-summary-row">
-                  <span>{t("executor.role_plan")}</span>
-                  <strong>{orchestratorModel() || t("agent_models.option_not_set")}</strong>
+                  <span>{t("executor.role_opencorvus")}</span>
+                  <strong>{openCorvusDisplayModel()}</strong>
                 </div>
-                <div class="executor-menu-summary-row">
-                  <span>{t("executor.role_edit")}</span>
-                  <strong>{executorModelText() || t("agent_models.option_not_set")}</strong>
-                </div>
+                <Show when={hasExternalExecutorModel()}>
+                  <div class="executor-menu-summary-row">
+                    <span>{activeLabel()}</span>
+                    <strong>{externalExecutorModel()}</strong>
+                  </div>
+                </Show>
               </div>
             </div>
             <For each={executors()}>
