@@ -22,7 +22,30 @@ export namespace TerminalProfile {
     command: string
     args: string[]
     env: Record<string, string>
+    icon: Icon
   }
+
+  export const Icon = z.enum(["terminal", "powershell", "command-prompt", "bash"])
+  export type Icon = z.infer<typeof Icon>
+
+  export const PublicInfo = z
+    .object({
+      id: z.string().min(1),
+      label: z.string().min(1),
+      icon: Icon,
+    })
+    .meta({ ref: "TerminalProfile" })
+
+  export type PublicInfo = z.infer<typeof PublicInfo>
+
+  export const ListResponse = z
+    .object({
+      defaultProfileID: z.string().min(1),
+      profiles: z.array(PublicInfo),
+    })
+    .meta({ ref: "TerminalProfileList" })
+
+  export type ListResponse = z.infer<typeof ListResponse>
 
   function normalizeForCompare(value: string): string {
     return process.platform === "win32" ? value.toLowerCase() : value
@@ -64,22 +87,57 @@ export namespace TerminalProfile {
     return resolved
   }
 
-  export async function resolve(profileID: string): Promise<Resolved> {
+  function configuredProfileIcon(profile: Config.TerminalProfile): Icon {
+    return profile.icon ?? "terminal"
+  }
+
+  async function registry(): Promise<{ defaultProfileID: string; profiles: Record<string, Resolved> }> {
     const config = await Config.get()
     const terminal = config.terminal
     if (!terminal?.profiles || Object.keys(terminal.profiles).length === 0) {
       throw new ConfigError({ message: "Terminal profiles are not configured" })
     }
-    const profile = terminal.profiles[profileID]
+    if (!terminal.default_profile_id) {
+      throw new ConfigError({ message: "Terminal default_profile_id is not configured" })
+    }
+    if (!terminal.profiles[terminal.default_profile_id]) {
+      throw new ConfigError({
+        message: `Terminal default_profile_id references unknown profile: ${terminal.default_profile_id}`,
+      })
+    }
+
+    const profiles: Record<string, Resolved> = {}
+    for (const [id, profile] of Object.entries(terminal.profiles)) {
+      profiles[id] = {
+        id,
+        label: profile.label,
+        command: resolveCommand(profile.command),
+        args: [...profile.args],
+        env: { ...profile.env },
+        icon: configuredProfileIcon(profile),
+      }
+    }
+    return { defaultProfileID: terminal.default_profile_id, profiles }
+  }
+
+  export async function resolve(profileID: string): Promise<Resolved> {
+    const { profiles } = await registry()
+    const profile = profiles[profileID]
     if (!profile) {
       throw new ConfigError({ message: `Unknown terminal profile: ${profileID}` })
     }
+    return profile
+  }
+
+  export async function list(): Promise<ListResponse> {
+    const result = await registry()
     return {
-      id: profileID,
-      label: profile.label,
-      command: resolveCommand(profile.command),
-      args: [...profile.args],
-      env: { ...profile.env },
+      defaultProfileID: result.defaultProfileID,
+      profiles: Object.values(result.profiles).map((profile) => ({
+        id: profile.id,
+        label: profile.label,
+        icon: profile.icon,
+      })),
     }
   }
 
@@ -106,6 +164,7 @@ export namespace TerminalProfile {
             TERM: "xterm-256color",
             COLORTERM: "truecolor",
           },
+          icon: process.platform === "win32" ? "command-prompt" : "terminal",
         },
       },
     }

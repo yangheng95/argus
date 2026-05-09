@@ -1033,6 +1033,10 @@ export namespace Config {
       command: z.string().min(1).describe("Executable path or command resolved by the configured environment"),
       args: z.array(z.string()).optional().default([]).describe("Executable arguments, not shell-split from a string"),
       env: z.record(z.string(), z.string()).optional().default({}).describe("Profile-owned terminal environment variables"),
+      icon: z
+        .enum(["terminal", "powershell", "command-prompt", "bash", "claude-code", "codex", "gemini", "copilot", "glm"])
+        .optional()
+        .describe("Terminal profile icon hint surfaced by Overlay launch controls"),
     })
     .strict()
     .meta({

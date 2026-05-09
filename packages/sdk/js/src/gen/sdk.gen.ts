@@ -160,6 +160,8 @@ import type {
   PtyGetErrors,
   PtyGetResponses,
   PtyListResponses,
+  PtyProfilesErrors,
+  PtyProfilesResponses,
   PtyRemoveErrors,
   PtyRemoveResponses,
   PtyUpdateErrors,
@@ -687,13 +689,11 @@ export class Pty extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      command?: string
-      args?: Array<string>
+      profileID?: string
       cwd?: string
+      cols?: number
+      rows?: number
       title?: string
-      env?: {
-        [key: string]: string
-      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -703,11 +703,11 @@ export class Pty extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
-            { in: "body", key: "command" },
-            { in: "body", key: "args" },
+            { in: "body", key: "profileID" },
             { in: "body", key: "cwd" },
+            { in: "body", key: "cols" },
+            { in: "body", key: "rows" },
             { in: "body", key: "title" },
-            { in: "body", key: "env" },
           ],
         },
       ],
@@ -721,6 +721,25 @@ export class Pty extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * List terminal profiles
+   *
+   * List server-owned terminal profiles available for new pseudo-terminal (PTY) sessions.
+   */
+  public profiles<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<PtyProfilesResponses, PtyProfilesErrors, ThrowOnError>({
+      url: "/pty/profiles",
+      ...options,
+      ...params,
     })
   }
 
@@ -4963,8 +4982,6 @@ export class Task extends HeyApiClient {
       priority?: "critical" | "high" | "normal" | "low"
       kind?: "workflow" | "build"
       budget?: {
-        maxRuns?: number
-        maxFixRuns?: number
         maxExecutorGroups?: number
       }
       checks?: {
@@ -5933,8 +5950,6 @@ export class Task extends HeyApiClient {
       taskID: string
       directory?: string
       budget?: {
-        maxRuns?: number
-        maxFixRuns?: number
         maxExecutorGroups?: number
       } | null
     },

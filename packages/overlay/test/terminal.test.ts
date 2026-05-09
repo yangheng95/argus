@@ -108,6 +108,9 @@ describe("terminal client", () => {
 
     expect(component).toContain("@xterm/xterm");
     expect(component).toContain("@xterm/addon-fit");
+    expect(component).toContain("listTerminalProfiles");
+    expect(component).toContain('data-ui="workspace-terminal-profile"');
+    expect(component).not.toContain('profileID: "default"');
     expect(component).not.toContain("child_process");
     expect(component).not.toContain("__TAURI__");
     expect(pkg).toContain('"@xterm/xterm"');

@@ -12,6 +12,19 @@ export interface TerminalInfo {
   cursor: number;
 }
 
+export interface TerminalProfile {
+  id: string;
+  label: string;
+  icon: TerminalProfileIcon;
+}
+
+export type TerminalProfileIcon = "terminal" | "powershell" | "command-prompt" | "bash";
+
+export interface TerminalProfileList {
+  defaultProfileID: string;
+  profiles: TerminalProfile[];
+}
+
 export type TerminalServerMessage =
   | { type: "ready"; cursor: number; info: TerminalInfo }
   | { type: "output"; cursor: number; data: string }
@@ -40,6 +53,10 @@ const MAX_PENDING_CLIENT_MESSAGES = 1024;
 
 export async function listTerminals(): Promise<TerminalInfo[]> {
   return await apiJson("pty");
+}
+
+export async function listTerminalProfiles(): Promise<TerminalProfileList> {
+  return await apiJson("pty/profiles");
 }
 
 export async function createTerminal(input: {

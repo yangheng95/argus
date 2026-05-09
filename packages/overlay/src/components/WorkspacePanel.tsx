@@ -25,6 +25,10 @@ export interface WorkspacePanelProps {
   onClose: () => void;
   /** Active project directory for workspace-owned tools. */
   directory: string;
+  /** Profile selected from the workspace command dock terminal dropdown. */
+  terminalLaunchProfileID?: string;
+  /** Increments for each terminal launch request from the command dock. */
+  terminalLaunchNonce?: number;
 }
 
 export function WorkspacePanel(props: WorkspacePanelProps) {
@@ -141,7 +145,11 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
           data-active={isTerminal() ? "true" : "false"}
         >
           <Show when={isTerminal()}>
-            <WorkspaceTerminal directory={props.directory} />
+            <WorkspaceTerminal
+              directory={props.directory}
+              launchProfileID={props.terminalLaunchProfileID}
+              launchNonce={props.terminalLaunchNonce}
+            />
           </Show>
         </div>
       </div>

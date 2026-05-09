@@ -534,6 +534,140 @@
   box-shadow: none;
 }
 
+.workspace-terminal-select {
+  appearance: none;
+  min-width: 0;
+  width: calc(42px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(4px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--font);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  cursor: pointer;
+}
+
+.workspace-terminal-select:hover,
+.workspace-terminal-select:focus-visible,
+.workspace-terminal-select[data-open="true"] {
+  background: var(--oc-control-bg-hover);
+  color: var(--text-strong);
+  outline: none;
+}
+
+.workspace-terminal-select:disabled {
+  cursor: default;
+  opacity: var(--ui-opacity-disabled);
+}
+
+.workspace-terminal-select-icon,
+.workspace-terminal-select-caret,
+.workspace-terminal-option-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.workspace-terminal-select-icon {
+  width: calc(20px * var(--ui-scale));
+  height: calc(20px * var(--ui-scale));
+  color: var(--accent);
+}
+
+.workspace-terminal-select-caret {
+  color: var(--text-muted);
+}
+
+.workspace-terminal-select[data-open="true"] .workspace-terminal-select-caret {
+  color: var(--text-strong);
+  transform: rotate(180deg);
+}
+
+.workspace-terminal-menu {
+  position: fixed;
+  z-index: var(--ui-z-titlebar);
+  width: max-content;
+  min-width: calc(180px * var(--ui-scale));
+  display: grid;
+  gap: calc(3px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--menu-panel-bg);
+  box-shadow: var(--shadow-lg);
+}
+
+.workspace-terminal-menu[hidden] {
+  display: none;
+}
+
+.workspace-terminal-option {
+  appearance: none;
+  width: 100%;
+  min-height: calc(30px * var(--ui-scale));
+  display: grid;
+  grid-template-columns: calc(22px * var(--ui-scale)) minmax(0, 1fr);
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--font);
+  font-size: var(--ui-font-control);
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-terminal-option:hover,
+.workspace-terminal-option:focus-visible {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+  outline: none;
+}
+
+.workspace-terminal-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-terminal-option-icon {
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+}
+
+.workspace-terminal-select-icon[data-terminal-icon="powershell"],
+.workspace-terminal-option-icon[data-terminal-icon="powershell"] {
+  color: #2671be;
+}
+
+.workspace-terminal-select-icon[data-terminal-icon="command-prompt"],
+.workspace-terminal-option-icon[data-terminal-icon="command-prompt"] {
+  color: var(--text-strong);
+}
+
+.workspace-terminal-select-icon[data-terminal-icon="bash"],
+.workspace-terminal-option-icon[data-terminal-icon="bash"] {
+  color: var(--good);
+}
+
+.workspace-terminal-select[aria-pressed="true"] {
+  background: var(--oc-control-bg-hover);
+  color: var(--text-strong);
+}
+
+
 .workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"] {
   --oc-button-color: var(--workspace-editor-color, var(--text-soft));
 }

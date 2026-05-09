@@ -656,31 +656,34 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "command": {
-                    "type": "string"
-                  },
-                  "args": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
+                  "profileID": {
+                    "type": "string",
+                    "minLength": 1
                   },
                   "cwd": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "cols": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "rows": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
                   },
                   "title": {
                     "type": "string"
-                  },
-                  "env": {
-                    "type": "object",
-                    "propertyNames": {
-                      "type": "string"
-                    },
-                    "additionalProperties": {
-                      "type": "string"
-                    }
                   }
-                }
+                },
+                "required": [
+                  "profileID",
+                  "cwd",
+                  "cols",
+                  "rows"
+                ]
               }
             }
           }
@@ -689,6 +692,50 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.pty.create({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/pty/profiles": {
+      "get": {
+        "operationId": "pty.profiles",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List terminal profiles",
+        "description": "List server-owned terminal profiles available for new pseudo-terminal (PTY) sessions.",
+        "responses": {
+          "200": {
+            "description": "Terminal profile list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalProfileList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.pty.profiles({\n  ...\n})"
           }
         ]
       }
@@ -800,10 +847,14 @@
                     "type": "object",
                     "properties": {
                       "rows": {
-                        "type": "number"
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
                       },
                       "cols": {
-                        "type": "number"
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
                       }
                     },
                     "required": [
@@ -11077,16 +11128,6 @@
                   "budget": {
                     "type": "object",
                     "properties": {
-                      "maxRuns": {
-                        "type": "integer",
-                        "exclusiveMinimum": 0,
-                        "maximum": 9007199254740991
-                      },
-                      "maxFixRuns": {
-                        "type": "integer",
-                        "exclusiveMinimum": 0,
-                        "maximum": 9007199254740991
-                      },
                       "maxExecutorGroups": {
                         "type": "integer",
                         "exclusiveMinimum": 0,
@@ -12542,16 +12583,6 @@
                               "budget": {
                                 "type": "object",
                                 "properties": {
-                                  "maxRuns": {
-                                    "type": "integer",
-                                    "exclusiveMinimum": 0,
-                                    "maximum": 9007199254740991
-                                  },
-                                  "maxFixRuns": {
-                                    "type": "integer",
-                                    "exclusiveMinimum": 0,
-                                    "maximum": 9007199254740991
-                                  },
                                   "maxExecutorGroups": {
                                     "type": "integer",
                                     "exclusiveMinimum": 0,
@@ -13209,16 +13240,6 @@
                               "budget": {
                                 "type": "object",
                                 "properties": {
-                                  "maxRuns": {
-                                    "type": "integer",
-                                    "exclusiveMinimum": 0,
-                                    "maximum": 9007199254740991
-                                  },
-                                  "maxFixRuns": {
-                                    "type": "integer",
-                                    "exclusiveMinimum": 0,
-                                    "maximum": 9007199254740991
-                                  },
                                   "maxExecutorGroups": {
                                     "type": "integer",
                                     "exclusiveMinimum": 0,
@@ -13937,16 +13958,6 @@
                     "budget": {
                       "type": "object",
                       "properties": {
-                        "maxRuns": {
-                          "type": "integer",
-                          "exclusiveMinimum": 0,
-                          "maximum": 9007199254740991
-                        },
-                        "maxFixRuns": {
-                          "type": "integer",
-                          "exclusiveMinimum": 0,
-                          "maximum": 9007199254740991
-                        },
                         "maxExecutorGroups": {
                           "type": "integer",
                           "exclusiveMinimum": 0,
@@ -14234,16 +14245,6 @@
                         "budget": {
                           "type": "object",
                           "properties": {
-                            "maxRuns": {
-                              "type": "integer",
-                              "exclusiveMinimum": 0,
-                              "maximum": 9007199254740991
-                            },
-                            "maxFixRuns": {
-                              "type": "integer",
-                              "exclusiveMinimum": 0,
-                              "maximum": 9007199254740991
-                            },
                             "maxExecutorGroups": {
                               "type": "integer",
                               "exclusiveMinimum": 0,
@@ -15363,16 +15364,6 @@
                             "budget": {
                               "type": "object",
                               "properties": {
-                                "maxRuns": {
-                                  "type": "integer",
-                                  "exclusiveMinimum": 0,
-                                  "maximum": 9007199254740991
-                                },
-                                "maxFixRuns": {
-                                  "type": "integer",
-                                  "exclusiveMinimum": 0,
-                                  "maximum": 9007199254740991
-                                },
                                 "maxExecutorGroups": {
                                   "type": "integer",
                                   "exclusiveMinimum": 0,
@@ -17616,16 +17607,6 @@
                         "budget": {
                           "type": "object",
                           "properties": {
-                            "maxRuns": {
-                              "type": "integer",
-                              "exclusiveMinimum": 0,
-                              "maximum": 9007199254740991
-                            },
-                            "maxFixRuns": {
-                              "type": "integer",
-                              "exclusiveMinimum": 0,
-                              "maximum": 9007199254740991
-                            },
                             "maxExecutorGroups": {
                               "type": "integer",
                               "exclusiveMinimum": 0,
@@ -23027,16 +23008,6 @@
                       {
                         "type": "object",
                         "properties": {
-                          "maxRuns": {
-                            "type": "integer",
-                            "exclusiveMinimum": 0,
-                            "maximum": 9007199254740991
-                          },
-                          "maxFixRuns": {
-                            "type": "integer",
-                            "exclusiveMinimum": 0,
-                            "maximum": 9007199254740991
-                          },
                           "maxExecutorGroups": {
                             "type": "integer",
                             "exclusiveMinimum": 0,
@@ -24670,7 +24641,7 @@
                     "default": 300000,
                     "type": "integer",
                     "minimum": 1000,
-                    "maximum": 1800000
+                    "maximum": 3600000
                   }
                 },
                 "required": [
@@ -30772,6 +30743,9 @@
             "type": "string",
             "pattern": "^pty.*"
           },
+          "profileID": {
+            "type": "string"
+          },
           "title": {
             "type": "string"
           },
@@ -30796,16 +30770,23 @@
           },
           "pid": {
             "type": "number"
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
           "id",
+          "profileID",
           "title",
           "command",
           "args",
           "cwd",
           "status",
-          "pid"
+          "pid",
+          "cursor"
         ]
       },
       "Event.pty.created": {
@@ -32280,6 +32261,77 @@
         ],
         "additionalProperties": false
       },
+      "TerminalProfileConfig": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "description": "Human-readable terminal profile label",
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "description": "Executable path or command resolved by the configured environment",
+            "type": "string",
+            "minLength": 1
+          },
+          "args": {
+            "description": "Executable arguments, not shell-split from a string",
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "env": {
+            "description": "Profile-owned terminal environment variables",
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "icon": {
+            "description": "Terminal profile icon hint surfaced by Overlay launch controls",
+            "type": "string",
+            "enum": [
+              "terminal",
+              "powershell",
+              "command-prompt",
+              "bash"
+            ]
+          }
+        },
+        "required": [
+          "label",
+          "command"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalConfig": {
+        "description": "Server-owned Overlay terminal configuration.",
+        "type": "object",
+        "properties": {
+          "default_profile_id": {
+            "description": "Default terminal profile id used by Overlay",
+            "type": "string",
+            "minLength": 1
+          },
+          "profiles": {
+            "description": "Server-owned terminal profiles",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TerminalProfileConfig"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "Config": {
         "type": "object",
         "properties": {
@@ -32659,6 +32711,9 @@
               }
             }
           },
+          "terminal": {
+            "$ref": "#/components/schemas/TerminalConfig"
+          },
           "compaction": {
             "type": "object",
             "properties": {
@@ -32915,18 +32970,6 @@
                     "type": "boolean"
                   }
                 }
-              },
-              "max_runs": {
-                "description": "Maximum total task runs",
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 9007199254740991
-              },
-              "max_fix_runs": {
-                "description": "Maximum fix runs after failure",
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
               },
               "max_executor_groups": {
                 "description": "Maximum parallel executor groups",
@@ -33221,6 +33264,42 @@
         "required": [
           "name",
           "data"
+        ]
+      },
+      "TerminalProfile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ]
+      },
+      "TerminalProfileList": {
+        "type": "object",
+        "properties": {
+          "defaultProfileID": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TerminalProfile"
+            }
+          }
+        },
+        "required": [
+          "defaultProfileID",
+          "profiles"
         ]
       },
       "Model": {

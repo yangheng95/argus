@@ -131,6 +131,8 @@ const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
   kind: "diff",
   target: { filePath: "" },
 });
+const [terminalLaunchProfileID, setTerminalLaunchProfileID] = createSignal("");
+const [terminalLaunchNonce, setTerminalLaunchNonce] = createSignal(0);
 
 function currentPreviewKey(): string {
   return previewRequestKey(boardStore.selectedTaskID || boardStore.board?.task?.id, boardStore.snapshotVersion);
@@ -392,8 +394,11 @@ function openWorkspaceFile(filePath: string): void {
   openWorkspace({ kind: "file", filePath });
 }
 
-/** Open (or switch to) the workspace terminal. */
-function openWorkspaceTerminal(): void {
+/** Open (or switch to) the workspace terminal with the selected terminal profile. */
+function openWorkspaceTerminal(profileID: string): void {
+  if (!profileID) throw new Error("Terminal profile ID is required");
+  setTerminalLaunchProfileID(profileID);
+  setTerminalLaunchNonce((value) => value + 1);
   openWorkspace({ kind: "terminal" });
 }
 
@@ -530,6 +535,8 @@ if (workspaceMountEl) {
         onSelectView={setWorkspaceView}
         onClose={closeWorkspace}
         directory={activeDirectory()}
+        terminalLaunchProfileID={terminalLaunchProfileID()}
+        terminalLaunchNonce={terminalLaunchNonce()}
       />
     ),
     workspaceMountEl,

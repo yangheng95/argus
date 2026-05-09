@@ -1433,12 +1433,14 @@ export type EventSessionError = {
 
 export type Pty = {
   id: string
+  profileID: string
   title: string
   command: string
   args: Array<string>
   cwd: string
   status: "running" | "exited"
   pid: number
+  cursor: number
 }
 
 export type EventPtyCreated = {
@@ -2216,6 +2218,47 @@ export type McpRemoteConfig = {
   timeout?: number
 }
 
+export type TerminalProfileConfig = {
+  /**
+   * Human-readable terminal profile label
+   */
+  label: string
+  /**
+   * Executable path or command resolved by the configured environment
+   */
+  command: string
+  /**
+   * Executable arguments, not shell-split from a string
+   */
+  args?: Array<string>
+  /**
+   * Profile-owned terminal environment variables
+   */
+  env?: {
+    [key: string]: string
+  }
+  /**
+   * Terminal profile icon hint surfaced by Overlay launch controls
+   */
+  icon?: "terminal" | "powershell" | "command-prompt" | "bash"
+}
+
+/**
+ * Server-owned Overlay terminal configuration.
+ */
+export type TerminalConfig = {
+  /**
+   * Default terminal profile id used by Overlay
+   */
+  default_profile_id?: string
+  /**
+   * Server-owned terminal profiles
+   */
+  profiles?: {
+    [key: string]: TerminalProfileConfig
+  }
+}
+
 export type Config = {
   /**
    * JSON schema reference for configuration validation
@@ -2377,6 +2420,7 @@ export type Config = {
      */
     ports?: Array<number>
   }
+  terminal?: TerminalConfig
   compaction?: {
     /**
      * Enable automatic compaction when context is full
@@ -2550,14 +2594,6 @@ export type Config = {
       fail_on_information_missing?: boolean
     }
     /**
-     * Maximum total task runs
-     */
-    max_runs?: number
-    /**
-     * Maximum fix runs after failure
-     */
-    max_fix_runs?: number
-    /**
      * Maximum parallel executor groups
      */
     max_executor_groups?: number
@@ -2702,6 +2738,16 @@ export type NotFoundError = {
   data: {
     message: string
   }
+}
+
+export type TerminalProfile = {
+  id: string
+  label: string
+}
+
+export type TerminalProfileList = {
+  defaultProfileID: string
+  profiles: Array<TerminalProfile>
 }
 
 export type Model = {
@@ -3430,13 +3476,11 @@ export type PtyListResponse = PtyListResponses[keyof PtyListResponses]
 
 export type PtyCreateData = {
   body?: {
-    command?: string
-    args?: Array<string>
-    cwd?: string
+    profileID: string
+    cwd: string
+    cols: number
+    rows: number
     title?: string
-    env?: {
-      [key: string]: string
-    }
   }
   path?: never
   query?: {
@@ -3462,6 +3506,33 @@ export type PtyCreateResponses = {
 }
 
 export type PtyCreateResponse = PtyCreateResponses[keyof PtyCreateResponses]
+
+export type PtyProfilesData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/pty/profiles"
+}
+
+export type PtyProfilesErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PtyProfilesError = PtyProfilesErrors[keyof PtyProfilesErrors]
+
+export type PtyProfilesResponses = {
+  /**
+   * Terminal profile list
+   */
+  200: TerminalProfileList
+}
+
+export type PtyProfilesResponse = PtyProfilesResponses[keyof PtyProfilesResponses]
 
 export type PtyRemoveData = {
   body?: never
@@ -7372,8 +7443,6 @@ export type TaskCreateData = {
     priority?: "critical" | "high" | "normal" | "low"
     kind?: "workflow" | "build"
     budget?: {
-      maxRuns?: number
-      maxFixRuns?: number
       maxExecutorGroups?: number
     }
     checks?: {
@@ -7803,8 +7872,6 @@ export type TaskListResponses = {
         blockingReason?: string
         error?: string
         budget?: {
-          maxRuns?: number
-          maxFixRuns?: number
           maxExecutorGroups?: number
         }
         metadata?: {
@@ -7950,8 +8017,6 @@ export type TaskGlobalListResponses = {
         blockingReason?: string
         error?: string
         budget?: {
-          maxRuns?: number
-          maxFixRuns?: number
           maxExecutorGroups?: number
         }
         metadata?: {
@@ -8178,8 +8243,6 @@ export type TaskGetResponses = {
     blockingReason?: string
     error?: string
     budget?: {
-      maxRuns?: number
-      maxFixRuns?: number
       maxExecutorGroups?: number
     }
     metadata?: {
@@ -8251,8 +8314,6 @@ export type TaskProgressResponses = {
       blockingReason?: string
       error?: string
       budget?: {
-        maxRuns?: number
-        maxFixRuns?: number
         maxExecutorGroups?: number
       }
       metadata?: {
@@ -8522,8 +8583,6 @@ export type TaskConversationResponses = {
         blockingReason?: string
         error?: string
         budget?: {
-          maxRuns?: number
-          maxFixRuns?: number
           maxExecutorGroups?: number
         }
         metadata?: {
@@ -9068,8 +9127,6 @@ export type TaskBoardResponses = {
       blockingReason?: string
       error?: string
       budget?: {
-        maxRuns?: number
-        maxFixRuns?: number
         maxExecutorGroups?: number
       }
       metadata?: {
@@ -10761,8 +10818,6 @@ export type GoalUpdateResponse = GoalUpdateResponses[keyof GoalUpdateResponses]
 export type TaskUpdateBudgetData = {
   body?: {
     budget: {
-      maxRuns?: number
-      maxFixRuns?: number
       maxExecutorGroups?: number
     } | null
   }
