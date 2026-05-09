@@ -614,7 +614,7 @@ test(
         }
         if (path === "/global/tasks") return send(data.tasks)
         if (path === "/executor") return send(data.executors)
-        if (path === "/pty/profiles") return send({ profiles: [] })
+        if (path === "/terminal/profiles") return send({ profiles: [] })
         if (path === "/coding/cli/profiles") return send({ profiles: [] })
         if (path === "/preview/frontend") {
           return send({ url: null, source: null, port: null, checkedPorts: [], reason: "not_detected" })

@@ -18,7 +18,6 @@ export async function listCodingCliProfiles(): Promise<CodingCliProfileList> {
 
 export async function openCodingCli(input: {
   cliID: string;
-  terminalProfileID: string;
   cwd: string;
 }): Promise<void> {
   await apiJson("coding/cli/open", {

@@ -1431,47 +1431,6 @@ export type EventSessionDiff = {
   }
 }
 
-export type Pty = {
-  id: string
-  profileID: string
-  title: string
-  command: string
-  args: Array<string>
-  cwd: string
-  status: "running" | "exited"
-  pid: number
-  cursor: number
-}
-
-export type EventPtyCreated = {
-  type: "pty.created"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyUpdated = {
-  type: "pty.updated"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyExited = {
-  type: "pty.exited"
-  properties: {
-    id: string
-    exitCode: number
-  }
-}
-
-export type EventPtyDeleted = {
-  type: "pty.deleted"
-  properties: {
-    id: string
-  }
-}
-
 export type EventWorkspaceReady = {
   type: "workspace.ready"
   properties: {
@@ -1566,10 +1525,6 @@ export type Event =
   | EventSessionUpdated
   | EventSessionDeleted
   | EventSessionDiff
-  | EventPtyCreated
-  | EventPtyUpdated
-  | EventPtyExited
-  | EventPtyDeleted
   | EventWorkspaceReady
   | EventWorkspaceFailed
 
@@ -2751,6 +2706,10 @@ export type TerminalProfileList = {
   profiles: Array<TerminalProfile>
 }
 
+export type SystemTerminalOpenResponse = {
+  ok: boolean
+}
+
 export type Model = {
   id: string
   providerID: string
@@ -3471,205 +3430,62 @@ export type ProjectUpdateResponses = {
 
 export type ProjectUpdateResponse = ProjectUpdateResponses[keyof ProjectUpdateResponses]
 
-export type PtyListData = {
+export type TerminalProfilesData = {
   body?: never
   path?: never
   query?: {
     directory?: string
   }
-  url: "/pty"
+  url: "/terminal/profiles"
 }
 
-export type PtyListResponses = {
-  /**
-   * List of sessions
-   */
-  200: Array<Pty>
-}
-
-export type PtyListResponse = PtyListResponses[keyof PtyListResponses]
-
-export type PtyCreateData = {
-  body?: {
-    profileID: string
-    cwd: string
-    cols: number
-    rows: number
-    title?: string
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/pty"
-}
-
-export type PtyCreateErrors = {
+export type TerminalProfilesErrors = {
   /**
    * Bad request
    */
   400: BadRequestError
 }
 
-export type PtyCreateError = PtyCreateErrors[keyof PtyCreateErrors]
+export type TerminalProfilesError = TerminalProfilesErrors[keyof TerminalProfilesErrors]
 
-export type PtyCreateResponses = {
-  /**
-   * Created session
-   */
-  200: Pty
-}
-
-export type PtyCreateResponse = PtyCreateResponses[keyof PtyCreateResponses]
-
-export type PtyProfilesData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/pty/profiles"
-}
-
-export type PtyProfilesErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type PtyProfilesError = PtyProfilesErrors[keyof PtyProfilesErrors]
-
-export type PtyProfilesResponses = {
+export type TerminalProfilesResponses = {
   /**
    * Terminal profile list
    */
   200: TerminalProfileList
 }
 
-export type PtyProfilesResponse = PtyProfilesResponses[keyof PtyProfilesResponses]
+export type TerminalProfilesResponse = TerminalProfilesResponses[keyof TerminalProfilesResponses]
 
-export type PtyRemoveData = {
-  body?: never
-  path: {
-    ptyID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/pty/{ptyID}"
-}
-
-export type PtyRemoveErrors = {
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type PtyRemoveError = PtyRemoveErrors[keyof PtyRemoveErrors]
-
-export type PtyRemoveResponses = {
-  /**
-   * Session removed
-   */
-  200: boolean
-}
-
-export type PtyRemoveResponse = PtyRemoveResponses[keyof PtyRemoveResponses]
-
-export type PtyGetData = {
-  body?: never
-  path: {
-    ptyID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/pty/{ptyID}"
-}
-
-export type PtyGetErrors = {
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type PtyGetError = PtyGetErrors[keyof PtyGetErrors]
-
-export type PtyGetResponses = {
-  /**
-   * Session info
-   */
-  200: Pty
-}
-
-export type PtyGetResponse = PtyGetResponses[keyof PtyGetResponses]
-
-export type PtyUpdateData = {
+export type TerminalOpenData = {
   body?: {
-    title?: string
-    size?: {
-      rows: number
-      cols: number
-    }
+    cwd: string
+    profileID?: string
   }
-  path: {
-    ptyID: string
-  }
+  path?: never
   query?: {
     directory?: string
   }
-  url: "/pty/{ptyID}"
+  url: "/terminal/open"
 }
 
-export type PtyUpdateErrors = {
+export type TerminalOpenErrors = {
   /**
    * Bad request
    */
   400: BadRequestError
 }
 
-export type PtyUpdateError = PtyUpdateErrors[keyof PtyUpdateErrors]
+export type TerminalOpenError = TerminalOpenErrors[keyof TerminalOpenErrors]
 
-export type PtyUpdateResponses = {
+export type TerminalOpenResponses = {
   /**
-   * Updated session
+   * Terminal launch result
    */
-  200: Pty
+  200: SystemTerminalOpenResponse
 }
 
-export type PtyUpdateResponse = PtyUpdateResponses[keyof PtyUpdateResponses]
-
-export type PtyConnectData = {
-  body?: never
-  path: {
-    ptyID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/pty/{ptyID}/connect"
-}
-
-export type PtyConnectErrors = {
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type PtyConnectError = PtyConnectErrors[keyof PtyConnectErrors]
-
-export type PtyConnectResponses = {
-  /**
-   * Connected session
-   */
-  200: boolean
-}
-
-export type PtyConnectResponse = PtyConnectResponses[keyof PtyConnectResponses]
+export type TerminalOpenResponse = TerminalOpenResponses[keyof TerminalOpenResponses]
 
 export type ConfigGetData = {
   body?: never
@@ -6733,7 +6549,6 @@ export type CodingCliProfilesResponse = CodingCliProfilesResponses[keyof CodingC
 export type CodingCliOpenData = {
   body?: {
     cliID: string
-    terminalProfileID: string
     cwd: string
   }
   path?: never

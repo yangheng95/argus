@@ -18,7 +18,7 @@ import { EngineService } from "@/task-api"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Config } from "@/config/config"
 import { ensureTaskMessageProtocolBridge } from "@/orchestrator/protocol/message-bridge"
-import { TerminalProfile } from "@/pty/profile"
+import { TerminalProfile } from "@/system-terminal/profile"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
