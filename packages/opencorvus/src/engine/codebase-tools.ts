@@ -36,6 +36,24 @@ function denseMirrorArtifactReason(relPath: string): string | null {
   return null
 }
 
+function isMirrorPromptExcerpt(relPath: string): boolean {
+  const normalized = relPath.replace(/\\/g, "/")
+  return (
+    normalized.endsWith("/mirror/page-ir.xml") ||
+    normalized === "mirror/page-ir.xml" ||
+    normalized.endsWith("/mirror/shared-context.md") ||
+    normalized === "mirror/shared-context.md"
+  )
+}
+
+function renderMirrorArtifactBoundary(filePath: string): string {
+  return (
+    `Error: ${filePath} is a bounded mirror artifact. ` +
+    "Do not page dense mirror artifacts through read_file. " +
+    "Use the returned excerpt, mirror/shared-context.md, mirror/page-ir.xml, mirror tool summaries, and the evidence manifest to finalize the PRD/SPEC."
+  )
+}
+
 function detectBinaryKind(buf: Buffer, filePath: string): string | null {
   if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "a PNG image"
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "a JPEG image"
@@ -94,11 +112,14 @@ export function createCodebaseTools(projectDir?: string) {
           )
         }
         const denseMirrorArtifact = denseMirrorArtifactReason(filePath)
+        if (denseMirrorArtifact && (start_line ?? 1) > 1) {
+          return renderMirrorArtifactBoundary(filePath)
+        }
         if (denseMirrorArtifact && (max_lines ?? 300) > DENSE_MIRROR_ARTIFACT_MAX_LINES) {
           return (
             `Error: ${filePath} is ${denseMirrorArtifact}. ` +
             `Use mirror/page-ir.xml, mirror/shared-context.md, and mirror tool summaries as the PRD/SPEC working surface. ` +
-            `If a specific gap requires this artifact, call read_file with max_lines <= ${DENSE_MIRROR_ARTIFACT_MAX_LINES}.`
+            `If a specific gap requires this artifact, call read_file from line 1 with max_lines <= ${DENSE_MIRROR_ARTIFACT_MAX_LINES}.`
           )
         }
         try {
@@ -128,6 +149,13 @@ export function createCodebaseTools(projectDir?: string) {
           }).join("\n")
           const remaining = lines.length - (startIndex + slice.length)
           if (remaining > 0) {
+            if (denseMirrorArtifact || isMirrorPromptExcerpt(filePath)) {
+              return (
+                numbered +
+                `\n... (${remaining} more lines, total ${lines.length}; bounded mirror artifact excerpt returned. ` +
+                "Do not page this artifact repeatedly. Use this excerpt with mirror summaries and finalize the PRD/SPEC.)"
+              )
+            }
             return (
               numbered +
               `\n... (${remaining} more lines, total ${lines.length}; ` +
