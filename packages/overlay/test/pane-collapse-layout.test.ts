@@ -85,9 +85,10 @@ test("panel header controls collapse side panes in place", async () => {
     expect(await page.$('.workspace-command-dock [data-ui="workspace-terminal-open"]')).not.toBeNull();
     expect(await page.$('.workspace-command-dock [data-terminal-icon="powershell"] svg')).not.toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-coding-cli-launchers")).not.toBeNull();
-    expect(await page.$(".workspace-command-dock .workspace-coding-cli-select")).not.toBeNull();
+    expect(await page.$('.workspace-command-dock [data-ui="workspace-coding-cli-open-default"]')).not.toBeNull();
+    expect(await page.$('.workspace-command-dock [data-ui="workspace-coding-cli-menu"]')).not.toBeNull();
     await page.waitForFunction(() => {
-      const button = document.querySelector<HTMLButtonElement>(".workspace-command-dock .workspace-coding-cli-select");
+      const button = document.querySelector<HTMLButtonElement>('.workspace-command-dock [data-ui="workspace-coding-cli-open-default"]');
       return !!button && !button.disabled;
     });
     expect(await page.$('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]')).toBeNull();
@@ -97,22 +98,23 @@ test("panel header controls collapse side panes in place", async () => {
     expect(await page.$('.sidebar-header [data-ui="sidebar-header-collapse-toggle"]')).not.toBeNull();
     expect(await page.$('.sections-header [data-ui="right-panel-header-collapse-toggle"]')).not.toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-editor-launchers")).not.toBeNull();
-    expect(await page.$(".workspace-command-dock .workspace-editor-select")).not.toBeNull();
+    expect(await page.$('.workspace-command-dock [data-ui="workspace-editor-open-default"]')).not.toBeNull();
+    expect(await page.$('.workspace-command-dock [data-ui="workspace-editor-menu"]')).not.toBeNull();
     expect(await page.$('.workspace-command-dock .oc-button[data-ui="workspace-editor-launcher"]')).toBeNull();
     const editorSelectText = ((await page.$eval(
-      ".workspace-command-dock .workspace-editor-select",
+      '.workspace-command-dock [data-ui="workspace-editor-open-default"]',
       (node) => node.textContent,
     )) || "").trim();
     expect(editorSelectText).not.toContain("Open in IDE");
     const editorSelectWidth = await page.$eval(
-      ".workspace-command-dock .workspace-editor-select",
+      '.workspace-command-dock [data-ui="workspace-editor-open-default"]',
       (node) => Math.round(node.getBoundingClientRect().width),
     );
-    expect(editorSelectWidth).toBeLessThanOrEqual(64);
+    expect(editorSelectWidth).toBeLessThanOrEqual(32);
     expect(await page.$('.workspace-editor-select-icon[data-editor="vscode"] svg')).not.toBeNull();
-    await page.click(".workspace-command-dock .workspace-editor-select");
+    await page.click('.workspace-command-dock [data-ui="workspace-editor-menu"]');
     const editorMenuState = await page.evaluate(() => {
-      const button = document.querySelector<HTMLElement>(".workspace-command-dock .workspace-editor-select");
+      const button = document.querySelector<HTMLElement>('.workspace-command-dock [data-ui="workspace-editor-menu"]');
       const menu = document.querySelector<HTMLElement>(".workspace-editor-menu");
       if (!button || !menu) throw new Error("Missing workspace editor dropdown");
       const buttonRect = button.getBoundingClientRect();
@@ -150,9 +152,20 @@ test("panel header controls collapse side panes in place", async () => {
     expect(((await page.$eval('[data-editor="pycharm"]', (node) => node.textContent)) || "").trim()).toContain("PyCharm");
     await page.keyboard.press("Escape");
 
-    await page.click(".workspace-command-dock .workspace-coding-cli-select");
+    await page.click('[data-ui="workspace-coding-cli-open-default"]');
+    for (let i = 0; i < 40 && codingCliOpenBodies.length === 0; i++) {
+      await Bun.sleep(50);
+    }
+    expect(codingCliOpenBodies).toHaveLength(1);
+    expect(codingCliOpenBodies[0]).toMatchObject({
+      cliID: "codex",
+      terminalProfileID: "powershell",
+      cwd: "D:/overlay/workspace/app",
+    });
+
+    await page.click(".workspace-command-dock [data-ui='workspace-coding-cli-menu']");
     const cliMenuState = await page.evaluate(() => {
-      const button = document.querySelector<HTMLElement>(".workspace-command-dock .workspace-coding-cli-select");
+      const button = document.querySelector<HTMLElement>(".workspace-command-dock [data-ui='workspace-coding-cli-menu']");
       const menu = document.querySelector<HTMLElement>(".workspace-coding-cli-menu");
       if (!button || !menu) throw new Error("Missing coding CLI dropdown");
       const buttonRect = button.getBoundingClientRect();
@@ -171,13 +184,13 @@ test("panel header controls collapse side panes in place", async () => {
     expect(cliMenuState.topBelowButton).toBe(true);
     expect(cliMenuState.rightAligned).toBe(true);
     expect(await page.$('[data-coding-cli="codex"] svg')).not.toBeNull();
-    await page.click('[data-coding-cli="codex"]');
-    for (let i = 0; i < 40 && codingCliOpenBodies.length === 0; i++) {
+    await page.click('[data-coding-cli="claude-code"]');
+    for (let i = 0; i < 40 && codingCliOpenBodies.length < 2; i++) {
       await Bun.sleep(50);
     }
-    expect(codingCliOpenBodies).toHaveLength(1);
-    expect(codingCliOpenBodies[0]).toMatchObject({
-      cliID: "codex",
+    expect(codingCliOpenBodies).toHaveLength(2);
+    expect(codingCliOpenBodies[1]).toMatchObject({
+      cliID: "claude-code",
       terminalProfileID: "powershell",
       cwd: "D:/overlay/workspace/app",
     });

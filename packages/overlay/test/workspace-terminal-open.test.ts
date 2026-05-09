@@ -105,9 +105,11 @@ test("workspace terminal command opens the terminal panel with measured PTY geom
     const removedTogglePresent = await page.$("#btnWorkspaceToggle");
     expect(removedTogglePresent).toBeNull();
 
-    await page.click('[data-ui="workspace-terminal-open"]');
+    await page.click('[data-ui="workspace-terminal-menu"]');
     await page.waitForSelector('[data-terminal-profile="default"]');
-    await page.click('[data-terminal-profile="default"]');
+    await page.waitForSelector('[data-terminal-profile="cmd"]');
+    await page.keyboard.press("Escape");
+    await page.click('[data-ui="workspace-terminal-open"]');
     await page.waitForSelector(".workspace-terminal");
     const body = await waitFor(() => createBodies[0] ?? null, "terminal create request");
 
