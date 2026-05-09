@@ -972,6 +972,23 @@ export type EventMessagePartRemoved = {
   }
 }
 
+export type EventSessionError = {
+  type: "session.error"
+  properties: {
+    sessionID?: string
+    error?:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | StructuredOutputPayloadError
+      | TerminalToolMissingError
+      | ContextOverflowError
+      | ApiError
+  }
+}
+
 export type PermissionRequest = {
   id: string
   sessionID: string
@@ -1414,23 +1431,6 @@ export type EventSessionDiff = {
   }
 }
 
-export type EventSessionError = {
-  type: "session.error"
-  properties: {
-    sessionID?: string
-    error?:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageAbortedError
-      | StructuredOutputError
-      | StructuredOutputPayloadError
-      | TerminalToolMissingError
-      | ContextOverflowError
-      | ApiError
-  }
-}
-
 export type Pty = {
   id: string
   profileID: string
@@ -1536,6 +1536,7 @@ export type Event =
   | EventMessagePartUpdated
   | EventMessagePartDelta
   | EventMessagePartRemoved
+  | EventSessionError
   | EventPermissionAsked
   | EventPermissionReplied
   | EventTaskQueueCompleted
@@ -1565,7 +1566,6 @@ export type Event =
   | EventSessionUpdated
   | EventSessionDeleted
   | EventSessionDiff
-  | EventSessionError
   | EventPtyCreated
   | EventPtyUpdated
   | EventPtyExited

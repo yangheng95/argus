@@ -39,20 +39,47 @@ test("PyCharm editor launcher uses the official JetBrains product SVG", () => {
   expect(block).not.toContain('fill="currentColor"')
 })
 
-test("Claude Code launcher uses the Anthropic brand glyph", () => {
+test("Claude Code launcher uses the official Claude brand glyph", () => {
   const block = iconBlock("coding-claude-code")
 
-  expect(block).toContain("M17.304 3.541")
-  expect(block).toContain("L0 20.459")
-  expect(block).toContain('fill="currentColor"')
+  expect(block).toContain("m4.7144 15.9555")
+  expect(block).toContain("#D97757")
+  expect(block).toContain("l-6.3385 4.1164")
+  expect(block).not.toContain("M17.304 3.541")
   expect(block).not.toContain("<circle")
 })
 
-test("Codex launcher uses the OpenAI brand glyph", () => {
+test("Codex launcher uses the official OpenAI brand glyph", () => {
   const block = iconBlock("coding-codex")
 
-  expect(block).toContain("M22.282 9.821")
-  expect(block).toContain("A6.065 6.065")
+  expect(block).toContain("M22.2819 9.8211")
+  expect(block).toContain("a5.9847 5.9847")
   expect(block).toContain('fill="currentColor"')
   expect(block).not.toContain("L8 13.5")
+})
+
+test("Gemini launcher uses the official Google Gemini brand glyph", () => {
+  const block = iconBlock("coding-gemini")
+
+  expect(block).toContain("M11.04 19.32Q12 21.51")
+  expect(block).toContain("#8E75B2")
+  expect(block).not.toContain("M8 2.5c.5")
+})
+
+test("Copilot launcher uses the official GitHub Copilot brand glyph", () => {
+  const block = iconBlock("coding-copilot")
+
+  expect(block).toContain("M23.922 16.997")
+  expect(block).toContain("C23.061 18.492")
+  expect(block).toContain('fill="currentColor"')
+  expect(block).not.toContain("M4 7.2c0-2.2")
+})
+
+test("GLM launcher uses the official Z.ai app icon", () => {
+  const block = iconBlock("coding-glm")
+
+  expect(block).toContain("M24.51,28.51H5.49")
+  expect(block).toContain("24.3,7.1 13.14,22.91")
+  expect(block).toContain("#2D2D2D")
+  expect(block).not.toContain("M3.2 11.2V4.8")
 })
