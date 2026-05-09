@@ -9,7 +9,7 @@ import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus, Message } from "@/session"
 import { Log } from "@/util/log"
 import { CodingCli } from "@/coding-cli"
-import { TerminalProfile } from "@/pty/profile"
+import { SystemTerminal } from "@/system-terminal"
 import { HTTPException } from "hono/http-exception"
 
 const log = Log.create({ service: "coding" })
@@ -33,7 +33,7 @@ export function CodingRoutes() {
       "/cli/profiles",
       describeRoute({
         summary: "List installed coding CLIs",
-        description: "List installed coding command-line interfaces launchable from a selected system terminal.",
+        description: "List installed coding command-line interfaces launchable in the system terminal.",
         operationId: "coding.cli.profiles",
         responses: {
           200: {
@@ -60,7 +60,7 @@ export function CodingRoutes() {
       "/cli/open",
       describeRoute({
         summary: "Open coding CLI",
-        description: "Open an installed coding CLI in the selected external terminal profile.",
+        description: "Open an installed coding CLI in the operating system terminal application.",
         operationId: "coding.cli.open",
         responses: {
           200: {
@@ -76,7 +76,7 @@ export function CodingRoutes() {
       validator("json", CodingCli.OpenInput),
       async (c) => {
         const result = await CodingCli.open(c.req.valid("json")).catch((error) => {
-          if (error instanceof CodingCli.ConfigError || error instanceof TerminalProfile.ConfigError) {
+          if (error instanceof CodingCli.ConfigError || error instanceof SystemTerminal.ConfigError) {
             throw new HTTPException(400, { message: error.data.message })
           }
           throw error

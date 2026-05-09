@@ -14,7 +14,6 @@ import { streamSSE } from "hono/streaming"
 import z from "zod"
 import { errors } from "../error"
 import { ProjectRoutes } from "./project"
-import { PtyRoutes } from "./pty"
 import { ConfigRoutes } from "./config"
 import { ExperimentalRoutes } from "./experimental"
 import { SessionRoutes } from "./session"
@@ -32,6 +31,7 @@ import { EngineRoutes } from "./orchestrator"
 import { PanelRoutes } from "./panel"
 import { ControlRoutes } from "./control"
 import { CodingRoutes } from "./coding"
+import { TerminalRoutes } from "./terminal"
 import { AttachmentRoutes } from "./attachment"
 import { GatewayRoutes } from "./gateway"
 import { PreviewRoutes } from "./preview"
@@ -59,7 +59,7 @@ export function AppRoutes(root: Hono) {
     )
     .use(validator("query", z.object({ directory: z.string().optional() })))
     .route("/project", ProjectRoutes())
-    .route("/pty", PtyRoutes())
+    .route("/terminal", TerminalRoutes())
     .route("/config", ConfigRoutes())
     .route("/channel", ChannelRoutes())
     .route("/executor", ExecutorRoutes())
@@ -214,7 +214,8 @@ export function AppRoutes(root: Hono) {
       "/vcs",
       describeRoute({
         summary: "Get VCS info",
-        description: "Retrieve version control system (VCS) information for the current project, such as git branch and working tree status.",
+        description:
+          "Retrieve version control system (VCS) information for the current project, such as git branch and working tree status.",
         operationId: "vcs.get",
         responses: {
           200: {

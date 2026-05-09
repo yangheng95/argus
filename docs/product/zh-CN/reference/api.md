@@ -255,18 +255,6 @@
 | POST | `/question/{requestID}/reject` | Reject question request | `question.reject` |
 | POST | `/question/{requestID}/reply` | Reply to question request | `question.reply` |
 
-### PTY
-
-| Method | 路径 | 说明 | operationId |
-|---|---|---|---|
-| GET | `/pty` | List PTY sessions | `pty.list` |
-| POST | `/pty` | Create PTY session | `pty.create` |
-| GET | `/pty/profiles` | List terminal profiles | `pty.profiles` |
-| DELETE | `/pty/{ptyID}` | Remove PTY session | `pty.remove` |
-| GET | `/pty/{ptyID}` | Get PTY session | `pty.get` |
-| PUT | `/pty/{ptyID}` | Update PTY session | `pty.update` |
-| GET | `/pty/{ptyID}/connect` | Connect to PTY session | `pty.connect` |
-
 ### File / Search
 
 | Method | 路径 | 说明 | operationId |
@@ -329,3 +317,10 @@
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
 | GET | `/preview/frontend` | Resolve live frontend preview URL | `preview.frontend` |
+
+### Terminal
+
+| Method | 路径 | 说明 | operationId |
+|---|---|---|---|
+| POST | `/terminal/open` | Open system terminal | `terminal.open` |
+| GET | `/terminal/profiles` | List system terminal profiles | `terminal.profiles` |

@@ -130,9 +130,6 @@ const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
   kind: "diff",
   target: { filePath: "" },
 });
-const [terminalLaunchProfileID, setTerminalLaunchProfileID] = createSignal("");
-const [terminalLaunchNonce, setTerminalLaunchNonce] = createSignal(0);
-const [selectedTerminalProfileID, setSelectedTerminalProfileID] = createSignal("");
 
 function currentPreviewKey(): string {
   return previewRequestKey(boardStore.selectedTaskID || boardStore.board?.task?.id, boardStore.snapshotVersion);
@@ -394,15 +391,6 @@ function openWorkspaceFile(filePath: string): void {
   openWorkspace({ kind: "file", filePath });
 }
 
-/** Open (or switch to) the workspace terminal with the selected terminal profile. */
-function openWorkspaceTerminal(profileID: string): void {
-  if (!profileID) throw new Error("Terminal profile ID is required");
-  setSelectedTerminalProfileID(profileID);
-  setTerminalLaunchProfileID(profileID);
-  setTerminalLaunchNonce((value) => value + 1);
-  openWorkspace({ kind: "terminal" });
-}
-
 // Exposed for services and window-level bridges that need to trigger the
 // workspace from outside this module (e.g. ChangesPanel clicks).
 (window as any).openWorkspaceDiff = openWorkspaceDiff;
@@ -535,9 +523,6 @@ if (workspaceMountEl) {
         view={workspaceView()}
         onSelectView={setWorkspaceView}
         onClose={closeWorkspace}
-        directory={activeDirectory()}
-        terminalLaunchProfileID={terminalLaunchProfileID()}
-        terminalLaunchNonce={terminalLaunchNonce()}
       />
     ),
     workspaceMountEl,
@@ -746,24 +731,12 @@ if (titlebarMenuEl) {
 
 const workspaceLayoutControlsEl = document.getElementById("solidWorkspaceLayoutControls");
 if (workspaceLayoutControlsEl) {
-  render(
-    () => (
-      <WorkspaceLayoutControls
-        terminalOpen={() => workspaceOpen() && workspaceView().kind === "terminal"}
-        onOpenTerminal={openWorkspaceTerminal}
-        onTerminalProfileSelected={setSelectedTerminalProfileID}
-      />
-    ),
-    workspaceLayoutControlsEl,
-  );
+  render(() => <WorkspaceLayoutControls />, workspaceLayoutControlsEl);
 }
 
 const workspaceCodingCliLaunchersEl = document.getElementById("solidWorkspaceCodingCliLaunchers");
 if (workspaceCodingCliLaunchersEl) {
-  render(
-    () => <WorkspaceCodingCliLaunchers terminalProfileID={selectedTerminalProfileID} />,
-    workspaceCodingCliLaunchersEl,
-  );
+  render(() => <WorkspaceCodingCliLaunchers />, workspaceCodingCliLaunchersEl);
 }
 
 const workspaceEditorLaunchersEl = document.getElementById("solidWorkspaceEditorLaunchers");

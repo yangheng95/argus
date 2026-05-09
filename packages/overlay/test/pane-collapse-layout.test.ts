@@ -20,6 +20,7 @@ function send(value: unknown, init?: ResponseInit) {
 
 test("panel header controls collapse side panes in place", async () => {
   const codingCliOpenBodies: Record<string, unknown>[] = [];
+  const terminalOpenBodies: Record<string, unknown>[] = [];
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -38,7 +39,7 @@ test("panel header controls collapse side panes in place", async () => {
       if (path === "/provider/auth") return send({});
       if (path === "/config/providers") return send({ providers: [] });
       if (path === "/config") return send({ model: "" });
-      if (path === "/pty/profiles") {
+      if (path === "/terminal/profiles") {
         return send({
           defaultProfileID: "powershell",
           profiles: [
@@ -46,6 +47,10 @@ test("panel header controls collapse side panes in place", async () => {
             { id: "cmd", label: "Command Prompt", icon: "command-prompt" },
           ],
         });
+      }
+      if (path === "/terminal/open" && req.method === "POST") {
+        terminalOpenBodies.push(await req.json() as Record<string, unknown>);
+        return send({ ok: true });
       }
       if (path === "/coding/cli/profiles") {
         return send({
@@ -127,6 +132,16 @@ test("panel header controls collapse side panes in place", async () => {
     expect(launcherDimensions.terminal).toEqual(launcherDimensions.editor);
     expect(launcherDimensions.terminal).toEqual(launcherDimensions.codingCli);
     expect(await page.$('.workspace-editor-select-icon[data-editor="vscode"] svg')).not.toBeNull();
+    await page.click('.workspace-command-dock [data-ui="workspace-terminal-open"]');
+    for (let i = 0; i < 40 && terminalOpenBodies.length === 0; i++) {
+      await Bun.sleep(50);
+    }
+    expect(terminalOpenBodies).toHaveLength(1);
+    expect(terminalOpenBodies[0]).toMatchObject({
+      cwd: "D:/overlay/workspace/app",
+      profileID: "powershell",
+    });
+    expect(await page.$(".workspace-terminal")).toBeNull();
     await page.click('.workspace-command-dock [data-ui="workspace-editor-menu"]');
     const editorMenuState = await page.evaluate(() => {
       const button = document.querySelector<HTMLElement>('.workspace-command-dock [data-ui="workspace-editor-menu"]');
@@ -174,7 +189,6 @@ test("panel header controls collapse side panes in place", async () => {
     expect(codingCliOpenBodies).toHaveLength(1);
     expect(codingCliOpenBodies[0]).toMatchObject({
       cliID: "codex",
-      terminalProfileID: "powershell",
       cwd: "D:/overlay/workspace/app",
     });
 
@@ -206,7 +220,6 @@ test("panel header controls collapse side panes in place", async () => {
     expect(codingCliOpenBodies).toHaveLength(2);
     expect(codingCliOpenBodies[1]).toMatchObject({
       cliID: "claude-code",
-      terminalProfileID: "powershell",
       cwd: "D:/overlay/workspace/app",
     });
 

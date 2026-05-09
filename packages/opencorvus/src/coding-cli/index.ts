@@ -2,7 +2,7 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { existsSync } from "fs"
 import path from "path"
 import z from "zod"
-import { TerminalProfile } from "@/pty/profile"
+import { SystemTerminal } from "@/system-terminal"
 import { which } from "@/util/which"
 
 export namespace CodingCli {
@@ -34,7 +34,6 @@ export namespace CodingCli {
 
   export const OpenInput = z.object({
     cliID: z.string().min(1),
-    terminalProfileID: z.string().min(1),
     cwd: z.string().min(1),
   })
   export type OpenInput = z.infer<typeof OpenInput>
@@ -62,9 +61,10 @@ export namespace CodingCli {
       label: "Claude Code",
       icon: "claude-code",
       env: "OPENCORVUS_CODING_CLI_CLAUDE_CODE_BIN",
-      commands: process.platform === "win32"
-        ? ["claude.exe", "claude-code.exe", "claude.cmd", "claude-code.cmd", "claude"]
-        : ["claude", "claude-code"],
+      commands:
+        process.platform === "win32"
+          ? ["claude.exe", "claude-code.exe", "claude.cmd", "claude-code.cmd", "claude"]
+          : ["claude", "claude-code"],
     },
     {
       id: "codex",
@@ -78,27 +78,38 @@ export namespace CodingCli {
       label: "Gemini Code",
       icon: "gemini",
       env: "OPENCORVUS_CODING_CLI_GEMINI_CODE_BIN",
-      commands: process.platform === "win32"
-        ? ["gemini.exe", "gemini.cmd", "geminicode.exe", "geminicode.cmd", "gemini-code.exe", "gemini-code.cmd", "gemini"]
-        : ["gemini", "geminicode", "gemini-code"],
+      commands:
+        process.platform === "win32"
+          ? [
+              "gemini.exe",
+              "gemini.cmd",
+              "geminicode.exe",
+              "geminicode.cmd",
+              "gemini-code.exe",
+              "gemini-code.cmd",
+              "gemini",
+            ]
+          : ["gemini", "geminicode", "gemini-code"],
     },
     {
       id: "copilot",
       label: "GitHub Copilot",
       icon: "copilot",
       env: "OPENCORVUS_CODING_CLI_COPILOT_BIN",
-      commands: process.platform === "win32"
-        ? ["copilot.exe", "copilot.cmd", "github-copilot.exe", "github-copilot.cmd", "copilot"]
-        : ["copilot", "github-copilot"],
+      commands:
+        process.platform === "win32"
+          ? ["copilot.exe", "copilot.cmd", "github-copilot.exe", "github-copilot.cmd", "copilot"]
+          : ["copilot", "github-copilot"],
     },
     {
       id: "glm-code",
       label: "GLM Code",
       icon: "glm",
       env: "OPENCORVUS_CODING_CLI_GLM_CODE_BIN",
-      commands: process.platform === "win32"
-        ? ["glmcode.exe", "glmcode.cmd", "glm-code.exe", "glm-code.cmd", "glm.exe", "glm.cmd", "glmcode"]
-        : ["glmcode", "glm-code", "glm"],
+      commands:
+        process.platform === "win32"
+          ? ["glmcode.exe", "glmcode.cmd", "glm-code.exe", "glm-code.cmd", "glm.exe", "glm.cmd", "glmcode"]
+          : ["glmcode", "glm-code", "glm"],
     },
   ]
 
@@ -176,79 +187,9 @@ export namespace CodingCli {
     return profile
   }
 
-  function powershellQuote(value: string): string {
-    return `'${value.replaceAll("'", "''")}'`
-  }
-
-  function shellQuote(value: string): string {
-    return `'${value.replaceAll("'", "'\"'\"'")}'`
-  }
-
-  function cmdQuote(value: string): string {
-    return `"${value.replaceAll('"', '""')}"`
-  }
-
-  function terminalKind(profile: TerminalProfile.Resolved): "powershell" | "cmd" | "bash" {
-    const base = path.basename(profile.command).toLowerCase()
-    if (base === "powershell.exe" || base === "powershell" || base === "pwsh.exe" || base === "pwsh") {
-      return "powershell"
-    }
-    if (base === "cmd.exe" || base === "cmd") return "cmd"
-    if (base === "bash.exe" || base === "bash" || base === "zsh" || base === "fish") return "bash"
-    throw new ConfigError({
-      message: `Terminal profile ${profile.id} cannot launch external coding CLIs: ${profile.command}`,
-    })
-  }
-
-  export function buildTerminalCommand(input: {
-    terminal: TerminalProfile.Resolved
-    cli: Resolved
-    cwd: string
-  }): { command: string; args: string[] } {
-    const cliCommand = [input.cli.command, ...input.cli.args]
-    const kind = terminalKind(input.terminal)
-    if (kind === "powershell") {
-      const invocation = [
-        `Set-Location -LiteralPath ${powershellQuote(input.cwd)}`,
-        `& ${powershellQuote(input.cli.command)}${input.cli.args.map((arg) => ` ${powershellQuote(arg)}`).join("")}`,
-      ].join("; ")
-      return {
-        command: input.terminal.command,
-        args: [...input.terminal.args, "-NoExit", "-Command", invocation],
-      }
-    }
-    if (kind === "cmd") {
-      return {
-        command: input.terminal.command,
-        args: [...input.terminal.args, "/k", cliCommand.map(cmdQuote).join(" ")],
-      }
-    }
-    return {
-      command: input.terminal.command,
-      args: [
-        ...input.terminal.args,
-        "-i",
-        "-c",
-        `cd ${shellQuote(input.cwd)} && ${cliCommand.map(shellQuote).join(" ")}; exec ${shellQuote(path.basename(input.terminal.command))} -i`,
-      ],
-    }
-  }
-
   export async function open(input: OpenInput): Promise<OpenResponse> {
-    const cwd = await TerminalProfile.validateCwd(input.cwd)
-    const terminal = await TerminalProfile.resolve(input.terminalProfileID)
     const cli = resolve(input.cliID)
-    const command = buildTerminalCommand({ terminal, cli, cwd })
-    const child = Bun.spawn([command.command, ...command.args], {
-      cwd,
-      env: {
-        ...process.env,
-        ...terminal.env,
-      },
-      stdio: ["ignore", "ignore", "ignore"],
-      windowsHide: false,
-    })
-    child.unref()
+    await SystemTerminal.openCommand({ cwd: input.cwd, command: cli.command, args: cli.args })
     return { ok: true }
   }
 }

@@ -1,5 +1,4 @@
 import { For, createEffect, createMemo, createSignal } from "solid-js";
-import type { Accessor } from "solid-js";
 import {
   listCodingCliProfiles,
   openCodingCli,
@@ -11,10 +10,6 @@ import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
 import { WorkspaceSplitLauncher } from "./WorkspaceSplitLauncher";
 
-interface WorkspaceCodingCliLaunchersProps {
-  terminalProfileID: Accessor<string>;
-}
-
 const CLI_ICONS: Record<CodingCliIcon, IconName> = {
   "claude-code": "coding-claude-code",
   codex: "coding-codex",
@@ -23,7 +18,7 @@ const CLI_ICONS: Record<CodingCliIcon, IconName> = {
   glm: "coding-glm",
 };
 
-export function WorkspaceCodingCliLaunchers(props: WorkspaceCodingCliLaunchersProps) {
+export function WorkspaceCodingCliLaunchers() {
   const [profiles, setProfiles] = createSignal<CodingCliProfile[]>([]);
   const [selectedCliID, setSelectedCliID] = createSignal("");
   const [open, setOpen] = createSignal(false);
@@ -31,7 +26,7 @@ export function WorkspaceCodingCliLaunchers(props: WorkspaceCodingCliLaunchersPr
   const [error, setError] = createSignal("");
 
   const disabled = () =>
-    !activeDirectory() || !props.terminalProfileID() || loading() || profiles().length === 0;
+    !activeDirectory() || loading() || profiles().length === 0;
   const title = () => error() || t("coding_cli.open");
   const selectedProfile = createMemo(() =>
     profiles().find((profile) => profile.id === selectedCliID()) ?? profiles()[0] ?? null,
@@ -72,15 +67,12 @@ export function WorkspaceCodingCliLaunchers(props: WorkspaceCodingCliLaunchersPr
   async function launch(profile: CodingCliProfile) {
     const directory = activeDirectory();
     if (!directory) throw new Error("Workspace directory is required");
-    const terminalProfileID = props.terminalProfileID();
-    if (!terminalProfileID) throw new Error("Terminal profile ID is required");
     close();
     setSelectedCliID(profile.id);
     setError("");
     try {
       await openCodingCli({
         cliID: profile.id,
-        terminalProfileID,
         cwd: directory,
       });
     } catch (reason) {

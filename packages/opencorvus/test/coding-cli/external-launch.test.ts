@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { CodingCli } from "../../src/coding-cli"
 import { Instance } from "../../src/project/instance"
-import { TerminalProfile } from "../../src/pty/profile"
+import { SystemTerminal } from "../../src/system-terminal"
 import { tmpdir } from "../fixture/fixture"
 
 function terminalConfig() {
@@ -36,27 +36,21 @@ describe("coding CLI external launch", () => {
     }
   })
 
-  test("builds a selected terminal command instead of a PTY profile command", () => {
-    const terminal: TerminalProfile.Resolved = {
-      id: "powershell",
-      label: "PowerShell",
-      command: process.platform === "win32" ? "powershell.exe" : "pwsh",
-      args: ["-NoLogo"],
-      env: { TERM: "xterm-256color" },
-      icon: "powershell",
-    }
-    const cli: CodingCli.Resolved = {
-      id: "codex",
-      label: "Codex",
-      icon: "codex",
+  test("builds a system terminal command for an external coding CLI", () => {
+    const command = SystemTerminal.buildCommand({
+      platform: "win32",
+      cwd: "C:\\repo",
+      terminalApp: "wt.exe",
       command: "C:\\Tools\\Codex CLI\\codex.cmd",
       args: [],
-    }
+      keepOpen: true,
+    })
 
-    const command = CodingCli.buildTerminalCommand({ terminal, cli, cwd: "C:\\repo" })
-
-    expect(command.command).toBe(terminal.command)
-    expect(command.args).toContain("-NoExit")
+    expect(command.command).toBe("wt.exe")
+    expect(command.args).toContain("-d")
+    expect(command.args).toContain("C:\\repo")
+    expect(command.args).toContain("cmd.exe")
+    expect(command.args).toContain("/k")
     expect(command.args.join(" ")).toContain("codex.cmd")
     expect(command.args.join(" ")).not.toContain("profileID")
   })
@@ -65,16 +59,23 @@ describe("coding CLI external launch", () => {
     await using dir = await tmpdir({ git: true, config: terminalConfig() })
     await using outside = await tmpdir({ git: true })
 
-    await Instance.provide({
-      directory: dir.path,
-      fn: async () => {
-        await expect(
-          CodingCli.open({ cliID: "missing", terminalProfileID: "powershell", cwd: dir.path }),
-        ).rejects.toBeInstanceOf(CodingCli.ConfigError)
-        await expect(
-          CodingCli.open({ cliID: "codex", terminalProfileID: "powershell", cwd: outside.path }),
-        ).rejects.toBeInstanceOf(TerminalProfile.ConfigError)
-      },
-    })
+    const previous = process.env.OPENCORVUS_CODING_CLI_CODEX_BIN
+    process.env.OPENCORVUS_CODING_CLI_CODEX_BIN = process.execPath
+    try {
+      await Instance.provide({
+        directory: dir.path,
+        fn: async () => {
+          await expect(CodingCli.open({ cliID: "missing", cwd: dir.path })).rejects.toBeInstanceOf(
+            CodingCli.ConfigError,
+          )
+          await expect(CodingCli.open({ cliID: "codex", cwd: outside.path })).rejects.toBeInstanceOf(
+            SystemTerminal.ConfigError,
+          )
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.OPENCORVUS_CODING_CLI_CODEX_BIN
+      else process.env.OPENCORVUS_CODING_CLI_CODEX_BIN = previous
+    }
   })
 })

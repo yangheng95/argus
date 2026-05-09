@@ -1,7 +1,7 @@
 import { For, createEffect, createMemo, createSignal } from "solid-js";
-import type { Accessor } from "solid-js";
 import {
   listTerminalProfiles,
+  openSystemTerminal,
   type TerminalProfile,
   type TerminalProfileIcon,
 } from "../services/terminal";
@@ -10,12 +10,6 @@ import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
 import { WorkspaceSplitLauncher } from "./WorkspaceSplitLauncher";
 
-interface WorkspaceLayoutControlsProps {
-  terminalOpen: Accessor<boolean>;
-  onOpenTerminal: (profileID: string) => void;
-  onTerminalProfileSelected: (profileID: string) => void;
-}
-
 const TERMINAL_ICONS: Record<TerminalProfileIcon, IconName> = {
   terminal: "terminal",
   powershell: "terminal-powershell",
@@ -23,7 +17,7 @@ const TERMINAL_ICONS: Record<TerminalProfileIcon, IconName> = {
   bash: "terminal-bash",
 };
 
-export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
+export function WorkspaceLayoutControls() {
   const [profiles, setProfiles] = createSignal<TerminalProfile[]>([]);
   const [defaultProfileID, setDefaultProfileID] = createSignal("");
   const [selectedProfileID, setSelectedProfileID] = createSignal("");
@@ -55,7 +49,6 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
       setProfiles([]);
       setDefaultProfileID("");
       setSelectedProfileID("");
-      props.onTerminalProfileSelected("");
       return;
     }
     setLoading(true);
@@ -72,12 +65,10 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
       setProfiles(response.profiles);
       setDefaultProfileID(response.defaultProfileID);
       setSelectedProfileID(selected);
-      props.onTerminalProfileSelected(selected);
     } catch (reason) {
       setProfiles([]);
       setDefaultProfileID("");
       setSelectedProfileID("");
-      props.onTerminalProfileSelected("");
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setLoading(false);
@@ -88,14 +79,20 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
     setOpen(false);
   }
 
-  function openProfile(profileID: string) {
+  async function openProfile(profileID: string) {
     if (!profiles().some((profile) => profile.id === profileID)) {
       throw new Error(`Unknown terminal profile selected: ${profileID}`);
     }
+    const cwd = activeDirectory();
+    if (!cwd) throw new Error("Workspace directory is required");
     setSelectedProfileID(profileID);
-    props.onTerminalProfileSelected(profileID);
     close();
-    props.onOpenTerminal(profileID);
+    setError("");
+    try {
+      await openSystemTerminal({ cwd, profileID });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
   }
 
   createEffect(() => {
@@ -118,7 +115,6 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
       menuAriaLabel={t("terminal.open_menu")}
       primaryDataUI="workspace-terminal-open"
       menuDataUI="workspace-terminal-menu"
-      pressed={props.terminalOpen()}
       onPrimaryClick={() => openProfile(selectedProfile()?.id ?? "")}
       onOpenChange={setOpen}
       primaryChildren={(

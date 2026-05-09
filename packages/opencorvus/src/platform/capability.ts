@@ -63,7 +63,6 @@ export namespace Capability {
     }
   }
 
-
   async function winFfi() {
     if (process.platform !== "win32") return line("win32_ffi", "Windows console FFI", "ok", "n/a")
     try {
@@ -83,12 +82,6 @@ export namespace Capability {
       )
     }
   }
-
-  async function bunPty() {
-    await import("bun-pty")
-    return line("bun_pty", "PTY native module", "ok", "bun-pty")
-  }
-
   async function screenCapture() {
     try {
       await import("node-screenshots" as any)
@@ -105,8 +98,7 @@ export namespace Capability {
   }
 
   async function gitBash() {
-    if (process.platform !== "win32")
-      return line("git_bash", "Git Bash (Windows only)", "ok", "n/a")
+    if (process.platform !== "win32") return line("git_bash", "Git Bash (Windows only)", "ok", "n/a")
     try {
       const { Shell } = await import("@/shell/shell")
       const shellPath = Shell.acceptable()
@@ -127,14 +119,7 @@ export namespace Capability {
   }
 
   async function collectFresh() {
-    const checks = [
-      winFfi(),
-      bunPty(),
-      screenCapture(),
-      gitBash(),
-      Promise.resolve(watcher()),
-      executors(),
-    ]
+    const checks = [winFfi(), screenCapture(), gitBash(), Promise.resolve(watcher()), executors()]
     const nested = await Promise.all(checks)
     const items = nested.flatMap((item) => (Array.isArray(item) ? item : [item]))
     const total = items.reduce(
@@ -160,7 +145,12 @@ export namespace Capability {
         ? line("executor_mirrorcode", "Executor MirrorCode", "ok", found.mirrorcode.detail)
         : line("executor_mirrorcode", "Executor MirrorCode", "fail", found.mirrorcode.detail),
       found.codex.available
-        ? line("executor_codex", "Executor codex", "ok", found.codex.version ? `${found.codex.detail} (${found.codex.version})` : found.codex.detail)
+        ? line(
+            "executor_codex",
+            "Executor codex",
+            "ok",
+            found.codex.version ? `${found.codex.detail} (${found.codex.version})` : found.codex.detail,
+          )
         : line(
             "executor_codex",
             "Executor codex",
