@@ -67,7 +67,14 @@ test("executor selector separates long plan and edit models", async () => {
           default: { openai: "gpt-5.5-pro-priority-editing-profile" },
         })
       }
-      if (path === "/config" && req.method === "GET") return send({ model: planModel })
+      if (path === "/config" && req.method === "GET") {
+        return send({
+          model: planModel,
+          agent: {
+            build: { model: "openai/gpt-5.5-pro-priority-editing-profile" },
+          },
+        })
+      }
       if (path === "/config/prompt") return send([])
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
@@ -147,8 +154,9 @@ test("executor selector separates long plan and edit models", async () => {
         slotCount: el.querySelectorAll(".executor-chip-model").length,
       }
     })
-    expect(chip.text).toContain("Plan")
-    expect(chip.text).toContain("Edit")
+    expect(chip.text).toContain("OpenCorvus")
+    expect(chip.text).toContain("Codex")
+    expect(chip.text).toContain("Custom")
     expect(chip.text).toContain("alibaba")
     expect(chip.text).toContain("gpt-5.5-pro-priority-editing-profile")
     expect(chip.slotCount).toBe(2)
@@ -162,6 +170,7 @@ test("executor selector separates long plan and edit models", async () => {
     await page.waitForSelector(".executor-menu-summary")
     const menuText = await page.$eval(".executor-menu", (node) => (node as HTMLElement).innerText)
     expect(menuText).toContain(planModel)
+    expect(menuText).toContain("Custom")
     expect(menuText).toContain(editModel)
     expect(menuText).toContain("openai")
     expect(menuText).toContain("gpt-5.5-pro-priority-editing-profile")

@@ -755,6 +755,10 @@
   white-space: nowrap;
 }
 
+.executor-chip-custom {
+  color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
+}
+
 .executor-chip-model[data-empty="true"] {
   font-style: italic;
   opacity: var(--ui-opacity-disabled);
