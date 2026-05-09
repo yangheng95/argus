@@ -107,7 +107,7 @@ export function CardHeader(props: {
   node: CardNode;
   expanded: boolean;
   collapsible: boolean;
-  onToggle: () => void;
+  onExpand: () => void;
   /** Invoked when the user clicks the rewind (↶) button. Receives the
    *  card's `time` (ms — becomes cursorTime on the backend) and id
    *  (anchorEventID for audit). Parent routes it to POST /task/:id/rewind. */
@@ -215,12 +215,15 @@ export function CardHeader(props: {
       role={props.collapsible ? "button" : undefined}
       tabindex={props.collapsible ? 0 : undefined}
       aria-expanded={props.collapsible ? props.expanded : undefined}
-      onClick={() => props.collapsible && props.onToggle()}
+      onClick={() => {
+        if (!props.collapsible || props.expanded) return;
+        props.onExpand();
+      }}
       onKeyDown={(e) => {
-        if (!props.collapsible) return;
+        if (!props.collapsible || props.expanded) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          props.onToggle();
+          props.onExpand();
         }
       }}
     >
@@ -461,11 +464,6 @@ export function CardHeader(props: {
           >
             <Icon name="rewind" size={13} />
           </button>
-        </Show>
-        <Show when={props.collapsible}>
-          <span class="card__chevron" aria-hidden="true">
-            <Icon name="caret-down" />
-          </span>
         </Show>
       </div>
     </div>

@@ -18,7 +18,8 @@ function send(value: unknown, init?: ResponseInit) {
   });
 }
 
-test("panel header controls collapse both side panes without residual width", async () => {
+test("panel header controls collapse side panes to expandable header rails", async () => {
+  const codingCliOpenBodies: Record<string, unknown>[] = [];
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -37,6 +38,27 @@ test("panel header controls collapse both side panes without residual width", as
       if (path === "/provider/auth") return send({});
       if (path === "/config/providers") return send({ providers: [] });
       if (path === "/config") return send({ model: "" });
+      if (path === "/pty/profiles") {
+        return send({
+          defaultProfileID: "powershell",
+          profiles: [
+            { id: "powershell", label: "Windows PowerShell", icon: "powershell" },
+            { id: "cmd", label: "Command Prompt", icon: "command-prompt" },
+          ],
+        });
+      }
+      if (path === "/coding/cli/profiles") {
+        return send({
+          profiles: [
+            { id: "codex", label: "Codex", icon: "codex" },
+            { id: "claude-code", label: "Claude Code", icon: "claude-code" },
+          ],
+        });
+      }
+      if (path === "/coding/cli/open" && req.method === "POST") {
+        codingCliOpenBodies.push(await req.json() as Record<string, unknown>);
+        return send({ ok: true });
+      }
       if (path === "/panel/knowledge/memory") return send([]);
       if (path === "/panel/knowledge/preference") return send([]);
       return send({});
@@ -49,12 +71,25 @@ test("panel header controls collapse both side panes without residual width", as
     await page.setViewport({ width: 1440, height: 900 });
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app");
+      localStorage.setItem("oc_recent_directories", JSON.stringify([
+        "C:/Users/chuan/myhexin-local/vibecodingclient",
+        "C:/Users/chuan/myhexin-local/demos/invest复刻",
+        "C:/Users/chuan/myhexin-local/Hithink.PrefabLibrary",
+      ]));
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`);
     }, server.port);
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector('.sidebar-header [data-ui="sidebar-header-collapse-toggle"]');
     expect(await page.$("#titlebar .workspace-layout-controls")).toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-layout-controls")).not.toBeNull();
+    expect(await page.$('.workspace-command-dock [data-ui="workspace-terminal-open"]')).not.toBeNull();
+    expect(await page.$('.workspace-command-dock [data-terminal-icon="powershell"] svg')).not.toBeNull();
+    expect(await page.$(".workspace-command-dock .workspace-coding-cli-launchers")).not.toBeNull();
+    expect(await page.$(".workspace-command-dock .workspace-coding-cli-select")).not.toBeNull();
+    await page.waitForFunction(() => {
+      const button = document.querySelector<HTMLButtonElement>(".workspace-command-dock .workspace-coding-cli-select");
+      return !!button && !button.disabled;
+    });
     expect(await page.$('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]')).toBeNull();
     expect(await page.$('.workspace-command-dock [data-ui="workspace-right-panel-toggle"]')).toBeNull();
     expect(await page.$('.pane-edge-controls [data-ui="workspace-left-panel-toggle"]')).toBeNull();
@@ -62,9 +97,119 @@ test("panel header controls collapse both side panes without residual width", as
     expect(await page.$('.sidebar-header [data-ui="sidebar-header-collapse-toggle"]')).not.toBeNull();
     expect(await page.$('.sections-header [data-ui="right-panel-header-collapse-toggle"]')).not.toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-editor-launchers")).not.toBeNull();
+    expect(await page.$(".workspace-command-dock .workspace-editor-select")).not.toBeNull();
+    expect(await page.$('.workspace-command-dock .oc-button[data-ui="workspace-editor-launcher"]')).toBeNull();
+    const editorSelectText = ((await page.$eval(
+      ".workspace-command-dock .workspace-editor-select",
+      (node) => node.textContent,
+    )) || "").trim();
+    expect(editorSelectText).not.toContain("Open in IDE");
+    const editorSelectWidth = await page.$eval(
+      ".workspace-command-dock .workspace-editor-select",
+      (node) => Math.round(node.getBoundingClientRect().width),
+    );
+    expect(editorSelectWidth).toBeLessThanOrEqual(64);
+    expect(await page.$('.workspace-editor-select-icon[data-editor="vscode"] svg')).not.toBeNull();
+    await page.click(".workspace-command-dock .workspace-editor-select");
+    const editorMenuState = await page.evaluate(() => {
+      const button = document.querySelector<HTMLElement>(".workspace-command-dock .workspace-editor-select");
+      const menu = document.querySelector<HTMLElement>(".workspace-editor-menu");
+      if (!button || !menu) throw new Error("Missing workspace editor dropdown");
+      const buttonRect = button.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+      return {
+        expanded: button.getAttribute("aria-expanded"),
+        hidden: menu.hidden,
+        portaled: !menu.closest(".workspace-command-dock"),
+        topBelowButton: Math.round(menuRect.top) >= Math.round(buttonRect.bottom),
+        rightAligned: Math.abs(Math.round(menuRect.right) - Math.round(buttonRect.right)) <= 1,
+      };
+    });
+    expect(editorMenuState.expanded).toBe("true");
+    expect(editorMenuState.hidden).toBe(false);
+    expect(editorMenuState.portaled).toBe(true);
+    expect(editorMenuState.topBelowButton).toBe(true);
+    expect(editorMenuState.rightAligned).toBe(true);
+    const editorIconSizes = await page.evaluate(() => {
+      const entries = Array.from(document.querySelectorAll<HTMLElement>(".workspace-editor-option")).map((option) => {
+        const editor = option.dataset.editor || "";
+        const svg = option.querySelector<SVGElement>("svg");
+        if (!editor || !svg) throw new Error("Missing editor option icon");
+        const rect = svg.getBoundingClientRect();
+        return [editor, Math.round(rect.width)] as const;
+      });
+      return Object.fromEntries(entries);
+    });
+    expect(editorIconSizes.vscode).toBeGreaterThanOrEqual(18);
+    expect(editorIconSizes.pycharm).toBeGreaterThanOrEqual(editorIconSizes.vscode);
+    expect(editorIconSizes.webstorm).toBeGreaterThanOrEqual(editorIconSizes.vscode);
+    expect(editorIconSizes.intellij).toBeGreaterThanOrEqual(editorIconSizes.vscode);
+    expect(editorIconSizes.cursor).toBeGreaterThanOrEqual(editorIconSizes.vscode);
     expect(await page.$('#taskDir [data-path-editor]')).toBeNull();
     expect(await page.$('[data-editor="pycharm"] svg')).not.toBeNull();
-    expect(await page.$eval('[data-editor="pycharm"]', (node) => node.textContent)).toBe("");
+    expect(((await page.$eval('[data-editor="pycharm"]', (node) => node.textContent)) || "").trim()).toContain("PyCharm");
+    await page.keyboard.press("Escape");
+
+    await page.click(".workspace-command-dock .workspace-coding-cli-select");
+    const cliMenuState = await page.evaluate(() => {
+      const button = document.querySelector<HTMLElement>(".workspace-command-dock .workspace-coding-cli-select");
+      const menu = document.querySelector<HTMLElement>(".workspace-coding-cli-menu");
+      if (!button || !menu) throw new Error("Missing coding CLI dropdown");
+      const buttonRect = button.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+      return {
+        expanded: button.getAttribute("aria-expanded"),
+        hidden: menu.hidden,
+        portaled: !menu.closest(".workspace-command-dock"),
+        topBelowButton: Math.round(menuRect.top) >= Math.round(buttonRect.bottom),
+        rightAligned: Math.abs(Math.round(menuRect.right) - Math.round(buttonRect.right)) <= 1,
+      };
+    });
+    expect(cliMenuState.expanded).toBe("true");
+    expect(cliMenuState.hidden).toBe(false);
+    expect(cliMenuState.portaled).toBe(true);
+    expect(cliMenuState.topBelowButton).toBe(true);
+    expect(cliMenuState.rightAligned).toBe(true);
+    expect(await page.$('[data-coding-cli="codex"] svg')).not.toBeNull();
+    await page.click('[data-coding-cli="codex"]');
+    for (let i = 0; i < 40 && codingCliOpenBodies.length === 0; i++) {
+      await Bun.sleep(50);
+    }
+    expect(codingCliOpenBodies).toHaveLength(1);
+    expect(codingCliOpenBodies[0]).toMatchObject({
+      cliID: "codex",
+      terminalProfileID: "powershell",
+      cwd: "D:/overlay/workspace/app",
+    });
+
+    await page.click('[data-menu-trigger="workspace"]');
+    await page.waitForSelector(".titlebar-menubar-recent-item");
+    const projectMenu = await page.evaluate(() => {
+      const panel = document.querySelector<HTMLElement>('[data-testid="titlebar-menu-workspace"]');
+      if (!panel) throw new Error("Missing Project menu panel");
+      const rows = Array.from(panel.querySelectorAll<HTMLElement>(".titlebar-menubar-recent-item")).map((item) => {
+        const name = item.querySelector<HTMLElement>(".titlebar-menubar-recent-name");
+        const path = item.querySelector<HTMLElement>(".titlebar-menubar-recent-path");
+        if (!name || !path) throw new Error("Missing recent row columns");
+        return {
+          nameLeft: Math.round(name.getBoundingClientRect().left),
+          pathLeft: Math.round(path.getBoundingClientRect().left),
+          pathAlign: getComputedStyle(path).textAlign,
+          pathText: path.textContent || "",
+        };
+      });
+      return {
+        text: panel.textContent || "",
+        rows,
+      };
+    });
+    expect(projectMenu.text).not.toContain("PyCharm");
+    expect(projectMenu.text).not.toContain("WebStorm");
+    expect(projectMenu.rows).toHaveLength(3);
+    expect(new Set(projectMenu.rows.map((row) => row.pathLeft)).size).toBe(1);
+    expect(projectMenu.rows.every((row) => row.pathAlign === "left" || row.pathAlign === "start")).toBe(true);
+    expect(projectMenu.rows.every((row) => row.pathText.startsWith("C:/Users/chuan/myhexin-local"))).toBe(true);
+    await page.keyboard.press("Escape");
 
     const headerPlacement = await page.evaluate(() => {
       const sidebarHeader = document.querySelector<HTMLElement>(".sidebar-header")!.getBoundingClientRect();
@@ -107,6 +252,54 @@ test("panel header controls collapse both side panes without residual width", as
           width: node.getBoundingClientRect().width,
         };
       };
+      const exists = (selector: string) => document.querySelector(selector) != null;
+      return {
+        sidebar: measure("#sidebar"),
+        leftResizer: measure("#leftPaneResizer"),
+        sections: measure("#sections"),
+        rightResizer: measure("#rightPaneResizer"),
+        leftToggle: measure('[data-ui="sidebar-header-collapse-toggle"]'),
+        rightToggle: measure('[data-ui="right-panel-header-collapse-toggle"]'),
+        sidebarTitleVisible: getComputedStyle(document.querySelector<HTMLElement>(".sidebar-title")!).display !== "none",
+        sectionsTabsVisible: getComputedStyle(document.querySelector<HTMLElement>(".sections-tabs")!).display !== "none",
+        dockLeftControlExists: exists('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]'),
+        dockRightControlExists: exists('.workspace-command-dock [data-ui="workspace-right-panel-toggle"]'),
+      };
+    });
+
+    expect(collapsed.sidebar.hidden).toBe(false);
+    expect(collapsed.sidebar.display).toBe("flex");
+    expect(collapsed.sidebar.width).toBeGreaterThan(0);
+    expect(collapsed.sidebar.width).toBeLessThanOrEqual(36);
+    expect(collapsed.leftResizer).toEqual({ hidden: true, display: "none", width: 0 });
+    expect(collapsed.sections.hidden).toBe(false);
+    expect(collapsed.sections.display).toBe("flex");
+    expect(collapsed.sections.width).toBeGreaterThan(0);
+    expect(collapsed.sections.width).toBeLessThanOrEqual(36);
+    expect(collapsed.rightResizer).toEqual({ hidden: true, display: "none", width: 0 });
+    expect(collapsed.leftToggle.hidden).toBe(false);
+    expect(collapsed.leftToggle.display).not.toBe("none");
+    expect(collapsed.rightToggle.hidden).toBe(false);
+    expect(collapsed.rightToggle.display).not.toBe("none");
+    expect(collapsed.sidebarTitleVisible).toBe(false);
+    expect(collapsed.sectionsTabsVisible).toBe(false);
+    expect(collapsed.dockLeftControlExists).toBe(false);
+    expect(collapsed.dockRightControlExists).toBe(false);
+
+    await page.click('[data-ui="sidebar-header-collapse-toggle"]');
+    await page.click('[data-ui="right-panel-header-collapse-toggle"]');
+
+    const expanded = await page.evaluate(() => {
+      const measure = (selector: string) => {
+        const node = document.querySelector<HTMLElement>(selector);
+        if (!node) throw new Error(`Missing ${selector}`);
+        const style = getComputedStyle(node);
+        return {
+          hidden: node.hidden,
+          display: style.display,
+          width: node.getBoundingClientRect().width,
+        };
+      };
       return {
         sidebar: measure("#sidebar"),
         leftResizer: measure("#leftPaneResizer"),
@@ -115,10 +308,12 @@ test("panel header controls collapse both side panes without residual width", as
       };
     });
 
-    expect(collapsed.sidebar).toEqual({ hidden: true, display: "none", width: 0 });
-    expect(collapsed.leftResizer).toEqual({ hidden: true, display: "none", width: 0 });
-    expect(collapsed.sections).toEqual({ hidden: true, display: "none", width: 0 });
-    expect(collapsed.rightResizer).toEqual({ hidden: true, display: "none", width: 0 });
+    expect(expanded.sidebar.hidden).toBe(false);
+    expect(expanded.sidebar.width).toBeGreaterThan(120);
+    expect(expanded.leftResizer.hidden).toBe(false);
+    expect(expanded.sections.hidden).toBe(false);
+    expect(expanded.sections.width).toBeGreaterThan(120);
+    expect(expanded.rightResizer.hidden).toBe(false);
   } finally {
     await browser.close();
     server.stop(true);

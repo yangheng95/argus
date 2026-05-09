@@ -1,0 +1,254 @@
+import { NamedError } from "@opencorvus-ai/util/error"
+import { existsSync } from "fs"
+import path from "path"
+import z from "zod"
+import { TerminalProfile } from "@/pty/profile"
+import { which } from "@/util/which"
+
+export namespace CodingCli {
+  export const ConfigError = NamedError.create(
+    "CodingCliConfigError",
+    z.object({
+      message: z.string(),
+    }),
+  )
+
+  export const Icon = z.enum(["claude-code", "codex", "gemini", "copilot", "glm"])
+  export type Icon = z.infer<typeof Icon>
+
+  export const PublicInfo = z
+    .object({
+      id: z.string().min(1),
+      label: z.string().min(1),
+      icon: Icon,
+    })
+    .meta({ ref: "CodingCliProfile" })
+  export type PublicInfo = z.infer<typeof PublicInfo>
+
+  export const ListResponse = z
+    .object({
+      profiles: z.array(PublicInfo),
+    })
+    .meta({ ref: "CodingCliProfileList" })
+  export type ListResponse = z.infer<typeof ListResponse>
+
+  export const OpenInput = z.object({
+    cliID: z.string().min(1),
+    terminalProfileID: z.string().min(1),
+    cwd: z.string().min(1),
+  })
+  export type OpenInput = z.infer<typeof OpenInput>
+
+  export const OpenResponse = z.object({ ok: z.boolean() }).meta({ ref: "CodingCliOpenResponse" })
+  export type OpenResponse = z.infer<typeof OpenResponse>
+
+  interface Definition {
+    id: string
+    label: string
+    icon: Icon
+    env: string
+    commands: string[]
+    args?: string[]
+  }
+
+  export interface Resolved extends PublicInfo {
+    command: string
+    args: string[]
+  }
+
+  const DEFINITIONS: Definition[] = [
+    {
+      id: "claude-code",
+      label: "Claude Code",
+      icon: "claude-code",
+      env: "OPENCORVUS_CODING_CLI_CLAUDE_CODE_BIN",
+      commands: process.platform === "win32"
+        ? ["claude.exe", "claude-code.exe", "claude.cmd", "claude-code.cmd", "claude"]
+        : ["claude", "claude-code"],
+    },
+    {
+      id: "codex",
+      label: "Codex",
+      icon: "codex",
+      env: "OPENCORVUS_CODING_CLI_CODEX_BIN",
+      commands: process.platform === "win32" ? ["codex.exe", "codex.cmd", "codex"] : ["codex"],
+    },
+    {
+      id: "gemini-code",
+      label: "Gemini Code",
+      icon: "gemini",
+      env: "OPENCORVUS_CODING_CLI_GEMINI_CODE_BIN",
+      commands: process.platform === "win32"
+        ? ["gemini.exe", "gemini.cmd", "geminicode.exe", "geminicode.cmd", "gemini-code.exe", "gemini-code.cmd", "gemini"]
+        : ["gemini", "geminicode", "gemini-code"],
+    },
+    {
+      id: "copilot",
+      label: "GitHub Copilot",
+      icon: "copilot",
+      env: "OPENCORVUS_CODING_CLI_COPILOT_BIN",
+      commands: process.platform === "win32"
+        ? ["copilot.exe", "copilot.cmd", "github-copilot.exe", "github-copilot.cmd", "copilot"]
+        : ["copilot", "github-copilot"],
+    },
+    {
+      id: "glm-code",
+      label: "GLM Code",
+      icon: "glm",
+      env: "OPENCORVUS_CODING_CLI_GLM_CODE_BIN",
+      commands: process.platform === "win32"
+        ? ["glmcode.exe", "glmcode.cmd", "glm-code.exe", "glm-code.cmd", "glm.exe", "glm.cmd", "glmcode"]
+        : ["glmcode", "glm-code", "glm"],
+    },
+  ]
+
+  function resolveCommand(command: string): string {
+    if (path.isAbsolute(command)) {
+      if (!existsSync(command)) {
+        throw new ConfigError({ message: `Coding CLI command does not exist: ${command}` })
+      }
+      return command
+    }
+    const resolved = which(command)
+    if (!resolved) {
+      throw new ConfigError({ message: `Coding CLI command is not resolvable: ${command}` })
+    }
+    return resolved
+  }
+
+  function resolveCommandIfInstalled(command: string): string | undefined {
+    try {
+      return resolveCommand(command)
+    } catch (error) {
+      if (error instanceof ConfigError) return undefined
+      throw error
+    }
+  }
+
+  function resolveDefinition(definition: Definition): Resolved | undefined {
+    const explicit = process.env[definition.env]?.trim()
+    if (explicit) {
+      return {
+        id: definition.id,
+        label: definition.label,
+        icon: definition.icon,
+        command: resolveCommand(explicit),
+        args: [...(definition.args ?? [])],
+      }
+    }
+    for (const command of definition.commands) {
+      const resolved = resolveCommandIfInstalled(command)
+      if (!resolved) continue
+      return {
+        id: definition.id,
+        label: definition.label,
+        icon: definition.icon,
+        command: resolved,
+        args: [...(definition.args ?? [])],
+      }
+    }
+  }
+
+  function profiles(): Record<string, Resolved> {
+    const result: Record<string, Resolved> = {}
+    for (const definition of DEFINITIONS) {
+      const resolved = resolveDefinition(definition)
+      if (resolved) result[resolved.id] = resolved
+    }
+    return result
+  }
+
+  export async function list(): Promise<ListResponse> {
+    return {
+      profiles: Object.values(profiles()).map((profile) => ({
+        id: profile.id,
+        label: profile.label,
+        icon: profile.icon,
+      })),
+    }
+  }
+
+  function resolve(cliID: string): Resolved {
+    const profile = profiles()[cliID]
+    if (!profile) {
+      throw new ConfigError({ message: `Unknown or unavailable coding CLI: ${cliID}` })
+    }
+    return profile
+  }
+
+  function powershellQuote(value: string): string {
+    return `'${value.replaceAll("'", "''")}'`
+  }
+
+  function shellQuote(value: string): string {
+    return `'${value.replaceAll("'", "'\"'\"'")}'`
+  }
+
+  function cmdQuote(value: string): string {
+    return `"${value.replaceAll('"', '""')}"`
+  }
+
+  function terminalKind(profile: TerminalProfile.Resolved): "powershell" | "cmd" | "bash" {
+    const base = path.basename(profile.command).toLowerCase()
+    if (base === "powershell.exe" || base === "powershell" || base === "pwsh.exe" || base === "pwsh") {
+      return "powershell"
+    }
+    if (base === "cmd.exe" || base === "cmd") return "cmd"
+    if (base === "bash.exe" || base === "bash" || base === "zsh" || base === "fish") return "bash"
+    throw new ConfigError({
+      message: `Terminal profile ${profile.id} cannot launch external coding CLIs: ${profile.command}`,
+    })
+  }
+
+  export function buildTerminalCommand(input: {
+    terminal: TerminalProfile.Resolved
+    cli: Resolved
+    cwd: string
+  }): { command: string; args: string[] } {
+    const cliCommand = [input.cli.command, ...input.cli.args]
+    const kind = terminalKind(input.terminal)
+    if (kind === "powershell") {
+      const invocation = [
+        `Set-Location -LiteralPath ${powershellQuote(input.cwd)}`,
+        `& ${powershellQuote(input.cli.command)}${input.cli.args.map((arg) => ` ${powershellQuote(arg)}`).join("")}`,
+      ].join("; ")
+      return {
+        command: input.terminal.command,
+        args: [...input.terminal.args, "-NoExit", "-Command", invocation],
+      }
+    }
+    if (kind === "cmd") {
+      return {
+        command: input.terminal.command,
+        args: [...input.terminal.args, "/k", cliCommand.map(cmdQuote).join(" ")],
+      }
+    }
+    return {
+      command: input.terminal.command,
+      args: [
+        ...input.terminal.args,
+        "-i",
+        "-c",
+        `cd ${shellQuote(input.cwd)} && ${cliCommand.map(shellQuote).join(" ")}; exec ${shellQuote(path.basename(input.terminal.command))} -i`,
+      ],
+    }
+  }
+
+  export async function open(input: OpenInput): Promise<OpenResponse> {
+    const cwd = await TerminalProfile.validateCwd(input.cwd)
+    const terminal = await TerminalProfile.resolve(input.terminalProfileID)
+    const cli = resolve(input.cliID)
+    const command = buildTerminalCommand({ terminal, cli, cwd })
+    const child = Bun.spawn([command.command, ...command.args], {
+      cwd,
+      env: {
+        ...process.env,
+        ...terminal.env,
+      },
+      stdio: ["ignore", "ignore", "ignore"],
+      windowsHide: false,
+    })
+    child.unref()
+    return { ok: true }
+  }
+}

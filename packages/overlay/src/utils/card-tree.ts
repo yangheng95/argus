@@ -179,6 +179,64 @@ export function orderedReachableCardIDs(): string[] {
   return reachableCardIDsFromTree(cardTreeStore.order, cardTreeStore.cards);
 }
 
+export function isBuildPhaseCard(node: Pick<CardNode, "kind" | "phaseID"> | undefined): boolean {
+  return node?.kind === "phase" && node.phaseID === "build";
+}
+
+export function buildPhaseChildForStep(
+  node: CardNode,
+  cards: Record<string, CardNode | undefined> = cardTreeStore.cards,
+): CardNode | undefined {
+  if (node.kind !== "step") return undefined;
+  const matches: CardNode[] = [];
+  for (const childID of node.childIDs ?? []) {
+    const child = cards[childID];
+    if (!child) {
+      throw new Error(`card-tree: step card ${node.id} references missing child ${childID}`);
+    }
+    if (isBuildPhaseCard(child)) matches.push(child);
+  }
+  if (matches.length > 1) {
+    throw new Error(`card-tree: step card ${node.id} has multiple build phase children`);
+  }
+  return matches[0];
+}
+
+export function visibleChildIDsForCard(
+  node: CardNode,
+  cards: Record<string, CardNode | undefined> = cardTreeStore.cards,
+): string[] {
+  const childIDs = node.childIDs ?? [];
+  const visible: string[] = [];
+  for (const childID of childIDs) {
+    const child = cards[childID];
+    if (!child) {
+      throw new Error(`card-tree: card ${node.id} references missing child ${childID}`);
+    }
+    if (node.kind === "step" && isBuildPhaseCard(child)) continue;
+    visible.push(childID);
+  }
+  return visible;
+}
+
+export function stepHeaderNodeWithBuildPhase(
+  node: CardNode,
+  cards: Record<string, CardNode | undefined> = cardTreeStore.cards,
+): CardNode {
+  const buildPhase = buildPhaseChildForStep(node, cards);
+  if (!buildPhase) return node;
+  return {
+    ...node,
+    status: buildPhase.status ?? node.status,
+    contextTokens: buildPhase.contextTokens ?? node.contextTokens,
+    contextTokensEstimated: buildPhase.contextTokensEstimated ?? node.contextTokensEstimated,
+    usage: buildPhase.usage ?? node.usage,
+    timeCompleted: buildPhase.timeCompleted ?? node.timeCompleted,
+    errorReason: buildPhase.errorReason ?? node.errorReason,
+    terminalReason: buildPhase.terminalReason ?? node.terminalReason,
+  };
+}
+
 // ── Latest-activity preview (collapsed header) ──
 // Walks the subtree and keeps only the single most recent activity by
 // (card.time, part-index). An activity is either:

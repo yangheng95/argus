@@ -44,8 +44,6 @@ export const PROJECT_EDITORS: ProjectEditor[] = [
   { id: "cursor", label: "Cursor" },
 ];
 
-export const QUICK_PROJECT_EDITORS: ProjectEditor[] = PROJECT_EDITORS.slice(0, 2);
-
 export interface ClearWorkspaceRuntimeOptions {
   /** When true, the in-flight chat request is NOT cancelled. */
   preserveChatRequest?: boolean;

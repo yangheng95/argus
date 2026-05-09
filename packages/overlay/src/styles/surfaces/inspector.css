@@ -676,8 +676,7 @@
 }
 
 /* GWG header bar: clickable summary row carrying the status icon,
-   goal title, optional priority/revision tags, and edit/delete
-   actions. The status-icon child rotates background + color
+   goal title, and optional priority/revision tags. The status-icon child rotates background + color
    through the three status modifier classes — those variants
    live next to the base so per-status chrome stays in one place. */
 .gwg-header {
@@ -709,13 +708,6 @@
   min-width: 0;
   align-items: baseline;
   gap: calc(6px * var(--ui-scale));
-}
-
-.gwg-header-actions {
-  display: flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  margin-left: auto;
 }
 
 /* Status icon: 18x18 round chip showing the status glyph. The
@@ -826,27 +818,6 @@
 .gwg-action-delete:hover {
   background: var(--bad-dim);
   color: var(--bad);
-}
-
-/* Disclosure chevron — round chip on the trailing edge. The
-   `.gwg--expanded` modifier flips the rotation to indicate the
-   open state. */
-.gwg-chevron {
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-  background: color-mix(in srgb, var(--surface-inset) 58%, transparent);
-  border-radius: var(--oc-radius-pill);
-  transition: transform var(--ui-duration-slow) var(--ui-timing-standard);
-  flex-shrink: 0;
-}
-
-.gwg--expanded .gwg-chevron {
-  transform: rotate(180deg);
 }
 
 /* GWG body: container that opens beneath the header when a goal is

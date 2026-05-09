@@ -385,15 +385,6 @@ body {
   padding-left: calc(8px * var(--ui-scale));
 }
 
-.card__chevron {
-  flex: none;
-  font-size: calc(10px * var(--ui-scale));
-  color: var(--text-muted);
-  transition: transform var(--ui-duration-base) var(--ui-timing-standard);
-  padding-left: calc(2px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-}
-
 /* Collapsed-only todo summary — bottom row under the preview line.
  * Only emitted when the card subtree contains a TodoWrite tool call, so
  * cards without a plan stay compact. Progress bar stretches to fill the
@@ -536,10 +527,6 @@ body {
   color: var(--good);
   opacity: var(--ui-opacity-full);
 }
-.card__copy + .card__chevron {
-  margin-left: 0;
-}
-
 .card__rewind {
   flex: none;
   display: inline-flex;
@@ -570,16 +557,6 @@ body {
   opacity: var(--ui-opacity-disabled);
   pointer-events: none;
 }
-.card__rewind + .card__chevron {
-  margin-left: 0;
-}
-.card--expanded > .card__head .card__chevron {
-  transform: rotate(0deg);
-}
-.card--collapsed > .card__head .card__chevron {
-  transform: rotate(-90deg);
-}
-
 /* ── Badge ───────────────────────────────────────────────── */
 
 .card__badge {
@@ -753,94 +730,6 @@ body {
   min-width: 0;
 }
 
-.card__body-actions {
-  display: flex;
-  justify-content: center;
-  margin-top: calc(var(--card-pad-y) + calc(4px * var(--ui-scale)));
-  padding-top: calc(2px * var(--ui-scale));
-}
-
-.card__collapse-toggle {
-  width: min(calc(240px * var(--ui-scale)), 74%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(6px * var(--ui-scale));
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-soft);
-  font-size: var(--card-meta-size);
-  line-height: 1.3;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  cursor: pointer;
-  transition: color var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.card__collapse-toggle::before,
-.card__collapse-toggle::after {
-  content: "";
-  flex: 1 1 0;
-  height: calc(1px * var(--ui-scale));
-}
-
-.card__collapse-toggle::before {
-  background: linear-gradient(90deg, transparent, var(--card-line-dim));
-}
-
-.card__collapse-toggle::after {
-  background: linear-gradient(90deg, var(--card-line-dim), transparent);
-}
-
-.card__collapse-toggle:hover,
-.card__collapse-toggle:focus-visible {
-  color: var(--text-strong);
-}
-
-.card__collapse-toggle:focus-visible {
-  outline: none;
-}
-
-.card__collapse-toggle-icon {
-  --card-collapse-stage: var(--card-stage, var(--card-stage-info));
-
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(22px * var(--ui-scale));
-  height: calc(22px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  color: color-mix(in srgb, var(--card-collapse-stage) 86%, var(--text-strong));
-  background: color-mix(in srgb, var(--card-collapse-stage) 14%, var(--surface-hover));
-  box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-collapse-stage) 32%, var(--card-line));
-  transition: color var(--ui-duration-base) var(--ui-timing-standard), background-color var(--ui-duration-base) var(--ui-timing-standard), box-shadow var(--ui-duration-base) var(--ui-timing-standard), transform var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.card__collapse-toggle:hover .card__collapse-toggle-icon,
-.card__collapse-toggle:focus-visible .card__collapse-toggle-icon {
-  color: var(--card-collapse-stage);
-  background: color-mix(in srgb, var(--card-collapse-stage) 18%, transparent);
-  box-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--card-collapse-stage) 42%, var(--card-line));
-  transform: translateY(calc(-1px * var(--ui-scale)));
-}
-
-.card__collapse-toggle svg {
-  flex: none;
-}
-
-.card__collapse-toggle-label {
-  flex: none;
-  color: var(--text-strong);
-  font-weight: var(--ui-font-weight-medium);
-  transition: color var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.card__collapse-toggle:hover .card__collapse-toggle-label,
-.card__collapse-toggle:focus-visible .card__collapse-toggle-label {
-  color: var(--text-strong);
-}
-
 /* ── Goal preamble ───────────────────────────────────────── */
 
 .card__goal-desc {
@@ -975,8 +864,7 @@ body {
   cursor: default;
   padding-bottom: calc(2px * var(--ui-scale));
 }
-.card[data-kind="message"][data-role="user"] > .card__head .card__badge,
-.card[data-kind="message"][data-role="user"] > .card__head .card__chevron {
+.card[data-kind="message"][data-role="user"] > .card__head .card__badge {
   display: none;
 }
 .card[data-kind="message"][data-role="user"] > .card__head .card__title {
@@ -1318,11 +1206,6 @@ body {
   background: var(--surface-hover);
   opacity: var(--ui-opacity-full);
 }
-.card__trace + .card__chevron,
-.card__agent-cancel + .card__chevron {
-  margin-left: 0;
-}
-
 /* Inline reply box at the END of agent session card body. Renders via
    <AgentSessionReplyBox/> in Card.tsx; spans full width of the card body. */
 .card__agent-reply {

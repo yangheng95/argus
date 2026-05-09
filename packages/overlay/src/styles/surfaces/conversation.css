@@ -498,10 +498,20 @@
 }
 
 .workspace-editor-launchers {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--oc-control-border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--oc-control-bg);
+  box-shadow: var(--oc-control-shadow);
+  flex-shrink: 0;
+}
+
+.workspace-coding-cli-launchers {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   border: var(--oc-border-width) solid var(--oc-control-border);
   border-radius: var(--oc-radius-soft);
   background: var(--oc-control-bg);
@@ -521,7 +531,9 @@
   flex-shrink: 0;
 }
 
-.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"],
+.workspace-editor-select,
+.workspace-coding-cli-select,
+.workspace-terminal-select,
 .workspace-layout-controls .oc-button[data-size="icon"] {
   --oc-button-height: calc(28px * var(--ui-scale));
   --oc-button-padding-x: 0;
@@ -534,18 +546,18 @@
   box-shadow: none;
 }
 
-.workspace-terminal-select {
+.workspace-terminal-select,
+.workspace-editor-select,
+.workspace-coding-cli-select {
   appearance: none;
   min-width: 0;
   width: calc(42px * var(--ui-scale));
-  height: calc(28px * var(--ui-scale));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0 calc(4px * var(--ui-scale));
   gap: calc(2px * var(--ui-scale));
   border: 0;
-  border-radius: var(--oc-radius-soft);
   background: transparent;
   color: var(--text-soft);
   font-family: var(--font);
@@ -556,42 +568,64 @@
 
 .workspace-terminal-select:hover,
 .workspace-terminal-select:focus-visible,
-.workspace-terminal-select[data-open="true"] {
+.workspace-terminal-select[data-open="true"],
+.workspace-editor-select:hover,
+.workspace-editor-select:focus-visible,
+.workspace-editor-select[data-open="true"],
+.workspace-coding-cli-select:hover,
+.workspace-coding-cli-select:focus-visible,
+.workspace-coding-cli-select[data-open="true"] {
   background: var(--oc-control-bg-hover);
   color: var(--text-strong);
   outline: none;
 }
 
-.workspace-terminal-select:disabled {
+.workspace-terminal-select:disabled,
+.workspace-editor-select:disabled,
+.workspace-coding-cli-select:disabled {
   cursor: default;
   opacity: var(--ui-opacity-disabled);
 }
 
 .workspace-terminal-select-icon,
 .workspace-terminal-select-caret,
-.workspace-terminal-option-icon {
+.workspace-terminal-option-icon,
+.workspace-editor-select-icon,
+.workspace-editor-select-caret,
+.workspace-editor-option-icon,
+.workspace-coding-cli-select-icon,
+.workspace-coding-cli-select-caret,
+.workspace-coding-cli-option-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
 }
 
-.workspace-terminal-select-icon {
+.workspace-terminal-select-icon,
+.workspace-editor-select-icon,
+.workspace-coding-cli-select-icon {
   width: calc(20px * var(--ui-scale));
   height: calc(20px * var(--ui-scale));
   color: var(--accent);
 }
 
-.workspace-terminal-select-caret {
+.workspace-terminal-select-caret,
+.workspace-editor-select-caret,
+.workspace-coding-cli-select-caret {
   color: var(--text-muted);
 }
 
-.workspace-terminal-select[data-open="true"] .workspace-terminal-select-caret {
+.workspace-terminal-select[data-open="true"] .workspace-terminal-select-caret,
+.workspace-editor-select[data-open="true"] .workspace-editor-select-caret,
+.workspace-coding-cli-select[data-open="true"] .workspace-coding-cli-select-caret {
   color: var(--text-strong);
   transform: rotate(180deg);
 }
 
-.workspace-terminal-menu {
+.workspace-terminal-menu,
+.workspace-editor-menu,
+.workspace-coding-cli-menu {
   position: fixed;
   z-index: var(--ui-z-titlebar);
   width: max-content;
@@ -605,11 +639,15 @@
   box-shadow: var(--shadow-lg);
 }
 
-.workspace-terminal-menu[hidden] {
+.workspace-terminal-menu[hidden],
+.workspace-editor-menu[hidden],
+.workspace-coding-cli-menu[hidden] {
   display: none;
 }
 
-.workspace-terminal-option {
+.workspace-terminal-option,
+.workspace-editor-option,
+.workspace-coding-cli-option {
   appearance: none;
   width: 100%;
   min-height: calc(30px * var(--ui-scale));
@@ -629,20 +667,28 @@
 }
 
 .workspace-terminal-option:hover,
-.workspace-terminal-option:focus-visible {
+.workspace-terminal-option:focus-visible,
+.workspace-editor-option:hover,
+.workspace-editor-option:focus-visible,
+.workspace-coding-cli-option:hover,
+.workspace-coding-cli-option:focus-visible {
   background: var(--subtle-3);
   color: var(--text-strong);
   outline: none;
 }
 
-.workspace-terminal-option-label {
+.workspace-terminal-option-label,
+.workspace-editor-option-label,
+.workspace-coding-cli-option-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.workspace-terminal-option-icon {
+.workspace-terminal-option-icon,
+.workspace-editor-option-icon,
+.workspace-coding-cli-option-icon {
   width: calc(22px * var(--ui-scale));
   height: calc(22px * var(--ui-scale));
 }
@@ -662,40 +708,54 @@
   color: var(--good);
 }
 
-.workspace-terminal-select[aria-pressed="true"] {
-  background: var(--oc-control-bg-hover);
+.workspace-editor-option[data-editor="vscode"] .workspace-editor-option-icon {
+  color: var(--accent);
+}
+
+.workspace-editor-option[data-editor="pycharm"] .workspace-editor-option-icon {
+  color: var(--good);
+}
+
+.workspace-editor-option[data-editor="webstorm"] .workspace-editor-option-icon {
+  color: var(--accent-start);
+}
+
+.workspace-editor-option[data-editor="intellij"] .workspace-editor-option-icon {
+  color: var(--accent-end);
+}
+
+.workspace-editor-option[data-editor="cursor"] .workspace-editor-option-icon {
   color: var(--text-strong);
 }
 
-
-.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"] {
-  --oc-button-color: var(--workspace-editor-color, var(--text-soft));
+.workspace-coding-cli-option-icon[data-coding-cli-icon="claude-code"] {
+  color: var(--accent-end);
 }
 
-.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"][data-editor="vscode"] {
-  --workspace-editor-color: var(--accent);
+.workspace-coding-cli-option-icon[data-coding-cli-icon="codex"],
+.workspace-coding-cli-select-icon {
+  color: var(--accent);
 }
 
-.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"][data-editor="pycharm"] {
-  --workspace-editor-color: var(--good);
+.workspace-coding-cli-option-icon[data-coding-cli-icon="gemini"] {
+  color: var(--accent-start);
 }
 
-.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"][data-editor="webstorm"] {
-  --workspace-editor-color: var(--accent-start);
+.workspace-coding-cli-option-icon[data-coding-cli-icon="copilot"] {
+  color: var(--good);
 }
 
-.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"][data-editor="intellij"] {
-  --workspace-editor-color: var(--accent-end);
+.workspace-coding-cli-option-icon[data-coding-cli-icon="glm"] {
+  color: var(--warn);
 }
 
-.workspace-editor-launchers .oc-button[data-ui="workspace-editor-launcher"][data-editor="cursor"] {
-  --workspace-editor-color: var(--text-strong);
-}
-
+.workspace-terminal-select[aria-pressed="true"],
 .workspace-layout-controls .oc-button[aria-pressed="true"] {
   --oc-button-border: var(--oc-border-width) solid var(--oc-control-border-hover);
   --oc-button-bg: var(--oc-control-bg-hover);
   --oc-button-color: var(--text-strong);
+  background: var(--oc-control-bg-hover);
+  color: var(--text-strong);
 }
 
 /* VcsBadge: branch + dirty/ahead/behind glyph cluster. Tone driven

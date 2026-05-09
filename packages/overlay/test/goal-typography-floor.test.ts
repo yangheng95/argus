@@ -109,7 +109,6 @@ test("goal workflow typography never drops below 10px", () => {
     ".gwg-status-icon",
     ".gwg-priority-badge",
     ".gwg-revision",
-    ".gwg-chevron",
     ".gwg-objective-label",
     ".gwg-objective-text",
     ".gwg-done-definition-label",

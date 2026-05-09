@@ -68,7 +68,7 @@ test("preview resolver does not call the port-probe route when board has no deli
   });
 });
 
-test("preview tab auto-activates only from unmanaged Inspector state", () => {
+test("preview tab auto-activates from any unmanaged right-panel tab when delivery preview is ready", () => {
   expect(nextTabForPreviewResolution({
     activeTab: "inspector",
     manualKey: "task:old",
@@ -89,7 +89,7 @@ test("preview tab auto-activates only from unmanaged Inspector state", () => {
       source: "delivery",
       port: 5173,
     },
-  })).toBe("workflow");
+  })).toBe("preview");
 
   expect(nextTabForPreviewResolution({
     activeTab: "inspector",

@@ -25,7 +25,7 @@ export function previewRequestKey(taskID: string | undefined, snapshotVersion: s
 
 export function nextTabForPreviewResolution(input: PreviewAutoActivationInput): RightPanelTab {
   if (input.manualKey === input.requestKey) return input.activeTab;
-  if (input.activeTab === "inspector" && input.resolution?.url) return "preview";
+  if (input.resolution?.url) return "preview";
   return input.activeTab;
 }
 

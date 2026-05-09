@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "typecheck": "tsgo --noEmit",
-    "test": "bun test --timeout 60000 test/acp test/agent test/bus test/cli test/config test/workspace test/env test/file test/flag test/format test/id test/ide test/lsp test/mcp test/memory test/mirror test/patch test/permission test/plugin test/project test/provider test/pty test/question test/scheduler test/server test/session test/skill test/snapshot test/storage test/tool test/tui test/util test/bun.test.ts test/keybind.test.ts test/permission-task.test.ts test/scheduler.test.ts",
+    "test": "bun test --timeout 60000 test/acp test/agent test/bus test/cli test/coding-cli test/config test/workspace test/env test/file test/flag test/format test/id test/ide test/lsp test/mcp test/memory test/mirror test/patch test/permission test/plugin test/project test/provider test/pty test/question test/scheduler test/server test/session test/skill test/snapshot test/storage test/tool test/tui test/util test/bun.test.ts test/keybind.test.ts test/permission-task.test.ts test/scheduler.test.ts",
     "build": "bun run script/build.ts",
     "dev": "bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts"
   },

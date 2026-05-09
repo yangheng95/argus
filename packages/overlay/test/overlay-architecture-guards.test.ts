@@ -680,13 +680,12 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
-  test("gwg actions + chevron + body + objective are owned by surfaces/inspector.css", () => {
+  test("gwg actions + body + objective are owned by surfaces/inspector.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
     for (const className of [
       "gwg-action-btn",
-      "gwg-chevron",
       "gwg-body",
       "gwg-objective",
       "gwg-objective-label",
@@ -701,7 +700,6 @@ describe("overlay architecture guards", () => {
 
     expect(inspectorSurface).toMatch(/\.gwg:hover \.gwg-action-btn,/)
     expect(inspectorSurface).toMatch(/\.gwg-action-delete:hover\s*\{/)
-    expect(inspectorSurface).toMatch(/\.gwg--expanded \.gwg-chevron\s*\{/)
     expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
@@ -1544,7 +1542,6 @@ describe("overlay architecture guards", () => {
     for (const className of [
       "gwg-header",
       "gwg-title-row",
-      "gwg-header-actions",
       "gwg-status-icon",
       "gwg-title",
       "gwg-revision",

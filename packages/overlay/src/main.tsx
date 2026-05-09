@@ -13,6 +13,7 @@ import { TaskDirContent, TaskWorkspaceLine } from "./components/TaskDirBar";
 import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
 import { WorkspaceEditorLaunchers } from "./components/WorkspaceEditorLaunchers";
+import { WorkspaceCodingCliLaunchers } from "./components/WorkspaceCodingCliLaunchers";
 import { WorkspaceLayoutControls } from "./components/WorkspaceLayoutControls";
 import { LeftPanelHeaderCollapseControl, RightPanelHeaderCollapseControl } from "./components/PanelHeaderCollapseControl";
 import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/TitlebarMenubar";
@@ -133,6 +134,7 @@ const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
 });
 const [terminalLaunchProfileID, setTerminalLaunchProfileID] = createSignal("");
 const [terminalLaunchNonce, setTerminalLaunchNonce] = createSignal(0);
+const [selectedTerminalProfileID, setSelectedTerminalProfileID] = createSignal("");
 
 function currentPreviewKey(): string {
   return previewRequestKey(boardStore.selectedTaskID || boardStore.board?.task?.id, boardStore.snapshotVersion);
@@ -397,6 +399,7 @@ function openWorkspaceFile(filePath: string): void {
 /** Open (or switch to) the workspace terminal with the selected terminal profile. */
 function openWorkspaceTerminal(profileID: string): void {
   if (!profileID) throw new Error("Terminal profile ID is required");
+  setSelectedTerminalProfileID(profileID);
   setTerminalLaunchProfileID(profileID);
   setTerminalLaunchNonce((value) => value + 1);
   openWorkspace({ kind: "terminal" });
@@ -750,9 +753,18 @@ if (workspaceLayoutControlsEl) {
       <WorkspaceLayoutControls
         terminalOpen={() => workspaceOpen() && workspaceView().kind === "terminal"}
         onOpenTerminal={openWorkspaceTerminal}
+        onTerminalProfileSelected={setSelectedTerminalProfileID}
       />
     ),
     workspaceLayoutControlsEl,
+  );
+}
+
+const workspaceCodingCliLaunchersEl = document.getElementById("solidWorkspaceCodingCliLaunchers");
+if (workspaceCodingCliLaunchersEl) {
+  render(
+    () => <WorkspaceCodingCliLaunchers terminalProfileID={selectedTerminalProfileID} />,
+    workspaceCodingCliLaunchersEl,
   );
 }
 
