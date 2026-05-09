@@ -21,6 +21,7 @@
  */
 
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
+import { createDecisionLog } from "@/decision-log"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
 import { isRunOrphan } from "./orphan"
@@ -54,6 +55,7 @@ import {
  *  A chronically failing provider can write an artifact every wake; older
  *  entries add no decision value once the LLM has seen the trend. */
 const STREAM_FAILURE_PROMPT_CAP = 5
+const AGENT_FAILURE_PROMPT_CAP = 5
 
 const LIVE_STATES = new Set(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
 const TERMINAL_OK_STATES = new Set(["completed"])
@@ -129,6 +131,14 @@ export interface StreamFailureDesc {
   session_id?: string
 }
 
+export interface AgentFailureDesc {
+  decision_id: string
+  time_created: number
+  key: string
+  reason: string
+  goal_id?: string
+}
+
 export interface DeliveryVerdictDesc {
   iteration: number
   verdict: string
@@ -182,6 +192,11 @@ export interface TaskDesc {
    *  (rule 13). Empty / undefined when the task has had no stream failures
    *  since `task.time_started`. */
   recent_stream_failures?: StreamFailureDesc[]
+  /** Recent sub-agent session failures recorded in decision_log phase
+   *  "agent_error". These are the model-visible counterpart to overlay red
+   *  session cards: provider quota, network, schema, and terminal session
+   *  errors that would otherwise live only in User Interface (UI) / log status. */
+  recent_agent_failures?: AgentFailureDesc[]
   iterations_count: number
 }
 
@@ -429,6 +444,20 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     }
   })
 
+  const agentFailureFloor = task.time_started ?? task.time_created
+  const recentAgentFailures: AgentFailureDesc[] = createDecisionLog(task.id)
+    .readByPhase("agent_error")
+    .filter((entry) => entry.timeCreated >= agentFailureFloor)
+    .slice(-AGENT_FAILURE_PROMPT_CAP)
+    .reverse()
+    .map((entry) => ({
+      decision_id: entry.id,
+      time_created: entry.timeCreated,
+      key: entry.key,
+      reason: entry.value,
+      goal_id: entry.goalID ?? undefined,
+    }))
+
   // Bootstrap-first signal. Single source — derived from goal status and
   // surfaced as collaboration context. This is not a dispatch gate.
   const activeBootstrap = goalRows.find(
@@ -460,6 +489,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     },
     recent_verdict: verdict,
     recent_stream_failures: recentStreamFailures.length > 0 ? recentStreamFailures : undefined,
+    recent_agent_failures: recentAgentFailures.length > 0 ? recentAgentFailures : undefined,
     iterations_count: history.length,
   }
 }
@@ -661,6 +691,22 @@ export function renderTaskDescription(desc: TaskDesc): string {
         `decision was made. Use this history to decide: \`retry_task\` (transient ` +
         `network/idle blip), \`restart_from_stage\` (config-level — wrong provider/key), ` +
         `or \`fail_task\` (permanent — quota exhausted, key revoked, model gone).`,
+    )
+  }
+
+  if (desc.recent_agent_failures && desc.recent_agent_failures.length > 0) {
+    lines.push("")
+    lines.push(`## Recent agent session failures (${desc.recent_agent_failures.length})`)
+    for (const f of desc.recent_agent_failures) {
+      const ts = new Date(f.time_created).toISOString()
+      const goal = f.goal_id ? ` goal=${f.goal_id}` : ""
+      lines.push(`- ${ts} ${f.key}${goal}: ${truncate(f.reason, 360)}`)
+    }
+    lines.push(
+      `These entries are failed agent/tool sessions made visible to this prompt. ` +
+        `Treat quota/network/provider failures as failed attempts of the current task or goal; ` +
+        `retry the same work, change provider, or fail_task from this evidence. ` +
+        `Do not infer a fresh task start merely because the latest user wake repeats the original request.`,
     )
   }
 
