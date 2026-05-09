@@ -56,7 +56,7 @@ export namespace SystemTerminal {
   function terminalApp(): string {
     const configured = process.env.OPENCORVUS_SYSTEM_TERMINAL_BIN?.trim()
     if (configured) return resolveExecutable(configured)
-    if (process.platform === "win32") return resolveExecutable("wt.exe")
+    if (process.platform === "win32") return resolveExecutable(process.env.ComSpec?.trim() || "cmd.exe")
     if (process.platform === "darwin") return resolveExecutable("/usr/bin/osascript")
     return resolveExecutable("x-terminal-emulator")
   }
@@ -111,12 +111,13 @@ export namespace SystemTerminal {
       if (options.command) {
         return {
           command: options.terminalApp,
-          args: ["-d", options.cwd, "cmd.exe", "/k", argv.map(cmdQuote).join(" ")],
+          args: ["/d", "/s", "/c", "start", "", "/D", options.cwd, "cmd.exe", "/k", argv.map(cmdQuote).join(" ")],
         }
       }
+      const command = argv.length > 0 ? argv : ["cmd.exe", "/k"]
       return {
         command: options.terminalApp,
-        args: argv.length > 0 ? ["-d", options.cwd, ...argv] : ["-d", options.cwd],
+        args: ["/d", "/s", "/c", "start", "", "/D", options.cwd, ...command],
       }
     }
 
@@ -137,16 +138,25 @@ export namespace SystemTerminal {
   }
 
   async function launch(spec: CommandSpec, cwd: string, env: Record<string, string>): Promise<OpenResponse> {
-    const child = Bun.spawn([spec.command, ...spec.args], {
-      cwd,
-      env: {
-        ...process.env,
-        ...env,
-      },
-      stdio: ["ignore", "ignore", "ignore"],
-      windowsHide: false,
-    })
-    child.unref()
+    let child: Bun.Subprocess<"ignore", "ignore", "ignore">
+    try {
+      child = Bun.spawn([spec.command, ...spec.args], {
+        cwd,
+        env: {
+          ...process.env,
+          ...env,
+        },
+        stdio: ["ignore", "ignore", "ignore"],
+        windowsHide: false,
+      })
+    } catch (error) {
+      throw new ConfigError({ message: error instanceof Error ? error.message : String(error) })
+    }
+    const earlyExit = await Promise.race([child.exited, Bun.sleep(300).then(() => undefined)])
+    if (typeof earlyExit === "number" && earlyExit !== 0) {
+      throw new ConfigError({ message: `System terminal launcher exited with code ${earlyExit}: ${spec.command}` })
+    }
+    if (earlyExit === undefined) child.unref()
     return { ok: true }
   }
 

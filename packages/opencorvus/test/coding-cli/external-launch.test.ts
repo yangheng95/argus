@@ -40,17 +40,14 @@ describe("coding CLI external launch", () => {
     const command = SystemTerminal.buildCommand({
       platform: "win32",
       cwd: "C:\\repo",
-      terminalApp: "wt.exe",
+      terminalApp: "cmd.exe",
       command: "C:\\Tools\\Codex CLI\\codex.cmd",
       args: [],
       keepOpen: true,
     })
 
-    expect(command.command).toBe("wt.exe")
-    expect(command.args).toContain("-d")
-    expect(command.args).toContain("C:\\repo")
-    expect(command.args).toContain("cmd.exe")
-    expect(command.args).toContain("/k")
+    expect(command.command).toBe("cmd.exe")
+    expect(command.args.slice(0, 9)).toEqual(["/d", "/s", "/c", "start", "", "/D", "C:\\repo", "cmd.exe", "/k"])
     expect(command.args.join(" ")).toContain("codex.cmd")
     expect(command.args.join(" ")).not.toContain("profileID")
   })
