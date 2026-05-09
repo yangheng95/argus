@@ -114,6 +114,10 @@ export namespace ArchitectAgent {
       existingGoals: seedGoals,
       designSpecs: input.designSpecs,
       requireReferenceCoverage: (input.designSpecs?.length ?? 0) > 0 || Boolean(input.designAnalysis?.trim()),
+      referenceCoverageReasons: [
+        ...((input.designSpecs?.length ?? 0) > 0 ? ["designSpecs are present"] : []),
+        ...(input.designAnalysis?.trim() ? ["designAnalysis handoff is present"] : []),
+      ],
     })
     const contextTools = await filterAgentTools(createAgentContextTools(), "architect")
 
