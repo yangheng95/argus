@@ -136,7 +136,13 @@ const pendingIntegrity = new Map<string, PendingIntegrityPayload>();
  *  Replaces the per-phase `pendingSubagentTerminal` buffer. Single source of
  *  truth for every session's lifecycle (orchestrator root, all subagent
  *  phases, future phases) — see specs/new-arch/07-panel-reactivity.md. */
-const pendingSessionStatus = new Map<string, CardStatus>();
+interface ProjectedSessionStatus {
+  cardStatus: CardStatus;
+  terminalReason?: "completed" | "error" | "aborted";
+  errorReason?: string;
+  timeCompleted?: number;
+}
+const pendingSessionStatus = new Map<string, ProjectedSessionStatus>();
 
 // ── Entry point ──
 
@@ -531,8 +537,8 @@ function handleTaskChanged(event: any): void {
  *  idle              → idle (no spinner, "between turns / awaiting input")
  *  terminal.completed → completed
  *  terminal.error    → error
- *  terminal.aborted  → error (operator-initiated cancel; rendered the same
- *                      as a hard error so the user sees the card is done) */
+ *  terminal.aborted  → error + terminalReason=aborted (badge renders as
+ *                      cancelled, while the card is still terminal) */
 function mapSessionStatusToCardStatus(status: any): CardStatus | undefined {
   const t = String(status?.type || "");
   if (t === "streaming" || t === "retry") return "running";
@@ -545,42 +551,62 @@ function mapSessionStatusToCardStatus(status: any): CardStatus | undefined {
   return undefined;
 }
 
+function projectSessionStatus(event: any): ProjectedSessionStatus {
+  const props = propsOf(event);
+  const status = props.status;
+  const cardStatus = mapSessionStatusToCardStatus(status);
+  if (!cardStatus) {
+    throw new Error(`session.status unknown status shape: ${JSON.stringify(status)}`);
+  }
+  const projected: ProjectedSessionStatus = { cardStatus };
+  if (status?.type === "terminal") {
+    const reason = String(status.reason || "");
+    if (reason !== "completed" && reason !== "error" && reason !== "aborted") {
+      throw new Error(`session.status unknown terminal reason: ${JSON.stringify(status)}`);
+    }
+    projected.terminalReason = reason;
+    projected.timeCompleted = Number(event?.emittedAt || event?.emitted_at || Date.now());
+    if (cardStatus === "error") {
+      projected.errorReason =
+        (typeof status.message === "string" && status.message) ||
+        (typeof status.error === "string" && status.error) ||
+        "";
+    }
+  }
+  return projected;
+}
+
+function applyProjectedSessionStatus(cardID: string, projected: ProjectedSessionStatus): void {
+  setCardTreeStore("cards", cardID, "status", projected.cardStatus);
+  if (projected.terminalReason) {
+    setCardTreeStore("cards", cardID, "terminalReason", projected.terminalReason);
+  }
+  if (
+    (projected.cardStatus === "completed" || projected.cardStatus === "error") &&
+    projected.timeCompleted &&
+    !cardTreeStore.cards[cardID]?.timeCompleted
+  ) {
+    setCardTreeStore("cards", cardID, "timeCompleted", projected.timeCompleted);
+  }
+  if (projected.errorReason) {
+    setCardTreeStore("cards", cardID, "errorReason", projected.errorReason);
+  }
+}
+
 function handleSessionStatus(event: any): void {
   const props = propsOf(event);
   const sessionID = String(props.sessionID || "");
   if (!sessionID) {
     throw new Error("session.status missing sessionID");
   }
-  const cardStatus = mapSessionStatusToCardStatus(props.status);
-  if (!cardStatus) {
-    throw new Error(`session.status unknown status shape: ${JSON.stringify(props.status)}`);
-  }
+  const projected = projectSessionStatus(event);
   const info = sessions.get(sessionID);
   if (!info || !cardTreeStore.cards[info.cardID]) {
     // Card not yet materialized — hold until ensureSessionCard runs.
-    pendingSessionStatus.set(sessionID, cardStatus);
+    pendingSessionStatus.set(sessionID, projected);
     return;
   }
-  setCardTreeStore("cards", info.cardID, "status", cardStatus);
-  // Stamp timeCompleted on the terminal flip so CardHeader can render the
-  // running-or-finished duration. We don't overwrite a prior value — once
-  // a session reaches terminal state, the duration is fixed.
-  if ((cardStatus === "completed" || cardStatus === "error") &&
-      !cardTreeStore.cards[info.cardID]?.timeCompleted) {
-    const ts = Number(event?.emittedAt || event?.emitted_at || Date.now());
-    setCardTreeStore("cards", info.cardID, "timeCompleted", ts);
-  }
-  // On error / aborted terminal, capture the human-readable reason so
-  // CardHeader doesn't strand the operator with just a red badge.
-  if (cardStatus === "error") {
-    const status = props.status as { message?: string; error?: string; reason?: string } | undefined;
-    const reason =
-      (typeof status?.message === "string" && status.message) ||
-      (typeof status?.error === "string" && status.error) ||
-      (typeof status?.reason === "string" && status.reason !== "error" && status.reason !== "aborted" && status.reason) ||
-      "";
-    if (reason) setCardTreeStore("cards", info.cardID, "errorReason", reason);
-  }
+  applyProjectedSessionStatus(info.cardID, projected);
 }
 
 // usage.updated — cumulative LLM token / cost totals from the executor for a
@@ -607,12 +633,12 @@ function handleUsageUpdated(event: any): void {
  *  ensureSessionCard after the session is committed, parallel to
  *  drainPendingIntegrity. */
 function drainPendingSessionStatus(sessionID: string): void {
-  const status = pendingSessionStatus.get(sessionID);
-  if (!status) return;
+  const projected = pendingSessionStatus.get(sessionID);
+  if (!projected) return;
   const session = sessions.get(sessionID);
   if (!session || !cardTreeStore.cards[session.cardID]) return;
   pendingSessionStatus.delete(sessionID);
-  setCardTreeStore("cards", session.cardID, "status", status);
+  applyProjectedSessionStatus(session.cardID, projected);
 }
 
 function handleInteraction(event: any): void {

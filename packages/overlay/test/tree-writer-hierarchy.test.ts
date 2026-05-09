@@ -2,6 +2,7 @@ import { test, expect } from "bun:test";
 import { setBoardStore } from "../src/store/board";
 import { applyEvent, resetWriter } from "../src/services/tree-writer";
 import { cardTreeStore } from "../src/store/card-tree";
+import { statusBadge } from "../src/utils/status-badge";
 import { replay } from "./fixtures/replay";
 import {
   EVENTS,
@@ -754,4 +755,35 @@ test("tree-writer explicitly accepts non-projected protocol events", () => {
 
   expect(cardTreeStore.order).toEqual(beforeOrder);
   expect(Object.keys(cardTreeStore.cards)).toEqual(beforeCards);
+});
+
+test("session.status preserves terminal reason when status arrives before the card", () => {
+  resetWriter();
+
+  applyEvent({
+    type: "session.status",
+    emittedAt: 1_776_000_010_000,
+    properties: {
+      sessionID: "ses_pending_terminal",
+      status: { type: "terminal", reason: "aborted" },
+    },
+  });
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      info: stampedInfo("requirements", {
+        id: "msg_pending_terminal",
+        sessionID: "ses_pending_terminal",
+        role: "assistant",
+        time: { created: 1_776_000_009_000 },
+      }),
+    },
+  });
+
+  const card = cardTreeStore.cards["requirements:session:ses_pending_terminal"]!;
+  expect(card.status).toBe("error");
+  expect(card.terminalReason).toBe("aborted");
+  expect(card.timeCompleted).toBe(1_776_000_010_000);
+  expect(statusBadge(card)).toEqual({ tone: "cancelled", glyph: "⊘" });
 });

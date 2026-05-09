@@ -2,10 +2,16 @@ import { Instance, lazyInstanceState } from "../../project/instance"
 import { Log } from "../../util/log"
 import { Message } from "../message"
 import { SessionStatus } from "../status"
-import { Session } from ".."
 
 export namespace SessionPromptState {
   export const log = Log.create({ service: "session.prompt" })
+
+  class BusyError extends Error {
+    constructor(public readonly sessionID: string) {
+      super(`Session ${sessionID} is busy`)
+      this.name = "BusyError"
+    }
+  }
 
   // Phase 5: Sessions manage their own lifecycle via explicit cancel(sessionID).
   // Instance.dispose() no longer aborts running sessions — this prevents
@@ -27,7 +33,7 @@ export namespace SessionPromptState {
   )
 
   export function assertNotBusy(sessionID: string) {
-    if (SessionStatus.get(sessionID).type === "streaming") throw new Session.BusyError(sessionID)
+    if (SessionStatus.get(sessionID).type === "streaming") throw new BusyError(sessionID)
   }
 
   export function start(sessionID: string) {
@@ -67,6 +73,19 @@ export namespace SessionPromptState {
     delete s[sessionID]
     SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" })
     return
+  }
+
+  export function finish(sessionID: string, abort?: AbortSignal) {
+    const s = state()
+    const match = s[sessionID]
+    if (!match) return
+    if (abort && match.abort.signal !== abort) return
+    const error = new Error("session prompt loop finished")
+    for (const cb of match.callbacks) {
+      cb.reject(error)
+    }
+    match.callbacks = []
+    delete s[sessionID]
   }
 
   export function flushCallbacks(sessionID: string, result: Message.WithParts) {

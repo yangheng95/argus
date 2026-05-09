@@ -195,6 +195,11 @@ export interface CardNode {
    *  read-only chip when present so the operator sees WHY the card flipped
    *  red instead of just the badge color change. */
   errorReason?: string;
+  /** Raw terminal reason carried by `session.status` terminal events.
+   *  Overlay keeps this separate from `status` because cancelled/aborted
+   *  sessions intentionally use the terminal status channel while rendering
+   *  differently from hard errors. */
+  terminalReason?: "completed" | "error" | "aborted";
   /** Structured integrity review payload — only populated for kind="integrity"
    *  nodes. Mirrors `IntegrityReviewCompleted` event shape (see
    *  opencorvus/engine/model.ts). Rendered natively by <IntegrityCard>; the
