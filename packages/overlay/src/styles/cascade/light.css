@@ -16,16 +16,16 @@
 body[data-theme="light"] {
   color-scheme: light;
   --text-on-accent: #ffffff;
-  --bg: #eef3ff;
+  --bg: rgba(238, 243, 255, 0.72);
   --surface: rgba(255, 255, 255, 0.82);
   --surface-hover: rgba(243, 247, 255, 0.96);
-  --surface-inset: #f7f9ff;
+  --surface-inset: rgba(247, 249, 255, 0.72);
   --surface-strong: rgba(255, 255, 255, 0.94);
   --rail-surface: rgba(250, 252, 255, 0.9);
   --chat-canvas: rgba(255, 255, 255, 0.78);
   --inspector-surface: rgba(250, 252, 255, 0.9);
 
-  --body-bg: linear-gradient(135deg, #fbfdff 0%, #f4f7ff 42%, #eef1ff 100%);
+  --body-bg: linear-gradient(135deg, rgba(251, 253, 255, 0.72) 0%, rgba(244, 247, 255, 0.66) 42%, rgba(238, 241, 255, 0.62) 100%);
   --panel-body-bg: rgba(255, 255, 255, 0.44);
   --panel-body-blur: blur(20px);
   --chrome: rgba(255, 255, 255, 0.78);
@@ -74,20 +74,20 @@ body[data-theme="light"] {
   --subtle-3: color-mix(in srgb, var(--accent) 8.5%, transparent);
   --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
-  --dialog-bg: #ffffff;
+  --dialog-bg: rgba(255, 255, 255, 0.86);
   --dialog-backdrop: rgba(0, 0, 0, 0.4);
   --ui-scrim: color-mix(in srgb, black 40%, transparent);
   --ui-shadow-tone: color-mix(in srgb, black 12%, transparent);
   --ui-highlight-tone: color-mix(in srgb, white 56%, transparent);
   --ui-glass-tint: color-mix(in srgb, white 62%, transparent);
-  --executor-menu-bg: #ffffff;
+  --executor-menu-bg: rgba(255, 255, 255, 0.86);
   --executor-menu-shadow:
     0 calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale)) var(--ui-shadow-tone);
   --executor-menu-row-hover-bg: var(--subtle-5);
   --task-bar-bg: var(--ui-glass-tint);
   --task-bar-backdrop-filter: blur(calc(18px * var(--ui-scale)));
   --task-bar-border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
-  --menu-panel-bg: rgba(255, 255, 255, 0.96);
+  --menu-panel-bg: rgba(255, 255, 255, 0.86);
   --divider-soft: rgba(92, 112, 163, 0.12);
   --panel-fill:
     linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 58%, rgba(255, 255, 255, 0.5)),

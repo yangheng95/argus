@@ -26,8 +26,8 @@
 }
 
 .dialog-form {
-  --dialog-drag-x: 0px;
-  --dialog-drag-y: 0px;
+  --dialog-drag-x: calc(0px * var(--ui-scale));
+  --dialog-drag-y: calc(0px * var(--ui-scale));
   position: absolute;
   top: 50%;
   left: 50%;

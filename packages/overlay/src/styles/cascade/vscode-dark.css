@@ -28,19 +28,19 @@ body[data-theme="vscode-dark"] {
   color-scheme: dark;
 
   --text-on-accent: #ffffff;
-  --bg: #1e1e1e;
-  --surface: #252526;
-  --surface-hover: #2a2d2e;
-  --surface-inset: #181818;
-  --surface-strong: #333333;
-  --rail-surface: #252526;
-  --chat-canvas: #1e1e1e;
-  --inspector-surface: #252526;
+  --bg: rgba(30, 30, 30, 0.78);
+  --surface: rgba(37, 37, 38, 0.74);
+  --surface-hover: rgba(42, 45, 46, 0.78);
+  --surface-inset: rgba(24, 24, 24, 0.72);
+  --surface-strong: rgba(51, 51, 51, 0.8);
+  --rail-surface: var(--surface);
+  --chat-canvas: var(--bg);
+  --inspector-surface: var(--surface);
 
-  --body-bg: #1e1e1e;
-  --panel-body-bg: #1e1e1e;
+  --body-bg: var(--bg);
+  --panel-body-bg: var(--bg);
   --panel-body-blur: none;
-  --chrome: #3c3c3c;
+  --chrome: rgba(60, 60, 60, 0.76);
   --border: rgba(255, 255, 255, 0.12);
   --border-hover: rgba(0, 122, 204, 0.5);
   --border-strong: rgba(255, 255, 255, 0.18);
@@ -94,30 +94,30 @@ body[data-theme="vscode-dark"] {
   --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
 
-  --dialog-bg: #252526;
+  --dialog-bg: rgba(37, 37, 38, 0.86);
   --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
   --ui-scrim: color-mix(in srgb, black 60%, transparent);
   --ui-shadow-tone: color-mix(in srgb, black 32%, transparent);
   --ui-highlight-tone: color-mix(in srgb, white 4%, transparent);
   --ui-glass-tint: color-mix(in srgb, white 3%, transparent);
 
-  --executor-menu-bg: #252526;
+  --executor-menu-bg: var(--menu-panel-bg);
   --executor-menu-shadow:
     0 calc(12px * var(--ui-scale)) calc(32px * var(--ui-scale)) var(--ui-shadow-tone),
     0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 56%, transparent);
   --executor-menu-row-hover-bg: #094771;
 
-  --task-bar-bg: #252526;
+  --task-bar-bg: var(--chrome);
   --task-bar-backdrop-filter: none;
   --task-bar-border-color: #454545;
 
-  --menu-panel-bg: #1f1f1f;
+  --menu-panel-bg: rgba(31, 31, 31, 0.9);
   --divider-soft: color-mix(in srgb, var(--border) 60%, transparent);
 
-  --panel-fill: #252526;
-  --panel-fill-hover: #2a2d2e;
-  --card-fill: #2d2d30;
-  --card-fill-hover: #2a2d2e;
+  --panel-fill: var(--surface);
+  --panel-fill-hover: var(--surface-hover);
+  --card-fill: rgba(45, 45, 48, 0.72);
+  --card-fill-hover: var(--surface-hover);
 
   --guide-card-border: color-mix(in srgb, var(--accent) 25%, transparent);
   --guide-card-bg:
