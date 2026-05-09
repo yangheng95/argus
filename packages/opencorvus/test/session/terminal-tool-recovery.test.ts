@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import "../../src/session/prompt"
-import { SessionLoop } from "../../src/session/loop"
+import { SessionLoop, terminalToolSystemPrompt } from "../../src/session/loop"
 
 describe("SessionLoop terminal tool recovery", () => {
   const base = {
@@ -90,6 +90,14 @@ describe("SessionLoop terminal tool recovery", () => {
     const tools = { submit_architect: {} as any, register_goal: {} as any }
 
     expect(Object.keys(SessionLoop.terminalToolScopedTools(contract, tools))).toEqual(["submit_architect"])
+  })
+
+  test("adds an explicit terminal tool system prompt for reasoning models", () => {
+    const prompt = terminalToolSystemPrompt("submit_design_prd_spec")
+
+    expect(prompt).toContain("MUST call the submit_design_prd_spec tool")
+    expect(prompt).toContain("Do NOT respond with plain text")
+    expect(prompt).toContain("input matching its schema")
   })
 
   test("marks the scoped terminal tool strict for providers that support strict tool input", () => {
