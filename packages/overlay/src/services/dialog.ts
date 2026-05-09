@@ -13,9 +13,9 @@ import { renderMarkdown, escapeHtml } from "../utils/markdown";
 import { describeToolPart } from "../utils/tool";
 import { dialogStore, setDialogStore, type ConfigDialogTab } from "../store/dialog";
 import { panelMessage } from "./chat";
+import { OPENCORVUS_VERSION_LABEL, OVERLAY_VERSION } from "../utils/version";
 
 let sessionDialogSeq = 0;
-const OVERLAY_VERSION = "0.0.1-alpha";
 const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>([
   "general",
   "permissions",
@@ -97,6 +97,7 @@ export function renderAboutVersion(): void {
     const text = connected
       ? t("version.overlay", { version: OVERLAY_VERSION })
       : `${t("version.overlay", { version: OVERLAY_VERSION })} / ${t("version.core_unknown")}`;
+    chatVersion.textContent = OPENCORVUS_VERSION_LABEL;
     chatVersion.title = text;
   }
 }

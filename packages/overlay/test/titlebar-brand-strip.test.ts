@@ -28,19 +28,25 @@ const HTML = readFileSync(
 describe("titlebar brand wordmark is gone", () => {
   test('no `<span class="brand-name">OpenCorvus</span>` survives in index.html', () => {
     expect(HTML).not.toMatch(/class=["']brand-name["']/)
-    // Belt + suspenders: the literal wordmark inside the titlebar
-    // brand stack should be gone too. The page <title> and the
-    // chat-version-copy line ("OpenCorvus Workspace") are different
-    // surfaces and stay intact, so we only forbid wordmark inside
-    // the titlebar.
+    // Belt + suspenders: the old plain brand-name node inside the titlebar
+    // brand stack should be gone. The brand-guide popover keeps its own
+    // OpenCorvus wordmark, so the assertion stays scoped to the retired node.
     const titlebar = HTML.match(/<header class=["']titlebar["'][\s\S]*?<\/header>/)
     expect(titlebar).not.toBeNull()
-    expect(titlebar![0]).not.toMatch(/>OpenCorvus</)
+    expect(titlebar![0]).not.toMatch(/class=["']brand-name["'][^>]*>OpenCorvus</)
   })
 
   test("brand-guide popover trigger is preserved (so the quick-guide affordance is not lost)", () => {
     expect(HTML).toMatch(/class=["']brand-guide["']/)
     expect(HTML).toMatch(/class=["']brand-guide-card["']/)
+  })
+})
+
+describe("sidebar version label", () => {
+  test("left footer shows OpenCorvus version instead of workspace copy", () => {
+    expect(HTML).not.toContain("OpenCorvus Workspace")
+    expect(HTML).toContain("OpenCorvus v%OPENCORVUS_OVERLAY_VERSION%")
+    expect(HTML).toContain('id="chatVersion"')
   })
 })
 

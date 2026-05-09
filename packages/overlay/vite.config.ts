@@ -3,6 +3,11 @@ import solidPlugin from "vite-plugin-solid";
 import path from "path";
 import fs from "fs";
 
+const overlayPackage = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, "package.json"), "utf8"),
+) as { version: string };
+const overlayVersion = overlayPackage.version;
+
 function copyStaticAssets(entries: string[]): Plugin {
   function copyRecursive(src: string, dest: string) {
     if (fs.statSync(src).isDirectory()) {
@@ -30,11 +35,24 @@ function copyStaticAssets(entries: string[]): Plugin {
   };
 }
 
+function injectOverlayVersion(): Plugin {
+  return {
+    name: "inject-overlay-version",
+    transformIndexHtml(html) {
+      return html.replaceAll("%OPENCORVUS_OVERLAY_VERSION%", overlayVersion);
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     solidPlugin(),
+    injectOverlayVersion(),
     copyStaticAssets(["i18n"]),
   ],
+  define: {
+    __OPENCORVUS_OVERLAY_VERSION__: JSON.stringify(overlayVersion),
+  },
   root: "src",
   server: {
     port: 5173,
