@@ -36,11 +36,6 @@ test("critical icon affordances keep readable computed contrast", async () => {
                 <div class="chat-textarea-wrap">
                   <textarea class="chat-textarea" disabled></textarea>
                 </div>
-                <div class="chat-icon-col" data-disabled="true">
-                  <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="neutral" data-chrome="icon-action" data-ui="chat-toolbar-button">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5"/></svg>
-                  </button>
-                </div>
                 <button class="chat-send" disabled>
                   <span class="chat-send-icon">
                     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="M2 8l10-5-3 5 3 5z" fill="currentColor" stroke="none"/></svg>
@@ -105,14 +100,11 @@ test("critical icon affordances keep readable computed contrast", async () => {
       }
       return {
         send: read(".chat-send-icon", ".chat-send"),
-        toolbar: read(".chat-icon-col .oc-button", ".chat-icon-col"),
       }
     })
 
     expect(report.send.fgOpacity).toBe("1")
     expect(report.send.ratio).toBeGreaterThanOrEqual(4.5)
-    expect(report.toolbar.bgOpacity).toBe("0.85")
-    expect(report.toolbar.ratio).toBeGreaterThanOrEqual(3)
   } finally {
     await browser.close()
   }

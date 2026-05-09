@@ -106,8 +106,6 @@ export interface DomRefs {
   chatForm: HTMLFormElement | null;
   chatTextarea: HTMLTextAreaElement | null;
   chatAttachments: HTMLElement | null;
-  chatFileInput: HTMLInputElement | null;
-  btnChatAttach: HTMLButtonElement | null;
   btnTaskInterrupt: HTMLButtonElement | null;
   chatSend: HTMLButtonElement | null;
 
@@ -258,8 +256,6 @@ export function getDomRefs(): DomRefs {
     chatForm: $<HTMLFormElement>("#chatForm"),
     chatTextarea: $<HTMLTextAreaElement>("#chatTextarea"),
     chatAttachments: $<HTMLElement>("#chatAttachments"),
-    chatFileInput: $<HTMLInputElement>("#chatFileInput"),
-    btnChatAttach: $<HTMLButtonElement>("#btnChatAttach"),
     btnTaskInterrupt: $<HTMLButtonElement>("#btnTaskInterrupt"),
     chatSend: $<HTMLButtonElement>("#chatSend"),
 

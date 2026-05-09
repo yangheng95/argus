@@ -71,8 +71,9 @@
 
 /* Composer shell: the operator's primary input surface.
    The parent layout owns outer spacing, so this shell stays marginless
-   while carrying its own border, radius, and inner padding. */
+   while carrying its own radius token and inner padding. */
 .chat-input {
+  --chat-textarea-height: calc(62px * var(--ui-scale));
   --chat-compose-scale: 1;
   position: relative;
   display: flex;
@@ -80,8 +81,8 @@
   gap: calc(2px * var(--ui-scale));
   margin: 0;
   padding: calc(4px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 34%, transparent);
-  border-radius: 0;
+  border: 0;
+  border-radius: var(--oc-radius-none);
   background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
   box-shadow: none;
   flex-shrink: 0;
@@ -89,8 +90,24 @@
 }
 
 .chat-input:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 54%, transparent);
-  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--surface-strong) 96%, transparent);
+  box-shadow: none;
+}
+
+.chat-resize-handle {
+  height: calc(8px * var(--ui-scale));
+  margin: calc(-4px * var(--ui-scale)) 0 0;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+}
+
+.chat-resize-handle:hover,
+.chat-resize-handle:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--surface-inset) 48%, transparent);
 }
 
 /* Composer textarea wrap and inner field: the wrap is the flex slot that
@@ -103,7 +120,7 @@
   min-width: 0;
   display: flex;
   align-self: stretch;
-  min-height: calc(62px * var(--ui-scale));
+  min-height: var(--chat-textarea-height);
 }
 
 .chat-textarea-wrap > .chat-textarea {
@@ -113,7 +130,7 @@
 .chat-textarea {
   flex: 1;
   min-width: 0;
-  min-height: calc(62px * var(--ui-scale));
+  min-height: var(--chat-textarea-height);
   resize: none;
   border: var(--oc-border-width) solid var(--border);
   border-radius: 0;
@@ -125,14 +142,10 @@
   overflow-y: auto;
 }
 
-.chat-textarea[data-expanded="true"] {
-  min-height: calc(210px * var(--ui-scale));
-}
-
 .chat-textarea:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--accent-ring);
+  border-color: var(--border);
+  box-shadow: none;
 }
 
 .chat-textarea::placeholder {
@@ -237,13 +250,13 @@
   white-space: nowrap;
 }
 
-/* Compose row: grid that lays the textarea wrap, the icon column, and
-   the send button across the chat-input shell. The 8px gap is the
+/* Compose row: grid that lays the textarea wrap and send button across
+   the chat-input shell. The 8px gap is the
    canonical value (the late `gap: 8px` override that lived in styles.css
    wins over the historical 6px; folded here as the single source). */
 .chat-compose-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: calc(8px * var(--ui-scale));
   min-width: 0;
@@ -409,16 +422,10 @@
 }
 
 /* Viewport reflow: at narrow viewports the send button drops onto its
-   own row and the icon column moves to the right, so the textarea takes
-   the entire first row. */
+   own row, so the textarea takes the entire first row. */
 @media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
   .chat-compose-row {
     grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .chat-icon-col {
-    grid-row: 1 / span 2;
-    grid-column: 2;
   }
 
   .chat-send {
@@ -437,50 +444,6 @@
   border-radius: 50%;
   transform: translateY(-0.05em);
   opacity: var(--ui-opacity-disabled);
-}
-
-/* Composer icon column: the small attach / web-search / expand stack on
-   the left edge of the chat input. Flat slice that visually merges with
-   the chat-input shell. */
-.chat-icon-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  align-self: stretch;
-  gap: calc(2px * var(--ui-scale));
-  flex-shrink: 0;
-  padding: calc(3px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: 0;
-  background: var(--surface-inset);
-}
-
-/* When the textarea is disabled, the entire icon column should follow —
-   otherwise the buttons look clickable but the operator thinks the
-   composer is broken. data-disabled flips pointer-events + opacity. */
-.chat-icon-col[data-disabled="true"] {
-  opacity: var(--ui-opacity-subtle);
-  pointer-events: none;
-}
-
-.chat-icon-col .oc-button[data-ui="chat-toolbar-button"] {
-  --oc-button-height: calc(var(--oc-density-icon-button) + calc(var(--oc-border-width) * 2));
-  --oc-button-padding-x: 0;
-  --oc-button-border: 0 solid transparent;
-  --oc-button-bg: transparent;
-
-  width: calc(var(--oc-density-icon-button) + calc(var(--oc-border-width) * 2));
-  min-width: calc(var(--oc-density-icon-button) + calc(var(--oc-border-width) * 2));
-  height: calc(var(--oc-density-icon-button) + calc(var(--oc-border-width) * 2));
-  border-radius: var(--oc-radius-soft);
-}
-
-.chat-icon-col .oc-button[data-ui="chat-toolbar-button"][data-active] {
-  --oc-button-bg: var(--accent-dim);
-  --oc-button-border: 0 solid transparent;
-  --oc-button-color: var(--accent);
-  --oc-button-shadow: inset 0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .executor-selector .oc-button[data-ui="executor-chip"] {

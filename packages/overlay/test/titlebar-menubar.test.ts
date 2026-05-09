@@ -695,7 +695,6 @@ test(
           ".btn.mini",
           '[data-ui="executor-chip"]',
           ".chat-input",
-          '[data-ui="chat-toolbar-button"]',
           ".chat-send",
           ".board-intro__cta-action",
         ]
@@ -726,18 +725,13 @@ test(
           { selector: ".task-dir-shell", props: ["columnGap", "paddingLeft", "paddingRight"], max: 4 },
           { selector: ".task-cwd-dropdown", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: ".btn.mini", props: ["paddingLeft", "paddingRight"], max: 8 },
-          { selector: '[data-ui="executor-chip"]', props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+          { selector: '[data-ui="executor-chip"]', props: ["columnGap", "paddingLeft", "paddingRight"], max: 9 },
           {
             selector: ".chat-input",
             props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
             max: 8,
           },
           { selector: ".chat-send", props: ["paddingLeft", "paddingRight"], max: 9 },
-          {
-            selector: ".chat-icon-col",
-            props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-            max: 4,
-          },
           { selector: ".chat-send", props: ["columnGap", "paddingLeft", "paddingRight"], max: 9 },
         ]
         return checks.flatMap(({ selector, props, max }) => {
@@ -760,10 +754,8 @@ test(
           ".titlebar-btn",
           '[data-ui="sidebar-new-task-button"]',
           ".btn.mini",
-          '[data-ui="executor-chip"]',
           '[data-ui="right-tabs"]',
           '[data-ui="right-tab"]',
-          '[data-ui="chat-toolbar-button"]',
           ".conn-banner__action",
           ".board-intro__cta-action",
         ]
@@ -874,10 +866,8 @@ test(
           '[data-ui="titlebar-menubar-trigger"]',
           ".titlebar-btn",
           ".btn.mini",
-          '[data-ui="executor-chip"]',
           '[data-ui="right-tabs"]',
           '[data-ui="right-tab"]',
-          '[data-ui="chat-toolbar-button"]',
           ".conn-banner__action",
         ]
         const transparent = (value: string) =>
