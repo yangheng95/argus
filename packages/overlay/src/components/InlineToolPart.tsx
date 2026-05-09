@@ -335,23 +335,23 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
                 // manage, and the operator can pin it open per-instance
                 // by clicking the summary. Short output stays open.
                 const text = output();
-                const lineCount = text.split("\n").length;
-                const isLong = lineCount > 12 || text.length > 1500;
-                const previewLine = text.split("\n").find((l) => l.trim()) || "";
+                const outputLines = text.split("\n");
+                const isLong = outputLines.length > 12 || text.length > 1500;
+                const previewLine = outputLines.find((l) => l.trim()) || "";
                 const preview = previewLine.length > 80
                   ? previewLine.slice(0, 80) + "…"
                   : previewLine;
+                const summaryText = isLong ? preview : "";
                 return (
                   <details
                     class="msg-tool-output-details"
                     open={!isLong}
                     data-long={isLong ? "true" : "false"}
                   >
-                    <summary class="msg-tool-output-summary">
-                      <span class="msg-tool-output-summary-text">
-                        {`${lineCount} line${lineCount === 1 ? "" : "s"} · ${text.length} chars`}
-                        {isLong && preview ? ` — ${preview}` : ""}
-                      </span>
+                    <summary class="msg-tool-output-summary" aria-label="Toggle tool output">
+                      <Show when={summaryText}>
+                        <span class="msg-tool-output-summary-text">{summaryText}</span>
+                      </Show>
                     </summary>
                     <div class="msg-tool-output msg-tool-output--expanded">{text}</div>
                   </details>
