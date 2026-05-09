@@ -58,6 +58,34 @@ export namespace LLM {
 
   export type StreamResult = ReturnType<typeof streamText<ToolSet>>
 
+  export async function composeSystem(input: {
+    agent: Agent.Info
+    model: Provider.Model
+    system: string[]
+    user: Message.User
+  }) {
+    const providerPrompt =
+      input.user.systemMode === "complete"
+        ? []
+        : input.agent.prompt
+          ? [input.agent.prompt]
+          : await SystemPrompt.provider(input.model)
+
+    return [
+      [
+        // use agent prompt otherwise provider prompt, unless caller supplied
+        // a complete system prompt for this turn
+        ...providerPrompt,
+        // any custom prompt passed into this call
+        ...input.system,
+        // any custom prompt from last user message
+        ...(input.user.system ? [input.user.system] : []),
+      ]
+        .filter((x) => x)
+        .join("\n"),
+    ]
+  }
+
   export async function stream(input: StreamInput): Promise<StreamResult> {
     const l = log
       .clone()
@@ -79,20 +107,7 @@ export namespace LLM {
     ])
     const isOpenaiOauth = provider.id === "openai" && auth?.type === "oauth"
 
-    const system: string[] = []
-    const providerPrompt = input.agent.prompt ? [input.agent.prompt] : await SystemPrompt.provider(input.model)
-    system.push(
-      [
-        // use agent prompt otherwise provider prompt
-        ...providerPrompt,
-        // any custom prompt passed into this call
-        ...input.system,
-        // any custom prompt from last user message
-        ...(input.user.system ? [input.user.system] : []),
-      ]
-        .filter((x) => x)
-        .join("\n"),
-    )
+    const system = await composeSystem(input)
 
     const header = system[0]
     await Plugin.trigger(

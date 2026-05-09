@@ -431,6 +431,7 @@ export namespace Message {
       modelID: z.string(),
     }),
     system: z.string().optional(),
+    systemMode: z.enum(["append_to_agent", "complete"]).optional(),
     tools: z.record(z.string(), z.boolean()).optional(),
     variant: z.string().optional(),
     extra: z.record(z.string(), z.any()).optional(),

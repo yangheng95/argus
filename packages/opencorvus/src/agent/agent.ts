@@ -132,6 +132,7 @@ export namespace Agent {
         name: "general",
         description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
         tools: { exclude: ["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...MIRROR_TOOL_IDS] },
+        prompt: PROMPT_GENERAL,
         permission: nonDesignPermissions(
           PermissionNext.fromConfig({
             task: {
@@ -222,10 +223,8 @@ export namespace Agent {
         name: "orchestrator",
         description: "Orchestrator (master) agent. Drives the end-to-end task lifecycle through one of the two built-in workflows (direct or pipeline).",
         // Prompt is constructed dynamically per-wake in src/orchestrator/agent.ts
-        // (buildSystemParts). This minimal agent prompt exists only to stop
-        // SessionLoop from inheriting the generic assistant core header, whose
-        // Task-tool policy is invalid for the orchestrator's explicit tool
-        // surface. Live task/goal/run context still comes from buildSystemParts.
+        // (buildSystemParts) and sent with systemMode="complete". This
+        // registry prompt only documents the agent if another path asks for it.
         prompt: ORCHESTRATOR_RUNTIME_PROMPT,
         // Step cap raised to 1000 (effectively unlimited). Per user 2026-04-25
         // the per-agent step budget should not constrain normal flow. A tight

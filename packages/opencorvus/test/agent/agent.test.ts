@@ -131,6 +131,8 @@ test("general agent exposes subtask dispatch without allowing self-recursion", a
       expect(general).toBeDefined()
       expect(general?.mode).toBe("subagent")
       expect(general?.hidden).toBeUndefined()
+      expect(general?.prompt).toBeDefined()
+      expect(general?.prompt).toContain("You are")
       expect(general?.tools?.exclude).not.toContain("task")
       expect(general?.tools?.exclude).toContain("todoread")
       expect(general?.tools?.exclude).toContain("todowrite")
