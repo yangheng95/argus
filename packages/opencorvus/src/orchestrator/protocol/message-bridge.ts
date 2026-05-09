@@ -2,6 +2,7 @@ import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { Instance } from "@/project/instance"
 import { ProtocolStore } from "@/protocol/store"
+import { Session } from "@/session"
 import { Message } from "@/session/message"
 import { SessionStatus } from "@/session/status"
 import { Log } from "@/util/log"
@@ -330,6 +331,67 @@ function bridgeSessionLifecycle(type: string, properties: Record<string, unknown
   }
 }
 
+function sessionErrorSummary(properties: Record<string, unknown>): string {
+  const error = properties.error as { data?: { message?: unknown }; message?: unknown; name?: unknown } | undefined
+  const dataMessage = error?.data?.message
+  if (typeof dataMessage === "string" && dataMessage.length > 0) return dataMessage
+  const message = error?.message
+  if (typeof message === "string" && message.length > 0) return message
+  const name = error?.name
+  if (typeof name === "string" && name.length > 0) return name
+  return "session stream error"
+}
+
+/**
+ * Persist session stream/provider errors independently of terminal lifecycle.
+ * A provider can fail while the processor later reports a secondary symptom
+ * (for example "terminal tool missing"). The operator must see the original
+ * stream error, so it gets its own tiny replayable event instead of being only
+ * a process log line.
+ */
+function bridgeSessionError(type: string, properties: Record<string, unknown>) {
+  try {
+    const sessionID = sessionFromProperties(properties)
+    if (!sessionID) return
+    const taskID = taskIDForSession(sessionID)
+    if (!taskID) return
+    const enriched = enrichLifecycleProperties(properties, sessionID)
+    const now = Date.now()
+    void ProtocolStore.appendEvent({
+      kind: "event",
+      type,
+      aggregate: "task",
+      aggregate_id: taskID,
+      task_id: taskID,
+      run_id: null,
+      goal_run_id: null,
+      session_id: sessionID,
+      interaction_id: null,
+      stream_id: null,
+      source: "session.bridge",
+      target: null,
+      correlation_id: null,
+      causation_id: null,
+      reply_to: null,
+      emitted_at: now,
+      payload: {
+        ...enriched,
+        summary: sessionErrorSummary(properties),
+      },
+    }).catch((err) => {
+      const detail = err instanceof Error ? err.message : String(err)
+      if (!detail.includes("FOREIGN KEY constraint failed")) {
+        log.warn("bridge: session error persist failed", { type, error: detail })
+      }
+    })
+  } catch (err) {
+    log.warn("bridge: dropping session error event after error", {
+      type,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
 function bridgeEvent(type: string, properties: Record<string, unknown>) {
   // Top-level guard: subscribers run synchronously inside Bus.dispatch's for-loop;
   // a sync throw here would abort dispatch for sibling subscribers. Old code hid
@@ -382,6 +444,9 @@ const CROSS_INSTANCE_HANDLERS: Record<string, (props: Record<string, unknown>) =
   [SessionStatus.Event.Idle.type]: (props) => {
     bridgeSessionLifecycle(SessionStatus.Event.Idle.type, props)
   },
+  [Session.Event.Error.type]: (props) => {
+    bridgeSessionError(Session.Event.Error.type, props)
+  },
 }
 
 const MESSAGE_TYPES = new Set(Object.keys(CROSS_INSTANCE_HANDLERS))
@@ -412,6 +477,9 @@ export function ensureTaskMessageProtocolBridge() {
   })
   Bus.subscribe(SessionStatus.Event.Idle, (event) => {
     bridgeSessionLifecycle(SessionStatus.Event.Idle.type, event.properties)
+  })
+  Bus.subscribe(Session.Event.Error, (event) => {
+    bridgeSessionError(Session.Event.Error.type, event.properties)
   })
 
   // Cross-Instance bridge: executor sessions run in worktree Instances whose

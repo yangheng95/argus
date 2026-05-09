@@ -787,3 +787,46 @@ test("session.status preserves terminal reason when status arrives before the ca
   expect(card.timeCompleted).toBe(1_776_000_010_000);
   expect(statusBadge(card)).toEqual({ tone: "cancelled", glyph: "⊘" });
 });
+
+test("session.error marks the session card with the original stream error", () => {
+  resetWriter();
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      info: stampedInfo("design-analyst", {
+        id: "msg_stream_error",
+        sessionID: "ses_stream_error",
+        role: "assistant",
+        time: { created: 1_776_000_009_000 },
+      }),
+    },
+  });
+
+  applyEvent({
+    type: "session.error",
+    emittedAt: 1_776_000_010_000,
+    properties: {
+      sessionID: "ses_stream_error",
+      error: {
+        name: "MessageAPIError",
+        data: { message: "upstream closed while starting tool call" },
+      },
+    },
+  });
+
+  applyEvent({
+    type: "session.status",
+    emittedAt: 1_776_000_011_000,
+    properties: {
+      sessionID: "ses_stream_error",
+      status: { type: "idle" },
+    },
+  });
+
+  const card = cardTreeStore.cards["design-analyst:session:ses_stream_error"]!;
+  expect(card.status).toBe("error");
+  expect(card.terminalReason).toBe("error");
+  expect(card.errorReason).toBe("upstream closed while starting tool call");
+  expect(card.timeCompleted).toBe(1_776_000_010_000);
+});

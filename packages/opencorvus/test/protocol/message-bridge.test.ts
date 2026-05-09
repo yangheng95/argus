@@ -20,11 +20,13 @@ describe("message-bridge persistence guard", () => {
     expect(bridgeSource).not.toContain("EngineProtocol")
   })
 
-  test("persists only session lifecycle events", () => {
+  test("persists session lifecycle and session error events", () => {
     expect(bridgeSource).toContain("function bridgeSessionLifecycle")
+    expect(bridgeSource).toContain("function bridgeSessionError")
     expect(bridgeSource).toContain("ProtocolStore.appendEvent")
     expect(bridgeSource).toMatch(/Bus\.subscribe\(SessionStatus\.Event\.Status,[\s\S]*bridgeSessionLifecycle/)
     expect(bridgeSource).toMatch(/Bus\.subscribe\(SessionStatus\.Event\.Idle,[\s\S]*bridgeSessionLifecycle/)
+    expect(bridgeSource).toMatch(/Bus\.subscribe\(Session\.Event\.Error,[\s\S]*bridgeSessionError/)
   })
 
   test("uses dispatchEphemeral for every Message.Event subscription", () => {

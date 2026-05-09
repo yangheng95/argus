@@ -1,6 +1,7 @@
 import { Provider } from "@/provider/provider"
 import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
+import { Bus } from "@/bus"
 import type { ModelMessage, Tool, ToolSet } from "ai"
 // Use the wrapped streamText from @/llm/api — its Proxy returns
 // `abortableIterable(fullStream, composed)`, which is the only thing that
@@ -15,7 +16,8 @@ import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import type { Agent } from "@/agent/agent"
-import type { Message } from "./message"
+import { Session } from "."
+import { Message } from "./message"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
@@ -201,8 +203,13 @@ export namespace LLM {
 
     const result = streamText({
       onError(event) {
+        const error = Message.fromError(event.error, { providerID: input.model.providerID })
+        Bus.publish(Session.Event.Error, {
+          sessionID: input.sessionID,
+          error,
+        })
         l.error("stream error", {
-          error: event.error,
+          error,
         })
       },
       async experimental_repairToolCall(failed) {
