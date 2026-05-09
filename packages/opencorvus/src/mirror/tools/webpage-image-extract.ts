@@ -28,13 +28,13 @@ import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 const log = Log.create({ service: "mirror.tool.webpage_image_extract" })
 
 export const WebpageImageExtractTool = Tool.define("webpage_image_extract", {
-  description: `Vision-LLM analysis of one or more reference screenshots → ImageAnalysis JSON. The image2code analogue of \`webpage_extract\` for cases where the user provides a screenshot/mockup instead of a live URL.
+  description: `Vision-LLM analysis of one or more reference screenshots into ImageAnalysis JSON. Use this for cases where the user provides a screenshot/mockup instead of a live URL.
 
 Reads each image from disk, sends it to a vision-capable model, and infers the page's structure (recursive element tree with bounds + roles), tokens (palette / fonts / text styles), and overall description. Multiple images are analyzed in parallel and merged into a single ImageAnalysis (palettes union, trees stacked under per-image wrapper containers).
 
 Writes \`<outputDir>/image-analysis.json\` (the full ImageAnalysis) and a copy of the first reference image as \`<outputDir>/reference.png\` so design-analysis has the same artifact path layout url2code uses. \`image-analysis.json\` is the raw source artifact for compile/analyze and the evidence manifest; use the compiled IR and shared context as the prompt-facing evidence.
 
-Use as step 1 of the design-analysis image PRD/SPEC workflow. Requires a vision-capable model — fails loudly if the configured model has \`capabilities.input.image=false\`.`,
+Use this only when image-reference evidence is missing for the requested output directory. Do not rerun it for the same image set/outputDir once \`reference.png\` and \`image-analysis.json\` exist. Requires a vision-capable model — fails loudly if the configured model has \`capabilities.input.image=false\`.`,
   parameters: z.object({
     images: z
       .array(z.string())
@@ -142,7 +142,7 @@ Use as step 1 of the design-analysis image PRD/SPEC workflow. Requires a vision-
         `**Analysis JSON:** \`${analysisPath}\``,
         `**Reference image:** \`${referencePath}\``,
         "",
-        "Next: call `webpage_image_compile`, then `webpage_image_analyze`, then read `page-ir.xml`, `shared-context.md`, and bounded scaffold details before writing the PRD/SPEC. Do not read `image-analysis.json` wholesale.",
+        "Image evidence acquired. Do not rerun extraction for this image set/outputDir unless the source changed. Use compact mirror artifacts for PRD/SPEC synthesis; do not read `image-analysis.json` wholesale.",
       ].join("\n"),
       metadata: summary,
     }

@@ -23,9 +23,9 @@ Same XML dialect that \`webpage_compile\` (URL) and \`figma_compile\` produce â€
 
 Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes \`<outputDir>/page-ir.xml\`. Returns a preview of the first 2KB and total byte size.
 
-This tool is artifact-dependent: do NOT call it until \`webpage_image_extract\` has completed and written \`image-analysis.json\`. Never batch it in the same assistant turn as \`webpage_image_extract\`.
+This tool is artifact-dependent: do NOT call it until \`image-analysis.json\` exists in the output directory. Never batch it with the image extraction call that creates that file.
 
-Use as step 2 of the design-analysis image PRD/SPEC workflow. Pure function, no network or LLM.`,
+Use this only when the compact image-derived page IR is missing. Do not rerun it once \`page-ir.xml\` exists for the current evidence package. Pure function, no network or LLM.`,
   parameters: z.object({
     outputDir: z
       .string()
@@ -45,7 +45,7 @@ Use as step 2 of the design-analysis image PRD/SPEC workflow. Pure function, no 
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         throw new Error(
           `Missing ${analysisPath}. \`webpage_image_compile\` depends on \`webpage_image_extract\` output. ` +
-            `Run \`webpage_image_extract\` first and wait for it to finish before calling \`webpage_image_compile\`.`,
+            `Create the image evidence package first and retry only after \`image-analysis.json\` exists.`,
         )
       }
       throw error
@@ -75,7 +75,7 @@ Use as step 2 of the design-analysis image PRD/SPEC workflow. Pure function, no 
         ir.xml.length > preview.length ? "<!-- truncated -->" : "",
         "```",
         "",
-        "Next: call `webpage_image_analyze`, then read `page-ir.xml`, `scaffold.json`, and `shared-context.md` before writing the PRD/SPEC.",
+        "Compact page IR written. Do not rerun compilation for this evidence package unless the source extraction changed.",
       ].join("\n"),
       metadata: {
         irPath,

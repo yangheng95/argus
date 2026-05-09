@@ -53,6 +53,10 @@ describe("webpage-generate dependency guards", () => {
       expect(parsed.content).toContain("Build agents consume the persisted PRD/SPEC")
       expect(parsed.content).toContain("visual_consistency_spec")
       expect(parsed.content).toContain("PRD/SPEC working surface")
+      expect(parsed.data.description).not.toContain("->")
+      expect(parsed.content).not.toContain("## Required Evidence Path")
+      expect(parsed.content).not.toMatch(/\bRun `(?:webpage|figma)/)
+      expect(parsed.content).toContain("stop acquiring mirror evidence")
       expect(parsed.content).not.toContain("webpage_render url=<explicit")
       expect(parsed.content).not.toContain("webpage_evaluate.passed = true")
       expect(parsed.content).not.toContain("webpage_vision_judge.accepted = true")
@@ -140,14 +144,18 @@ describe("webpage-generate dependency guards", () => {
         const compile = await WebpageCompileTool.init()
         const analyze = await WebpageAnalyzeTool.init()
 
-        expect(compile.description).toContain("Never batch it in the same assistant turn as `webpage_extract`")
-        expect(analyze.description).toContain("Never batch it in the same assistant turn as `webpage_extract`")
+        expect(compile.description).toContain("Do not rerun it once `page-ir.xml` exists")
+        expect(analyze.description).toContain("Do not rerun it once `shared-context.md`")
+        expect(compile.description).not.toContain("Use as step")
+        expect(analyze.description).not.toContain("Use as step")
+        expect(compile.description).not.toContain("Never batch it in the same assistant turn")
+        expect(analyze.description).not.toContain("Never batch it in the same assistant turn")
 
         await expect(compile.execute({ outputDir: tmp.path }, {} as any)).rejects.toThrow(
-          "Run `webpage_extract` first and wait for it to finish before calling `webpage_compile`.",
+          "Create the URL evidence package first and retry only after `extracted-page.json` exists.",
         )
         await expect(analyze.execute({ outputDir: tmp.path }, {} as any)).rejects.toThrow(
-          "Run `webpage_extract` first and wait for it to finish before calling `webpage_analyze`.",
+          "Create the URL evidence package first and retry only after `extracted-page.json` exists.",
         )
       },
     })

@@ -21,9 +21,9 @@ The XML IR captures every DOM section as <Container>, <Text>, <Image>, <Icon> ta
 
 Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes \`<outputDir>/page-ir.xml\`. Returns a preview of the first 2KB and total byte size.
 
-This tool is artifact-dependent: do NOT call it until \`webpage_extract\` has completed and written \`extracted-page.json\`. Never batch it in the same assistant turn as \`webpage_extract\`.
+This tool is artifact-dependent: do NOT call it until \`extracted-page.json\` exists in the output directory. Never batch it with the URL extraction call that creates that file.
 
-Use as step 2 of the design-analysis webpage PRD/SPEC workflow. Pure function, no network or browser.`,
+Use this only when the compact page IR is missing. Do not rerun it once \`page-ir.xml\` exists for the current evidence package. Pure function, no network or browser.`,
   parameters: z.object({
     outputDir: z
       .string()
@@ -49,7 +49,7 @@ Use as step 2 of the design-analysis webpage PRD/SPEC workflow. Pure function, n
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         throw new Error(
           `Missing ${extractedPath}. \`webpage_compile\` depends on \`webpage_extract\` output. ` +
-          `Run \`webpage_extract\` first and wait for it to finish before calling \`webpage_compile\`.`,
+          `Create the URL evidence package first and retry only after \`extracted-page.json\` exists.`,
         )
       }
       throw error
@@ -80,7 +80,7 @@ Use as step 2 of the design-analysis webpage PRD/SPEC workflow. Pure function, n
         ir.xml.length > preview.length ? "<!-- truncated -->" : "",
         "```",
         "",
-        "Next: call `webpage_analyze`, then read `page-ir.xml`, `scaffold.json`, and `shared-context.md` before writing the PRD/SPEC.",
+        "Compact page IR written. Do not rerun compilation for this evidence package unless the source extraction changed.",
       ].join("\n"),
       metadata: {
         irPath,

@@ -23,9 +23,9 @@ Same XML dialect that webpage_compile (URL) and webpage_image_compile (image) pr
 
 Reads \`<outputDir>/figma-design.json\` (from figma_extract). Writes \`<outputDir>/page-ir.xml\`. Returns a preview of the first 2KB and total byte size.
 
-Artifact-dependent: do NOT call until \`figma_extract\` has finished and written \`figma-design.json\`. Never batch in the same assistant turn.
+Artifact-dependent: do NOT call until \`figma-design.json\` exists in the output directory. Never batch it with the Figma extraction call that creates that file.
 
-Step 2 of the design-analysis Figma PRD/SPEC workflow. Pure function, no network or LLM.`,
+Use this only when the compact Figma-derived page IR is missing. Do not rerun it once \`page-ir.xml\` exists for the current evidence package. Pure function, no network or LLM.`,
   parameters: z.object({
     outputDir: z
       .string()
@@ -45,7 +45,7 @@ Step 2 of the design-analysis Figma PRD/SPEC workflow. Pure function, no network
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         throw new Error(
           `Missing ${designPath}. \`figma_compile\` depends on \`figma_extract\` output. ` +
-            `Run \`figma_extract\` first and wait for it to finish before calling \`figma_compile\`.`,
+            `Create the Figma evidence package first and retry only after \`figma-design.json\` exists.`,
         )
       }
       throw error
@@ -75,7 +75,7 @@ Step 2 of the design-analysis Figma PRD/SPEC workflow. Pure function, no network
         ir.xml.length > preview.length ? "<!-- truncated -->" : "",
         "```",
         "",
-        "Next: call `figma_analyze`, then read `page-ir.xml`, `scaffold.json`, and `shared-context.md` before writing the PRD/SPEC.",
+        "Compact page IR written. Do not rerun compilation for this evidence package unless the source extraction changed.",
       ].join("\n"),
       metadata: {
         irPath,

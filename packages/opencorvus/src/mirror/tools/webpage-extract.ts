@@ -33,9 +33,9 @@ Writes to the output directory (defaults to the worktree):
   - extracted-page.json          the full ExtractedPage object (DOM + tokens + assets)
   - images/*                     downloaded image assets (so the clone can reference local paths)
 
-Returns a compact summary (title, viewport, element count, artifact paths). The design-analysis agent should call \`webpage_compile\` and \`webpage_analyze\`, then use \`page-ir.xml\`, \`shared-context.md\`, and the tool summaries as its prompt-facing evidence. \`extracted-page.json\` is the raw source artifact for deterministic tools and the evidence manifest; do not read it wholesale into prompt context.
+Returns a compact summary (title, viewport, element count, artifact paths). \`extracted-page.json\` is the raw source artifact for deterministic tools and the evidence manifest; do not read it wholesale into prompt context.
 
-Use this as step 1 of the design-analysis webpage PRD/SPEC workflow. Requires network access to the target URL.`,
+Use this only when URL evidence is missing for the requested output directory. Do not rerun it for the same URL/outputDir once \`reference.png\` and \`extracted-page.json\` exist. Requires network access to the target URL.`,
   parameters: z.object({
     url: z.string().describe("The webpage to extract. Must start with http:// or https://."),
     outputDir: z
@@ -130,7 +130,7 @@ Use this as step 1 of the design-analysis webpage PRD/SPEC workflow. Requires ne
         `**Reference screenshot:** \`${referencePath}\``,
         `**Full extracted page JSON:** \`${jsonPath}\``,
         "",
-        "Next: call `webpage_compile`, then `webpage_analyze`, then read `page-ir.xml`, `shared-context.md`, and bounded scaffold details before writing the PRD/SPEC. Do not read `extracted-page.json` wholesale.",
+        "Evidence acquired. Do not rerun extraction for this URL/outputDir unless the source changed. Use compact mirror artifacts for PRD/SPEC synthesis; do not read `extracted-page.json` wholesale.",
       ].join("\n"),
       metadata: summary,
     }

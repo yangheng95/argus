@@ -32,11 +32,11 @@ Reads \`<outputDir>/figma-design.json\` (from figma_extract). Writes the same mi
   - shared-context.md       compact token + section summary
   - sourcePaths             scaffold-generated source files for analysis only
 
-Returns a compact summary. The agent should read \`shared-context.md\` and \`page-ir.xml\` first, then use bounded targeted \`scaffold.json\` reads only for specific gaps.
+Returns a compact summary. Once these artifacts exist, use \`shared-context.md\` and \`page-ir.xml\` for PRD/SPEC synthesis; bounded targeted \`scaffold.json\` reads are only for specific gaps.
 
-Artifact-dependent: do NOT call until \`figma_extract\` has finished. Never batch with figma_extract.
+Artifact-dependent: do NOT call until \`figma-design.json\` exists in the output directory. Never batch it with the Figma extraction call that creates that file.
 
-Step 3 of the design-analysis Figma PRD/SPEC workflow. Pure function, no network or LLM.`,
+Use this only when scaffold artifacts are missing. Do not rerun it once \`shared-context.md\` exists for the current evidence package. Pure function, no network or LLM.`,
   parameters: z.object({
     outputDir: z
       .string()
@@ -56,7 +56,7 @@ Step 3 of the design-analysis Figma PRD/SPEC workflow. Pure function, no network
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         throw new Error(
           `Missing ${designPath}. \`figma_analyze\` depends on \`figma_extract\` output. ` +
-            `Run \`figma_extract\` first and wait for it to finish before calling \`figma_analyze\`.`,
+            `Create the Figma evidence package first and retry only after \`figma-design.json\` exists.`,
         )
       }
       throw error
@@ -106,7 +106,7 @@ Step 3 of the design-analysis Figma PRD/SPEC workflow. Pure function, no network
         `- \`${contextPath}\` — compact prompt-ready summary`,
         `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: read `shared-context.md` and `page-ir.xml`, then use bounded targeted `scaffold.json` reads only for missing details before writing the PRD/SPEC. Do not treat generated source as the deliverable.",
+        "Figma scaffold artifacts written. Do not rerun analysis for this evidence package unless the source extraction changed. Use compact artifacts for PRD/SPEC synthesis; generated source is not the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,
