@@ -62,7 +62,11 @@ describe("webpage-generate dependency guards", () => {
     const { createCodebaseTools } = await import("../../src/engine/codebase-tools")
     await using tmp = await tmpdir()
     await Bun.write(`${tmp.path}/mirror/extracted-page.json`, `[{"screenshotUrl":"${"x".repeat(5000)}"}]\n`)
-    await Bun.write(`${tmp.path}/mirror/scaffold.json`, "[\n{}\n]\n")
+    await Bun.write(
+      `${tmp.path}/mirror/scaffold.json`,
+      Array.from({ length: 140 }, (_, i) => (i === 0 ? "[" : i === 139 ? "]" : `{"node":${i}}`)).join("\n"),
+    )
+    await Bun.write(`${tmp.path}/mirror/page-ir.xml`, Array.from({ length: 5 }, (_, i) => `<n>${i}</n>`).join("\n"))
 
     const tools = createCodebaseTools(tmp.path)
     const readFile = tools.read_file as any
@@ -80,6 +84,16 @@ describe("webpage-generate dependency guards", () => {
 
     const bounded = await readFile.execute({ path: "mirror/scaffold.json", max_lines: 20 }, {})
     expect(bounded).toContain("1 | [")
+    expect(bounded).toContain("bounded mirror artifact excerpt returned")
+    expect(bounded).not.toContain("next chunk:")
+
+    const paged = await readFile.execute({ path: "mirror/scaffold.json", start_line: 21, max_lines: 20 }, {})
+    expect(paged).toContain("Do not page dense mirror artifacts")
+
+    const pageIr = await readFile.execute({ path: "mirror/page-ir.xml", max_lines: 2 }, {})
+    expect(pageIr).toContain("1 | <n>0</n>")
+    expect(pageIr).toContain("bounded mirror artifact excerpt returned")
+    expect(pageIr).not.toContain("next chunk:")
   })
 
   test("read_file truncates pathological long text lines", async () => {
