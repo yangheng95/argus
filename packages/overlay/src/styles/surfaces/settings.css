@@ -718,11 +718,7 @@
    surface boundary. */
 .config-dialog-layout {
   display: flex;
-  /* Density refresh 2026-05-06: dropped `flex: 1` so the layout height
-   * is driven by the taller of (sidebar nav height) and (active tab
-   * content height) instead of stretching to fill the whole dialog
-   * frame. This fixes the "huge empty modal under a small Providers
-   * panel" symptom — when content is short, the modal shrinks to fit. */
+  flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   /* Cap with the dialog's own max-height (minus header / actions) so
@@ -730,6 +726,10 @@
    * the modal. The 120px reservation covers the header + close button
    * row plus the dialog's own padding. */
   max-height: calc(min(calc(100vh - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale))) - calc(120px * var(--ui-scale)));
+}
+
+#configDialog .dialog-form {
+  min-height: min(calc(620px * var(--ui-scale)), calc(100vh - calc(80px * var(--ui-scale))));
 }
 
 /* Sidebar nav rail: vertical list of tab buttons inside the
@@ -854,6 +854,7 @@
 .config-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   /* Density refresh 2026-05-06: padding dropped from 16-22 / 18-28 to
    * 12-16 / 14-18. The dialog already gives us a 16px frame; keeping
@@ -1637,11 +1638,46 @@
   gap: var(--ui-gap-sm);
   flex-wrap: wrap;
 }
+
+.config-content .oc-button[data-size="sm"] {
+  --oc-button-height: calc(28px * var(--ui-scale));
+  --oc-button-padding-x: calc(10px * var(--ui-scale));
+  --oc-button-gap: calc(6px * var(--ui-scale));
+}
+
+.config-content .oc-button[data-size="sm"] > svg,
+.config-content .oc-button[data-size="sm"] .provider-refresh-icon svg {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+}
+
+.config-content .provider-head-actions .oc-button[data-size="sm"],
+.config-content .provider-row-actions .oc-button[data-size="sm"],
+.config-content .provider-form-actions .oc-button[data-size="sm"] {
+  min-width: calc(76px * var(--ui-scale));
+}
+
+.config-content .provider-api-key-row .oc-button[data-size="sm"] {
+  --oc-button-height: auto;
+
+  align-self: stretch;
+  min-width: calc(88px * var(--ui-scale));
+}
+
+.config-content .provider-head-actions .oc-button[data-size="sm"] {
+  min-width: calc(86px * var(--ui-scale));
+}
+
 .provider-refresh-meta {
   font-size: var(--ui-font-control);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.provider-head-actions .oc-button[data-ui="provider-refresh-button"] {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
 }
 .provider-search-field {
   grid-column: 1 / -1;
