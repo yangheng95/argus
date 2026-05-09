@@ -81,7 +81,9 @@ export async function resolvePromptParts(template: string): Promise<PromptInput[
 }
 
 export async function createUserMessage(input: PromptInput) {
-  const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
+  const agentName = input.agent ?? (await Agent.defaultAgent())
+  const agent = await Agent.get(agentName)
+  if (!agent) throw new Error(`Unknown agent: ${agentName}`)
 
   const model = input.model ?? agent.model ?? (await Provider.defaultModel())
   const full =
@@ -101,6 +103,7 @@ export async function createUserMessage(input: PromptInput) {
     agent: agent.name,
     model,
     system: input.system,
+    systemMode: input.systemMode,
     format: input.format,
     variant,
     extra: input.extra,

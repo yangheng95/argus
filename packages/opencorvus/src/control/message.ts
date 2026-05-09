@@ -94,7 +94,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       onEvent({ type: "start" })
     }
 
-    const agent = await Agent.defaultAgent()
+    const agent = "general"
     const system = await systemPrompt(input)
     const parts = buildUserParts(input)
     const tools = await panelTools()
@@ -114,6 +114,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       agent,
       model,
       system,
+      systemMode: "complete",
       parts: parts as any,
       tools,
       format: {

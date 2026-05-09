@@ -16,6 +16,7 @@ export const PromptInput = z.object({
   tools: z.record(z.string(), z.boolean()).optional(),
   format: Message.Format.optional(),
   system: z.string().optional(),
+  systemMode: z.enum(["append_to_agent", "complete"]).optional(),
   variant: z.string().optional(),
   extra: z.record(z.string(), z.any()).optional(),
   parts: z.array(

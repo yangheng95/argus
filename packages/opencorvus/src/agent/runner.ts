@@ -720,6 +720,7 @@ export async function runAgentSession<C>(
           model: { providerID: model!.providerID, modelID: model!.api.id },
           agent: agentName,
           system: systemPrompt,
+          systemMode: "complete",
           tools: enableMap,
           parts: promptParts as Parameters<typeof SessionPrompt.prompt>[0]["parts"],
         }

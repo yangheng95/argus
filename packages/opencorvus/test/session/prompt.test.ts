@@ -219,6 +219,60 @@ describe("session.prompt agent variant", () => {
   }, 20000)
 })
 
+describe("session.prompt agent contract", () => {
+  test("fails fast when an explicit agent does not exist", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+
+        await expect(
+          SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "assistant",
+            model: { providerID: "openai", modelID: "gpt-5.2" },
+            noReply: true,
+            parts: [{ type: "text", text: "hello" }],
+          }),
+        ).rejects.toThrow("Unknown agent: assistant")
+
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+
+  test("persists complete system mode on user messages", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const msg = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "general",
+          model: { providerID: "openai", modelID: "gpt-5.2" },
+          noReply: true,
+          system: "COMPLETE CONTROL PROMPT",
+          systemMode: "complete",
+          parts: [{ type: "text", text: "hello" }],
+        })
+
+        if (msg.info.role !== "user") throw new Error("expected user message")
+        expect(msg.info.systemMode).toBe("complete")
+
+        const stored = await Message.get({ sessionID: session.id, messageID: msg.info.id })
+        if (stored.info.role !== "user") throw new Error("expected stored user message")
+        expect(stored.info.systemMode).toBe("complete")
+
+        await Session.remove(session.id)
+      },
+    })
+  }, 20000)
+})
+
 // plan/spec reminder feature was removed: src/session/prompt/plan-reminder-anthropic.txt
 // and spec-reminder-anthropic.txt no longer exist. Skipping until reminders are reintroduced.
 describe.skip("session.prompt plan mode reminders", () => {

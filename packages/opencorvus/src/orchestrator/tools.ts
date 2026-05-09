@@ -4708,8 +4708,9 @@ export function createOrchestratorTools(input: {
           finalMessage = await SessionPrompt.prompt({
             sessionID: refineSession.id,
             model: { providerID: model.providerID, modelID: model.api.id },
-            agent: "assistant",
+            agent: "general",
             system: systemPrompt,
+            systemMode: "complete",
             parts: [{ type: "text", text: userPrompt, id: Identifier.ascending("part") }],
           })
         } catch (err) {

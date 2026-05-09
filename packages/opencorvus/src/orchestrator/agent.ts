@@ -354,6 +354,7 @@ export namespace Orchestrator {
               model: { providerID: model.providerID, modelID: model.api.id },
               agent: "orchestrator",
               system: Array.isArray(system) ? system.join("\n\n") : system,
+              systemMode: "complete",
               tools: enableMap,
               parts: partsWithIds,
             })) as Message.WithParts
