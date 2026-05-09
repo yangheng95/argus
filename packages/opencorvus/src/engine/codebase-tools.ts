@@ -119,7 +119,8 @@ export function createCodebaseTools(projectDir?: string) {
           return (
             `Error: ${filePath} is ${denseMirrorArtifact}. ` +
             `Use mirror/page-ir.xml, mirror/shared-context.md, and mirror tool summaries as the PRD/SPEC working surface. ` +
-            `If a specific gap requires this artifact, call read_file from line 1 with max_lines <= ${DENSE_MIRROR_ARTIFACT_MAX_LINES}.`
+            `Do not retry this read for general page discovery. Finalize the PRD/SPEC unless you can name a specific unresolved scaffold gap; ` +
+            `for that one gap only, read a single excerpt from line 1 with max_lines <= ${DENSE_MIRROR_ARTIFACT_MAX_LINES}.`
           )
         }
         try {

@@ -49,3 +49,10 @@ test("the streamText call passes timeoutMs: false to disable the wrapper's soft 
   // single source for idle / abort decisions is withLLMActivity.
   expect(src).toMatch(/timeoutMs:\s*false/)
 })
+
+test("session system prompt is passed through the SDK system field, not messages", () => {
+  expect(src).toMatch(/const\s+systemText\s*=\s*system\.join\("\\n"\)/)
+  expect(src).toMatch(/const\s+requestMessages\s*=\s*input\.messages/)
+  expect(src).toMatch(/\.\.\.\(isOpenaiOauth\s*\?\s*\{\}\s*:\s*\{\s*system:\s*systemText\s*\}\)/)
+  expect(src).not.toMatch(/role:\s*"system"[\s\S]{0,120}content:\s*x/)
+})
