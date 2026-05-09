@@ -31,6 +31,24 @@ function acceptance(goalID: string, requirementID: string) {
   }
 }
 
+function deliveryVisualAcceptance(goalID: string, requirementID: string = "REQ-visual") {
+  return {
+    id: `acc-${goalID}-final-reference-fidelity`,
+    source_requirement_id: requirementID,
+    goal_id: goalID,
+    title: "Final rendered output matches the authoritative reference contract",
+    severity: "essential" as const,
+    trigger: "on_delivery" as const,
+    scorers: [
+      {
+        type: "llm_judge" as const,
+        name: "rendered-reference-fidelity",
+        criteria: "Compare the final rendered output against the authoritative reference artifacts and PRD/SPEC visual consistency contract.",
+      },
+    ],
+  }
+}
+
 const FEATURE_GOAL = {
   id: "goal_feature",
   title: "Feature",
@@ -312,7 +330,16 @@ test("submit_architect rejects missing reference coverage for visual specs", asy
   const { tools } = kit
 
   await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
-  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
+  await tools.register_goal.execute!(
+    {
+      ...VERIFY_GOAL,
+      acceptance_specs: [
+        acceptance("goal_verify", "REQ-2"),
+        deliveryVisualAcceptance("goal_verify", "REQ-2"),
+      ],
+    } as any,
+    {} as any,
+  )
   await tools.register_traceability.execute!(
     { requirement_id: "REQ-1", goal_ids: ["goal_feature", "goal_verify"] } as any,
     {} as any,
@@ -354,6 +381,192 @@ test("submit_architect rejects missing reference coverage for visual specs", asy
     {} as any,
   )
   expect(accepted).toMatch(/^PASS: Architect output finalized\./)
+})
+
+test("reference-driven bootstrap feature verification graph finalizes with final delivery judge", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: freshWorkDir(),
+    requireReferenceCoverage: true,
+    referenceCoverageReasons: ["designAnalysis handoff is present"],
+  })
+  const { tools } = kit
+
+  await tools.register_goal.execute!(
+    {
+      ...FEATURE_GOAL,
+      id: "goal_bootstrap",
+      title: "Source analysis",
+      acceptance_specs: [acceptance("goal_bootstrap", "REQ-1")],
+      owned_paths: ["analysis/keystatistics-gap.md"],
+      depends_on: [],
+      exports: ["KeyStatistics behavior inventory"],
+      kind: "bootstrap",
+    } as any,
+    {} as any,
+  )
+  await tools.register_goal.execute!(
+    {
+      ...FEATURE_GOAL,
+      id: "goal_rewrite_workflow",
+      title: "Rewrite workflow",
+      acceptance_specs: [acceptance("goal_rewrite_workflow", "REQ-2")],
+      owned_paths: ["src/web/src/components/composite/KeyStatisticsMTts/KeyStatisticsMTts.tsx"],
+      depends_on: ["goal_bootstrap"],
+      exports: ["KeyStatisticsMTts component API"],
+      imports: ["KeyStatistics behavior inventory from goal_bootstrap"],
+      requirement_ids: ["REQ-2"],
+    } as any,
+    {} as any,
+  )
+  await tools.register_goal.execute!(
+    {
+      ...VERIFY_GOAL,
+      id: "goal_tests",
+      title: "Final integration tests",
+      acceptance_specs: [
+        acceptance("goal_tests", "REQ-2"),
+        deliveryVisualAcceptance("goal_tests", "REQ-2"),
+      ],
+      owned_paths: ["tests/integration/keystatistics.test.ts"],
+      depends_on: ["goal_bootstrap", "goal_rewrite_workflow"],
+      imports: [
+        "KeyStatistics behavior inventory from goal_bootstrap",
+        "KeyStatisticsMTts component API from goal_rewrite_workflow",
+      ],
+      requirement_ids: ["REQ-1", "REQ-2"],
+    } as any,
+    {} as any,
+  )
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-1", goal_ids: ["goal_bootstrap", "goal_tests"] } as any,
+    {} as any,
+  )
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-2", goal_ids: ["goal_rewrite_workflow", "goal_tests"] } as any,
+    {} as any,
+  )
+  await tools.register_reference_coverage.execute!(
+    {
+      id: "ref-prd-spec",
+      surface: "KeyStatisticsMTts PRD/SPEC",
+      goal_ids: ["goal_rewrite_workflow", "goal_tests"],
+      visual_spec_ids: [],
+      expectation: "Final component behavior and rendered surface must follow the authoritative PRD/SPEC.",
+    } as any,
+    {} as any,
+  )
+  await tools.register_assembly_owner.execute!(
+    {
+      surface: "KeyStatisticsMTts deliverable",
+      goal_id: "goal_rewrite_workflow",
+      rationale: "Rewrite workflow goal owns the stitched component implementation.",
+    } as any,
+    {} as any,
+  )
+  await tools.register_contract.execute!(
+    {
+      category: "interface_contract",
+      title: "KeyStatistics rewrite handoff",
+      spec: "```ts\nexport interface KeyStatisticsMTtsProps { className?: string }\n```",
+      goal_ids: ["goal_bootstrap", "goal_rewrite_workflow", "goal_tests"],
+    } as any,
+    {} as any,
+  )
+
+  const accepted = await tools.submit_architect.execute!(
+    { summary: "Reference-driven rewrite graph has a final delivery judge." } as any,
+    {} as any,
+  )
+  expect(accepted).toMatch(/^PASS: Architect output finalized\./)
+})
+
+test("reference-driven visual acceptance diagnostic names trigger reason and goal candidates", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: freshWorkDir(),
+    requireReferenceCoverage: true,
+    referenceCoverageReasons: ["designAnalysis handoff is present"],
+  })
+  const { tools } = kit
+
+  await tools.register_goal.execute!(
+    {
+      ...FEATURE_GOAL,
+      acceptance_specs: [
+        acceptance("goal_feature", "REQ-1"),
+        deliveryVisualAcceptance("goal_feature", "REQ-1"),
+      ],
+    } as any,
+    {} as any,
+  )
+  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-1", goal_ids: ["goal_feature"] } as any,
+    {} as any,
+  )
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_reference_coverage.execute!(
+    {
+      id: "ref-page",
+      surface: "final-page",
+      goal_ids: ["goal_feature", "goal_verify"],
+      visual_spec_ids: [],
+      expectation: "Restore the authoritative reference surface.",
+    } as any,
+    {} as any,
+  )
+  await tools.register_contract.execute!(
+    {
+      category: "interface_contract",
+      title: "Router",
+      spec: "```ts\nexport type Router = unknown\n```",
+      goal_ids: ["goal_feature", "goal_verify"],
+    } as any,
+    {} as any,
+  )
+  await registerAssemblyOwner(tools)
+
+  const rejected = await tools.submit_architect.execute!(
+    { summary: "Visual acceptance is on the wrong goal." } as any,
+    {} as any,
+  )
+  expect(rejected).toContain("Reference coverage requirement: requireReferenceCoverage=true because designAnalysis handoff is present.")
+  expect(rejected).toContain("Required shape: priority=blocking kind=verification|integration")
+  expect(rejected).toContain("goal_feature kind=feature priority=blocking")
+  expect(rejected).toContain("acc-goal_feature-final-reference-fidelity:essential:on_delivery:llm_judge")
+  expect(rejected).toContain("goal_verify kind=verification priority=blocking")
+  expect(rejected).toContain("final_reference_acceptance=no")
+})
+
+test("register_goal and modify_goal return the current goal snapshot", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
+  const registered = await kit.tools.register_goal.execute!(
+    { ...VERIFY_GOAL } as any,
+    {} as any,
+  )
+  expect(registered).toContain("Current: goal_verify kind=verification priority=blocking")
+  expect(registered).toContain("depends_on=[goal_feature]")
+  expect(registered).toContain("acc-goal_verify:essential:default:heuristic")
+
+  const modified = await kit.tools.modify_goal.execute!(
+    {
+      id: "goal_verify",
+      updates: {
+        acceptance_specs: [
+          acceptance("goal_verify", "REQ-2"),
+          deliveryVisualAcceptance("goal_verify", "REQ-2"),
+        ],
+      },
+    } as any,
+    {} as any,
+  )
+  expect(modified).toContain("fields updated (1 change(s))")
+  expect(modified).toContain("acc-goal_verify-final-reference-fidelity:essential:on_delivery:llm_judge")
+  expect(modified).toContain("final_reference_acceptance=yes")
 })
 
 test("architect readiness remains identical to submit_architect validation precondition", async () => {

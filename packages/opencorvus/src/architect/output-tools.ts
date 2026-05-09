@@ -74,6 +74,13 @@ export interface ArchitectCollector {
   finalized: boolean
 }
 
+type ArchitectValidationInput = {
+  workDir?: string
+  designSpecs?: VisualSpec[]
+  requireReferenceCoverage?: boolean
+  referenceCoverageReasons?: string[]
+}
+
 const VALID_CONTRACT_CATEGORIES: ArchitectDecisionKey[] = [
   "directory_blueprint",
   "interface_contract",
@@ -109,7 +116,7 @@ function emptyCollector(): ArchitectCollector {
 
 export function architectValidationIssues(
   collector: ArchitectCollector,
-  input?: { workDir?: string; designSpecs?: VisualSpec[]; requireReferenceCoverage?: boolean },
+  input?: ArchitectValidationInput,
 ): string[] {
   const issues: string[] = []
 
@@ -223,12 +230,47 @@ export function architectValidationIssues(
     )
     if (visualAcceptanceOwners.length === 0) {
       issues.push(
-        "Missing essential delivery visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_delivery llm_judge acceptance spec for final rendered-vs-reference fidelity.",
+        [
+          "Missing essential delivery visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_delivery llm_judge acceptance spec for final rendered-vs-reference fidelity.",
+          `Reference coverage requirement: ${formatReferenceCoverageReason(input)}`,
+          "Required shape: priority=blocking kind=verification|integration acceptance_specs includes severity=essential trigger=on_delivery scorer=llm_judge.",
+          `Goal candidates: ${formatGoalCandidateList(collector.goals)}`,
+        ].join(" "),
       )
     }
   }
 
   return issues
+}
+
+function formatReferenceCoverageReason(input?: ArchitectValidationInput): string {
+  const reasons = input?.referenceCoverageReasons?.filter((reason) => reason.trim().length > 0) ?? []
+  if (reasons.length > 0) return `requireReferenceCoverage=true because ${reasons.join(", ")}.`
+  if ((input?.designSpecs?.length ?? 0) > 0) return "requireReferenceCoverage=true because designSpecs are present."
+  return "requireReferenceCoverage=true because designAnalysis handoff or caller flag is present."
+}
+
+function formatGoalCandidateList(goals: RegisteredGoal[]): string {
+  if (goals.length === 0) return "(none)"
+  return goals.map(formatGoalSnapshot).join(" | ")
+}
+
+function formatGoalSnapshot(goal: RegisteredGoal): string {
+  const specs = goal.acceptance_specs.length > 0
+    ? goal.acceptance_specs.map(formatAcceptanceSpecSnapshot).join(", ")
+    : "(none)"
+  const deps = goal.depends_on.length > 0 ? goal.depends_on.join(",") : "(none)"
+  const finalReferenceAcceptance = goal.priority === "blocking" &&
+    (goal.kind === "verification" || goal.kind === "integration") &&
+    goal.acceptance_specs.some(isEssentialDeliveryJudgeSpec)
+    ? "yes"
+    : "no"
+  return `${goal.id} kind=${goal.kind} priority=${goal.priority} depends_on=[${deps}] acceptance_specs=[${specs}] final_reference_acceptance=${finalReferenceAcceptance}`
+}
+
+function formatAcceptanceSpecSnapshot(spec: AcceptanceSpec): string {
+  const scorerTypes = spec.scorers.map((scorer) => scorer.type).join("+")
+  return `${spec.id}:${spec.severity}:${spec.trigger ?? "default"}:${scorerTypes}`
 }
 
 function isEssentialDeliveryJudgeSpec(spec: AcceptanceSpec): boolean {
@@ -241,7 +283,7 @@ function isEssentialDeliveryJudgeSpec(spec: AcceptanceSpec): boolean {
 
 export function isArchitectReadyToFinalize(
   collector: ArchitectCollector,
-  input?: { workDir?: string; designSpecs?: VisualSpec[]; requireReferenceCoverage?: boolean },
+  input?: ArchitectValidationInput,
 ): boolean {
   return architectValidationIssues(collector, input).length === 0
 }
@@ -259,6 +301,7 @@ export function createArchitectOutputTools(input: {
   workDir?: string
   designSpecs?: VisualSpec[]
   requireReferenceCoverage?: boolean
+  referenceCoverageReasons?: string[]
 }) {
   let collector = emptyCollector()
   const dir = input.workDir ?? Instance.directory
@@ -273,6 +316,7 @@ export function createArchitectOutputTools(input: {
     workDir: dir,
     designSpecs: input.designSpecs,
     requireReferenceCoverage: input.requireReferenceCoverage,
+    referenceCoverageReasons: input.referenceCoverageReasons,
   })
 
   // Seed the collector with existing goals so modify_goal / remove_goal work
@@ -321,7 +365,7 @@ export function createArchitectOutputTools(input: {
         if (warnings.length > 0) {
           msg += `\nWarning: paths without an existing parent directory: ${warnings.join(", ")}. Verify these are intentional.`
         }
-        return msg
+        return `${msg}\nCurrent: ${formatGoalSnapshot(goal)}`
       },
     }),
 
@@ -347,8 +391,9 @@ export function createArchitectOutputTools(input: {
         const normalizedUpdates = normalizeGoalContractUpdate(
           updates as Parameters<typeof normalizeGoalContractUpdate>[0],
         )
-        collector.goals[idx] = toRegisteredGoal({ ...prior, ...normalizedUpdates })
-        return `OK: goal "${id}" fields updated (${Object.keys(normalizedUpdates).length} change(s))`
+        const next = toRegisteredGoal({ ...prior, ...normalizedUpdates })
+        collector.goals[idx] = next
+        return `OK: goal "${id}" fields updated (${Object.keys(normalizedUpdates).length} change(s))\nCurrent: ${formatGoalSnapshot(next)}`
       },
     }),
 

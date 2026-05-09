@@ -123,9 +123,42 @@ export function normalizeGoalContractFields(
  * (never re-keyed), and constraints still enforced on whichever fields are
  * supplied. Use `.parse()` to reject invalid updates.
  */
-export const GoalContractUpdateSchema = GoalContractFieldsSchema.omit({
-  id: true,
-}).partial()
+export const GoalContractUpdateSchema = z.object({
+  title: z.string().min(1).describe("Short human-readable goal title").optional(),
+  objective: z
+    .string()
+    .min(50)
+    .describe("Execution directive for this goal. Same constraints as register_goal.objective.")
+    .optional(),
+  acceptance_specs: z
+    .array(AcceptanceSpecSchema)
+    .min(1)
+    .describe("Typed acceptance specs. Replaces the prior acceptance spec list when present.")
+    .optional(),
+  owned_paths: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe("Primary responsibility paths for this goal. Replaces the prior path list when present.")
+    .optional(),
+  depends_on: z
+    .array(z.string())
+    .describe("Goal IDs this depends on. Replaces the prior dependency list when present.")
+    .optional(),
+  exports: z
+    .array(z.string())
+    .describe("Interfaces this goal provides. Replaces the prior export list when present.")
+    .optional(),
+  imports: z
+    .array(z.string())
+    .describe("Interfaces this goal consumes. Replaces the prior import list when present.")
+    .optional(),
+  priority: z.enum(GOAL_PRIORITIES).describe("Goal priority.").optional(),
+  kind: z.enum(GOAL_KINDS).describe("Goal kind.").optional(),
+  requirement_ids: z
+    .array(z.string())
+    .describe("REQ-N references this goal covers. Replaces the prior requirement list when present.")
+    .optional(),
+})
 
 export type GoalContractUpdate = z.infer<typeof GoalContractUpdateSchema>
 

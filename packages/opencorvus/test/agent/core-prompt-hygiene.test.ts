@@ -130,6 +130,17 @@ describe("core prompt hygiene", () => {
     expect(architect).toContain("The verification goal's `acceptance_specs` are the quality contract")
   })
 
+  test("architect prompt pins reference-driven final judge to the single global test goal", async () => {
+    const architect = await readPrompt("architect")
+
+    expect(architect).toContain("A materialized PRD/SPEC handoff is itself an authoritative reference surface")
+    expect(architect).toContain("Put this spec on the final `goal_tests` / `goal_e2e` verification goal")
+    expect(architect).toContain("putting that spec on a feature goal will not satisfy `submit_architect`")
+    expect(architect).toContain("Do not create two global test goals")
+    expect(architect).toContain("do not create both `goal_unit_tests` and `goal_tests`")
+    expect(architect).toContain("Single global test goal check")
+  })
+
   test("architect and build prompts carry repository discipline without hidden reminder injection", async () => {
     const architect = await readPrompt("architect")
     const build = await readPrompt("build")
