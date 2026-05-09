@@ -27,13 +27,6 @@ describe("icon affordances stay visible at rest", () => {
     expect(css).toContain("opacity: var(--ui-opacity-subtle);")
   })
 
-  test("composer toolbar icons do not default to muted text", () => {
-    const css = read("src/styles/surfaces/composer.css")
-    const body = soloRuleBody(css, '.chat-icon-col .oc-button[data-ui="chat-toolbar-button"]')
-    expect(body).not.toContain("--oc-button-color: var(--text-muted);")
-    expect(body).not.toContain("--oc-button-shadow:")
-  })
-
   test("disabled send button keeps an explicit visible shell instead of opacity fade", () => {
     const css = read("src/styles/surfaces/composer.css")
     const body = soloRuleBody(css, ".chat-send:disabled")
@@ -43,13 +36,6 @@ describe("icon affordances stay visible at rest", () => {
     expect(body).not.toContain("opacity:")
     expect(body).not.toContain("white 78%")
     expect(body).not.toContain("var(--accent) 44%")
-  })
-
-  test("disabled composer icon column does not fade icon glyphs below readability", () => {
-    const css = read("src/styles/surfaces/composer.css")
-    const body = soloRuleBody(css, '.chat-icon-col[data-disabled="true"]')
-    expect(body).toContain("opacity: var(--ui-opacity-subtle);")
-    expect(body).not.toContain("opacity: var(--ui-opacity-faint);")
   })
 
   test("chat header no longer owns a workspace toggle affordance", () => {

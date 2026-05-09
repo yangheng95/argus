@@ -469,20 +469,18 @@ describe("overlay architecture guards", () => {
     expect(titlebarSurface).toMatch(/\.titlebar-status-value\s*\{/)
   })
 
-  test("composer icon column is owned by surfaces/composer.css", () => {
+  test("composer toolbar column stays retired", () => {
     const styles = readLegacyStylesCss("src/styles.css")
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
+    const composerSource = readText(join(OVERLAY_ROOT, "src/components/ChatComposer.tsx"))
 
-    for (const className of ["chat-icon-col"]) {
-      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-    }
-
-    expect(composerSurface).toMatch(/\.chat-icon-col\[data-disabled="true"\]/)
-    expect(composerSurface).toMatch(/\.chat-icon-col \.oc-button\[data-ui="chat-toolbar-button"\]/)
+    expect(styles).not.toMatch(/\.chat-icon-col(?![-\w])/)
+    expect(composerSurface).not.toMatch(/\.chat-icon-col(?![-\w])/)
+    expect(composerSurface).not.toContain("chat-toolbar-button")
+    expect(composerSource).not.toContain('data-ui="chat-toolbar-button"')
   })
 
-  test("composer icon column chrome is not controlled by legacy theme selectors", () => {
+  test("composer toolbar chrome is not controlled by legacy theme selectors", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -493,6 +491,7 @@ describe("overlay architecture guards", () => {
       if (!isThemeSelector) continue
 
       expect(selector).not.toMatch(/\.chat-icon-col(?=$|[\s:{.#\[,>+~])/)
+      expect(selector).not.toMatch(/chat-toolbar-button/)
     }
   })
 
@@ -805,10 +804,14 @@ describe("overlay architecture guards", () => {
 
     for (const className of [
       "executor-selector",
-      "executor-chip",
+      "executor-chip-identity",
       "executor-chip-label",
-      "executor-chip-sep",
+      "executor-chip-action",
+      "executor-chip-models",
       "executor-chip-model",
+      "executor-chip-role",
+      "executor-chip-provider",
+      "executor-chip-name",
       "executor-chip-caret",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -825,12 +828,15 @@ describe("overlay architecture guards", () => {
 
     // Canonical properties must use tokens
     expect(composerSurface).toContain("var(--oc-border-width)")
-    expect(composerSurface).toContain("var(--oc-radius-pill)")
+    expect(composerSurface).toContain("var(--oc-radius-soft)")
     expect(composerSurface).not.toMatch(/border-radius:\s*999px/)
 
-    expect(composerSurface).toMatch(/\.executor-chip:hover\s*\{/)
-    expect(composerSurface).toMatch(/\.executor-selector\[data-open="true"\] \.executor-chip\s*\{/)
-    expect(composerSurface).toMatch(/\.executor-chip-model\[data-source="executor"\]::before\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-selector \.oc-button\[data-ui="executor-chip"\]\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-selector \.oc-button\[data-ui="executor-chip"\]:hover\s*\{/)
+    expect(composerSurface).toMatch(
+      /\.executor-selector\[data-open="true"\] \.oc-button\[data-ui="executor-chip"\]\s*\{/,
+    )
+    expect(composerSurface).toMatch(/\.executor-chip-model\[data-source="executor"\]\s*\{/)
   })
 
   test("workspace panel, diff preview, and file view are owned by surfaces/workspace.css", () => {
@@ -1807,6 +1813,7 @@ describe("overlay architecture guards", () => {
       "chat-compose-meta",
       "chat-compose-meta-left",
       "chat-compose-meta-right",
+      "chat-resize-handle",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -1866,7 +1873,7 @@ describe("overlay architecture guards", () => {
     expect(styles).not.toMatch(/body\[data-theme="light"\] \.chat-textarea\b/)
     expect(styles).not.toMatch(/body:is\([^)]*\) \.chat-textarea\b/)
     expect(composerSurface).toMatch(/\.chat-textarea:focus\s*\{/)
-    expect(composerSurface).toMatch(/\.chat-textarea\[data-expanded="true"\]\s*\{/)
+    expect(composerSurface).not.toMatch(/\.chat-textarea\[data-expanded="true"\]\s*\{/)
     expect(composerSurface).toMatch(/\.chat-textarea::placeholder\s*\{/)
   })
 
@@ -2238,7 +2245,7 @@ describe("overlay architecture guards", () => {
     expect(body).toContain("margin: 0")
     expect(body).toContain("padding: calc(4px * var(--ui-scale))")
     expect(body).toContain("gap: calc(2px * var(--ui-scale))")
-    expect(body).toContain("border-radius: 0")
+    expect(body).toContain("border-radius: var(--oc-radius-none)")
   })
 
   test("panel shell padding is canonical, not theme scoped", () => {

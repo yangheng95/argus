@@ -2,7 +2,7 @@
 // Solid.js port of renderChatComposer / renderChatAttachments / chatForm submit
 // and related attachment/keyboard logic
 
-import { createSignal, createMemo, createEffect, For, Show, onMount, onCleanup } from "solid-js";
+import { createSignal, createMemo, createEffect, For, Show, onCleanup } from "solid-js";
 import { t, tArray } from "../utils/i18n";
 import { ExecutorSelector } from "./ExecutorSelector";
 import { nativeMessage } from "../services/app-dialog";
@@ -13,9 +13,7 @@ import {
   wouldExceedAggregateLimit,
 } from "../services/chat-attach-limits";
 import { fileToDataUrl } from "../services/file-to-data-url";
-import { Button } from "./ui/Button";
 import { Icon } from "./Icon";
-import { useDisclosure } from "../solid/disclosure";
 
 // ── Types ──
 
@@ -62,36 +60,6 @@ export interface ChatComposerProps {
 // services/chat-attach-limits (audit W2-V15) so the cap can be
 // unit-tested without rendering the component.
 
-const FILE_ACCEPT = [
-  "image/*",
-  ".pdf",
-  ".txt",
-  ".md",
-  ".json",
-  ".csv",
-  ".xml",
-  ".yaml",
-  ".yml",
-  ".log",
-  ".ts",
-  ".js",
-  ".py",
-  ".go",
-  ".rs",
-  ".c",
-  ".cpp",
-  ".h",
-  ".java",
-  ".rb",
-  ".sh",
-  ".bat",
-  ".ps1",
-  ".html",
-  ".css",
-  ".sql",
-  ".toml",
-].join(",");
-
 // ── Helpers ──
 //
 // fileToDataUrl moved to services/file-to-data-url so the V18 catch
@@ -132,7 +100,6 @@ function chooseAttachmentFilename(original: string | undefined, mime: string): s
 
 export function ChatComposer(props: ChatComposerProps) {
   let textareaRef!: HTMLTextAreaElement;
-  let fileInputRef!: HTMLInputElement;
   let formRef!: HTMLFormElement;
 
   const [text, setText] = createSignal("");
@@ -154,12 +121,12 @@ export function ChatComposer(props: ChatComposerProps) {
     setChatAttachments(nextValue);
   };
   const [dragover, setDragover] = createSignal(false);
-  const [webSearch, setWebSearch] = createSignal(false);
-  const composerExpanded = useDisclosure();
-  const expanded = composerExpanded.open;
   const [focused, setFocused] = createSignal(false);
   const [hintText, setHintText] = createSignal("");
   const [submitting, setSubmitting] = createSignal(false);
+  let resizeSession:
+    | { pointerID: number; startY: number; startHeight: number }
+    | undefined;
 
   const hasText = createMemo(() => text().trim().length > 0);
   const stopping = () => props.stopping === true;
@@ -341,10 +308,9 @@ export function ChatComposer(props: ChatComposerProps) {
     const sentAttachments = [...attachments()];
     setSubmitting(true);
     try {
-      await props.onSubmit(trimmed, sentAttachments, webSearch());
+      await props.onSubmit(trimmed, sentAttachments, false);
       setText("");
       setAttachments([]);
-      composerExpanded.close();
       if (textareaRef) textareaRef.value = "";
     } catch (error) {
       console.error("[ChatComposer] submit failed", error);
@@ -367,15 +333,6 @@ export function ChatComposer(props: ChatComposerProps) {
       if (!props.enabled) return;
       formRef?.requestSubmit();
     }
-  }
-
- // ── File input change ──
-
-  async function handleFileChange() {
-    const files = fileInputRef?.files;
-    if (!files) return;
-    for (const file of files) await addAttachment(file);
-    if (fileInputRef) fileInputRef.value = "";
   }
 
  // ── Drag-and-drop ──
@@ -406,6 +363,45 @@ export function ChatComposer(props: ChatComposerProps) {
     if (!files || !files.length) return;
     e.preventDefault();
     for (const file of files) await addAttachment(file);
+  }
+
+ // ── Composer resize ──
+
+  function currentUIScale(): number {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue("--ui-scale");
+    const value = Number.parseFloat(raw);
+    return Number.isFinite(value) && value > 0 ? value : 1;
+  }
+
+  function handleResizePointerDown(e: PointerEvent) {
+    if (e.button !== 0 || !textareaRef) return;
+    const handle = e.currentTarget as HTMLElement;
+    resizeSession = {
+      pointerID: e.pointerId,
+      startY: e.clientY,
+      startHeight: textareaRef.getBoundingClientRect().height,
+    };
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  }
+
+  function handleResizePointerMove(e: PointerEvent) {
+    if (!resizeSession || resizeSession.pointerID !== e.pointerId || !formRef) return;
+    const scale = currentUIScale();
+    const minHeight = 62 * scale;
+    const maxHeight = 260 * scale;
+    const nextHeight = Math.min(
+      maxHeight,
+      Math.max(minHeight, resizeSession.startHeight + resizeSession.startY - e.clientY),
+    );
+    formRef.style.setProperty("--chat-textarea-height", `${Math.round(nextHeight)}px`);
+  }
+
+  function handleResizePointerEnd(e: PointerEvent) {
+    if (!resizeSession || resizeSession.pointerID !== e.pointerId) return;
+    const handle = e.currentTarget as HTMLElement;
+    if (handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId);
+    resizeSession = undefined;
   }
 
  // ── Send/Stop button rendering (mirrors renderChatComposer SVG logic) ──
@@ -473,25 +469,25 @@ export function ChatComposer(props: ChatComposerProps) {
         </div>
       </Show>
 
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        id="chatFileInput"
-        type="file"
-        multiple
-        accept={FILE_ACCEPT}
-        hidden
-        onChange={handleFileChange}
+      <div
+        class="chat-resize-handle"
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label={t("chat.resize_handle")}
+        title={t("chat.resize_handle")}
+        onPointerDown={handleResizePointerDown}
+        onPointerMove={handleResizePointerMove}
+        onPointerUp={handleResizePointerEnd}
+        onPointerCancel={handleResizePointerEnd}
       />
 
-      {/* Compose row: textarea + icon column + send */}
+      {/* Compose row: textarea + send */}
       <div class="chat-compose-row">
-        <div class="chat-textarea-wrap" data-expanded={expanded() ? "true" : undefined}>
+        <div class="chat-textarea-wrap">
           <textarea
             ref={textareaRef}
             id="chatTextarea"
             class="chat-textarea"
-            data-expanded={expanded() ? "true" : undefined}
             rows={2}
             disabled={!props.enabled}
             placeholder={props.enabled ? "" : t("chat.placeholder_disabled")}
@@ -510,57 +506,6 @@ export function ChatComposer(props: ChatComposerProps) {
               <span class="chat-placeholder-caret" />
             </div>
           </Show>
-        </div>
-
-        {/* Icon column: attach / web search / expand */}
-        <div class="chat-icon-col" data-disabled={!props.enabled ? "true" : undefined}>
-          <Button
-            type="button"
-            id="btnChatAttach"
-            variant="ghost"
-            size="icon"
-            tone="neutral"
-            data-chrome="icon-action"
-            data-ui="chat-toolbar-button"
-            title={t("chat.attach_title")}
-            aria-label={t("chat.attach_title")}
-            onClick={() => fileInputRef?.click()}
-          >
-            <Icon name="attach" size={14} />
-          </Button>
-          <Button
-            type="button"
-            id="btnWebSearch"
-            variant="ghost"
-            size="icon"
-            tone="neutral"
-            data-chrome="icon-action"
-            data-ui="chat-toolbar-button"
-            data-active={webSearch() ? "true" : undefined}
-            title={t("chat.web_search_title")}
-            aria-label={t("chat.web_search_title")}
-            aria-pressed={webSearch()}
-            onClick={() => setWebSearch((v) => !v)}
-          >
-            <Icon name="web-search" size={14} />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            tone="neutral"
-            data-chrome="icon-action"
-            data-ui="chat-toolbar-button"
-            data-active={expanded() ? "true" : undefined}
-            title={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}
-            aria-label={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}
-            aria-pressed={expanded()}
-            onClick={() => composerExpanded.toggle()}
-          >
-            <Show when={expanded()} fallback={<Icon name="chevron-up" size={14} />}>
-              <Icon name="chevron-down" size={14} />
-            </Show>
-          </Button>
         </div>
 
         {/* Send / Stop button */}
