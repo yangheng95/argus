@@ -14,6 +14,7 @@ import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
 import { WorkspaceEditorLaunchers } from "./components/WorkspaceEditorLaunchers";
 import { WorkspaceLayoutControls } from "./components/WorkspaceLayoutControls";
+import { LeftPanelHeaderCollapseControl, RightPanelHeaderCollapseControl } from "./components/PanelHeaderCollapseControl";
 import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/TitlebarMenubar";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { FilesSection } from "./components/FilesSection";
@@ -751,6 +752,16 @@ if (workspaceLayoutControlsEl) {
 const workspaceEditorLaunchersEl = document.getElementById("solidWorkspaceEditorLaunchers");
 if (workspaceEditorLaunchersEl) {
   render(() => <WorkspaceEditorLaunchers />, workspaceEditorLaunchersEl);
+}
+
+const leftPanelHeaderCollapseEl = document.getElementById("solidLeftPanelHeaderCollapseControl");
+if (leftPanelHeaderCollapseEl) {
+  render(() => <LeftPanelHeaderCollapseControl />, leftPanelHeaderCollapseEl);
+}
+
+const rightPanelHeaderCollapseEl = document.getElementById("solidRightPanelHeaderCollapseControl");
+if (rightPanelHeaderCollapseEl) {
+  render(() => <RightPanelHeaderCollapseControl />, rightPanelHeaderCollapseEl);
 }
 
 const titlebarStatusEl = document.getElementById("solidTitlebarStatus");

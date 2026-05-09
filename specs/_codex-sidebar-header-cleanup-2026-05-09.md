@@ -6,7 +6,7 @@ Date: 2026-05-09
 
 - Remove the refresh and collapse buttons from the left task-list header.
 - Keep the New Chat command as the only header action in the Recent Chats rail.
-- Preserve sidebar collapse through the workspace command dock, which is now the canonical layout-control location.
+- Preserve sidebar collapse through the sidebar header's left-side panel control, which is now the canonical side-panel location.
 - Delete stale refs, event handlers, and CSS/test expectations for the removed sidebar header buttons.
 
 ## Checklist

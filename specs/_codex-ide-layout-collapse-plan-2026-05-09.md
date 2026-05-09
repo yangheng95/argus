@@ -6,12 +6,12 @@ Make the overlay project view expose compact workspace layout controls and allow
 
 ## Implementation
 
-- Put restore affordances in the project workspace strip beside the active directory context, so a collapsed pane does not need a residual rail and the window titlebar remains window/menu-only.
+- Put side-panel collapse affordances in the owning panel headers: left of the left sidebar title and right of the right inspector tabs, so the window titlebar remains window/menu-only and workspace commands remain workspace-owned.
 - Persist right inspector collapse state beside the existing left sidebar collapse state.
 - Treat collapsed pane widths as zero in the pane layout service.
 - Hide collapsed panes and their resize handles with `hidden`/`display: none`.
-- Add a browser regression test that clicks both titlebar controls and asserts the panes and resize handles have no residual width.
-- Follow-up visual correction: remove the floating edge collapse buttons and make the workspace command dock the only layout-control surface for left sidebar, workspace, and right inspector visibility.
+- Add a browser regression test that clicks both panel-header controls and asserts the panes and resize handles have no residual width.
+- Follow-up visual correction: remove the floating edge collapse buttons and remove left/right side-panel controls from the workspace command dock; the dock only owns workspace-level actions.
 
 ## Verification
 
