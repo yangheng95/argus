@@ -64,9 +64,10 @@ function parseToolInput(raw: any): Record<string, any> {
 
 /** Derive a stable message ID for grouping executor events by goal/session. */
 function executorMessageID(properties: any): string {
-  const goalRunID = properties.goalRunID || properties.goal_run_id || "";
-  const execSessionID = properties.executorSessionID || properties.executor_session_id || "";
-  const runID = properties.runID || "";
+  const payload = record(properties.payload) ? properties.payload : {};
+  const goalRunID = properties.goalRunID || properties.goal_run_id || payload.goalRunID || payload.goal_run_id || "";
+  const execSessionID = properties.executorSessionID || properties.executor_session_id || payload.executorSessionID || payload.executor_session_id || "";
+  const runID = properties.runID || payload.runID || "";
   const scope = goalRunID || execSessionID || runID || "default";
   return `executor:msg:${scope}`;
 }
@@ -79,12 +80,18 @@ function executorPartID(properties: any, eventID: string): string {
 
 /** Derive the executor session ID for message info. */
 function executorSessionID(properties: any): string {
+  const payload = record(properties.payload) ? properties.payload : {};
   return properties.sessionID || properties.session_id ||
+         payload.sessionID || payload.session_id ||
          properties.goalSessionID || properties.goal_session_id ||
+         payload.goalSessionID || payload.goal_session_id ||
          properties.goalRunSessionID || properties.goal_run_session_id ||
+         payload.goalRunSessionID || payload.goal_run_session_id ||
          properties.executorSessionID || properties.executor_session_id ||
+         payload.executorSessionID || payload.executor_session_id ||
          properties.goalRunID || properties.goal_run_id ||
-         properties.runID || "";
+         payload.goalRunID || payload.goal_run_id ||
+         properties.runID || payload.runID || "";
 }
 
 // ── Executor event → message event conversion ──
@@ -149,6 +156,50 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
               time: { start: timestamp },
             },
           },
+        },
+      },
+    ];
+  }
+
+  if (kind === "tool_delta") {
+    const name = properties.name || properties.payload?.name || properties.tool || "tool";
+    const partID = executorPartID(properties, event.event_id);
+    const delta = typeof properties.delta === "string" ? properties.delta
+      : typeof properties.payload?.delta === "string" ? properties.payload.delta
+      : "";
+    if (!delta) return [];
+    return [
+      messageEvent,
+      {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: partID,
+            messageID: msgID,
+            sessionID,
+            type: "tool",
+            tool: name,
+            resolvedRole: "executor",
+            channel: "executor",
+            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+            state: {
+              status: "running",
+              input: {},
+              title: event.summary || name,
+              metadata: {},
+              time: { start: timestamp },
+            },
+          },
+        },
+      },
+      {
+        type: "message.part.delta",
+        properties: {
+          partID,
+          messageID: msgID,
+          sessionID,
+          field: "raw",
+          delta,
         },
       },
     ];
@@ -495,7 +546,7 @@ export function routeSSEEvent(event: any): boolean {
 // ── executorEventKind ──
 
 function executorEventKind(progressType: string | undefined): string {
-  const t = String(progressType || "").trim().toLowerCase();
+  const t = String(progressType || "").trim().toLowerCase().replace(/[.\s-]+/g, "_");
   if (!t) return "event";
   if (t === "message_delta" || t === "reasoning_delta") return t;
   if (t === "tool_call" || t === "tool_delta" || t === "tool_result") return t;

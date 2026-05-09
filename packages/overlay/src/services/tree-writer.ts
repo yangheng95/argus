@@ -512,15 +512,27 @@ function handlePartDelta(event: any): void {
     throw new Error(`message.part.delta: unknown part ${partID} in session ${sessionID}`);
   }
 
-  // Append delta to the named field in-place.
-  setCardTreeStore(
-    "cards",
-    session.cardID,
-    "parts",
-    idx,
-    field as any,
-    (prev: any) => String(prev ?? "") + delta,
-  );
+  const part = cardTreeStore.cards[session.cardID]?.parts?.[idx];
+  if (field === "raw" && part?.type === "tool") {
+    setCardTreeStore(
+      "cards",
+      session.cardID,
+      "parts",
+      idx,
+      "state",
+      "raw",
+      (prev: any) => String(prev ?? "") + delta,
+    );
+  } else {
+    setCardTreeStore(
+      "cards",
+      session.cardID,
+      "parts",
+      idx,
+      field as any,
+      (prev: any) => String(prev ?? "") + delta,
+    );
+  }
   if (session.stage === "executor") rebuildTopLevelOrder();
 }
 

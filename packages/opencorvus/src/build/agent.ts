@@ -1353,6 +1353,7 @@ async function runWithExternalProviderImpl(args: {
     id: string
     name: string
     input: Record<string, unknown>
+    raw: string
     metadata: Record<string, unknown>
     start: number
   }>()
@@ -1465,11 +1466,12 @@ async function runWithExternalProviderImpl(args: {
         }
         case "tool_call": {
           toolUseCount += 1
-          const partID = Identifier.ascending("part")
-          const start = Date.now()
+          const existing = tools.get(event.id)
+          const partID = existing?.id ?? Identifier.ascending("part")
+          const start = existing?.start ?? Date.now()
           const inputObj = externalToolInput(event.input)
-          const metadata = externalToolMetadata(event)
-          tools.set(event.id, { id: partID, name: event.name, input: inputObj, metadata, start })
+          const metadata = { ...(existing?.metadata ?? {}), ...externalToolMetadata(event) }
+          tools.set(event.id, { id: partID, name: event.name, input: inputObj, raw: existing?.raw ?? "", metadata, start })
           await Session.updatePart({
             id: partID,
             sessionID: session.id,
@@ -1484,6 +1486,42 @@ async function runWithExternalProviderImpl(args: {
               time: { start },
             },
             metadata,
+          })
+          break
+        }
+        case "tool_delta": {
+          const existing = tools.get(event.id)
+          const partID = existing?.id ?? Identifier.ascending("part")
+          const start = existing?.start ?? Date.now()
+          const name = event.name ?? existing?.name ?? "tool"
+          const raw = (existing?.raw ?? "") + event.delta
+          const metadata = { ...(existing?.metadata ?? {}), ...externalToolMetadata(event) }
+          if (!existing) {
+            tools.set(event.id, { id: partID, name, input: {}, raw, metadata, start })
+            await Session.updatePart({
+              id: partID,
+              sessionID: session.id,
+              messageID: assistantMessageID,
+              type: "tool",
+              tool: name,
+              callID: event.id,
+              state: {
+                status: "running",
+                input: {},
+                metadata,
+                time: { start },
+              },
+              metadata,
+            })
+          } else {
+            tools.set(event.id, { ...existing, name, raw, metadata })
+          }
+          await Session.updatePartDelta({
+            sessionID: session.id,
+            messageID: assistantMessageID,
+            partID,
+            field: "raw",
+            delta: event.delta,
           })
           break
         }
@@ -1596,7 +1634,7 @@ async function runWithExternalProviderImpl(args: {
       callID,
       state: {
         status: "error",
-        input: t.input,
+        input: Object.keys(t.input).length > 0 ? t.input : externalToolInput(t.raw),
         error: protocolError,
         metadata: t.metadata,
         time: { start: t.start, end },

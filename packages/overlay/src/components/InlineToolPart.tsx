@@ -257,9 +257,10 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
   // truncation) because block mode lives inside its own <Card> body
   // which is only rendered when the user expanded it.
   const codeResult = createMemo(() => {
-    if (status() !== "completed") return null;
     const k = key();
     if (!isFileContentTool(k)) return null;
+    if (FILE_READ_TOOLS.has(k) && status() !== "completed") return null;
+    if (status() !== "completed" && status() !== "running" && status() !== "pending") return null;
     const parsedRead = readView();
     const content = FILE_READ_TOOLS.has(k)
       ? parsedRead?.body ?? extractCodeContent(k, input(), output())
@@ -307,7 +308,7 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
       <Show when={showBody()}>
         <Show when={todoItems() && todoItems()!.length > 0} fallback={
           <>
-            <Show when={status() === "pending" && raw() && !todoItems()}>
+            <Show when={status() !== "completed" && raw() && !todoItems()}>
               <div class="msg-tool-input">{raw()}</div>
             </Show>
             <Show when={showStructuredOutput()}>

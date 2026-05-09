@@ -453,6 +453,8 @@ export function displayToolDetail(
     return (safeInput as any).description || (safeInput as any).prompt || "";
   if (typeof (safeInput as any).raw === "string" && (safeInput as any).raw.trim())
     return (safeInput as any).raw.trim();
+  if (typeof (safeState as any).raw === "string" && (safeState as any).raw.trim())
+    return shortValue((safeState as any).raw);
   const resultDetail = displayToolResultDetail(name, safeState as Record<string, unknown>);
   if (resultDetail) return resultDetail;
   if (
