@@ -182,6 +182,7 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: calc(4px * var(--ui-scale));
+  flex: 1 1 auto;
   padding: calc(4px * var(--ui-scale)) calc(5px * var(--ui-scale));
   min-width: 0;
   text-align: left;
