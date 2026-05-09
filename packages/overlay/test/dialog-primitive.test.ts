@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 const OVERLAY_ROOT = join(import.meta.dir, "../");
 const DIALOG_SOURCE = join(OVERLAY_ROOT, "src/components/primitives/Dialog.tsx");
+const DIALOG_CSS = join(OVERLAY_ROOT, "src/styles/surfaces/dialog.css");
 
 function readText(path: string): string {
   return readFileSync(path, "utf8");
@@ -45,6 +46,21 @@ describe("Dialog primitive", () => {
   test("supports built-in backdrop close handling", () => {
     expect(source).toContain("event.target === event.currentTarget");
     expect(source).toContain("dialogRef?.close()");
+  });
+
+  test("makes the header the single dialog drag handle", () => {
+    const css = readText(DIALOG_CSS);
+
+    expect(source).toContain("draggable?: boolean");
+    expect(source).toContain("onPointerDown={startDialogDrag}");
+    expect(source).toContain("data-dialog-drag-handle");
+    expect(source).toContain("data-dialog-draggable");
+    expect(source).toContain("DIALOG_DRAG_IGNORE_SELECTOR");
+    expect(source).toContain("clampDialogOffset");
+    expect(css).toContain("--dialog-drag-x");
+    expect(css).toContain("--dialog-drag-y");
+    expect(css).toContain('data-dialog-drag-handle="true"');
+    expect(css).toContain('data-dialog-dragging="true"');
   });
 });
 
