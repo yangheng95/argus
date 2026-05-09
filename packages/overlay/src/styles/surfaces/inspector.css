@@ -431,6 +431,39 @@
   background: color-mix(in srgb, var(--accent) 86%, transparent);
 }
 
+.workflow-section-stack {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+}
+
+.workflow-section-stack .oc-section {
+  border-radius: 0;
+  background: transparent;
+}
+
+.workflow-section-stack .oc-section + .oc-section {
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 58%, transparent);
+}
+
+.workflow-section-stack .oc-section__head {
+  border-radius: 0;
+}
+
+.workflow-section-stack .oc-section[data-phase-state="related"] {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 3%, transparent), transparent 72%),
+    color-mix(in srgb, var(--surface) 91%, var(--surface-inset) 9%);
+}
+
+.workflow-section-stack .oc-section[data-phase-state="active"] {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 74%),
+    color-mix(in srgb, var(--surface) 92%, var(--surface-inset) 8%);
+}
+
 /* Eval error card — semantic error chrome that surfaces evaluator
    failures inside the right panel. Background routes through
    color-mix on var(--bad) (was raw rgba on a slightly different red;

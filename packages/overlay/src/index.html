@@ -238,18 +238,9 @@
         <div class="sections-tab-body" id="rightPanelInspector" data-panel-tab="inspector" data-active="true">
           <div class="sections-stack">
 
-          <!-- Board: rendered entirely by Solid Board component -->
+          <!-- Inspector workflow sections: Board owns Requirements, Architect,
+               Goals, Delivery, and Files as one ordered section stack. -->
           <div id="solidBoardMount"></div>
-          <div id="solidInteractionMount"></div>
-
-          <!-- Delivery (rendered by Solid <DeliveryPanel/>; mounts the DeliveryEvidenceManifest
-               card group — checks (build/test/lint), runtime flows (preview/SSE/golden-path),
-               specialist reviews (per-reviewer LLM judgement). Sits above Files because the
-               verdict is the lead context — the file changelog is a consequence of the verdict. -->
-          <div id="solidDeliveryMount"></div>
-
-          <!-- Files (rendered by Solid <FilesSection/>; visibility owned by its memo) -->
-          <div id="solidFilesSectionMount"></div>
 
           </div>
         </div>

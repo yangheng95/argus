@@ -40,15 +40,16 @@ function readAllSurfaceCss(): string {
 // delivery card at all. This suite locks both the structural wiring and the
 // redesigned panel's verdict-driven behavior in place.
 
-test("index.html declares the three right-panel tab mounts", async () => {
+test("index.html declares one Inspector tab mount owned by Board", async () => {
   const html = await readSrc("src/index.html");
   expect(html).toContain('id="solidRightPanelTabs"');
   expect(html).toContain('id="rightPanelWorkflow"');
   expect(html).toContain('id="solidAgentWorkflowMount"');
   expect(html).toContain('id="rightPanelInspector"');
   expect(html).toContain('id="solidBoardMount"');
-  expect(html).toContain('id="solidDeliveryMount"');
-  expect(html).toContain('id="solidFilesSectionMount"');
+  expect(html).not.toContain('id="solidInteractionMount"');
+  expect(html).not.toContain('id="solidDeliveryMount"');
+  expect(html).not.toContain('id="solidFilesSectionMount"');
   expect(html).toContain('id="rightPanelPreview"');
   expect(html).toContain('id="solidFrontendPreviewMount"');
 });
@@ -58,13 +59,21 @@ test("index.html does not declare the rejected single InspectorPanel root", asyn
   expect(html).not.toContain('id="solidInspectorPanelMount"');
 });
 
-test("index.html keeps delivery before files inside the Inspector tab", async () => {
-  const html = await readSrc("src/index.html");
-  const deliveryAt = html.indexOf('id="solidDeliveryMount"');
-  const filesAt = html.indexOf('id="solidFilesSectionMount"');
+test("Board keeps delivery before files inside the unified Inspector stack", async () => {
+  const board = await readSrc("src/components/Board.tsx");
+  expect(board).toContain('class="workflow-section-stack"');
+  const deliveryAt = board.indexOf("<DeliveryPanel");
+  const filesAt = board.indexOf("<FilesSection");
   expect(deliveryAt).toBeGreaterThan(-1);
   expect(filesAt).toBeGreaterThan(-1);
   expect(deliveryAt).toBeLessThan(filesAt);
+});
+
+test("Inspector workflow sections render as one contiguous stack", async () => {
+  const css = await readSrc("src/styles/surfaces/inspector.css");
+  expect(css).toMatch(/\.workflow-section-stack\s*\{/);
+  expect(css).toMatch(/\.workflow-section-stack \.oc-section \+ \.oc-section\s*\{/);
+  expect(css).toContain(".workflow-section-stack .oc-section[data-phase-state=\"active\"]");
 });
 
 test("main.tsx mounts the top-level right tabs and preview panel", async () => {
@@ -72,8 +81,8 @@ test("main.tsx mounts the top-level right tabs and preview panel", async () => {
   expect(main).toContain('document.getElementById("solidRightPanelTabs")');
   expect(main).toContain('document.getElementById("solidAgentWorkflowMount")');
   expect(main).toContain('document.getElementById("solidBoardMount")');
-  expect(main).toContain('document.getElementById("solidDeliveryMount")');
-  expect(main).toContain('document.getElementById("solidFilesSectionMount")');
+  expect(main).not.toContain('document.getElementById("solidDeliveryMount")');
+  expect(main).not.toContain('document.getElementById("solidFilesSectionMount")');
   expect(main).toContain('document.getElementById("solidFrontendPreviewMount")');
   expect(main).toContain("<FrontendPreviewPanel");
   expect(main).toContain("nextTabForPreviewResolution");
@@ -107,13 +116,12 @@ test("DeliveryPanel and DeliveryEvidenceGroup are exported from components/Board
 
 test("DeliveryPanel has an in-flight projection while the run is in deliver before a delivery row exists", async () => {
   const board = await readSrc("src/components/Board.tsx");
-  const main = await readSrc("src/main.tsx");
   expect(board).toContain('const DELIVERY_PHASES = new Set(["deliver", "refine"])');
   expect(board).toContain('const LIVE_RUN_STATUSES = new Set(["queued", "accepted", "running", "blocked"])');
   expect(board).toContain('pending: true');
   expect(board).toContain('t("delivery.inflight.hint")');
   expect(board).toContain("if (hasActiveDeliveryRun(board())) return \"delivery\";");
-  expect(main).toContain("deliveryPanelDelivery(boardStore.board as any)");
+  expect(board).toContain("<DeliveryPanel delivery={delivery()}");
 });
 
 test("DeliveryPanel drives chrome via [data-verdict] (not the lifecycle status mapping)", async () => {
