@@ -27,8 +27,8 @@
   flex-shrink: 1;
 }
 
-/* Sidebar header text lanes: align with the shared
-   `.oc-surface-header__title` / `__actions` grammar. */
+/* Sidebar header text lanes: panel collapse control, title, then
+   right-side actions. */
 .sidebar-title {
   flex: 1 1 auto;
 }
