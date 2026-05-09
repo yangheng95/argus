@@ -60,7 +60,7 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
         <textarea
           class="card__agent-reply-input"
           value={text()}
-          rows={3}
+          rows={2}
           placeholder={t("card.agent_reply_placeholder")}
           disabled={sending()}
           onInput={(event) => setText(event.currentTarget.value)}

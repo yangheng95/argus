@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 import { configure } from "../src/services/api";
-import { cancelAgentSession, replyToAgentSession } from "../src/services/task";
+
+(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+const { cancelAgentSession, replyToAgentSession } = await import("../src/services/task");
 
 const originalFetch = globalThis.fetch;
+const root = join(import.meta.dir, "..");
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -46,5 +51,18 @@ describe("agent session controls", () => {
     expect(calls.length).toBe(1);
     expect(calls[0].url).toBe("http://overlay.test/task/tsk_1/session/ses_child/cancel");
     expect(calls[0].init?.method).toBe("POST");
+  });
+
+  test("agent steer input is constrained to two control rows", () => {
+    const component = readFileSync(join(root, "src/components/AgentSessionReplyBox.tsx"), "utf8");
+    const css = readFileSync(join(root, "src/styles/surfaces/card.css"), "utf8");
+
+    expect(component).toContain("rows={2}");
+    expect(component).not.toContain("rows={3}");
+    expect(css).toContain("resize: none;");
+    expect(css).toContain("height: calc(58px * var(--ui-scale));");
+    expect(css).toContain("max-height: calc(58px * var(--ui-scale));");
+    expect(css).toContain("top: 50%;");
+    expect(css).not.toContain("min-height: calc(104px * var(--ui-scale));");
   });
 });
