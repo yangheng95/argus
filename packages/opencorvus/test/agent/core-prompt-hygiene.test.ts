@@ -191,6 +191,14 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("do not stop with prose")
   })
 
+  test("build prompt defines the explicit no-edit analysis terminal branch", async () => {
+    const build = await readPrompt("build")
+    expect(build).toContain("read-only exploration, investigation, or analysis")
+    expect(build).toContain("skip commit / merge_back")
+    expect(build).toContain("files_changed: []")
+    expect(build).toContain("Do not end with prose")
+  })
+
   test("requirements prompt keeps REQ extraction at acceptance granularity", async () => {
     const requirements = await readPrompt("requirements")
 
