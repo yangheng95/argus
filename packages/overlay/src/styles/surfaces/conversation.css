@@ -536,7 +536,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0;
-  padding: calc(2px * var(--ui-scale));
+  padding: 0;
   border: var(--oc-border-width) solid var(--oc-control-border);
   border-radius: var(--oc-radius-soft);
   background: var(--oc-control-bg);
@@ -748,7 +748,7 @@
 }
 
 .workspace-coding-cli-option-icon[data-coding-cli-icon="codex"] {
-  color: #10a37f;
+  color: var(--text-strong);
 }
 
 .workspace-coding-cli-select-icon[data-coding-cli-icon="claude-code"] {
@@ -756,19 +756,22 @@
 }
 
 .workspace-coding-cli-select-icon[data-coding-cli-icon="codex"] {
-  color: var(--accent);
+  color: var(--text-strong);
 }
 
-.workspace-coding-cli-option-icon[data-coding-cli-icon="gemini"] {
-  color: var(--accent-start);
+.workspace-coding-cli-option-icon[data-coding-cli-icon="gemini"],
+.workspace-coding-cli-select-icon[data-coding-cli-icon="gemini"] {
+  color: #8e75b2;
 }
 
-.workspace-coding-cli-option-icon[data-coding-cli-icon="copilot"] {
-  color: var(--good);
+.workspace-coding-cli-option-icon[data-coding-cli-icon="copilot"],
+.workspace-coding-cli-select-icon[data-coding-cli-icon="copilot"] {
+  color: var(--text-strong);
 }
 
-.workspace-coding-cli-option-icon[data-coding-cli-icon="glm"] {
-  color: var(--warn);
+.workspace-coding-cli-option-icon[data-coding-cli-icon="glm"],
+.workspace-coding-cli-select-icon[data-coding-cli-icon="glm"] {
+  color: var(--text-strong);
 }
 
 .workspace-split-launcher-primary[aria-pressed="true"],

@@ -111,6 +111,21 @@ test("panel header controls collapse side panes in place", async () => {
       (node) => Math.round(node.getBoundingClientRect().width),
     );
     expect(editorSelectWidth).toBeLessThanOrEqual(32);
+    const launcherDimensions = await page.evaluate(() => {
+      const measure = (selector: string) => {
+        const node = document.querySelector<HTMLElement>(selector);
+        if (!node) throw new Error(`Missing ${selector}`);
+        const rect = node.getBoundingClientRect();
+        return { width: Math.round(rect.width), height: Math.round(rect.height) };
+      };
+      return {
+        terminal: measure(".workspace-command-dock .workspace-layout-controls"),
+        editor: measure(".workspace-command-dock .workspace-editor-launchers"),
+        codingCli: measure(".workspace-command-dock .workspace-coding-cli-launchers"),
+      };
+    });
+    expect(launcherDimensions.terminal).toEqual(launcherDimensions.editor);
+    expect(launcherDimensions.terminal).toEqual(launcherDimensions.codingCli);
     expect(await page.$('.workspace-editor-select-icon[data-editor="vscode"] svg')).not.toBeNull();
     await page.click('.workspace-command-dock [data-ui="workspace-editor-menu"]');
     const editorMenuState = await page.evaluate(() => {

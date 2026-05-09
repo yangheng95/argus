@@ -29451,6 +29451,58 @@
           "properties"
         ]
       },
+      "Event.session.error": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.error"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "error": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ProviderAuthError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnknownError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MessageOutputLengthError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MessageAbortedError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StructuredOutputError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StructuredOutputPayloadError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TerminalToolMissingError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ContextOverflowError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/APIError"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "PermissionRequest": {
         "type": "object",
         "properties": {
@@ -30780,58 +30832,6 @@
           "properties"
         ]
       },
-      "Event.session.error": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.error"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "error": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/ProviderAuthError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/UnknownError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/MessageOutputLengthError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/MessageAbortedError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StructuredOutputError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StructuredOutputPayloadError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/TerminalToolMissingError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContextOverflowError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/APIError"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Pty": {
         "type": "object",
         "properties": {
@@ -31185,6 +31185,9 @@
             "$ref": "#/components/schemas/Event.message.part.removed"
           },
           {
+            "$ref": "#/components/schemas/Event.session.error"
+          },
+          {
             "$ref": "#/components/schemas/Event.permission.asked"
           },
           {
@@ -31270,9 +31273,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.session.diff"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.error"
           },
           {
             "$ref": "#/components/schemas/Event.pty.created"
