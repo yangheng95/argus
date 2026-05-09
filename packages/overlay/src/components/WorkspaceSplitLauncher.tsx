@@ -3,7 +3,7 @@ import { Portal } from "solid-js/web";
 
 interface WorkspaceSplitLauncherProps {
   rootClass: string;
-  rootRole?: string;
+  rootRole?: JSX.IntrinsicElements["div"]["role"];
   rootAriaLabel?: string;
   primaryClass: string;
   menuButtonClass: string;

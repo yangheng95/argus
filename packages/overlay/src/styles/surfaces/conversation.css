@@ -744,7 +744,7 @@
 }
 
 .workspace-coding-cli-option-icon[data-coding-cli-icon="claude-code"] {
-  color: #d97757;
+  color: var(--oc-brand-claude-code);
 }
 
 .workspace-coding-cli-option-icon[data-coding-cli-icon="codex"] {
@@ -752,7 +752,7 @@
 }
 
 .workspace-coding-cli-select-icon[data-coding-cli-icon="claude-code"] {
-  color: #d97757;
+  color: var(--oc-brand-claude-code);
 }
 
 .workspace-coding-cli-select-icon[data-coding-cli-icon="codex"] {
@@ -761,7 +761,7 @@
 
 .workspace-coding-cli-option-icon[data-coding-cli-icon="gemini"],
 .workspace-coding-cli-select-icon[data-coding-cli-icon="gemini"] {
-  color: #8e75b2;
+  color: var(--oc-brand-gemini);
 }
 
 .workspace-coding-cli-option-icon[data-coding-cli-icon="copilot"],

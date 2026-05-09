@@ -18,7 +18,7 @@ function send(value: unknown, init?: ResponseInit) {
   });
 }
 
-test("panel header collapse controls keep side panes in place", async () => {
+test("panel header collapse controls shrink side panes to header rails", async () => {
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -109,22 +109,24 @@ test("panel header collapse controls keep side panes in place", async () => {
 
     expect(collapsed.sidebar.hidden).toBe(false);
     expect(collapsed.sidebar.display).toBe("flex");
-    expect(Math.abs(collapsed.sidebar.width - beforeCollapse.sidebar.width)).toBeLessThanOrEqual(1);
+    expect(collapsed.sidebar.width).toBeLessThanOrEqual(48);
+    expect(collapsed.sidebar.width).toBeLessThan(beforeCollapse.sidebar.width / 2);
     expect(Math.abs(collapsed.sidebar.height - beforeCollapse.sidebar.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.leftResizer.hidden).toBe(false);
-    expect(collapsed.leftResizer.display).not.toBe("none");
+    expect(collapsed.leftResizer.hidden).toBe(true);
+    expect(collapsed.leftResizer.display).toBe("none");
     expect(collapsed.leftResizer.disabled).toBe("true");
-    expect(Math.abs(collapsed.leftResizer.width - beforeCollapse.leftResizer.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(collapsed.chat.width - beforeCollapse.chat.width)).toBeLessThanOrEqual(1);
+    expect(collapsed.leftResizer.width).toBe(0);
+    expect(collapsed.chat.width).toBeGreaterThan(beforeCollapse.chat.width + 200);
     expect(Math.abs(collapsed.chat.height - beforeCollapse.chat.height)).toBeLessThanOrEqual(1);
     expect(collapsed.sections.hidden).toBe(false);
     expect(collapsed.sections.display).toBe("flex");
-    expect(Math.abs(collapsed.sections.width - beforeCollapse.sections.width)).toBeLessThanOrEqual(1);
+    expect(collapsed.sections.width).toBeLessThanOrEqual(48);
+    expect(collapsed.sections.width).toBeLessThan(beforeCollapse.sections.width / 2);
     expect(Math.abs(collapsed.sections.height - beforeCollapse.sections.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.rightResizer.hidden).toBe(false);
-    expect(collapsed.rightResizer.display).not.toBe("none");
+    expect(collapsed.rightResizer.hidden).toBe(true);
+    expect(collapsed.rightResizer.display).toBe("none");
     expect(collapsed.rightResizer.disabled).toBe("true");
-    expect(Math.abs(collapsed.rightResizer.width - beforeCollapse.rightResizer.width)).toBeLessThanOrEqual(1);
+    expect(collapsed.rightResizer.width).toBe(0);
     expect(collapsed.leftToggle.hidden).toBe(false);
     expect(collapsed.leftToggle.display).not.toBe("none");
     expect(collapsed.rightToggle.hidden).toBe(false);
@@ -161,6 +163,51 @@ test("panel header collapse controls keep side panes in place", async () => {
     expect(Math.abs(expanded.sections.width - beforeCollapse.sections.width)).toBeLessThanOrEqual(1);
     expect(expanded.rightResizer.hidden).toBe(false);
     expect(expanded.rightResizer.disabled).toBe("false");
+
+    await page.setViewport({ width: 607, height: 900 });
+    await page.evaluate(() => {
+      localStorage.setItem("oc_sidebar_collapsed", "true");
+      localStorage.setItem("oc_right_panel_collapsed", "true");
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector('[data-ui="sidebar-header-collapse-toggle"]');
+
+    const narrowCollapsed = await page.evaluate(() => {
+      const measure = (selector: string) => {
+        const node = document.querySelector<HTMLElement>(selector);
+        if (!node) throw new Error(`Missing ${selector}`);
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return {
+          hidden: node.hidden,
+          display: style.display,
+          width: rect.width,
+          height: rect.height,
+          disabled: node.dataset.disabled || "",
+        };
+      };
+      return {
+        sidebar: measure("#sidebar"),
+        leftResizer: measure("#leftPaneResizer"),
+        chat: measure("#chatSection"),
+        sections: measure("#sections"),
+        rightResizer: measure("#rightPaneResizer"),
+      };
+    });
+
+    expect(narrowCollapsed.sidebar.hidden).toBe(false);
+    expect(narrowCollapsed.sidebar.width).toBeGreaterThan(600);
+    expect(narrowCollapsed.sidebar.height).toBeLessThanOrEqual(48);
+    expect(narrowCollapsed.leftResizer.hidden).toBe(true);
+    expect(narrowCollapsed.leftResizer.display).toBe("none");
+    expect(narrowCollapsed.leftResizer.disabled).toBe("true");
+    expect(narrowCollapsed.chat.height).toBeGreaterThan(500);
+    expect(narrowCollapsed.sections.hidden).toBe(false);
+    expect(narrowCollapsed.sections.width).toBeGreaterThan(600);
+    expect(narrowCollapsed.sections.height).toBeLessThanOrEqual(48);
+    expect(narrowCollapsed.rightResizer.hidden).toBe(true);
+    expect(narrowCollapsed.rightResizer.display).toBe("none");
+    expect(narrowCollapsed.rightResizer.disabled).toBe("true");
   } finally {
     await browser.close();
     server.stop(true);

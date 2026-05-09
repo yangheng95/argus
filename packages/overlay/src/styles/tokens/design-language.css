@@ -164,6 +164,9 @@
   --ui-panel-padding-y: calc(8px * var(--ui-scale));
   --ui-capsule-height: calc(28px * var(--ui-scale));
   --ui-resizer-width: 1px;
+  --ui-collapsed-pane-width: var(--oc-header-height);
+  --oc-brand-claude-code: #d97757;
+  --oc-brand-gemini: #8e75b2;
 
   --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
   --ui-rail-min-width: calc(210px * var(--ui-scale));
