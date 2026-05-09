@@ -26,10 +26,12 @@
 }
 
 .dialog-form {
+  --dialog-drag-x: 0px;
+  --dialog-drag-y: 0px;
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(calc(-50% + var(--dialog-drag-x)), calc(-50% + var(--dialog-drag-y)));
   width: calc(100% - calc(32px * var(--ui-scale)));
   max-width: var(--ui-dialog-width);
   max-height: calc(100vh - calc(80px * var(--ui-scale)));
@@ -109,6 +111,21 @@
   align-items: center;
   justify-content: space-between;
   gap: calc(12px * var(--ui-scale));
+}
+
+.dialog-header[data-dialog-drag-handle="true"] {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.dialog-form[data-dialog-dragging="true"] > .dialog-header {
+  cursor: grabbing;
+}
+
+.dialog-header-actions,
+.dialog-header-actions * {
+  cursor: auto;
 }
 
 .dialog-header-actions,

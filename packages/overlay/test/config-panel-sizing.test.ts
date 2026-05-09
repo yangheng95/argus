@@ -159,6 +159,62 @@ describe("config panel sizing", () => {
       expect(new Set(metrics.headHeights).size).toBe(1)
       expect(Math.abs(metrics.apiInputHeight - metrics.apiButtonHeight)).toBeLessThanOrEqual(1)
       expect(metrics.dialogHeight).toBeGreaterThanOrEqual(600)
+
+      const beforeDrag = await page.evaluate(() => {
+        const dialog = document.querySelector("#configDialog .dialog-form") as HTMLElement
+        const header = document.querySelector("#configDialog .dialog-header") as HTMLElement
+        const dialogRect = dialog.getBoundingClientRect()
+        const headerRect = header.getBoundingClientRect()
+        return {
+          left: Math.round(dialogRect.left),
+          top: Math.round(dialogRect.top),
+          startX: Math.round(headerRect.left + 160),
+          startY: Math.round(headerRect.top + headerRect.height / 2),
+        }
+      })
+
+      await page.mouse.move(beforeDrag.startX, beforeDrag.startY)
+      await page.mouse.down()
+      await page.mouse.move(beforeDrag.startX + 120, beforeDrag.startY + 80, { steps: 10 })
+      await page.mouse.up()
+
+      const afterDrag = await page.evaluate(() => {
+        const dialog = document.querySelector("#configDialog .dialog-form") as HTMLElement
+        const rect = dialog.getBoundingClientRect()
+        return {
+          left: Math.round(rect.left),
+          top: Math.round(rect.top),
+        }
+      })
+
+      expect(afterDrag.left - beforeDrag.left).toBeGreaterThanOrEqual(100)
+      expect(afterDrag.top - beforeDrag.top).toBeGreaterThanOrEqual(60)
+
+      const edgeDrag = await page.evaluate(() => {
+        const header = document.querySelector("#configDialog .dialog-header") as HTMLElement
+        const headerRect = header.getBoundingClientRect()
+        return {
+          startX: Math.round(headerRect.left + 160),
+          startY: Math.round(headerRect.top + headerRect.height / 2),
+        }
+      })
+
+      await page.mouse.move(edgeDrag.startX, edgeDrag.startY)
+      await page.mouse.down()
+      await page.mouse.move(edgeDrag.startX - 2000, edgeDrag.startY - 2000, { steps: 10 })
+      await page.mouse.up()
+
+      const clamped = await page.evaluate(() => {
+        const dialog = document.querySelector("#configDialog .dialog-form") as HTMLElement
+        const rect = dialog.getBoundingClientRect()
+        return {
+          left: Math.round(rect.left),
+          top: Math.round(rect.top),
+        }
+      })
+
+      expect(clamped.left).toBeGreaterThanOrEqual(7)
+      expect(clamped.top).toBeGreaterThanOrEqual(7)
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
