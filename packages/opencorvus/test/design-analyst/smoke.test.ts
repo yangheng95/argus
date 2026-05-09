@@ -4,7 +4,7 @@
  * Gated behind OPENCORVUS_RUN_LIVE_E2E=1 / OPENCORVUS_RUN_DESIGN_SMOKE=1.
  * Runs with no visual attachments so the agent exercises the text-only
  * code path — enough to prove the SessionPrompt + extraTools + multimodal
- * parts pipeline resolves and the StructuredOutput terminal call lands.
+ * parts pipeline resolves and the submit_design_prd_spec terminal call lands.
  * An image-backed smoke test that verifies extracted color/typography
  * specs is deferred until the phase-3 sweep reaches a full dispatch run.
  */
