@@ -125,8 +125,14 @@ export namespace Agent {
       general: {
         name: "general",
         description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
-        tools: { exclude: ["planner", "panel", "task_report", "analytics", "task", "todoread", "todowrite", ...MIRROR_TOOL_IDS] },
-        permission: nonDesignPermissions(),
+        tools: { exclude: ["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...MIRROR_TOOL_IDS] },
+        permission: nonDesignPermissions(
+          PermissionNext.fromConfig({
+            task: {
+              general: "deny",
+            },
+          }),
+        ),
         options: {},
         mode: "subagent",
         native: true,
@@ -228,7 +234,7 @@ export namespace Agent {
         //   - dispatch tools (the orchestrator's actual job)
         //   - observation tools (read_context, query_failed_goals, *_report)
         //   - user interaction (question)
-        //   - bookkeeping (todoread, todowrite, memory, schedule, skill, panel)
+        //   - bookkeeping (todoread, todowrite, memory, schedule, skill)
         // Excluded:
         //   - filesystem / shell (bash, read, edit, write, glob, search_code,
         //     external_code_search, lsp, codesearch, list)
@@ -237,6 +243,7 @@ export namespace Agent {
         //   - network (webfetch, websearch) — same reason
         //   - sub-agent dispatch via the generic `task` tool — orchestrator uses
         //     the explicit `build` / `requirements` / etc. tools instead
+        //   - control-plane `panel` — the gateway surface owns that boundary
         tools: {
           include: [
             // dispatch
@@ -270,7 +277,6 @@ export namespace Agent {
             "memory",
             "schedule",
             "skill",
-            "panel",
           ],
         },
         options: {},
