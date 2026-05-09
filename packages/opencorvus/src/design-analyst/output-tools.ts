@@ -3,10 +3,10 @@
  *
  * Structured output tools for the Design Analyst Agent.
  *
- * The PRD/SPEC carried by DesignFinalSchema is the authoritative design-analysis
- * output. VisualSpec registration tools remain available to tests and older
- * collector call sites as optional compact anchors, but design-analysis no
- * longer depends on registering rows before handoff.
+ * The PRD/SPEC submitted through submit_design_prd_spec is the authoritative
+ * design-analysis output. VisualSpec registration tools remain available to
+ * tests and older collector call sites as optional compact anchors, but
+ * design-analysis no longer depends on registering rows before handoff.
  */
 import { tool } from "ai"
 import z from "zod"
@@ -15,27 +15,25 @@ import type { VisualSpec, VisualSpecCategory } from "./types"
 // ---------------------------------------------------------------------------
 // Collector — private. Callers read through getSpecs() / getStats().
 //
-// Phase 3-b-2: designSystem / techStack / finalized moved out of the
-// collector — they now arrive through SessionLoop's StructuredOutput tool
-// via DesignFinalSchema. The cross-field validation formerly in
-// `finalize_design_requirements` (≥2 colors, ≥1 typography, layout,
-// component) is dropped in favour of trust-the-LLM; the agent is free
-// to under-register, and callers must decide whether to accept thin
-// contracts or re-dispatch. This aligns with CLAUDE.md rule 23 — no
-// FSM-style quality gates inside a tool.
+// The cross-field validation formerly in `finalize_design_requirements`
+// (≥2 colors, ≥1 typography, layout, component) is dropped in favour of
+// a direct PRD/SPEC submit contract. The agent is free to under-register
+// optional anchors; callers consume the submitted PRD/SPEC as the source
+// of truth.
 // ---------------------------------------------------------------------------
 
-interface Collector {
+export interface DesignOutputCollector {
   specs: VisualSpec[]
+  final?: DesignFinal
 }
 
 const DESIGN_SPEC_BUDGET = 80
 
-function emptyCollector(): Collector {
+function emptyCollector(): DesignOutputCollector {
   return { specs: [] }
 }
 
-// Terminal JSON-schema: payload the StructuredOutput tool must deliver.
+// Terminal JSON-schema: payload submit_design_prd_spec must deliver.
 export const DesignFinalSchema = z.object({
   design_system: z
     .string()
@@ -295,7 +293,7 @@ export function createDesignOutputTools() {
       return (
         `SPEC_BUDGET_REACHED: ${DESIGN_SPEC_BUDGET} visual specs are already registered. ` +
         "Stop registering per-item visual rows; consolidate remaining detail in product_spec/frontend_spec/visual_consistency_spec/backend_spec, " +
-        "complete the two PRD/SPEC review passes, then call StructuredOutput."
+        "complete the two PRD/SPEC review passes, then call submit_design_prd_spec."
       )
     }
     const spec: VisualSpec = {
@@ -413,12 +411,30 @@ export function createDesignOutputTools() {
       },
     }),
 
+    submit_design_prd_spec: tool({
+      description:
+        "Submit the complete mirror-grounded PRD/SPEC for downstream agents. " +
+        "Use this as the final action after visual evidence review and at least two PRD/SPEC review passes; " +
+        "do not register rows or call more mirror tools once this terminal tool is exposed.",
+      inputSchema: DesignFinalSchema,
+      execute: async (input) => {
+        collector.final = input
+        return "OK: complete design-analysis PRD/SPEC submitted for orchestrator handoff."
+      },
+    }),
+
   }
 
   return {
     tools,
+    getCollector(): DesignOutputCollector {
+      return { specs: [...collector.specs], final: collector.final }
+    },
     getSpecs(): VisualSpec[] {
       return [...collector.specs]
+    },
+    getFinal(): DesignFinal | undefined {
+      return collector.final
     },
     reset() {
       collector = emptyCollector()

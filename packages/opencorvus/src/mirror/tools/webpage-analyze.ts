@@ -25,8 +25,82 @@ import {
   materializeScaffoldForReactSource,
 } from "../shared/scaffold-helpers"
 import { ExtractedPageSchema } from "../ir/extracted-page"
+import type { ProjectScaffold } from "../ir/scaffold"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 import { writeGeneratedSourceFiles } from "./generated-source"
+
+function renderPrdEvidenceSummary(input: {
+  page: { url: string; title: string; viewport: { width: number; height: number } }
+  scaffold: ProjectScaffold
+  scaffoldPath: string
+  contextPath: string
+  irPath: string
+  referencePath: string
+}): string {
+  const { page, scaffold } = input
+  const colors = scaffold.tokens.colors
+    .slice(0, 12)
+    .map((c) => `- ${c.value}${c.semantic ? ` (${c.semantic})` : ""}, frequency=${c.frequency}`)
+    .join("\n")
+  const fonts = scaffold.tokens.fonts
+    .map((f) => `- ${f.family}: weights=${f.weights.join("/")}, sizes=${f.sizes.join("/")}px`)
+    .join("\n")
+  const spacing = scaffold.tokens.spacing
+    .slice(0, 8)
+    .map((s) => `${s.px}px`)
+    .join(", ")
+  const sections = scaffold.sections
+    .map((s) => `- ${s.name}: role=${s.role ?? "unknown"}, bounds=${s.bounds.x},${s.bounds.y},${s.bounds.w}x${s.bounds.h}, elements=${s.elementCount}, file=${s.file.filePath}`)
+    .join("\n")
+  const patterns = scaffold.catalog.patterns
+    .slice(0, 12)
+    .map((p) => {
+      const props = p.props.length > 0 ? `, props=${p.props.map((prop) => `${prop.name}:${prop.type}`).join("/")}` : ""
+      return `- ${p.name}: instances=${p.instanceCount}, similarity=${Math.round(p.structuralSimilarity * 100)}%${props}`
+    })
+    .join("\n")
+
+  return [
+    "# Mirror PRD/SPEC Evidence Summary",
+    "",
+    `Source URL: ${page.url}`,
+    `Title: ${page.title}`,
+    `Viewport: ${page.viewport.width}x${page.viewport.height}`,
+    "",
+    "## Canonical Evidence Files",
+    `- Pixel reference: ${input.referencePath}`,
+    `- Page hierarchy and text IR: ${input.irPath}`,
+    `- Compact token/pattern summary: ${input.contextPath}`,
+    `- Full scaffold source for bounded targeted reads: ${input.scaffoldPath}`,
+    "",
+    "## PRD/SPEC Draft Surface",
+    "Use this as the first draft surface, then perform two PRD/SPEC review passes before submit_design_prd_spec.",
+    "",
+    "### Page Inventory",
+    sections || "- No sections detected; mark inventory gaps explicitly.",
+    "",
+    "### Visual Tokens",
+    "Colors:",
+    colors || "- unknown",
+    "",
+    "Fonts:",
+    fonts || "- unknown",
+    "",
+    `Spacing: ${spacing || "unknown"}`,
+    "",
+    "### Reusable Component Patterns",
+    patterns || "- No repeated patterns detected; describe visible unique components from pixels.",
+    "",
+    "### Visual Consistency Emphasis",
+    "- Preserve the reference viewport geometry and major region proportions before decorative detail.",
+    "- Bind charts, tables, toolbars, sidebars, overlays, and repeated data surfaces as grouped components.",
+    "- Backend/API details must be marked unknown unless observable from text, controls, or data surfaces.",
+    "",
+    "### Required Review Passes",
+    "- Pass 1 inventory: confirm each visible region/text/control/chart/table/media surface is represented or marked unknown.",
+    "- Pass 2 implementation handoff: confirm frontend/backend specs are implementable without mirror tools.",
+  ].join("\n")
+}
 
 export const WebpageAnalyzeTool = Tool.define("webpage_analyze", {
   description: `Analyze an ExtractedPage into a deterministic ProjectScaffold (section list, component-pattern catalog, design-token system, file contracts). Zero LLM.
@@ -34,9 +108,10 @@ export const WebpageAnalyzeTool = Tool.define("webpage_analyze", {
 Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes mirror facts plus scaffold artifacts:
   - scaffold.json           full ProjectScaffold
   - shared-context.md       compact token + pattern summary for prompts
+  - prd-evidence-summary.md direct PRD/SPEC drafting surface
   - sourcePaths             scaffold-generated source files for analysis only
 
-Returns a summary: section list, pattern list, token counts. The agent should read \`shared-context.md\` and \`page-ir.xml\` first, then use bounded targeted \`scaffold.json\` reads only for specific gaps.
+Returns a summary: section list, pattern list, token counts, and the PRD/SPEC evidence summary path. The agent should submit the PRD/SPEC after two review passes once these artifacts exist; bounded targeted \`scaffold.json\` reads are only for specific gaps.
 
 This tool is artifact-dependent: do NOT call it until \`webpage_extract\` has completed and written \`extracted-page.json\`. Never batch it in the same assistant turn as \`webpage_extract\`.
 
@@ -79,11 +154,23 @@ Use as step 3 of the design-analysis webpage PRD/SPEC workflow. Pure function, n
 
     const scaffoldPath = path.join(outputDir, "scaffold.json")
     const contextPath = path.join(outputDir, "shared-context.md")
+    const prdEvidencePath = path.join(outputDir, "prd-evidence-summary.md")
+    const irPath = path.join(outputDir, "page-ir.xml")
+    const referencePath = path.join(outputDir, "reference.png")
     const sourcePaths = await writeGeneratedSourceFiles(sourceFiles)
+    const prdEvidenceSummary = renderPrdEvidenceSummary({
+      page,
+      scaffold,
+      scaffoldPath,
+      contextPath,
+      irPath,
+      referencePath,
+    })
 
     await Promise.all([
       fs.writeFile(scaffoldPath, JSON.stringify(scaffold, null, 2), "utf8"),
       fs.writeFile(contextPath, sharedContext, "utf8"),
+      fs.writeFile(prdEvidencePath, prdEvidenceSummary, "utf8"),
     ])
 
     const topPatterns = scaffold.catalog.patterns
@@ -123,13 +210,15 @@ Use as step 3 of the design-analysis webpage PRD/SPEC workflow. Pure function, n
         `**Artifacts written:**`,
         `- \`${scaffoldPath}\` — full ProjectScaffold`,
         `- \`${contextPath}\` — compact prompt-ready summary`,
+        `- \`${prdEvidencePath}\` — direct PRD/SPEC evidence summary`,
         `- React source files: ${sourcePaths.length}`,
         "",
-        "Next: read `shared-context.md` and `page-ir.xml`, then use bounded targeted `scaffold.json` reads only for missing details before writing the PRD/SPEC. Do not treat generated source as the deliverable.",
+        "Next: use the PRD/SPEC evidence summary above plus `shared-context.md` and `page-ir.xml` as the working surface. Perform two PRD/SPEC review passes, then call `submit_design_prd_spec`. Do not treat generated source as the deliverable.",
       ].join("\n"),
       metadata: {
         scaffoldPath,
         contextPath,
+        prdEvidencePath,
         sourcePaths,
         sectionCount: scaffold.sections.length,
         patternCount: scaffold.catalog.patterns.length,

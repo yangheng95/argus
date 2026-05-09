@@ -2,8 +2,8 @@
  * Design Analyst Agent — produces a mirror-grounded PRD/SPEC from screenshots /
  * mockups / live URLs.
  *
- * The StructuredOutput payload lands in the design-analysis decision log and is
- * the authoritative contract for requirements, architect, build, and delivery.
+ * The submit_design_prd_spec payload lands in the design-analysis decision log
+ * and is the authoritative contract for requirements, architect, build, and delivery.
  * `engine_task.design_specs` is no longer required for handoff; if present, it is
  * only a compact anchor list beside the PRD/SPEC.
  *
@@ -13,13 +13,13 @@
  * ✓ Reads codebase to discover existing design patterns/component libraries
  * ✓ Works from multimodal attachments (screenshots, PDF) and can capture a
  *   live webpage PNG via `url_screenshot` when the brief includes a visual URL.
- * ✓ Emits terminal PRD/SPEC fields via SessionLoop's StructuredOutput
- *   (DesignFinalSchema).
+ * ✓ Emits terminal PRD/SPEC fields via submit_design_prd_spec.
  *
  * Implementation: thin shell over `runAgentSession`. The runner owns
  * model / session / prompt-composition / abort / stream-error handling.
  */
-import z from "zod"
+import fs from "node:fs"
+import path from "node:path"
 import { runAgentSession } from "@/agent/runner"
 import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
@@ -28,7 +28,7 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { Instance } from "@/project/instance"
 import { deriveUrlSignals } from "@/engine/skill-inject"
 import type { VisualSpec } from "./types"
-import { createDesignOutputTools, DesignFinalSchema, type DesignFinal } from "./output-tools"
+import { createDesignOutputTools, type DesignOutputCollector } from "./output-tools"
 import { createReadAttachmentTool } from "./read-attachment-tool"
 import { createUrlScreenshotTool } from "./url-screenshot-tool"
 
@@ -108,14 +108,21 @@ export namespace DesignAnalystAgent {
           ...contextTools,
           ...screenshotToolKit,
           ...readAttachmentToolKit,
+          ...outputToolKit.tools,
         },
-        getCollector: () => outputToolKit.getSpecs(),
+        getCollector: () => outputToolKit.getCollector(),
       },
       buildUserPrompt: () => buildUserPrompt(input),
       buildUserParts: () => buildPromptParts(input),
-      format: {
-        schema: z.toJSONSchema(DesignFinalSchema) as Record<string, unknown>,
-        retryCount: 2,
+      terminalTool: {
+        toolName: "submit_design_prd_spec",
+        isSatisfied: (collector: DesignOutputCollector) => !!collector.final,
+        shouldExposeOnlyTerminalTool: () => shouldPinDesignSubmitTool(input),
+        recovery: {
+          maxTurns: 2,
+          buildUserPrompt: () =>
+            "Design-analysis has enough evidence for handoff. Submit the complete PRD/SPEC now with submit_design_prd_spec. Include the two review-pass notes in prd_iteration_notes.",
+        },
       },
       skillsStage: "design_analyst",
       skillTaskSignals: {
@@ -125,8 +132,9 @@ export namespace DesignAnalystAgent {
       },
     })
 
-    const structured = out.structured as DesignFinal | undefined
-    const specs = out.collector as VisualSpec[]
+    const collector = out.collector as DesignOutputCollector
+    const structured = collector.final
+    const specs = collector.specs
 
     log.info("design analyst finished", {
       specs: specs.length,
@@ -135,7 +143,7 @@ export namespace DesignAnalystAgent {
 
     if (!structured) {
       throw new Error(
-        "Design analyst agent did not finalize — StructuredOutput missing. " +
+        "Design analyst agent did not finalize — submit_design_prd_spec missing. " +
         "Check the model's tool-calling behavior or the design-analyst prompt.",
       )
     }
@@ -190,6 +198,21 @@ export namespace DesignAnalystAgent {
     }
     return lines.join("\n")
   }
+}
+
+function shouldPinDesignSubmitTool(input: {
+  request: string
+  attachments?: Array<{ mime: string; intent?: string; source?: string }>
+}): boolean {
+  if (!hasHttpUrl(input.request)) return true
+  return mirrorPromptArtifactsReady()
+}
+
+function mirrorPromptArtifactsReady(): boolean {
+  const mirrorDir = path.join(Instance.directory, "mirror")
+  return ["reference.png", "page-ir.xml", "shared-context.md", "scaffold.json"].every((name) =>
+    fs.existsSync(path.join(mirrorDir, name)),
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +306,7 @@ function buildUserPrompt(input: {
     "Strict order: `webpage_extract` writes `mirror/reference.png` and `mirror/extracted-page.json`; " +
     "`webpage_compile` writes `mirror/page-ir.xml`; `webpage_analyze` writes `mirror/scaffold.json` " +
     "and `mirror/shared-context.md`. Read the compact artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the PRD/SPEC prompt. " +
-    "Do at least two PRD/SPEC review passes before StructuredOutput: first check page inventory and visual coverage, then check downstream frontend/backend implementability. " +
+    "Do at least two PRD/SPEC review passes before `submit_design_prd_spec`: first check page inventory and visual coverage, then check downstream frontend/backend implementability. " +
     "Do not use todo or scratchpad tools for PRD iteration; write the review-pass findings directly into the final PRD/SPEC fields.",
   )
 
