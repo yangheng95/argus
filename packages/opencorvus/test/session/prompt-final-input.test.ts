@@ -70,4 +70,8 @@ test("runtime prompt call sites mark complete system prompts explicitly", async 
 
   const refineSrc = await fs.readFile(path.join(srcRoot, "orchestrator/tools.ts"), "utf8")
   expect(refineSrc).not.toContain('agent: "assistant"')
+
+  const controlSrc = await fs.readFile(path.join(srcRoot, "control/message.ts"), "utf8")
+  expect(controlSrc).toContain('const agent = "control"')
+  expect(controlSrc).not.toContain('const agent = "general"')
 })

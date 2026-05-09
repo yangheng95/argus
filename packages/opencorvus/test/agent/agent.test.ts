@@ -180,6 +180,31 @@ test("orchestrator does not inherit the generic task-tool prompt policy", async 
   })
 })
 
+test("control agent is hidden and isolated from general subagent config", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        general: { disable: true },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(await Agent.get("general")).toBeUndefined()
+
+      const control = await Agent.get("control")
+      expect(control).toBeDefined()
+      expect(control?.hidden).toBe(true)
+      expect(control?.mode).toBe("primary")
+      expect(control?.prompt).toContain("control-plane agent")
+
+      const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, control)
+      expect(tools.map((tool) => tool.id)).toEqual(["panel"])
+    },
+  })
+})
+
 test("compaction agent exposes no tools while permissions default to allow", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({

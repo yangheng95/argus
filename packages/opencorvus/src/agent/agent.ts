@@ -30,6 +30,12 @@ const ORCHESTRATOR_RUNTIME_PROMPT = [
   "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `design_analysis`, `architect`, `build`, `deliver`, and `refine`. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
 ].join("\n")
 
+const CONTROL_RUNTIME_PROMPT = [
+  "You are the OpenCorvus control-plane agent.",
+  "Follow the per-request control-plane system prompt supplied by the control runtime.",
+  "Use only the panel tool exposed in the current turn.",
+].join("\n")
+
 export namespace Agent {
   export const Info = z
     .object({
@@ -191,6 +197,21 @@ export namespace Agent {
         tools: { include: [] as string[] },
         mode: "primary",
         options: {},
+        native: true,
+        hidden: true,
+      },
+      control: {
+        name: "control",
+        description: "Control-plane agent. Routes panel and gateway natural-language requests through the panel tool.",
+        tools: { include: ["panel"] },
+        permission: nonDesignPermissions(
+          PermissionNext.fromConfig({
+            panel: "allow",
+          }),
+        ),
+        options: {},
+        prompt: CONTROL_RUNTIME_PROMPT,
+        mode: "primary",
         native: true,
         hidden: true,
       },

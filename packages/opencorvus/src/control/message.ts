@@ -94,7 +94,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       onEvent({ type: "start" })
     }
 
-    const agent = "general"
+    const agent = "control"
     const system = await systemPrompt(input)
     const parts = buildUserParts(input)
     const tools = await panelTools()
