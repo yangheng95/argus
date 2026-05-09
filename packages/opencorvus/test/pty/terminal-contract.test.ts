@@ -81,6 +81,35 @@ describe("pty terminal contract", () => {
     })
   })
 
+  test("builds multiple system terminal profiles from available shells", () => {
+    const resolved = new Map([
+      ["powershell.exe", "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"],
+      ["C:\\Windows\\System32\\cmd.exe", "C:\\Windows\\System32\\cmd.exe"],
+    ])
+
+    const terminal = TerminalProfile.createSystemTerminalProfilesForTest({
+      platform: "win32",
+      env: { ComSpec: "C:\\Windows\\System32\\cmd.exe" },
+      resolveCommand(command) {
+        return resolved.get(command)
+      },
+    })
+
+    expect(terminal?.default_profile_id).toBe("powershell")
+    expect(Object.keys(terminal?.profiles ?? {})).toEqual(["powershell", "cmd"])
+    expect(terminal?.profiles?.powershell).toMatchObject({
+      label: "Windows PowerShell",
+      command: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      icon: "powershell",
+    })
+    expect(terminal?.profiles?.cmd).toMatchObject({
+      label: "Command Prompt",
+      command: "C:\\Windows\\System32\\cmd.exe",
+      icon: "command-prompt",
+    })
+    expect(terminal?.profiles?.default).toBeUndefined()
+  })
+
   test("create requires configured terminal profile", async () => {
     await using dir = await tmpdir({ git: true })
 

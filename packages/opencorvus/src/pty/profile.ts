@@ -148,31 +148,152 @@ export namespace TerminalProfile {
     return process.env.SHELL
   }
 
-  export function setupDefaultProfile(): Config.Terminal | undefined {
-    const command = configuredSystemShell()
-    if (!command) return
-    const label = process.platform === "win32" ? "Command Prompt" : path.basename(command)
-    if (!label) return
-    return {
-      default_profile_id: "default",
-      profiles: {
-        default: {
-          label,
-          command,
-          args: [],
-          env: {
-            TERM: "xterm-256color",
-            COLORTERM: "truecolor",
-          },
-          icon: process.platform === "win32" ? "command-prompt" : "terminal",
+  interface SystemProfileDefinition {
+    id: string
+    label: string
+    commands: string[]
+    args: string[]
+    icon: Icon
+  }
+
+  interface SystemProfileOptions {
+    platform: NodeJS.Platform
+    env: NodeJS.ProcessEnv
+    resolveCommand: (command: string) => string | undefined
+  }
+
+  function uniqueStrings(values: Array<string | undefined>): string[] {
+    return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => !!value))]
+  }
+
+  function systemProfileDefinitions(options: SystemProfileOptions): SystemProfileDefinition[] {
+    if (options.platform === "win32") {
+      return [
+        {
+          id: "powershell",
+          label: "Windows PowerShell",
+          commands: ["powershell.exe", "powershell"],
+          args: ["-NoLogo"],
+          icon: "powershell",
         },
-      },
+        {
+          id: "pwsh",
+          label: "PowerShell",
+          commands: ["pwsh.exe", "pwsh"],
+          args: ["-NoLogo"],
+          icon: "powershell",
+        },
+        {
+          id: "cmd",
+          label: "Command Prompt",
+          commands: uniqueStrings([options.env.ComSpec, "cmd.exe", "cmd"]),
+          args: [],
+          icon: "command-prompt",
+        },
+        {
+          id: "bash",
+          label: "Bash",
+          commands: ["bash.exe", "bash"],
+          args: [],
+          icon: "bash",
+        },
+      ]
     }
+
+    return [
+      {
+        id: "bash",
+        label: "Bash",
+        commands: uniqueStrings([options.env.SHELL?.endsWith("/bash") ? options.env.SHELL : undefined, "bash"]),
+        args: [],
+        icon: "bash",
+      },
+      {
+        id: "zsh",
+        label: "Zsh",
+        commands: uniqueStrings([options.env.SHELL?.endsWith("/zsh") ? options.env.SHELL : undefined, "zsh"]),
+        args: [],
+        icon: "terminal",
+      },
+      {
+        id: "fish",
+        label: "Fish",
+        commands: uniqueStrings([options.env.SHELL?.endsWith("/fish") ? options.env.SHELL : undefined, "fish"]),
+        args: [],
+        icon: "terminal",
+      },
+    ]
+  }
+
+  function createSystemTerminalProfileConfig(options: SystemProfileOptions): Config.Terminal | undefined {
+    const profiles: Record<string, Config.TerminalProfile> = {}
+    for (const definition of systemProfileDefinitions(options)) {
+      const command = definition.commands.map(options.resolveCommand).find((resolved) => !!resolved)
+      if (!command) continue
+      profiles[definition.id] = {
+        label: definition.label,
+        command,
+        args: definition.args,
+        env: {
+          TERM: "xterm-256color",
+          COLORTERM: "truecolor",
+        },
+        icon: definition.icon,
+      }
+    }
+    const defaultProfileID = profiles.powershell ? "powershell" : Object.keys(profiles)[0]
+    if (!defaultProfileID) return
+    return {
+      default_profile_id: defaultProfileID,
+      profiles,
+    }
+  }
+
+  export function createSystemTerminalProfilesForTest(options: SystemProfileOptions): Config.Terminal | undefined {
+    return createSystemTerminalProfileConfig(options)
+  }
+
+  export function setupDefaultProfile(): Config.Terminal | undefined {
+    return createSystemTerminalProfileConfig({
+      platform: process.platform,
+      env: process.env,
+      resolveCommand(command) {
+        try {
+          return resolveCommand(command)
+        } catch (error) {
+          if (error instanceof ConfigError) return undefined
+          throw error
+        }
+      },
+    })
+  }
+
+  function isPreviousGeneratedSingleProfile(terminal: Config.Terminal): boolean {
+    const command = configuredSystemShell()
+    if (!command) return false
+    const profiles = terminal.profiles ?? {}
+    const entries = Object.entries(profiles)
+    if (terminal.default_profile_id !== "default" || entries.length !== 1) return false
+    const profile = profiles.default
+    if (!profile) return false
+    const label = process.platform === "win32" ? "Command Prompt" : path.basename(command)
+    return (
+      profile.label === label &&
+      profile.command === command &&
+      profile.args.length === 0 &&
+      profile.env.TERM === "xterm-256color" &&
+      profile.env.COLORTERM === "truecolor" &&
+      profile.icon === (process.platform === "win32" ? "command-prompt" : "terminal")
+    )
   }
 
   export async function ensureProjectDefaultProfile(): Promise<void> {
     const config = await Config.get()
-    if (config.terminal?.profiles && Object.keys(config.terminal.profiles).length > 0) return
+    const shouldWrite =
+      !config.terminal?.profiles ||
+      Object.keys(config.terminal.profiles).length === 0 ||
+      isPreviousGeneratedSingleProfile(config.terminal)
+    if (!shouldWrite) return
 
     const terminal = setupDefaultProfile()
     if (!terminal) {
@@ -181,6 +302,15 @@ export namespace TerminalProfile {
       })
     }
 
-    await Config.update({ terminal })
+    const removePreviousDefault = config.terminal?.profiles?.default ? { default: null } : {}
+    await Config.update({
+      terminal: {
+        ...terminal,
+        profiles: {
+          ...removePreviousDefault,
+          ...terminal.profiles,
+        },
+      },
+    } as Config.Info)
   }
 }

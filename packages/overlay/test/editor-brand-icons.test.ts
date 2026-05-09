@@ -8,7 +8,7 @@ function iconBlock(name: string): string {
   const marker = `"${name}": {`
   const start = ICON_SOURCE.indexOf(marker)
   if (start < 0) throw new Error(`${name} icon block not found`)
-  const next = ICON_SOURCE.indexOf("\n  \"editor-", start + marker.length)
+  const next = ICON_SOURCE.indexOf("\n  \"", start + marker.length)
   if (next < 0) throw new Error(`${name} icon block terminator not found`)
   return ICON_SOURCE.slice(start, next)
 }
@@ -37,4 +37,22 @@ test("PyCharm editor launcher uses the official JetBrains product SVG", () => {
   expect(block).toContain('fill="#000"')
   expect(block).toContain('fill="#fff"')
   expect(block).not.toContain('fill="currentColor"')
+})
+
+test("Claude Code launcher uses the Anthropic brand glyph", () => {
+  const block = iconBlock("coding-claude-code")
+
+  expect(block).toContain("M17.304 3.541")
+  expect(block).toContain("L0 20.459")
+  expect(block).toContain('fill="currentColor"')
+  expect(block).not.toContain("<circle")
+})
+
+test("Codex launcher uses the OpenAI brand glyph", () => {
+  const block = iconBlock("coding-codex")
+
+  expect(block).toContain("M22.282 9.821")
+  expect(block).toContain("A6.065 6.065")
+  expect(block).toContain('fill="currentColor"')
+  expect(block).not.toContain("L8 13.5")
 })
