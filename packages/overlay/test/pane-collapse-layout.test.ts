@@ -18,7 +18,7 @@ function send(value: unknown, init?: ResponseInit) {
   });
 }
 
-test("panel header controls collapse side panes in place", async () => {
+test("panel header controls collapse side panes to message-adjacent rails", async () => {
   const codingCliOpenBodies: Record<string, unknown>[] = [];
   const terminalOpenBodies: Record<string, unknown>[] = [];
   const server = Bun.serve({
@@ -337,22 +337,24 @@ test("panel header controls collapse side panes in place", async () => {
 
     expect(collapsed.sidebar.hidden).toBe(false);
     expect(collapsed.sidebar.display).toBe("flex");
-    expect(Math.abs(collapsed.sidebar.width - beforeCollapse.sidebar.width)).toBeLessThanOrEqual(1);
+    expect(collapsed.sidebar.width).toBeLessThanOrEqual(48);
+    expect(collapsed.sidebar.width).toBeLessThan(beforeCollapse.sidebar.width / 2);
     expect(Math.abs(collapsed.sidebar.height - beforeCollapse.sidebar.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.leftResizer.hidden).toBe(false);
-    expect(collapsed.leftResizer.display).not.toBe("none");
+    expect(collapsed.leftResizer.hidden).toBe(true);
+    expect(collapsed.leftResizer.display).toBe("none");
     expect(collapsed.leftResizer.disabled).toBe("true");
-    expect(Math.abs(collapsed.leftResizer.width - beforeCollapse.leftResizer.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(collapsed.chat.width - beforeCollapse.chat.width)).toBeLessThanOrEqual(1);
+    expect(collapsed.leftResizer.width).toBe(0);
+    expect(collapsed.chat.width).toBeGreaterThan(beforeCollapse.chat.width + 200);
     expect(Math.abs(collapsed.chat.height - beforeCollapse.chat.height)).toBeLessThanOrEqual(1);
     expect(collapsed.sections.hidden).toBe(false);
     expect(collapsed.sections.display).toBe("flex");
-    expect(Math.abs(collapsed.sections.width - beforeCollapse.sections.width)).toBeLessThanOrEqual(1);
+    expect(collapsed.sections.width).toBeLessThanOrEqual(48);
+    expect(collapsed.sections.width).toBeLessThan(beforeCollapse.sections.width / 2);
     expect(Math.abs(collapsed.sections.height - beforeCollapse.sections.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.rightResizer.hidden).toBe(false);
-    expect(collapsed.rightResizer.display).not.toBe("none");
+    expect(collapsed.rightResizer.hidden).toBe(true);
+    expect(collapsed.rightResizer.display).toBe("none");
     expect(collapsed.rightResizer.disabled).toBe("true");
-    expect(Math.abs(collapsed.rightResizer.width - beforeCollapse.rightResizer.width)).toBeLessThanOrEqual(1);
+    expect(collapsed.rightResizer.width).toBe(0);
     expect(collapsed.leftToggle.hidden).toBe(false);
     expect(collapsed.leftToggle.display).not.toBe("none");
     expect(collapsed.rightToggle.hidden).toBe(false);

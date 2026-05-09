@@ -823,6 +823,13 @@
   display: none;
 }
 
+.sidebar[data-collapsed="true"] {
+  width: var(--ui-collapsed-pane-width);
+  min-width: var(--ui-collapsed-pane-width);
+  max-width: var(--ui-collapsed-pane-width);
+  flex: 0 0 var(--ui-collapsed-pane-width);
+}
+
 .sidebar[data-collapsed="true"] .sidebar-title,
 .sidebar[data-collapsed="true"] .sidebar-body,
 .sidebar[data-collapsed="true"] .sidebar-header-actions,

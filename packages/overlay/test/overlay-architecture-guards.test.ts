@@ -560,7 +560,7 @@ describe("overlay architecture guards", () => {
     }
 
     expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\] \.sidebar-title,/)
-    expect(sidebarSurface).not.toMatch(/\.sidebar\[data-collapsed="true"\]\s*\{[\s\S]*?(?:width|min-width|max-width|flex)\s*:/)
+    expect(sidebarSurface).toContain("--ui-collapsed-pane-width")
     expect(sidebarSurface).not.toContain("sidebar-toolset")
     expect(html).not.toContain('data-ui="sidebar-refresh-button"')
     expect(html).not.toContain('data-ui="sidebar-toggle-button"')
@@ -591,7 +591,7 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.sections-tab-body\[data-active="false"\]/)
     expect(inspectorSurface).toMatch(/\.sections-tab-body\[data-panel-tab="inspector"\]/)
     expect(inspectorSurface).toContain("var(--inspector-surface)")
-    expect(inspectorSurface).not.toMatch(/\.sections\[data-collapsed="true"\]\s*\{[\s\S]*?(?:width|min-width|max-width|flex)\s*:/)
+    expect(inspectorSurface).toContain("--ui-collapsed-pane-width")
 
     const inspectorAt = html.indexOf('href="styles/surfaces/inspector.css"')
     expect(inspectorAt).toBeGreaterThan(-1)

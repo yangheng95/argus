@@ -1125,11 +1125,11 @@ disposers.push(createRoot((dispose) => {
       sections.hidden = false;
     }
     if (leftResizer) {
-      leftResizer.hidden = false;
+      leftResizer.hidden = sidebarCollapsed;
       leftResizer.dataset.disabled = String(sidebarCollapsed);
     }
     if (rightResizer) {
-      rightResizer.hidden = false;
+      rightResizer.hidden = rightPanelCollapsed;
       rightResizer.dataset.disabled = String(rightPanelCollapsed);
     }
 
