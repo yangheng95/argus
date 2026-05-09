@@ -890,8 +890,9 @@ describe("overlay architecture guards", () => {
     expect(html).not.toContain("btnWorkspaceToggle")
     expect(workspaceSurface).not.toContain(".workspace-toggle")
     expect(workspaceSurface).toMatch(/\.workspace-mount\[hidden\]\s*\{/)
-    expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace::before\s*\{/)
-    expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace:hover::before/)
+    expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace::before\s*\{/)
+    expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace:hover::before/)
+    expect(workspaceSurface).not.toMatch(/\.pane-resizer:hover::before/)
     expect(workspaceSurface).toMatch(/\.workspace-tab:hover\s*\{/)
     expect(workspaceSurface).toMatch(/\.workspace-tab\[data-active="true"\]\s*\{/)
     expect(workspaceSurface).toMatch(/\.workspace-close:hover\s*\{/)
@@ -1573,7 +1574,7 @@ describe("overlay architecture guards", () => {
     expect(styles).not.toMatch(/(^|\n)\.gwg::before\s*\{/)
     expect(styles).not.toMatch(/(^|\n)\.gwg:hover\s*\{/)
     expect(inspectorSurface).toMatch(/\.gwg\s*\{/)
-    expect(inspectorSurface).toMatch(/\.gwg::before\s*\{/)
+    expect(inspectorSurface).not.toMatch(/\.gwg::before\s*\{/)
     expect(inspectorSurface).toMatch(/\.gwg:hover\s*\{/)
 
     expect(styles).not.toMatch(/(^|\n)\.gwg--expanded\s*\{/)
@@ -1583,12 +1584,12 @@ describe("overlay architecture guards", () => {
         new RegExp(`(^|\\n)\\.gwg\\[data-goal-status="${status}"\\](?:::before)?\\s*\\{`),
       )
       expect(inspectorSurface).toMatch(
-        new RegExp(`\\.gwg\\[data-goal-status="${status}"\\](?:::before)?\\s*\\{`),
+        new RegExp(`\\.gwg\\[data-goal-status="${status}"\\] \\.gwg-status-icon\\s*\\{`),
       )
     }
 
     expect(inspectorSurface).not.toMatch(/#c3d2ee/)
-    expect(inspectorSurface).toMatch(/\.gwg\[data-goal-status="passed"\]::before[\s\S]*?var\(--text-soft\)/)
+    expect(inspectorSurface).not.toMatch(/\.gwg\[data-goal-status="passed"\]::before/)
     expect(inspectorSurface).toContain("var(--ui-shadow-tone)")
   })
 
@@ -1666,10 +1667,9 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(
       /\.oc-section\[data-phase-state="active"\] \.oc-section__badge:not\(:empty\)::before\s*\{/,
     )
-    // Flat-redesign Step 2 (2026-05-04): the active phase-state stack
-    // dropped its outer drop-shadow per rule §2.2 C — the accent identifier
-    // is now a 2px left-stripe rendered via `::after`.
-    expect(inspectorSurface).toMatch(
+    // Active phase-state uses only a background wash; the old vertical
+    // `::after` rail made narrow panes look broken.
+    expect(inspectorSurface).not.toMatch(
       /\.oc-section\[data-phase-state="active"\]::after\s*\{/,
     )
     expect(inspectorSurface).not.toMatch(/rgba\(91,\s*141,\s*239/)
