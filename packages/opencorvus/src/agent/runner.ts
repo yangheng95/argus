@@ -448,6 +448,57 @@ export function shouldContinueForMissingTerminalTool(input: {
   return terminalToolMissingErrorFor(input) !== null
 }
 
+async function recordAgentErrorForOrchestrator(input: {
+  taskID?: string
+  goalID?: string
+  sessionID: string
+  agentName: string
+  kind: SessionKind
+  error: unknown
+  streamErrors: Array<{ reason: string; name?: string }>
+}) {
+  if (!input.taskID) return
+  const message = input.error instanceof Error ? input.error.message : String(input.error)
+  const cause = input.error instanceof Error && input.error.cause instanceof Error
+    ? input.error.cause.message
+    : undefined
+  const streamLines = input.streamErrors
+    .slice(-3)
+    .map((e) => `- ${e.name ? `[${e.name}] ` : ""}${e.reason}`)
+  const lines = [
+    `Agent session failed before producing a successful result.`,
+    `agent=${input.agentName}`,
+    `kind=${input.kind}`,
+    `session_id=${input.sessionID}`,
+    `error=${message}`,
+  ]
+  if (cause) lines.push(`cause=${cause}`)
+  if (streamLines.length > 0) {
+    lines.push("stream_errors:")
+    lines.push(...streamLines)
+  }
+  try {
+    const { createDecisionLog } = await import("@/decision-log")
+    createDecisionLog(input.taskID).append({
+      phase: "agent_error",
+      goalID: input.goalID,
+      key: `${input.agentName}_session_error`,
+      value: lines.join("\n"),
+      reason:
+        `model-visible agent failure; session=${input.sessionID}; ` +
+        `kind=${input.kind}`,
+    })
+  } catch (logErr) {
+    log.warn("agent error decision_log append failed (non-fatal)", {
+      taskID: input.taskID,
+      goalID: input.goalID,
+      agentName: input.agentName,
+      sessionID: input.sessionID,
+      error: logErr instanceof Error ? logErr.message : String(logErr),
+    })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Core runner
 // ---------------------------------------------------------------------------
@@ -798,6 +849,15 @@ export async function runAgentSession<C>(
     })
     if (hardError) throw hardError
   } catch (err) {
+    await recordAgentErrorForOrchestrator({
+      taskID: input.taskID,
+      goalID: input.goalID,
+      sessionID: session.id,
+      agentName,
+      kind,
+      error: err,
+      streamErrors,
+    })
     if (AgentTrace.isEnabled()) {
       AgentTrace.recordAgentReport({
         sessionID: session.id,

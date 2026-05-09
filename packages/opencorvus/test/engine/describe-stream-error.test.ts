@@ -6,6 +6,7 @@ import {
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { describeTask, renderTaskDescription } from "../../src/engine/describe"
+import { createDecisionLog } from "../../src/decision-log"
 import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -216,6 +217,64 @@ describe("renderTaskDescription — stream failures section", () => {
         const desc = await describeTask(taskID)
         const md = renderTaskDescription(desc)
         expect(md).not.toContain("Recent orchestrator stream failures")
+      },
+    })
+  })
+})
+
+describe("describeTask.recent_agent_failures", () => {
+  test("decision_log agent_error entries are projected newest-first", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskStart = Date.now()
+        seedTask(taskStart)
+        const log = createDecisionLog(taskID)
+        log.append({
+          phase: "agent_error",
+          key: "build_session_error",
+          value: "AgentRunError: [build] APIError: Provider returned HTTP 429",
+          reason: "model-visible agent failure; session=ses_a; kind=build",
+        })
+        await new Promise((resolve) => setTimeout(resolve, 2))
+        log.append({
+          phase: "agent_error",
+          goalID: "goal_visible_error",
+          key: "design_analysis_session_error",
+          value: "AgentRunError: [design_analysis] upstream socket closed",
+          reason: "model-visible agent failure; session=ses_b; kind=design_analysis",
+        })
+
+        const desc = await describeTask(taskID)
+        expect(desc.recent_agent_failures).toBeDefined()
+        expect(desc.recent_agent_failures!.length).toBe(2)
+        expect(desc.recent_agent_failures![0]!.key).toBe("design_analysis_session_error")
+        expect(desc.recent_agent_failures![0]!.goal_id).toBe("goal_visible_error")
+        expect(desc.recent_agent_failures![1]!.key).toBe("build_session_error")
+        expect(desc.recent_agent_failures![1]!.reason).toContain("HTTP 429")
+      },
+    })
+  })
+
+  test("rendered section tells the orchestrator not to treat repeated request text as a fresh start", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedTask(Date.now())
+        createDecisionLog(taskID).append({
+          phase: "agent_error",
+          key: "build_session_error",
+          value: "Agent session failed before producing a successful result.\nerror=AgentRunError: [build] APIError: Provider returned HTTP 429",
+          reason: "model-visible agent failure; session=ses_build; kind=build",
+        })
+
+        const md = renderTaskDescription(await describeTask(taskID))
+        expect(md).toContain("Recent agent session failures")
+        expect(md).toContain("HTTP 429")
+        expect(md).toContain("retry the same work")
+        expect(md).toContain("Do not infer a fresh task start")
       },
     })
   })
