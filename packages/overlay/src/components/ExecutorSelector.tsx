@@ -32,18 +32,33 @@ import {
 import { t } from "../utils/i18n";
 import { Button } from "./ui/Button";
 
-// MirrorCode is the internal/orchestrator executor — its "model" is the
-// project default LLM (appStore.config.model) which drives planning +
-// evaluation. External executors (codex / claude-code) carry their own
-// model that does the actual editing. iter35 surfaces both in the chip
-// when an external executor is active so the operator can see at a glance
-// what's planning and what's editing.
+interface ModelParts {
+  provider: string;
+  name: string;
+}
+
+// MirrorCode is the internal/orchestrator executor. Its model is the
+// project default model from appStore.config.model, used for planning and
+// evaluation. External executors carry their own editing model.
 function projectModelFromConfig(): string {
   const cfg = appStore.config as { model?: unknown } | null | undefined
   return typeof cfg?.model === "string" ? cfg.model : ""
 }
 
 const INTERNAL_EXECUTOR_ID = "mirrorcode"
+
+function splitModelID(modelID: string): ModelParts {
+  const trimmed = modelID.trim();
+  if (!trimmed) return { provider: "", name: "" };
+  const slash = trimmed.indexOf("/");
+  if (slash <= 0 || slash === trimmed.length - 1) {
+    return { provider: "", name: trimmed };
+  }
+  return {
+    provider: trimmed.slice(0, slash),
+    name: trimmed.slice(slash + 1),
+  };
+}
 
 export function ExecutorSelector() {
   const menu = useDisclosure();
@@ -74,18 +89,31 @@ export function ExecutorSelector() {
   const executorModel = createMemo(() =>
     isExternalExecutor() ? activeModel() : orchestratorModel(),
   )
+  const sameModel = createMemo(() =>
+    !!orchestratorModel() && orchestratorModel() === executorModel(),
+  )
+  const orchestratorParts = createMemo(() => splitModelID(orchestratorModel()))
+  const executorParts = createMemo(() => splitModelID(executorModel()))
+  const executorModelText = createMemo(() =>
+    sameModel() ? t("executor.same_as_plan") : executorModel(),
+  )
 
   // Tooltip always names both models. The pair explainer reads
   // naturally even when the two values are equal (mirrorcode case).
   const chipTitle = createMemo(() => {
     const orch = orchestratorModel() || t("agent_models.option_not_set")
-    const exec = executorModel() || t("agent_models.option_not_set")
+    const exec = executorModelText() || t("agent_models.option_not_set")
     const pair = t("executor.model_explainer_pair", {
       orchestrator: orch,
       executor: activeLabel(),
       external: exec,
     })
     return [executorTitle(activeID()), pair].filter(Boolean).join("\n")
+  })
+  const chipAriaLabel = createMemo(() => {
+    const orch = orchestratorModel() || t("agent_models.option_not_set")
+    const exec = executorModelText() || t("agent_models.option_not_set")
+    return `${activeLabel()}: ${t("executor.role_plan")} ${orch}; ${t("executor.role_edit")} ${exec}. ${t("executor.change_model")}`
   })
 
   let rootRef: HTMLDivElement | undefined;
@@ -143,38 +171,49 @@ export function ExecutorSelector() {
           aria-haspopup="listbox"
           aria-expanded={menu.open() ? "true" : "false"}
           title={chipTitle()}
+          aria-label={chipAriaLabel()}
           onClick={(event) => {
             event.stopPropagation();
             menu.toggle();
           }}
         >
-          <span class="executor-chip-label">{activeLabel()}</span>
-          {/* iter50: BOTH model slots ALWAYS render — global LLM
-              (orchestrator-side, drives planning) + executor LLM
-              (active executor's editing model). MirrorCode active
-              follows project config so executor LLM == global LLM
-              (intentional visual consistency — same layout regardless
-              of which executor is selected). External executors carry
-              their own model that diverges from the global. */}
-          <span class="executor-chip-sep" aria-hidden="true">G</span>
-          <span
-            class="executor-chip-model"
-            data-source="orchestrator"
-            data-empty={orchestratorModel() ? "false" : "true"}
-            title={t("executor.model_explainer_internal")}
-          >
-            {orchestratorModel() || t("agent_models.option_not_set")}
+          <span class="executor-chip-identity">
+            <span class="executor-chip-label">{activeLabel()}</span>
+            <span class="executor-chip-action">{t("executor.change_model")}</span>
           </span>
-          <span class="executor-chip-sep" aria-hidden="true">E</span>
-          <span
-            class="executor-chip-model"
-            data-source="executor"
-            data-empty={executorModel() ? "false" : "true"}
-            title={t("executor.model_explainer_external", {
-              executor: activeLabel(),
-            })}
-          >
-            {executorModel() || t("agent_models.option_not_set")}
+          <span class="executor-chip-models" aria-hidden="true">
+            <span
+              class="executor-chip-model"
+              data-source="orchestrator"
+              data-empty={orchestratorModel() ? "false" : "true"}
+              title={t("executor.model_explainer_internal")}
+            >
+              <span class="executor-chip-role">{t("executor.role_plan")}</span>
+              <span class="executor-chip-provider">{orchestratorParts().provider}</span>
+              <span class="executor-chip-name">
+                {orchestratorParts().name || t("agent_models.option_not_set")}
+              </span>
+            </span>
+            <span
+              class="executor-chip-model"
+              data-source="executor"
+              data-empty={executorModel() ? "false" : "true"}
+              data-same={sameModel() ? "true" : "false"}
+              title={t("executor.model_explainer_external", {
+                executor: activeLabel(),
+              })}
+            >
+              <span class="executor-chip-role">{t("executor.role_edit")}</span>
+              <Show
+                when={!sameModel()}
+                fallback={<span class="executor-chip-name">{t("executor.same_as_plan")}</span>}
+              >
+                <span class="executor-chip-provider">{executorParts().provider}</span>
+                <span class="executor-chip-name">
+                  {executorParts().name || t("agent_models.option_not_set")}
+                </span>
+              </Show>
+            </span>
           </span>
           <span class="executor-chip-caret" aria-hidden="true">
             <Icon name="caret-up" size={8} />
@@ -183,6 +222,22 @@ export function ExecutorSelector() {
 
         <Show when={menu.open()}>
           <div class="executor-menu" role="listbox" aria-label={t("executor.group")}>
+            <div class="executor-menu-summary">
+              <div class="executor-menu-summary-title">
+                <span>{activeLabel()}</span>
+                <span>{t("executor.change_model")}</span>
+              </div>
+              <div class="executor-menu-summary-grid">
+                <div class="executor-menu-summary-row">
+                  <span>{t("executor.role_plan")}</span>
+                  <strong>{orchestratorModel() || t("agent_models.option_not_set")}</strong>
+                </div>
+                <div class="executor-menu-summary-row">
+                  <span>{t("executor.role_edit")}</span>
+                  <strong>{executorModelText() || t("agent_models.option_not_set")}</strong>
+                </div>
+              </div>
+            </div>
             <For each={executors()}>
               {(item) => {
                 const id = item.id;
@@ -221,9 +276,15 @@ export function ExecutorSelector() {
                               type="button"
                               class="executor-menu-model"
                               data-active={modelID === current() ? "true" : "false"}
+                              title={modelID}
                               onClick={() => void pickModel(id, modelID)}
                             >
-                              {modelID}
+                              <span class="executor-menu-model-provider">
+                                {splitModelID(modelID).provider}
+                              </span>
+                              <span class="executor-menu-model-name">
+                                {splitModelID(modelID).name}
+                              </span>
                             </button>
                           )}
                         </For>
