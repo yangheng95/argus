@@ -153,9 +153,11 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
       expect(orchestrator?.tools?.include).not.toContain("panel")
+      expect(orchestrator?.tools?.include).not.toContain("task")
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, orchestrator)
       expect(tools.map((tool) => tool.id)).not.toContain("panel")
+      expect(tools.map((tool) => tool.id)).not.toContain("task")
     },
   })
 })
@@ -169,6 +171,7 @@ test("orchestrator does not inherit the generic task-tool prompt policy", async 
       expect(orchestrator).toBeDefined()
       expect(orchestrator?.prompt).toBeDefined()
       expect(orchestrator?.prompt).toContain("The generic `task` tool is not an orchestrator tool")
+      expect(orchestrator?.prompt).toContain("use `propose_task`")
       expect(orchestrator?.prompt).not.toContain("Use the Task tool")
       expect(orchestrator?.prompt).not.toContain("Proactively use the Task tool")
     },

@@ -8,6 +8,7 @@ import { tool } from "ai"
 import z from "zod"
 import path from "node:path"
 import fs from "node:fs/promises"
+import { createHash } from "node:crypto"
 import { Session } from "@/session"
 import { resolveAgentModel } from "@/agent/model"
 import { SessionPrompt } from "@/session/prompt"
@@ -4822,6 +4823,99 @@ export function createOrchestratorTools(input: {
           })),
         })
         return output
+      },
+    }),
+
+    propose_task: tool({
+      description:
+        "Offer the user one polished follow-up task candidate that improves or completes the current/previous request. " +
+        "This is the orchestrator's ONLY new-engine-task creation path: it first asks the user to confirm, then creates " +
+        "a new task only if the user selects `创建任务`. Do not use this for normal workflow progress, do not use it " +
+        "instead of build/deliver on the current task, and do not call generic `task` or control-plane `panel`.",
+      inputSchema: z.object({
+        title: z.string().min(1).describe("Concise title for the proposed new task."),
+        request: z
+          .string()
+          .min(1)
+          .describe("Complete, self-contained request for the proposed new task. Include the relation to the current task when relevant."),
+        reason: z
+          .string()
+          .min(1)
+          .describe("Why this should be offered as a separate follow-up task instead of changing the current task."),
+        priority: z.enum(["critical", "high", "normal", "low"]).default("normal"),
+        kind: z.enum(["workflow", "build"]).default("workflow"),
+      }),
+      execute: async ({ title, request, reason, priority, kind }) => {
+        const task = requireTask(taskID)
+        log.info("propose_task confirmation requested", { taskID, title, priority, kind })
+        const { output, answers } = await Question.askAndFormat({
+          sessionID: input.agentSessionID,
+          questions: [
+            {
+              header: "新任务",
+              question: `是否创建这个新任务？\n\n${title}\n\n${request}`,
+              options: [
+                {
+                  label: "创建任务",
+                  description: "确认后立即提交为一个新的任务。",
+                },
+                {
+                  label: "不创建",
+                  description: "保留当前任务，不提交新的任务。",
+                },
+              ],
+              multiple: false,
+              custom: false,
+            },
+          ],
+        })
+        const selected = answers?.[0]?.[0]
+        if (selected !== "创建任务") {
+          return SubAgentProtocol.yieldResult({
+            headline: "Follow-up task proposal was not created.",
+            summary: output,
+            fields: [
+              ["proposal", title],
+              ["reason", reason],
+              ["selection", selected ?? "dismissed"],
+            ],
+            pointer: `current task ${taskID}; no new task was created`,
+          })
+        }
+        const requestID = "orchestrator-proposed-task:" +
+          taskID + ":" +
+          createHash("sha256").update(`${title}\0${request}`).digest("hex").slice(0, 16)
+        const newTaskID = await EngineService.createTask({
+          requestID,
+          title,
+          request,
+          priority,
+          kind,
+          executor: task.executor,
+          source: "orchestrator:propose_task",
+          metadata: {
+            origin: "orchestrator_proposed_task",
+            parent_task_id: taskID,
+            proposal_reason: reason,
+          },
+        })
+        createDecisionLog(taskID).append({
+          phase: "orchestrator",
+          key: `proposed_task_${Date.now()}`,
+          value: `Created follow-up task ${newTaskID}: ${title}\n\nReason: ${reason}`,
+          reason: "propose_task_confirmed",
+        })
+        return SubAgentProtocol.yieldResult({
+          headline: "Follow-up task created after user confirmation.",
+          fields: [
+            ["new_task_id", newTaskID],
+            ["title", title],
+            ["kind", kind],
+            ["priority", priority],
+            ["parent_task_id", taskID],
+          ],
+          pointer: `new task ${newTaskID}; parent task ${taskID}`,
+        })
       },
     }),
 
