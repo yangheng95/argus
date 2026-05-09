@@ -8,8 +8,7 @@ import { explicitModel } from "../../script/benchmark/env"
  * variant exclusively. Both auto-resolution and explicit env-var pinning
  * (`OPENCORVUS_BENCHMARK_MODEL=alibaba-coding-plan/...`) must refuse the
  * international variant rather than silently 401 inside the orchestrator
- * stream — that path also wedged the engine via reviveZombieTasks
- * (see _session-r2-glm5.out 14:47:25).
+ * stream (see _session-r2-glm5.out 14:47:25).
  */
 
 const STUB_PROVIDERS = {

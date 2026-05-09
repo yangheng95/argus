@@ -12,8 +12,8 @@ import type { Provider } from "../../src/provider/provider"
  * `[step-start, reasoning(text="")]`. Without this gate the message gets
  * serialised to `{role:"assistant", content:"", tool_calls:undefined}`,
  * which OpenAI / DeepSeek / any chat-completion provider rejects with
- * HTTP 4xx — `monitorRuns → reviveZombieTasks` then replays the same
- * broken history once per second in a deterministic retry storm
+ * HTTP 4xx. Before restart recovery became passive, `monitorRuns`
+ * replayed the same broken history once per second in a deterministic retry storm
  * (tsk_e078e1f2a001t4ZwUl5SWgoG8o produced 277 identical errors in 2.5
  * minutes on 2026-05-08).
  */

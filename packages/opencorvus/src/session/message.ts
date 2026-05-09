@@ -867,8 +867,8 @@ export namespace Message {
         // ends up with only [step-start, reasoning("")] and `finish=null,
         // error=null`. Replaying it serialises to {role:"assistant",
         // content:"", tool_calls:undefined}; the provider rejects with HTTP
-        // 4xx and `monitorRuns → reviveZombieTasks` keeps replaying the same
-        // broken history, burning a deterministic retry storm
+        // 4xx. Before restart recovery became passive, `monitorRuns` kept
+        // replaying the same broken history, burning a deterministic retry storm
         // (orchestrator-stream-error artifact loop, 2026-05-08, see
         // specs/new-arch/2026-05-08-stream-early-death-and-retry-fuse.md).
         // step-start is dropped by the global filter below; reasoning alone

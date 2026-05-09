@@ -1971,11 +1971,11 @@ export function recordOrchestratorStreamError(input: {
  * Stream-error retry circuit breaker.
  *
  * When the orchestrator's LLM stream early-dies before producing any token,
- * the next external wake replays the same history. If the cause is structural
+ * the next operator wake replays the same history. If the cause is structural
  * — provider rejecting a malformed assistant turn, payload too large, account
- * blocked — every replay deterministically fails. `monitorRuns` happily wakes
- * the task ~once per second (no in-flight loop = zombie eligible), burning
- * the same provider 4xx in a tight loop. The 2026-05-08 incident on
+ * blocked — every replay deterministically fails. The old runtime poll also
+ * auto-woke active tasks with no in-flight loop, which turned that structural
+ * failure into a retry storm. The 2026-05-08 incident on
  * `tsk_e078e1f2a001t4ZwUl5SWgoG8o` produced 277 identical `orchestrator-
  * stream-error` artifacts in 2.5 minutes against DeepSeek 400.
  *
@@ -1984,8 +1984,8 @@ export function recordOrchestratorStreamError(input: {
  * provider-visible content), but any future provider truncation / new error
  * class can recur the loop. This fuse is the resource-governance bound:
  * three stream-errors within {@link ORCHESTRATOR_STREAM_ERROR_FUSE_WINDOW_MS}
- * on the same task transitions the task to `failed` so `reviveZombieTasks`
- * stops waking it (a terminal task is not active).
+ * on the same task transitions the task to `failed`, so repeated operator
+ * wakes do not keep replaying an unrecoverable prompt.
  *
  * Same family as a provider rate-limit, NOT a workflow FSM (rule 13/23): the
  * LLM here cannot decide because the stream produced no tokens. Threshold

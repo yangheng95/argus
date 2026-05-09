@@ -405,11 +405,9 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const verdict = describeVerdict(task.id)
 
   // Surface recent orchestrator stream errors so the LLM can read them on
-  // its next wake and decide retry / restart / fail. The reviveZombieTasks
-  // poll resumes the task even when these are present (rule 13: no engine
-  // state machine that decides for the LLM); without this projection the
-  // artifacts would be invisible to the prompt and the LLM would be told
-  // "you woke up" with no clue why the previous attempt failed.
+  // the next user-driven wake and decide retry / restart / fail. Runtime
+  // restart must not auto-wake active tasks: the overlay restores the task
+  // view and waits for a real operator message.
   const streamErrorFloor = task.time_started ?? task.time_created
   const streamErrorRows = listOrchestratorStreamErrorArtifacts(
     task.id,

@@ -110,7 +110,7 @@ interface GoalContract {
 
 ## 状态持久化
 
-所有状态存 SQLite（默认 `~/.opencorvus/opencorvus.db`），支持跨进程/跨会话恢复。Task 崩溃后重启 server 可以继续执行（前提是 worktree 还在）。
+所有状态存 SQLite（默认 `~/.opencorvus/opencorvus.db`），支持跨进程/跨会话恢复。Server 重启后，overlay 只恢复任务上下文，编排器必须等下一条真实用户消息才继续。
 
 ## 你接下来要看的
 
