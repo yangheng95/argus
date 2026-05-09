@@ -2,32 +2,32 @@ import { describe, expect, test } from "bun:test"
 import { SystemTerminal } from "../../src/system-terminal"
 
 describe("system terminal external launch command", () => {
-  test("Windows opens Windows Terminal at cwd with the selected shell profile", () => {
+  test("Windows opens the selected shell through the system console launcher", () => {
     const command = SystemTerminal.buildCommand({
       platform: "win32",
       cwd: "C:\\repo",
-      terminalApp: "wt.exe",
+      terminalApp: "cmd.exe",
       profile: { command: "powershell.exe", args: ["-NoLogo"] },
     })
 
     expect(command).toEqual({
-      command: "wt.exe",
-      args: ["-d", "C:\\repo", "powershell.exe", "-NoLogo"],
+      command: "cmd.exe",
+      args: ["/d", "/s", "/c", "start", "", "/D", "C:\\repo", "powershell.exe", "-NoLogo"],
     })
   })
 
-  test("Windows coding CLI opens inside Windows Terminal without PTY", () => {
+  test("Windows coding CLI opens inside the system console without PTY", () => {
     const command = SystemTerminal.buildCommand({
       platform: "win32",
       cwd: "C:\\repo",
-      terminalApp: "wt.exe",
+      terminalApp: "cmd.exe",
       command: "C:\\Tools\\Codex CLI\\codex.cmd",
       args: ["--dangerously-bypass-approvals-and-sandbox"],
       keepOpen: true,
     })
 
-    expect(command.command).toBe("wt.exe")
-    expect(command.args.slice(0, 4)).toEqual(["-d", "C:\\repo", "cmd.exe", "/k"])
+    expect(command.command).toBe("cmd.exe")
+    expect(command.args.slice(0, 9)).toEqual(["/d", "/s", "/c", "start", "", "/D", "C:\\repo", "cmd.exe", "/k"])
     expect(command.args.join(" ")).toContain("codex.cmd")
     expect(command.args.join(" ")).not.toContain("pty")
   })
