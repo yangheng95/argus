@@ -15,6 +15,12 @@ function terminalConfig(args = ["-e", "process.stdin.on('data', c => process.std
           args,
           env: { TERM: "xterm-256color" },
         },
+        second: {
+          label: "Second terminal",
+          command: process.execPath,
+          args,
+          env: { TERM: "xterm-256color" },
+        },
       },
     },
   }
@@ -59,6 +65,22 @@ async function waitFor(predicate: () => boolean) {
 }
 
 describe("pty terminal contract", () => {
+  test("lists configured terminal profiles with the configured default", async () => {
+    await using dir = await tmpdir({ git: true, config: terminalConfig() })
+
+    await Instance.provide({
+      directory: dir.path,
+      fn: async () => {
+        const profiles = await TerminalProfile.list()
+
+        expect(profiles.defaultProfileID).toBe("test")
+        expect(profiles.profiles).toContainEqual({ id: "test", label: "Test terminal", icon: "terminal" })
+        expect(profiles.profiles).toContainEqual({ id: "second", label: "Second terminal", icon: "terminal" })
+        expect(profiles.profiles.every((profile) => typeof profile.icon === "string")).toBe(true)
+      },
+    })
+  })
+
   test("create requires configured terminal profile", async () => {
     await using dir = await tmpdir({ git: true })
 
@@ -66,6 +88,32 @@ describe("pty terminal contract", () => {
       directory: dir.path,
       fn: async () => {
         await expect(Pty.create(createInput(dir.path))).rejects.toBeInstanceOf(TerminalProfile.ConfigError)
+      },
+    })
+  })
+
+  test("list rejects a default profile that is not explicitly configured", async () => {
+    await using unknownDefault = await tmpdir({
+      git: true,
+      config: {
+        terminal: {
+          default_profile_id: "missing",
+          profiles: {
+            test: {
+              label: "Test terminal",
+              command: process.execPath,
+              args: [],
+              env: { TERM: "xterm-256color" },
+            },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: unknownDefault.path,
+      fn: async () => {
+        await expect(TerminalProfile.list()).rejects.toBeInstanceOf(TerminalProfile.ConfigError)
       },
     })
   })

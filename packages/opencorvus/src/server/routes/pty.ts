@@ -62,6 +62,34 @@ export const PtyRoutes = lazy(() =>
       },
     )
     .get(
+      "/profiles",
+      describeRoute({
+        summary: "List terminal profiles",
+        description: "List server-owned terminal profiles available for new pseudo-terminal (PTY) sessions.",
+        operationId: "pty.profiles",
+        responses: {
+          200: {
+            description: "Terminal profile list",
+            content: {
+              "application/json": {
+                schema: resolver(TerminalProfile.ListResponse),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      async (c) => {
+        const profiles = await TerminalProfile.list().catch((error) => {
+          if (error instanceof TerminalProfile.ConfigError) {
+            throw new HTTPException(400, { message: error.data.message })
+          }
+          throw error
+        })
+        return c.json(profiles)
+      },
+    )
+    .get(
       "/:ptyID",
       describeRoute({
         summary: "Get PTY session",

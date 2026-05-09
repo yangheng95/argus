@@ -259,6 +259,7 @@
 |---|---|---|---|
 | GET | `/pty` | List PTY sessions | `pty.list` |
 | POST | `/pty` | Create PTY session | `pty.create` |
+| GET | `/pty/profiles` | List terminal profiles | `pty.profiles` |
 | DELETE | `/pty/{ptyID}` | Remove PTY session | `pty.remove` |
 | GET | `/pty/{ptyID}` | Get PTY session | `pty.get` |
 | PUT | `/pty/{ptyID}` | Update PTY session | `pty.update` |

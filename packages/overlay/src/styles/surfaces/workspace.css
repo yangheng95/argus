@@ -185,9 +185,27 @@
 
 /* ── Workspace Terminal ── */
 .workspace-terminal {
-  --workspace-terminal-canvas: #101418;
-  --workspace-terminal-canvas-edge: #1a222c;
-  --workspace-terminal-fg: #d7dde6;
+  --workspace-terminal-canvas: color-mix(in srgb, var(--surface-inset) 92%, var(--bg));
+  --workspace-terminal-canvas-edge: color-mix(in srgb, var(--border) 82%, var(--accent) 18%);
+  --workspace-terminal-fg: var(--text-strong);
+  --workspace-terminal-cursor: var(--text-strong);
+  --workspace-terminal-selection: color-mix(in srgb, var(--accent) 24%, transparent);
+  --workspace-terminal-black: color-mix(in srgb, var(--text-strong) 18%, var(--bg));
+  --workspace-terminal-red: color-mix(in srgb, var(--bad) 88%, var(--text-strong) 12%);
+  --workspace-terminal-green: color-mix(in srgb, var(--good) 86%, var(--text-strong) 14%);
+  --workspace-terminal-yellow: color-mix(in srgb, var(--warn) 86%, var(--text-strong) 14%);
+  --workspace-terminal-blue: color-mix(in srgb, var(--accent) 86%, var(--text-strong) 14%);
+  --workspace-terminal-magenta: color-mix(in srgb, var(--accent) 72%, var(--bad) 28%);
+  --workspace-terminal-cyan: color-mix(in srgb, var(--accent) 56%, var(--good) 44%);
+  --workspace-terminal-white: var(--text);
+  --workspace-terminal-bright-black: var(--text-muted);
+  --workspace-terminal-bright-red: color-mix(in srgb, var(--bad) 72%, var(--text-strong) 28%);
+  --workspace-terminal-bright-green: color-mix(in srgb, var(--good) 72%, var(--text-strong) 28%);
+  --workspace-terminal-bright-yellow: color-mix(in srgb, var(--warn) 72%, var(--text-strong) 28%);
+  --workspace-terminal-bright-blue: color-mix(in srgb, var(--accent) 72%, var(--text-strong) 28%);
+  --workspace-terminal-bright-magenta: color-mix(in srgb, var(--accent) 58%, var(--bad) 42%);
+  --workspace-terminal-bright-cyan: color-mix(in srgb, var(--accent) 42%, var(--good) 58%);
+  --workspace-terminal-bright-white: var(--text-strong);
 
   flex: 1;
   min-height: 0;
@@ -201,9 +219,9 @@
 .workspace-terminal-header {
   flex: 0 0 auto;
   min-height: calc(38px * var(--ui-scale));
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(calc(132px * var(--ui-scale)), auto) auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--ui-gap-sm);
   padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
   background: var(--surface-strong);
@@ -335,6 +353,44 @@
   line-height: 1;
 }
 
+.workspace-terminal-profile {
+  min-width: calc(132px * var(--ui-scale));
+  max-width: calc(220px * var(--ui-scale));
+  height: calc(28px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  padding: 0 calc(7px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--surface-inset) 82%, transparent);
+  color: var(--text-soft);
+}
+
+.workspace-terminal-profile .oc-icon {
+  flex: 0 0 auto;
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  color: var(--accent);
+}
+
+.workspace-terminal-profile select {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: var(--ui-font-meta);
+  cursor: pointer;
+}
+
+.workspace-terminal-profile select:disabled {
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+
 .workspace-terminal-header .oc-button[data-ui="workspace-terminal-new"] {
   --oc-button-height: calc(28px * var(--ui-scale));
   flex: 0 0 auto;
@@ -403,12 +459,19 @@
 }
 
 @media (max-width: 760px) { /* breakpoint: terminal compact */
+  .workspace-terminal-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
   .workspace-terminal-sessionbar {
     grid-template-columns: minmax(0, 1fr);
     gap: calc(4px * var(--ui-scale));
   }
   .workspace-terminal-meta {
     display: none;
+  }
+  .workspace-terminal-profile {
+    grid-column: 1 / -1;
+    max-width: none;
   }
   .workspace-terminal-body {
     padding: calc(6px * var(--ui-scale));

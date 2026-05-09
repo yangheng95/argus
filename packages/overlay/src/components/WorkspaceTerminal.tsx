@@ -1,21 +1,26 @@
 import "@xterm/xterm/css/xterm.css";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XtermTerminal } from "@xterm/xterm";
-import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import {
   connectTerminal,
   createTerminal,
   deleteTerminal,
+  listTerminalProfiles,
   listTerminals,
   type TerminalInfo,
+  type TerminalProfile,
   type TerminalSocket,
 } from "../services/terminal";
+import { settingsStore } from "../store/settings";
 import { t } from "../utils/i18n";
 import { Icon } from "./Icon";
 import { Button } from "./ui/Button";
 
 interface WorkspaceTerminalProps {
   directory: string;
+  launchProfileID?: string;
+  launchNonce?: number;
 }
 
 interface TerminalSession {
@@ -35,23 +40,32 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
   let outputQueue: string[] = [];
   let outputScheduled = false;
   let lastDirectory = "";
+  let handledLaunchNonce = 0;
 
   const [sessions, setSessions] = createSignal<TerminalSession[]>([]);
   const [activeID, setActiveID] = createSignal("");
+  const [profiles, setProfiles] = createSignal<TerminalProfile[]>([]);
+  const [defaultProfileID, setDefaultProfileID] = createSignal("");
+  const [selectedProfileID, setSelectedProfileID] = createSignal("");
   const [loading, setLoading] = createSignal(false);
   const [panelError, setPanelError] = createSignal("");
 
   const activeSession = () => sessions().find((session) => session.info.id === activeID()) ?? null;
+  const selectedProfile = createMemo(() =>
+    profiles().find((profile) => profile.id === selectedProfileID()) ?? null,
+  );
+  const profileLabel = (id: string) => profiles().find((profile) => profile.id === id)?.label ?? id;
   const activeMeta = () => {
     const session = activeSession();
     if (!session) return props.directory || "";
-    const parts = [session.info.cwd, `process ${session.info.pid}`];
+    const parts = [profileLabel(session.info.profileID), session.info.cwd, `process ${session.info.pid}`];
     return parts.filter(Boolean).join("  ");
   };
 
   onMount(() => {
+    handledLaunchNonce = props.launchNonce ?? 0;
     openXterm();
-    void reloadSessions();
+    void reloadSessions(props.launchProfileID);
   });
 
   onCleanup(() => {
@@ -78,7 +92,19 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
       });
     }
     lastDirectory = directory;
-    void reloadSessions();
+    void reloadSessions(props.launchProfileID);
+  });
+
+  createEffect(() => {
+    const nonce = props.launchNonce ?? 0;
+    const profileID = props.launchProfileID ?? "";
+    if (!nonce || nonce === handledLaunchNonce) return;
+    handledLaunchNonce = nonce;
+    if (!profileID) {
+      setPanelError(t("terminal.profile_required"));
+      return;
+    }
+    void launchProfile(profileID);
   });
 
   createEffect(() => {
@@ -89,7 +115,12 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
     connect(session);
   });
 
-  async function reloadSessions() {
+  createEffect(() => {
+    settingsStore.theme;
+    applyXtermTheme();
+  });
+
+  async function reloadSessions(launchProfileID?: string) {
     if (!props.directory) {
       setPanelError(t("terminal.select_directory"));
       return;
@@ -97,6 +128,11 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
     setLoading(true);
     setPanelError("");
     try {
+      await reloadProfiles();
+      if (launchProfileID) {
+        await launchProfile(launchProfileID);
+        return;
+      }
       const existing = (await listTerminals()).filter((item) => item.status === "running");
       if (existing.length > 0) {
         setSessions(existing.map((info) => ({
@@ -117,9 +153,30 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
     }
   }
 
-  async function newTerminal() {
+  async function reloadProfiles() {
+    const response = await listTerminalProfiles();
+    const defaultProfile = response.profiles.find((profile) => profile.id === response.defaultProfileID);
+    if (!defaultProfile) {
+      throw new Error(t("terminal.default_profile_missing"));
+    }
+    setProfiles(response.profiles);
+    setDefaultProfileID(response.defaultProfileID);
+    setSelectedProfileID((current) =>
+      response.profiles.some((profile) => profile.id === current) ? current : response.defaultProfileID,
+    );
+  }
+
+  async function newTerminal(profileID = selectedProfileID()) {
     if (!props.directory) {
       setPanelError(t("terminal.select_directory"));
+      return;
+    }
+    if (profiles().length === 0) {
+      await reloadProfiles();
+    }
+    const profile = profiles().find((item) => item.id === profileID);
+    if (!profile) {
+      setPanelError(t("terminal.profile_required"));
       return;
     }
     const dimensions = fitDimensions();
@@ -127,11 +184,11 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
     setPanelError("");
     try {
       const info = await createTerminal({
-        profileID: "default",
+        profileID: profile.id,
         cwd: props.directory,
         cols: dimensions.cols,
         rows: dimensions.rows,
-        title: t("terminal.title"),
+        title: profile.label,
       });
       setSessions((items) => [
         ...items,
@@ -143,6 +200,26 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function launchProfile(profileID: string) {
+    if (profiles().length === 0) {
+      await reloadProfiles();
+    }
+    if (!profiles().some((profile) => profile.id === profileID)) {
+      setPanelError(t("terminal.profile_required"));
+      return;
+    }
+    setSelectedProfileID(profileID);
+    await newTerminal(profileID);
+  }
+
+  async function handleProfileChange(value: string) {
+    if (!profiles().some((profile) => profile.id === value)) {
+      setPanelError(t("terminal.profile_required"));
+      return;
+    }
+    setSelectedProfileID(value);
   }
 
   async function closeTerminal(id: string) {
@@ -217,28 +294,7 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
       fontSize: 13,
       lineHeight: 1.2,
       scrollback: 5000,
-      theme: {
-        background: "#101418",
-        foreground: "#d7dde6",
-        cursor: "#f8fafc",
-        selectionBackground: "#2e425b",
-        black: "#0b0f14",
-        blue: "#6aa4ff",
-        brightBlack: "#667085",
-        brightBlue: "#8bb7ff",
-        brightCyan: "#7dd3fc",
-        brightGreen: "#8ee6a8",
-        brightMagenta: "#d7a6ff",
-        brightRed: "#ff9a9a",
-        brightWhite: "#ffffff",
-        brightYellow: "#f4d06f",
-        cyan: "#67c7e6",
-        green: "#70d690",
-        magenta: "#c993ff",
-        red: "#ff7b7b",
-        white: "#d7dde6",
-        yellow: "#e7bf4f",
-      },
+      theme: terminalTheme(),
     });
     fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
@@ -256,6 +312,47 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
     });
     resizeObserver.observe(hostEl);
     fitAddon.fit();
+  }
+
+  function cssColor(name: string): string {
+    if (!hostEl) throw new Error("Terminal renderer is not ready");
+    const value = getComputedStyle(hostEl).getPropertyValue(name).trim();
+    if (!value) throw new Error(`Terminal theme token ${name} is not defined`);
+    return value;
+  }
+
+  function terminalTheme() {
+    return {
+      background: cssColor("--workspace-terminal-canvas"),
+      foreground: cssColor("--workspace-terminal-fg"),
+      cursor: cssColor("--workspace-terminal-cursor"),
+      selectionBackground: cssColor("--workspace-terminal-selection"),
+      black: cssColor("--workspace-terminal-black"),
+      blue: cssColor("--workspace-terminal-blue"),
+      brightBlack: cssColor("--workspace-terminal-bright-black"),
+      brightBlue: cssColor("--workspace-terminal-bright-blue"),
+      brightCyan: cssColor("--workspace-terminal-bright-cyan"),
+      brightGreen: cssColor("--workspace-terminal-bright-green"),
+      brightMagenta: cssColor("--workspace-terminal-bright-magenta"),
+      brightRed: cssColor("--workspace-terminal-bright-red"),
+      brightWhite: cssColor("--workspace-terminal-bright-white"),
+      brightYellow: cssColor("--workspace-terminal-bright-yellow"),
+      cyan: cssColor("--workspace-terminal-cyan"),
+      green: cssColor("--workspace-terminal-green"),
+      magenta: cssColor("--workspace-terminal-magenta"),
+      red: cssColor("--workspace-terminal-red"),
+      white: cssColor("--workspace-terminal-white"),
+      yellow: cssColor("--workspace-terminal-yellow"),
+    };
+  }
+
+  function applyXtermTheme() {
+    if (!term || !hostEl) return;
+    try {
+      term.options.theme = terminalTheme();
+    } catch (error) {
+      setPanelError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   function fitDimensions(): { cols: number; rows: number } {
@@ -331,6 +428,24 @@ export function WorkspaceTerminal(props: WorkspaceTerminalProps) {
           </div>
           <div class="workspace-terminal-meta" title={activeMeta()}>{activeMeta()}</div>
         </div>
+        <label class="workspace-terminal-profile" title={t("terminal.profile")}>
+          <Icon name="terminal" />
+          <select
+            aria-label={t("terminal.profile")}
+            value={selectedProfileID()}
+            disabled={loading() || profiles().length === 0}
+            data-ui="workspace-terminal-profile"
+            onChange={(event) => void handleProfileChange(event.currentTarget.value)}
+          >
+            <For each={profiles()}>
+              {(profile) => (
+                <option value={profile.id}>
+                  {profile.label}{profile.id === defaultProfileID() ? ` ${t("terminal.default_profile_suffix")}` : ""}
+                </option>
+              )}
+            </For>
+          </select>
+        </label>
         <Button
           type="button"
           variant="ghost"

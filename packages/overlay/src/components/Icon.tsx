@@ -30,6 +30,9 @@ export type IconName =
   | "panel-left"
   | "panel-right"
   | "terminal"
+  | "terminal-powershell"
+  | "terminal-command-prompt"
+  | "terminal-bash"
   | "editor-vscode"
   | "editor-pycharm"
   | "editor-webstorm"
@@ -150,6 +153,33 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
         <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
         <path d="M5 6.2 7 8 5 9.8" />
         <line x1="8.2" y1="10" x2="11" y2="10" />
+      </>
+    ),
+  },
+  "terminal-powershell": {
+    body: () => (
+      <>
+        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
+        <path d="M5 6.1 7.2 8 5 9.9" />
+        <line x1="8.4" y1="10.2" x2="11.2" y2="10.2" />
+      </>
+    ),
+  },
+  "terminal-command-prompt": {
+    body: () => (
+      <>
+        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
+        <path d="M5 6.2 7 8 5 9.8" />
+        <line x1="8.2" y1="10" x2="11" y2="10" />
+      </>
+    ),
+  },
+  "terminal-bash": {
+    body: () => (
+      <>
+        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
+        <path d="M5 6.3 6.8 8 5 9.7" />
+        <path d="M8.1 6.3h2.7M8.1 8h2.2M8.1 9.7h2.7" />
       </>
     ),
   },

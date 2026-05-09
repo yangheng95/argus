@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -10,6 +10,23 @@ let browserQueue: Promise<void> = Promise.resolve()
 const browserLockDir = join(tmpdir(), "pptr-overlay-browser-lock")
 const browserLockHeartbeat = join(browserLockDir, "heartbeat")
 const STALE_BROWSER_LOCK_MS = 120_000
+
+function lockedOwnerIsDead() {
+  try {
+    const owner = readFileSync(join(browserLockDir, "owner"), "utf8")
+    const pid = Number(owner.split(/\r?\n/, 1)[0])
+    if (!Number.isSafeInteger(pid) || pid <= 0) return true
+    try {
+      process.kill(pid, 0)
+      return false
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code
+      return code === "ESRCH"
+    }
+  } catch {
+    return true
+  }
+}
 
 async function acquireBrowserLock() {
   while (true) {
@@ -24,7 +41,7 @@ async function acquireBrowserLock() {
       try {
         const lockStat = statSync(browserLockHeartbeat)
         const age = Date.now() - lockStat.mtimeMs
-        if (age > STALE_BROWSER_LOCK_MS) {
+        if (lockedOwnerIsDead() || age > STALE_BROWSER_LOCK_MS) {
           rmSync(browserLockDir, { recursive: true, force: true })
           continue
         }
