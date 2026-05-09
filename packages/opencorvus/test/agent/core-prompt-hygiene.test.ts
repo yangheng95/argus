@@ -286,6 +286,13 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("direct `build({ request })` is allowed")
   })
 
+  test("orchestrator prompt routes follow-up task creation through confirmed proposals", async () => {
+    const text = await readPrompt("orchestrator")
+    expect(text).toContain("propose_task")
+    expect(text).toContain("only creates the new task when the user")
+    expect(text).toContain("Never call generic `task` or control-plane `panel`")
+  })
+
   test("orchestrator prompt forbids `deliver` while non-terminal goals remain", async () => {
     const text = await readPrompt("orchestrator")
     // Strengthened post-r23: bench observed orchestrator calling deliver

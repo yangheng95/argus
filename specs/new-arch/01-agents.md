@@ -137,6 +137,8 @@ orchestrator/loop.ts — runTaskLoop()
 
 `panel` control-plane tool **不**属于 orchestrator。Gateway 入口独占 panel capability action；orchestrator 只能通过自身的 workflow / task-control tools 推进任务。
 
+orchestrator 可以通过 `propose_task` 提供“完善上一个 request 的新任务”候选；该工具必须先等待用户确认，确认后才调用 `EngineService.createTask`。这不是恢复 `panel`，也不是恢复 generic `task` subagent 工具。
+
 ## Decision Log
 
 - 全局共享 append-only 上下文（`src/decision-log/`）

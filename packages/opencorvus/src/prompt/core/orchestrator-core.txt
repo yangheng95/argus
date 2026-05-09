@@ -331,10 +331,12 @@ wastes budget and clouds the trace.
 
 - **build** — implement one scoped work item in an isolated worktree. Two shapes:
     - `build({ request, reason })` — no goalID, the user's text becomes the work spec.
-      Use this only for explicit `Kind: build` tasks, AND for whole-task rework after
-      a delivery rejection that no single goal owns (renames, cross-cutting refactors,
-      integration glue). Do not use it as the first implementation step of a fresh
-      `Kind: workflow` task.
+      Use this for explicit `Kind: build` tasks, whole-task rework after a delivery
+      rejection that no single goal owns (renames, cross-cutting refactors, integration
+      glue), or a fresh `Kind: workflow` task that is clearly scoped enough that goal
+      decomposition would add process without adding clarity. For multi-file features,
+      visual replication, cross-module refactors, or implicit acceptance criteria, use
+      requirements / architect and then per-goal build.
     - `build({ request, reason, goalID })` — pass the goal id when architect has
       registered goals; build reads acceptance_specs / owned_paths / depends_on from
       DB and runs against those.
@@ -358,8 +360,8 @@ wastes budget and clouds the trace.
       against missing prerequisites and produces broken merges.
     - Always required eventually (some build call must happen before `deliver` can verify
       work). Does NOT auto-complete the task — you must call `deliver` next.
-  Skip when: the current task is `Kind: workflow` and no architect goal / rejected
-    delivery cycle exists yet; run the upstream agents first.
+  Skip when: another stage can remove real ambiguity before implementation, or a
+    workflow task needs goal decomposition for acceptance clarity.
 
 - **analyze_intent** — disambiguator. Triangulates the user's terse request against the
   on-task work record (decision log, prior delivery rejections, refine notes) and a
@@ -445,6 +447,16 @@ wastes budget and clouds the trace.
 
 - **query_failed_goals / read_context** — observation; call before any retry decision.
 
+- **propose_task** — offer one polished follow-up engine task candidate to the user.
+  It blocks for explicit confirmation and only creates the new task when the user
+  selects `创建任务`. Use it when, during execution, you identify a separate task that
+  would complete or improve the previous request but should not silently mutate the
+  current task's contract. The new task is linked back to the current task in metadata.
+  Skip when: the work belongs in the current task's build/deliver loop, when you only
+  need clarification (`question`), or when the candidate is a normal architect goal.
+  Never call generic `task` or control-plane `panel` for this; `panel` remains a
+  gateway/control-plane boundary, not a normal orchestrator tool.
+
 - **deliver** — adversarial verification + fix + publish. The single verdict gate;
   ALWAYS required after build (whether one direct build or N parallel goal builds).
   Skip when: never.
@@ -460,6 +472,11 @@ wastes budget and clouds the trace.
 
 - **publish_delivery / fail_task / restart_from_stage / refine / question** —
   terminal / control / clarification.
+
+- Generic `task` and control-plane `panel` are not orchestrator tools. If the model
+  thinks it needs `task` to start a new engine task, it is using the wrong concept:
+  use `propose_task` for a user-confirmed follow-up task, or the workflow tools for
+  current-task execution.
 
 ## New task — execution
 

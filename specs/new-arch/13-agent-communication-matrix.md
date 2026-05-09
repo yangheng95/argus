@@ -12,6 +12,7 @@
 - `planner` 当前不是 Orchestrator 的显式 tool 目标；它在 pipeline build 路径里由 `engine/goal-pool.ts` 调用 `planGoal()`。
 - `intent-analysis` 已有 agent 实现，但源码明确写着“not wired yet”；当前 runtime 里没有接线。
 - `build -> general/explore`、`deliver -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；`general -> general` 自递归被权限拒绝。
+- `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：先向用户展示“完善上一个 request 的新任务”候选，用户确认后才创建新 task；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
 - [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的“双向都要声明”规则，`general -> explore` 在 spec 文本上并不成立。
 
 ## 节点缩写
