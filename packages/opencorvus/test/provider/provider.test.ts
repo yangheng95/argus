@@ -21,6 +21,20 @@ afterAll(() => {
   liveServer = undefined
 })
 
+test("alibaba coding-plan provider clamps fetch inactivity timeout to fail fast", () => {
+  expect(Provider.resolveFetchInactivityMs("alibaba-coding-plan-cn", undefined)).toBe(60_000)
+  expect(Provider.resolveFetchInactivityMs("alibaba-coding-plan-cn", 300_000)).toBe(60_000)
+  expect(Provider.resolveFetchInactivityMs("alibaba-coding-plan-cn", 30_000)).toBe(30_000)
+  expect(Provider.resolveFetchInactivityMs("alibaba-coding-plan-cn", false)).toBe(0)
+})
+
+test("stable providers retain the five minute minimum fetch inactivity timeout", () => {
+  expect(Provider.resolveFetchInactivityMs("anthropic", undefined)).toBe(300_000)
+  expect(Provider.resolveFetchInactivityMs("anthropic", 30_000)).toBe(300_000)
+  expect(Provider.resolveFetchInactivityMs("anthropic", 600_000)).toBe(600_000)
+  expect(Provider.resolveFetchInactivityMs("anthropic", false)).toBe(0)
+})
+
 test("provider loaded from env variable", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
