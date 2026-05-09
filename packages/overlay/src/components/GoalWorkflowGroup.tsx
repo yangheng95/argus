@@ -1,5 +1,5 @@
 /**
- * GoalWorkflowGroup — per-goal collapsible summary card for the sidebar.
+ * GoalWorkflowGroup — per-goal expandable summary card for the sidebar.
  *
  * The right-side goal panel should stay goal-scoped: title, objective,
  * acceptance, and overall status. Step-by-step executor detail belongs in
@@ -7,7 +7,7 @@
  */
 import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
-import { cardExpanded, toggleCard } from "../store/conversation-ui";
+import { cardExpanded, setCardExpanded } from "../store/conversation-ui";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
 import { goalStatusToTaskStatus, statusIconName } from "../utils/status-mapping";
 import { StaticTextPart } from "./TextPart";
@@ -97,24 +97,58 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
   const defaultOpen = () =>
     props.defaultOpen ?? (status() === "running" || status() === "failed");
   const expanded = () => cardExpanded(cardKey(), status(), defaultOpen());
-  const toggle = () => toggleCard(cardKey(), status(), defaultOpen());
+  const expand = () => {
+    if (expanded()) return;
+    setCardExpanded(cardKey(), true, status());
+  };
+  const collapse = () => {
+    if (!expanded()) return;
+    setCardExpanded(cardKey(), false, status());
+  };
   const revisionLabel = () =>
     goalRevisionLabelFromIndexes(props.goal.orderIndex, props.goal.retryCount);
+
+  const canSurfaceCollapse = (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return false;
+    if (!target.closest(".gwg")) return false;
+    return !target.closest([
+      "button",
+      "a",
+      "input",
+      "textarea",
+      "select",
+      "summary",
+      "[contenteditable='true']",
+      "[role='button']",
+      "[role='menuitem']",
+      "[role='checkbox']",
+      "[role='tab']",
+      "[role='textbox']",
+      "[data-card-dblclick-ignore='true']",
+    ].join(","));
+  };
 
   return (
     <div
       class="gwg"
       data-goal-status={props.goal.goalStatus}
       classList={{ "gwg--expanded": expanded() }}
+      onDblClick={(event) => {
+        if (!canSurfaceCollapse(event)) return;
+        event.stopPropagation();
+        collapse();
+      }}
     >
       <div
         class="gwg-header"
         role="button"
         tabindex="0"
         aria-expanded={expanded()}
-        onClick={toggle}
+        onClick={expand}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+          if (expanded()) return;
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); expand(); }
         }}
       >
         <span class="gwg-status-icon" data-status={props.goal.goalStatus}>
@@ -135,15 +169,9 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
             (2026-05-03) \u2014 goal authoring lives elsewhere (the
             requirements/architect flow owns goal definition; manual
             edit/delete from the conversation surface was confusing
-            and rarely the right action). The chevron stays as the
-            collapse affordance. The `onEditGoal` / `onDeleteGoal`
+            and rarely the right action). The `onEditGoal` / `onDeleteGoal`
             props remain on the component so callers don't break;
             they're just no-ops on this surface now. */}
-        <div class="gwg-header-actions">
-          <span class="gwg-chevron" aria-hidden="true">
-            <Icon name="caret-down" />
-          </span>
-        </div>
       </div>
       <Show when={expanded()}>
         <div class="gwg-body">

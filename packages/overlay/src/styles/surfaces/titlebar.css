@@ -556,6 +556,10 @@
   -webkit-app-region: no-drag;
 }
 
+.titlebar-menubar-panel[data-menu="workspace"] {
+  width: min(calc(460px * var(--ui-scale)), calc(100vw - calc(24px * var(--ui-scale))));
+}
+
 @media (max-width: 520px) { /* breakpoint: --ui-breakpoint-sm */
   .titlebar-menubar-panel {
     position: fixed;
@@ -634,6 +638,33 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: right;
+}
+
+.titlebar-menubar-recent-item {
+  display: grid;
+  grid-template-columns: minmax(calc(120px * var(--ui-scale)), calc(170px * var(--ui-scale))) minmax(0, 1fr);
+  align-items: center;
+  gap: calc(14px * var(--ui-scale));
+}
+
+.titlebar-menubar-recent-name,
+.titlebar-menubar-recent-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.titlebar-menubar-recent-name {
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+}
+
+.titlebar-menubar-recent-path {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  text-align: left;
 }
 
 .titlebar-menubar-note {

@@ -20,7 +20,6 @@ import { nativeConfirm, nativeOpen, nativePrompt, nativeSelect } from "../../uti
 import { nativeMessage } from "../../services/app-dialog";
 import { Icon } from "../Icon";
 import { Button } from "../ui/Button";
-import { SurfaceHeader } from "../ui/SurfaceHeader";
 
 function describeFailure(e: unknown): string {
   if (e instanceof ApiError) return e.message;
@@ -514,58 +513,79 @@ export default function ProvidersPanel() {
   const totalProviderCount = createMemo(() => Object.keys(configProviders()).length + catalogProviders().length);
   const visibleProviderCount = createMemo(() => providerEntries().length + catalogEntries().length);
   const hasProviderSearch = createMemo(() => providerSearch().trim().length > 0);
+  const customProviderCount = createMemo(() => Object.keys(configProviders()).length);
+  const catalogProviderCount = createMemo(() => catalogProviders().length);
+
+  function modelSummary(modelIds: string[]): string {
+    if (modelIds.length === 0) return t("provider.label.no_models");
+    return modelIds.slice(0, 8).join(", ");
+  }
+
+  function hasMoreModels(modelIds: string[]): boolean {
+    return modelIds.length > 8;
+  }
 
   return (
-    <div class="general-panel">
+    <div class="general-panel provider-panel">
       <div class="config-panel-group provider-settings-flat">
-        <div class="provider-toolbar">
-          <SurfaceHeader
-            variant="settings-group"
-            title={
-              <span class="provider-toolbar-title">
-                <span>{t("provider.title")}</span>
-                <span class="provider-toolbar-count">
-                  {t("provider.search.count", { shown: visibleProviderCount(), total: totalProviderCount() })}
-                </span>
-              </span>
-            }
-            actions={
-              <div class="provider-head-actions">
-                <Show when={lastRefreshedAt()}>
-                  {(ts) => (
-                    <span class="provider-refresh-meta" title={new Date(ts()).toLocaleString()}>
-                      {t("provider.refresh.last", { when: formatRelative(ts()) })}
-                    </span>
-                  )}
-                </Show>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  tone="neutral"
-                  data-ui="provider-refresh-button"
-                  onClick={() => void handleRefreshCatalog()}
-                  disabled={refreshing()}
-                  title={t("provider.refresh.title")}
-                  data-spinning={refreshing() ? "true" : "false"}
-                >
-                  <span class="provider-refresh-icon" aria-hidden="true">↻</span>
-                  {refreshing() ? t("provider.refresh.refreshing") : t("provider.refresh.button")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="solid"
-                  size="sm"
-                  tone="accent"
-                  onClick={startAdd}
-                >
-                  + Add
-                </Button>
+        <div class="provider-command">
+          <div class="provider-command-main">
+            <div class="provider-title-block">
+              <h3 class="provider-page-title">{t("provider.title")}</h3>
+              <div class="provider-toolbar-count">
+                {t("provider.search.count", { shown: visibleProviderCount(), total: totalProviderCount() })}
               </div>
-            }
-          />
+            </div>
+            <div class="provider-stat-strip" aria-label={t("provider.stats.label")}>
+              <div class="provider-stat">
+                <span class="provider-stat-value">{customProviderCount()}</span>
+                <span class="provider-stat-label">{t("provider.stats.configured")}</span>
+              </div>
+              <div class="provider-stat">
+                <span class="provider-stat-value">{catalogProviderCount()}</span>
+                <span class="provider-stat-label">{t("provider.stats.catalog")}</span>
+              </div>
+            </div>
+          </div>
+          <div class="provider-head-actions">
+            <Show when={lastRefreshedAt()}>
+              {(ts) => (
+                <span class="provider-refresh-meta" title={new Date(ts()).toLocaleString()}>
+                  {t("provider.refresh.last", { when: formatRelative(ts()) })}
+                </span>
+              )}
+            </Show>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              tone="neutral"
+              data-ui="provider-refresh-button"
+              onClick={() => void handleRefreshCatalog()}
+              disabled={refreshing()}
+              title={t("provider.refresh.title")}
+              data-spinning={refreshing() ? "true" : "false"}
+            >
+              <span class="provider-refresh-icon" aria-hidden="true">
+                <Icon name="refresh" size={13} />
+              </span>
+              {refreshing() ? t("provider.refresh.refreshing") : t("provider.refresh.button")}
+            </Button>
+            <Button
+              type="button"
+              variant="solid"
+              size="sm"
+              tone="accent"
+              onClick={startAdd}
+            >
+              <Icon name="plus" size={13} />
+              {t("provider.action.add")}
+            </Button>
+          </div>
           <label class="provider-search-field">
-            <span class="provider-search-icon" aria-hidden="true">⌕</span>
+            <span class="provider-search-icon" aria-hidden="true">
+              <Icon name="search" size={14} />
+            </span>
             <input
               class="field-input provider-search-input"
               type="search"
@@ -612,107 +632,124 @@ export default function ProvidersPanel() {
 
         <Show when={providerEntries().length > 0}>
           <div class="provider-flat-section">
-            <div class="provider-section-label">{t("provider.section.custom")}</div>
+            <div class="provider-section-head">
+              <div>
+                <div class="provider-section-label">{t("provider.section.custom")}</div>
+                <div class="provider-section-count">
+                  {t("provider.section.count", { count: providerEntries().length })}
+                </div>
+              </div>
+            </div>
             <div class="provider-flat-list">
               <For each={providerEntries()}>
-                {([id, provider]) => (
-                  <div class="provider-flat-row" data-testid={`provider-custom-row-${id}`}>
-                    <div class="provider-row-main">
-                      <div class="provider-row-title-line">
-                        <strong class="provider-row-title">{provider.name || id}</strong>
-                        <span class="provider-row-id">{id}</span>
+                {([id, provider]) => {
+                  const modelIds = Object.keys(provider.models || {});
+                  const status = providerAuthMethods(id).length > 0 ? providerState(id, undefined) : null;
+                  return (
+                    <div class="provider-flat-row" data-testid={`provider-custom-row-${id}`}>
+                      <div class="provider-row-main">
+                        <div class="provider-row-title-line">
+                          <strong class="provider-row-title">{provider.name || id}</strong>
+                          <span class="provider-row-id">{id}</span>
+                        </div>
+                        <div class="provider-row-meta">
+                          <span>{t("provider.label.api")}: {provider.api}</span>
+                          <Show when={provider.env?.length}>
+                            <span>{t("provider.label.env")}: {provider.env.join(", ")}</span>
+                          </Show>
+                        </div>
                       </div>
-                      <div class="provider-row-meta">
-                        <span>{t("provider.label.api")}: {provider.api}</span>
-                        <Show when={provider.env?.length}>
-                          <span>{t("provider.label.env")}: {provider.env.join(", ")}</span>
+                      <div class="provider-row-summary">
+                        <span class="provider-count-pill">
+                          {t("provider.models.count", { count: modelIds.length })}
+                        </span>
+                        <Show when={status}>
+                          {(s) => (
+                            <span class="provider-row-status" data-tone={s().tone}>
+                              {s().label}: {s().detail}
+                            </span>
+                          )}
                         </Show>
-                        <span>{t("provider.label.models")}: {Object.keys(provider.models || {}).length}</span>
                       </div>
-                      {providerAuthMethods(id).length > 0
-                        ? (() => {
-                          const status = providerState(id, undefined);
-                          return (
-                            <div class="provider-row-status" data-tone={status.tone}>
-                              {status.label}: {status.detail}
-                            </div>
-                          );
-                        })()
-                        : null}
-                    </div>
-                    <div class="provider-row-actions">
-                      <Show when={providerAuthMethods(id).length > 0}>
+                      <div class="provider-row-actions">
+                        <Show when={providerAuthMethods(id).length > 0}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            tone="neutral"
+                            onClick={() => void handleAuth(id)}
+                            disabled={authing().has(id)}
+                            title={t("llm.auth_connect_title")}
+                            data-testid={`provider-auth-${id}`}
+                          >
+                            {authing().has(id) ? t("common.loading") : t("llm.auth_connect")}
+                          </Button>
+                        </Show>
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           tone="neutral"
-                          onClick={() => void handleAuth(id)}
-                          disabled={authing().has(id)}
-                          title={t("llm.auth_connect_title")}
-                          data-testid={`provider-auth-${id}`}
+                          onClick={() => void handleTest(id, provider.models || {})}
+                          disabled={testing().has(id)}
+                          title={t("provider.test.button_title")}
                         >
-                          {authing().has(id) ? t("common.loading") : t("llm.auth_connect")}
+                          {testing().has(id) ? t("provider.test.testing") : t("provider.test.button")}
                         </Button>
-                      </Show>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        tone="neutral"
-                        onClick={() => void handleTest(id, provider.models || {})}
-                        disabled={testing().has(id)}
-                        title={t("provider.test.button_title")}
-                      >
-                        {testing().has(id) ? t("provider.test.testing") : t("provider.test.button")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        tone="neutral"
-                        onClick={() => startEdit(id)}
-                      >
-                        {t("common.edit")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        tone="danger"
-                        onClick={() => handleDelete(id)}
-                        disabled={saving()}
-                      >
-                        {t("common.delete")}
-                      </Button>
-                    </div>
-                    <div class="provider-row-key">
-                      <ApiKeyEditor providerId={id} />
-                    </div>
-                    <Show when={testResults().get(id)}>
-                      {(result) => (
-                        <div
-                          class="provider-test-result"
-                          data-ok={result().ok ? "true" : "false"}
-                          role="status"
-                          aria-live="polite"
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          tone="neutral"
+                          onClick={() => startEdit(id)}
                         >
-                          <span class="provider-test-result-icon" aria-hidden="true">
-                            <Icon name={result().ok ? "status-completed" : "status-failed"} size={13} />
+                          {t("common.edit")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          tone="danger"
+                          onClick={() => handleDelete(id)}
+                          disabled={saving()}
+                        >
+                          {t("common.delete")}
+                        </Button>
+                      </div>
+                      <div class="provider-row-key">
+                        <ApiKeyEditor providerId={id} />
+                      </div>
+                      <Show when={testResults().get(id)}>
+                        {(result) => (
+                          <div
+                            class="provider-test-result"
+                            data-ok={result().ok ? "true" : "false"}
+                            role="status"
+                            aria-live="polite"
+                          >
+                            <span class="provider-test-result-icon" aria-hidden="true">
+                              <Icon name={result().ok ? "status-completed" : "status-failed"} size={13} />
+                            </span>
+                            <span class="provider-test-result-msg">
+                              {result().ok
+                                ? (result().message || t("provider.test.success"))
+                                : (result().message || t("provider.test.failed"))}
+                            </span>
+                          </div>
+                        )}
+                      </Show>
+                      <div class="provider-row-models" title={modelIds.join(", ")}>
+                        {modelSummary(modelIds)}
+                        <Show when={hasMoreModels(modelIds)}>
+                          <span class="provider-model-overflow">
+                            {t("provider.models.more", { count: modelIds.length - 8 })}
                           </span>
-                          <span class="provider-test-result-msg">
-                            {result().ok
-                              ? (result().message || t("provider.test.success"))
-                              : (result().message || t("provider.test.failed"))}
-                          </span>
-                        </div>
-                      )}
-                    </Show>
-                    <div class="provider-row-models">
-                      {Object.keys(provider.models || {}).join(", ") || t("provider.label.no_models")}
+                        </Show>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                }}
               </For>
             </div>
           </div>
@@ -722,12 +759,14 @@ export default function ProvidersPanel() {
         <Show when={showAdd()}>
           <div class="config-panel-card provider-add-card">
             <h4 class="provider-add-title">
-              {editing() ? `Edit: ${editing()}` : "Add Custom Provider"}
+              {editing()
+                ? t("provider.form.edit_title", { id: editing() || "" })
+                : t("provider.form.add_title")}
             </h4>
 
             <Show when={!editing()}>
               <label class="field">
-                <span class="field-label">Provider ID</span>
+                <span class="field-label">{t("provider.form.id_label")}</span>
                 <input
                   class="field-input"
                   type="text"
@@ -739,7 +778,7 @@ export default function ProvidersPanel() {
             </Show>
 
             <label class="field">
-              <span class="field-label">Display Name</span>
+              <span class="field-label">{t("provider.form.name_label")}</span>
               <input
                 class="field-input"
                 type="text"
@@ -750,7 +789,7 @@ export default function ProvidersPanel() {
             </label>
 
             <label class="field">
-              <span class="field-label">API Base URL</span>
+              <span class="field-label">{t("provider.form.api_label")}</span>
               <input
                 class="field-input"
                 type="url"
@@ -771,7 +810,7 @@ export default function ProvidersPanel() {
             </label>
 
             <label class="field">
-              <span class="field-label">API Key Env Variable</span>
+              <span class="field-label">{t("provider.form.env_label")}</span>
               <input
                 class="field-input"
                 type="text"
@@ -798,7 +837,7 @@ export default function ProvidersPanel() {
             </label>
 
             <label class="field">
-              <span class="field-label">Models (one per line: id:display_name)</span>
+              <span class="field-label">{t("provider.form.models_label")}</span>
               {/* Fixed model mapping examples; these are literal IDs/display names, not instructional prose. */}
               <textarea
                 class="field-input provider-models-textarea"
@@ -819,7 +858,7 @@ export default function ProvidersPanel() {
 
             <div class="dialog-actions compact provider-form-actions">
               <Button type="button" variant="outline" size="sm" tone="neutral" onClick={cancel}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="button"
@@ -829,16 +868,27 @@ export default function ProvidersPanel() {
                 onClick={handleSave}
                 disabled={saving() || (!editing() && !formId().trim()) || !formApi().trim()}
               >
-                {saving() ? "Saving..." : editing() ? "Update" : "Add Provider"}
+                {saving()
+                  ? t("common.saving")
+                  : editing()
+                    ? t("provider.form.update")
+                    : t("provider.form.add")}
               </Button>
             </div>
           </div>
         </Show>
         <Show when={catalogEntries().length > 0}>
           <div class="provider-flat-section">
-            <div class="provider-section-label">{t("provider.section.catalog")}</div>
-            <div class="provider-catalog-hint">
-              {t("provider.catalog.hint")}
+            <div class="provider-section-head">
+              <div>
+                <div class="provider-section-label">{t("provider.section.catalog")}</div>
+                <div class="provider-section-count">
+                  {t("provider.section.count", { count: catalogEntries().length })}
+                </div>
+              </div>
+              <div class="provider-catalog-hint">
+                {t("provider.catalog.hint")}
+              </div>
             </div>
             <div class="provider-flat-list">
               <For each={catalogEntries()}>
@@ -851,11 +901,15 @@ export default function ProvidersPanel() {
                       </div>
                       <div class="provider-row-meta">
                         <span>{p.source}</span>
-                        <span>{p.modelCount} {t("provider.label.models").toLowerCase()}</span>
                       </div>
-                      <div class="provider-row-status" data-tone={p.status.tone}>
+                    </div>
+                    <div class="provider-row-summary">
+                      <span class="provider-count-pill">
+                        {t("provider.models.count", { count: p.modelCount })}
+                      </span>
+                      <span class="provider-row-status" data-tone={p.status.tone}>
                         {p.status.label}: {p.status.detail}
-                      </div>
+                      </span>
                     </div>
                     <div class="provider-row-actions">
                       <Show when={p.authMethods > 0}>

@@ -2743,6 +2743,7 @@ export type NotFoundError = {
 export type TerminalProfile = {
   id: string
   label: string
+  icon: "terminal" | "powershell" | "command-prompt" | "bash"
 }
 
 export type TerminalProfileList = {
@@ -3014,6 +3015,20 @@ export type ProviderAuthAuthorization = {
   url: string
   method: "auto" | "code"
   instructions: string
+}
+
+export type CodingCliProfile = {
+  id: string
+  label: string
+  icon: "claude-code" | "codex" | "gemini" | "copilot" | "glm"
+}
+
+export type CodingCliProfileList = {
+  profiles: Array<CodingCliProfile>
+}
+
+export type CodingCliOpenResponse = {
+  ok: boolean
 }
 
 export type Symbol = {
@@ -6696,6 +6711,46 @@ export type ControlTimelineResponses = {
 }
 
 export type ControlTimelineResponse = ControlTimelineResponses[keyof ControlTimelineResponses]
+
+export type CodingCliProfilesData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/coding/cli/profiles"
+}
+
+export type CodingCliProfilesResponses = {
+  /**
+   * Coding CLI profile list
+   */
+  200: CodingCliProfileList
+}
+
+export type CodingCliProfilesResponse = CodingCliProfilesResponses[keyof CodingCliProfilesResponses]
+
+export type CodingCliOpenData = {
+  body?: {
+    cliID: string
+    terminalProfileID: string
+    cwd: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/coding/cli/open"
+}
+
+export type CodingCliOpenResponses = {
+  /**
+   * Coding CLI launch result
+   */
+  200: CodingCliOpenResponse
+}
+
+export type CodingCliOpenResponse2 = CodingCliOpenResponses[keyof CodingCliOpenResponses]
 
 export type CodingMessageStreamData = {
   body?: {

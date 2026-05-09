@@ -23,6 +23,8 @@ import type {
   ChannelMessageResponses,
   ChannelRuntimeResponses,
   ChannelRuntimeRestartResponses,
+  CodingCliOpenResponses,
+  CodingCliProfilesResponses,
   CodingMessageStreamResponses,
   CodingSessionMessagesResponses,
   CommandListResponses,
@@ -3973,6 +3975,66 @@ export class Control extends HeyApiClient {
   }
 }
 
+export class Cli extends HeyApiClient {
+  /**
+   * List installed coding CLIs
+   *
+   * List installed coding command-line interfaces launchable from a selected system terminal.
+   */
+  public profiles<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<CodingCliProfilesResponses, unknown, ThrowOnError>({
+      url: "/coding/cli/profiles",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Open coding CLI
+   *
+   * Open an installed coding CLI in the selected external terminal profile.
+   */
+  public open<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      cliID?: string
+      terminalProfileID?: string
+      cwd?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "cliID" },
+            { in: "body", key: "terminalProfileID" },
+            { in: "body", key: "cwd" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CodingCliOpenResponses, unknown, ThrowOnError>({
+      url: "/coding/cli/open",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Message2 extends HeyApiClient {
   /**
    * Send coding assistant message with streaming
@@ -4050,6 +4112,11 @@ export class Session2 extends HeyApiClient {
 }
 
 export class Coding extends HeyApiClient {
+  private _cli?: Cli
+  get cli(): Cli {
+    return (this._cli ??= new Cli({ client: this.client }))
+  }
+
   private _message?: Message2
   get message(): Message2 {
     return (this._message ??= new Message2({ client: this.client }))

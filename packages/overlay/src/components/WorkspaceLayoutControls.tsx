@@ -13,6 +13,7 @@ import { Icon, type IconName } from "./Icon";
 interface WorkspaceLayoutControlsProps {
   terminalOpen: Accessor<boolean>;
   onOpenTerminal: (profileID: string) => void;
+  onTerminalProfileSelected: (profileID: string) => void;
 }
 
 const TERMINAL_ICONS: Record<TerminalProfileIcon, IconName> = {
@@ -25,6 +26,7 @@ const TERMINAL_ICONS: Record<TerminalProfileIcon, IconName> = {
 export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
   const [profiles, setProfiles] = createSignal<TerminalProfile[]>([]);
   const [defaultProfileID, setDefaultProfileID] = createSignal("");
+  const [selectedProfileID, setSelectedProfileID] = createSignal("");
   const [open, setOpen] = createSignal(false);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal("");
@@ -37,11 +39,13 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
   let menuRef: HTMLDivElement | undefined;
 
   const disabled = () => !settingsStore.directory || loading() || profiles().length === 0;
-  const defaultProfile = createMemo(() =>
-    profiles().find((profile) => profile.id === defaultProfileID()) ?? null,
+  const selectedProfile = createMemo(() =>
+    profiles().find((profile) => profile.id === selectedProfileID()) ??
+    profiles().find((profile) => profile.id === defaultProfileID()) ??
+    null,
   );
   const triggerIcon = createMemo(() => {
-    const profile = defaultProfile();
+    const profile = selectedProfile();
     if (!profile) return "terminal" as IconName;
     return terminalIconName(profile.icon);
   });
@@ -57,6 +61,8 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
     if (!settingsStore.directory) {
       setProfiles([]);
       setDefaultProfileID("");
+      setSelectedProfileID("");
+      props.onTerminalProfileSelected("");
       return;
     }
     setLoading(true);
@@ -66,11 +72,19 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
       if (!response.profiles.some((profile) => profile.id === response.defaultProfileID)) {
         throw new Error(t("terminal.default_profile_missing"));
       }
+      const current = selectedProfileID();
+      const selected = response.profiles.some((profile) => profile.id === current)
+        ? current
+        : response.defaultProfileID;
       setProfiles(response.profiles);
       setDefaultProfileID(response.defaultProfileID);
+      setSelectedProfileID(selected);
+      props.onTerminalProfileSelected(selected);
     } catch (reason) {
       setProfiles([]);
       setDefaultProfileID("");
+      setSelectedProfileID("");
+      props.onTerminalProfileSelected("");
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setLoading(false);
@@ -106,6 +120,8 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
     if (!profiles().some((profile) => profile.id === profileID)) {
       throw new Error(`Unknown terminal profile selected: ${profileID}`);
     }
+    setSelectedProfileID(profileID);
+    props.onTerminalProfileSelected(profileID);
     close();
     props.onOpenTerminal(profileID);
   }
@@ -172,7 +188,7 @@ export function WorkspaceLayoutControls(props: WorkspaceLayoutControlsProps) {
         onClick={toggle}
         onKeyDown={onKeyDown}
       >
-        <span class="workspace-terminal-select-icon" data-terminal-icon={defaultProfile()?.icon ?? "terminal"} aria-hidden="true">
+        <span class="workspace-terminal-select-icon" data-terminal-icon={selectedProfile()?.icon ?? "terminal"} aria-hidden="true">
           <Icon name={triggerIcon()} size={16} />
         </span>
         <span class="workspace-terminal-select-caret" aria-hidden="true">

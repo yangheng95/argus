@@ -51,6 +51,7 @@ test("workspace terminal command opens the terminal panel with measured PTY geom
       if (path === "/config") return send({ model: "" });
       if (path === "/panel/knowledge/memory") return send([]);
       if (path === "/panel/knowledge/preference") return send([]);
+      if (path === "/coding/cli/profiles") return send({ profiles: [] });
       if (path === "/pty/profiles") {
         return send({
           defaultProfileID: "default",

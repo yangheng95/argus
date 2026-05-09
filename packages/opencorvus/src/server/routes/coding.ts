@@ -8,6 +8,9 @@ import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus, Message } from "@/session"
 import { Log } from "@/util/log"
+import { CodingCli } from "@/coding-cli"
+import { TerminalProfile } from "@/pty/profile"
+import { HTTPException } from "hono/http-exception"
 
 const log = Log.create({ service: "coding" })
 
@@ -26,6 +29,61 @@ const CodingInput = z.object({
 
 export function CodingRoutes() {
   return new Hono()
+    .get(
+      "/cli/profiles",
+      describeRoute({
+        summary: "List installed coding CLIs",
+        description: "List installed coding command-line interfaces launchable from a selected system terminal.",
+        operationId: "coding.cli.profiles",
+        responses: {
+          200: {
+            description: "Coding CLI profile list",
+            content: {
+              "application/json": {
+                schema: resolver(CodingCli.ListResponse),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const profiles = await CodingCli.list().catch((error) => {
+          if (error instanceof CodingCli.ConfigError) {
+            throw new HTTPException(400, { message: error.data.message })
+          }
+          throw error
+        })
+        return c.json(profiles)
+      },
+    )
+    .post(
+      "/cli/open",
+      describeRoute({
+        summary: "Open coding CLI",
+        description: "Open an installed coding CLI in the selected external terminal profile.",
+        operationId: "coding.cli.open",
+        responses: {
+          200: {
+            description: "Coding CLI launch result",
+            content: {
+              "application/json": {
+                schema: resolver(CodingCli.OpenResponse),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", CodingCli.OpenInput),
+      async (c) => {
+        const result = await CodingCli.open(c.req.valid("json")).catch((error) => {
+          if (error instanceof CodingCli.ConfigError || error instanceof TerminalProfile.ConfigError) {
+            throw new HTTPException(400, { message: error.data.message })
+          }
+          throw error
+        })
+        return c.json(result)
+      },
+    )
     .post(
       "/message/stream",
       describeRoute({

@@ -8,12 +8,10 @@ import { openConfigDialog } from "../../services/dialog";
 import { applyOpacity, applyTheme, applyZoom, sanitizeOpacity, sanitizeZoom, toggleDevtools } from "../../services/theme";
 import { themeOptionsForCurrentHost } from "../../services/theme-registry";
 import {
-  PROJECT_EDITORS,
   browseDirectory,
   createDirectory,
   loadRecentDirectories,
   openDirectory,
-  openDirectoryInEditor,
   setDirectory,
 } from "../../services/workspace";
 import { t } from "../../utils/i18n";
@@ -114,6 +112,28 @@ function MenuGroup(props: { title: string; children: any }) {
       <div class="titlebar-menubar-group-title">{props.title}</div>
       {props.children}
     </div>
+  );
+}
+
+function directoryLeaf(dir: string): string {
+  return dir.split(/[\\/]/).filter(Boolean).at(-1) || dir;
+}
+
+function RecentDirectoryMenuItem(props: {
+  dir: string;
+  onClick: () => void | Promise<void>;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      class="titlebar-menubar-item titlebar-menubar-recent-item"
+      title={props.dir}
+      onClick={() => void props.onClick()}
+    >
+      <span class="titlebar-menubar-recent-name">{directoryLeaf(props.dir)}</span>
+      <span class="titlebar-menubar-recent-path">{props.dir}</span>
+    </button>
   );
 }
 
@@ -396,25 +416,14 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                     <MenuItem onClick={() => void createDirectory().finally(closeMenu)}>{t("cwd.create")}</MenuItem>
                     <MenuItem onClick={() => void openDirectory().finally(closeMenu)} disabled={!settingsStore.directory}>{t("cwd.open")}</MenuItem>
                   </MenuGroup>
-                  <MenuGroup title={t("cwd.open_with")}>
-                    <For each={PROJECT_EDITORS}>
-                      {(editor) => (
-                        <MenuItem
-                          onClick={() => void openDirectoryInEditor(editor.id).finally(closeMenu)}
-                          disabled={!settingsStore.directory}
-                        >
-                          {editor.label}
-                        </MenuItem>
-                      )}
-                    </For>
-                  </MenuGroup>
                   <Show when={recentDirs().length > 0}>
                     <MenuGroup title={t("cwd.recent")}>
                       <For each={recentDirs().slice(0, 6)}>
                         {(dir) => (
-                          <MenuItem onClick={() => void setDirectory(dir).finally(closeMenu)} meta={dir}>
-                            {dir.split(/[\\/]/).filter(Boolean).at(-1) || dir}
-                          </MenuItem>
+                          <RecentDirectoryMenuItem
+                            dir={dir}
+                            onClick={() => void setDirectory(dir).finally(closeMenu)}
+                          />
                         )}
                       </For>
                     </MenuGroup>

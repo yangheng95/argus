@@ -141,6 +141,8 @@
 
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
+| POST | `/coding/cli/open` | Open coding CLI | `coding.cli.open` |
+| GET | `/coding/cli/profiles` | List installed coding CLIs | `coding.cli.profiles` |
 | POST | `/coding/message/stream` | Send coding assistant message with streaming | `coding.message.stream` |
 | GET | `/coding/session/{sessionID}/messages` | Get coding session messages | `coding.session.messages` |
 

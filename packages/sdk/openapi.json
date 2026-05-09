@@ -8459,6 +8459,102 @@
         ]
       }
     },
+    "/coding/cli/profiles": {
+      "get": {
+        "operationId": "coding.cli.profiles",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List installed coding CLIs",
+        "description": "List installed coding command-line interfaces launchable from a selected system terminal.",
+        "responses": {
+          "200": {
+            "description": "Coding CLI profile list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingCliProfileList"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.cli.profiles({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/coding/cli/open": {
+      "post": {
+        "operationId": "coding.cli.open",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Open coding CLI",
+        "description": "Open an installed coding CLI in the selected external terminal profile.",
+        "responses": {
+          "200": {
+            "description": "Coding CLI launch result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingCliOpenResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cliID": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "terminalProfileID": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "cwd": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "cliID",
+                  "terminalProfileID",
+                  "cwd"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.cli.open({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/coding/message/stream": {
       "post": {
         "operationId": "coding.message.stream",
@@ -33276,11 +33372,21 @@
           "label": {
             "type": "string",
             "minLength": 1
+          },
+          "icon": {
+            "type": "string",
+            "enum": [
+              "terminal",
+              "powershell",
+              "command-prompt",
+              "bash"
+            ]
           }
         },
         "required": [
           "id",
-          "label"
+          "label",
+          "icon"
         ]
       },
       "TerminalProfileList": {
@@ -34219,6 +34325,59 @@
           "url",
           "method",
           "instructions"
+        ]
+      },
+      "CodingCliProfile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "icon": {
+            "type": "string",
+            "enum": [
+              "claude-code",
+              "codex",
+              "gemini",
+              "copilot",
+              "glm"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "icon"
+        ]
+      },
+      "CodingCliProfileList": {
+        "type": "object",
+        "properties": {
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodingCliProfile"
+            }
+          }
+        },
+        "required": [
+          "profiles"
+        ]
+      },
+      "CodingCliOpenResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
         ]
       },
       "Symbol": {

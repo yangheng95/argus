@@ -49,16 +49,6 @@ test("critical icon affordances keep readable computed contrast", async () => {
                 </button>
               </div>
             </form>
-            <article class="card" data-kind="agent" data-stage="unknown" data-depth="0">
-              <div class="card__body-actions">
-                <button class="card__collapse-toggle">
-                  <span class="card__collapse-toggle-icon">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="M4 10l4-4 4 4"/></svg>
-                  </span>
-                  <span class="card__collapse-toggle-label">Collapse</span>
-                </button>
-              </div>
-            </article>
           </main>
         </body>
       </html>
@@ -116,7 +106,6 @@ test("critical icon affordances keep readable computed contrast", async () => {
       return {
         send: read(".chat-send-icon", ".chat-send"),
         toolbar: read(".chat-icon-col .oc-button", ".chat-icon-col"),
-        collapse: read(".card__collapse-toggle-icon", ".card__collapse-toggle-icon"),
       }
     })
 
@@ -124,8 +113,6 @@ test("critical icon affordances keep readable computed contrast", async () => {
     expect(report.send.ratio).toBeGreaterThanOrEqual(4.5)
     expect(report.toolbar.bgOpacity).toBe("0.85")
     expect(report.toolbar.ratio).toBeGreaterThanOrEqual(3)
-    expect(report.collapse.fgOpacity).toBe("1")
-    expect(report.collapse.ratio).toBeGreaterThanOrEqual(3)
   } finally {
     await browser.close()
   }

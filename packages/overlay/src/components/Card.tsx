@@ -1,14 +1,19 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import type { CardNode } from "../store/card-tree";
 import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree";
-import { collectActivityCounts, defaultExpandedForNode } from "../utils/card-tree";
-import { cardExpanded, toggleCard } from "../store/conversation-ui";
+import {
+  buildPhaseChildForStep,
+  collectActivityCounts,
+  defaultExpandedForNode,
+  stepHeaderNodeWithBuildPhase,
+  visibleChildIDsForCard,
+} from "../utils/card-tree";
+import { cardExpanded, setCardExpanded } from "../store/conversation-ui";
 import { boardStore, rootTaskSessionID } from "../store/board";
 import { cancelAgentSession, replyToAgentSession } from "../services/task";
 import { apiRequest } from "../services/api";
 import { normalizeAgentRole } from "../utils/message";
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox";
-import { Icon } from "./Icon";
 import { CardHeader } from "./CardHeader";
 import { CardParts } from "./CardParts";
 import { InlineToolPart } from "./InlineToolPart";
@@ -53,6 +58,10 @@ export function Card(props: { node: CardNode; depth: number }) {
   const expanded = () =>
     cardExpanded(props.node.id, props.node.status, defaultExpanded());
 
+  const promotedBuildPhase = createMemo(() => buildPhaseChildForStep(props.node));
+  const headerNode = createMemo(() => stepHeaderNodeWithBuildPhase(props.node));
+  const visibleChildIDs = createMemo(() => visibleChildIDsForCard(props.node));
+
   // Foot stats: tool / message / agent / skill activity rolled up from the
   // card's descendants. Surface on stage cards (agent/phase/step) regardless
   // of expand state — when collapsed they back-fill what the body would
@@ -77,8 +86,38 @@ export function Card(props: { node: CardNode; depth: number }) {
     return true;
   };
 
-  const toggle = () => {
-    toggleCard(props.node.id, props.node.status, defaultExpanded());
+  const expand = () => {
+    if (!collapsible() || expanded()) return;
+    setCardExpanded(props.node.id, true, props.node.status);
+  };
+
+  const collapse = () => {
+    if (!collapsible() || !expanded()) return;
+    setCardExpanded(props.node.id, false, props.node.status);
+  };
+
+  const canCardSurfaceCollapse = (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (!target || !articleRef) return false;
+    if (target.closest(".card") !== articleRef) return false;
+    const interactive = target.closest<HTMLElement>(
+      [
+        "button",
+        "a",
+        "input",
+        "textarea",
+        "select",
+        "summary",
+        "[contenteditable='true']",
+        "[role='button']",
+        "[role='menuitem']",
+        "[role='checkbox']",
+        "[role='tab']",
+        "[role='textbox']",
+        "[data-card-dblclick-ignore='true']",
+      ].join(","),
+    );
+    return interactive == null;
   };
 
   // Per-card AgentTrace toggle. Only meaningful for session cards (kind="agent")
@@ -90,16 +129,16 @@ export function Card(props: { node: CardNode; depth: number }) {
   const directAgentSessionID = createMemo(() => {
     // kind="agent" cards encode the sessionID in their card id. kind="phase"
     // cards absorb their sub-agent session's parts into themselves and
-    // therefore never produce a `kind="agent"` card — but the underlying
-    // session still exists in the backend and accepts /reply, so we surface
-    // the absorbed sessionID via `phaseSessionID` so the reply box renders
-    // on phase cards (build / planner) the same as on standalone agent
-    // cards (requirements / architect / design-analyst / delivery / ...).
+    // therefore never produce a `kind="agent"` card. For step cards, the
+    // build phase is visually promoted into the parent goal card, so its
+    // direct-reply session also belongs to the parent surface.
     const sessionID =
       props.node.kind === "agent"
         ? traceSessionID()
         : props.node.kind === "phase"
           ? props.node.phaseSessionID
+          : props.node.kind === "step"
+            ? promotedBuildPhase()?.phaseSessionID
           : undefined;
     if (!sessionID) return undefined;
     if (sessionID === rootTaskSessionID()) return undefined;
@@ -110,7 +149,7 @@ export function Card(props: { node: CardNode; depth: number }) {
     if (!traceSessionID()) return;
     // Auto-expand the card when opening the trace panel — collapsed cards
     // hide their body, which is where the panel renders.
-    if (!expanded()) toggleCard(props.node.id, props.node.status, defaultExpanded());
+    if (!expanded()) setCardExpanded(props.node.id, true, props.node.status);
     setTraceOpen((v) => !v);
   };
 
@@ -180,15 +219,23 @@ export function Card(props: { node: CardNode; depth: number }) {
   const isTool = () => props.node.kind === "tool";
   const toolPart = () => props.node.toolPart;
   const bodyParts = createMemo(() => {
-    const parts = props.node.parts ?? [];
-    if (props.node.kind !== "phase" || parts.length === 0) return parts;
-    const phaseRole = props.node.phaseSessionKind || props.node.stage || "";
+    return visibleBodyParts(props.node);
+  });
+  const promotedBuildParts = createMemo(() => {
+    const phase = promotedBuildPhase();
+    return phase ? visibleBodyParts(phase) : [];
+  });
+
+  function visibleBodyParts(node: CardNode): any[] {
+    const parts = node.parts ?? [];
+    if (node.kind !== "phase" || parts.length === 0) return parts;
+    const phaseRole = node.phaseSessionKind || node.stage || "";
     const first = parts[0];
     if (!phaseRole || first?.type !== "boundary") return parts;
     return normalizeAgentRole(String(first.role || "")) === normalizeAgentRole(phaseRole)
       ? parts.slice(1)
       : parts;
-  });
+  }
 
   const articleStyle = createMemo<Record<string, string> | undefined>(() => {
     const style: Record<string, string> = {};
@@ -240,12 +287,17 @@ export function Card(props: { node: CardNode; depth: number }) {
       data-depth={props.depth}
       style={articleStyle()}
       classList={{ "card--expanded": expanded(), "card--collapsed": !expanded() }}
+      onDblClick={(event) => {
+        if (!canCardSurfaceCollapse(event)) return;
+        event.stopPropagation();
+        collapse();
+      }}
     >
       <CardHeader
-        node={props.node}
+        node={headerNode()}
         expanded={expanded()}
         collapsible={collapsible()}
-        onToggle={toggle}
+        onExpand={expand}
         onRewind={onRewind}
         traceSessionID={traceSessionID()}
         traceOpen={traceOpen()}
@@ -303,7 +355,7 @@ export function Card(props: { node: CardNode; depth: number }) {
               memo. Transient cards (tool promotion in CardParts) still
               carry inline `children`; when both are set `childIDs` wins. */}
           <Show
-            when={(props.node.childIDs?.length ?? 0) > 0}
+            when={visibleChildIDs().length > 0}
             fallback={
               <Show when={(props.node.children?.length ?? 0) > 0}>
                 <div class="card__children">
@@ -315,14 +367,14 @@ export function Card(props: { node: CardNode; depth: number }) {
             }
           >
             <div class="card__children">
-              <For each={props.node.childIDs}>
-                {(id) => (
-                  <Show when={cardTreeStore.cards[id]}>
-                    <Card node={cardTreeStore.cards[id]!} depth={props.depth + 1} />
-                  </Show>
-                )}
+              <For each={visibleChildIDs()}>
+                {(id) => <Card node={cardTreeStore.cards[id]!} depth={props.depth + 1} />}
               </For>
             </div>
+          </Show>
+
+          <Show when={promotedBuildParts().length > 0}>
+            <CardParts parts={promotedBuildParts()} depth={props.depth + 1} />
           </Show>
 
           {/* Inline reply box at the END of every direct-replyable agent
@@ -336,22 +388,6 @@ export function Card(props: { node: CardNode; depth: number }) {
             />
           </Show>
 
-          <Show when={collapsible() && isStageCard()}>
-            <div class="card__body-actions">
-              <button
-                type="button"
-                class="card__collapse-toggle"
-                onClick={toggle}
-                title={t("card.collapse_title")}
-                aria-label={t("card.collapse_title")}
-              >
-                <span class="card__collapse-toggle-icon" aria-hidden="true">
-                  <Icon name="chevron-up" size={14} />
-                </span>
-                <span class="card__collapse-toggle-label">{t("card.collapse")}</span>
-              </button>
-            </div>
-          </Show>
         </div>
       </Show>
       <Show when={footActivity()}>

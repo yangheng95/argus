@@ -52,17 +52,6 @@ describe("icon affordances stay visible at rest", () => {
     expect(body).not.toContain("opacity: var(--ui-opacity-faint);")
   })
 
-  test("collapse row keeps a readable resting icon and label", () => {
-    const css = read("src/styles/surfaces/card.css")
-    expect(soloRuleBody(css, ".card__collapse-toggle")).toContain("color: var(--text-soft);")
-    const iconBody = soloRuleBody(css, ".card__collapse-toggle-icon")
-    expect(iconBody).toContain("--card-collapse-stage: var(--card-stage, var(--card-stage-info));")
-    expect(iconBody).toContain("var(--card-collapse-stage) 86%")
-    expect(iconBody).toContain("var(--card-collapse-stage) 32%")
-    expect(iconBody).not.toContain("var(--text-muted)")
-    expect(soloRuleBody(css, ".card__collapse-toggle-label")).toContain("color: var(--text-strong);")
-  })
-
   test("chat header no longer owns a workspace toggle affordance", () => {
     const css = read("src/styles/surfaces/conversation.css")
     const html = read("src/index.html")

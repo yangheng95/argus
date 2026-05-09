@@ -38,6 +38,12 @@ export type IconName =
   | "editor-webstorm"
   | "editor-intellij"
   | "editor-cursor"
+  | "coding-cli"
+  | "coding-claude-code"
+  | "coding-codex"
+  | "coding-gemini"
+  | "coding-copilot"
+  | "coding-glm"
   // Empty-state / cwd
   | "folder"
   | "folder-open"
@@ -380,6 +386,60 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
         <path d="M6.4 5.7 9.7 7.6 7.8 8 7 10.1Z" fill="var(--task-bar-bg)" stroke="none" />
       </>
     ),
+  },
+  "coding-cli": {
+    body: () => (
+      <>
+        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
+        <path d="M5 6.2 7 8 5 9.8" />
+        <circle cx="10.5" cy="8" r="1.3" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+  "coding-claude-code": {
+    body: () => (
+      <>
+        <circle cx="8" cy="8" r="5.6" />
+        <path d="M8 3.2v9.6M3.2 8h9.6M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8" />
+      </>
+    ),
+    strokeWidth: 1.2,
+  },
+  "coding-codex": {
+    body: () => (
+      <>
+        <path d="M8 2.5 13 5.4v5.2L8 13.5 3 10.6V5.4Z" />
+        <path d="M5.5 6.3 8 4.9l2.5 1.4v3.4L8 11.1 5.5 9.7Z" />
+      </>
+    ),
+  },
+  "coding-gemini": {
+    body: () => (
+      <>
+        <path d="M8 2.5c.5 2.8 1.7 4 5.5 5.5C9.7 9.5 8.5 10.7 8 13.5 7.5 10.7 6.3 9.5 2.5 8 6.3 6.5 7.5 5.3 8 2.5Z" />
+        <path d="M11.5 2.5c.2 1 .7 1.5 2 2-.9.3-1.5.9-2 2-.3-1.1-.9-1.7-2-2 1.1-.5 1.7-1 2-2Z" />
+      </>
+    ),
+  },
+  "coding-copilot": {
+    body: () => (
+      <>
+        <path d="M4 7.2c0-2.2 1.6-3.7 4-3.7s4 1.5 4 3.7v3.1a2.2 2.2 0 0 1-2.2 2.2H6.2A2.2 2.2 0 0 1 4 10.3Z" />
+        <circle cx="6.4" cy="8.2" r="0.8" fill="currentColor" stroke="none" />
+        <circle cx="9.6" cy="8.2" r="0.8" fill="currentColor" stroke="none" />
+        <path d="M6.5 11h3" />
+      </>
+    ),
+  },
+  "coding-glm": {
+    body: () => (
+      <>
+        <path d="M3.2 11.2V4.8L8 2.6l4.8 2.2v6.4L8 13.4Z" />
+        <path d="M5.5 8.1h2.3v2.4H5.3c-1.2-.7-1.6-1.9-1.1-3.1.5-1.3 1.8-2 3.3-2" />
+        <path d="M9 10.5V5.6l2.1 3 2.1-3v4.9" />
+      </>
+    ),
+    strokeWidth: 1.2,
   },
   folder: {
     body: () => (
