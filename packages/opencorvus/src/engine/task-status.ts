@@ -4,9 +4,9 @@
  * Rule-23 compliance: the "status" field is a **projection** of
  * `(time_started, time_completed, error, metadata.cancelled)`. Call-sites that
  * need a status string for display / logging / LLM prompts use
- * `deriveTaskStatus(task)`; decision logic should prefer the specific
- * boolean predicate (`isTaskTerminal` / `isTaskActive` / etc.) to avoid
- * string branching.
+ * `deriveTaskStatus(task)`. These predicates describe facts for UI,
+ * diagnostics, deletion cleanup, and queue projection; they must not be used
+ * to block operator messages from continuing the same task.
  *
  * Replaces the old `engine_task.status` column deleted in 6-f-2.
  *

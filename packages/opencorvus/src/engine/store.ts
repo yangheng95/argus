@@ -1642,7 +1642,6 @@ export function viewExecutorSession(row: ExecutorSessionRow) {
 function budgetModel(input?: EngineBudget | null) {
   if (!input) return undefined
   return {
-    maxRuns: input.max_runs,
     maxExecutorGroups: input.max_executor_groups,
   }
 }

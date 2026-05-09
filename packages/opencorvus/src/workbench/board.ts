@@ -225,8 +225,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
         error: task.error ?? undefined,
         budget: task.budget
           ? {
-              maxRuns: task.budget.max_runs,
-              maxFixRuns: task.budget.max_fix_runs,
+              maxExecutorGroups: task.budget.max_executor_groups,
             }
           : undefined,
         metadata: task.metadata ?? undefined,
@@ -479,7 +478,7 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
     task.id,
     task.time_created,
     task.time_updated,
-    task.budget?.max_runs ?? "",
+    task.budget?.max_executor_groups ?? "",
     run?.id ?? "",
     run?.time_updated ?? 0,
     plan?.id ?? "",

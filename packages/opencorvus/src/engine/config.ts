@@ -149,8 +149,6 @@ export interface EngineConfigType {
   build: BuildConfig
   activity: ActivityConfig
   debug: DebugConfig
-  max_runs: number
-  max_fix_runs: number
   max_executor_groups: number
   /** Default workflow ID for new tasks. Default: "pipeline". */
   default_workflow: string
@@ -232,9 +230,7 @@ const DEFAULTS: EngineConfigType = {
     // a self-fed timer.
     task_queue_run_timeout_ms: 600_000,
   },
-  max_runs: 15,            // was 10
-  max_fix_runs: 20,
-  max_executor_groups: 5,
+  max_executor_groups: 3,
   default_workflow: "pipeline",
   workflows: [],
 }
@@ -339,8 +335,6 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       fail_on_information_missing:
         user?.debug?.fail_on_information_missing ?? DEFAULTS.debug.fail_on_information_missing,
     },
-    max_runs: user?.max_runs ?? DEFAULTS.max_runs,
-    max_fix_runs: user?.max_fix_runs ?? DEFAULTS.max_fix_runs,
     max_executor_groups: user?.max_executor_groups ?? DEFAULTS.max_executor_groups,
     default_workflow: user?.default_workflow ?? DEFAULTS.default_workflow,
     workflows: (user?.workflows ?? DEFAULTS.workflows).map(w => ({

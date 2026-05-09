@@ -17,15 +17,9 @@ afterEach(async () => {
 })
 
 /**
- * Memory: feedback_task_terminal_state_revivable.md.
- * Backend invariant — any terminal task (cancelled / completed / failed)
- * receiving a new operator message must:
- *   1. flip status back to "active"
- *   2. clear time_completed
- *   3. drop metadata.cancelled
- * Otherwise the orchestrator-loop dispatch gate blocks revival and the
- * operator's message disappears (the second wedge variant after
- * commit 5861ebc3b which only fixed the active+deferred-stop path).
+ * Backend invariant: lifecycle status is display/audit context, not a gate.
+ * Any task can receive a new operator message, but accepting that message must
+ * not erase the prior completed / failed / cancelled facts.
  */
 /**
  * Status is a derivation, not a column (see engine/task-status.ts).
@@ -50,9 +44,9 @@ const TERMINAL_FIXTURES = [
   },
 ] as const
 
-describe("openTaskForOperatorMessage — terminal-state revival", () => {
+describe("openTaskForOperatorMessage — terminal-state facts are preserved", () => {
   for (const fixture of TERMINAL_FIXTURES) {
-    test(`flips ${fixture.label} task back to active and clears terminal markers`, async () => {
+    test(`keeps ${fixture.label} markers when opening for an operator message`, async () => {
       await using tmp = await tmpdir({ git: true })
       await Instance.provide({
         directory: tmp.path,
@@ -85,18 +79,16 @@ describe("openTaskForOperatorMessage — terminal-state revival", () => {
           expect(task!.time_completed).toBe(completedAt)
 
           const reopened = await openTaskForOperatorMessage(task!)
-          expect(reopened.time_completed).toBeNull()
-          expect(reopened.error).toBeNull()
-          // metadata.cancelled must be stripped — that's the disambiguator
-          // deriveTaskStatus uses to distinguish cancelled from failed.
+          expect(reopened.time_completed).toBe(completedAt)
+          expect(reopened.error).toBe(fixture.fields.error)
           const md = (reopened.metadata ?? {}) as Record<string, unknown>
-          expect(md.cancelled).toBeUndefined()
-          expect(deriveTaskStatus(reopened)).toBe("active")
+          expect(md.cancelled).toBe((fixture.fields.metadata as any)?.cancelled)
+          expect(deriveTaskStatus(reopened)).toBe(fixture.label)
 
           // Persisted, not just in-memory: re-read from DB.
           const reread = findTask(taskID)
-          expect(reread!.time_completed).toBeNull()
-          expect(deriveTaskStatus(reread!)).toBe("active")
+          expect(reread!.time_completed).toBe(completedAt)
+          expect(deriveTaskStatus(reread!)).toBe(fixture.label)
         },
       })
     })
@@ -130,8 +122,7 @@ describe("appendTaskSessionMessage — no silent no-op", () => {
 
 /**
  * Source-level pin for the overlay chat fix. The previous "completed →
- * fork new task" branch contradicted the backend's revival invariant
- * (memory: feedback_task_terminal_state_revivable.md) by severing
+ * fork new task" branch contradicted the same-task continuation invariant by severing
  * conversation history at the task boundary. Every status now goes
  * through /task/:id/message uniformly.
  */
@@ -143,8 +134,6 @@ describe("overlay chat — terminal tasks no longer fork on send", () => {
     )
     expect(src).not.toMatch(/taskStatus === ["']completed["']/)
     expect(src).not.toMatch(/Completed tasks → create a follow-up task/)
-    // The unified comment that replaced it must be present so a future
-    // refactor recognizes the rule.
-    expect(src).toMatch(/feedback_task_terminal_state_revivable\.md/)
+    expect(src).toMatch(/Every status .* send message directly to the task/s)
   })
 })

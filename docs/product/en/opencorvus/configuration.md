@@ -80,8 +80,7 @@ Fine-tunes each agent (merged in `OrchestratorConfig.get()` — see `src/orchest
   "assistant": {
     "requirements": { "max_steps": 20 },
     "evaluator": { "tier": "standard" },  // core | standard | full
-    "max_runs": 3,
-    "max_goal_retries": 2
+    "max_executor_groups": 3
   }
 }
 ```

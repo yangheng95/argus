@@ -25,7 +25,7 @@
 assistant: requirements{}  ← 替代 spec
            goal{} · planner{} · evaluator{tier, model, ...} · delivery{}
            adaptive{}
-           max_runs · max_fix_runs · max_executor_groups
+           max_executor_groups
            每个 agent 子项含: max_steps · timeout_ms · quality_threshold? · max_attempts? · skills[]
 
 experimental: unattended · auto_permission · auto_question · batch_tool

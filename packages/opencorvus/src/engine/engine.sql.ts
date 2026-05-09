@@ -5,8 +5,6 @@ import { Timestamps } from "@/storage/schema.sql"
 import type { ProtocolCapabilitiesInfo, ProtocolRefsInfo, ProtocolSettingsInfo } from "@/executor/protocol"
 
 export type EngineBudget = {
-  max_runs?: number
-  max_fix_runs?: number
   max_executor_groups?: number
 }
 

@@ -53,7 +53,7 @@ Usually evaluator's `replan_guidance` isn't providing improvement info. Check:
 
 1. Spec itself lacks acceptance criteria
 2. `done_definition` commands not executable (see [Evaluator](../opencorvus/evaluator.md))
-3. `max_runs` too large — default 3; larger values just burn budget
+3. `assistant.max_executor_groups` too large — default 3; larger values start more goal/build work in parallel
 
 ### Permission ask never resolves
 

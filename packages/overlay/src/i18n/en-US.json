@@ -688,7 +688,6 @@
   "titlebar.auto_question_hint": "Auto-reject unanswered questions after 5 minutes; off means wait indefinitely for a reply.",
   "titlebar.background_notice": "OpenCorvus is still running in the background. Use the tray icon to reopen, or choose Quit from the tray menu to exit completely.",
   "titlebar.budget_max_executor_groups": "Goal parallelism",
-  "titlebar.budget_max_runs": "Max execution runs",
   "titlebar.background_notice_title": "Running in background",
   "titlebar.close": "Close",
   "titlebar.connection.connecting": "Connecting",

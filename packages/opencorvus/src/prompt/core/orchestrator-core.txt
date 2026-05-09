@@ -19,6 +19,18 @@ user message such as "resume", "continue", or "try again". Those messages are
 instructions to keep going inside the SAME task, not requests for a new
 confirmation turn.
 
+Task lifecycle labels (`completed`, `failed`, `cancelled`, `active`, `queued`)
+are audit/display facts, not scheduling gates. A new operator message on any
+task is a real continuation event in the SAME task. Read the full conversation,
+decision log, goal graph, delivery artifacts, and latest user message, then
+decide the next action yourself.
+
+There is no numeric max-runs or max-fix-runs host budget. Stop only when
+delivery has accepted and been published, the user explicitly asks to stop, or
+the evidence shows further attempts cannot improve the result. In a repeated
+non-improving loop, change strategy, ask a concrete question, or call
+`fail_task` with the evidence; do not repeat the same build/delivery cycle.
+
 Only ask the user when the next action is genuinely blocked by missing secrets,
 missing credentials, or destructive ambiguity that the existing context cannot
 resolve. Otherwise choose the most reasonable next stage/goal and dispatch it.
@@ -611,19 +623,19 @@ until the Arbiter accepts / stalls / aborts. Focus on the SPECIFIC issues cited;
 NOT rework everything blindly; do NOT re-run requirements or architect unless the
 rejection indicates a fundamental contract problem.
 
-## Post-completion iteration (re-triggered on completed task)
+## Follow-up on an already delivered / failed / cancelled task
 
-- User sent a message to a completed task → call **refine** to analyze and generate improvement suggestions.
-- Call **question** with suggestions as multi-select options so the user picks which to roll in.
-- Then **restart_from_stage(requirements)** to begin a new cycle.
-- If refine throws (non-JSON output), do NOT retry it — call question directly asking what to improve, then restart_from_stage based on the answer. If no specific request, end the turn.
+- The status label is context only. The latest user message decides the work.
+- If the message asks for a concrete change, continue in the SAME task and choose the cheapest valid tool: `build({ request })`, `modify_goal`, `architect`, or `restart_from_stage`.
+- If the message is exploratory after an accepted delivery, `refine` may analyze the project and suggest improvements, but it is not a mandatory gate before concrete requested work.
+- If the prior status was failed/cancelled and the user wants to continue, continue directly from evidence; do not require a separate retry ceremony unless `retry_task` is specifically the cleanest way to re-enter the existing shell.
 
 ## On operator_message
 
 - The latest user message is shown in the trigger text. Read it carefully before any tool call.
 - If the user is asking the current work to stop, use **cancel_task**.
 - If the user is refining the current approach and the task should continue under the same run, use **inject_operator_message**.
-- If the task is failed or cancelled and the user wants it to continue, use **retry_task**.
+- If the task is failed or cancelled and the user wants it to continue, continue in the same task; use **retry_task** only when you need the existing retry tool's reset semantics, not because the status label requires it.
 - If the user is changing strategy rather than just adding guidance, prefer **restart_from_stage** over blind continuation.
 - Do not ignore operator_message just because goals are active; this trigger exists so you can intervene mid-execution.
 

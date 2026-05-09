@@ -45,8 +45,6 @@ export function progressStatus(status: EngineTaskStatus) {
 export function budgetRow(input?: z.infer<typeof Budget>): EngineBudget | undefined {
   if (!input) return undefined
   return {
-    max_runs: input.maxRuns,
-    max_fix_runs: input.maxFixRuns,
     max_executor_groups: input.maxExecutorGroups,
   }
 }
@@ -65,20 +63,6 @@ export async function effectiveMaxExecutorGroups(task: TaskRow): Promise<number>
   if (typeof budgetMax === "number" && budgetMax >= 1) return budgetMax
   const cfg = await EngineConfig.get()
   return cfg.max_executor_groups
-}
-
-export async function effectiveMaxRuns(task: TaskRow): Promise<number> {
-  const budgetMax = (task.budget as EngineBudget | null)?.max_runs
-  if (typeof budgetMax === "number" && budgetMax >= 1) return budgetMax
-  const cfg = await EngineConfig.get()
-  return cfg.max_runs
-}
-
-export async function effectiveMaxFixRuns(task: TaskRow): Promise<number> {
-  const budgetMax = (task.budget as EngineBudget | null)?.max_fix_runs
-  if (typeof budgetMax === "number" && budgetMax >= 1) return budgetMax
-  const cfg = await EngineConfig.get()
-  return cfg.max_fix_runs
 }
 
 /**

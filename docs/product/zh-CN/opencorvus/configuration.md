@@ -84,8 +84,7 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
   "assistant": {
     "requirements": { "max_steps": 20 },
     "evaluator": { "tier": "standard" },  // core | standard | full
-    "max_runs": 3,
-    "max_goal_retries": 2
+    "max_executor_groups": 3
   }
 }
 ```

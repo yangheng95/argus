@@ -31,8 +31,7 @@ import { deriveTaskStatus } from "./task-status"
  *  the function-return type for the live derivation. */
 export type EngineGoalStatus = "pending" | "running" | "passed" | "failed"
 import {
-  effectiveMaxFixRuns,
-  effectiveMaxRuns,
+  effectiveMaxExecutorGroups,
   clarificationTranscriptSection,
   operatorNotesSection,
 } from "./helpers"
@@ -171,9 +170,8 @@ export interface TaskDesc {
   collaboration_closure?: CollaborationClosureDesc
   budget: {
     runs_used: number
-    max_runs: number
     fix_count: number
-    max_fix_runs: number
+    max_executor_groups: number
   }
   recent_verdict?: DeliveryVerdictDesc
   /** Recent orchestrator-stream-error artifacts (newest first, capped at
@@ -400,10 +398,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   }
 
   const totalRuns = findRuns(task.id).length
-  const [maxRuns, maxFixRuns] = await Promise.all([
-    effectiveMaxRuns(task),
-    effectiveMaxFixRuns(task),
-  ])
+  const maxExecutorGroups = await effectiveMaxExecutorGroups(task)
   const fixCount = activeRunForTask?.retry_count ?? 0
 
   const history = readHistory(task.id)
@@ -462,9 +457,8 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     collaboration_closure: collaborationClosure,
     budget: {
       runs_used: totalRuns,
-      max_runs: maxRuns,
       fix_count: fixCount,
-      max_fix_runs: maxFixRuns,
+      max_executor_groups: maxExecutorGroups,
     },
     recent_verdict: verdict,
     recent_stream_failures: recentStreamFailures.length > 0 ? recentStreamFailures : undefined,
@@ -605,9 +599,13 @@ export function renderTaskDescription(desc: TaskDesc): string {
   }
   if (desc.error) lines.push(`Error: ${desc.error}`)
   lines.push(
-    `Budget: ${desc.budget.runs_used}/${desc.budget.max_runs} runs, ` +
-      `${desc.budget.fix_count}/${desc.budget.max_fix_runs} fixes, ` +
-      `${desc.iterations_count} delivery iterations`,
+    `Runtime facts: ${desc.budget.runs_used} run(s) recorded, ` +
+      `${desc.budget.fix_count} fix attempt(s) on the active run, ` +
+      `${desc.iterations_count} delivery iteration(s), ` +
+      `goal_parallelism=${desc.budget.max_executor_groups}.`,
+  )
+  lines.push(
+    "No numeric run/fix budget is enforced by the host. Decide whether to continue, change strategy, ask the operator, or fail_task from the evidence above and below.",
   )
 
   const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals)

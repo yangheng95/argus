@@ -1303,8 +1303,6 @@ export namespace Config {
             })
             .optional()
             .describe("Operator-toggled debug behaviour. Settings here are diagnostic — they affect host runtime decisions and prompt content."),
-          max_runs: z.number().int().min(1).optional().describe("Maximum total task runs"),
-          max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure"),
           max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups"),
           default_workflow: z.string().optional().describe("Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID"),
           workflows: z

@@ -91,7 +91,7 @@ Common question: "Why not let one big LLM prompt do everything?"
 
 1. **Each stage has a different I/O contract** — spec produces a structured specification, plan produces ordered steps, eval produces verdict + evidence. Mixing them makes the LLM skip checks.
 2. **Failures need targeted rollback** — spec wrong → re-spec; plan wrong → re-plan; execution wrong → retry. Monolithic agents can't do this layering.
-3. **Budget control** — each stage has its own timeout and retry cap, configurable via `assistant.requirements.max_steps`, `evaluator.tier`, `max_runs`, `max_goal_retries`.
+3. **Parallelism control** — streaming activity timeouts remain layer-specific; `assistant.max_executor_groups` controls per-task goal/build parallelism and defaults to 3.
 4. **Human-machine interaction granularity** — permission approvals and follow-up messages live in the task loop, not polluting a single LLM context.
 
 ## Worktree parallelism

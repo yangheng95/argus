@@ -60,13 +60,11 @@ import {
   requireTask,
   type TaskRow,
 } from "@/engine/store"
-import { effectiveMaxFixRuns } from "@/engine/helpers"
 import { describeTask, goalStatusByID, renderCollaborationClosure } from "@/engine/describe"
 import { isLiveGoalRunStatus } from "@/engine/catalog"
 import {
   GoalContractUpdateSchema,
 } from "@/pipeline/goal-contract.schema"
-import type { EngineBudget } from "@/engine/engine.sql"
 import { updateRun, updateTask } from "@/engine/state"
 import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
 
@@ -1623,28 +1621,6 @@ export function createOrchestratorTools(input: {
     ].filter(Boolean).join(", ")
 
     return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} NEXT: ${plan.nextAction}${freshRunID ? `(${freshRunID})` : ""}.`
-  }
-
-  async function restartTaskFromStageAndWake(input: {
-    stage: RestartStage
-    reason: string
-    detail?: string
-    stopReason: string
-  }) {
-    const summary = await restartTaskFromStage(input.stage, input.reason)
-    requestStopAfterCurrentStep(input.stopReason)
-    const { dispatchTaskLoop } = await import("@/engine/queue")
-    void dispatchTaskLoop({
-      taskID,
-      event: {
-        note: OrchestratorEventNote.stageRestart({
-          stage: input.stage,
-          reason: input.reason,
-          detail: input.detail ?? summary,
-        }),
-      },
-    })
-    return summary
   }
 
   // Agents that need to ask the user a question do so directly via
@@ -3471,7 +3447,7 @@ export function createOrchestratorTools(input: {
     }),
 
     retry_task: tool({
-      description: "Retry a failed or cancelled task when the user wants to continue from the latest state.",
+      description: "Retry the same task when the operator wants a fresh scheduling pass from the latest evidence.",
       inputSchema: z.object({
         reason: z.string().describe("Why you are retrying the task"),
       }),
@@ -4273,20 +4249,6 @@ export function createOrchestratorTools(input: {
             )
           }
 
-          // Fix-runs budget gate. `iteration` counts prior delivery rounds —
-          // every delivery_rework cycle increments it by one. Without this
-          // check the loop is unbounded: `--max-fix-runs` was rendered into
-          // the orchestrator describe context but never enforced, so the
-          // benchmark could spin indefinitely on the same rework prompt
-          // (observed in 2026-04-27 ainvest run: 4+ consecutive fix-build
-          // attempts all forgot `merge_back`, evaluator kept rejecting on
-          // the unchanged primary, and `startNewAttempt` happily opened a
-          // fresh attempt every time). When the budget is exhausted, refuse
-          // to dispatch yet another `delivery_rework` and yield a sharp
-          // signal so the orchestrator LLM must change strategy while keeping
-          // the task active. Compare with `>=` so a
-          // budget of N permits N fix runs (iterations 0..N-1 open new
-          // attempts; iteration N is the cutoff).
           const {
             findLatestDeliveryEvidenceManifest,
             findDeliveryEvidenceManifestHistory,
@@ -4297,49 +4259,6 @@ export function createOrchestratorTools(input: {
           const manifestFailureDetails = currentManifest
             ? formatDeliveryManifestFailureDetails(currentManifest)
             : []
-          const fixBudget = await effectiveMaxFixRuns(task)
-          if (iteration >= fixBudget) {
-            log.info("deliver: fix-runs budget exhausted — refusing delivery_rework", {
-              taskID,
-              iteration,
-              maxFixRuns: fixBudget,
-              issues: rejectionIssues.length,
-            })
-            try {
-              const { createDecisionLog } = await import("@/decision-log")
-              createDecisionLog(taskID).append({
-                phase: "delivery",
-                key: `delivery_budget_exhausted_${iteration}`,
-                value: `Fix-runs budget exhausted: iteration=${iteration} >= max_fix_runs=${fixBudget}. No more delivery_rework attempts will be opened.`,
-                reason: rejectionIssues.join("; "),
-              })
-            } catch {
-              /* best effort */
-            }
-            await trackStepComplete("deliver", undefined, true)
-            const restartSummary = await restartTaskFromStageAndWake({
-              stage: "plan",
-              reason:
-                `Delivery fix-runs budget exhausted at iteration ${iteration} ` +
-                `(max_fix_runs=${fixBudget}). ${verdict.summary}`,
-              detail:
-                `Automatic plan restart triggered after delivery exhausted identical fix runs. ` +
-                `Manifest failures: ${manifestFailureDetails.join(" | ") || "(none recorded)"}`,
-              stopReason: "delivery_restart_plan_budget_exhausted",
-            })
-            return SubAgentProtocol.yieldResult({
-              headline: `Delivery rejected and fix-runs budget exhausted (iteration=${iteration}, max_fix_runs=${fixBudget}). Task was automatically restarted from plan before any further build dispatch.`,
-              fields: [
-                ["issues_found", rejectionIssues],
-                ["manifest_failures", manifestFailureDetails],
-                ["iteration", String(iteration)],
-                ["max_fix_runs", String(fixBudget)],
-                ["agent_summary", verdict.summary],
-                ["restart", restartSummary],
-              ],
-              pointer: `verdict artifact ${verdictArtifactId}; budget exhaustion forced plan restart`,
-            })
-          }
           const priorManifests = currentManifest?.taskId
             ? findDeliveryEvidenceManifestHistory({
                 taskID: currentManifest.taskId,
@@ -4359,69 +4278,40 @@ export function createOrchestratorTools(input: {
               iteration,
               signatures: repeatedFailure.signatures.length,
             })
-            // Count prior repeated-signature notes for context only. r42
-            // showed that terminal-failing here stops unattended iteration
-            // before the orchestrator can change strategy from the persisted
-            // manifest facts.
-            let priorSignalCount = 0
-            const decisionLogModule = await import("@/decision-log")
             const { countPriorRepeatedDeliveryFailureSignals } =
               await import("@/delivery/manifest")
-            try {
-              priorSignalCount = countPriorRepeatedDeliveryFailureSignals(
-                decisionLogModule.createDecisionLog(taskID).readByPhase("delivery"),
-              )
-            } catch {
-              /* best effort */
-            }
-            try {
-              decisionLogModule.createDecisionLog(taskID).append({
-                phase: "delivery",
-                key: `delivery_repeated_failure_signature_${iteration}`,
-                value: `Repeated delivery failure signatures: ${repeatedFailure.signatures.join(" | ")}`,
-                reason: "Current DeliveryEvidenceManifest repeats the prior manifest failure set; another identical delivery_rework would re-run the same prompt without new information.",
-              })
-            } catch {
-              /* best effort */
-            }
-            await trackStepComplete("deliver", undefined, true)
-            const restartSummary = await restartTaskFromStageAndWake({
-              stage: "plan",
-              reason:
-                `Delivery repeated failure signatures at iteration ${iteration}. ${verdict.summary}`,
-              detail:
-                `Automatic plan restart triggered after repeated delivery evidence signatures: ` +
-                `${repeatedFailure.signatures.join(" | ")}`,
-              stopReason: "delivery_restart_plan_repeated_failures",
+            const priorSignalCount = countPriorRepeatedDeliveryFailureSignals(
+              createDecisionLog(taskID).readByPhase("delivery"),
+            )
+            createDecisionLog(taskID).append({
+              phase: "delivery",
+              key: `delivery_repeated_failure_signature_${iteration}`,
+              value: `Repeated delivery failure signatures: ${repeatedFailure.signatures.join(" | ")}`,
+              reason: "Current DeliveryEvidenceManifest repeats the prior manifest failure set; the orchestrator must change strategy, ask the operator, or fail_task from evidence instead of blindly repeating the same rework.",
             })
+            await trackStepComplete("deliver", undefined, true)
             return SubAgentProtocol.yieldResult({
-              headline: `Delivery rejected with repeated failure signatures (iteration=${iteration}). Task was automatically restarted from plan before any identical rework could repeat.`,
+              headline: `Delivery rejected with repeated failure signatures (iteration=${iteration}). No host rule restarted the plan; choose the next strategy from the manifest evidence.`,
               fields: [
                 ["failure_signatures", repeatedFailure.signatures],
                 ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
                 ["prior_repeated_signals", String(priorSignalCount)],
                 ["agent_summary", verdict.summary],
-                ["restart", restartSummary],
               ],
-              pointer: `verdict artifact ${verdictArtifactId}; repeated manifest failures forced plan restart`,
+              pointer: `verdict artifact ${verdictArtifactId}; repeated manifest failures require an orchestrator decision`,
             })
           }
           if (toReset.length === 0) {
-            try {
-              const { createDecisionLog } = await import("@/decision-log")
-              createDecisionLog(taskID).append({
-                phase: "delivery",
-                key: `delivery_task_scope_rejection_${iteration}`,
-                value: verdict.summary,
-                reason:
-                  "Delivery rejected at task scope: no rejection_details entry carried a concrete goal_id, " +
-                  "so no goal attempt was reopened. The orchestrator must fix the integrated deliverable " +
-                  "with build({ request }) or change strategy before calling deliver again.",
-              })
-            } catch {
-              /* best effort */
-            }
+            createDecisionLog(taskID).append({
+              phase: "delivery",
+              key: `delivery_task_scope_rejection_${iteration}`,
+              value: verdict.summary,
+              reason:
+                "Delivery rejected at task scope: no rejection_details entry carried a concrete goal_id, " +
+                "so no goal attempt was reopened. The orchestrator must fix the integrated deliverable " +
+                "with build({ request }) or change strategy before calling deliver again.",
+            })
             log.info("deliver: task-scope rejection processed without goal reset", {
               taskID,
               iteration,
@@ -4429,29 +4319,19 @@ export function createOrchestratorTools(input: {
               affected_goal_ids: rejectionAffectedGoalIDs,
             })
             await trackStepComplete("deliver", undefined, true)
-            const restartSummary = await restartTaskFromStageAndWake({
-              stage: "plan",
-              reason:
-                `Delivery rejected at task scope on iteration ${iteration}; no actionable goal attribution. ${verdict.summary}`,
-              detail:
-                `Automatic plan restart triggered because delivery found an integrated failure ` +
-                `with no concrete goal_id attribution. Manifest failures: ${manifestFailureDetails.join(" | ") || "(none recorded)"}`,
-              stopReason: "delivery_restart_plan_task_scope",
-            })
             return SubAgentProtocol.yieldResult({
               headline:
                 `Delivery rejected at task scope — iteration ${iteration}; no goal attempts were reopened. ` +
-                `Task was automatically restarted from plan to rebuild the decomposition.`,
+                `No host rule restarted the plan; choose build({ request }), architect, question, or fail_task from the evidence.`,
               fields: [
                 ["issues_found", rejectionIssues],
                 ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
                 ["agent_summary", verdict.summary],
-                ["restart", restartSummary],
               ],
               pointer: currentManifest
-                ? `verdict artifact ${verdictArtifactId}; manifest ${currentManifest.id}; task-scope rejection forced plan restart`
-                : `verdict artifact ${verdictArtifactId}; task-scope rejection forced plan restart`,
+                ? `verdict artifact ${verdictArtifactId}; manifest ${currentManifest.id}; task-scope rejection requires an orchestrator decision`
+                : `verdict artifact ${verdictArtifactId}; task-scope rejection requires an orchestrator decision`,
             })
           }
           // Per-goal rejection slice: the delivery agent already attributed

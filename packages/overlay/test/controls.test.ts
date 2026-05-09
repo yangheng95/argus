@@ -32,9 +32,7 @@ test(
       status: "running",
       sessionID: "session-1",
       budget: {
-        maxRuns: 2,
-        maxReplans: 1,
-        maxEvaluations: 3,
+        maxExecutorGroups: 3,
       },
       time: {
         created: now - 90_000,

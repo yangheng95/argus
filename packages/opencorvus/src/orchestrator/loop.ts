@@ -17,7 +17,6 @@
  * What this owns:
  *   - Per-taskID serial chain (so concurrent wakes don't double-run).
  *   - Marking queued → active so the cwd-scoped queue sees ownership.
- *   - Terminal-state short-circuit when no caller event accompanies the wake.
  *
  * What this does NOT own:
  *   - Deciding what the orchestrator does on wake (LLM reads describe).
@@ -30,7 +29,7 @@ import { Log } from "@/util/log"
 import type { RuntimeHooks } from "@/engine/runtime-hooks"
 import { Orchestrator, type OrchestratorEvent } from "@/orchestrator/agent"
 import { findTask } from "@/engine"
-import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
+import { isTaskQueued } from "@/engine/task-status"
 
 const log = Log.create({ service: "orchestrator-loop" })
 
@@ -183,14 +182,6 @@ async function runTaskLoopInner(input: {
   const task = findTask(taskID)
   if (!task) {
     log.error("task not found, exiting loop", { taskID })
-    return
-  }
-
-  // Terminal-state guard: a wake without an event has nothing to add.
-  // Operator messages / retries arrive as event.note and ARE allowed to wake
-  // terminal tasks so the orchestrator can revive them.
-  if (isTaskTerminal(task) && !event) {
-    log.info("task in terminal state, exiting loop", { taskID, status: deriveTaskStatus(task) })
     return
   }
 
