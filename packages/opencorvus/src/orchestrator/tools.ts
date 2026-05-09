@@ -4927,12 +4927,13 @@ export function createOrchestratorTools(input: {
         "concrete guidance for the next attempt — the goal contract (objective / acceptance_specs / " +
         "owned_paths) is preserved untouched and your `request` is rendered as a separate " +
         "'Retry Guidance From Orchestrator' section ahead of historical retry feedback, so filling it " +
-        "never costs you any architect-committed contract. `build({ request })` without goalID is a task-level " +
+        "never costs you any architect-committed contract. `build({ request, directBuildIntent })` without goalID is a task-level " +
         "direct build. It is supported for explicit `kind=build` tasks, whole-task rework after delivery " +
         "rejection, and operator/orchestrator decisions to bypass goal decomposition for a scoped workflow " +
         "task. For fresh `kind=workflow` tasks, requirements → architect → per-goal build remains the " +
-        "recommended path, but this tool does not hard-reject a direct build when the orchestrator gives a " +
-        "specific reason. " +
+        "recommended path. Fresh workflow direct builds must declare directBuildIntent='modify_files'. " +
+        "directBuildIntent='inspect_only' is not a workflow execution path; use analyze_intent / requirements / " +
+        "architect and then per-goal build instead. " +
         "After build returns, you MUST call `deliver` next: build does NOT auto-complete the task; the only " +
         "way to mark a task accepted is through delivery's adversarial verification. Build → deliver loops " +
         "until Arbiter accepts (or hits stalled/abort). On rejection, call build again with " +
@@ -4959,11 +4960,23 @@ export function createOrchestratorTools(input: {
           .describe(
             "Optional goal id this build is scoped to. Set when build is invoked as a per-goal worker inside the pipeline workflow. Omit for task-level direct builds.",
           ),
+        directBuildIntent: z
+          .enum(["modify_files", "inspect_only"])
+          .optional()
+          .describe(
+            "Required for task-level direct builds on kind=workflow tasks. Use modify_files only when the direct build is expected to change project files. Use inspect_only when the requested work is read-only exploration / investigation / analysis; workflow tasks reject that path so the orchestrator must use stage agents instead.",
+          ),
       }),
-      execute: async ({ request = "", reason, goalID }) => {
+      execute: async ({ request = "", reason, goalID, directBuildIntent }) => {
         const task = requireTask(taskID)
         const requestText = request.trim()
-        log.info("build tool invoked", { taskID, reason, requestLen: request.length, goalID: goalID || "" })
+        log.info("build tool invoked", {
+          taskID,
+          reason,
+          requestLen: request.length,
+          goalID: goalID || "",
+          directBuildIntent: directBuildIntent ?? "",
+        })
 
         const designGate = requireDesignAnalysisBefore("build", task)
         if (designGate) return designGate
@@ -4981,6 +4994,23 @@ export function createOrchestratorTools(input: {
         if (isTaskLevelBuild) {
           if (requestText.length === 0) {
             return `build: rejected task-level build. request is required when build is not scoped to a goal.`
+          }
+          if (task.kind === "workflow") {
+            if (!directBuildIntent) {
+              return (
+                `build: rejected task-level workflow build. directBuildIntent is required when build is not scoped ` +
+                `to a goal; use directBuildIntent="modify_files" only for a scoped direct implementation. ` +
+                `For read-only exploration / investigation / analysis, call analyze_intent / requirements / ` +
+                `architect and then build({ goalID }) instead.`
+              )
+            }
+            if (directBuildIntent === "inspect_only") {
+              return (
+                `build: rejected inspect-only task-level workflow build. Workflow exploration belongs in the ` +
+                `stage-agent path (analyze_intent / requirements / architect) so the task gets durable ` +
+                `requirements, acceptance specs, and per-goal build contracts before execution.`
+              )
+            }
           }
           await switchExplicitBuildTaskToDirectWorkflow(attachedGoalID)
           await trackStepStart("build")
