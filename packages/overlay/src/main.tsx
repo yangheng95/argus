@@ -18,10 +18,8 @@ import { WorkspaceLayoutControls } from "./components/WorkspaceLayoutControls";
 import { LeftPanelHeaderCollapseControl, RightPanelHeaderCollapseControl } from "./components/PanelHeaderCollapseControl";
 import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/TitlebarMenubar";
 import { ConnectionBadge } from "./components/ConnectionBadge";
-import { FilesSection } from "./components/FilesSection";
 import { FrontendPreviewPanel } from "./components/FrontendPreviewPanel";
 import { AgentWorkflowPanel } from "./components/AgentWorkflowPanel";
-import { DeliveryPanel, deliveryPanelDelivery } from "./components/Board";
 import { LogViewer } from "./components/LogViewer";
 import {
   WorkspacePanel,
@@ -911,14 +909,7 @@ createEffect(() => {
   refreshFrontendPreview();
 });
 
-// ── Mount: ChangesPanel ──
-
-const filesSectionMountEl = document.getElementById("solidFilesSectionMount");
-if (filesSectionMountEl) {
-  render(() => <FilesSection />, filesSectionMountEl);
-}
-
-// ── Mount: Board (Goal Workflow Graph) ──
+// ── Mount: Board (right-panel task workflow sections) ──
 
 const boardMountEl = document.getElementById("solidBoardMount");
 if (boardMountEl) {
@@ -933,27 +924,6 @@ if (boardMountEl) {
       />
     ),
     boardMountEl,
-  );
-}
-
-// ── Mount: DeliveryPanel ──
-// Surfaces every delivery activity: deterministic gate checks, runtime flows,
-// specialist reviews, agent verdict. Without this mount the DeliveryPanel
-// component existed in components/Board.tsx but never reached the DOM, so the
-// overlay rendered nothing for any delivery state — even though the bench
-// emitted delivery.ready / delivery.evidence.updated and the board hydrated
-// candidateDelivery.evidenceManifest. Reactive on boardStore.board so each
-// snapshot refresh re-renders the rows.
-
-const deliveryMountEl = document.getElementById("solidDeliveryMount");
-if (deliveryMountEl) {
-  render(
-    () => (
-      <DeliveryPanel
-        delivery={deliveryPanelDelivery(boardStore.board as any)}
-      />
-    ),
-    deliveryMountEl,
   );
 }
 

@@ -17,6 +17,7 @@ import { activeTone, verdictTone } from "../utils/verdict-tone";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
 import { ArchitectPanel } from "./ArchitectPanel";
+import { FilesSection } from "./FilesSection";
 import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel";
 import { InteractionCardList, type InteractionData } from "./InteractionCard";
 import { taskScopeSectionVisibility } from "../utils/task-scope-sections";
@@ -210,6 +211,7 @@ export function DeliveryEvidenceGroup(props: DeliveryEvidenceGroupProps) {
 
 interface DeliveryPanelProps {
   delivery: any;
+  phaseState?: "active" | "";
 }
 
 const LIVE_RUN_STATUSES = new Set(["queued", "accepted", "running", "blocked"]);
@@ -286,6 +288,7 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
               : undefined
       }
       defaultOpen
+      attr:data-phase-state={props.phaseState || undefined}
     >
     <Show
       when={props.delivery}
@@ -659,82 +662,87 @@ export function Board(props: BoardProps) {
           context now use the per-session 📋 Copy button on each TracePanel
           to dump the JSON dump into a log viewer or LLM. */}
 
-      <Show when={taskScopeSections().requirements}>
-        <SectionFrame
-          id="requirementsSection"
-          title={t("workflow.requirements")}
-          icon="spec"
-          bodyId="requirementsBody"
-          badgeId="requirementsBadge"
-          phaseState={phaseFor("requirements")}
-          badgeText={(() => {
-            const rs = requirements() ?? [];
-            if (rs.length > 0) {
+      <div class="workflow-section-stack" data-ui="workflow-section-stack">
+        <Show when={taskScopeSections().requirements}>
+          <SectionFrame
+            id="requirementsSection"
+            title={t("workflow.requirements")}
+            icon="spec"
+            bodyId="requirementsBody"
+            badgeId="requirementsBadge"
+            phaseState={phaseFor("requirements")}
+            badgeText={(() => {
+              const rs = requirements() ?? [];
+              if (rs.length > 0) {
+                const passed = rs.filter((r: any) => r.status === "passed").length;
+                return `${passed}/${rs.length}`;
+              }
+              if (isRequirementsGenerating()) return t("common.active");
+              return goalWorkflows().length > 0 ? "—" : "";
+            })()}
+            badgeTone={(() => {
+              const rs = requirements() ?? [];
+              if (rs.length === 0) return activeTone(isRequirementsGenerating());
               const passed = rs.filter((r: any) => r.status === "passed").length;
-              return `${passed}/${rs.length}`;
-            }
-            if (isRequirementsGenerating()) return t("common.active");
-            return goalWorkflows().length > 0 ? "—" : "";
+              const failed = rs.filter((r: any) => r.status === "failed").length;
+              return verdictTone({ passed, failed, total: rs.length });
+            })()}
+          >
+            <RequirementsPanel
+              requirements={requirements()}
+              specContent={spec()?.content}
+              isGenerating={isRequirementsGenerating()}
+              streamingMessages={requirementsMessages()}
+            />
+          </SectionFrame>
+        </Show>
+
+        <Show when={taskScopeSections().architect}>
+          <SectionFrame
+            id="architectSection"
+            title={t("workflow.architect")}
+            icon="plan"
+            bodyId="architectBody"
+            badgeId="architectBadge"
+            phaseState={phaseFor("architect")}
+            badgeText={architect() ? String(architect()!.contractCount) : ""}
+            badgeTone={activeTone(Boolean(architect()))}
+          >
+            <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
+          </SectionFrame>
+        </Show>
+
+        <SectionFrame
+          id="goalWorkflowsSection"
+          title={t("workflow.goals")}
+          icon="goals"
+          bodyId="goalWorkflowsBody"
+          badgeId="goalWorkflowsBadge"
+          phaseState={phaseFor("goalWorkflows")}
+          badgeText={(() => {
+            const gw = goalWorkflows();
+            const passed = gw.filter((g) => g.goalStatus === "passed").length;
+            return gw.length > 0 ? `${passed}/${gw.length}` : "";
           })()}
+          badgeVariant="metric"
           badgeTone={(() => {
-            const rs = requirements() ?? [];
-            if (rs.length === 0) return activeTone(isRequirementsGenerating());
-            const passed = rs.filter((r: any) => r.status === "passed").length;
-            const failed = rs.filter((r: any) => r.status === "failed").length;
-            return verdictTone({ passed, failed, total: rs.length });
+            const gw = goalWorkflows();
+            if (gw.length === 0) return "";
+            const passed = gw.filter((g) => g.goalStatus === "passed").length;
+            const failed = gw.filter((g) => g.goalStatus === "failed").length;
+            return verdictTone({ passed, failed, total: gw.length });
           })()}
         >
-          <RequirementsPanel
-            requirements={requirements()}
-            specContent={spec()?.content}
-            isGenerating={isRequirementsGenerating()}
-            streamingMessages={requirementsMessages()}
+          <GoalWorkflowList
+            goals={goalWorkflows()}
+            onEditGoal={props.onEditGoal}
+            onDeleteGoal={props.onDeleteGoal}
           />
         </SectionFrame>
-      </Show>
 
-      <Show when={taskScopeSections().architect}>
-        <SectionFrame
-          id="architectSection"
-          title={t("workflow.architect")}
-          icon="plan"
-          bodyId="architectBody"
-          badgeId="architectBadge"
-          phaseState={phaseFor("architect")}
-          badgeText={architect() ? String(architect()!.contractCount) : ""}
-          badgeTone={activeTone(Boolean(architect()))}
-        >
-          <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
-        </SectionFrame>
-      </Show>
-
-      <SectionFrame
-        id="goalWorkflowsSection"
-        title={t("workflow.goals")}
-        icon="goals"
-        bodyId="goalWorkflowsBody"
-        badgeId="goalWorkflowsBadge"
-        phaseState={phaseFor("goalWorkflows")}
-        badgeText={(() => {
-          const gw = goalWorkflows();
-          const passed = gw.filter((g) => g.goalStatus === "passed").length;
-          return gw.length > 0 ? `${passed}/${gw.length}` : "";
-        })()}
-        badgeVariant="metric"
-        badgeTone={(() => {
-          const gw = goalWorkflows();
-          if (gw.length === 0) return "";
-          const passed = gw.filter((g) => g.goalStatus === "passed").length;
-          const failed = gw.filter((g) => g.goalStatus === "failed").length;
-          return verdictTone({ passed, failed, total: gw.length });
-        })()}
-      >
-        <GoalWorkflowList
-          goals={goalWorkflows()}
-          onEditGoal={props.onEditGoal}
-          onDeleteGoal={props.onDeleteGoal}
-        />
-      </SectionFrame>
+        <DeliveryPanel delivery={delivery()} phaseState={phaseFor("delivery")} />
+        <FilesSection />
+      </div>
 
       {/* TODO(2026-04-20): 评估指标 / 交付 / interactions 三个板块同步下线待重做。
           理由同上——避免与 goal 卡片信息重复；重做时评估每块是否该独立 section
