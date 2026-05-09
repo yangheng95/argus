@@ -8,8 +8,9 @@ import PROMPT_GENERATE from "@/agent/generate.txt"
  *  at runtime. Surfacing them in the catalog is a UX trap: users edit the
  *  card, hit Save, and nothing changes.
  *  - orchestrator → dynamic prompt built per-trigger in `buildSystemParts`;
- *    the whole core_header + workflow state is reconstructed from DB every
- *    invocation, so a static override has no place to land.
+ *    the small Agent.Info prompt only prevents inheritance of the generic
+ *    assistant core header, while workflow state is reconstructed from DB every
+ *    invocation, so a user-editable static override has no place to land.
  *  - summary → `PROMPT_SUMMARY` is attached to the agent registry but has
  *    no consumer; `task-api/index.ts::generateFollowup` only picks a model
  *    via `resolveAgentModel("summary")` and constructs its own prompt. */
