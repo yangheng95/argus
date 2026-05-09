@@ -399,7 +399,7 @@ export type EventDeliveryEvidenceUpdated = {
     failedRuntimeFlowCount: number
     failedReviewCount: number
     failureDetails: Array<{
-      kind: "check" | "coverage" | "runtime" | "review"
+      kind: "readiness" | "check" | "coverage" | "runtime" | "review"
       id: string
       name: string
       status?: string
@@ -2271,7 +2271,7 @@ export type Config = {
    */
   enabled_providers?: Array<string>
   /**
-   * Model to use in the format of provider/model, eg anthropic/claude-2
+   * Model to use in the format of provider/model, eg alibaba-coding-plan-cn/kimi-k2.5
    */
   model?: string
   /**
