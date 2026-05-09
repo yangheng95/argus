@@ -1,8 +1,7 @@
 import { For, createSignal, onCleanup, onMount } from "solid-js";
 import { Portal } from "solid-js/web";
 import { type ProjectEditorID } from "../services/host-transport";
-import { openDirectoryInEditor, PROJECT_EDITORS } from "../services/workspace";
-import { settingsStore } from "../store/settings";
+import { activeDirectory, openDirectoryInEditor, PROJECT_EDITORS } from "../services/workspace";
 import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
 
@@ -23,7 +22,7 @@ const EDITOR_ICON_SIZES: Record<ProjectEditorID, number> = {
 };
 
 export function WorkspaceEditorLaunchers() {
-  const disabled = () => !settingsStore.directory;
+  const disabled = () => !activeDirectory();
   const [open, setOpen] = createSignal(false);
   const [menuPosition, setMenuPosition] = createSignal<{ top: number; right: number }>({
     top: 0,

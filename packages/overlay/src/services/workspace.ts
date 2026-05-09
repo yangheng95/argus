@@ -366,10 +366,10 @@ export async function pickFiles(start?: string): Promise<string[]> {
 // ── Directory helper functions ──
 
 /**
- * Returns the currently active working directory from the settings store.
+ * Returns the currently active working directory for project-scoped UI.
  */
 export function activeDirectory(): string {
-  return settingsStore.directory;
+  return boardStore.board?.task?.directory || settingsStore.directory || "";
 }
 
 // ── Recent directories ──
