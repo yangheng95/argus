@@ -262,11 +262,130 @@ describe("orchestrator tools", () => {
         const result = await tools.build.execute({
           request: "Implement the page directly.",
           reason: "Scoped workflow task; direct build is enough.",
+          directBuildIntent: "modify_files",
         }, {} as any)
 
         expect(result).toContain("Build agent finished")
         expect(result).toContain("Direct workflow build completed")
         expect(workflowState.workflowID).toBe("pipeline")
+      },
+    })
+  })
+
+  test("workflow task-level build requires directBuildIntent before starting build agent", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_build_intent_${stamp}`
+    const taskID = `tsk_build_intent_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+
+    Database.use((db) => {
+      db.insert(ProjectTable).values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "Build workflow intent test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      }).run()
+      db.insert(EngineTaskTable).values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Build workflow intent task",
+        request: "Verify workflow task-level build intent is explicit",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      }).run()
+    })
+
+    buildAgentRunImpl = async () => {
+      throw new Error("BuildAgent.run must not start when workflow directBuildIntent is missing")
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "build workflow intent test" })
+        const workflowState = createWorkflowState(pipeline)
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        const result = await tools.build.execute({
+          request: "Implement the page directly.",
+          reason: "Scoped workflow task; direct build is enough.",
+        }, {} as any)
+
+        expect(result).toContain("rejected task-level workflow build")
+        expect(result).toContain("directBuildIntent is required")
+      },
+    })
+  })
+
+  test("workflow task-level inspect-only build is rejected before starting build agent", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_build_inspect_${stamp}`
+    const taskID = `tsk_build_inspect_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+
+    Database.use((db) => {
+      db.insert(ProjectTable).values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "Build workflow inspect test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      }).run()
+      db.insert(EngineTaskTable).values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Build workflow inspect task",
+        request: "Verify inspect-only workflow direct build is blocked",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      }).run()
+    })
+
+    buildAgentRunImpl = async () => {
+      throw new Error("BuildAgent.run must not start for inspect-only workflow direct build")
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "build workflow inspect test" })
+        const workflowState = createWorkflowState(pipeline)
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        const result = await tools.build.execute({
+          request: "Explore the component tree without changing files.",
+          reason: "Need read-only exploration before implementation.",
+          directBuildIntent: "inspect_only",
+        }, {} as any)
+
+        expect(result).toContain("rejected inspect-only task-level workflow build")
+        expect(result).toContain("stage-agent path")
+        expect(result).toContain("per-goal build contracts")
       },
     })
   })

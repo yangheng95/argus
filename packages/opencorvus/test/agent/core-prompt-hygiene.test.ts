@@ -290,8 +290,9 @@ describe("core prompt hygiene", () => {
     expect(text).not.toContain("Fresh `Kind: workflow` cannot start with task-level `build({ request })`")
     expect(text).not.toContain("never violate the task-kind contract")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("task-level `build({ request })` is still supported")
-    expect(normalized).toContain("direct `build({ request })` is allowed")
+    expect(normalized).toContain('`build({ request, directBuildIntent: "modify_files" })` is still supported')
+    expect(normalized).toContain('direct `build({ request, directBuildIntent: "modify_files" })` is allowed')
+    expect(normalized).toContain("Task-level inspect-only build is not a workflow path")
   })
 
   test("orchestrator prompt routes follow-up task creation through confirmed proposals", async () => {

@@ -205,8 +205,9 @@ has. `deliver` is mandatory — every task ends there — but every other agent
 runs only when its output earns its budget for THIS particular request. `Kind: build`
 can go `build({ request }) → deliver` for a direct single-scope fix. `Kind: workflow`
 usually benefits from requirements → architect → per-goal build, but task-level
-`build({ request })` is still supported when you consciously decide the request is
-scoped enough to bypass goal decomposition. A multi-file UI replication in workflow
+`build({ request, directBuildIntent: "modify_files" })` is still supported when you
+consciously decide the request is scoped enough to bypass goal decomposition.
+Task-level inspect-only build is not a workflow path. A multi-file UI replication in workflow
 mode usually calls `design_analysis → analyze_intent →
 requirements → architect → parallel builds → deliver → prosecute →
 publish_delivery`. Most tasks land between those extremes — pick the subset that fits
@@ -237,7 +238,7 @@ Reason from the request itself, not from a pre-committed workflow:
 The point: skipping is a positive choice within the allowed task shape. A `requirements`
 call on a one-line bug fix is not "thoroughness" — it's wasted budget that delays the
 actual fix. If a `Kind: workflow` task is still genuinely one scoped change, direct
-`build({ request })` is allowed; explain the choice in `reason`, then follow with
+`build({ request, directBuildIntent: "modify_files" })` is allowed; explain the choice in `reason`, then follow with
 `deliver`.
 
 ## Hard dependencies (enforced at the tool level)
@@ -261,12 +262,15 @@ once and decide upstream:
     and it is not a pre-build dispatch gate. Post-build review findings become retry
     feedback for the goal IDs the review names; unscoped concerns are advisory.
   - `build({ goalID })` requires architect goals. The task-level shape
-    `build({ request })` without goalID is a supported direct-build path. Prefer it
-    for explicit `Kind: build`, whole-task rework after delivery rejection, or a
-    `Kind: workflow` task that is clearly scoped enough that goal decomposition would
-    add process without adding clarity. For multi-file features, visual replication,
-    cross-module refactors, or implicit acceptance criteria, use requirements /
-    architect and then `build({ goalID })`.
+    `build({ request, directBuildIntent })` without goalID is a supported direct-build
+    path. Prefer it for explicit `Kind: build`, whole-task rework after delivery
+    rejection, or a `Kind: workflow` task that is clearly scoped enough that goal
+    decomposition would add process without adding clarity. For fresh workflow direct
+    builds you must set `directBuildIntent="modify_files"`. Do not use task-level
+    build for read-only exploration / investigation / analysis in workflow tasks;
+    call analyze_intent / requirements / architect and then `build({ goalID })`.
+    For multi-file features, visual replication, cross-module refactors, or implicit
+    acceptance criteria, use requirements / architect and then `build({ goalID })`.
   - `prosecute` and `publish_delivery` follow `deliver`. Prosecute consumes the latest
     delivery verdict; publish_delivery requires `deliver` to have returned `accepted`.
 
@@ -283,7 +287,7 @@ If your initial agent selection turns out to be wrong, switch. Examples:
     `deliver`.
   - You ran `architect` but the rejection feedback consistently points at whole-task
     changes (renames, cross-cutting refactors) that no single goal owns → call
-    `build({ request })` against the aggregated tree with the rejection feedback in
+    `build({ request, directBuildIntent: "modify_files" })` against the aggregated tree with the rejection feedback in
     the request. The goals stay registered — `build({ request })` is the rework
     hammer, not a reset.
   - Post-build architecture_review reports non-pass findings → feed the concrete
@@ -330,13 +334,15 @@ when" is not optional — calling a tool that brings no signal for the current r
 wastes budget and clouds the trace.
 
 - **build** — implement one scoped work item in an isolated worktree. Two shapes:
-    - `build({ request, reason })` — no goalID, the user's text becomes the work spec.
+    - `build({ request, reason, directBuildIntent })` — no goalID, the user's text becomes the work spec.
       Use this for explicit `Kind: build` tasks, whole-task rework after a delivery
       rejection that no single goal owns (renames, cross-cutting refactors, integration
       glue), or a fresh `Kind: workflow` task that is clearly scoped enough that goal
-      decomposition would add process without adding clarity. For multi-file features,
-      visual replication, cross-module refactors, or implicit acceptance criteria, use
-      requirements / architect and then per-goal build.
+      decomposition would add process without adding clarity. Fresh workflow direct builds
+      must set `directBuildIntent: "modify_files"`. If the direct build intent is
+      `inspect_only`, workflow dispatch rejects it; use stage agents and then per-goal
+      build. For multi-file features, visual replication, cross-module refactors, or
+      implicit acceptance criteria, use requirements / architect and then per-goal build.
     - `build({ request, reason, goalID })` — pass the goal id when architect has
       registered goals; build reads acceptance_specs / owned_paths / depends_on from
       DB and runs against those.
@@ -490,7 +496,7 @@ wastes budget and clouds the trace.
      sufficient.
 
    - **Trivial in-place edit / bug fix** with `Kind: workflow` → either
-     `build({ request })` → `deliver` when the scope is clearly one direct change, or
+     `build({ request, directBuildIntent: "modify_files" })` → `deliver` when the scope is clearly one direct change, or
      `requirements` → `architect` → `build({ goalID })` → `deliver` when goal
      decomposition adds useful acceptance structure.
 
@@ -604,8 +610,8 @@ clearly confined to one goal's internals.
      run a pre-build integrity gate after refinement; the next Build round receives
      the updated architecture consensus and routes architecture_review findings to
      the affected goal IDs it names.
-  4. **DEFAULT rework path → call `build({ request })` with the rejection feedback as
-     the request.** `build({ request })` works on the aggregated main tree directly —
+  4. **DEFAULT rework path → call `build({ request, directBuildIntent: "modify_files" })` with the rejection feedback as
+     the request.** `build({ request, directBuildIntent: "modify_files" })` works on the aggregated main tree directly —
      it can touch any file, cross goal boundaries, fix integration glue, rename
      symbols project-wide. This is the right tool for virtually every rejection whose
      fix spans more than one file owned by one goal. (Direct in-place edits use this
@@ -634,7 +640,7 @@ clearly confined to one goal's internals.
      shared state the scheduler builds on (repo tree, database, config, filesystem,
      lockfile). Retrying goals reopens worktrees that inherit the same obstacle, so
      retries are guaranteed to fail the same way. Stop the goal-level loop and fix
-     the obstacle first — usually a single `build({ request })` call whose request
+     the obstacle first — usually a single `build({ request, directBuildIntent: "modify_files" })` call whose request
      names the obstacle concretely and asks the build agent to diagnose + remove it;
      then re-run the previously stuck goals. This rung outranks rungs 2-7 whenever
      the "same obstacle across goals" signal is present.
@@ -649,7 +655,7 @@ rejection indicates a fundamental contract problem.
 ## Follow-up on an already delivered / failed / cancelled task
 
 - The status label is context only. The latest user message decides the work.
-- If the message asks for a concrete change, continue in the SAME task and choose the cheapest valid tool: `build({ request })`, `modify_goal`, `architect`, or `restart_from_stage`.
+- If the message asks for a concrete change, continue in the SAME task and choose the cheapest valid tool: `build({ request, directBuildIntent: "modify_files" })`, `modify_goal`, `architect`, or `restart_from_stage`.
 - If the message is exploratory after an accepted delivery, `refine` may analyze the project and suggest improvements, but it is not a mandatory gate before concrete requested work.
 - If the prior status was failed/cancelled and the user wants to continue, continue directly from evidence; do not require a separate retry ceremony unless `retry_task` is specifically the cleanest way to re-enter the existing shell.
 
