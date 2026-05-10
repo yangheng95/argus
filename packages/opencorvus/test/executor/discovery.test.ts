@@ -6,11 +6,15 @@ import { ExecutorDiscovery } from "../../src/executor/discovery"
 
 const env = {
   search: process.env.OPENCORVUS_EXECUTOR_SEARCH_PATHS,
+  codex: process.env.OPENCORVUS_EXECUTOR_CODEX_BIN,
+  claude: process.env.OPENCORVUS_EXECUTOR_CLAUDE_CODE_BIN,
 }
 
 describe("executor discovery", () => {
   afterEach(() => {
-    process.env.OPENCORVUS_EXECUTOR_SEARCH_PATHS = env.search
+    restoreEnv("OPENCORVUS_EXECUTOR_SEARCH_PATHS", env.search)
+    restoreEnv("OPENCORVUS_EXECUTOR_CODEX_BIN", env.codex)
+    restoreEnv("OPENCORVUS_EXECUTOR_CLAUDE_CODE_BIN", env.claude)
   })
 
   test("finds codex and claude binaries from custom search paths", async () => {
@@ -68,4 +72,23 @@ describe("executor discovery", () => {
     expect(found["claude-code"].available).toBe(true)
     expect(found["claude-code"].path).toBe(exe)
   })
+
+  test("unwraps quoted explicit executor binary paths before availability checks", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-exec-env-"))
+    const claude = path.join(dir, process.platform === "win32" ? "claude.exe" : "claude")
+    await fs.writeFile(claude, "")
+    process.env.OPENCORVUS_EXECUTOR_SEARCH_PATHS = ""
+    process.env.OPENCORVUS_EXECUTOR_CLAUDE_CODE_BIN = `'"${claude}"'`
+
+    const found = await ExecutorDiscovery.scan()
+
+    expect(found["claude-code"].available).toBe(true)
+    expect(found["claude-code"].path).toBe(claude)
+    expect(found["claude-code"].command).toEqual([claude])
+  })
 })
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) delete process.env[name]
+  else process.env[name] = value
+}

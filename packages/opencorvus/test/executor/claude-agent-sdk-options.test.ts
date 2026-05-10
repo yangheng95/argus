@@ -44,6 +44,13 @@ describe("claude agent sdk options", () => {
     expect(options?.allowDangerouslySkipPermissions).toBe(true)
   })
 
+  test("unwraps quoted Claude executable paths before passing SDK options", async () => {
+    await collect(ClaudeAgentExecutor.createSdk(`'"C:\\Users\\hengu\\.local\\bin\\claude.exe"'`).run({ prompt: "test" }))
+
+    const options = calls[0]?.options as Record<string, unknown> | undefined
+    expect(options?.pathToClaudeCodeExecutable).toBe("C:\\Users\\hengu\\.local\\bin\\claude.exe")
+  })
+
   test("honors explicit permission mode overrides", async () => {
     process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "default"
 

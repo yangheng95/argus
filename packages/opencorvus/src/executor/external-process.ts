@@ -1,6 +1,7 @@
 import { createInterface } from "readline"
 import { text } from "node:stream/consumers"
 import { Process } from "@/util/process"
+import { normalizeExecutableArgv } from "@/util/command"
 
 /**
  * Stream a subprocess's stdout as JSON lines.
@@ -33,7 +34,8 @@ export async function* jsonLines(input: {
   stdin?: string
   signal?: AbortSignal
 }) {
-  const proc = Process.spawn(input.command, {
+  const command = normalizeExecutableArgv(input.command)
+  const proc = Process.spawn(command, {
     cwd: input.cwd,
     env: input.env,
     stdin: input.stdin !== undefined ? "pipe" : "ignore",
@@ -42,7 +44,7 @@ export async function* jsonLines(input: {
     abort: input.signal,
   })
   if (!proc.stdout || !proc.stderr) {
-    throw new Error(`Command output not available: ${input.command.join(" ")}`)
+    throw new Error(`Command output not available: ${command.join(" ")}`)
   }
 
   const stderrPromise = text(proc.stderr)
@@ -97,6 +99,6 @@ export async function* jsonLines(input: {
   if (consumerAborted) return
   if (input.signal?.aborted) return
   if (exitCode === 0 || exitCode === undefined) return
-  const detail = stderrBody.trim() || `Command failed with exit code ${exitCode}: ${input.command.join(" ")}`
+  const detail = stderrBody.trim() || `Command failed with exit code ${exitCode}: ${command.join(" ")}`
   throw new Error(detail)
 }

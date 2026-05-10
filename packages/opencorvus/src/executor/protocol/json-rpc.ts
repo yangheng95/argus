@@ -1,5 +1,6 @@
 import { createInterface } from "readline"
 import { Process } from "@/util/process"
+import { normalizeExecutableArgv } from "@/util/command"
 
 type RequestID = string | number
 
@@ -31,7 +32,8 @@ export const JsonRpcLineTransport = {
     cwd?: string
     env?: NodeJS.ProcessEnv
   }) {
-    const proc = Process.spawn(spawnCommand(input.command), {
+    const command = spawnCommand(input.command)
+    const proc = Process.spawn(command, {
       cwd: input.cwd,
       env: input.env,
       stdin: "pipe",
@@ -39,7 +41,7 @@ export const JsonRpcLineTransport = {
       stderr: "pipe",
     })
     if (!proc.stdout || !proc.stdin || !proc.stderr) {
-      throw new Error(`JSON-RPC transport unavailable: ${input.command.join(" ")}`)
+      throw new Error(`JSON-RPC transport unavailable: ${command.join(" ")}`)
     }
 
     const pending = new Map<RequestID, {
@@ -118,12 +120,12 @@ export const JsonRpcLineTransport = {
       const code = await proc.exited.catch(() => 1)
       if (closed) return
       closed = true
-      failAll(new Error(`JSON-RPC process exited with code ${code}: ${input.command.join(" ")}`))
+      failAll(new Error(`JSON-RPC process exited with code ${code}: ${command.join(" ")}`))
       wake?.()
     })()
 
     const send = (message: Record<string, unknown>) => {
-      if (closed) throw new Error(`JSON-RPC transport closed: ${input.command.join(" ")}`)
+      if (closed) throw new Error(`JSON-RPC transport closed: ${command.join(" ")}`)
       proc.stdin!.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`)
     }
 
@@ -204,7 +206,7 @@ function record(input: unknown) {
 
 function spawnCommand(command: string[]) {
   if (command.length === 0) throw new Error("Command is required")
-  const [file, ...rest] = command
+  const [file, ...rest] = normalizeExecutableArgv(command)
   const lower = file.toLowerCase()
   if (process.platform === "win32" && (lower.endsWith(".cmd") || lower.endsWith(".bat"))) {
     return ["cmd.exe", "/c", file, ...rest]

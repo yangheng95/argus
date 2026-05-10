@@ -4,6 +4,7 @@ import path from "path"
 import z from "zod"
 import { Plugin } from "@/plugin"
 import { TerminalProfile } from "@/system-terminal/profile"
+import { unwrapCommandQuotes } from "@/util/command"
 import { which } from "@/util/which"
 
 export namespace SystemTerminal {
@@ -37,17 +38,6 @@ export namespace SystemTerminal {
     args?: string[]
     keepOpen?: boolean
     defaultShell?: string
-  }
-
-  function unwrapCommandQuotes(value: string): string {
-    let next = value.trim()
-    while (next.length >= 2) {
-      const first = next[0]
-      const last = next[next.length - 1]
-      if (!((first === "'" && last === "'") || (first === '"' && last === '"'))) break
-      next = next.slice(1, -1).trim()
-    }
-    return next
   }
 
   function resolveExecutable(command: string): string {

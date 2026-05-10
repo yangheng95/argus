@@ -18,6 +18,12 @@ describe("util.process", () => {
     expect(out.code).toBe(7)
   })
 
+  test("unwraps quoted executable paths before spawning", async () => {
+    const [executable, ...args] = node('process.stdout.write("ok")')
+    const out = await Process.run([`'"${executable}"'`, ...args])
+    expect(out.stdout.toString()).toBe("ok")
+  })
+
   test("throws RunFailedError on non-zero exit", async () => {
     const err = await Process.run(node('process.stderr.write("bad");process.exit(3)')).catch((error) => error)
     expect(err).toBeInstanceOf(Process.RunFailedError)

@@ -17,6 +17,7 @@ import { ToolAdapterRegistry } from "./protocol"
 import { MCPServe } from "@/mcp/serve"
 import { assertExecutorModel } from "./runtime-env"
 import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
+import { unwrapCommandQuotes } from "@/util/command"
 
 export type ClaudeAgentHandle = {
   stream: AsyncIterable<Record<string, unknown>>
@@ -140,7 +141,7 @@ export namespace ClaudeAgentExecutor {
         const handle = query({
           prompt: input.prompt,
           options: {
-            ...(executablePath ? { pathToClaudeCodeExecutable: executablePath } : {}),
+            ...(executablePath ? { pathToClaudeCodeExecutable: unwrapCommandQuotes(executablePath) } : {}),
             cwd: input.cwd,
             model: input.model,
             // Only pass `resume` when we actually have a Claude UUID from a

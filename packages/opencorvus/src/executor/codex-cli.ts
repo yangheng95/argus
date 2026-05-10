@@ -1,9 +1,11 @@
 import { record, text, type CodingEventInfo, type CodingProvider } from "./contract"
 import { jsonLines } from "./external-process"
+import { normalizeExecutableArgv } from "@/util/command"
 import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 
 export namespace CodexCLIExecutor {
   export function create(input: { command: string[] }): CodingProvider {
+    const baseCommand = normalizeExecutableArgv(input.command)
     return {
       name: "codex",
       capabilities() {
@@ -22,7 +24,7 @@ export namespace CodexCLIExecutor {
         const next = decoder()
         const stream = jsonLines({
           command: [
-            ...input.command,
+            ...baseCommand,
             "exec",
             "--json",
             "--skip-git-repo-check",
@@ -49,7 +51,7 @@ export namespace CodexCLIExecutor {
         const next = decoder()
         const stream = jsonLines({
           command: [
-            ...input.command,
+            ...baseCommand,
             "exec",
             "resume",
             info.sessionID,
