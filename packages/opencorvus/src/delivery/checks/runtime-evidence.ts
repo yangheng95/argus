@@ -13,7 +13,9 @@
  * rejected verdict 和 goal attribution；host 只负责阻止 accepted，不合成
  * rejection_details。
  */
-import { captureRuntimePage } from "@/delivery/runtime-capture"
+import { captureRuntimePage, type RuntimeCaptureSuccess } from "@/delivery/runtime-capture"
+import type { AcceptanceSpec } from "@/acceptance/types"
+import { runWalkthrough, type WalkthroughResult } from "./walkthrough/run"
 
 export type RuntimeEvidenceViolationKind =
   | "no_live_preview"
@@ -22,6 +24,11 @@ export type RuntimeEvidenceViolationKind =
   | "dom_too_thin"
   | "interaction_required_but_missing"
   | "interaction_probe_failed"
+  | "js_runtime_error"
+  | "http_failure"
+  | "asset_failure"
+  | "expected_missing"
+  | "walkthrough_failed"
 
 export interface RuntimeEvidenceViolation {
   kind: RuntimeEvidenceViolationKind
@@ -52,7 +59,17 @@ export interface RuntimeEvidenceReport {
       errorCount: number
       errors: string[]
     }
+    walkthroughs?: RuntimeEvidenceWalkthrough[]
   }
+}
+
+export type RuntimeEvidenceWalkthrough = {
+  specId: string
+  scenarioTitle: string
+  passed: boolean
+  finalPath: string
+  screenshotPath?: string
+  evidence: string[]
 }
 
 /** 阈值写死但集中，调节无需跨文件。 */
@@ -71,6 +88,8 @@ export async function computeRuntimeEvidence(input: {
   referenceForViewport?: string
   viewport?: { width: number; height: number }
   requireInteraction?: boolean
+  scenarios?: AcceptanceSpec[]
+  walkthroughRunner?: typeof runWalkthrough
 }): Promise<RuntimeEvidenceReport> {
   const violations: RuntimeEvidenceViolation[] = []
   const report: RuntimeEvidenceReport = {
@@ -112,6 +131,7 @@ export async function computeRuntimeEvidence(input: {
   report.evidence.viewport = { width: render.viewport.width, height: render.viewport.height }
   report.evidence.dom = render.dom
   report.evidence.interaction = render.interaction
+  violations.push(...runtimeLayerViolations(render.layers))
 
   // 3. DOM 实证：空壳 or 过薄？
   if (render.dom.isEmptyRootShell) {
@@ -144,9 +164,60 @@ export async function computeRuntimeEvidence(input: {
   if (input.requireInteraction) {
     violations.push(...runtimeInteractionViolations(render.interaction))
   }
+  const scenarios = input.scenarios ?? []
+  if (violations.length === 0 && scenarios.length > 0) {
+    const walkthroughs: RuntimeEvidenceWalkthrough[] = []
+    const runner = input.walkthroughRunner ?? runWalkthrough
+    for (const spec of scenarios) {
+      const walkthrough = await runner({ spec, baseUrl: input.previewUrl, outDir: input.outDir })
+      walkthroughs.push(toRuntimeEvidenceWalkthrough(walkthrough))
+      if (!walkthrough.passed) {
+        violations.push({
+          kind: "walkthrough_failed",
+          detail: `${spec.id}: ${walkthrough.firstFailure?.message ?? "scenario walkthrough failed"}`,
+        })
+      }
+    }
+    report.evidence.walkthroughs = walkthroughs
+  }
 
   report.passed = violations.length === 0
   return report
+}
+
+export function runtimeLayerViolations(layers: RuntimeCaptureSuccess["layers"]): RuntimeEvidenceViolation[] {
+  const violations: RuntimeEvidenceViolation[] = []
+  if (!layers.http.passed) {
+    violations.push({
+      kind: "http_failure",
+      detail: `HTTP layer failed: status=${layers.http.status} content_type=${layers.http.content_type} body_length=${layers.http.body_length} reason=${layers.http.reason}`,
+    })
+  }
+  if (!layers.asset.passed) {
+    for (const item of layers.asset.failed) {
+      violations.push({ kind: "asset_failure", detail: `${item.url} status=${item.status} reason=${item.reason}` })
+    }
+  }
+  if (!layers.js.passed) {
+    for (const item of layers.js.page_errors) violations.push({ kind: "js_runtime_error", detail: `pageerror: ${item}` })
+    for (const item of layers.js.console_errors) violations.push({ kind: "js_runtime_error", detail: `console.error: ${item}` })
+  }
+  if (!layers.expected.passed) {
+    for (const item of layers.expected.missing_selectors) violations.push({ kind: "expected_missing", detail: `missing selector: ${item}` })
+    for (const item of layers.expected.missing_texts) violations.push({ kind: "expected_missing", detail: `missing text: ${item}` })
+  }
+  return violations
+}
+
+function toRuntimeEvidenceWalkthrough(walkthrough: WalkthroughResult): RuntimeEvidenceWalkthrough {
+  return {
+    specId: walkthrough.specId,
+    scenarioTitle: walkthrough.scenarioTitle,
+    passed: walkthrough.passed,
+    finalPath: walkthrough.finalPath,
+    screenshotPath: walkthrough.screenshotPath,
+    evidence: walkthrough.evidence,
+  }
 }
 
 export function runtimeInteractionViolations(

@@ -611,6 +611,7 @@ export async function composeLatestDeliveryFeedbackForBuild(input: {
       category: typeof detail.category === "string" ? detail.category : "unknown",
       error: typeof detail.error === "string" ? detail.error : JSON.stringify(detail),
       goal_id: typeof detail.goal_id === "string" ? detail.goal_id : undefined,
+      check_id: typeof detail.check_id === "string" ? detail.check_id : undefined,
       file: typeof detail.file === "string" ? detail.file : undefined,
       suggestion: typeof detail.suggestion === "string" ? detail.suggestion : undefined,
       visual_spec_id: typeof detail.visual_spec_id === "string" ? detail.visual_spec_id : undefined,
@@ -705,7 +706,7 @@ async function sinkDeliveryVerdictToCriteria(
   for (const dc of verdict.deferred_checks) {
     checks.push({
       name: dc.name,
-      status: dc.result,
+      status: dc.result === "advisory_failed" ? "failed" : dc.result,
       family: "delivery",
       evidence: dc.evidence,
     })
@@ -3586,7 +3587,7 @@ export function createOrchestratorTools(input: {
             criteria: renderSpecsAsText(acceptanceSpecs),
             priority: g.priority as "blocking" | "advisory",
             acceptance_spec_count: acceptanceSpecs.length,
-            runtime_scenario_count: acceptanceSpecs.filter((spec) => !!spec.scenario).length,
+            acceptance_scenarios: acceptanceSpecs.filter((spec) => !!spec.scenario),
             requirement_ids: Array.isArray(g.requirement_ids) ? g.requirement_ids as string[] : [],
             depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
             imports: Array.isArray(g.imports) ? g.imports as string[] : [],

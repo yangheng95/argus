@@ -21,6 +21,7 @@ import { arbitrateDeliveryGate } from "../arbiter"
 import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
 import { runSecurityDataReview } from "../specialists/security-data"
 import { ensureManagedPreviewSession } from "@/preview/session"
+import type { AcceptanceSpec } from "@/acceptance/types"
 import { ensureProjectReadyForRuntime } from "./runtime-readiness"
 import type { EvaluatorCommand } from "./types"
 import {
@@ -67,7 +68,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     priority: "blocking" | "advisory"
     requirement_ids: string[]
     acceptance_spec_count?: number
-    runtime_scenario_count?: number
+    acceptance_scenarios?: AcceptanceSpec[]
     depends_on?: string[]
     imports?: string[]
     exports?: string[]
@@ -497,7 +498,7 @@ async function runRuntimeFlows(input: {
   taskID?: string
   iteration: number
   surfaceManifest: DeliverySurfaceManifest
-  goals?: Array<{ runtime_scenario_count?: number }>
+  goals?: Array<{ acceptance_scenarios?: AcceptanceSpec[] }>
   metadata?: Record<string, unknown>
 }): Promise<DeliveryRuntimeFlowResult[]> {
   const flows: DeliveryRuntimeFlowResult[] = []
@@ -505,8 +506,9 @@ async function runRuntimeFlows(input: {
     return flows
   }
   const root = input.surfaceManifest.projectRoot
-  const requireInteraction = (input.goals ?? [])
-    .some((goal) => (goal.runtime_scenario_count ?? 0) > 0)
+  const scenarios = (input.goals ?? [])
+    .flatMap((goal) => goal.acceptance_scenarios ?? [])
+    .filter((spec) => spec.scenario)
   const id = `runtime:web:${path.relative(Instance.directory, root).replaceAll("\\", "/") || "."}`
   let preview: Awaited<ReturnType<typeof resolveRuntimeFlowPreview>> | undefined
   try {
@@ -526,13 +528,14 @@ async function runRuntimeFlows(input: {
         String(input.iteration),
       ),
       viewport: { width: 1440, height: 900 },
-      requireInteraction,
+      scenarios,
     })
+    const baseViolations = report.violations.filter((item) => item.kind !== "walkthrough_failed")
     flows.push({
       id,
-      name: requireInteraction ? "Web Runtime Render and Interaction" : "Web Runtime Render",
-      status: report.passed ? "passed" : "failed",
-      evidence: report.passed
+      name: "Web Runtime Render",
+      status: baseViolations.length === 0 ? "passed" : "failed",
+      evidence: baseViolations.length === 0
         ? [
             [
               ...preview.evidence,
@@ -546,18 +549,28 @@ async function runRuntimeFlows(input: {
           ]
         : [
             ...preview.evidence,
-            ...report.violations.map((item) => `${item.kind}: ${item.detail}`),
+            ...baseViolations.map((item) => `${item.kind}: ${item.detail}`),
           ],
       screenshotPath: report.evidence.renderedPngPath,
       previewUrl: report.evidence.previewUrl,
       dom: report.evidence.dom,
       interaction: report.evidence.interaction,
     })
+    for (const walkthrough of report.evidence.walkthroughs ?? []) {
+      flows.push({
+        id: `runtime:web:scenario:${walkthrough.specId}`,
+        name: `Web Runtime Scenario: ${walkthrough.scenarioTitle}`,
+        status: walkthrough.passed ? "passed" : "failed",
+        evidence: walkthrough.evidence,
+        screenshotPath: walkthrough.screenshotPath,
+        previewUrl: report.evidence.previewUrl,
+      })
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     flows.push({
       id,
-      name: requireInteraction ? "Web Runtime Render and Interaction" : "Web Runtime Render",
+      name: "Web Runtime Render",
       status: "failed",
       evidence: [`runtime_flow_error: ${message}`],
     })

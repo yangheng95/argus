@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { Identifier } from "@/id/id"
 import { discoverPackageRoot } from "./checks/discovery"
+import type { AcceptanceSpec } from "@/acceptance/types"
 
 export type DeliverySurface =
   | "frontend"
@@ -101,7 +102,7 @@ export async function detectDeliverySurfaces(input: {
   metadata?: Record<string, unknown>
   goals?: Array<{
     acceptance_spec_count?: number
-    runtime_scenario_count?: number
+    acceptance_scenarios?: AcceptanceSpec[]
     imports?: string[]
     exports?: string[]
   }>
@@ -174,7 +175,7 @@ export async function detectDeliverySurfaces(input: {
   if (
     surfaces.has("frontend") &&
     (
-      (input.goals ?? []).some((goal) => (goal.runtime_scenario_count ?? 0) > 0)
+      (input.goals ?? []).some((goal) => (goal.acceptance_scenarios?.length ?? 0) > 0)
       || hasDesignSpecs(input.metadata)
       || allFileRefs.some((file) => /\.(css|scss|tsx|jsx|vue|svelte|astro)$/.test(file))
     )

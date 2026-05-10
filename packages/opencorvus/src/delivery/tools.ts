@@ -773,7 +773,7 @@ function renderGoalDetail(goal: GoalInfo): string {
     `id=${goal.id}`,
     `priority=${goal.priority}`,
     `acceptance_spec_count=${goal.acceptance_spec_count ?? 0}`,
-    `runtime_scenario_count=${goal.runtime_scenario_count ?? 0}`,
+    `acceptance_scenarios=${goal.acceptance_scenarios?.length ?? 0}`,
     goal.requirement_ids.length > 0 ? `requirement_ids=${goal.requirement_ids.join(", ")}` : "requirement_ids=(none)",
     goal.depends_on.length > 0 ? `depends_on=${goal.depends_on.join(", ")}` : "depends_on=(none)",
     goal.imports.length > 0 ? `imports=${goal.imports.join(", ")}` : "imports=(none)",

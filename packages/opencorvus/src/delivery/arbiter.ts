@@ -125,13 +125,14 @@ export function arbitrateDeliveryVerdict(input: {
   }
 }
 
-function appendManifestEvidence(
+export function appendManifestEvidence(
   verdict: DeliveryVerdictType,
   manifest: DeliveryEvidenceManifest,
 ): DeliveryVerdictType {
+  const auxiliary = new Set(manifest.functionalAssessment?.auxiliaryFailureIds ?? [])
   const projected = manifest.checkResults.map((item) => ({
     name: item.id,
-    result: item.status,
+    result: item.status === "failed" && auxiliary.has(item.id) ? "advisory_failed" as const : item.status,
     evidence: [
       item.command,
       item.exitCode === undefined ? undefined : `exit_code=${item.exitCode}`,
@@ -146,7 +147,7 @@ function appendManifestEvidence(
       ...projected,
       ...manifest.reviewEvidence.map((item) => ({
         name: item.id,
-        result: item.status,
+        result: item.status === "failed" && auxiliary.has(item.id) ? "advisory_failed" as const : item.status,
         evidence: item.evidence.join("\n"),
       })),
     ],

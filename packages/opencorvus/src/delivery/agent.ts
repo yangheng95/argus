@@ -291,7 +291,7 @@ function buildUserPrompt(
       input.goals
         .map(
           (g, i) =>
-            `- ${i + 1}. \`${g.id}\` ${truncate(g.title, 180)} priority=${g.priority} acceptance_specs=${g.acceptance_spec_count ?? 0} runtime_scenarios=${g.runtime_scenario_count ?? 0} owned_paths=${g.owned_paths.slice(0, 8).join(", ") || "(none)"}`,
+            `- ${i + 1}. \`${g.id}\` ${truncate(g.title, 180)} priority=${g.priority} acceptance_specs=${g.acceptance_spec_count ?? 0} acceptance_scenarios=${g.acceptance_scenarios?.length ?? 0} owned_paths=${g.owned_paths.slice(0, 8).join(", ") || "(none)"}`,
         )
         .join("\n"),
     12_000,
@@ -452,13 +452,13 @@ function renderRequiredEvidenceFacets(facets: DeliveryEvidenceFacetType[]): stri
 
 export function deriveRequiredEvidenceFacets(input: {
   task: { design_specs?: Array<unknown> }
-  goals: Array<{ runtime_scenario_count?: number }>
+  goals: Array<{ acceptance_scenarios?: unknown[] }>
   delivery: { changedFiles: string[] }
   attachments?: Array<{ mime?: string; intent?: string }>
 }): DeliveryEvidenceFacetType[] {
   const facets = new Set<DeliveryEvidenceFacetType>()
   const files = input.delivery.changedFiles.map((file) => file.replaceAll("\\", "/"))
-  const hasRuntimeScenario = input.goals.some((goal) => (goal.runtime_scenario_count ?? 0) > 0)
+  const hasRuntimeScenario = input.goals.some((goal) => (goal.acceptance_scenarios?.length ?? 0) > 0)
   const hasImageReference = (input.attachments ?? []).some((a) => (a.mime ?? "").startsWith("image/"))
   const hasDesignSpecs = (input.task.design_specs ?? []).length > 0
   const touchesFrontend = files.some((file) =>
