@@ -13,7 +13,7 @@ import {
 } from "../../src/delivery/checks/runtime-readiness"
 import { runtimeInteractionViolations } from "../../src/delivery/checks/runtime-evidence"
 import { stopAllManagedPreviewSessions } from "../../src/preview/session"
-import { EngineTaskTable, EngineArtifactTable } from "../../src/engine/engine.sql"
+import { EngineTaskTable, EngineArtifactTable, EngineGoalTable, EngineSpecSnapshotTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { Database } from "../../src/storage/db"
 import {
@@ -982,7 +982,7 @@ describe("delivery repeated failure tracking", () => {
     expect((integrityCheckPost?.evidence ?? []).join("\n")).toContain("phase=post_build")
   })
 
-  test("delivery freshness gate rejects a post_build integrity attempt that is older than a newer terminal goal_run", async () => {
+  test("delivery freshness gate rejects a post_build integrity attempt that is older than a newer terminal goal_run on the same spec snapshot", async () => {
     const dir = await packageFixture({
       build: "bun -e \"console.log('build ok')\"",
     })
@@ -994,7 +994,6 @@ describe("delivery repeated failure tracking", () => {
       directory: dir,
       fn: () => {
         const baseTime = Date.now()
-        // Record a green post-build integrity attempt FIRST.
         recordIntegrity(taskID, specSnapshotID, {
           verdict: "pass",
           issuesCount: 0,
@@ -1003,6 +1002,7 @@ describe("delivery repeated failure tracking", () => {
           phase: "post_build",
           now: baseTime,
         })
+        seedGoalForSnapshot({ taskID, specSnapshotID, goalID: "gol_phase", now: baseTime })
         // Then write a terminal goal_run_attempt artifact AFTER the
         // integrity attempt — simulating a fresh goal completion since the
         // last review.
@@ -1038,6 +1038,66 @@ describe("delivery repeated failure tracking", () => {
     expect(integrityCheck?.status).toBe("failed")
     const evidenceJoined = (integrityCheck?.evidence ?? []).join("\n")
     expect(evidenceJoined).toContain("stale post-build integrity attempt")
+  })
+
+  test("delivery freshness gate ignores newer goal_runs from a stale (superseded) spec snapshot", async () => {
+    const dir = await packageFixture({
+      build: "bun -e \"console.log('build ok')\"",
+    })
+
+    const taskID = "tsk_phase_snapshot_scope"
+    const activeSpec = "spec_active"
+    const staleSpec = "spec_stale"
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => {
+        const baseTime = Date.now()
+        // Active-snapshot integrity attempt at baseTime.
+        recordIntegrity(taskID, activeSpec, {
+          verdict: "pass",
+          issuesCount: 0,
+          correctionsCount: 0,
+          missingCount: 0,
+          phase: "post_build",
+          now: baseTime,
+        })
+        // Active-snapshot goal — its run row will be older than the attempt.
+        seedGoalForSnapshot({ taskID, specSnapshotID: activeSpec, goalID: "gol_active", now: baseTime })
+        // Stale-snapshot goal — its run row will be NEWER than the attempt,
+        // but on a snapshot the architect already replaced. Must not stale-
+        // reject the active snapshot's review.
+        seedGoalForSnapshot({ taskID, specSnapshotID: staleSpec, goalID: "gol_stale", now: baseTime })
+        Database.use((db) =>
+          db.insert(EngineArtifactTable).values({
+            id: "art_goalrun_stale_snapshot",
+            task_id: taskID,
+            run_id: null,
+            goal_run_id: "run_stale_snapshot",
+            kind: "goal_run_attempt",
+            label: "completed",
+            payload: {
+              goal_id: "gol_stale",
+              status: "completed",
+              retry_count: 0,
+            },
+            time_created: baseTime + 1000,
+            time_updated: baseTime + 1000,
+          }).run(),
+        )
+        return buildDeliveryEvidenceManifest({
+          taskID,
+          runID: "run_phase_snapshot_scope_dlv",
+          deliveryID: "dlv_phase_snapshot_scope",
+          specSnapshotID: activeSpec,
+          changedFiles: ["src/app.ts"],
+          goals: [{ ...goalInput("gol_active"), acceptance_spec_count: 1 }],
+        })
+      },
+    })
+
+    const integrityCheck = manifest.reviewEvidence.find((r) => r.id === "review:integrity")
+    expect(integrityCheck?.status).toBe("passed")
   })
 
   test("delivery refusal guards remain non-terminal strategy feedback", async () => {
@@ -1079,6 +1139,47 @@ function recordPassingIntegrity(taskID: string, specSnapshotID: string) {
     issuesCount: 0,
     correctionsCount: 0,
     missingCount: 0,
+  })
+}
+
+function seedGoalForSnapshot(input: {
+  taskID: string
+  specSnapshotID: string
+  goalID: string
+  now: number
+}) {
+  Database.use((db) => {
+    db.insert(EngineSpecSnapshotTable).values({
+      id: input.specSnapshotID,
+      task_id: input.taskID,
+      version: 1,
+      status: "ready",
+      summary: input.specSnapshotID,
+      content: input.specSnapshotID,
+      scope: "scope",
+      time_created: input.now,
+      time_updated: input.now,
+    }).onConflictDoNothing().run()
+    db.insert(EngineGoalTable).values({
+      id: input.goalID,
+      task_id: input.taskID,
+      spec_snapshot_id: input.specSnapshotID,
+      title: input.goalID,
+      slug: input.goalID,
+      objective: `objective for ${input.goalID}`,
+      acceptance_specs: [],
+      owned_paths: [],
+      depends_on: [],
+      exports: [],
+      imports: [],
+      kind: "feature",
+      requirement_ids: [],
+      priority: "blocking",
+      source: "spec",
+      order_index: 0,
+      time_created: input.now,
+      time_updated: input.now,
+    }).onConflictDoNothing().run()
   })
 }
 

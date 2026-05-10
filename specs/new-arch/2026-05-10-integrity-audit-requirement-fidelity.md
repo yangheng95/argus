@@ -342,8 +342,8 @@ Pre-build 阶段 `requirementStatus` 自然为空数组（无 goal_run / 无 evi
 - §1.4 inspector.css 漏点（codex #3）作废。
 
 **[codex #12] 修复路径夸大了 integrity 的能力。**
-`GoalCorrectionUpdates` 只能改 goal 字段；`MissingGoal` 创的 goal 写死 `source_requirement_id: "integrity-pending"`、`requirement_ids: []`。§5.1 / §5.3 写的"propose either a new REQ via missing_goal or modify-correction widening the consuming REQ's scope"是描述性夸大 — 实际 wire schema 不允许 integrity 改 REQ 行。
-**修订**：§5.1 / §5.3 把"propose new REQ" / "modify REQ scope"全部改成"propose missing_goal that owns the implied tier"（goal 层修复）+"modify-correction on goal.requirement_ids to rebind"（goal 层重新认领），并显式声明：integrity NEVER mutates REQ rows; if the REQ list itself is malformed, integrity surfaces the issue and the orchestrator decides whether to re-run the requirements agent. 加注脚："REQ-row mutations are out-of-scope by schema design — see GoalCorrectionUpdates @ integrity/agent.ts:145."
+`GoalCorrectionUpdates` 只能改 goal 字段；`MissingGoal` 创的 goal 写死 `source_requirement_id: "integrity-pending"`、`requirement_ids: []`。§5.1 / §5.3 早稿曾用 ~~propose-new-REQ~~ / ~~modify-REQ-scope~~ 这种描述性夸大说法 — 实际 wire schema 不允许 integrity 改 REQ 行。
+**修订**：§5.1 / §5.3 全部改成"propose missing_goal that owns the implied tier"（goal 层修复）+"modify-correction on goal.requirement_ids to rebind"（goal 层重新认领），并显式声明：integrity NEVER mutates REQ rows; if the REQ list itself is malformed, integrity surfaces the issue and the orchestrator decides whether to re-run the requirements agent. 加注脚："REQ-row mutations are out-of-scope by schema design — see GoalCorrectionUpdates @ integrity/agent.ts:145."
 
 ### 6.4 状态/时序 gap
 
