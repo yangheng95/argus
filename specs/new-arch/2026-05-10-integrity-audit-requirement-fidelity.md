@@ -152,7 +152,7 @@ mock 改名（仅替换字面量）：
 
 **审查点 A：implicit dependency tier surfacing（pre-build 也能查）**
 
-User request 描述的是 user-visible 交付物，但实现需要的隐含 tier（FE page → BE API + 数据源；CLI tool → 运行时入口 + 持久化；webhook → 外部回调可达性）未必出现在 REQ 列表。`requirement_fidelity` 必须对每条 user-visible REQ 推它的实现 tier，逐 tier 检查 REQ 是否存在。缺 tier = 新 issue type `implicit_dependency_missing`，建议生成 missing_goal 或 modify 现有 REQ。
+User request 描述的是 user-visible 交付物，但实现需要的隐含 tier（FE page → BE API + 数据源；CLI tool → 运行时入口 + 持久化；webhook → 外部回调可达性）未必出现在 REQ 列表。`technical_feasibility` 维度对每条 user-visible REQ 推它的实现 tier，逐 tier 检查 *merged tree* 中是否有承担该 tier 的 goal — 缺 tier = `missing_capability` against an implicit infra goal，提议 `missing_goal` 拥有该 tier（或 `modify` 现有 goal 加宽 `owned_paths` / `exports`）。**integrity 不会改 REQ 行**（schema 不允许，见 §6.3.#12）；REQ 列表自身的缺漏由 orchestrator 决策是否回到 requirements agent 重抽。
 
 **审查点 B：post-build REQ completion evidence（运行后才有）**
 
@@ -212,11 +212,10 @@ export function computeRequirementStatusSnapshot(input: {
 
 `packages/opencorvus/src/integrity/dimensions.ts`：
 
-- `IntegrityIssueType` 加 `implicit_dependency_missing`。
-- `requirement_fidelity.issueTypes` 追加 `implicit_dependency_missing`（最终 5 个：`uncovered / partial / distorted / merged_incorrectly / implicit_dependency_missing`）。
-- `requirement_fidelity.checklist` 新增两条：
-  - "**Implicit-dependency tier walk.** For each user-visible REQ, derive its implementation tier (FE deliverable → BE API + data source; CLI → runtime + storage; webhook → reachability infra). For each implied tier, check the REQ list. Missing tier = `implicit_dependency_missing` — propose either a new REQ via missing_goal or modify-correction widening the consuming REQ's scope. Cite the user phrase that implies the missing tier in `evidence`."
-  - "**Post-build completion walk.** When a `# Requirement Status Snapshot` block is present, walk it row by row. REQ aggregate `partial` / `not_done` despite a green claiming goal = real `partial` (essential specs failed) — issue must cite the failing `spec_id` in evidence. REQ aggregate `unstarted` despite a claiming goal exists = `partial` (the goal didn't actually run) — surface the goal_run status. Pre-build (snapshot empty) skip this bullet."
+- `IntegrityIssueType` 不增项 — 见 §6 codex 审查反馈 §6.3.#11。
+- `requirement_fidelity.issueTypes` 维持 4 个：`uncovered / partial / distorted / merged_incorrectly`。
+- `technical_feasibility.checklist` 新增 1 条 "**User-deliverable tier walk (system completion).**" — 对每条 user-visible REQ 推它的实现 tier；缺 tier 由 `missing_capability` 处理，repair 仍走 goal 层（`missing_goals` 或 `modify` 现有 goal）。
+- `requirement_fidelity.checklist` 新增"Post-build completion walk"：当 Requirement Status Snapshot 块存在时，逐行走查；essential spec 部分 fail = `partial`（issue 必须 cite failing `spec_ids`）；snapshot 为空（pre-build）跳过。**aggregate 不在 host 计算，由 LLM 从原始证据自行判断**（rule 6.1）。
 
 ### 5.4 prompt 注入（`buildIntegrityPrompt`，合并进 §1.1）
 

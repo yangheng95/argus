@@ -13,7 +13,7 @@ import {
 } from "../../src/delivery/checks/runtime-readiness"
 import { runtimeInteractionViolations } from "../../src/delivery/checks/runtime-evidence"
 import { stopAllManagedPreviewSessions } from "../../src/preview/session"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineTaskTable, EngineArtifactTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { Database } from "../../src/storage/db"
 import {
@@ -982,6 +982,64 @@ describe("delivery repeated failure tracking", () => {
     expect((integrityCheckPost?.evidence ?? []).join("\n")).toContain("phase=post_build")
   })
 
+  test("delivery freshness gate rejects a post_build integrity attempt that is older than a newer terminal goal_run", async () => {
+    const dir = await packageFixture({
+      build: "bun -e \"console.log('build ok')\"",
+    })
+
+    const taskID = "tsk_phase_stale"
+    const specSnapshotID = "spec_phase_stale"
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => {
+        const baseTime = Date.now()
+        // Record a green post-build integrity attempt FIRST.
+        recordIntegrity(taskID, specSnapshotID, {
+          verdict: "pass",
+          issuesCount: 0,
+          correctionsCount: 0,
+          missingCount: 0,
+          phase: "post_build",
+          now: baseTime,
+        })
+        // Then write a terminal goal_run_attempt artifact AFTER the
+        // integrity attempt — simulating a fresh goal completion since the
+        // last review.
+        Database.use((db) =>
+          db.insert(EngineArtifactTable).values({
+            id: "art_goalrun_after_integrity",
+            task_id: taskID,
+            run_id: null,
+            goal_run_id: "run_phase_stale",
+            kind: "goal_run_attempt",
+            label: "completed",
+            payload: {
+              goal_id: "gol_phase",
+              status: "completed",
+              retry_count: 0,
+            },
+            time_created: baseTime + 1000,
+            time_updated: baseTime + 1000,
+          }).run(),
+        )
+        return buildDeliveryEvidenceManifest({
+          taskID,
+          runID: "run_phase_stale_dlv",
+          deliveryID: "dlv_phase_stale",
+          specSnapshotID,
+          changedFiles: ["src/app.ts"],
+          goals: [{ ...goalInput("gol_phase"), acceptance_spec_count: 1 }],
+        })
+      },
+    })
+
+    const integrityCheck = manifest.reviewEvidence.find((r) => r.id === "review:integrity")
+    expect(integrityCheck?.status).toBe("failed")
+    const evidenceJoined = (integrityCheck?.evidence ?? []).join("\n")
+    expect(evidenceJoined).toContain("stale post-build integrity attempt")
+  })
+
   test("delivery refusal guards remain non-terminal strategy feedback", async () => {
     const orchestratorTools = await fs.readFile(
       path.join(import.meta.dir, "../../src/orchestrator/tools.ts"),
@@ -1036,9 +1094,12 @@ function recordIntegrity(
      *  reviewed build, satisfy the delivery freshness gate. Pre-build cases
      *  pass "pre_build" explicitly to assert the gate rejects them. */
     phase?: "pre_build" | "post_build"
+    /** Override the artifact's time_created so freshness-gate tests can
+     *  position the attempt before a later goal_run_attempt artifact. */
+    now?: number
   },
 ) {
-  const now = Date.now()
+  const now = input.now ?? Date.now()
   Database.use((db) => {
     db.insert(ProjectTable).values({
       id: `project_${taskID}`,
@@ -1081,5 +1142,6 @@ function recordIntegrity(
     issuesCount: input.issuesCount,
     correctionsCount: input.correctionsCount,
     missingCount: input.missingCount,
+    now,
   })
 }

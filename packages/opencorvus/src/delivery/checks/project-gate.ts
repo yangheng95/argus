@@ -356,6 +356,41 @@ function buildReviewEvidence(input: {
       specSnapshotId: input.specSnapshotID,
     }]
   }
+
+  // Freshness check: a post-build attempt only stands in for "current state"
+  // when no terminal goal_run finished AFTER the attempt was recorded. A new
+  // goal_run completion since the attempt means the merged tree changed and
+  // the prior attempt's evidence is stale.
+  // Goal_run rows are append-only artifacts of kind="goal_run_attempt"; we
+  // join via spec snapshot through the goal table indirectly by filtering
+  // task_id (a single task has one active spec snapshot at a time, and
+  // delivery already gated by `specSnapshotID`).
+  const newerTerminalRun = Database.use((db) =>
+    db.select().from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.task_id, input.taskID!),
+        eq(EngineArtifactTable.kind, "goal_run_attempt"),
+        sql`json_extract(${EngineArtifactTable.payload}, '$.status') IN ('completed', 'failed', 'aborted')`,
+        sql`${EngineArtifactTable.time_created} > ${row.time_created}`,
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
+  )
+  if (newerTerminalRun) {
+    return [{
+      id,
+      name: "Integrity Review",
+      status: "failed",
+      artifactId: row.id,
+      specSnapshotId: input.specSnapshotID,
+      evidence: [
+        "stale post-build integrity attempt — a goal_run terminal status was recorded after this review",
+        `attempt time_created=${row.time_created}`,
+        `newer goal_run terminal at time_created=${newerTerminalRun.time_created}`,
+        "rerun integrity to refresh the Requirement Status Snapshot",
+      ],
+    }]
+  }
   const payload = (row.payload ?? {}) as {
     verdict?: string
     phase?: string

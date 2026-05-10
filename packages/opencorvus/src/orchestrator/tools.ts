@@ -1351,14 +1351,18 @@ export function createOrchestratorTools(input: {
       taskID,
       specSnapshotID: activeSpec.id,
     })
-    // Phase classification: post_build iff at least one REQ has a claiming
-    // goal whose tip run is not "unstarted" (i.e. SOME goal has actually
-    // produced evidence by attempt time). This makes pre-build attempts
-    // (no goal_run rows yet) and post-build attempts (≥1 run with status)
-    // sit in distinct phase buckets so the delivery freshness gate cannot
-    // be satisfied by a green pre-build attempt.
+    // Phase classification: post_build iff at least one claiming goal has a
+    // tip run whose status is TERMINAL (`completed | failed | aborted`). A
+    // queued / running / blocked tip means the build is still in flight —
+    // its evidence is incomplete and integrity has nothing real to judge
+    // beyond the structural decomposition. Treating in-flight runs as
+    // post_build would let the delivery freshness gate accept attempts that
+    // were taken mid-build, which is what codex review §6.4 #8 flagged.
+    // Per @/engine/catalog GOAL_RUN_STATUS_CATALOG: completed = terminal,
+    // failed/aborted = retriable, everything else = live.
+    const TERMINAL_RUN_STATUSES = new Set<string>(["completed", "failed", "aborted"])
     const phase: "pre_build" | "post_build" = requirementStatus.some((r) =>
-      r.claimingGoals.some((g) => g.runStatus !== "unstarted"),
+      r.claimingGoals.some((g) => TERMINAL_RUN_STATUSES.has(g.runStatus)),
     )
       ? "post_build"
       : "pre_build"
