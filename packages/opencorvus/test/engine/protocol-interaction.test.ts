@@ -10,6 +10,9 @@ import {
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { EngineService } from "@/task-api"
+import { EngineRuntime } from "../../src/engine/runtime"
+import { hooks } from "../../src/engine/state"
+import { findRun } from "../../src/engine/store"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
@@ -122,6 +125,65 @@ describe("protocol interaction resolution", () => {
           db.select().from(EngineInteractionRequestTable).where(eq(EngineInteractionRequestTable.id, interactionID)).get(),
         )
         expect(row?.status).toBe("answered")
+      },
+    })
+  })
+
+  test("syncRun clears resolved coordinator question blockers without queue refs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "coordinator-blocker" })
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const now = Date.now()
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: session.id,
+            source: "test",
+            title: "coordinator blocker",
+            request: "coordinator blocker",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+        Database.use((db) =>
+          db.insert(EngineArtifactTable).values({
+            id: runID,
+            task_id: taskID,
+            run_id: runID,
+            kind: "run",
+            label: "run-blocked",
+            payload: {
+              plan_version_id: null,
+              session_id: session.id,
+              executor: "mirrorcode",
+              status: "blocked",
+              phase: "dispatch",
+              blocking_reason: "question",
+              error: null,
+              retry_count: 0,
+              executor_ref: null,
+              metadata: null,
+              time_started: now,
+              time_completed: null,
+            },
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+
+        await EngineRuntime.syncRun(runID, hooks())
+
+        const run = findRun(runID)
+        expect(run?.status).toBe("running")
+        expect(run?.blocking_reason).toBeNull()
       },
     })
   })

@@ -46,6 +46,7 @@ const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
 
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "300000", 10) // auto-reject stale interactions (5min default)
+const INTERACTION_BLOCKING_REASONS = new Set(["permission", "question"])
 
 
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
@@ -129,6 +130,7 @@ export namespace EngineRuntime {
 
     const task = requireTask(run.task_id)
     const delivery = findDeliveryByRun(run.id)
+    const queueTaskID = run.executor_ref?.queue_task_id
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
       const now = Date.now()
@@ -170,6 +172,13 @@ export namespace EngineRuntime {
       }
     }
 
+    if (!queueTaskID) {
+      if (run.status === "blocked" && INTERACTION_BLOCKING_REASONS.has(run.blocking_reason ?? "")) {
+        await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run resumed")
+      }
+      return
+    }
+
     if (run.status === "completed") {
       // Already-completed runs reach this branch only when syncRun's downstream
       // path (queue.status === "completed") hasn't yet handled this run. That
@@ -185,8 +194,6 @@ export namespace EngineRuntime {
       return
     }
 
-    const queueTaskID = run.executor_ref?.queue_task_id
-    if (!queueTaskID) return
     const executor = ExecutorRegistry.require(run.executor)
     const queue = await Promise.race([
       executor.status(queueTaskID),

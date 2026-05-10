@@ -65,6 +65,7 @@ import {
   findDeliveryByRun,
   findEvaluationByRun,
   requireTask,
+  blockActiveRunForTask,
   updateTask,
   WorkflowRegistry,
   createWorkflowState,
@@ -441,6 +442,11 @@ export namespace Orchestrator {
           errorName: first?.errorName,
           sessionID: agentSession.id,
           now,
+        })
+        await blockActiveRunForTask(taskID, {
+          blockingReason: "orchestrator_stream_error",
+          error: reason,
+          summary: `Orchestrator stream error: ${reason}`,
         })
 
         // Retry circuit breaker. When stream early-death produces a malformed

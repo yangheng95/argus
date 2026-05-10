@@ -272,6 +272,23 @@ export async function updateRun(
   return findRun(row.id) ?? requireRun(row.id)
 }
 
+export async function blockActiveRunForTask(
+  taskID: string,
+  input: {
+    blockingReason: string
+    error: string
+    summary: string
+  },
+) {
+  const run = findActiveRunForTask(taskID)
+  if (!isLiveRunStatus(run?.status)) return undefined
+  return updateRun(run, {
+    status: "blocked",
+    blocking_reason: input.blockingReason,
+    error: input.error,
+  }, input.summary)
+}
+
 export function hooks() {
   return {
     updateTask,
