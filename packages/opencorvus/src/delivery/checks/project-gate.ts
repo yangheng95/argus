@@ -361,10 +361,11 @@ function buildReviewEvidence(input: {
   // when no terminal goal_run finished AFTER the attempt was recorded. A new
   // goal_run completion since the attempt means the merged tree changed and
   // the prior attempt's evidence is stale.
-  // Goal_run rows are append-only artifacts of kind="goal_run_attempt"; we
-  // join via spec snapshot through the goal table indirectly by filtering
-  // task_id (a single task has one active spec snapshot at a time, and
-  // delivery already gated by `specSnapshotID`).
+  //
+  // Scope to the ACTIVE spec snapshot — a task may carry stale goal_run
+  // artifacts from prior snapshots that the architect has since superseded;
+  // those must NOT trigger false freshness rejection. Join via
+  // `payload.goal_id ∈ engine_goal WHERE spec_snapshot_id = active`.
   const newerTerminalRun = Database.use((db) =>
     db.select().from(EngineArtifactTable)
       .where(and(
@@ -372,6 +373,9 @@ function buildReviewEvidence(input: {
         eq(EngineArtifactTable.kind, "goal_run_attempt"),
         sql`json_extract(${EngineArtifactTable.payload}, '$.status') IN ('completed', 'failed', 'aborted')`,
         sql`${EngineArtifactTable.time_created} > ${row.time_created}`,
+        sql`json_extract(${EngineArtifactTable.payload}, '$.goal_id') IN (
+          SELECT id FROM engine_goal WHERE spec_snapshot_id = ${input.specSnapshotID!}
+        )`,
       ))
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
