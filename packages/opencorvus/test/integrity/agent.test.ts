@@ -333,6 +333,131 @@ test("buildIntegrityPrompt omits the Requirement Status Snapshot section when th
   expect(capturedPrompt).not.toContain("(post-build raw evidence)")
 })
 
+test("IntegrityReviewCompleted event payload schema accepts requirement_ids and spec_ids on issue rows", async () => {
+  const { Event } = await import("../../src/engine/model")
+  const payload = {
+    taskID: "tsk_event_payload",
+    sessionID: "ses_event_payload",
+    verdict: "needs_correction" as const,
+    summary: "REQ-1 partial",
+    dimensions: [{
+      id: "requirement_fidelity" as const,
+      verdict: "needs_correction" as const,
+      issueCount: 1,
+      correctionCount: 0,
+      missingGoalCount: 0,
+    }],
+    issues: [{
+      type: "partial",
+      description: "acc-fe-1 failed",
+      requirement_ids: ["REQ-1"],
+      spec_ids: ["acc-fe-1"],
+    }],
+    corrections: [],
+    missingGoals: [],
+    attempts: 1,
+  }
+  const parsed = Event.IntegrityReviewCompleted.properties.parse(payload)
+  expect(parsed.issues[0].requirement_ids).toEqual(["REQ-1"])
+  expect(parsed.issues[0].spec_ids).toEqual(["acc-fe-1"])
+  // Issues without the new fields still parse — they're optional.
+  const minimal = Event.IntegrityReviewCompleted.properties.parse({
+    ...payload,
+    issues: [{ type: "partial", description: "no new fields" }],
+  })
+  expect(minimal.issues[0].requirement_ids).toBeUndefined()
+  expect(minimal.issues[0].spec_ids).toBeUndefined()
+})
+
+test("when every claiming goal's essential spec fails, the LLM-driven verdict round-trips as needs_correction (host does not aggregate)", async () => {
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  let capturedPrompt = ""
+  runnerImpl = async (input: any) => {
+    capturedPrompt = input.buildUserPrompt()
+    // The LLM walks the snapshot rows itself and decides the verdict —
+    // we simulate that by submitting "needs_correction" with a partial
+    // issue that points at the failing specs the snapshot listed.
+    await input.toolKit.tools.submit_requirement_fidelity_verdict.execute({
+      verdict: "needs_correction",
+      issues: [{
+        type: "partial",
+        description: "REQ-1 essential specs all failed across both claiming goals.",
+        requirement_ids: ["REQ-1"],
+        spec_ids: ["acc-fe-1", "acc-be-1"],
+        evidence: "snapshot rows show acc-fe-1=FAILED on goal_fe and acc-be-1=FAILED on goal_be",
+      }],
+      corrections: [],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_technical_feasibility_verdict.execute({
+      verdict: "pass", issues: [], corrections: [], missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_hallucination_verdict.execute({
+      verdict: "pass", issues: [], corrections: [], missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_solution_quality_verdict.execute({
+      verdict: "pass", issues: [], corrections: [], missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_all_fail" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  const result = await reviewIntegrity({
+    userRequest: "Stock dashboard with API",
+    taskTitle: "all-essential-fail snapshot",
+    goals: [{
+      ...baseGoal,
+      requirement_ids: ["REQ-1"],
+      acceptance_specs: [{
+        id: "acc-fe-1",
+        source_requirement_id: "REQ-1",
+        goal_id: baseGoal.id,
+        title: "fe acceptance",
+        severity: "essential",
+        scorers: [{ type: "heuristic", name: "fe", spec: { kind: "shell", cmd: "true" } }],
+      }],
+    }],
+    requirements: [{ id: "REQ-1", type: "explicit", description: "Show dashboard" }],
+    requirementStatus: [{
+      reqID: "REQ-1",
+      reqDescription: "Show dashboard",
+      claimingGoals: [
+        {
+          goalID: "goal_fe",
+          goalTitle: "frontend",
+          runStatus: "completed",
+          specOutcomes: [{ specID: "acc-fe-1", severity: "essential", passed: false, summary: "fe smoke failed" }],
+        },
+        {
+          goalID: "goal_be",
+          goalTitle: "backend",
+          runStatus: "completed",
+          specOutcomes: [{ specID: "acc-be-1", severity: "essential", passed: false, summary: "api smoke failed" }],
+        },
+      ],
+    }],
+  })
+
+  // Snapshot table renders both goals' FAILED outcomes verbatim.
+  expect(capturedPrompt).toContain("goal_fe")
+  expect(capturedPrompt).toContain("goal_be")
+  expect(capturedPrompt.match(/FAILED/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+  // Aggregate verdict is the worst per-dimension verdict — derived from the
+  // LLM's submission, not host-recomputed from snapshot rows.
+  expect(result.verdict).toBe("needs_correction")
+  const fidelity = result.dimensions.find((d) => d.id === "requirement_fidelity")
+  expect(fidelity?.verdict).toBe("needs_correction")
+  expect(fidelity?.issues[0].specIDs).toEqual(["acc-fe-1", "acc-be-1"])
+})
+
 test("buildIntegrityPrompt renders the snapshot table and foregrounds REQ → goal coverage when post-build", async () => {
   const { reviewIntegrity } = await import("../../src/integrity/agent")
   let capturedPrompt = ""
