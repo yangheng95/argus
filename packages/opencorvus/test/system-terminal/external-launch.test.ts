@@ -32,6 +32,20 @@ describe("system terminal external launch command", () => {
     expect(command.args.join(" ")).not.toContain("pty")
   })
 
+  test("Windows coding CLI unwraps user-supplied executable quotes before cmd quoting", () => {
+    const command = SystemTerminal.buildCommand({
+      platform: "win32",
+      cwd: "C:\\repo",
+      terminalApp: "cmd.exe",
+      command: `'"C:\\Users\\hengu\\.local\\bin\\claude.exe"'`,
+      args: [],
+      keepOpen: true,
+    })
+
+    expect(command.args.at(-1)).toBe('"C:\\Users\\hengu\\.local\\bin\\claude.exe"')
+    expect(command.args.at(-1)).not.toContain("'")
+  })
+
   test("macOS opens Terminal.app through osascript", () => {
     const command = SystemTerminal.buildCommand({
       platform: "darwin",

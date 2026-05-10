@@ -113,16 +113,28 @@ export namespace CodingCli {
     },
   ]
 
-  function resolveCommand(command: string): string {
-    if (path.isAbsolute(command)) {
-      if (!existsSync(command)) {
-        throw new ConfigError({ message: `Coding CLI command does not exist: ${command}` })
-      }
-      return command
+  function unwrapCommandQuotes(value: string): string {
+    let next = value.trim()
+    while (next.length >= 2) {
+      const first = next[0]
+      const last = next[next.length - 1]
+      if (!((first === "'" && last === "'") || (first === '"' && last === '"'))) break
+      next = next.slice(1, -1).trim()
     }
-    const resolved = which(command)
+    return next
+  }
+
+  function resolveCommand(command: string): string {
+    const normalized = unwrapCommandQuotes(command)
+    if (path.isAbsolute(normalized)) {
+      if (!existsSync(normalized)) {
+        throw new ConfigError({ message: `Coding CLI command does not exist: ${normalized}` })
+      }
+      return normalized
+    }
+    const resolved = which(normalized)
     if (!resolved) {
-      throw new ConfigError({ message: `Coding CLI command is not resolvable: ${command}` })
+      throw new ConfigError({ message: `Coding CLI command is not resolvable: ${normalized}` })
     }
     return resolved
   }
