@@ -924,6 +924,64 @@ describe("delivery repeated failure tracking", () => {
     ])).toBe(2)
   })
 
+  test("delivery freshness gate rejects pre_build integrity attempts and accepts post_build attempts", async () => {
+    const dir = await packageFixture({
+      build: "bun -e \"console.log('build ok')\"",
+    })
+
+    // Pre-build integrity attempt only — gate must fail.
+    const manifestPre = await Instance.provide({
+      directory: dir,
+      fn: () => {
+        recordIntegrity("tsk_phase_pre", "spec_phase_pre", {
+          verdict: "pass",
+          issuesCount: 0,
+          correctionsCount: 0,
+          missingCount: 0,
+          phase: "pre_build",
+        })
+        return buildDeliveryEvidenceManifest({
+          taskID: "tsk_phase_pre",
+          runID: "run_phase_pre",
+          deliveryID: "dlv_phase_pre",
+          specSnapshotID: "spec_phase_pre",
+          changedFiles: ["src/app.ts"],
+          goals: [{ ...goalInput("gol_phase"), acceptance_spec_count: 1 }],
+        })
+      },
+    })
+
+    const integrityCheckPre = manifestPre.reviewEvidence.find((r) => r.id === "review:integrity")
+    expect(integrityCheckPre?.status).toBe("failed")
+    const evidencePre = (integrityCheckPre?.evidence ?? []).join("\n")
+    expect(evidencePre).toContain("post-build")
+
+    // Same task with a post-build attempt — gate accepts.
+    const manifestPost = await Instance.provide({
+      directory: dir,
+      fn: () => {
+        recordIntegrity("tsk_phase_post", "spec_phase_post", {
+          verdict: "pass",
+          issuesCount: 0,
+          correctionsCount: 0,
+          missingCount: 0,
+          phase: "post_build",
+        })
+        return buildDeliveryEvidenceManifest({
+          taskID: "tsk_phase_post",
+          runID: "run_phase_post",
+          deliveryID: "dlv_phase_post",
+          specSnapshotID: "spec_phase_post",
+          changedFiles: ["src/app.ts"],
+          goals: [{ ...goalInput("gol_phase"), acceptance_spec_count: 1 }],
+        })
+      },
+    })
+    const integrityCheckPost = manifestPost.reviewEvidence.find((r) => r.id === "review:integrity")
+    expect(integrityCheckPost?.status).toBe("passed")
+    expect((integrityCheckPost?.evidence ?? []).join("\n")).toContain("phase=post_build")
+  })
+
   test("delivery refusal guards remain non-terminal strategy feedback", async () => {
     const orchestratorTools = await fs.readFile(
       path.join(import.meta.dir, "../../src/orchestrator/tools.ts"),
@@ -974,6 +1032,10 @@ function recordIntegrity(
     issuesCount: number
     correctionsCount: number
     missingCount: number
+    /** Defaults to post_build so the existing tests, which simulate a fully
+     *  reviewed build, satisfy the delivery freshness gate. Pre-build cases
+     *  pass "pre_build" explicitly to assert the gate rejects them. */
+    phase?: "pre_build" | "post_build"
   },
 ) {
   const now = Date.now()
@@ -1009,8 +1071,9 @@ function recordIntegrity(
     sessionID: `ses_${specSnapshotID}`,
     specSnapshotID,
     verdict: input.verdict,
+    phase: input.phase ?? "post_build",
     perDimension: [
-      { id: "goal_fidelity", verdict: input.verdict },
+      { id: "requirement_fidelity", verdict: input.verdict },
       { id: "technical_feasibility", verdict: "pass" },
       { id: "hallucination", verdict: "pass" },
       { id: "solution_quality", verdict: "pass" },

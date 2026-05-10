@@ -1736,6 +1736,35 @@
   border-left-color: var(--warn);
 }
 
+/* REQ-N / acceptance-spec id chip strip on issue rows. Lights up when
+   requirement_fidelity issues cite the affected REQs (always required by
+   prompt rule), or when post-build issues point at failing acceptance specs
+   surfaced by the Requirement Status Snapshot. */
+.integrity__chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: calc(2px * var(--ui-scale));
+  margin-left: calc(6px * var(--ui-scale));
+}
+
+.integrity__chip {
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny, var(--ui-font-small));
+  padding: 0 calc(4px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  line-height: 1.6;
+}
+
+.integrity__chip--req {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.integrity__chip--spec {
+  color: var(--warn);
+  background: var(--warn-dim);
+}
+
 /* Correction sub-block: head row layered on the shared chrome. */
 .integrity__correction-head {
   display: flex;

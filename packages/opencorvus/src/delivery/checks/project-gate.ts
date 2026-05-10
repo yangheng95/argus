@@ -329,12 +329,17 @@ function buildReviewEvidence(input: {
       specSnapshotId: input.specSnapshotID,
     }]
   }
+  // Delivery gate requires a POST-BUILD integrity attempt — a pre-build
+  // attempt audits decomposition only and cannot stand in for end-to-end
+  // completion review. A pre-build green attempt that landed before any goal
+  // ran would otherwise let the delivery proceed despite zero build evidence.
   const row = Database.use((db) =>
     db.select().from(EngineArtifactTable)
       .where(and(
         eq(EngineArtifactTable.task_id, input.taskID!),
         eq(EngineArtifactTable.kind, "integrity_attempt"),
         sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotID}`,
+        sql`json_extract(${EngineArtifactTable.payload}, '$.phase') = 'post_build'`,
       ))
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
@@ -344,12 +349,16 @@ function buildReviewEvidence(input: {
       id,
       name: "Integrity Review",
       status: "failed",
-      evidence: [`non-trivial goal graph requires integrity review for spec snapshot ${input.specSnapshotID}`],
+      evidence: [
+        `non-trivial goal graph requires a post-build integrity review for spec snapshot ${input.specSnapshotID}`,
+        "pre-build attempts (decomposition audit) do not satisfy the delivery freshness gate",
+      ],
       specSnapshotId: input.specSnapshotID,
     }]
   }
   const payload = (row.payload ?? {}) as {
     verdict?: string
+    phase?: string
     issues_count?: number
     corrections_count?: number
     missing_count?: number
@@ -357,6 +366,7 @@ function buildReviewEvidence(input: {
     review_markdown?: string | null
   }
   const verdict = payload.verdict ?? "unknown"
+  const phase = payload.phase ?? "unknown"
   const correctionsCount = payload.corrections_count ?? 0
   const missingCount = payload.missing_count ?? 0
   const reviewMarkdown = typeof payload.review_markdown === "string" && payload.review_markdown.length > 0
@@ -379,6 +389,7 @@ function buildReviewEvidence(input: {
     verdict,
     evidence: [
       `verdict=${verdict}`,
+      `phase=${phase}`,
       `issues_count=${payload.issues_count ?? 0}`,
       `corrections_count=${correctionsCount}`,
       `missing_count=${missingCount}`,

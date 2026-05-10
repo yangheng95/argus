@@ -108,13 +108,18 @@ interface PendingIntegrityPayload {
   verdict: "pass" | "concerns" | "needs_correction";
   summary: string;
   dimensions: Array<{
-    id: "goal_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
+    id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
     verdict: "pass" | "concerns" | "needs_correction";
     issueCount: number;
     correctionCount: number;
     missingGoalCount: number;
   }>;
-  issues: Array<{ type: string; description: string }>;
+  issues: Array<{
+    type: string;
+    description: string;
+    requirement_ids?: string[];
+    spec_ids?: string[];
+  }>;
   corrections: Array<{
     action: "modify" | "split" | "remove";
     goalID: string;
@@ -907,7 +912,7 @@ function handleIntegrityCompleted(event: any): void {
       : props.verdict === "concerns" ? "concerns"
       : "needs_correction";
 
-  const dimensionIDs = ["goal_fidelity", "technical_feasibility", "hallucination", "solution_quality"] as const;
+  const dimensionIDs = ["requirement_fidelity", "technical_feasibility", "hallucination", "solution_quality"] as const;
   type DimensionID = typeof dimensionIDs[number];
   const isDimensionID = (s: string): s is DimensionID =>
     (dimensionIDs as readonly string[]).includes(s);
@@ -935,6 +940,12 @@ function handleIntegrityCompleted(event: any): void {
     issues: issues.map((i: any) => ({
       type: String(i?.type || "uncovered"),
       description: String(i?.description || ""),
+      requirement_ids: Array.isArray(i?.requirement_ids)
+        ? i.requirement_ids.filter((x: unknown): x is string => typeof x === "string")
+        : undefined,
+      spec_ids: Array.isArray(i?.spec_ids)
+        ? i.spec_ids.filter((x: unknown): x is string => typeof x === "string")
+        : undefined,
     })),
     corrections: corrections.map((c: any) => ({
       action: (c?.action === "split" || c?.action === "remove") ? c.action : "modify",

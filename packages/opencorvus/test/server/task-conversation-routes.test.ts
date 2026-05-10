@@ -58,7 +58,7 @@ describe("task conversation routes", () => {
           summary: "faithful",
           dimensions: [
             {
-              id: "goal_fidelity",
+              id: "requirement_fidelity",
               verdict: "pass",
               issueCount: 0,
               correctionCount: 0,

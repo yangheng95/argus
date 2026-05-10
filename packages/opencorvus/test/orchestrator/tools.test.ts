@@ -41,6 +41,14 @@ mock.module("@/integrity", () => ({
     if (!reviewIntegrityImpl) throw new Error("reviewIntegrity mock not configured")
     return reviewIntegrityImpl(input)
   },
+  // Pure projection — empty snapshot is the right answer for orchestrator
+  // tests, which don't seed the goal_run / verification-evidence rows the
+  // production projection would join. Tests asserting prompt rendering of
+  // the snapshot live in test/integrity/agent.test.ts and use the real
+  // function; this mock is just a non-throwing stub so the orchestrator's
+  // pre-review wiring doesn't blow up in the legacy test suites.
+  computeRequirementStatusSnapshot: () => [],
+  applyIntegrityCorrections: (goals: any) => goals,
 }))
 
 mock.module("@/architect/agent", () => ({
@@ -174,7 +182,7 @@ describe("orchestrator tools", () => {
       verdict: "pass",
       summary: "Integrity pass",
       dimensions: [
-        { id: "goal_fidelity", verdict: "pass", issues: [] },
+        { id: "requirement_fidelity", verdict: "pass", issues: [] },
         { id: "technical_feasibility", verdict: "pass", issues: [] },
         { id: "hallucination", verdict: "pass", issues: [] },
         { id: "solution_quality", verdict: "pass", issues: [] },
@@ -999,7 +1007,7 @@ describe("orchestrator tools", () => {
             verdict: "pass",
             summary: "Integrity pass",
             dimensions: [
-              { id: "goal_fidelity", verdict: "pass", issues: [] },
+              { id: "requirement_fidelity", verdict: "pass", issues: [] },
               { id: "technical_feasibility", verdict: "pass", issues: [] },
               { id: "hallucination", verdict: "pass", issues: [] },
               { id: "solution_quality", verdict: "pass", issues: [] },
@@ -1106,7 +1114,7 @@ describe("orchestrator tools", () => {
             verdict: "pass",
             summary: "Integrity pass",
             dimensions: [
-              { id: "goal_fidelity", verdict: "pass", issues: [] },
+              { id: "requirement_fidelity", verdict: "pass", issues: [] },
               { id: "technical_feasibility", verdict: "pass", issues: [] },
               { id: "hallucination", verdict: "pass", issues: [] },
               { id: "solution_quality", verdict: "pass", issues: [] },
@@ -1343,7 +1351,7 @@ describe("orchestrator tools", () => {
           verdict: "needs_correction",
           summary: "Goal graph must change",
           dimensions: [
-            { id: "goal_fidelity", verdict: "needs_correction", issues: [{ description: "Split the goal", type: "coverage_gap" }] },
+            { id: "requirement_fidelity", verdict: "needs_correction", issues: [{ description: "Split the goal", type: "coverage_gap" }] },
             { id: "technical_feasibility", verdict: "pass", issues: [] },
             { id: "hallucination", verdict: "pass", issues: [] },
             { id: "solution_quality", verdict: "needs_correction", issues: [{ description: "Current goal is too broad", type: "granularity" }] },
@@ -1439,7 +1447,7 @@ describe("orchestrator tools", () => {
           summary: "Shared shell contract is underspecified",
           dimensions: [
             {
-              id: "goal_fidelity",
+              id: "requirement_fidelity",
               verdict: "concerns",
               issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap", goalIDs: [goalID] }],
             },
@@ -1577,7 +1585,7 @@ describe("orchestrator tools", () => {
           summary: "Feature acceptance is underspecified",
           dimensions: [
             {
-              id: "goal_fidelity",
+              id: "requirement_fidelity",
               verdict: "pass",
               issues: [],
             },
@@ -1737,7 +1745,7 @@ describe("orchestrator tools", () => {
           summary: "Foundation contract changed under dependent work",
           dimensions: [
             {
-              id: "goal_fidelity",
+              id: "requirement_fidelity",
               verdict: "needs_correction",
               issues: [{
                 description: "Foundation acceptance omitted a shared interface",
@@ -1919,7 +1927,7 @@ describe("orchestrator tools", () => {
           verdict: "needs_correction",
           summary: "Correction has no semantic effect",
           dimensions: [
-            { id: "goal_fidelity", verdict: "pass", issues: [] },
+            { id: "requirement_fidelity", verdict: "pass", issues: [] },
             { id: "technical_feasibility", verdict: "needs_correction", issues: [{ description: "Dependency prose only", type: "missing_capability" }] },
             { id: "hallucination", verdict: "pass", issues: [] },
             { id: "solution_quality", verdict: "concerns", issues: [] },
@@ -1981,7 +1989,7 @@ describe("orchestrator tools", () => {
           verdict: "needs_correction",
           summary: "Integrity needs_correction",
           dimensions: [
-            { id: "goal_fidelity", verdict: "pass", issues: [] },
+            { id: "requirement_fidelity", verdict: "pass", issues: [] },
             { id: "technical_feasibility", verdict: "pass", issues: [] },
             {
               id: "hallucination",
@@ -2050,8 +2058,9 @@ describe("orchestrator tools", () => {
             sessionID: `ses_prior_integrity_${offset}`,
             specSnapshotID: specID,
             verdict: "needs_correction",
+            phase: "post_build",
             perDimension: [
-              { id: "goal_fidelity", verdict: "needs_correction" },
+              { id: "requirement_fidelity", verdict: "needs_correction" },
               { id: "technical_feasibility", verdict: "pass" },
               { id: "hallucination", verdict: "pass" },
               { id: "solution_quality", verdict: "pass" },
@@ -2069,7 +2078,7 @@ describe("orchestrator tools", () => {
           summary: "Integrity needs_correction",
           dimensions: [
             {
-              id: "goal_fidelity",
+              id: "requirement_fidelity",
               verdict: "needs_correction",
               issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
             },
@@ -2135,8 +2144,9 @@ describe("orchestrator tools", () => {
             sessionID: `ses_prior_mixed_integrity_${offset}`,
             specSnapshotID: specID,
             verdict: "needs_correction",
+            phase: "post_build",
             perDimension: [
-              { id: "goal_fidelity", verdict: "needs_correction" },
+              { id: "requirement_fidelity", verdict: "needs_correction" },
               { id: "technical_feasibility", verdict: "pass" },
               { id: "hallucination", verdict: "pass" },
               { id: "solution_quality", verdict: "pass" },
@@ -2154,7 +2164,7 @@ describe("orchestrator tools", () => {
           summary: "Integrity needs_correction",
           dimensions: [
             {
-              id: "goal_fidelity",
+              id: "requirement_fidelity",
               verdict: "needs_correction",
               issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
             },
@@ -2247,8 +2257,9 @@ describe("orchestrator tools", () => {
           sessionID: "ses_integrity_persisted_block",
           specSnapshotID: specID,
           verdict: "needs_correction",
+          phase: "post_build",
           perDimension: [
-            { id: "goal_fidelity", verdict: "pass" },
+            { id: "requirement_fidelity", verdict: "pass" },
             { id: "technical_feasibility", verdict: "pass" },
             { id: "hallucination", verdict: "needs_correction" },
             { id: "solution_quality", verdict: "concerns" },
@@ -2409,8 +2420,9 @@ describe("orchestrator tools", () => {
           sessionID: "ses_integrity_concern_block",
           specSnapshotID: specID,
           verdict: "concerns",
+          phase: "post_build",
           perDimension: [
-            { id: "goal_fidelity", verdict: "concerns" },
+            { id: "requirement_fidelity", verdict: "concerns" },
             { id: "technical_feasibility", verdict: "pass" },
             { id: "hallucination", verdict: "pass" },
             { id: "solution_quality", verdict: "concerns" },
@@ -2500,7 +2512,7 @@ describe("orchestrator tools", () => {
             verdict: "pass",
             summary: "Integrity pass before delivery",
             dimensions: [
-              { id: "goal_fidelity", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
+              { id: "requirement_fidelity", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
               { id: "technical_feasibility", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
               { id: "hallucination", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
               { id: "solution_quality", verdict: "pass", issues: [], corrections: [], missingGoals: [] },

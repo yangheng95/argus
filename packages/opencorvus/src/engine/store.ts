@@ -709,6 +709,10 @@ export function findLatestDeliveryVerdictArtifact(taskID: string) {
 export function findLatestIntegrityAttemptArtifact(input: {
   taskID: string
   specSnapshotID?: string | null
+  /** Filter by recorded `phase` ("pre_build" | "post_build"). Omit to match
+   *  any phase. The delivery freshness gate uses `phase: "post_build"` so a
+   *  pre-build review cannot satisfy the post-build completion requirement. */
+  phase?: "pre_build" | "post_build"
 }) {
   return Database.use((db) =>
     db.select().from(EngineArtifactTable)
@@ -717,6 +721,9 @@ export function findLatestIntegrityAttemptArtifact(input: {
         eq(EngineArtifactTable.kind, "integrity_attempt"),
         input.specSnapshotID
           ? sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotID}`
+          : sql`1 = 1`,
+        input.phase
+          ? sql`json_extract(${EngineArtifactTable.payload}, '$.phase') = ${input.phase}`
           : sql`1 = 1`,
       ))
       .orderBy(desc(EngineArtifactTable.time_created))

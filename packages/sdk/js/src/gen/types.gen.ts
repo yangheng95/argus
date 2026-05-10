@@ -418,7 +418,7 @@ export type EventIntegrityReviewCompleted = {
     verdict: "pass" | "concerns" | "needs_correction"
     summary: string
     dimensions: Array<{
-      id: "goal_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality"
+      id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality"
       verdict: "pass" | "concerns" | "needs_correction"
       issueCount: number
       correctionCount: number
@@ -427,6 +427,8 @@ export type EventIntegrityReviewCompleted = {
     issues: Array<{
       type: string
       description: string
+      requirement_ids?: Array<string>
+      spec_ids?: Array<string>
     }>
     corrections: Array<{
       action: "modify" | "split" | "remove"
@@ -535,6 +537,7 @@ export type UserMessage = {
     modelID: string
   }
   system?: string
+  systemMode?: "append_to_agent" | "complete"
   tools?: {
     [key: string]: boolean
   }
@@ -4926,6 +4929,7 @@ export type SessionPromptData = {
     }
     format?: OutputFormat
     system?: string
+    systemMode?: "append_to_agent" | "complete"
     variant?: string
     extra?: {
       [key: string]: unknown
@@ -5154,6 +5158,7 @@ export type SessionPromptAsyncData = {
     }
     format?: OutputFormat
     system?: string
+    systemMode?: "append_to_agent" | "complete"
     variant?: string
     extra?: {
       [key: string]: unknown

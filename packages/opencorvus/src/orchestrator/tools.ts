@@ -88,6 +88,7 @@ import type {
   IntegrityResult,
   MissingGoal,
 } from "@/integrity"
+import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 
 const log = Log.create({ service: "task-tools" })
 
@@ -120,66 +121,8 @@ type IntegrityReviewOutcome =
       missingGoals: MissingGoal[]
     }
 
-/**
- * Render a complete integrity review as markdown text. Every issue, every
- * correction proposal (with action / goalID / reason / updates fields), every
- * missing-goal proposal (with title / objective / acceptance hints / owned
- * paths), and every per-dimension verdict is included verbatim.
- *
- * No truncation, no count-only summarisation. The orchestrator LLM is the
- * single decision maker for follow-up actions and needs the same evidence the
- * integrity LLM produced. Compact rendering (one fact per line) keeps the
- * payload prompt-friendly.
- */
-function renderIntegrityMarkdown(input: {
-  verdict: IntegrityResult
-  sessionID: string
-}): string {
-  const { verdict, sessionID } = input
-  const lines: string[] = []
-  lines.push(`### Architecture review (verdict=${verdict.verdict}; session ${sessionID})`)
-  if (verdict.summary) lines.push(`Summary: ${verdict.summary}`)
-  for (const dim of verdict.dimensions) {
-    const issues = dim.issues ?? []
-    const corrections = dim.corrections ?? []
-    const missingGoals = dim.missingGoals ?? []
-    lines.push("")
-    lines.push(`**${dim.id} = ${dim.verdict}**`)
-    if (issues.length === 0 && corrections.length === 0 && missingGoals.length === 0) {
-      lines.push("- (no findings)")
-      continue
-    }
-    if (issues.length > 0) {
-      lines.push("- issues:")
-      for (const i of issues) {
-        const goalRef = i.goalIDs && i.goalIDs.length > 0 ? ` goal_ids=[${i.goalIDs.join(", ")}]` : ""
-        const evidence = i.evidence ? ` _evidence: ${i.evidence}_` : ""
-        lines.push(`  - [${i.type}] ${i.description}${goalRef}${evidence}`)
-      }
-    }
-    if (corrections.length > 0) {
-      lines.push("- corrections (proposed by integrity, NOT yet applied):")
-      for (const c of corrections) {
-        const updates = c.updates ? ` updates=${JSON.stringify(c.updates)}` : ""
-        lines.push(`  - ${c.action} goal=${c.goalID} — ${c.reason}${updates}`)
-      }
-    }
-    if (missingGoals.length > 0) {
-      lines.push("- missing_goals (proposed by integrity, NOT yet applied):")
-      for (const m of missingGoals) {
-        const ownedPaths = m.owned_paths ?? []
-        const hints = m.acceptance_spec_hints ?? []
-        lines.push(
-          `  - title="${m.title}" kind=${m.kind} priority=${m.priority} owned_paths=[${ownedPaths.join(", ")}] — ${m.reason}`,
-        )
-        if (hints.length > 0) {
-          for (const h of hints) lines.push(`    * acceptance hint: ${h}`)
-        }
-      }
-    }
-  }
-  return lines.join("\n")
-}
+// renderIntegrityMarkdown lives in @/integrity/render-markdown so it can be
+// unit-tested without pulling the full orchestrator import graph; imported below.
 
 // Post-build architecture review is task/spec scoped. Parallel Build tool
 // calls can complete in the same orchestrator turn; without this single-flight
@@ -1397,13 +1340,36 @@ export function createOrchestratorTools(input: {
       requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
     }))
 
-    const { reviewIntegrity } = await import("@/integrity")
+    const { reviewIntegrity, computeRequirementStatusSnapshot } = await import("@/integrity")
+    // Project REQ status from DB BEFORE the review fires. The host does not
+    // pre-compute completion verdicts (rule 6.1) — it only lays out raw
+    // claiming-goal × tip-run × per-spec evidence; the LLM walks it inside
+    // the prompt. An empty snapshot (pre-build, or no REQs at all) is the
+    // signal that the prompt's Requirement Status Snapshot section should
+    // not render — handled in buildIntegrityPrompt.
+    const requirementStatus = computeRequirementStatusSnapshot({
+      taskID,
+      specSnapshotID: activeSpec.id,
+    })
+    // Phase classification: post_build iff at least one REQ has a claiming
+    // goal whose tip run is not "unstarted" (i.e. SOME goal has actually
+    // produced evidence by attempt time). This makes pre-build attempts
+    // (no goal_run rows yet) and post-build attempts (≥1 run with status)
+    // sit in distinct phase buckets so the delivery freshness gate cannot
+    // be satisfied by a green pre-build attempt.
+    const phase: "pre_build" | "post_build" = requirementStatus.some((r) =>
+      r.claimingGoals.some((g) => g.runStatus !== "unstarted"),
+    )
+      ? "post_build"
+      : "pre_build"
+
     const verdict = await reviewIntegrity({
       userRequest: task.request,
       taskTitle: task.title,
       goals: goalsForReview,
       requirements,
       requirementDecisions,
+      requirementStatus,
       designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
       decisionLog,
       attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
@@ -1423,6 +1389,7 @@ export function createOrchestratorTools(input: {
         sessionID: verdict.sessionID,
         specSnapshotID: activeSpec.id,
         verdict: verdict.verdict,
+        phase,
         perDimension: perDimensionRollup,
         issuesCount: verdict.issues.length,
         correctionsCount: verdict.corrections.length,
@@ -2696,8 +2663,9 @@ export function createOrchestratorTools(input: {
       description:
         "OPTIONAL architecture-review agent. Multi-dimension review of the active " +
         "architect graph along four " +
-        "axes: goal_fidelity (coverage of the original user request), " +
-        "technical_feasibility (imports / exports / owned_paths / dep graph viability), " +
+        "axes: requirement_fidelity (REQ-N keyed coverage + system completion when " +
+        "post-build evidence is available), technical_feasibility (imports / exports / " +
+        "owned_paths / dep graph viability + user-deliverable tier walk), " +
         "hallucination (ungrounded REQs / specs / contracts), solution_quality " +
         "(granularity, acceptance-spec strength, ownership, ordering). Returns a " +
         "per-dimension verdict (pass / concerns / needs_correction) plus an aggregate " +
@@ -3628,9 +3596,13 @@ export function createOrchestratorTools(input: {
           if (!activeSpecSnapshot) {
             throw new Error("deliver integrity prerequisite failed: required integrity review has no active spec snapshot")
           }
+          // Phase-aware lookup: delivery requires a POST-BUILD attempt. A
+          // green pre-build attempt (decomposition audit) does NOT satisfy
+          // the system-completion review the delivery gate enforces.
           const existingIntegrity = findLatestIntegrityAttemptArtifact({
             taskID,
             specSnapshotID: activeSpecSnapshot.id,
+            phase: "post_build",
           })
           if (!existingIntegrity) {
             const integrityOutcome = await runIntegrityReview()

@@ -11,6 +11,20 @@ mock.module("@/agent/runner", () => ({
   runAgentSessionWithRetry: () => {
     throw new Error("runAgentSessionWithRetry should not be called by IntegrityAgent")
   },
+  // Bun's `mock.module(...)` replaces the module's export map for the rest of
+  // the process. Re-export the runner's helper exports so tests that load
+  // SessionLoop or orchestrator/agent.ts AFTER this file (in Bun's pooled
+  // test runner) don't trip on missing-export SyntaxErrors. These pass-through
+  // implementations are pure functions that don't need the runner's heavy
+  // imports — copying them avoids re-running the original module.
+  AgentRunError: class AgentRunError extends Error {},
+  buildHardErrorFromFinalMessage: () => undefined,
+  messageHasInformationMissing: () => false,
+  extractInformationMissingBlock: () => undefined,
+  terminalToolMissingErrorFor: () => undefined,
+  shouldContinueForMissingTerminalTool: () => false,
+  promptToolSwitchesForAgentRun: () => ({}),
+  classifyAttemptOutcome: () => ({ kind: "noop" }),
 }))
 
 const baseGoal: GoalContractFields = {
@@ -36,9 +50,9 @@ test("integrity uses dimension collectors plus submit_integrity_review terminato
   runnerImpl = async (input: any) => {
     expect(input.toolKit.tools.finalize_integrity_review).toBeUndefined()
     expect(Object.keys(input.toolKit.tools).sort()).toEqual([
-      "submit_goal_fidelity_verdict",
       "submit_hallucination_verdict",
       "submit_integrity_review",
+      "submit_requirement_fidelity_verdict",
       "submit_solution_quality_verdict",
       "submit_technical_feasibility_verdict",
     ])
@@ -60,7 +74,7 @@ test("integrity uses dimension collectors plus submit_integrity_review terminato
     userRequest: "Build UI",
     taskTitle: "Test",
     goals: [baseGoal],
-  })).rejects.toThrow("missingDimensions=goal_fidelity,technical_feasibility,hallucination,solution_quality")
+  })).rejects.toThrow("missingDimensions=requirement_fidelity,technical_feasibility,hallucination,solution_quality")
 })
 
 test("integrity accepts only complete dimension submissions plus submit_integrity_review", async () => {
@@ -94,7 +108,7 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
   expect(result.verdict).toBe("pass")
   expect(result.summary).toBe("Integrity pass: 0 issue(s), 0 correction action(s).")
   expect(result.dimensions.map((d) => d.id)).toEqual([
-    "goal_fidelity",
+    "requirement_fidelity",
     "technical_feasibility",
     "hallucination",
     "solution_quality",
@@ -104,7 +118,7 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
 test("integrity preserves correction-bearing concerns verdict (no host reconciliation)", async () => {
   const { reviewIntegrity } = await import("../../src/integrity/agent")
   runnerImpl = async (input: any) => {
-    await input.toolKit.tools.submit_goal_fidelity_verdict.execute({
+    await input.toolKit.tools.submit_requirement_fidelity_verdict.execute({
       verdict: "pass",
       issues: [],
       corrections: [],
@@ -164,7 +178,7 @@ test("integrity preserves correction-bearing concerns verdict (no host reconcili
 test("hallucination findings can propose executable requirement-id repairs", async () => {
   const { reviewIntegrity } = await import("../../src/integrity/agent")
   runnerImpl = async (input: any) => {
-    await input.toolKit.tools.submit_goal_fidelity_verdict.execute({
+    await input.toolKit.tools.submit_requirement_fidelity_verdict.execute({
       verdict: "pass",
       issues: [],
       corrections: [],
@@ -228,4 +242,149 @@ test("submit_integrity_review schema requires explicit final confirmation", asyn
   const { IntegritySubmitSchema } = await import("../../src/integrity/submit-schema")
   expect(IntegritySubmitSchema.safeParse({}).success).toBe(false)
   expect(IntegritySubmitSchema.safeParse({ final: true }).success).toBe(true)
+})
+
+test("requirement_fidelity issue carries requirement_ids and spec_ids through to IntegrityResult", async () => {
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  runnerImpl = async (input: any) => {
+    await input.toolKit.tools.submit_requirement_fidelity_verdict.execute({
+      verdict: "needs_correction",
+      issues: [{
+        type: "partial",
+        description: "REQ-1 was claimed by goal_fe but acc-fe-1 failed.",
+        requirement_ids: ["REQ-1"],
+        spec_ids: ["acc-fe-1"],
+        evidence: "Requirement Status Snapshot row REQ-1: goal_fe runStatus=completed, acc-fe-1/essential=FAILED.",
+      }],
+      corrections: [],
+      missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_technical_feasibility_verdict.execute({
+      verdict: "pass", issues: [], corrections: [], missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_hallucination_verdict.execute({
+      verdict: "pass", issues: [], corrections: [], missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_solution_quality_verdict.execute({
+      verdict: "pass", issues: [], corrections: [], missing_goals: [],
+    }, {})
+    await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_integrity_post_build" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  const result = await reviewIntegrity({
+    userRequest: "Show stock dashboard",
+    taskTitle: "post-build issue surfaces spec_ids",
+    goals: [baseGoal],
+  })
+
+  const fidelity = result.dimensions.find((d) => d.id === "requirement_fidelity")
+  expect(fidelity?.issues).toHaveLength(1)
+  expect(fidelity?.issues[0].requirementIDs).toEqual(["REQ-1"])
+  expect(fidelity?.issues[0].specIDs).toEqual(["acc-fe-1"])
+  // Cross-dimension union also preserves the new fields.
+  expect(result.issues[0].requirementIDs).toEqual(["REQ-1"])
+  expect(result.issues[0].specIDs).toEqual(["acc-fe-1"])
+})
+
+test("buildIntegrityPrompt omits the Requirement Status Snapshot section when the snapshot is empty (pre-build)", async () => {
+  // Capture the rendered prompt by intercepting the runner's buildUserPrompt
+  // hook the way the production agent.ts wires it.
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  let capturedPrompt = ""
+  runnerImpl = async (input: any) => {
+    capturedPrompt = input.buildUserPrompt()
+    for (const [name, t] of Object.entries(input.toolKit.tools)) {
+      if (name === "submit_integrity_review") continue
+      await (t as any).execute({ verdict: "pass", issues: [], corrections: [], missing_goals: [] }, {})
+    }
+    await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_prompt_pre_build" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  await reviewIntegrity({
+    userRequest: "Build something",
+    taskTitle: "pre-build prompt elision",
+    goals: [baseGoal],
+    requirements: [{ id: "REQ-1", type: "explicit", description: "Build it" }],
+    requirementStatus: [],
+  })
+
+  // The dimension catalog already mentions the phrase "Requirement Status
+  // Snapshot" as instructional text. Key on the section header's unique
+  // subtitle "(post-build raw evidence)" which only appears when the actual
+  // table is rendered.
+  expect(capturedPrompt).not.toContain("(post-build raw evidence)")
+})
+
+test("buildIntegrityPrompt renders the snapshot table and foregrounds REQ → goal coverage when post-build", async () => {
+  const { reviewIntegrity } = await import("../../src/integrity/agent")
+  let capturedPrompt = ""
+  runnerImpl = async (input: any) => {
+    capturedPrompt = input.buildUserPrompt()
+    for (const [name, t] of Object.entries(input.toolKit.tools)) {
+      if (name === "submit_integrity_review") continue
+      await (t as any).execute({ verdict: "pass", issues: [], corrections: [], missing_goals: [] }, {})
+    }
+    await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
+    return {
+      session: { id: "ses_prompt_post_build" },
+      streamErrors: [],
+      structured: undefined,
+      collector: input.toolKit.getCollector(),
+      finalMessage: { info: {} },
+      model: { providerID: "test", modelID: "mock", id: "test/mock" },
+      requiredTools: [],
+    }
+  }
+
+  await reviewIntegrity({
+    userRequest: "Stock dashboard with API",
+    taskTitle: "post-build prompt with snapshot",
+    goals: [{
+      ...baseGoal,
+      acceptance_specs: [{
+        id: "acc-fe-1",
+        source_requirement_id: "REQ-1",
+        goal_id: baseGoal.id,
+        title: "frontend renders",
+        severity: "essential",
+        scorers: [{ type: "heuristic", name: "smoke", spec: { kind: "shell", cmd: "true" } }],
+      }],
+    }],
+    requirements: [{ id: "REQ-1", type: "explicit", description: "Show dashboard" }],
+    requirementStatus: [{
+      reqID: "REQ-1",
+      reqDescription: "Show dashboard",
+      claimingGoals: [{
+        goalID: baseGoal.id,
+        goalTitle: baseGoal.title,
+        runStatus: "completed",
+        specOutcomes: [{ specID: "acc-fe-1", severity: "essential", passed: false, summary: "smoke failed" }],
+      }],
+    }],
+  })
+
+  expect(capturedPrompt).toContain("(post-build raw evidence)")
+  expect(capturedPrompt).toContain("REQ-1")
+  expect(capturedPrompt).toContain("acc-fe-1")
+  expect(capturedPrompt).toContain("FAILED")
+  // Reverse-lookup map renders too.
+  expect(capturedPrompt).toContain("Requirement → Goal Coverage Map")
 })

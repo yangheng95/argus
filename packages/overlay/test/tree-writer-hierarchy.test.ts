@@ -590,7 +590,7 @@ test("integrity completed event materializes an integrity session card with stru
       verdict: "needs_correction",
       summary: "1 dimension flagged",
       dimensions: [
-        { id: "goal_fidelity", verdict: "needs_correction", issueCount: 1, correctionCount: 0, missingGoalCount: 1 },
+        { id: "requirement_fidelity", verdict: "needs_correction", issueCount: 1, correctionCount: 0, missingGoalCount: 1 },
       ],
       issues: [{ type: "uncovered", description: "missing goal X" }],
       corrections: [],
@@ -604,7 +604,7 @@ test("integrity completed event materializes an integrity session card with stru
   expect(cardTreeStore.cards[integrityCardID]?.kind).toBe("agent");
   expect(cardTreeStore.cards[integrityCardID]?.stage).toBe("integrity");
   expect(cardTreeStore.cards[integrityCardID]?.integrity?.verdict).toBe("needs_correction");
-  expect(cardTreeStore.cards[integrityCardID]?.integrity?.dimensions?.[0]?.id).toBe("goal_fidelity");
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.dimensions?.[0]?.id).toBe("requirement_fidelity");
   expect(cardTreeStore.cards[integrityCardID]?.integrity?.missingGoals?.[0]?.title).toBe("Add X");
   expect(cardTreeStore.order).toContain(integrityCardID);
 });

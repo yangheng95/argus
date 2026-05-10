@@ -134,8 +134,9 @@ describe("pipeline workflow architecture review step", () => {
       sessionID: "ses_integrity_projection",
       specSnapshotID: specID,
       verdict: "pass",
+      phase: "post_build",
       perDimension: [
-        { id: "goal_fidelity", verdict: "pass" },
+        { id: "requirement_fidelity", verdict: "pass" },
         { id: "technical_feasibility", verdict: "pass" },
         { id: "hallucination", verdict: "pass" },
         { id: "solution_quality", verdict: "pass" },
@@ -198,8 +199,9 @@ describe("pipeline workflow architecture review step", () => {
       sessionID: "ses_integrity_projection_failed",
       specSnapshotID: specID,
       verdict: "needs_correction",
+      phase: "post_build",
       perDimension: [
-        { id: "goal_fidelity", verdict: "pass" },
+        { id: "requirement_fidelity", verdict: "pass" },
         { id: "technical_feasibility", verdict: "pass" },
         { id: "hallucination", verdict: "needs_correction" },
         { id: "solution_quality", verdict: "concerns" },
@@ -266,8 +268,9 @@ describe("pipeline workflow architecture review step", () => {
       sessionID: "ses_integrity_projection_concern_failed",
       specSnapshotID: specID,
       verdict: "concerns",
+      phase: "post_build",
       perDimension: [
-        { id: "goal_fidelity", verdict: "concerns" },
+        { id: "requirement_fidelity", verdict: "concerns" },
         { id: "technical_feasibility", verdict: "pass" },
         { id: "hallucination", verdict: "pass" },
         { id: "solution_quality", verdict: "concerns" },

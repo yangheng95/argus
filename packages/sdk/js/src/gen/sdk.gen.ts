@@ -2277,6 +2277,7 @@ export class Session extends HeyApiClient {
       }
       format?: OutputFormat
       system?: string
+      systemMode?: "append_to_agent" | "complete"
       variant?: string
       extra?: {
         [key: string]: unknown
@@ -2299,6 +2300,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "tools" },
             { in: "body", key: "format" },
             { in: "body", key: "system" },
+            { in: "body", key: "systemMode" },
             { in: "body", key: "variant" },
             { in: "body", key: "extra" },
             { in: "body", key: "parts" },
@@ -2407,6 +2409,7 @@ export class Session extends HeyApiClient {
       }
       format?: OutputFormat
       system?: string
+      systemMode?: "append_to_agent" | "complete"
       variant?: string
       extra?: {
         [key: string]: unknown
@@ -2429,6 +2432,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "tools" },
             { in: "body", key: "format" },
             { in: "body", key: "system" },
+            { in: "body", key: "systemMode" },
             { in: "body", key: "variant" },
             { in: "body", key: "extra" },
             { in: "body", key: "parts" },
