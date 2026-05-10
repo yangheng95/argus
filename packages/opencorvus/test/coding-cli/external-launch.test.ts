@@ -36,6 +36,19 @@ describe("coding CLI external launch", () => {
     }
   })
 
+  test("accepts quoted explicit CLI command env paths", async () => {
+    const previous = process.env.OPENCORVUS_CODING_CLI_CLAUDE_CODE_BIN
+    process.env.OPENCORVUS_CODING_CLI_CLAUDE_CODE_BIN = `'"${process.execPath}"'`
+    try {
+      const listed = await CodingCli.list()
+
+      expect(listed.profiles).toContainEqual({ id: "claude-code", label: "Claude Code", icon: "claude-code" })
+    } finally {
+      if (previous === undefined) delete process.env.OPENCORVUS_CODING_CLI_CLAUDE_CODE_BIN
+      else process.env.OPENCORVUS_CODING_CLI_CLAUDE_CODE_BIN = previous
+    }
+  })
+
   test("builds a system terminal command for an external coding CLI", () => {
     const command = SystemTerminal.buildCommand({
       platform: "win32",

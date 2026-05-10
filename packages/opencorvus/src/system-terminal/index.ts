@@ -39,16 +39,28 @@ export namespace SystemTerminal {
     defaultShell?: string
   }
 
-  function resolveExecutable(command: string): string {
-    if (path.isAbsolute(command)) {
-      if (!existsSync(command)) {
-        throw new ConfigError({ message: `System terminal executable does not exist: ${command}` })
-      }
-      return command
+  function unwrapCommandQuotes(value: string): string {
+    let next = value.trim()
+    while (next.length >= 2) {
+      const first = next[0]
+      const last = next[next.length - 1]
+      if (!((first === "'" && last === "'") || (first === '"' && last === '"'))) break
+      next = next.slice(1, -1).trim()
     }
-    const resolved = which(command)
+    return next
+  }
+
+  function resolveExecutable(command: string): string {
+    const normalized = unwrapCommandQuotes(command)
+    if (path.isAbsolute(normalized)) {
+      if (!existsSync(normalized)) {
+        throw new ConfigError({ message: `System terminal executable does not exist: ${normalized}` })
+      }
+      return normalized
+    }
+    const resolved = which(normalized)
     if (!resolved) {
-      throw new ConfigError({ message: `System terminal executable is not resolvable: ${command}` })
+      throw new ConfigError({ message: `System terminal executable is not resolvable: ${normalized}` })
     }
     return resolved
   }
@@ -89,8 +101,8 @@ export namespace SystemTerminal {
   }
 
   function commandArgv(options: BuildOptions): string[] {
-    if (options.command) return [options.command, ...(options.args ?? [])]
-    if (options.profile) return [options.profile.command, ...options.profile.args]
+    if (options.command) return [unwrapCommandQuotes(options.command), ...(options.args ?? [])]
+    if (options.profile) return [unwrapCommandQuotes(options.profile.command), ...options.profile.args]
     return []
   }
 
