@@ -3,6 +3,7 @@ import { existsSync } from "fs"
 import path from "path"
 import z from "zod"
 import { SystemTerminal } from "@/system-terminal"
+import { unwrapCommandQuotes } from "@/util/command"
 import { which } from "@/util/which"
 
 export namespace CodingCli {
@@ -112,17 +113,6 @@ export namespace CodingCli {
           : ["glmcode", "glm-code", "glm"],
     },
   ]
-
-  function unwrapCommandQuotes(value: string): string {
-    let next = value.trim()
-    while (next.length >= 2) {
-      const first = next[0]
-      const last = next[next.length - 1]
-      if (!((first === "'" && last === "'") || (first === '"' && last === '"'))) break
-      next = next.slice(1, -1).trim()
-    }
-    return next
-  }
 
   function resolveCommand(command: string): string {
     const normalized = unwrapCommandQuotes(command)

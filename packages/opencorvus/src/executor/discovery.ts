@@ -3,6 +3,7 @@ import path from "path"
 import fs from "fs"
 import { Process } from "@/util/process"
 import type { ExecutorNameInfo } from "./contract"
+import { normalizeExecutableArgv, unwrapCommandQuotes } from "@/util/command"
 import { which } from "@/util/which"
 
 type Found = {
@@ -172,9 +173,10 @@ async function locate(input: {
   }
 
   const envPath = process.env[input.env]?.trim()
-  const envResolved = envPath && exists(envPath)
+  const envExecutable = envPath ? unwrapCommandQuotes(envPath) : undefined
+  const envResolved = envExecutable && exists(envExecutable)
     ? {
-        path: envPath,
+        path: envExecutable,
         source: "env" as const,
       }
     : undefined
@@ -191,7 +193,7 @@ async function locate(input: {
   }
 
   const resolved = input.resolve ? input.resolve(next.path) : next.path
-  const cmd = [resolved]
+  const cmd = normalizeExecutableArgv([resolved])
   return {
     name: input.name,
     available: true,

@@ -1,5 +1,6 @@
 import { spawn as launch, type ChildProcess } from "child_process"
 import { buffer } from "node:stream/consumers"
+import { normalizeExecutableArgv } from "./command"
 
 export namespace Process {
   export type Stdio = "inherit" | "pipe" | "ignore"
@@ -51,8 +52,9 @@ export namespace Process {
   export function spawn(cmd: string[], opts: Options = {}): Child {
     if (cmd.length === 0) throw new Error("Command is required")
     opts.abort?.throwIfAborted()
+    const command = normalizeExecutableArgv(cmd)
 
-    const proc = launch(cmd[0], cmd.slice(1), {
+    const proc = launch(command[0], command.slice(1), {
       cwd: opts.cwd,
       env: opts.env === null ? {} : opts.env ? { ...process.env, ...opts.env } : undefined,
       stdio: [opts.stdin ?? "ignore", opts.stdout ?? "ignore", opts.stderr ?? "ignore"],
@@ -101,6 +103,7 @@ export namespace Process {
   }
 
   export async function run(cmd: string[], opts: RunOptions = {}): Promise<Result> {
+    const command = normalizeExecutableArgv(cmd)
     const proc = spawn(cmd, {
       cwd: opts.cwd,
       env: opts.env,
@@ -121,6 +124,6 @@ export namespace Process {
       stderr,
     }
     if (out.code === 0 || opts.nothrow) return out
-    throw new RunFailedError(cmd, out.code, out.stdout, out.stderr)
+    throw new RunFailedError(command, out.code, out.stdout, out.stderr)
   }
 }
