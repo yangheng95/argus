@@ -15,6 +15,7 @@ describe("delivery retry feedback", () => {
         category: "runtime",
         error: "calculator render failed before puppeteer could inspect the DOM",
         goal_id: "gol_calc",
+        check_id: "runtime:web:.",
         suggestion: "Fix the render launch failure before changing calculator UI.",
       }],
       rawFeedbackPacket: {
@@ -31,6 +32,7 @@ describe("delivery retry feedback", () => {
     expect(text).toContain("specialist:client_contract")
     expect(text).toContain("render_failed: ETIMEDOUT")
     expect(text).toContain("[runtime] calculator render failed")
+    expect(text).toContain("check_id: runtime:web:.")
     expect(text).toContain("Canonical delivery feedback packet")
     expect(text).toContain("\"verdict_artifact_id\": \"artifact_verdict\"")
     expect(text).toContain("\"failedRuntimeFlowIds\"")

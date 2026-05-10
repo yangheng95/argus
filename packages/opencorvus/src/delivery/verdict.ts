@@ -55,7 +55,7 @@ export type DeliveryEvidenceFacetType = z.infer<typeof DeliveryEvidenceFacet>
 
 export const DeferredCheck = z.object({
   name: z.string().min(1).describe("Check name (e.g. code_review, dead_code_review)"),
-  result: z.enum(["passed", "failed", "skipped"]),
+  result: z.enum(["passed", "failed", "skipped", "advisory_failed"]),
   evidence: z.string().min(1).describe("Brief evidence or reason"),
 })
 export type DeferredCheckType = z.infer<typeof DeferredCheck>
@@ -87,6 +87,7 @@ export type ToolCallEvidenceType = z.infer<typeof ToolCallEvidence>
 export const RejectionDetail = z.object({
   goal_id: z.string().min(1).optional().describe("The goal id (gol_...) this rejection is attributed to. Omit for task-scope delivery failures that cannot be truthfully assigned to one goal."),
   category: z.enum(["build", "test", "lint", "runtime", "quality", "startup", "visual"]).describe("Category of the issue. Use 'visual' when the rejection traces back to a design_spec on task.design_specs."),
+  check_id: z.string().min(1).optional().describe("Deferred check id this rejection directly cites. Use the exact deferred_checks[].name when the rejection is caused by a check result."),
   file: z.string().optional().describe("Affected file path, if applicable"),
   error: z.string().min(8).describe("Description of the error or issue. Minimum 8 characters of reproducer-grade signal."),
   suggestion: z.string().optional().describe("Suggested fix approach for the executor"),

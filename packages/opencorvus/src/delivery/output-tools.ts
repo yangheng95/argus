@@ -16,7 +16,7 @@
  * a Zod schema cannot express:
  *   - accepted requires startup_verification.success=true when startup is applicable
  *   - accepted requires frontend_check.attempted=true ⇒ renders_correctly!=false
- *   - accepted requires no result='failed' deferred_check
+ *   - accepted requires no primary result='failed' deferred_check
  *   - accepted requires ≥1 tool_call_evidence with passed=true
  *   - accepted requires every skill-required_tool to appear with passed=true
  *
@@ -75,7 +75,7 @@ export function createDeliveryOutputTools(input?: {
         "is treated as a failed parse and retried.\n\n" +
         "Schema shape (discriminated by `verdict`):\n" +
         "- verdict='accepted' — provide summary, deferred_checks, tool_call_evidence (≥1 entry), plus only the task-applicable evidence facets listed below. NO rejection_details.\n" +
-        "- verdict='rejected' — provide summary, deferred_checks, tool_call_evidence (≥1 entry), any evidence facets you actually probed, AND rejection_details (≥1 entry). Include goal_id only when a responsible goal is actually identifiable; omit it for task-scope project failures.\n" +
+        "- verdict='rejected' — provide summary, deferred_checks, tool_call_evidence (≥1 entry), any evidence facets you actually probed, AND rejection_details (≥1 entry). Include goal_id only when a responsible goal is actually identifiable; include check_id when the issue directly cites a deferred_checks[].name; omit goal_id for task-scope project failures.\n" +
         "There is NO separate affected_goal_ids or issues_found field — goal rework routing derives only from rejection_details entries that truthfully include goal_id.\n" +
         (requiredEvidenceFacets.length > 0
           ? `\nHost-required evidence facets for verdict='accepted': [${requiredEvidenceFacets.join(", ")}].\n`
@@ -85,7 +85,7 @@ export function createDeliveryOutputTools(input?: {
         "- If frontend or visual is host-required, frontend_check.attempted MUST be true and renders_correctly MUST NOT be false.\n" +
         "- If any host hard gate failed (manifest, runtime-evidence, or visual metric), verdict='accepted' is rejected; submit a rejected verdict with evidence-backed rejection_details.\n" +
         "- Any supplied failed startup/frontend evidence contradicts acceptance even when that facet was not required.\n" +
-        "- deferred_checks MUST carry no result='failed' entries.\n" +
+        "- deferred_checks MUST carry no primary result='failed' entries; result='advisory_failed' is allowed as diagnostic evidence.\n" +
         "- tool_call_evidence MUST contain ≥1 entry with passed=true.\n" +
         (requiredTools.length > 0
           ? `- tool_call_evidence[] MUST cover every required tool with passed=true: [${requiredTools.join(", ")}].\n`
@@ -166,10 +166,10 @@ export function createDeliveryOutputTools(input?: {
           if (failedDeferred.length > 0) {
             return (
               `Error: verdict='accepted' requires deferred_checks to contain no ` +
-              `result='failed' entries. You reported ${failedDeferred.length} failed ` +
-              `deferred check(s): ${failedDeferred.map((c) => c.name).join(", ")}. A ` +
-              `failed check means the spec was not met — reject with rejection_details ` +
-              `attributing each failure to a goal.`
+              `primary result='failed' entries. You reported ${failedDeferred.length} failed ` +
+              `deferred check(s): ${failedDeferred.map((c) => c.name).join(", ")}. ` +
+              `result='advisory_failed' is allowed for auxiliary diagnostics, but ` +
+              `primary failures require verdict='rejected' with rejection_details.`
             )
           }
           const passedEvidenceCount = obj.tool_call_evidence.filter((e) => e.passed).length
@@ -198,6 +198,11 @@ export function createDeliveryOutputTools(input?: {
           }
         }
 
+        if (obj.verdict === "rejected") {
+          const advisoryOnlyError = advisoryOnlyRejectionError(obj)
+          if (advisoryOnlyError) return advisoryOnlyError
+        }
+
         collector.verdict = obj
         collector.finalized = true
 
@@ -224,4 +229,21 @@ export function createDeliveryOutputTools(input?: {
       collector = emptyCollector()
     },
   }
+}
+
+function advisoryOnlyRejectionError(obj: DeliveryVerdictType): string | undefined {
+  if (obj.verdict !== "rejected") return undefined
+  const failedNames = new Set(obj.deferred_checks.filter((item) => item.result === "failed").map((item) => item.name))
+  if (failedNames.size > 0) return undefined
+  const advisoryNames = new Set(obj.deferred_checks
+    .filter((item) => item.result === "advisory_failed")
+    .map((item) => item.name))
+  if (advisoryNames.size === 0) return undefined
+  const citedCheckIds = obj.rejection_details
+    .map((detail) => detail.check_id)
+    .filter((item): item is string => Boolean(item))
+  if (citedCheckIds.length !== obj.rejection_details.length) return undefined
+  const allDetailsReferenceAdvisory = citedCheckIds.every((checkID) => advisoryNames.has(checkID))
+  if (!allDetailsReferenceAdvisory) return undefined
+  return "Error: advisory 信号不应单独触发 reject — 找一个 primary 失败或重新分类"
 }

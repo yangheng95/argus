@@ -2,6 +2,7 @@ export type DeliveryRetryFeedbackDetail = {
   category: string
   error: string
   goal_id?: string
+  check_id?: string
   file?: string
   suggestion?: string
   visual_spec_id?: string
@@ -20,6 +21,7 @@ export function composeDeliveryRetryFeedback(input: {
   const detailLines = input.ownDetails.map((detail) => {
     const parts: string[] = [`[${detail.category}] ${detail.error}`]
     if (detail.goal_id) parts.push(`goal_id: ${detail.goal_id}`)
+    if (detail.check_id) parts.push(`check_id: ${detail.check_id}`)
     if (detail.file) parts.push(`(file: ${detail.file})`)
     if (detail.suggestion) parts.push(`suggestion: ${detail.suggestion}`)
     if (detail.visual_spec_id) parts.push(`visual_spec: ${detail.visual_spec_id}`)

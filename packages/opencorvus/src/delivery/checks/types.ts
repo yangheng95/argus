@@ -5,6 +5,7 @@
 import z from "zod"
 import { CheckConfig, EvaluationCheck, NamedCheckFamily } from "@/engine"
 import { Snapshot } from "@/snapshot"
+import type { AcceptanceSpec } from "@/acceptance/types"
 
 // ---------------------------------------------------------------------------
 // Output schema (from evaluator/agent.ts)
@@ -69,7 +70,7 @@ export interface GoalInfo {
   criteria: string
   priority: "blocking" | "advisory"
   acceptance_spec_count?: number
-  runtime_scenario_count?: number
+  acceptance_scenarios?: AcceptanceSpec[]
   check_selector?: string[]
   requirement_ids: string[]
   depends_on: string[]

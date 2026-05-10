@@ -76,6 +76,8 @@ appropriate file/test/config evidence instead of fabricating a startup attempt.
 - Every rejected issue must have a `rejection_details[]` entry. Include
   `goal_id` only when a responsible goal can be identified; omit it for
   task-scope project failures such as integrated build/test/lint/runtime gates.
+- When a rejection directly cites a deferred check, set
+  `rejection_details[].check_id` to the exact `deferred_checks[].name`.
 - `rejection_details[]` is the rework plan. Only entries with a truthful
   `goal_id` are used for goal routing.
 - Cite supporting calls in `tool_call_evidence` when a verdict depends on
@@ -201,8 +203,10 @@ remaining reviews (`review:workspace_export`, `specialist:*`) surface as
 evidence / visual metric in the manifest. Runtime flow failures for a
 requested frontend surface are blocking completion evidence: a deliverable
 that cannot be started and previewed through `start_frontend_preview` is not
-complete. Other auxiliary failures should be cited in `deferred_checks`
-unless they directly prove a requested surface is incomplete.
+complete. Other auxiliary failures should be cited in `deferred_checks` with
+`result="advisory_failed"` unless they directly prove a requested surface is
+incomplete. `result="failed"` is reserved for primary blockers; do not reject
+solely because every `rejection_details[].check_id` cites an advisory failure.
 
 Reject when coverage is incomplete, when a required runtime flow cannot be
 started/rendered, OR when an integrity blocker remains. The host gate will

@@ -63,7 +63,7 @@ test("DeliveryAgent budgets large auxiliary evidence while preserving hard gates
           criteria: huge,
           priority: "blocking",
           acceptance_spec_count: 1,
-          runtime_scenario_count: 0,
+          acceptance_scenarios: [],
           check_selector: [],
           requirement_ids: [],
           depends_on: [],
@@ -176,7 +176,7 @@ test("DeliveryAgent prompt includes manifest gate, ownership, and executor chang
           criteria: "Build passes.",
           priority: "blocking",
           acceptance_spec_count: 1,
-          runtime_scenario_count: 0,
+          acceptance_scenarios: [],
           check_selector: [],
           requirement_ids: [],
           depends_on: [],
@@ -281,7 +281,7 @@ test("DeliveryAgent keeps visual images out of startup prompt and exposes explor
           criteria: "Rendered UI matches the reference.",
           priority: "blocking",
           acceptance_spec_count: 1,
-          runtime_scenario_count: 1,
+          acceptance_scenarios: [scenarioSpec()],
           check_selector: [],
           requirement_ids: [],
           depends_on: [],
@@ -361,6 +361,26 @@ test("DeliveryAgent parses collector verdict before returning to the arbiter", a
     },
   })
 })
+
+function scenarioSpec() {
+  return {
+    id: "acc-runtime",
+    source_requirement_id: "REQ-runtime",
+    goal_id: "gol_visual",
+    title: "Runtime scenario",
+    scenario: {
+      given: ["the preview is open"],
+      when: ["the user views the page"],
+      then: ["the expected UI is visible"],
+    },
+    scorers: [{
+      type: "llm_judge" as const,
+      name: "runtime_behavior",
+      criteria: "The runtime page satisfies the described scenario.",
+    }],
+    severity: "essential" as const,
+  }
+}
 
 function testDeliveryModel(input?: { id?: string; providerID?: string; context?: number }) {
   const id = input?.id ?? "mock"

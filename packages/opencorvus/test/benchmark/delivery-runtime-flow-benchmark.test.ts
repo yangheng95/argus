@@ -48,7 +48,7 @@ describe("delivery runtime flow benchmark", () => {
             priority: "blocking",
             requirement_ids: ["REQ-chat"],
             acceptance_spec_count: 1,
-            runtime_scenario_count: 1,
+            acceptance_scenarios: [scenarioSpec("acc-chat-runtime", "gol_chat_runtime")],
           }],
         })
       },
@@ -84,7 +84,7 @@ describe("delivery runtime flow benchmark", () => {
             priority: "blocking",
             requirement_ids: ["REQ-chat"],
             acceptance_spec_count: 1,
-            runtime_scenario_count: 1,
+            acceptance_scenarios: [scenarioSpec("acc-chat-runtime", "gol_chat_runtime")],
           }],
         })
       },
@@ -116,7 +116,7 @@ describe("delivery runtime flow benchmark", () => {
             priority: "blocking",
             requirement_ids: ["REQ-auth"],
             acceptance_spec_count: 1,
-            runtime_scenario_count: 1,
+            acceptance_scenarios: [scenarioSpec("acc-auth-runtime", "gol_auth_runtime")],
           }],
         })
       },
@@ -129,6 +129,26 @@ describe("delivery runtime flow benchmark", () => {
     expect(manifest.runtimeFlows[0]?.interaction?.htmlChanged).toBe(true)
   }, 60_000)
 })
+
+function scenarioSpec(id: string, goalID: string) {
+  return {
+    id,
+    source_requirement_id: "REQ-runtime",
+    goal_id: goalID,
+    title: "Runtime scenario",
+    scenario: {
+      given: ["the preview is open"],
+      when: ["the user completes the primary page interaction"],
+      then: ["the expected application state is visible"],
+    },
+    scorers: [{
+      type: "llm_judge" as const,
+      name: "runtime_behavior",
+      criteria: "The runtime page satisfies the described scenario.",
+    }],
+    severity: "essential" as const,
+  }
+}
 
 async function frontendFixture(input: { interactive: boolean | "auth-gated" }) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "oc-delivery-runtime-bench-"))

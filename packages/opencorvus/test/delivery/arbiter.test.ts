@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { arbitrateDeliveryGate, arbitrateDeliveryVerdict } from "../../src/delivery/arbiter"
+import { appendManifestEvidence, arbitrateDeliveryGate, arbitrateDeliveryVerdict } from "../../src/delivery/arbiter"
 import {
   formatDeliveryManifestFailureDetails,
   repeatedDeliveryFailureSignatures,
@@ -362,6 +362,15 @@ describe("delivery arbiter", () => {
     ]))
   })
 
+  test("manifest auxiliary failures are projected as advisory_failed", () => {
+    const verdict = appendManifestEvidence(acceptedVerdict(), manifestWithAuxiliaryBuildAndReviewFailures())
+
+    expect(verdict.deferred_checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "check:build", result: "advisory_failed" }),
+      expect.objectContaining({ name: "specialist:frontend", result: "advisory_failed" }),
+    ]))
+  })
+
   test("runtime evidence failure stays advisory and does not override an LLM accept", () => {
     const rejected: DeliveryVerdictType = {
       verdict: "rejected",
@@ -538,6 +547,17 @@ function manifestWithMixedFunctionalAndAuxiliaryFailures(): DeliveryEvidenceMani
   }
 }
 
+function acceptedVerdict(): DeliveryVerdictType {
+  return {
+    verdict: "accepted",
+    summary: "accepted by reviewer",
+    startup_verification: { attempted: true, success: true },
+    frontend_check: { attempted: false },
+    deferred_checks: [],
+    tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
+  }
+}
+
 function passedManifest(): DeliveryEvidenceManifest {
   return {
     ...baseManifest(),
@@ -583,6 +603,38 @@ function manifestWithFailedBuildCheck(): DeliveryEvidenceManifest {
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
       failedReviewIds: [],
+    },
+  }
+}
+
+function manifestWithAuxiliaryBuildAndReviewFailures(): DeliveryEvidenceManifest {
+  return {
+    ...manifestWithFailedBuildCheck(),
+    reviewEvidence: [{
+      id: "specialist:frontend",
+      name: "Specialist Review: frontend",
+      status: "failed",
+      evidence: ["advisory frontend finding"],
+    }],
+    functionalAssessment: {
+      status: "complete",
+      primaryFailureIds: [],
+      auxiliaryFailureIds: ["check:build", "specialist:frontend"],
+      summary: "Functional completion passed with advisory issues.",
+    },
+    finalGate: {
+      status: "passed",
+      summary: "Functional completion passed with advisory issues.",
+      failedCheckIds: ["check:build"],
+      failedCoverageIds: [],
+      failedRuntimeFlowIds: [],
+      failedReviewIds: ["specialist:frontend"],
+      functionalAssessment: {
+        status: "complete",
+        primaryFailureIds: [],
+        auxiliaryFailureIds: ["check:build", "specialist:frontend"],
+        summary: "Functional completion passed with advisory issues.",
+      },
     },
   }
 }

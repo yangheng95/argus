@@ -32,7 +32,7 @@ test("DeliveryService still runs DeliveryAgent when manifest gate failed", async
           criteria: "Build passes.",
           priority: "blocking",
           acceptance_spec_count: 1,
-          runtime_scenario_count: 0,
+          acceptance_scenarios: [],
           check_selector: [],
           requirement_ids: [],
           depends_on: [],
