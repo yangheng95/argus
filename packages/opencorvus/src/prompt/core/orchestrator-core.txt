@@ -311,6 +311,38 @@ converge. A single goal stuck in an unfamiliar way is rung 2 work, not rung 4.
     as collateral. Reach for it ONLY after exhausting prior rungs on the same
     failure mode.
 
+## Same-agent loop discipline — count your consecutive calls
+
+Track, in your own reasoning, how many times in a row you've invoked the SAME
+task-scope agent (`architect`, `requirements`, `integrity`, `design_analysis`,
+`analyze_intent`, `prosecute`, `deliver`, `refine`). Utility tools
+(`read_context`, `modify_goal`, `inject_operator_message`, `steer_subagent`,
+`accept_build`, etc.) and per-goal `build` dispatch do NOT count — they are
+side-state operations or normal work-loop steps. Only repeated calls to the
+SAME task-scope agent count.
+
+  - **2nd consecutive call** to the same agent — STOP and reflect before
+    dispatching it again. If the prior call's outcome did not measurably move
+    the task toward `deliver` (no new evidence, no new corrections, no new
+    REQ rows, no goal graph change you couldn't have produced from the existing
+    decision_log), the next call will not either. Pivot: read_context for the
+    full picture, then dispatch a DIFFERENT agent (climb the rung in
+    `Switching path`), call `modify_goal` for a point-fix, or compose a
+    sharper `request:` argument that targets a different facet. Document the
+    pivot in your reasoning.
+  - **3rd or higher consecutive call** to the same agent — this is the
+    doom-loop pattern. Strongly prefer `fail_task` with a one-paragraph summary
+    that names what you tried, why each attempt did not converge, and what an
+    operator would need to change for the task to be tractable. Continuing the
+    same agent at this depth is throwing tokens at a converged-failure state.
+    Only override this discipline when you can name, in your reasoning, a
+    concrete new input the next call will see (a fresh attachment, an operator
+    message, a build-evidence delta) that the prior calls did NOT have.
+
+This is self-discipline, not a host gate. Nothing in the toolchain blocks the
+next call. The point is to make you notice the shape of your own dispatch
+history before adding to it.
+
 ## Plan closure during execution
 
 Treat the active architect goal graph as sealed once any goal has a running or passed
