@@ -1114,11 +1114,15 @@ export const Event = {
   /** Integrity review verdict with the full structured result. Emitted once
    *  per reviewIntegrity() call after the LLM submits every dimension verdict
    *  and closes with submit_integrity_review.
-   *  Carries the per-dimension breakdown (goal_fidelity / technical_feasibility
+   *  Carries the per-dimension breakdown (requirement_fidelity / technical_feasibility
    *  / hallucination / solution_quality) plus the cross-dimension union of
    *  issues / corrections / missing goals so the overlay can render a native
    *  verdict card. The runtime aggregates `verdict` from per-dimension worst-
-   *  case; the LLM does NOT supply a top-level verdict. */
+   *  case; the LLM does NOT supply a top-level verdict.
+   *  Issue rows carry optional `requirement_ids` and `spec_ids` so the overlay
+   *  can chip-render REQ-N / acc-* references and downstream consumers can
+   *  navigate from a fidelity issue to the failing REQ row or acceptance spec
+   *  surfaced post-build by the Requirement Status Snapshot. */
   /** Delivery deterministic pre-gate rejection. Fires when DeliveryService.verify
    *  short-circuits via runtime-evidence (e.g. empty_root_shell, no build artifact)
    *  and never invokes the LLM agent — so no agent session is created and no
@@ -1176,7 +1180,7 @@ export const Event = {
       verdict: z.enum(["pass", "concerns", "needs_correction"]),
       summary: z.string(),
       dimensions: z.array(z.object({
-        id: z.enum(["goal_fidelity", "technical_feasibility", "hallucination", "solution_quality"]),
+        id: z.enum(["requirement_fidelity", "technical_feasibility", "hallucination", "solution_quality"]),
         verdict: z.enum(["pass", "concerns", "needs_correction"]),
         issueCount: z.number(),
         correctionCount: z.number(),
@@ -1185,6 +1189,8 @@ export const Event = {
       issues: z.array(z.object({
         type: z.string(),
         description: z.string(),
+        requirement_ids: z.array(z.string()).optional(),
+        spec_ids: z.array(z.string()).optional(),
       })),
       corrections: z.array(z.object({
         action: z.enum(["modify", "split", "remove"]),

@@ -13,14 +13,35 @@ name the affected `goal_ids` on each issue. The orchestrator routes non-pass fee
 to those goal IDs; unscoped concerns are advisory. The review still must not rewrite
 the graph by itself.
 
+## Audit Unit
+
+Fidelity is REQ-keyed, NOT goal-keyed. The `requirement_fidelity` dimension walks the
+REQ-N rows (and the `Requirement Status Snapshot` table when present), then maps each
+REQ to the goal(s) that claim it via `requirement_ids` and the acceptance_specs whose
+`source_requirement_id` equals that REQ. Goals are too coarse a unit — one goal can
+absorb multiple REQs, so per-goal "covered?" judgements miss partial / merged-incorrectly
+REQ coverage.
+
+System completion is also an integrity concern: when a user-visible REQ implies a tier
+the user did not explicitly call out (a frontend page implies a backend API REQ + a data
+source; a CLI implies a runtime entrypoint; a webhook implies external reachability), the
+`technical_feasibility` dimension's user-deliverable tier walk catches it as
+`missing_capability`.
+
+Completion is a property of the **system** behind a REQ, not just the REQ row. When a
+`Requirement Status Snapshot` is present, fidelity verdicts MUST be backed by it; in its
+absence, fidelity is structural-only and the verdict reflects that. The host does NOT
+pre-compute completion verdicts — you walk raw run + spec outcomes and decide done /
+partial / not_done yourself (rule 6.1: prompt-over-host invariant).
+
 ## Decision Discipline
 
 Walk every dimension explicitly — do NOT collapse the four into a single judgement.
-A goal set can be perfectly faithful to the user's request while being technically
-infeasible, or fully feasible while built on hallucinated REQs. Each dimension
-produces its own per-dimension verdict (`pass` / `concerns` / `needs_correction`)
-and its own issue list. The aggregate verdict is the worst per-dimension verdict;
-the orchestrator records the per-dimension breakdown as architecture_review evidence.
+A REQ set can be perfectly covered while being technically infeasible, or fully
+feasible while built on hallucinated REQs. Each dimension produces its own per-dimension
+verdict (`pass` / `concerns` / `needs_correction`) and its own issue list. The aggregate
+verdict is the worst per-dimension verdict; the orchestrator records the per-dimension
+breakdown as architecture_review evidence.
 
 A `concerns` verdict means: I noticed something worth surfacing, but the goal set
 can still proceed, and therefore it MUST NOT include `corrections` or
@@ -44,14 +65,20 @@ trigger JSON-parse loops on smaller models, which is why each dimension is its
 own tool with a dimension-scoped issue-type enum.
 
 For EACH dimension in the catalogue, call its dedicated tool EXACTLY ONCE:
-  `submit_goal_fidelity_verdict({ verdict, issues, corrections, missing_goals })`
+  `submit_requirement_fidelity_verdict({ verdict, issues, corrections, missing_goals })`
   `submit_technical_feasibility_verdict({ verdict, issues, corrections, missing_goals })`
   `submit_hallucination_verdict({ verdict, issues, corrections, missing_goals })`
   `submit_solution_quality_verdict({ verdict, issues, corrections, missing_goals })`
 
 Issue `type` values are restricted per dimension; you cannot file e.g.
-`granularity_off` under `goal_fidelity`. If the schema rejects a call, the error
+`granularity_off` under `requirement_fidelity`. If the schema rejects a call, the error
 message will tell you which field is wrong and you must call that single tool again.
+
+Every `requirement_fidelity` issue MUST set `requirement_ids` to the affected REQ
+ids. When the issue points at failing acceptance specs surfaced by the post-build
+Requirement Status Snapshot, also set `spec_ids` so the orchestrator and overlay
+can navigate to the failing spec. Issues from other dimensions may set
+`requirement_ids` / `spec_ids` when relevant but it is not required.
 
 After every dimension is submitted, close with EXACTLY ONE call:
   `submit_integrity_review({ "final": true })`
@@ -81,7 +108,8 @@ grounded in the user request, reference, or codebase), `kind` (`bootstrap` |
 
 ## Evidence Requirement
 
-Every `issues[]` entry MUST cite concrete evidence: a goal id, a REQ id, a spec id,
+Every `issues[]` entry MUST cite concrete evidence: a REQ id, a goal id, a spec id,
 or a verbatim phrase from the user request. "Goal looks weak" is rejected at
-review-time; "goal_backend's only essential spec is `acc-be-1` whose scorer runs
-`test -f src/server/index.js`, which passes by construction" is the bar.
+review-time; "REQ-3 ('show stock dashboard') is claimed by goal_fe but goal_fe's
+only essential spec acc-fe-1 has `passed=false` in the Requirement Status Snapshot,
+and no goal owns the BE API REQ-3 implies" is the bar.

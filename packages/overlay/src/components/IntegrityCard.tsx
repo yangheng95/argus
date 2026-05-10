@@ -107,6 +107,20 @@ export function IntegrityBody(props: { integrity: Integrity }) {
                 <li class="integrity__issue" data-type={issue.type}>
                   <span class="integrity__tag">{issue.type}</span>
                   <span class="integrity__issue-desc">{issue.description}</span>
+                  <Show when={issue.requirement_ids && issue.requirement_ids.length > 0}>
+                    <span class="integrity__chips integrity__chips--req">
+                      <For each={issue.requirement_ids}>
+                        {(rid) => <span class="integrity__chip integrity__chip--req">{rid}</span>}
+                      </For>
+                    </span>
+                  </Show>
+                  <Show when={issue.spec_ids && issue.spec_ids.length > 0}>
+                    <span class="integrity__chips integrity__chips--spec">
+                      <For each={issue.spec_ids}>
+                        {(sid) => <span class="integrity__chip integrity__chip--spec">{sid}</span>}
+                      </For>
+                    </span>
+                  </Show>
                 </li>
               )}
             </For>

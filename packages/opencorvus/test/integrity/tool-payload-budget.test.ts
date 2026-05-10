@@ -58,6 +58,8 @@ describe("integrity reviewer tool payload — provider-normalised budget", () =>
       type: z.enum(types as [string, ...string[]]),
       description: z.string().min(1),
       goal_ids: z.array(z.string()).optional(),
+      requirement_ids: z.array(z.string()).optional(),
+      spec_ids: z.array(z.string()).optional(),
       evidence: z.string().optional(),
     })
   }

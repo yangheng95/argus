@@ -5,7 +5,10 @@
  * builds turn non-pass post-build architecture_review findings from these four
  * orthogonal properties of the architect's output into targeted rework feedback:
  *
- *   1. goal_fidelity         — coverage of the user's literal request
+ *   1. requirement_fidelity  — REQ-N completion at the system level (each
+ *                              user-visible requirement is covered AND, when a
+ *                              post-build status snapshot is present, actually
+ *                              done end-to-end)
  *   2. technical_feasibility — viability of the proposed contracts
  *   3. hallucination         — fabrication-free upstream reasoning
  *   4. solution_quality      — soundness of the decomposition itself
@@ -39,7 +42,7 @@
  */
 
 export type IntegrityIssueType =
-  // goal_fidelity
+  // requirement_fidelity
   | "uncovered"
   | "partial"
   | "distorted"
@@ -61,7 +64,7 @@ export type IntegrityIssueType =
 
 export interface IntegrityDimension {
   /** Snake_case id used on the wire and in storage. */
-  id: "goal_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality"
+  id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality"
   /** Human-readable title (en). */
   title: string
   /** Single-sentence definition for the system prompt. */
@@ -76,20 +79,34 @@ export interface IntegrityDimension {
 
 export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
   {
-    id: "goal_fidelity",
-    title: "Goal Fidelity",
+    id: "requirement_fidelity",
+    title: "Requirement Fidelity",
     summary:
-      "The goal set must cover the user's ORIGINAL request faithfully — every distinct " +
-      "ask is addressed, no ask is silently merged or distorted, and no goal injects " +
-      "scope the user did not request.",
+      "Audit unit is REQ-N (each row in the parsed requirements list), NOT goal contracts. " +
+      "Every user-visible REQ must be covered by at least one goal that claims it via " +
+      "`requirement_ids`, and the related acceptance specs (those whose `source_requirement_id` " +
+      "matches the REQ) must be strong enough to constitute real coverage. When a `Requirement " +
+      "Status Snapshot` block is present in the prompt, also judge real end-to-end completion " +
+      "from the raw run + spec outcomes; the host does not pre-compute aggregates — you decide.",
     checklist: [
-      "Read the User Request verbatim. List every concrete deliverable the user named. " +
-        "Walk through each goal contract and assign which user deliverable it satisfies. " +
-        "An unmatched user deliverable = `uncovered` issue. A goal with no user-deliverable mapping = `out_of_scope` (handled by the hallucination dimension; if it overlaps a user deliverable but adds requirements the user did not specify, that's `distorted` here).",
-      "When the user names two clearly separate concerns and one goal claims both, " +
-        "that's `merged_incorrectly` — split-correction or a missing-goal proposal.",
-      "When a goal addresses a user deliverable but at strictly less depth than the " +
-        "user described, that's `partial`.",
+      "Walk REQ-N row by row, NOT goal by goal. For each REQ: which goal(s) claim it via " +
+        "`requirement_ids`? If none claim it = `uncovered` (cite the REQ id in `requirement_ids` " +
+        "on the issue). If exactly one goal claims a REQ that names two clearly separate concerns " +
+        "the user described (e.g. 'frontend page AND a separate auth flow'), that's " +
+        "`merged_incorrectly` — propose a split via missing_goal or modify-correction.",
+      "For each REQ that IS claimed, walk the claiming goals' acceptance_specs filtered by " +
+        "`source_requirement_id == REQ-id`. If those specs only cover a strict subset of what " +
+        "the REQ describes (depth shortfall), that's `partial`. If a claiming goal's contract " +
+        "reshapes the REQ — adding constraints the user did not state in the REQ row — that's " +
+        "`distorted` (NOT `out_of_scope`; that one is hallucination's territory and triggers when " +
+        "the REQ row itself drifts beyond the user's words).",
+      "When a `# Requirement Status Snapshot` section is present (post-build), walk it row by " +
+        "row. Each snapshot row gives REQ-N, claiming goals with their `runStatus`, and per-spec " +
+        "`severity` + `passed?` outcomes. Decide REQ completion yourself from this raw evidence: " +
+        "essential specs all `passed=true` is done; mixed pass/fail on essential specs is `partial` " +
+        "(cite the failing `spec_ids`); essential specs all failed or no spec evidence with a " +
+        "non-running goal is the strong form of `partial`. Pre-build (snapshot absent) skip this " +
+        "bullet — fidelity is structural-only.",
     ],
     issueTypes: ["uncovered", "partial", "distorted", "merged_incorrectly"],
     canProposeCorrections: true,
@@ -130,6 +147,16 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
         "config). When a deliverable prerequisite is unowned by every goal, that's " +
         "`missing_capability` against an implicit infra goal — propose a corrected goal " +
         "(or a new infra goal) that owns the missing path.",
+      "User-deliverable tier walk (system completion). For each user-visible REQ, derive its " +
+        "implementation tier: a frontend page implies a backend API REQ + a data source; a CLI " +
+        "tool implies a runtime entrypoint + storage; a webhook implies external reachability " +
+        "infra. For each implied tier, check the merged tree for a goal whose `exports` / " +
+        "`owned_paths` actually produce that capability. A frontend page with no backing API goal, " +
+        "an API goal with no data-store goal, a CLI tool with no runtime entrypoint goal — each " +
+        "is `missing_capability` against an implicit infra goal. Cite the user phrase that " +
+        "implies the missing tier in `evidence`. Propose a `missing_goals` entry that owns the " +
+        "implied tier; if an existing goal is the natural owner, use a `modify` correction that " +
+        "widens its `owned_paths` / `exports` instead.",
     ],
     issueTypes: ["infeasible_stack", "missing_capability", "contract_collision", "dependency_cycle"],
     canProposeCorrections: true,
@@ -151,8 +178,9 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
         "and the codebase does not contain, that's `invented_artifact`.",
       "When a spec drifts BEYOND the user's stated scope (e.g. user asked for X, REQ " +
         "rows demand X + Y, where Y is invented), flag `out_of_scope`. This is the " +
-        "scope-creep partner of goal_fidelity's `distorted`: distorted reshapes a user " +
-        "ask, out_of_scope adds a non-user ask.",
+        "scope-creep partner of requirement_fidelity's `distorted`: distorted reshapes " +
+        "a user ask within an existing REQ row, out_of_scope is when the REQ row itself " +
+        "adds a non-user ask.",
     ],
     issueTypes: ["invented_artifact", "out_of_scope", "unsupported_claim"],
     canProposeCorrections: true,

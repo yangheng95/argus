@@ -400,7 +400,7 @@
   "extensions.title": "Skill / Memory / MCP",
   "integrity.attempts": "{{n}} attempts",
   "integrity.corrections_heading": "Corrections ({{n}})",
-  "integrity.dimension.goal_fidelity": "Goal Fidelity",
+  "integrity.dimension.requirement_fidelity": "Requirement Fidelity",
   "integrity.dimension.hallucination": "Hallucination",
   "integrity.dimension.solution_quality": "Solution Quality",
   "integrity.dimension.technical_feasibility": "Technical Feasibility",

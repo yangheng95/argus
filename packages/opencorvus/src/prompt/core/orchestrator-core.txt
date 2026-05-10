@@ -418,9 +418,12 @@ wastes budget and clouds the trace.
   contract-level point fixes prefer `modify_goal`.
 
 - **integrity** — advisory architecture review of the active architect graph along
-  four orthogonal axes: (1) goal_fidelity (coverage of the user's literal request),
-  (2) technical_feasibility (imports/exports/owned_paths/dep-graph viability +
-  foundational-decision coherence), (3) hallucination (ungrounded REQs / fabricated
+  four orthogonal axes: (1) requirement_fidelity (REQ-N completion at the system
+  level — audit unit is each REQ row, NOT goal contracts; `issue.requirement_ids`
+  names which REQ failed and `issue.spec_ids` names which acceptance spec failed
+  post-build), (2) technical_feasibility (imports/exports/owned_paths/dep-graph
+  viability + foundational-decision coherence + user-deliverable tier walk:
+  FE→BE/data, CLI→runtime, etc.), (3) hallucination (ungrounded REQs / fabricated
   specs / out-of-scope additions), (4) solution_quality (granularity,
   acceptance-spec strength, ownership clarity, ordering smell). Returns a
   per-dimension verdict (pass / concerns / needs_correction) plus an aggregate

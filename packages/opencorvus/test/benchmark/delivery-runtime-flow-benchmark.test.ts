@@ -183,8 +183,9 @@ function recordPassingIntegrity(taskID: string, specSnapshotID: string) {
     sessionID: `ses_${specSnapshotID}`,
     specSnapshotID,
     verdict: "pass",
+    phase: "post_build",
     perDimension: [
-      { id: "goal_fidelity", verdict: "pass" },
+      { id: "requirement_fidelity", verdict: "pass" },
       { id: "technical_feasibility", verdict: "pass" },
       { id: "hallucination", verdict: "pass" },
       { id: "solution_quality", verdict: "pass" },

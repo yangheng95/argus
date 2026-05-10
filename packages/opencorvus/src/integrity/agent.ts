@@ -5,8 +5,12 @@
  * ("does the goal set cover the user request?"), integrity asks four,
  * registered in `dimensions.ts`:
  *
- *   1. goal_fidelity         — coverage of the user's literal request
- *   2. technical_feasibility — viability of the proposed contracts
+ *   1. requirement_fidelity  — REQ-N completion (audit unit is REQ rows, not
+ *                              goals; with post-build snapshot, also judges
+ *                              real end-to-end completion)
+ *   2. technical_feasibility — viability of the proposed contracts +
+ *                              user-deliverable tier completeness (FE → BE,
+ *                              CLI → runtime, etc.)
  *   3. hallucination         — fabrication-free upstream reasoning
  *   4. solution_quality      — soundness of the decomposition itself
  *
@@ -44,6 +48,7 @@ import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { DecisionLog } from "@/decision-log"
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
+import type { RequirementStatusRow } from "./requirement-status"
 import { AttachmentStore } from "@/storage/attachment-store"
 import {
   INTEGRITY_DIMENSIONS,
@@ -64,8 +69,15 @@ export type IntegrityVerdict = "pass" | "concerns" | "needs_correction"
 export interface IntegrityIssue {
   type: IntegrityIssueType
   description: string
-  /** Related goal IDs, REQ ids, or spec ids depending on dimension. */
+  /** Goal IDs the issue is scoped to (any dimension). */
   goalIDs?: string[]
+  /** Visible REQ-N ids the issue is scoped to (required for requirement_fidelity
+   *  issues by prompt rule; optional on the wire so non-fidelity issues aren't
+   *  forced to populate it). */
+  requirementIDs?: string[]
+  /** Acceptance spec ids (e.g. acc-foo-1) the issue is scoped to — used to point
+   *  at failing specs surfaced by the post-build Requirement Status Snapshot. */
+  specIDs?: string[]
   evidence?: string
 }
 
@@ -186,6 +198,13 @@ function buildIssueInput(d: IntegrityDimension) {
     type: z.enum(types as [string, ...string[]]),
     description: z.string().min(1),
     goal_ids: z.array(z.string()).optional(),
+    /** Visible REQ-N ids (e.g. "REQ-3") this issue is scoped to. requirement_fidelity
+     *  issues MUST populate this — enforcement is via prompt rule, not schema, so
+     *  we don't fork the per-dimension shape. */
+    requirement_ids: z.array(z.string()).optional(),
+    /** Acceptance spec ids (e.g. "acc-foo-1") this issue is scoped to. Used post-
+     *  build to point at failing specs from the Requirement Status Snapshot. */
+    spec_ids: z.array(z.string()).optional(),
     evidence: z.string().optional(),
   })
 }
@@ -247,6 +266,13 @@ export async function reviewIntegrity(input: {
   requirementDecisions?: RequirementsDecision[]
   designSpecs?: VisualSpec[]
   decisionLog?: DecisionLog
+  /** Post-build REQ status snapshot — pure projection of (REQ-N → claiming
+   *  goals → tip goal_run + per-spec evidence). Empty array (or undefined)
+   *  pre-build, when no claiming goal has run yet; the prompt renderer omits
+   *  the section in that case. The host does NOT pre-compute completion
+   *  verdicts — the LLM walks raw rows and concludes done/partial/not_done
+   *  itself (rule 6.1: prompt-over-host invariant). */
+  requirementStatus?: RequirementStatusRow[]
   /** Task attachments (user reference images) — forwarded to the reviewer as
    *  multimodal user-message parts so visual goal-fidelity judgements have the
    *  pixels in front of them, not just text design_specs. */
@@ -275,7 +301,7 @@ export async function reviewIntegrity(input: {
   // for the overlay to render a card, but it never pretends the review passed.
   if (goals.length === 0) {
     const dim: IntegrityDimensionResult = {
-      id: "goal_fidelity",
+      id: "requirement_fidelity",
       verdict: "needs_correction",
       issues: [{ type: "uncovered", description: "No goals produced" }],
       corrections: [],
@@ -320,6 +346,8 @@ export async function reviewIntegrity(input: {
           type: it.type as IntegrityIssueType,
           description: it.description,
           goalIDs: it.goal_ids,
+          requirementIDs: it.requirement_ids,
+          specIDs: it.spec_ids,
           evidence: it.evidence,
         }))
 
@@ -546,7 +574,12 @@ function emitIntegrityEvent(
       correctionCount: d.corrections.length,
       missingGoalCount: d.missingGoals.length,
     })),
-    issues: result.issues.map((i) => ({ type: i.type, description: i.description })),
+    issues: result.issues.map((i) => ({
+      type: i.type,
+      description: i.description,
+      requirement_ids: i.requirementIDs,
+      spec_ids: i.specIDs,
+    })),
     corrections: result.corrections.map((c) => ({
       action: c.action,
       goalID: c.goalID,
@@ -680,6 +713,7 @@ function buildIntegrityPrompt(input: {
   goals: GoalContractFields[]
   requirements?: ParsedRequirement[]
   requirementDecisions?: RequirementsDecision[]
+  requirementStatus?: RequirementStatusRow[]
   designSpecs?: VisualSpec[]
   decisionLog?: DecisionLog
 }): string {
@@ -693,7 +727,65 @@ function buildIntegrityPrompt(input: {
     const reqText = input.requirements
       .map((r) => `- **${r.id}** (${r.type}): ${r.description}`)
       .join("\n")
-    sections.push(`# Requirements (${input.requirements.length}) — architect decomposed against this list\n\n${reqText}`)
+    sections.push(
+      `# Requirements (${input.requirements.length}) — REQ-N is the audit unit for requirement_fidelity\n\n` +
+        `Walk these row by row. Each REQ-N is matched against the goals' \`requirement_ids\` and the ` +
+        `acceptance_specs whose \`source_requirement_id\` equals the REQ id.\n\n${reqText}`,
+    )
+  }
+
+  // Requirement → claiming-goal reverse-lookup table. Rendered when both REQs
+  // and goals are present so the LLM sees REQ-N → which goal claims it (via
+  // requirement_ids) → which acceptance_specs cover it (via
+  // source_requirement_id) without re-deriving from the goal contracts list.
+  if (input.requirements && input.requirements.length > 0 && input.goals.length > 0) {
+    const lines: string[] = []
+    lines.push(`# Requirement → Goal Coverage Map`)
+    lines.push("")
+    for (const req of input.requirements) {
+      const claimingGoals = input.goals.filter((g) => (g.requirement_ids ?? []).includes(req.id))
+      if (claimingGoals.length === 0) {
+        lines.push(`- **${req.id}** — _no goal claims this REQ via requirement_ids_`)
+        continue
+      }
+      const goalSummaries = claimingGoals.map((g) => {
+        const relatedSpecs = (g.acceptance_specs ?? []).filter((s) => s.source_requirement_id === req.id)
+        const specRefs = relatedSpecs.map((s) => `${s.id}/${s.severity}`).join(", ")
+        return `${g.id} (${specRefs || "no related specs"})`
+      })
+      lines.push(`- **${req.id}** — ${goalSummaries.join("; ")}`)
+    }
+    sections.push(lines.join("\n"))
+  }
+
+  if (input.requirementStatus && input.requirementStatus.length > 0) {
+    const lines: string[] = []
+    lines.push(`# Requirement Status Snapshot (post-build raw evidence)`)
+    lines.push("")
+    lines.push(
+      "Each row is a pure projection from the database — REQ-N → claiming goal(s) → tip goal_run " +
+        "status + per-spec scorer outcomes. The host does NOT pre-compute completion verdicts. " +
+        "You walk these rows under `requirement_fidelity` and decide done / partial / not_done from " +
+        "the raw evidence (rule 6.1: prompt-over-host invariant).",
+    )
+    lines.push("")
+    for (const row of input.requirementStatus) {
+      lines.push(`## ${row.reqID} — ${row.reqDescription}`)
+      if (row.claimingGoals.length === 0) {
+        lines.push("- _no claiming goal_ (this should also surface as `uncovered` in fidelity)")
+        continue
+      }
+      for (const cg of row.claimingGoals) {
+        const specBits = cg.specOutcomes.map((s) => {
+          const passed = s.passed === true ? "passed" : s.passed === false ? "FAILED" : "no-evidence"
+          const summary = s.summary ? ` (${s.summary})` : ""
+          return `${s.specID}/${s.severity}=${passed}${summary}`
+        })
+        const specStr = specBits.length > 0 ? specBits.join(", ") : "no related specs evaluated"
+        lines.push(`- **${cg.goalID}** "${cg.goalTitle}" runStatus=${cg.runStatus}: ${specStr}`)
+      }
+    }
+    sections.push(lines.join("\n"))
   }
 
   if (input.requirementDecisions && input.requirementDecisions.length > 0) {
@@ -708,14 +800,14 @@ function buildIntegrityPrompt(input: {
       specs: input.designSpecs,
       instructions: [
         "The following advisory visual constraints came from design_analysis.",
-        "Use them under `goal_fidelity` (uncovered visual specs) and `hallucination` " +
-          "(specs the design-analyst could not have read off the reference image, " +
+        "Use them under `requirement_fidelity` (uncovered visual specs the user requested) and " +
+          "`hallucination` (specs the design-analyst could not have read off the reference image, " +
           "e.g. exact hex codes when the image was not actually attached).",
       ],
     }))
   }
 
-  sections.push(`# Goal Contracts (${input.goals.length} goals)\n`)
+  sections.push(`# Goal Contracts (${input.goals.length} goals — supporting context)\n`)
   for (const goal of input.goals) {
     sections.push([
       `## ${goal.id}: ${goal.title}`,
@@ -735,8 +827,12 @@ function buildIntegrityPrompt(input: {
   if (dlSection) sections.push(dlSection)
 
   sections.push(
-    "Now review every dimension above. Cite REQ-N / spec ids / goal ids / verbatim user " +
-    "phrases as evidence in each issue.",
+    "Now review every dimension above. The audit unit for `requirement_fidelity` is REQ-N — " +
+    "walk the Requirements list (and the Requirement Status Snapshot when present) row by row, " +
+    "NOT the goal contracts. Every `requirement_fidelity` issue MUST set `requirement_ids` to " +
+    "the affected REQ ids; post-build issues that point at failing acceptance specs MUST also " +
+    "set `spec_ids`. Cite REQ-N / spec ids / goal ids / verbatim user phrases as evidence in " +
+    "each issue.",
   )
 
   return sections.join("\n\n")

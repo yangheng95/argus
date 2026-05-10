@@ -208,13 +208,18 @@ export interface CardNode {
     verdict: "pass" | "concerns" | "needs_correction";
     summary: string;
     dimensions: Array<{
-      id: "goal_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
+      id: "requirement_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
       verdict: "pass" | "concerns" | "needs_correction";
       issueCount: number;
       correctionCount: number;
       missingGoalCount: number;
     }>;
-    issues: Array<{ type: string; description: string }>;
+    issues: Array<{
+      type: string;
+      description: string;
+      requirement_ids?: string[];
+      spec_ids?: string[];
+    }>;
     corrections: Array<{
       action: "modify" | "split" | "remove";
       goalID: string;

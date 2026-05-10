@@ -14,3 +14,13 @@ export {
   type IntegrityDimension,
   type IntegrityIssueType,
 } from "./dimensions"
+export {
+  computeRequirementStatusSnapshot,
+  extractVisibleReqID,
+  type RequirementStatusRow,
+  type RequirementClaimingGoal,
+  type RequirementSpecOutcome,
+  type RequirementSnapshotRunStatus,
+  type RequirementStatusDeps,
+} from "./requirement-status"
+export { renderIntegrityMarkdown } from "./render-markdown"

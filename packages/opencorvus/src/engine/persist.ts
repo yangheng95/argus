@@ -1804,10 +1804,17 @@ export function recordIntegrityAttempt(input: {
    *  read_context must scope the latest-attempt lookup by snapshot id. */
   specSnapshotID: string
   verdict: "pass" | "concerns" | "needs_correction"
-  /** Per-dimension verdicts so read_context can surface "goal_fidelity passed
+  /** Per-dimension verdicts so read_context can surface "requirement_fidelity passed
    *  but solution_quality flagged 3 weak_acceptance specs" — losing this
    *  granularity behind a single aggregate would defeat the redesign. */
   perDimension: Array<{ id: string; verdict: "pass" | "concerns" | "needs_correction" }>
+  /** Phase marker. `pre_build` attempts audit decomposition only — they cannot
+   *  satisfy the post-build delivery freshness gate (a green pre-build attempt
+   *  must not let an unrun graph through). `post_build` attempts have access
+   *  to a Requirement Status Snapshot and represent real end-to-end completion
+   *  evidence. The orchestrator decides phase from whether any claiming goal
+   *  has produced run + evidence by attempt time. */
+  phase: "pre_build" | "post_build"
   issuesCount: number
   correctionsCount: number
   missingCount: number
@@ -1845,6 +1852,7 @@ export function recordIntegrityAttempt(input: {
     spec_snapshot_id: input.specSnapshotID,
     session_id: input.sessionID,
     verdict: input.verdict,
+    phase: input.phase,
     per_dimension: input.perDimension,
     issues_count: input.issuesCount,
     corrections_count: input.correctionsCount,

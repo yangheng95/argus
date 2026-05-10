@@ -32,7 +32,7 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  specific kind above.
  *   architect      architect sub-agent
  *   integrity      multi-dimension integrity reviewer (child of architect) —
- *                  goal_fidelity / technical_feasibility / hallucination /
+ *                  requirement_fidelity / technical_feasibility / hallucination /
  *                  solution_quality. Successor to the legacy `fidelity` kind.
  *   delivery       delivery sub-agent
  *   executor       per-goal container session — empty parent that groups
