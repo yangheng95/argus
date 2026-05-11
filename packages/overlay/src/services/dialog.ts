@@ -21,7 +21,9 @@ const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>([
   "permissions",
   "prompt",
   "channel",
-  "tools",
+  "skill",
+  "skill-market",
+  "mcp",
   "memory",
   "providers",
   "agent-models",
@@ -29,9 +31,9 @@ const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>([
 ]);
 
 const CONFIG_SECTION_TARGETS: Record<string, { tab: ConfigDialogTab; elementID?: string }> = {
-  skill: { tab: "tools", elementID: "skillList" },
-  "skill-market": { tab: "tools", elementID: "skillMarketList" },
-  mcp: { tab: "tools", elementID: "mcpList" },
+  skill: { tab: "skill", elementID: "skillList" },
+  "skill-market": { tab: "skill-market", elementID: "skillMarketList" },
+  mcp: { tab: "mcp", elementID: "mcpList" },
 };
 
 function normalizeConfigTab(tabName: string): ConfigDialogTab {

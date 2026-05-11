@@ -87,9 +87,11 @@ function policyLabel(policy: string): string {
   return policy;
 }
 
-// ── SkillMarketPanel ──
+// ── Extension Settings Panels ──
 
-export default function SkillMarketPanel() {
+type ExtensionPanelMode = "skill" | "mcp" | "skill-market";
+
+function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode }) {
   const [notice, setNotice] = createSignal("");
   const [loading, setLoading] = createSignal(false);
 
@@ -253,9 +255,9 @@ export default function SkillMarketPanel() {
     await reloadAll();
   }
 
-  // Ensure market data is loaded once skills are available
+  // Ensure market data is loaded when the marketplace tab is mounted.
   createEffect(() => {
-    if (market().length === 0 && skills().length > 0) {
+    if (props.mode === "skill-market" && market().length === 0) {
       loadSkillMarket().catch(() => {});
     }
   });
@@ -321,7 +323,8 @@ export default function SkillMarketPanel() {
       </Show>
 
       {/* ── Installed Skills ── */}
-      <section class="ext-group">
+      <Show when={props.mode === "skill"}>
+        <section class="ext-group">
         <SurfaceHeader
           variant="settings-group"
           title={t("skill.title")}
@@ -474,10 +477,12 @@ export default function SkillMarketPanel() {
             </Show>
           </div>
         </div>
-      </section>
+        </section>
+      </Show>
 
       {/* ── MCP Servers ── */}
-      <section class="ext-group">
+      <Show when={props.mode === "mcp"}>
+        <section class="ext-group">
         <SurfaceHeader
           variant="settings-group"
           title={t("mcp.title")}
@@ -610,69 +615,72 @@ export default function SkillMarketPanel() {
             </Show>
           </div>
         </div>
-      </section>
+        </section>
+      </Show>
 
-      {/* ── Skill Market ── hidden when empty to avoid a standalone header bar */}
-      <Show when={market().length > 0}>
+      {/* ── Skill Market ── */}
+      <Show when={props.mode === "skill-market"}>
         <section class="ext-group">
           <SurfaceHeader variant="settings-group" title={t("skill.market.title")} />
           <div class="ext-group-body">
             <div class="extension-list" id="skillMarketList">
-              <For each={market()}>
-                {(item) => {
-                  const installable = !!item.source && item.install_kind !== "manual";
-                  return (
-                    <div class="market-card">
-                      <div class="market-card-main">
-                        <strong>{item.name}</strong>
-                        <span>
-                          {item.provider} · {item.trust} · {item.install_kind}
-                        </span>
-                        <small>{item.description || ""}</small>
-                        <Show when={item.notes}>
-                          <small>{item.notes}</small>
-                        </Show>
-                      </div>
-                      <div class="market-card-actions">
-                        <span
-                          class="extension-status"
-                          data-state={item.recommended_policy || ""}
-                        >
-                          {policyLabel(item.recommended_policy || "")}
-                        </span>
-                        <Show
-                          when={installable}
-                          fallback={
+              <Show when={market().length > 0} fallback={<div class="empty-hint">{t("skill.market.none")}</div>}>
+                <For each={market()}>
+                  {(item) => {
+                    const installable = !!item.source && item.install_kind !== "manual";
+                    return (
+                      <div class="market-card">
+                        <div class="market-card-main">
+                          <strong>{item.name}</strong>
+                          <span>
+                            {item.provider} · {item.trust} · {item.install_kind}
+                          </span>
+                          <small>{item.description || ""}</small>
+                          <Show when={item.notes}>
+                            <small>{item.notes}</small>
+                          </Show>
+                        </div>
+                        <div class="market-card-actions">
+                          <span
+                            class="extension-status"
+                            data-state={item.recommended_policy || ""}
+                          >
+                            {policyLabel(item.recommended_policy || "")}
+                          </span>
+                          <Show
+                            when={installable}
+                            fallback={
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                tone="neutral"
+                                title={t("skill.market.open_site_title")}
+                                aria-label={t("skill.market.open_site_title")}
+                                onClick={() => handleOpenHomepage(item.homepage)}
+                              >
+                                {t("skill.market.open_site")}
+                              </Button>
+                            }
+                          >
                             <Button
                               type="button"
-                              variant="ghost"
+                              variant="solid"
                               size="sm"
-                              tone="neutral"
-                              title={t("skill.market.open_site_title")}
-                              aria-label={t("skill.market.open_site_title")}
-                              onClick={() => handleOpenHomepage(item.homepage)}
+                              tone="accent"
+                              title={t("skill.market.install_button_title")}
+                              aria-label={t("skill.market.install_button_title")}
+                              onClick={() => handleInstall(item)}
                             >
-                              {t("skill.market.open_site")}
+                              {t("skill.install")}
                             </Button>
-                          }
-                        >
-                          <Button
-                            type="button"
-                            variant="solid"
-                            size="sm"
-                            tone="accent"
-                            title={t("skill.market.install_button_title")}
-                            aria-label={t("skill.market.install_button_title")}
-                            onClick={() => handleInstall(item)}
-                          >
-                            {t("skill.install")}
-                          </Button>
-                        </Show>
+                          </Show>
+                        </div>
                       </div>
-                    </div>
-                  );
-                }}
-              </For>
+                    );
+                  }}
+                </For>
+              </Show>
             </div>
           </div>
         </section>
@@ -680,3 +688,17 @@ export default function SkillMarketPanel() {
     </>
   );
 }
+
+export function SkillsPanel() {
+  return <ExtensionSettingsPanel mode="skill" />;
+}
+
+export function McpPanel() {
+  return <ExtensionSettingsPanel mode="mcp" />;
+}
+
+export function SkillMarketPanel() {
+  return <ExtensionSettingsPanel mode="skill-market" />;
+}
+
+export default SkillMarketPanel;
