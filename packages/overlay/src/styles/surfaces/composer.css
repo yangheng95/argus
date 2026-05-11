@@ -557,9 +557,8 @@
 }
 
 /* ── Popover surface anchored above each chip ─────────────────
-   Each chip owns its own popover; the right-side popover anchors
-   to its slot's right edge so it stays inside the composer when
-   the bar spans the full width. */
+   Each chip owns its own popover and anchors from the slot's left
+   edge so both pickers share the same bottom-left alignment rule. */
 .executor-popover {
   position: absolute;
   bottom: calc(100% + calc(6px * var(--ui-scale)));
@@ -574,11 +573,6 @@
   padding: calc(8px * var(--ui-scale));
   box-shadow: var(--executor-menu-shadow);
   z-index: var(--ui-z-titlebar);
-}
-
-.executor-chip-slot[data-side="external"] .executor-popover {
-  left: auto;
-  right: 0;
 }
 
 .executor-popover-header {
@@ -658,10 +652,6 @@
   gap: calc(2px * var(--ui-scale));
 }
 
-.executor-popover-group[data-available="false"] {
-  opacity: 0.72;
-}
-
 .executor-popover-group-header {
   display: flex;
   align-items: baseline;
@@ -723,14 +713,6 @@
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   color: var(--text-strong);
   font-weight: var(--ui-font-weight-strong);
-}
-
-.executor-popover-model[data-available="false"] {
-  color: var(--text-muted);
-}
-
-.executor-popover-model[data-available="false"]:hover {
-  color: var(--text-soft);
 }
 
 .executor-popover-model-name {

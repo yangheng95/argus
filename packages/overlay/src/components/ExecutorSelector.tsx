@@ -8,10 +8,9 @@
 //     default via `patchConfig({ model })` — same write path as
 //     AgentModelsPanel project-default row.
 //   - External picker lists every model from the provider IDs mapped to
-//     that executor (EXECUTOR_PROVIDER_MAP), regardless of connection.
-//     Models whose provider is connected are highlighted; the rest stay
-//     visible but marked as unavailable so the user sees the full
-//     supported set without being misled about what currently works.
+//     that executor (EXECUTOR_PROVIDER_MAP). These provider buckets are
+//     only a model taxonomy for the picker; they must not be treated as
+//     the auth source of truth for Codex / Claude Code themselves.
 //
 // State sources (rule 8 single source):
 //   - active external executor → settingsStore.executor
@@ -80,7 +79,10 @@ function connectedProviderIDs(): Set<string> {
   return out;
 }
 
-function buildProviderGroups(filter?: (id: string) => boolean): ProviderGroup[] {
+function buildProviderGroups(
+  filter?: (id: string) => boolean,
+  prioritizeAvailable = true,
+): ProviderGroup[] {
   const catalog = appStore.providerCatalog as { all?: unknown } | null | undefined;
   const all = Array.isArray(catalog?.all) ? (catalog!.all as Array<Record<string, unknown>>) : [];
   const connected = connectedProviderIDs();
@@ -108,8 +110,7 @@ function buildProviderGroups(filter?: (id: string) => boolean): ProviderGroup[] 
     });
   }
   groups.sort((a, b) => {
-    // Available providers first so the picker leads with usable rows.
-    if (a.available !== b.available) return a.available ? -1 : 1;
+    if (prioritizeAvailable && a.available !== b.available) return a.available ? -1 : 1;
     return a.providerName.localeCompare(b.providerName);
   });
   return groups;
@@ -119,16 +120,17 @@ function buildProviderGroups(filter?: (id: string) => boolean): ProviderGroup[] 
 // are already authenticated — there is no point letting the user pick a
 // model whose provider can't actually serve it.
 function mirrorProviderGroups(): ProviderGroup[] {
-  return buildProviderGroups().filter((group) => group.available);
+  return buildProviderGroups(undefined, true).filter((group) => group.available);
 }
 
-// External executor groups: every provider mapped to that executor, even
-// when not connected. The popover dims unavailable ones via data-available.
+// External executor groups: every provider mapped to that executor. These
+// buckets only scope model families; executor availability comes from the
+// executor registry, not from overlay provider auth state.
 function externalProviderGroups(executorID: string): ProviderGroup[] {
   const wanted = EXECUTOR_PROVIDER_MAP[executorID];
   if (!wanted || wanted.length === 0) return [];
   const wantedSet = new Set(wanted);
-  return buildProviderGroups((id) => wantedSet.has(id));
+  return buildProviderGroups((id) => wantedSet.has(id), false);
 }
 
 function ChevronCaret(props: { open: boolean }) {
@@ -401,7 +403,6 @@ export function ExecutorSelector() {
                       group={group}
                       currentModel={focusedCurrentModel()}
                       onPick={(modelID) => void pickExternalModel(focusedExternalID(), modelID)}
-                      showAvailability
                     />
                   )}
                 </For>
@@ -465,24 +466,13 @@ interface ProviderModelGroupProps {
   group: ProviderGroup;
   currentModel: string;
   onPick: (modelID: string) => void;
-  showAvailability?: boolean;
 }
 
 function ProviderModelGroup(props: ProviderModelGroupProps) {
   return (
-    <div
-      class="executor-popover-group"
-      data-available={props.group.available ? "true" : "false"}
-    >
+    <div class="executor-popover-group">
       <div class="executor-popover-group-header">
         <span class="executor-popover-group-name">{props.group.providerName}</span>
-        <Show when={props.showAvailability}>
-          <span class="executor-popover-group-status">
-            {props.group.available
-              ? t("executor.provider_status_connected")
-              : t("executor.provider_status_disconnected")}
-          </span>
-        </Show>
       </div>
       <div class="executor-popover-models">
         <For each={props.group.models}>
@@ -491,18 +481,12 @@ function ProviderModelGroup(props: ProviderModelGroupProps) {
               type="button"
               class="executor-popover-model"
               data-active={modelID === props.currentModel ? "true" : "false"}
-              data-available={props.group.available ? "true" : "false"}
               title={modelID}
               onClick={() => props.onPick(modelID)}
             >
               <span class="executor-popover-model-name">
                 {splitModelID(modelID).name}
               </span>
-              <Show when={props.showAvailability && !props.group.available}>
-                <span class="executor-popover-model-badge">
-                  {t("executor.provider_status_disconnected")}
-                </span>
-              </Show>
             </button>
           )}
         </For>

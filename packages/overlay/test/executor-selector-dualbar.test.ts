@@ -6,8 +6,8 @@
 //      embedded dual-model display.
 //   2. Each chip has its own popover anchored to the same slot. The mirror
 //      popover lists only providers reported as connected; the external
-//      popover lists every provider mapped to that executor and dims the
-//      ones that are not connected via data-available="false".
+//      popover lists every provider mapped to that executor, but does not
+//      claim provider-auth state for executor-managed CLIs.
 //   3. The bar fills the composer row so the controls align with the
 //      textarea above (flex: 1 1 100% on the meta-left container; the bar
 //      itself flexes to span 100%).
@@ -47,10 +47,10 @@ describe("ExecutorSelector dual chip bar", () => {
     )
   })
 
-  test("external picker lists all configured providers for the executor with availability flags", () => {
+  test("external picker lists all configured providers for the executor without provider-auth status badges", () => {
     expect(SRC).toMatch(/EXECUTOR_PROVIDER_MAP\[executorID\]/)
-    expect(SRC).toMatch(/data-available=\{props\.group\.available \? "true" : "false"\}/)
-    expect(SRC).toMatch(/showAvailability/)
+    expect(SRC).not.toMatch(/data-available=\{props\.group\.available \? "true" : "false"\}/)
+    expect(SRC).not.toMatch(/showAvailability/)
   })
 
   test("mirror selection writes appStore.config.model via patchConfig", () => {
@@ -68,12 +68,11 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(/sanitizeExecutor\(INTERNAL_EXECUTOR_ID\)/)
   })
 
-  test("dual bar CSS spans the composer width and external popover anchors to the right", () => {
+  test("dual bar CSS spans the composer width and both popovers share left-edge anchoring", () => {
     expect(CSS).toMatch(/\.executor-dualbar\s*\{[\s\S]*?width:\s*100%/)
     expect(CSS).toMatch(/\.chat-compose-meta-left[\s\S]*?flex:\s*1\s*1\s*100%/)
-    expect(CSS).toMatch(
-      /\.executor-chip-slot\[data-side="external"\] \.executor-popover[\s\S]*?right:\s*0/,
-    )
+    expect(CSS).toMatch(/\.executor-popover\s*\{[\s\S]*?left:\s*0/)
+    expect(CSS).not.toMatch(/\.executor-chip-slot\[data-side="external"\] \.executor-popover/)
   })
 
   test("retired key names from the old single-chip design are gone", () => {
@@ -107,8 +106,6 @@ describe("i18n keys for the dual bar exist in both locales", () => {
     "executor.external_disabled",
     "executor.external_disabled_hint",
     "executor.external_no_models",
-    "executor.provider_status_connected",
-    "executor.provider_status_disconnected",
   ]) {
     test(`${key} present in en-US.json`, () => {
       expect(typeof EN[key]).toBe("string")

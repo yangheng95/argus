@@ -5,8 +5,8 @@
 //   - Clicking MirrorCode opens its popover; only connected providers'
 //     models appear.
 //   - Clicking External opens its popover; all configured providers for
-//     the active executor appear, with availability flagged via
-//     data-available on the model row.
+//     the active executor appear, but provider auth is not presented as
+//     executor connectivity.
 //   - Opening one popover closes the other.
 
 import { expect, test } from "bun:test"
@@ -49,9 +49,10 @@ test("dual executor chip — mirror vs external popovers with availability", asy
       if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
       if (path === "/vcs") return send({ branch: "dev", clean: true, dirty: false, staged: 0, modified: 0, untracked: 0, conflicts: 0, ahead: 0, behind: 0 })
       if (path === "/provider") {
-        // openai is connected; anthropic is configured but NOT connected
-        // — so the external Claude Code tab should show anthropic models
-        // dimmed/unavailable, and the mirror picker must hide them.
+        // openai is connected; anthropic is configured but NOT connected.
+        // MirrorCode should hide anthropic, while the external Claude Code
+        // tab still lists anthropic models without mislabeling Claude Code
+        // itself as disconnected.
         return send({
           all: [
             {
@@ -80,6 +81,9 @@ test("dual executor chip — mirror vs external popovers with availability", asy
       }
       if (path === "/config" && req.method === "GET") {
         return send({ model: projectModel })
+      }
+      if (path === "/config" && req.method === "PATCH") {
+        return send(await req.json())
       }
       if (path === "/config/prompt") return send([])
       if (path === "/agent") return send([])
@@ -201,7 +205,7 @@ test("dual executor chip — mirror vs external popovers with availability", asy
     expect(externalBody).toContain("gpt-5.5-codex")
 
     // Switching the focused tab to Claude Code should list anthropic models
-    // with the unavailable badge (anthropic is configured but not connected).
+    // without inheriting overlay provider-auth wording.
     const claudeTab = await page.$$eval(
       '[data-section="external"] .executor-popover-tab',
       (nodes) =>
@@ -221,8 +225,20 @@ test("dual executor chip — mirror vs external popovers with availability", asy
     ).toLowerCase()
     expect(claudeBody).toContain("anthropic")
     expect(claudeBody).toContain("claude-sonnet-4-6")
-    const unavailableRow = await page.$('[data-section="external"] .executor-popover-model[data-available="false"]')
-    expect(unavailableRow).not.toBeNull()
+    expect(claudeBody).not.toContain("not connected")
+    const placement = await page.evaluate(() => {
+      const slot = document.querySelector('[data-side="external"]') as HTMLElement | null
+      const popover = document.querySelector('[data-section="external"]') as HTMLElement | null
+      if (!slot || !popover) return null
+      const slotRect = slot.getBoundingClientRect()
+      const popoverRect = popover.getBoundingClientRect()
+      return {
+        slotLeft: slotRect.left,
+        popoverLeft: popoverRect.left,
+      }
+    })
+    expect(placement).not.toBeNull()
+    expect(Math.abs((placement as any).popoverLeft - (placement as any).slotLeft)).toBeLessThanOrEqual(1)
     await page.close()
   } finally {
     await browser.close().catch(() => undefined)
