@@ -5,6 +5,10 @@ import {
   type CodingCliIcon,
   type CodingCliProfile,
 } from "../services/coding-cli";
+import {
+  currentTerminalProfileID,
+  reloadTerminalProfileSelection,
+} from "../services/terminal-selection";
 import { activeDirectory } from "../services/workspace";
 import { t } from "../utils/i18n";
 import { Icon, type IconName } from "./Icon";
@@ -26,7 +30,7 @@ export function WorkspaceCodingCliLaunchers() {
   const [error, setError] = createSignal("");
 
   const disabled = () =>
-    !activeDirectory() || loading() || profiles().length === 0;
+    !activeDirectory() || loading() || profiles().length === 0 || !currentTerminalProfileID();
   const title = () => error() || t("coding_cli.open");
   const selectedProfile = createMemo(() =>
     profiles().find((profile) => profile.id === selectedCliID()) ?? profiles()[0] ?? null,
@@ -44,7 +48,12 @@ export function WorkspaceCodingCliLaunchers() {
     setLoading(true);
     setError("");
     try {
-      const response = await listCodingCliProfiles();
+      const [response] = await Promise.all([
+        listCodingCliProfiles(),
+        reloadTerminalProfileSelection({
+          defaultProfileMissingMessage: t("terminal.default_profile_missing"),
+        }),
+      ]);
       if (!Array.isArray(response.profiles)) {
         throw new Error("Coding CLI profiles response is missing profiles");
       }
@@ -67,12 +76,15 @@ export function WorkspaceCodingCliLaunchers() {
   async function launch(profile: CodingCliProfile) {
     const directory = activeDirectory();
     if (!directory) throw new Error("Workspace directory is required");
+    const terminalProfileID = currentTerminalProfileID();
+    if (!terminalProfileID) throw new Error("Terminal profile is required");
     close();
     setSelectedCliID(profile.id);
     setError("");
     try {
       await openCodingCli({
         cliID: profile.id,
+        terminalProfileID,
         cwd: directory,
       });
     } catch (reason) {
