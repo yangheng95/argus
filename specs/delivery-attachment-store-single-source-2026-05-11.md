@@ -92,16 +92,19 @@ Test (`packages/opencorvus/test/session/inline-base64-rejected.test.ts`):
 - Inserts a `Message.ToolPart` whose `state.attachments[].url` is `data:image/png;base64,iVBOR...`. Assert `Session.updatePart` throws with `name === "InlineBase64InPartError"`.
 - Inserts the same part with `url` rewritten to `/attachment/proj/<sha>.png`. Assert `updatePart` succeeds.
 
-### Step 4 — One-shot migration of existing 92 base64 parts (P0)
+### Step 4 — DB reset, not migration (rule 18)
 
-`script/migrate-base64-parts.ts`:
+The standing project policy is to reset the engine DB on schema /
+contract breaks instead of carrying forward-compatible migration code.
+After landing the guard from Step 3, the deploy procedure is:
 
-1. `SELECT id, data FROM part WHERE data LIKE '%data:image/%base64,%'`.
-2. For each match, parse the JSON, walk to every `url` field that is a data URL, decode the base64 to bytes, derive MIME from the data URL prefix, call `AttachmentStore.write(projectID, bytes, mime, filename)`, replace the field with `Reference.url`.
-3. UPDATE the part row in a single transaction per part.
-4. Print before/after byte counts.
+1. Stop overlay + engine sidecar.
+2. Delete `opencorvus.db{,-wal,-shm}` under the engine's data dir.
+3. Restart. Bootstrap recreates the schema; the first `Project.fromDirectory`
+   call hooks `AttachmentStore.sweep` against the empty `part` table and
+   any stale on-disk attachments get reaped.
 
-Run once. No fallback / no compat reader (rule 16). The guard from Step 3 ensures no new inline parts can appear.
+See the "DB reset, not migrate" section below for the verified path.
 
 ### Step 5 — `AttachmentStore.inlineFileParts` memo (P1, follow-up)
 
@@ -129,13 +132,27 @@ Out of scope for this PR but tracked: per-session `Map<sha, InlineFilePart>` so 
 - `test/session/inline-base64-rejected.test.ts` — guard rejects inline, accepts ref.
 - `test/storage/attachment-store-sweep.test.ts` — write 3 attachments, reference 1 in a part row, sweep deletes 2 orphans; sweep skips files newer than 60s.
 - `test/delivery/tool-result-attachment-ref.test.ts` — `buildMultimodalToolResult` produces refs, not data URLs; same image used twice in one tool result deduplicates to the same sha (verified by FS check).
-- `test/delivery/screenshot-attachment-ref.test.ts` — `screenshot` tool returns a `/attachment/<sha>.png` path; no `delivery-screenshots/` directory is created.
 
-## Migration & Rollback (rule 16)
+## DB reset, not migrate (rule 18)
 
-- Migration: `script/migrate-base64-parts.ts` runs once before deploy.
-- Rollback: there is none — once the inline-base64 rows are normalized to refs and the guard is in place, a rollback would resurrect inline parts and the OOM. If the change has to be reverted, the migration is replayed against the rollback target.
-- The 272 KB `.opencorvus/delivery-screenshots/` directory is deleted post-migration. Its contents (1 verify PNG + 1 preview PNG) are not referenced by anything other than ephemeral tool output JSON; the migration script ingests them into `AttachmentStore` before deletion if their sha appears in any persisted part row.
+This project's standing policy is to reset the engine DB rather than write
+forward-compatible migrations for in-flight rows (rule 18). After landing
+this change, the deploy procedure is:
+
+1. Stop the overlay + engine sidecar.
+2. Delete `<XDG_STATE_HOME>/opencorvus/opencorvus.db{,-wal,-shm}` (Windows:
+   `%LOCALAPPDATA%\opencorvus\.opencorvus\opencorvus.db{,-wal,-shm}`).
+3. Optionally `rm -rf <projectDir>/.opencorvus/{attachments,delivery-screenshots}/`
+   for any project where stale on-disk attachments would confuse the
+   first post-reset sweep — the engine recreates `attachments/` lazily,
+   and `delivery-screenshots/` is no longer written to.
+4. Restart. The schema bootstrap creates a fresh DB; `AttachmentStore.sweep`
+   on first project load sees an empty `part` table and reaps any
+   leftover bytes on disk.
+
+There is no migration tool. A `script/migrate-base64-parts.ts` was
+initially staged but removed under rule 16 (no compat patches) once the
+team confirmed reset is the canonical path.
 
 ## Out of Scope (for tracking)
 
@@ -148,11 +165,19 @@ Out of scope for this PR but tracked: per-session `Map<sha, InlineFilePart>` so 
 
 ## Verification
 
-Post-deploy DB check:
+Post-deploy DB check (run after the reset + first task that exercises
+delivery's `compare_visual_artifacts`):
 
 ```sql
 SELECT COUNT(*) FROM part WHERE data LIKE '%data:image/%base64,%';
--- expected: 0
+-- expected: 0 (the write-boundary guard rejects any inline base64,
+-- so a non-zero count means an unmigrated producer path leaked
+-- through — fix root cause, do not soften the guard).
 ```
 
-If the count is ever > 0, the guard regressed — fix root cause, do not soften the guard.
+```sql
+SELECT COUNT(*), SUM(LENGTH(data)) FROM part
+WHERE data LIKE '%"/attachment/%';
+-- expected: > 0 after compare_visual_artifacts fires; rows are small
+-- (refs only) rather than 600 KB each.
+```
