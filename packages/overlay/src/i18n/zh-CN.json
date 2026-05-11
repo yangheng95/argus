@@ -398,6 +398,7 @@
   "executor.role_opencorvus": "OpenCorvus",
   "executor.version": "v{{version}}",
   "extensions.title": "技能 / 记忆 / MCP",
+  "integrity.attempt_label": "第 {{value}} 次尝试",
   "integrity.attempts": "{{n}} 轮尝试",
   "integrity.corrections_heading": "修正（{{n}} 项）",
   "integrity.dimension.requirement_fidelity": "需求对齐",

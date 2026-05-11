@@ -17,7 +17,7 @@
 // must match the old-pipeline snapshot byte-for-byte. The equivalence test
 // in `test/new-writer-equivalence.test.ts` enforces this.
 
-import { createEffect } from "solid-js";
+import { batch, createEffect } from "solid-js";
 import { produce } from "solid-js/store";
 import { cardTreeStore, setCardTreeStore, type CardNode, type CardStatus } from "../store/card-tree";
 import { boardStore, setBoardProjectionHandler } from "../store/board";
@@ -853,10 +853,13 @@ function materializeRunningIntegrity(p: RunningIntegrityPayload): void {
   // card back to "running". `attempts` on a completed card is > 0 and the
   // `integrity` payload is populated — that's how we tell.
   if (existing && existing.integrity) return;
-  const elapsedSec = Math.max(0, Math.round(p.elapsedMs / 1000));
-  const subtitle = p.attempt > 0
-    ? `attempt ${p.attempt} · ${formatElapsed(elapsedSec)}`
-    : formatElapsed(elapsedSec);
+  // Subtitle carries only the retry attempt label (when applicable).
+  // The live elapsed-time display is owned by CardHeader's
+  // `.card__duration` chip, which subtracts `time` from a shared 1Hz
+  // tick (services/clock.ts). `p.elapsedMs` stays on the payload
+  // because it still reconstructs `startedAt` on SSE replay above.
+  const subtitle =
+    p.attempt > 0 ? t("integrity.attempt_label", { value: String(p.attempt) }) : undefined;
   // Progress ticks every 20s. If the card already exists, patch only the
   // volatile fields (status + subtitle) — writing a fresh card with
   // `parts: []` would wipe any reasoning/tool_input chunks that have
@@ -873,13 +876,6 @@ function materializeRunningIntegrity(p: RunningIntegrityPayload): void {
     return;
   }
   throw new Error(`integrity session card missing after ensureSessionCard (sessionID=${p.sessionID})`);
-}
-
-function formatElapsed(sec: number): string {
-  if (sec < 60) return `${sec}s elapsed`;
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return s === 0 ? `${m}m elapsed` : `${m}m ${s}s elapsed`;
 }
 
 function handleIntegrityCompleted(event: any): void {
@@ -1424,13 +1420,21 @@ function appendSessionPart(cardID: string, part: any): number {
 // ── Board-derived projections (task request, goal groups, interactions) ──
 
 function rebuildBoardDerivedCards(): void {
-  const board = boardStore.board;
-  // Task request bubble (ctx:user-request).
-  rebuildTaskContextCard(board);
-  // Per-goal executor step cards (top-level) + their phase children.
-  rebuildGoalStepCards(board);
-  // Session-to-goal claiming.
-  rebuildCardHierarchy();
+  // batch coalesces every setCardTreeStore inside the three rebuilders into a
+  // single reactivity round. Without it, downstream memos (e.g. Card.tsx's
+  // visibleChildIDsForCard) re-evaluate between sub-rebuild writes and observe
+  // intermediate states like "step card holds a phase childID before the phase
+  // card itself was created" — which throws "card-tree: card X references
+  // missing child Y" and surfaces in console as `loadBoard failed`.
+  batch(() => {
+    const board = boardStore.board;
+    // Task request bubble (ctx:user-request).
+    rebuildTaskContextCard(board);
+    // Per-goal executor step cards (top-level) + their phase children.
+    rebuildGoalStepCards(board);
+    // Session-to-goal claiming.
+    rebuildCardHierarchy();
+  });
 }
 
 function rebuildTaskContextCard(board: any): void {
@@ -1797,6 +1801,16 @@ function resolveSessionContainerCardID(info: SessionInfo): string | null {
 }
 
 function rebuildCardHierarchy(): void {
+  // batch ensures that the interaction-card GC inside rebuildInteractionCards
+  // and the final childIDs write at the bottom of this function are visible
+  // atomically to downstream reactions. Otherwise a parent card can be
+  // observed holding a `childIDs` entry whose corresponding child was just
+  // deleted by the GC, causing visibleChildIDsForCard to throw
+  // "references missing child …".
+  batch(() => rebuildCardHierarchyImpl());
+}
+
+function rebuildCardHierarchyImpl(): void {
   const nextChildIDs = new Map<string, string[]>();
   const goalWorkflows: any[] = Array.isArray(boardStore.board?.goalWorkflows)
     ? boardStore.board.goalWorkflows

@@ -5,12 +5,13 @@
 // The whole block is now driven by Solid signals: a single reactive subtree
 // that updates only the affected text/attribute when boardStore changes.
 
-import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js";
+import { createMemo, Show } from "solid-js";
 import { boardStore } from "../store/board";
 import { statusIconName } from "../utils/status-mapping";
 import { Icon } from "./Icon";
 import { t } from "../utils/i18n";
 import { formatDuration } from "../utils/time";
+import { useNowTick } from "../services/clock";
 
 const LIVE_STATUSES = new Set(["active", "queued"]);
 
@@ -22,26 +23,10 @@ export function TaskStatusHeader() {
   const isLive = createMemo(() => LIVE_STATUSES.has(status()));
   const visible = createMemo(() => Boolean(boardStore.selectedTaskID));
 
-  // Tick state: only the live-task path drives a 1Hz interval, and only while
-  // the overlay window is visible. The previous imperative effect already had
-  // this gate; we preserve it exactly to keep the battery-saver behaviour
-  // earned in the prior commit.
-  const [now, setNow] = createSignal(Date.now());
-  const [windowVisible, setWindowVisible] = createSignal(
-    typeof document !== "undefined" ? document.visibilityState === "visible" : true,
-  );
-  if (typeof document !== "undefined") {
-    const onVis = () => setWindowVisible(document.visibilityState === "visible");
-    document.addEventListener("visibilitychange", onVis);
-    onCleanup(() => document.removeEventListener("visibilitychange", onVis));
-  }
-
-  createEffect(() => {
-    if (!visible() || !startTime() || !isLive() || !windowVisible()) return;
-    setNow(Date.now());
-    const handle = setInterval(() => setNow(Date.now()), 1000);
-    onCleanup(() => clearInterval(handle));
-  });
+  // Shared 1Hz tick from services/clock.ts. The clock module owns the
+  // visibility-gated setInterval and reference-counts subscribers so
+  // every running CardHeader chip and this header share one timer.
+  const now = useNowTick();
 
   const elapsedText = createMemo(() => {
     const start = startTime();

@@ -398,6 +398,7 @@
   "executor.role_opencorvus": "OpenCorvus",
   "executor.version": "v{{version}}",
   "extensions.title": "Skill / Memory / MCP",
+  "integrity.attempt_label": "attempt {{value}}",
   "integrity.attempts": "{{n}} attempts",
   "integrity.corrections_heading": "Corrections ({{n}})",
   "integrity.dimension.requirement_fidelity": "Requirement Fidelity",

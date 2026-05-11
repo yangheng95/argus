@@ -684,6 +684,64 @@ test("integrity event missing sessionID throws (schema became required)", () => 
   ).toThrow(/missing sessionID/);
 });
 
+test("integrity progress no longer writes elapsed string into subtitle", () => {
+  // 2026-05-11: previously tree-writer composed `"Xm Ys elapsed"` (and
+  // `"attempt N · Xm Ys elapsed"`) into the running integrity card's
+  // subtitle every 20s. That double-sourced the elapsed UX against
+  // CardHeader's `.card__duration` chip. Subtitle now carries only the
+  // attempt label; CardHeader owns the live elapsed string.
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "integrity elapsed single source",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  applyEvent({
+    type: "integrity.review.started",
+    emittedAt: 1_776_000_001_000,
+    properties: { taskID: TASK_ID, sessionID: INTEGRITY_SID },
+  });
+  applyEvent({
+    type: "integrity.review.progress",
+    emittedAt: 1_776_000_021_000,
+    properties: { taskID: TASK_ID, sessionID: INTEGRITY_SID, attempt: 0, elapsedMs: 20_000 },
+  });
+
+  const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
+  const beforeRetry = cardTreeStore.cards[integrityCardID];
+  expect(beforeRetry).toBeDefined();
+  expect(beforeRetry!.status).toBe("running");
+  // attempt 0 → no subtitle at all.
+  expect(beforeRetry!.subtitle).toBeUndefined();
+
+  applyEvent({
+    type: "integrity.review.progress",
+    emittedAt: 1_776_000_101_000,
+    properties: { taskID: TASK_ID, sessionID: INTEGRITY_SID, attempt: 2, elapsedMs: 100_000 },
+  });
+
+  const afterRetry = cardTreeStore.cards[integrityCardID]!;
+  // Subtitle reflects the retry attempt; nothing about elapsed time.
+  // In the test harness `t()` returns the key verbatim because no
+  // locale bundle is loaded — that's still adequate to prove the
+  // tree-writer no longer composes an elapsed string.
+  expect(afterRetry.subtitle).toBeDefined();
+  expect(afterRetry.subtitle).not.toContain("elapsed");
+  expect(afterRetry.subtitle).toContain("integrity.attempt_label");
+  // `time` is set from the started event so CardHeader can subtract from
+  // the shared 1Hz tick to display the running duration.
+  expect(afterRetry.time).toBe(1_776_000_001_000);
+});
+
 test("resetWriter clears integrity session cards materialized from protocol events", () => {
   resetWriter();
   setBoardStore("board", {
