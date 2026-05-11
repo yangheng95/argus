@@ -71,7 +71,12 @@ import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
 
 import { createWorkflowState, findStepByTool, WorkflowRegistry, type WorkflowState, type MiniWorkflow } from "@/engine/workflow"
 import { Question } from "@/question"
-import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
+import { renderSpecsAsText, type AcceptanceSpec, type ContractAuditScorer } from "@/acceptance/types"
+import {
+  contractAuditRequired,
+  runContractAudit,
+  type ContractAuditCriteriaResult,
+} from "@/acceptance/contract-audit"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan, type RestartStage } from "./scheduler"
 import { OrchestratorEventNote } from "./agent"
 import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
@@ -82,7 +87,8 @@ import {
   SourceCoverageEntrySchema,
   type ArchitectFidelityState,
 } from "@/architect/fidelity"
-import { ContractIRSchema, renderContractIR } from "@/architect/contract-ir"
+import { ContractIRSchema, renderContractIR, type ContractIR } from "@/architect/contract-ir"
+import { linkContracts } from "@/architect/linker"
 import type {
   GoalCorrection,
   IntegrityDimensionResult,
@@ -100,6 +106,74 @@ function parseArchitectContractDecision(value: string) {
   } catch {
     return undefined
   }
+}
+
+function architectContractsFromDecisionLog(taskID: string): Array<{ ir: ContractIR; goalIDs: string[] }> {
+  return createDecisionLog(taskID)
+    .readByPhase("architect")
+    .flatMap((entry) => {
+      const ir = parseArchitectContractDecision(entry.value)
+      return ir ? [{ ir, goalIDs: entry.goalID ? [entry.goalID] : [] }] : []
+    })
+}
+
+async function runGoalContractAuditCriteria(input: {
+  taskID: string
+  goal: ReturnType<typeof findGoal>
+  workDir: string
+  task: TaskRow
+}): Promise<ContractAuditCriteriaResult[]> {
+  const goal = input.goal
+  if (!goal) return []
+  const acceptanceSpecs = (Array.isArray(goal.acceptance_specs) ? goal.acceptance_specs : []) as AcceptanceSpec[]
+  const contractAuditSpecs = acceptanceSpecs.flatMap((spec) =>
+    spec.scorers
+      .filter((scorer): scorer is ContractAuditScorer => scorer.type === "contract_audit")
+      .map((scorer) => ({ spec, scorer })),
+  )
+  if (contractAuditSpecs.length === 0) return []
+
+  const dbGoals = listGoals(input.taskID)
+  const fidelity = readPersistedArchitectFidelity(input.task)
+  const linked = linkContracts({
+    workDir: input.workDir,
+    sourceCoverage: fidelity.sourceCoverage,
+    contracts: architectContractsFromDecisionLog(input.taskID),
+    goals: dbGoals.map((g) => ({
+      id: g.id,
+      depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
+      exports: Array.isArray(g.exports) ? g.exports as string[] : [],
+      imports: Array.isArray(g.imports) ? g.imports as string[] : [],
+    })),
+  })
+
+  const goalContract = {
+    id: goal.id,
+    imports: Array.isArray(goal.imports) ? goal.imports as string[] : [],
+    exports: Array.isArray(goal.exports) ? goal.exports as string[] : [],
+    owned_paths: Array.isArray(goal.owned_paths) ? goal.owned_paths as string[] : [],
+  }
+  if (linked.issues.length > 0) {
+    return contractAuditSpecs.map(({ spec, scorer }) => ({
+      name: `acceptance:${spec.id}:${scorer.name}`,
+      label: `${spec.title} / ${scorer.name}`,
+      family: "contract_audit",
+      status: "failed",
+      evidence: linked.issues.map((issue) =>
+        `${issue.kind}${issue.goalID ? ` goal=${issue.goalID}` : ""}${issue.symbol ? ` symbol=${issue.symbol}` : ""}: ${issue.detail}`,
+      ).join("\n"),
+    }))
+  }
+
+  return contractAuditSpecs.map(({ spec, scorer }) =>
+    runContractAudit({
+      workDir: input.workDir,
+      index: linked.index,
+      goal: goalContract,
+      spec,
+      scorer,
+    }),
+  )
 }
 
 type IntegrityReviewOutcome =
@@ -3598,6 +3672,7 @@ export function createOrchestratorTools(input: {
             priority: g.priority as "blocking" | "advisory",
             acceptance_spec_count: acceptanceSpecs.length,
             acceptance_scenarios: acceptanceSpecs.filter((spec) => !!spec.scenario),
+            acceptance_specs: acceptanceSpecs,
             requirement_ids: Array.isArray(g.requirement_ids) ? g.requirement_ids as string[] : [],
             depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
             imports: Array.isArray(g.imports) ? g.imports as string[] : [],
@@ -3835,6 +3910,7 @@ export function createOrchestratorTools(input: {
               runID: run?.id,
               deliveryID,
               specSnapshotID: activeSpecSnapshot?.id,
+              criteriaResults: Array.isArray(task.criteria_results) ? task.criteria_results as any : [],
             })
 
           // Persist verdict as artifact
@@ -5555,6 +5631,37 @@ export function createOrchestratorTools(input: {
                 workspaceBranch: worktreeBranch,
                 workspaceBaseRef: worktreeBaseRef,
               })
+            }
+            if (attachedGoalID && worktreeDir && (!currentGoalRun || isLiveGoalRunStatus(currentGoalRun.status))) {
+              const contractAuditCriteria = await runGoalContractAuditCriteria({
+                taskID,
+                goal: findGoal(attachedGoalID),
+                workDir: worktreeDir,
+                task,
+              })
+              if (contractAuditCriteria.length > 0) {
+                await EngineService.upsertTaskCriteria(taskID, contractAuditCriteria)
+                const failedEssential = contractAuditCriteria.filter((criteria) => {
+                  if (criteria.status !== "failed") return false
+                  const goalRow = findGoal(attachedGoalID)
+                  const specs = (Array.isArray(goalRow?.acceptance_specs) ? goalRow.acceptance_specs : []) as AcceptanceSpec[]
+                  return specs.some((spec) =>
+                    spec.scorers.some((scorer) =>
+                      scorer.type === "contract_audit" &&
+                      contractAuditRequired(spec, scorer) &&
+                      `acceptance:${spec.id}:${scorer.name}` === criteria.name,
+                    ),
+                  )
+                })
+                if (failedEssential.length > 0 && buildOutcome.result.result.status === "passed") {
+                  buildOutcome.result.result = {
+                    ...buildOutcome.result.result,
+                    status: "failed",
+                    error: `contract_audit failed:\n${failedEssential.map((criteria) => criteria.evidence).join("\n")}`,
+                    summary: `${buildOutcome.result.result.summary}\n\nContract audit failed before goal finalization.`,
+                  }
+                }
+              }
             }
           }
 

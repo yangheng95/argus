@@ -22,7 +22,7 @@ import {
   normalizeGoalContractFields,
   normalizeGoalContractUpdate,
 } from "@/pipeline/goal-contract.schema"
-import type { AcceptanceSpec } from "@/acceptance/types"
+import { resolveTrigger, type AcceptanceSpec } from "@/acceptance/types"
 import type { VisualSpec } from "@/design-analyst/types"
 import type { TraceabilityEntry } from "./types"
 import {
@@ -142,6 +142,16 @@ export function architectValidationIssues(
       if (spec.goal_id !== g.id) {
         issues.push(`Goal ${g.id}: acceptance spec ${spec.id} has mismatched goal_id "${spec.goal_id}"`)
       }
+    }
+    const hasContractBoundary = g.imports.length > 0 || g.exports.length > 0
+    const hasEssentialContractAudit = g.acceptance_specs.some((spec) =>
+      spec.severity === "essential" &&
+      spec.scorers.some((scorer) => scorer.type === "contract_audit" && resolveTrigger(spec, scorer) === "on_goal")
+    )
+    if (hasContractBoundary && !hasEssentialContractAudit) {
+      issues.push(
+        `Goal ${g.id}: imports/exports require at least one essential on_goal contract_audit acceptance scorer.`,
+      )
     }
     for (const requirementID of g.requirement_ids) {
       if (!requiredTraceability.has(requirementID)) {
