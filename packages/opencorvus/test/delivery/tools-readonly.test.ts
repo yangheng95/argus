@@ -94,7 +94,17 @@ describe("delivery review-only tool surface", () => {
 
           expect(output.text).toContain("rendered_output")
           expect(output.attachments).toHaveLength(2)
-          expect(output.attachments[0].url).toStartWith("data:image/png;base64,")
+          // Post-2026-05-11 contract: tool result attachments are
+          // canonical AttachmentStore refs (`/attachment/<projectID>/<sha>.<ext>`),
+          // never inline data URLs. The Session.updatePart guard rejects
+          // any data:image/...;base64 leakage at the write boundary, so
+          // this is the only shape downstream code is allowed to see.
+          // (specs/delivery-attachment-store-single-source-2026-05-11.md)
+          for (const att of output.attachments) {
+            expect(att.url).toStartWith(`/attachment/${Instance.project.id}/`)
+            expect(att.url).not.toStartWith("data:")
+            expect(AttachmentStore.nameFromUrl(att.url)).toBeTruthy()
+          }
         },
       })
     } finally {

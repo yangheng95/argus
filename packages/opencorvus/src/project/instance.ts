@@ -63,6 +63,26 @@ export const Instance: InstanceApi = {
           // context. Lazy import breaks the engine/git ↔ instance cycle.
           const { ensureGitignore } = await import("@/engine/git")
           await ensureGitignore()
+          // Sweep orphan attachments on first bootstrap per project
+          // (specs/delivery-attachment-store-single-source-2026-05-11.md).
+          // `AttachmentStore.write` is content-addressed and write-only —
+          // without this hook, removed parts / archived sessions leave
+          // bytes on disk forever. Skipped for the "global" pseudo-
+          // project (worktree="/") because reading C:\.opencorvus\ would
+          // fail and the global project never holds real attachments.
+          // Errors degrade to a log line — sweep failure must not turn
+          // into a 500-storm (rule 1 / W2-V32 lesson).
+          if (project.id !== "global") {
+            try {
+              const { AttachmentStore } = await import("@/storage/attachment-store")
+              await AttachmentStore.sweep(project.id)
+            } catch (err) {
+              Log.Default.warn("AttachmentStore.sweep failed during bootstrap", {
+                projectID: project.id,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
+          }
           await input.init?.()
         })
         return ctx

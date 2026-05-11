@@ -9,12 +9,12 @@ import { fn } from "@/util/fn"
 import { Database, eq, desc, inArray } from "@/storage/db"
 import { MessageTable, PartTable } from "./session.sql"
 import { ProviderError } from "@/provider/error"
-import { iife } from "@/util/iife"
 import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { isDecodableText } from "./text-mime"
 import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/orchestrator/stateful-tool-names"
 import { normalizeToolInput } from "./tool-input-norm"
+import { AttachmentStore } from "@/storage/attachment-store"
 
 /** Coerce a persisted tool_use.input into a dict for outbound AI-SDK messages.
  *  Downstream gateways (notably hexin → litellm → Bedrock) reject tool_use
@@ -653,7 +653,49 @@ export namespace Message {
     // undefined" at value[0].text), surfacing as
     // `Invalid prompt: The messages do not match the ModelMessage[] schema`
     // and a hard orchestrator retry loop.
-    const toModelOutput = (args: { toolCallId: string; input: unknown; output: unknown }) => {
+    // Attachment URL → base64 string for AI-SDK `image-data` content.
+    //
+    // Two URL shapes are accepted:
+    //  1. `/attachment/<projectID>/<sha>.<ext>` ref — the canonical form
+    //     post-2026-05-11 (specs/delivery-attachment-store-single-source-2026-05-11.md).
+    //     Bytes are read from `AttachmentStore` on demand and base64-encoded
+    //     here, so `part.data` stores small refs instead of MB of inline
+    //     base64. This is the OOM fix; the disk read is amortized across all
+    //     subsequent turns that consume the same tool result.
+    //  2. `data:<mime>;base64,<payload>` — legacy form for tool results
+    //     produced before the migration. Pre-existing rows resolve through
+    //     this branch until the migration script rewrites them; the
+    //     Session.updatePart guard prevents new rows from taking this shape.
+    //
+    // Returns undefined when the URL is neither — the caller skips that
+    // attachment rather than crashing the tool result.
+    const attachmentToBase64 = async (
+      attachment: { mime: string; url: string },
+    ): Promise<{ mime: string; data: string } | undefined> => {
+      if (attachment.url.startsWith("data:") && attachment.url.includes(",")) {
+        const commaIndex = attachment.url.indexOf(",")
+        return { mime: attachment.mime, data: attachment.url.slice(commaIndex + 1) }
+      }
+      const located = AttachmentStore.nameFromUrl(attachment.url)
+      if (!located) return undefined
+      const bytes = await AttachmentStore.read(located.projectID, located.name).catch(() => undefined)
+      if (!bytes) return undefined
+      return { mime: attachment.mime, data: bytes.toString("base64") }
+    }
+
+    // AI SDK v6 invokes tool.toModelOutput with an args object
+    // ({ toolCallId, input, output }), not a raw output. v5 passed `output`
+    // directly. Reading the wrapped argument as if it were the output gave
+    // outputObject.text === undefined for every tool result, which the v6
+    // ToolModelOutput zod schema rejected ("expected string, received
+    // undefined" at value[0].text), surfacing as
+    // `Invalid prompt: The messages do not match the ModelMessage[] schema`
+    // and a hard orchestrator retry loop.
+    //
+    // toModelOutput is awaited by the AI SDK (see
+    // node_modules/ai/dist/index.js: `await tool2.toModelOutput(...)`),
+    // so reading attachment bytes from disk on demand is safe.
+    const toModelOutput = async (args: { toolCallId: string; input: unknown; output: unknown }) => {
       const { output } = args
       if (typeof output === "string") {
         return { type: "text", value: output }
@@ -664,9 +706,16 @@ export namespace Message {
           text?: string
           attachments?: Array<{ mime: string; url: string }>
         }
-        const attachments = (outputObject.attachments ?? []).filter((attachment) => {
-          return attachment.url.startsWith("data:") && attachment.url.includes(",")
-        })
+
+        const rawAttachments = outputObject.attachments ?? []
+        const resolved = await Promise.all(rawAttachments.map(attachmentToBase64))
+        const attachmentParts = resolved
+          .filter((entry): entry is { mime: string; data: string } => entry !== undefined)
+          .map((entry) => ({
+            type: "image-data" as const,
+            mediaType: entry.mime,
+            data: entry.data,
+          }))
 
         // ToolModelOutput.content also rejects a `text` part with undefined or
         // empty text (screenshot-only outputs) — drop the text part when the
@@ -676,14 +725,6 @@ export namespace Message {
           typeof outputObject.text === "string" && outputObject.text.length > 0
             ? [{ type: "text" as const, text: outputObject.text }]
             : []
-        const attachmentParts = attachments.map((attachment) => ({
-          type: "image-data" as const,
-          mediaType: attachment.mime,
-          data: iife(() => {
-            const commaIndex = attachment.url.indexOf(",")
-            return commaIndex === -1 ? attachment.url : attachment.url.slice(commaIndex + 1)
-          }),
-        }))
         const value = [...textPart, ...attachmentParts]
         if (value.length === 0) return { type: "json", value: outputObject as never }
         return { type: "content", value }

@@ -25,6 +25,7 @@ import { defer } from "../../util/defer"
 import { fileURLToPath, pathToFileURL } from "bun"
 import type { PromptInput } from "./schema"
 import { isDecodableText, decodeDataUrlText } from "../text-mime"
+import { AttachmentStore } from "@/storage/attachment-store"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -357,6 +358,19 @@ export async function createUserMessage(input: PromptInput) {
               }
 
               FileTime.read(input.sessionID, filepath)
+              // Read tool binary content used to land in part.url as a
+              // raw `data:<mime>;base64,...` string, which trips the
+              // Session.updatePart inline-base64 guard
+              // (specs/delivery-attachment-store-single-source-2026-05-11.md).
+              // Route through AttachmentStore so the persisted url is a
+              // canonical ref and the bytes round-trip via toModelOutput's
+              // ref → base64 reader at LLM call time.
+              const fileRef = await AttachmentStore.writeFromPath(
+                Instance.project.id,
+                filepath,
+                part.mime,
+                part.filename!,
+              )
               return [
                 {
                   messageID: info.id,
@@ -369,8 +383,8 @@ export async function createUserMessage(input: PromptInput) {
                   messageID: info.id,
                   sessionID: input.sessionID,
                   type: "file",
-                  url: `data:${part.mime};base64,` + (await Filesystem.readBytes(filepath)).toString("base64"),
-                  mime: part.mime,
+                  url: fileRef.url,
+                  mime: fileRef.mime,
                   filename: part.filename!,
                   source: part.source,
                 },
