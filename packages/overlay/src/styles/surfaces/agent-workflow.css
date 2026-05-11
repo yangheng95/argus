@@ -251,6 +251,16 @@
   font-weight: var(--ui-font-weight-body);
 }
 
+.agent-workflow-card-subtitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-soft);
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-medium);
+}
+
 .agent-workflow-card-body {
   display: -webkit-box;
   min-height: calc(34px * var(--ui-scale));
@@ -294,6 +304,7 @@
 }
 
 .agent-workflow-report-head {
+  flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -318,6 +329,10 @@
   line-height: 1.45;
 }
 
+.agent-workflow-report-goal {
+  color: var(--text);
+}
+
 .agent-workflow-report-close {
   width: calc(28px * var(--ui-scale));
   padding: 0;
@@ -338,10 +353,14 @@
   border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 58%, transparent);
 }
 
+.agent-workflow-report-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .agent-workflow-report-section:last-child {
   border-bottom: 0;
-  min-height: 0;
-  overflow: auto;
 }
 
 .agent-workflow-report-section h3 {
@@ -352,9 +371,7 @@
 }
 
 .agent-workflow-report-section pre {
-  max-height: calc(340px * var(--ui-scale));
   margin: 0;
-  overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--mono);
