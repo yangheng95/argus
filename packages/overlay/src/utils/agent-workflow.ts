@@ -25,6 +25,11 @@ export interface AgentWorkflowRecord {
   depth: number;
   cardID?: string;
   goalID?: string;
+  goalDescription?: string;
+  round?: number;
+  attempt?: number;
+  stepID?: string;
+  phaseID?: string;
   model?: string;
   report?: AgentWorkflowReport;
 }
@@ -85,48 +90,6 @@ function firstString(...values: unknown[]): string {
   return "";
 }
 
-function compactJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function summariseObject(value: unknown): string {
-  if (!value || typeof value !== "object") return "";
-  const item = value as Record<string, any>;
-  const direct = firstString(
-    item.summary,
-    item.verdictSummary,
-    item.finalSummary,
-    item.result?.summary,
-    item.output?.summary,
-    item.message,
-    item.error,
-  );
-  if (direct) return direct;
-  const parts: string[] = [];
-  if (Array.isArray(item.requirements)) parts.push(`${item.requirements.length} requirements`);
-  if (Array.isArray(item.specs)) parts.push(`${item.specs.length} specs`);
-  if (Array.isArray(item.goals)) parts.push(`${item.goals.length} goals`);
-  if (Array.isArray(item.contracts)) parts.push(`${item.contracts.length} contracts`);
-  if (Array.isArray(item.changedFiles)) parts.push(`${item.changedFiles.length} files changed`);
-  if (Array.isArray(item.files)) parts.push(`${item.files.length} files`);
-  if (Array.isArray(item.checks)) parts.push(`${item.checks.length} checks`);
-  return parts.join(" · ");
-}
-
-function summariseReportPayload(payload: Record<string, any>): string {
-  const explicit = firstString(payload.error, payload.finalText);
-  if (explicit) return explicit;
-  return firstString(
-    summariseObject(payload.collector),
-    summariseObject(payload.structured),
-    payload.streamErrors?.length ? `${payload.streamErrors.length} stream errors` : "",
-  );
-}
-
 function textFromPart(part: any): string {
   if (!part || typeof part !== "object") return "";
   if (part.type === "text" || part.type === "reasoning") return String(part.text || "").trim();
@@ -148,7 +111,7 @@ function textFromCard(card: CardNode | undefined, cards: Record<string, CardNode
   return chunks.join("\n\n").trim();
 }
 
-function traceReport(event: TraceEvent): AgentWorkflowReport | undefined {
+export function traceReport(event: TraceEvent): AgentWorkflowReport | undefined {
   const kind = String(event.kind || "");
   if (
     kind !== "agent_report" &&
@@ -160,15 +123,31 @@ function traceReport(event: TraceEvent): AgentWorkflowReport | undefined {
     return undefined;
   }
   const payload = (event.payload || {}) as Record<string, any>;
+  const report = payload.report;
+  if (!report || typeof report !== "object") return undefined;
+  const summary = typeof report.summary === "string" ? report.summary.trim() : "";
+  const detail = typeof report.detail === "string" ? report.detail.trim() : "";
+  if (!summary || !detail) return undefined;
   const attempts = Number(payload.attempts || 0);
-  const summary = summariseReportPayload(payload);
   return {
     kind,
     ts: Number(event.ts || 0),
-    summary: summary || "(no summary)",
-    detail: compactJson(payload),
+    summary,
+    detail,
     ...(attempts > 0 ? { attempts } : {}),
   };
+}
+
+function phaseIDFromCardID(id: string): string {
+  const marker = ":phase:";
+  const idx = id.indexOf(marker);
+  return idx >= 0 ? id.slice(idx + marker.length) : "";
+}
+
+function stepIDFromCardID(id: string): string {
+  const [head] = id.split(":phase:");
+  const parts = (head || "").split(":");
+  return parts[0] === "step" && parts.length >= 3 ? parts[2] || "" : "";
 }
 
 function ensureRecord(records: Map<string, AgentWorkflowRecord>, sessionID: string): AgentWorkflowRecord {
@@ -228,6 +207,11 @@ function applyCardRecord(
   const record = ensureRecord(records, sessionID);
   record.cardID = card.id;
   record.goalID = card.goalID || record.goalID;
+  record.goalDescription = card.goalDescription || record.goalDescription;
+  record.round = typeof card.round === "number" ? card.round : record.round;
+  record.attempt = typeof card.attempt === "number" ? card.attempt : record.attempt;
+  record.stepID = card.stepID || stepIDFromCardID(card.id) || record.stepID;
+  record.phaseID = card.phaseID || phaseIDFromCardID(card.id) || record.phaseID;
   record.agentName = firstString(card.stage, record.agentName);
   record.stage = normalizeAgentRole(record.agentName);
   record.status = mergeStatus(record.status, normaliseStatus(card.status));
