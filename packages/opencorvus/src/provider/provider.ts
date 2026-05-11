@@ -494,13 +494,9 @@ export namespace Provider {
     // neither is present, still register the provider (no key) so the
     // UI can display it and let the operator paste a key at runtime.
 
-    // alibaba-coding-plan-cn: always available with embedded key; env overrides
-    if (!disabled.has("alibaba-coding-plan-cn") && !providers["alibaba-coding-plan-cn"]) {
-      mergeProvider("alibaba-coding-plan-cn", {
-        source: "custom",
-        key: "sk-sp-40eeacbb1d2848a4829dca771f2ed51a",
-      })
-    }
+    // alibaba-coding-plan-cn: no embedded key. Provider is still registered
+    // via the env loop above (ALIBABA_CODING_PLAN_API_KEY / DASHSCOPE_API_KEY),
+    // Auth.all(), config, or surfaced via database() for the UI to prompt input.
 
     // alibaba-cn: resolve key from DASHSCOPE_API_KEY or embedded key
     if (!disabled.has("alibaba-cn")) {
