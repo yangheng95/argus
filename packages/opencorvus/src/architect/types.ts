@@ -14,6 +14,7 @@ import type {
   ReferenceCoverageEntry,
   SourceCoverageEntry,
 } from "./fidelity"
+import type { ContractCategory, ContractIR } from "./contract-ir"
 
 // ---------------------------------------------------------------------------
 // Architect Decision Log key categories
@@ -21,12 +22,7 @@ import type {
 
 /** The 6 key categories that Architect writes to the Decision Log. */
 export type ArchitectDecisionKey =
-  | "directory_blueprint"
-  | "interface_contract"
-  | "export_manifest"
-  | "shared_type"
-  | "naming_convention"
-  | "dependency_order"
+  | ContractCategory
 
 // ---------------------------------------------------------------------------
 // ArchitectContract — one cross-goal consensus entry
@@ -35,7 +31,7 @@ export type ArchitectDecisionKey =
 export interface ArchitectContract {
   category: ArchitectDecisionKey
   title: string
-  spec: string
+  ir: ContractIR
   goalIDs: string[]
 }
 
