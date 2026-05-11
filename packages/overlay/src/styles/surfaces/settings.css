@@ -1950,7 +1950,7 @@
 .provider-catalog-row {
   align-items: start;
 }
-@media (max-width: 980px) { /* breakpoint: --ui-breakpoint-lg */
+@media (max-width: 900px) { /* breakpoint: --ui-breakpoint-lg */
   .provider-command,
   .provider-flat-row {
     grid-template-columns: 1fr;

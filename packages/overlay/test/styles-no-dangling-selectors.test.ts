@@ -53,8 +53,15 @@ function walkCss(dir: string): string[] {
 }
 
 // Concatenate all surface + cascade + primitive CSS files (styles.css was
-// dissolved 2026-05-04 into this decomposed architecture).
-const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
+// dissolved 2026-05-04 into this decomposed architecture). Comments are
+// stripped first so a /* ... */ block immediately preceding a rule does
+// not get folded into the rule's selector head when we split on }.
+function stripCssComments(input: string): string {
+  return input.replace(/\/\*[\s\S]*?\*\//g, "")
+}
+const STYLES = stripCssComments(
+  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+)
 
 describe("styles.css carries no dangling selector lists", () => {
   test("every rule head ends with a selector segment, not a trailing comma", () => {

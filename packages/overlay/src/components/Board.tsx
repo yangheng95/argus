@@ -6,6 +6,7 @@
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
 import { createEffect, createMemo, createSignal, For, Show, onMount } from "solid-js";
+import { useDisclosure } from "../solid/disclosure";
 import { boardStore } from "../store/board";
 import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
@@ -247,7 +248,10 @@ export function deliveryPanelDelivery(board: any): any {
 const DEFAULT_SUMMARY_LINES = 10;
 
 export function DeliveryPanel(props: DeliveryPanelProps) {
-  const [summaryExpanded, setSummaryExpanded] = createSignal(false);
+  // Migrated to the shared disclosure primitive (Step 9.H of the
+  // flat-redesign rollout). `summary` is the canonical open/close
+  // state for the delivery summary clamp affordance.
+  const summary = useDisclosure(false);
 
   const tone = createMemo<VerdictTone>(() => deriveVerdictTone(props.delivery));
   const summaryText = createMemo(() => {
@@ -318,16 +322,16 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
         <Show when={summaryText()}>
           <div
             class="delivery-summary md-content"
-            data-clamped={summaryNeedsClamp() && !summaryExpanded() ? "true" : "false"}
+            data-clamped={summaryNeedsClamp() && !summary.open() ? "true" : "false"}
             innerHTML={renderMarkdown(summaryText())}
           />
           <Show when={summaryNeedsClamp()}>
             <button
               class="delivery-summary-toggle"
               type="button"
-              onClick={() => setSummaryExpanded((v) => !v)}
+              onClick={summary.toggle}
             >
-              {summaryExpanded() ? t("delivery.show_less") : t("delivery.show_more")}
+              {summary.open() ? t("delivery.show_less") : t("delivery.show_more")}
             </button>
           </Show>
         </Show>
@@ -482,7 +486,6 @@ function SectionFrame(props: SectionFrameProps) {
       badgeId={props.badgeId}
       badgeTone={props.badgeTone}
       badgeVariant={props.badgeVariant || "status"}
-      defaultOpen={false}
       attr:data-phase-state={props.phaseState || undefined}
     >
       {props.children}

@@ -73,7 +73,10 @@
    The parent layout owns outer spacing, so this shell stays marginless
    while carrying its own radius token and inner padding. */
 .chat-input {
-  --chat-textarea-height: calc(62px * var(--ui-scale));
+  /* Compact density: textarea floor is 56px so the composer reads
+     visibly tighter than the surrounding canvas. Pinned by
+     workspace-composer-density.test.ts. */
+  --chat-textarea-height: calc(56px * var(--ui-scale));
   --chat-compose-scale: 1;
   position: relative;
   display: flex;
@@ -516,7 +519,7 @@
   color: var(--text-strong);
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
 }
 
 .executor-menu-summary-title span:last-child {
@@ -569,7 +572,7 @@
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   cursor: pointer;
   transition:
     background var(--ui-duration-fast),
@@ -686,7 +689,7 @@
 
 .executor-chip-label {
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
   color: var(--text-strong);
 }
 
@@ -724,7 +727,7 @@
   color: var(--text-muted);
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0;
+  letter-spacing: var(--ui-letter-spacing-normal);
 }
 
 .executor-chip-role::after {

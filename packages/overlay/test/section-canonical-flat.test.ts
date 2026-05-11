@@ -56,22 +56,66 @@ function soloRuleBody(text: string, selector: string): string {
   throw new Error(`solo ${selector} not found`)
 }
 
-describe(".section canonical matches the actually-rendered flat chrome", () => {
-  test("canonical body declares --surface-inset background", () => {
-    expect(soloRuleBody(INSPECTOR_SURFACE, ".section")).toMatch(
-      /background:\s*var\(--surface-inset\)/,
+// iter40 was a placeholder for migrating the legacy `.section` chrome
+// off its !important reset chain. Subsequent work renamed the primitive
+// to `.oc-section` (see `styles/primitives/section.css`) and retired
+// `.section` entirely — no surface or component file still emits the
+// class. So the original assertions ("canonical declares
+// --surface-inset / soft radius / no drop-shadow") are obsolete. Pin
+// the post-migration invariant instead: no solo `.section` rule
+// survives anywhere, and the new primitive's body does not leak
+// surface chrome (background/border) at the structural layer.
+function hasSoloRule(text: string, selector: string): boolean {
+  try {
+    soloRuleBody(text, selector)
+    return true
+  } catch {
+    return false
+  }
+}
+
+describe(".section legacy chrome was retired in favour of .oc-section", () => {
+  test("no surface file declares a solo top-level `.section` rule anymore", () => {
+    expect(hasSoloRule(INSPECTOR_SURFACE, ".section")).toBe(false)
+  })
+
+  test(".oc-section primitive carries the section structural contract", () => {
+    const primitiveRaw = readFileSync(
+      path.resolve(
+        import.meta.dir,
+        "..",
+        "src",
+        "styles",
+        "primitives",
+        "section.css",
+      ),
+      "utf8",
     )
+    const primitive = primitiveRaw.replace(/\/\*[\s\S]*?\*\//g, "")
+    expect(hasSoloRule(primitive, ".oc-section")).toBe(true)
   })
 
-  test("canonical body uses var(--oc-radius-soft) (≈4px), not the dead 14px chrome value", () => {
-    const body = soloRuleBody(INSPECTOR_SURFACE, ".section")
-    expect(body).not.toMatch(/border-radius:\s*calc\(14px/)
-    expect(body).toMatch(/border-radius:\s*var\(--oc-radius-soft\)/)
-  })
-
-  test("canonical body does NOT declare the dead drop-shadow chrome", () => {
-    const body = soloRuleBody(INSPECTOR_SURFACE, ".section")
-    expect(body).not.toMatch(/box-shadow:[^;]*8px[^;]*18px/)
+  test(".oc-section primitive intentionally omits surface chrome (background/border/box-shadow)", () => {
+    const primitiveRaw = readFileSync(
+      path.resolve(
+        import.meta.dir,
+        "..",
+        "src",
+        "styles",
+        "primitives",
+        "section.css",
+      ),
+      "utf8",
+    )
+    const primitive = primitiveRaw.replace(/\/\*[\s\S]*?\*\//g, "")
+    const body = soloRuleBody(primitive, ".oc-section")
+    // The primitive is a flex-column shell only — colors live on surface
+    // variants. Pin the contract so future edits don't sneak chrome
+    // back into the structural layer (which would re-introduce the
+    // double-source the iter40 plan tried to retire).
+    expect(body).not.toMatch(/^\s*background:/m)
+    expect(body).not.toMatch(/^\s*border:/m)
+    expect(body).not.toMatch(/^\s*box-shadow:/m)
   })
 })
 

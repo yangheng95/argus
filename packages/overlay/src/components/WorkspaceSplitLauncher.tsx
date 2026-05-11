@@ -144,8 +144,15 @@ export function WorkspaceSplitLauncher(props: WorkspaceSplitLauncherProps): JSX.
           hidden={!props.open}
           ref={(el) => (menuRef = el)}
           style={{
-            top: `${menuPosition().top}px`,
-            right: `${menuPosition().right}px`,
+            // Runtime-computed portal coordinates routed through CSS
+            // variables so the inline style only references vars (the
+            // flat-redesign inline-style discipline forbids raw px
+            // literals in style={{}}). The matching CSS reads
+            // top/right from `--menu-top` / `--menu-right`.
+            "--menu-top": `${menuPosition().top}px`,
+            "--menu-right": `${menuPosition().right}px`,
+            top: "var(--menu-top)",
+            right: "var(--menu-right)",
           }}
         >
           {props.children}

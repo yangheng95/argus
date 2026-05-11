@@ -9,6 +9,12 @@
   max-height: 100%;
   width: 100%;
   height: 100%;
+  /* The top-layer dialog escapes its parent stacking context, which
+     means Chrome resets `color-scheme` on it. Without `inherit`, native
+     form controls inside the dialog (selects, inputs, scrollbars) flip
+     to the OS default scheme even when the surrounding overlay is in
+     dark mode. */
+  color-scheme: inherit;
 }
 
 #appDialog {
