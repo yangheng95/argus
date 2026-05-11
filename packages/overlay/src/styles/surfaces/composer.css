@@ -324,7 +324,7 @@
 
 /* Build/version block: the small text strip beneath the textarea showing
    the active engine + model and the build version link. Wraps onto a
-   second line on narrow composers via `.chat-compose-tip` reflow. */
+   second line on narrow composers. */
 .chat-build {
   display: flex;
   flex: 1 1 calc(220px * var(--ui-scale));
@@ -377,20 +377,6 @@
   opacity: var(--ui-opacity-full);
 }
 
-.chat-compose-tip {
-  display: inline-flex;
-  align-items: center;
-  min-height: auto;
-  padding: 0;
-  text-align: right;
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  background: transparent;
-  border: 0 solid transparent;
-  border-radius: 0;
-  white-space: nowrap;
-}
-
 /* Send button SVG icon sizing. Kept separate from the `.chat-send`
    shell because it is purely an icon affordance and the icon column
    reuses the same SVG component. */
@@ -416,12 +402,7 @@
     flex-direction: column;
   }
 
-  .chat-compose-meta-right {
-    justify-content: flex-start;
-  }
-
-  .chat-version,
-  .chat-compose-tip {
+  .chat-version {
     margin-left: 0;
     text-align: left;
     white-space: normal;
@@ -463,7 +444,7 @@
   width: 100%;
   flex: 1 1 100%;
   align-items: stretch;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
   min-width: 0;
 }
 
@@ -476,8 +457,8 @@
 
 .executor-chip-slot .oc-button[data-ui^="executor-chip-"] {
   --oc-button-height: auto;
-  --oc-button-padding-x: calc(10px * var(--ui-scale));
-  --oc-button-gap: calc(8px * var(--ui-scale));
+  --oc-button-padding-x: calc(8px * var(--ui-scale));
+  --oc-button-gap: calc(6px * var(--ui-scale));
   /* Rule A — surfaces carry no resting self-border; the fill against
    * the composer background is what reads as a boundary. */
   --oc-button-border: 0 solid transparent;
@@ -489,13 +470,13 @@
   align-items: center;
   justify-content: space-between;
   border-radius: var(--oc-radius-soft);
-  min-height: calc(32px * var(--ui-scale));
+  min-height: calc(22px * var(--ui-scale));
   width: 100%;
-  padding-top: calc(4px * var(--ui-scale));
-  padding-bottom: calc(4px * var(--ui-scale));
-  font-size: var(--ui-font-meta);
+  padding-top: calc(1px * var(--ui-scale));
+  padding-bottom: calc(1px * var(--ui-scale));
+  font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-medium);
-  line-height: 1.15;
+  line-height: 1.1;
   min-width: 0;
 }
 
@@ -515,11 +496,12 @@
 .executor-chip-identity {
   display: inline-flex;
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(5px * var(--ui-scale));
   min-width: 0;
 }
 
 .executor-chip-label {
+  font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   letter-spacing: var(--ui-letter-spacing-normal);
   color: var(--text-strong);
@@ -529,7 +511,7 @@
 .executor-chip-model {
   display: inline-flex;
   align-items: baseline;
-  gap: calc(3px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
   min-width: 0;
   flex: 1 1 0;
   justify-content: flex-end;
@@ -539,7 +521,7 @@
 }
 
 .executor-chip-provider {
-  max-width: calc(96px * var(--ui-scale));
+  max-width: calc(88px * var(--ui-scale));
   overflow: hidden;
   color: color-mix(in srgb, var(--text-muted) 78%, transparent);
   font-size: var(--ui-font-tiny);
@@ -556,7 +538,7 @@
   max-width: calc(220px * var(--ui-scale));
   overflow: hidden;
   color: var(--text-soft);
-  font-size: var(--ui-font-meta);
+  font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-overflow: ellipsis;
   white-space: nowrap;
