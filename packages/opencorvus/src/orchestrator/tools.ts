@@ -28,6 +28,7 @@ import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { renderDesignAnalysisHandoffReference } from "@/design-analyst/handoff"
+import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
   EngineArtifactTable,
   EngineGoalTable,
@@ -770,6 +771,160 @@ function guessMimeFromFilename(filename: string): string {
     mp3: "audio/mpeg", wav: "audio/wav",
   }
   return table[ext] ?? "application/octet-stream"
+}
+
+const FIGMA_URL_PATTERN =
+  /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)\/[^\s)]+/i
+
+function isFigmaUrl(value: string): boolean {
+  return FIGMA_URL_PATTERN.test(value)
+}
+
+function parseFigmaMaterialUrl(value: string): { nodeID: string } {
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch (err) {
+    throw new Error(`invalid Figma URL for design_analysis MCP materialization: ${value}`, { cause: err })
+  }
+  if (!/(^|\.)figma\.com$/i.test(parsed.hostname)) {
+    throw new Error(`design_analysis Figma MCP materialization expected a figma.com URL: ${value}`)
+  }
+  const node = parsed.searchParams.get("node-id")
+  if (!node?.trim()) {
+    throw new Error(
+      `design_analysis Figma MCP materialization requires a node-id query parameter: ${value}`,
+    )
+  }
+  return { nodeID: node.replace(/-/g, ":") }
+}
+
+type FigmaMcpToolName =
+  | "get_design_context"
+  | "get_screenshot"
+  | "get_metadata"
+  | "get_variable_defs"
+
+async function resolveFigmaMcpToolKeys(): Promise<Record<FigmaMcpToolName, string>> {
+  const { MCP } = await import("@/mcp")
+  const tools = await MCP.serverTools()
+
+  const pick = (name: FigmaMcpToolName): string => {
+    const matches = tools.filter((item) =>
+      item.name === name ||
+      item.key === `Figma_${name}` ||
+      item.key === `figma_${name}`,
+    )
+    if (matches.length === 0) {
+      throw new Error(
+        `Figma MCP tool missing: ${name}. Connect a Figma MCP server that exposes get_design_context, get_screenshot, get_metadata, and get_variable_defs.`,
+      )
+    }
+    if (matches.length > 1) {
+      throw new Error(
+        `Ambiguous Figma MCP tool ${name}: ${matches.map((item) => item.key).join(", ")}`,
+      )
+    }
+    return matches[0]!.key
+  }
+
+  return {
+    get_design_context: pick("get_design_context"),
+    get_screenshot: pick("get_screenshot"),
+    get_metadata: pick("get_metadata"),
+    get_variable_defs: pick("get_variable_defs"),
+  }
+}
+
+async function materializeFigmaMcpReference(input: {
+  taskID: string
+  projectID: string
+  figmaUrl: string
+}): Promise<number> {
+  const { MCP } = await import("@/mcp")
+  const tools = await resolveFigmaMcpToolKeys()
+  const { nodeID } = parseFigmaMaterialUrl(input.figmaUrl)
+  const nodeId = nodeID
+  const common = {
+    nodeId,
+    clientLanguages: "typescript,html,css",
+    clientFrameworks: "react,tailwindcss",
+  }
+
+  const [designContextRaw, screenshotRaw, metadataRaw, variableDefsRaw] = await Promise.all([
+    MCP.callTool({
+      key: tools.get_design_context,
+      args: {
+        ...common,
+        artifactType: "WEB_PAGE_OR_APP_SCREEN",
+        taskType: "CREATE_ARTIFACT",
+      },
+    }),
+    MCP.callTool({
+      key: tools.get_screenshot,
+      args: { nodeId },
+    }),
+    MCP.callTool({
+      key: tools.get_metadata,
+      args: common,
+    }),
+    MCP.callTool({
+      key: tools.get_variable_defs,
+      args: common,
+    }),
+  ])
+
+  const screenshot = await materializeMcpToolResult({
+    projectID: input.projectID,
+    result: screenshotRaw as any,
+    imageFilename: `figma-${nodeID.replace(/[^a-zA-Z0-9]/g, "_")}.png`,
+  })
+  if (screenshot.attachments.length === 0) {
+    throw new Error(`Figma MCP get_screenshot produced no image content for node ${nodeID}`)
+  }
+  for (const ref of screenshot.attachments) {
+    await EngineService.appendTaskAttachment(input.taskID, {
+      ...ref,
+      intent: "visual_reference",
+      source: "figma-mcp",
+    })
+  }
+
+  const textArtifacts = [
+    ["figma-design-context", designContextRaw],
+    ["figma-metadata", metadataRaw],
+    ["figma-variable-defs", variableDefsRaw],
+  ] as const
+  for (const [label, raw] of textArtifacts) {
+    const materialized = await materializeMcpToolResult({
+      projectID: input.projectID,
+      result: raw as any,
+    })
+    if (!materialized.text.trim()) {
+      throw new Error(`Figma MCP ${label} produced no text content for node ${nodeID}`)
+    }
+    const body = [
+      `# ${label}`,
+      ``,
+      `- Source: ${input.figmaUrl}`,
+      `- Node: ${nodeID}`,
+      ``,
+      materialized.text.trim(),
+    ].join("\n")
+    const ref = await (await import("@/storage/attachment-store")).AttachmentStore.write(
+      input.projectID,
+      Buffer.from(body, "utf8"),
+      "text/markdown",
+      `${label}-${nodeID.replace(/[^a-zA-Z0-9]/g, "_")}.md`,
+    )
+    await EngineService.appendTaskSystemArtifact(input.taskID, {
+      ...ref,
+      intent: "design_reference",
+      source: "figma-mcp",
+    })
+  }
+
+  return 1
 }
 
 // The delivery agent emits a structured DeliveryVerdict with three typed
@@ -1923,11 +2078,11 @@ export function createOrchestratorTools(input: {
             "Any number of design-reference URLs: live pages, design-tool share links " +
             "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
             "Non-Figma URLs are available to design-analyst for mirror extraction and may also be materialized " +
-            "as screenshot references. Figma URLs use the REST API path. Do not route URL/page extraction to build.",
+            "as screenshot references. Figma URLs use the connected Figma MCP path. Do not route URL/page extraction to build.",
           ),
         figma_url: z.string().optional().describe(
-          "Figma file URL rendered via the Figma REST API (figma.com/file/... or figma.com/design/...). " +
-          "Requires FIGMA_API_TOKEN in env. The design-analysis stage owns Figma mirror extraction.",
+          "Figma file URL materialized through the connected Figma MCP server (figma.com/file/... or figma.com/design/...). " +
+          "Requires Figma MCP tools get_design_context, get_screenshot, get_metadata, and get_variable_defs.",
         ),
         materials: z
           .array(z.string())
@@ -1945,7 +2100,7 @@ export function createOrchestratorTools(input: {
         // Guard: skip if no visual input available. Figma URL counts as visual.
         const hasAttachments = Array.isArray(task.attachments) && task.attachments.length > 0
         // Auto-detect: any `figma.com` URL passed via `url` / `urls` is
-        // treated as a Figma URL (uses REST API path instead of screenshot).
+        // treated as a Figma URL (uses Figma MCP instead of screenshot).
         const meta = (task.metadata as Record<string, unknown> | null) ?? {}
         const metaFigma = typeof meta.figma_url === "string" ? meta.figma_url : undefined
         const inputUrls = [
@@ -1955,9 +2110,9 @@ export function createOrchestratorTools(input: {
         const figmaUrls = [
           ...(figma_url ? [figma_url] : []),
           ...(metaFigma ? [metaFigma] : []),
-          ...inputUrls.filter((u) => /(^|\.)figma\.com\//i.test(u)),
+          ...inputUrls.filter((u) => isFigmaUrl(u)),
         ]
-        const liveUrls = inputUrls.filter((u) => !/(^|\.)figma\.com\//i.test(u))
+        const liveUrls = inputUrls.filter((u) => !isFigmaUrl(u))
         const materialPaths = Array.isArray(materials) ? materials.filter((m) => typeof m === "string" && m.length > 0) : []
         if (!hasAttachments && liveUrls.length === 0 && figmaUrls.length === 0 && materialPaths.length === 0) {
           // P4: decision_log entry before throw so downstream stage agents
@@ -1999,8 +2154,8 @@ export function createOrchestratorTools(input: {
         // frame, URL-screenshot, local file) gets pulled, written to
         // AttachmentStore, and registered on the task. Two destination
         // columns:
-        //   • Figma frames → attachments (figma URL is part of the user
-        //     contract — the user pointed us at it).
+        //   • Figma MCP references → attachments (figma URL is part of the
+        //     user contract — the user pointed us at it).
         //   • URL screenshots / local materials → system_artifacts (we
         //     captured them ourselves to feed design-analyst; not user
         //     intent — keeping them out of attachments prevents requirements
@@ -2015,7 +2170,7 @@ export function createOrchestratorTools(input: {
         const pathMod = await import("node:path")
 
         // Track how many external sources actually produced visual bytes. If
-        // every Figma fetch, URL screenshot, and local material fails to
+        // every URL screenshot and local material fails to
         // materialize AND the task had no pre-existing attachments, we must
         // abort before calling design-analyst — otherwise the agent runs
         // blind, registers nothing, and the orchestrator hangs waiting for
@@ -2025,33 +2180,17 @@ export function createOrchestratorTools(input: {
         // nothing, and the pipeline stalled on the empty verdict.
         let materializedCount = 0
 
-        // --- Figma frames -----------------------------------------------------
+        // --- Figma MCP references --------------------------------------------
         for (const figmaUrl of figmaUrls) {
-          try {
-            const { fetchFigmaFrame } = await import("@/design-analyst/figma-fetch")
-            const frame = await fetchFigmaFrame({ url: figmaUrl })
-            const ref = await AttachmentStore.write(
-              Instance.project.id,
-              frame.png,
-              "image/png",
-              `figma-${frame.fileKey}-${frame.nodeId.replace(/[^a-zA-Z0-9]/g, "_")}.png`,
-            )
-            await EngineService.appendTaskAttachment(taskID, {
-              ...ref,
-              intent: "visual_reference",
-              source: "figma",
-            })
-            log.info("design_analysis: figma frame materialized", {
-              taskID, fileKey: frame.fileKey, nodeId: frame.nodeId, sha: ref.sha, size: ref.size,
-            })
-            materializedCount++
-          } catch (figmaErr) {
-            log.warn("design_analysis: figma materialization failed", {
-              taskID,
-              figmaUrl,
-              error: figmaErr instanceof Error ? figmaErr.message : String(figmaErr),
-            })
-          }
+          materializedCount += await materializeFigmaMcpReference({
+            taskID,
+            projectID: Instance.project.id,
+            figmaUrl,
+          })
+          log.info("design_analysis: figma MCP reference materialized", {
+            taskID,
+            figmaUrl,
+          })
         }
 
         // --- Generic URL screenshots -----------------------------------------

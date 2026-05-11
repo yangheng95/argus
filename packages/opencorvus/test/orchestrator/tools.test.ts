@@ -26,6 +26,8 @@ let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
 let architectCoordinateImpl: ((input: any) => Promise<any>) | undefined
 let deliveryServiceVerifyImpl: ((input: any) => Promise<any>) | undefined
 let designAnalyzeImpl: ((input: any) => Promise<any>) | undefined
+let mcpServerToolsImpl: (() => Promise<any[]>) | undefined
+let mcpCallToolImpl: ((input: { key: string; args: Record<string, unknown> }) => Promise<any>) | undefined
 
 mock.module("@/build/agent", () => ({
   BuildAgent: {
@@ -65,6 +67,19 @@ mock.module("@/design-analyst", () => ({
     analyze: (input: any) => {
       if (!designAnalyzeImpl) throw new Error("DesignAnalystAgent.analyze mock not configured")
       return designAnalyzeImpl(input)
+    },
+  },
+}))
+
+mock.module("@/mcp", () => ({
+  MCP: {
+    serverTools: () => {
+      if (!mcpServerToolsImpl) throw new Error("MCP.serverTools mock not configured")
+      return mcpServerToolsImpl()
+    },
+    callTool: (input: { key: string; args: Record<string, unknown> }) => {
+      if (!mcpCallToolImpl) throw new Error("MCP.callTool mock not configured")
+      return mcpCallToolImpl(input)
     },
   },
 }))
@@ -178,6 +193,8 @@ describe("orchestrator tools", () => {
     await resetDatabase()
     tmp = await tmpdir()
     architectCoordinateImpl = undefined
+    mcpServerToolsImpl = undefined
+    mcpCallToolImpl = undefined
     reviewIntegrityImpl = async () => ({
       verdict: "pass",
       summary: "Integrity pass",
@@ -200,6 +217,8 @@ describe("orchestrator tools", () => {
     architectCoordinateImpl = undefined
     deliveryServiceVerifyImpl = undefined
     designAnalyzeImpl = undefined
+    mcpServerToolsImpl = undefined
+    mcpCallToolImpl = undefined
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
@@ -694,6 +713,111 @@ describe("orchestrator tools", () => {
         expect(manifest).toContain("Canonical PRD/SPEC file: .opencorvus/design-analysis/prd-spec.md")
         expect(manifest).toContain("design-reference.png")
         expect(manifest).toContain("mirror/reference.png")
+      },
+    })
+  })
+
+  test("design_analysis materializes Figma references through MCP before analysis", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_figma_mcp_${stamp}`
+    const taskID = `tsk_figma_mcp_${stamp}`
+    const goalID = `gol_figma_mcp_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const workflowState = createWorkflowState(pipeline)
+    const figmaUrl = "https://www.figma.com/design/fileKey/Product?node-id=1963-5219&m=dev"
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "Figma MCP project",
+      taskTitle: "Figma MCP task",
+      request: `复刻 ${figmaUrl}`,
+      goalTitle: "Implement Figma window",
+      goalSlug: "implement-figma-window",
+      objective: "Implement the Figma window",
+      now,
+    })
+
+    mcpServerToolsImpl = async () => [
+      { key: "Figma_get_design_context", client: "Figma", name: "get_design_context", description: "", inputSchema: {} },
+      { key: "Figma_get_screenshot", client: "Figma", name: "get_screenshot", description: "", inputSchema: {} },
+      { key: "Figma_get_metadata", client: "Figma", name: "get_metadata", description: "", inputSchema: {} },
+      { key: "Figma_get_variable_defs", client: "Figma", name: "get_variable_defs", description: "", inputSchema: {} },
+    ]
+    const calls: Array<{ key: string; args: Record<string, unknown> }> = []
+    mcpCallToolImpl = async (input) => {
+      calls.push(input)
+      if (input.key === "Figma_get_screenshot") {
+        return {
+          content: [{
+            type: "image",
+            data: Buffer.from("fake png bytes").toString("base64"),
+            mimeType: "image/png",
+          }],
+        }
+      }
+      return {
+        content: [{
+          type: "text",
+          text: `${input.key} evidence for ${input.args.nodeId}`,
+        }],
+      }
+    }
+
+    designAnalyzeImpl = async (input) => {
+      const attachments = input.attachments ?? []
+      expect(attachments.some((item: any) => item.source === "figma-mcp" && item.mime === "image/png")).toBe(true)
+      expect(attachments.filter((item: any) => item.source === "figma-mcp" && item.mime === "text/markdown").length).toBe(3)
+      return {
+        specs: [],
+        designSystem: "Figma MCP design system",
+        techStack: ["React"],
+        productSpec: "Product spec from Figma MCP evidence",
+        frontendSpec: "Frontend spec from Figma MCP evidence",
+        visualConsistencySpec: "Match the Figma MCP screenshot and metadata.",
+        backendSpec: "Mock API only; unknown backend details remain unknown.",
+        prdIterationNotes: ["Checked Figma node inventory.", "Checked implementability from MCP metadata."],
+        completenessReview: "Figma MCP evidence is complete enough for handoff.",
+        referenceArtifacts: ["figma-mcp screenshot", "figma-mcp metadata"],
+        openQuestions: [],
+        sessionID: "ses_design_analysis_figma_mcp_mock",
+      }
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "figma mcp test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        const result = await tools.design_analysis.execute({
+          reason: "Figma MCP visual reference requires PRD/SPEC",
+          figma_url: figmaUrl,
+        }, {} as any)
+        expect(result).toContain("SUCCESS")
+        expect(calls.map((call) => call.key).sort()).toEqual([
+          "Figma_get_design_context",
+          "Figma_get_metadata",
+          "Figma_get_screenshot",
+          "Figma_get_variable_defs",
+        ].sort())
+        expect(calls.every((call) => call.args.nodeId === "1963:5219")).toBe(true)
+
+        const task = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+        )!
+        expect((task.attachments as any[]).some((item) => item.source === "figma-mcp")).toBe(true)
+        expect((task.system_artifacts as any[]).filter((item) => item.source === "figma-mcp").length).toBe(3)
       },
     })
   })

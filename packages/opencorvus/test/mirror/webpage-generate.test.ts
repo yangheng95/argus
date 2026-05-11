@@ -6,7 +6,6 @@ import { WebpageCompileTool } from "../../src/mirror/tools/webpage-compile"
 import { WebpageAnalyzeTool } from "../../src/mirror/tools/webpage-analyze"
 import webpageGenerateMd from "../../src/skill/builtin/webpage-generate.md" with { type: "text" }
 import imageGenerateMd from "../../src/skill/builtin/image-generate.md" with { type: "text" }
-import figmaGenerateMd from "../../src/skill/builtin/figma-generate.md" with { type: "text" }
 
 describe("webpage-generate dependency guards", () => {
   test("skill declares design-analysis PRD/SPEC mirror pipeline only", () => {
@@ -45,7 +44,7 @@ describe("webpage-generate dependency guards", () => {
   })
 
   test("reference generation skills are design-analysis only and never claim delivery gates", () => {
-    for (const md of [webpageGenerateMd, imageGenerateMd, figmaGenerateMd]) {
+    for (const md of [webpageGenerateMd, imageGenerateMd]) {
       const parsed = matter(md)
       expect(parsed.data.stage).toBe("design_analyst")
       expect(parsed.content).toContain("PRD/SPEC")
