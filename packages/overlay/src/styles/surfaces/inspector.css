@@ -2771,13 +2771,13 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Inspector list-row variants (extracted 2026-05-04): goal/market/
+   Inspector list-row variants (extracted 2026-05-04): goal/
    knowledge/pref/criteria card chrome + their unified hover lift,
-   gwg list + priority badge, goalsSection scroll override.
+   gwg list + priority badge, goalsSection scroll override. Settings
+   market-card chrome is owned by surfaces/settings.css.
    ───────────────────────────────────────────────────────────── */
 
 .goal-item,
-.market-card,
 .knowledge-item,
 .pref-item,
 .criteria-check {
@@ -2795,7 +2795,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .goal-item:hover,
 .extension-row:hover,
 .channel-doc-card:hover,
-.market-card:hover,
 .knowledge-item:hover,
 .pref-item:hover,
 .criteria-check:hover,

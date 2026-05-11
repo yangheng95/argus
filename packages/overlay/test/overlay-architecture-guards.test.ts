@@ -1268,9 +1268,10 @@ describe("overlay architecture guards", () => {
     expect(channelDocBody).toContain("border: 0")
 
     const marketCardBody = settingsSurface.match(/(^|\n)\.market-card\s*\{([^}]*)\}/)?.[2] ?? ""
-    expect(marketCardBody).not.toMatch(/border:/)
-    expect(marketCardBody).not.toMatch(/border-radius:/)
-    expect(marketCardBody).not.toMatch(/background:/)
+    expect(marketCardBody).toContain("background: var(--surface-inset)")
+    expect(marketCardBody).toContain("border: 0")
+    expect(marketCardBody).toContain("border-radius: var(--oc-radius-soft)")
+    expect(settingsSurface).toMatch(/\.market-card:hover,\s*\.market-card:focus-within\s*\{/)
   })
 
   test("extensions panel block + row is owned by surfaces/settings.css", () => {
