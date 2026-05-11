@@ -189,18 +189,15 @@ describe("resolveStageSkills", () => {
     })
   })
 
-  test("figma URL routes to ONLY figma-generate (not webpage-generate, not image-generate)", async () => {
+  test("figma URL does not route to mirror generation skills", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         // Figma URL routes via deriveUrlSignals to
         // { request_contains_url: false, request_contains_figma_url: true }.
-        //   - figma-generate fires on figma_url=true.
-        //   - image-generate vetoes on figma_url=true.
-        //   - webpage-generate fails the url=true gate (url is false here).
-        // Each skill independently declares its own constraint; no cross-skill
-        // coordination in their frontmatter.
+        // Figma materialization now belongs to design_analysis through MCP,
+        // so no mirror-generation skill should load for Figma references.
         const build = await resolveStageSkills([], "build", {
           has_attachment_image: true,
           ...deriveUrlSignals("复刻 https://www.figma.com/design/abc/title"),
@@ -214,12 +211,12 @@ describe("resolveStageSkills", () => {
           request_text: "复刻 https://www.figma.com/design/abc/title",
         })
         const skillNames = result.skills.map((s) => s.name)
-        expect(skillNames).toContain("figma-generate")
         expect(skillNames).not.toContain("webpage-generate")
         expect(skillNames).not.toContain("image-generate")
-        expect(result.requiredTools).toContain("figma_extract")
-        expect(result.requiredTools).toContain("figma_compile")
-        expect(result.requiredTools).toContain("figma_analyze")
+        expect(skillNames).not.toContain("figma-generate")
+        expect(result.requiredTools).not.toContain("figma_extract")
+        expect(result.requiredTools).not.toContain("figma_compile")
+        expect(result.requiredTools).not.toContain("figma_analyze")
       },
     })
   })

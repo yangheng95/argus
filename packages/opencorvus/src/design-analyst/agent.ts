@@ -217,7 +217,7 @@ async function buildPromptParts(input: {
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
 }) {
   const text = buildUserPrompt(input)
-  const hasLiveHttpUrl = hasHttpUrl(input.request)
+  const hasLiveHttpUrl = hasNonFigmaHttpUrl(input.request)
   const inlineAttachments = (input.attachments ?? []).filter((attachment) =>
     shouldInlineDesignAttachment(attachment, hasLiveHttpUrl),
   )
@@ -234,8 +234,8 @@ function shouldInlineDesignAttachment(
   return true
 }
 
-function hasHttpUrl(text: string): boolean {
-  return /https?:\/\/\S+/i.test(text)
+function hasNonFigmaHttpUrl(text: string): boolean {
+  return deriveUrlSignals(text).request_contains_url
 }
 
 function selectDesignSubmitTool(outputToolKit: ReturnType<typeof createDesignOutputTools>) {
@@ -257,7 +257,16 @@ function buildUserPrompt(input: {
   // not a keyword policy: the agent decides whether to propose a
   // `url_screenshot` capture based on whether a web URL is even
   // available in the brief. Not a rule-11 violation.
-  const hasLiveHttpUrl = hasHttpUrl(input.request)
+  const hasLiveHttpUrl = hasNonFigmaHttpUrl(input.request)
+  const figmaMcpAttachments = (input.attachments ?? []).filter((a) => a.source === "figma-mcp")
+  if (figmaMcpAttachments.length > 0) {
+    sections.push(
+      "# Figma MCP Evidence\n\n" +
+      "The Figma URL has already been materialized through the connected Figma MCP server. " +
+      "Use the attached screenshot pixels plus the textual MCP artifacts in the attachment manifest as the source of truth. " +
+      "Read markdown/text Figma MCP artifacts with `read_attachment` before submitting the PRD/SPEC. Do not call webpage tools for the Figma URL.",
+    )
+  }
 
   const visualAttachments = (input.attachments ?? []).filter(
     (a) => (a.intent ?? "") === "visual_reference" || a.mime.startsWith("image/") || a.mime === "application/pdf",

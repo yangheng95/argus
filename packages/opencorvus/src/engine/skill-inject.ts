@@ -66,9 +66,9 @@ export interface TaskSignals {
   has_attachment_image?: boolean
   /** The request text contains an http(s):// URL — explicitly EXCLUDING
    *  figma.com URLs (those land on `request_contains_figma_url`). The split
-   *  lets `webpage-generate` and `figma-generate` skills declare mutually
-   *  exclusive signals without coordinating frontmatter (each skill remains
-   *  independent). */
+   *  prevents Figma references from loading webpage-generation skills. Figma
+   *  references are materialized by design_analysis through MCP, not by a
+   *  mirror skill. */
   request_contains_url?: boolean
   /** The request text contains a figma.com URL (file / design / proto /
    *  board path). When true, `request_contains_url` is forced false by

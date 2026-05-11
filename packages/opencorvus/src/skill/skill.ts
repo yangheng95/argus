@@ -16,7 +16,6 @@ import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
 import webpageGenerateMd from "./builtin/webpage-generate.md" with { type: "text" }
 import imageGenerateMd from "./builtin/image-generate.md" with { type: "text" }
-import figmaGenerateMd from "./builtin/figma-generate.md" with { type: "text" }
 import researchReportMd from "./builtin/research-report.md" with { type: "text" }
 
 export namespace Skill {
@@ -93,7 +92,6 @@ export namespace Skill {
   const builtins = [
     { skill: webpageGenerateMd, files: {} },
     { skill: imageGenerateMd, files: {} },
-    { skill: figmaGenerateMd, files: {} },
     { skill: researchReportMd, files: {} },
   ] as const
 

@@ -10,6 +10,7 @@ import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSch
 import { SessionCompaction } from "./compaction"
 import { Instance } from "../project/instance"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { materializeMcpToolResult } from "@/mcp/materialize"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
 import { SystemPrompt } from "./system"
@@ -1874,9 +1875,6 @@ export namespace SessionLoop {
             result,
           )
 
-          const textParts: string[] = []
-          const attachments: Omit<Message.FilePart, "id" | "sessionID" | "messageID">[] = []
-
           // MCP tool image / resource content used to inline as
           // `data:<mime>;base64,...` directly into `attachment.url`,
           // which (a) blew up `part.data` (see DB forensics in specs/
@@ -1886,47 +1884,14 @@ export namespace SessionLoop {
           // persisted url is the canonical `/attachment/<id>/<sha>.<ext>`
           // ref; bytes only re-inline transiently in toModelOutput when
           // the AI SDK actually feeds the tool result back to the model.
-          const mcpProjectID = Instance.project.id
-          for (const contentItem of result.content) {
-            if (contentItem.type === "text") {
-              textParts.push(contentItem.text)
-            } else if (contentItem.type === "image") {
-              const ref = await AttachmentStore.write(
-                mcpProjectID,
-                Buffer.from(contentItem.data, "base64"),
-                contentItem.mimeType,
-              )
-              attachments.push({
-                type: "file",
-                mime: ref.mime,
-                url: ref.url,
-              })
-            } else if (contentItem.type === "resource") {
-              const { resource } = contentItem
-              if (resource.text) {
-                textParts.push(resource.text)
-              }
-              if (resource.blob) {
-                const mime = resource.mimeType ?? "application/octet-stream"
-                const ref = await AttachmentStore.write(
-                  mcpProjectID,
-                  Buffer.from(resource.blob, "base64"),
-                  mime,
-                  resource.uri,
-                )
-                attachments.push({
-                  type: "file",
-                  mime: ref.mime,
-                  url: ref.url,
-                  filename: resource.uri,
-                })
-              }
-            }
-          }
+          const materialized = await materializeMcpToolResult({
+            projectID: Instance.project.id,
+            result,
+          })
 
-          const truncated = await Truncate.output(textParts.join("\n\n"), {}, input.agent)
+          const truncated = await Truncate.output(materialized.text, {}, input.agent)
           const metadata = {
-            ...(result.metadata ?? {}),
+            ...materialized.metadata,
             truncated: truncated.truncated,
             ...(truncated.truncated && { outputPath: truncated.outputPath }),
           }
@@ -1935,8 +1900,11 @@ export namespace SessionLoop {
             title: "",
             metadata,
             output: truncated.content,
-            attachments: attachments.map((attachment) => ({
-              ...attachment,
+            attachments: materialized.attachments.map((attachment) => ({
+              type: "file" as const,
+              mime: attachment.mime,
+              url: attachment.url,
+              ...(attachment.filename ? { filename: attachment.filename } : {}),
               id: Identifier.ascending("part"),
               sessionID: ctx.sessionID,
               messageID: input.processor.message.id,

@@ -87,6 +87,10 @@ exports[`tool parameter schemas keeps built-in tool schemas stable 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "background": {
+        "description": "When true, the command keeps running after this tool call returns. The tool returns immediately with the spawned PID once stdout/stderr are observed (or after a short readiness window). Use ONLY for long-lived servers (dev/preview/serve) that must outlive a single tool call so delivery checks can probe them. You are responsible for stopping it later (e.g. \`kill <pid>\` or \`lsof -ti :<port> | xargs kill\`).",
+        "type": "boolean",
+      },
       "command": {
         "description": "The command to execute",
         "type": "string",
@@ -249,7 +253,7 @@ Output: Creates directory 'foo'"
         "type": "array",
       },
       "files_changed": {
-        "description": "Every file touched in this goal. A goal that produced zero file changes is invalid — do not call this tool without deliverables.",
+        "description": "Every file touched in this goal. May be empty if the goal's acceptance was met by reusing a prior attempt's worktree without further edits — the orchestrator cross-checks against the host's actual_changed_files ground truth.",
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -269,7 +273,6 @@ Output: Creates directory 'foo'"
           ],
           "type": "object",
         },
-        "minItems": 1,
         "type": "array",
       },
       "implementation_approach": {
@@ -2154,7 +2157,7 @@ Output: Creates directory 'foo'"
     "additionalProperties": false,
     "properties": {
       "name": {
-        "description": "The name of the skill from available_skills (e.g., 'webpage-generate', 'image-generate', 'figma-generate', ...)",
+        "description": "The name of the skill from available_skills (e.g., 'webpage-generate', 'image-generate', 'research-report', ...)",
         "type": "string",
       },
     },
