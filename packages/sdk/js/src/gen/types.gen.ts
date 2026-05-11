@@ -2288,6 +2288,10 @@ export type Config = {
    */
   username?: string
   /**
+   * Operator-selected system language used for assistant replies and Overlay localization.
+   */
+  locale?: "en-US" | "zh-CN"
+  /**
    * Agent configuration, see https://opencorvus.ai/docs/agents
    */
   agent?: {
