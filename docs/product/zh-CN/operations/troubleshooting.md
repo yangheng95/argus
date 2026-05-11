@@ -16,9 +16,17 @@
 ### Overlay 启动后连不上后端
 
 1. 托盘菜单 → Restart（会重启后端 + 刷新前端）
-2. 看 overlay 日志 `~/.opencorvus/overlay.log`
+2. 看 overlay 日志 `~/.opencorvus/overlay.log` 与 server 日志 `~/.opencorvus/server.log`
 3. 手工探测 `GET http://127.0.0.1:<port>/global/health`
 4. 设 `OPENCORVUS_OVERLAY_SINGLETON_MODE=kill-old-start-new` 防止旧后端残留
+
+### 系统终端打开失败
+
+Overlay 用系统终端打开 worktree 的能力（替代旧嵌入 PTY，commit `6edd471a3`）依赖 `terminal` profile 配置。失败排查：
+
+1. 检查 `opencorvus.jsonc` 的 `terminal.command` 是否指向有效可执行文件
+2. Windows 上推荐 `wt.exe`（Windows Terminal）；macOS 推荐 `iTerm.app`；Linux 用对应 desktop terminal 的命令
+3. profile shell flag 是否与目标 shell 一致（`bash -c` / `pwsh -NoExit -Command` 等）
 
 ## Provider / 模型类
 
@@ -39,21 +47,22 @@
 
 ## Orchestrator 类
 
-### 任务卡在 spec / goals / plan 阶段
+### 任务卡在 requirements / architect / build 阶段
 
 | 症状 | 检查 |
 |---|---|
-| 没有任何事件 | LLM provider 连通性 |
+| 没有任何事件 | LLM provider 连通性；`opencorvus doctor` |
 | 有 reasoning tokens 但无 tool-call | 检查 `toolChoice`，reasoning 模型必须 `"auto"` |
-| 规划 agent 长时间无动静 | 正常：规划可能静默思考 30+ 分钟，用 `--planning-stall-timeout-ms` 调 |
+| Agent 长时间无动静 | 当前由 engine 内部 stream-activity 看门狗（180s idle abort）管理；benchmark 已不再接受 `--stall-timeout-ms` / `--planning-stall-timeout-ms` flag |
 
-### 任务一直 replan 不停
+### 任务一直 replan / retry 不停
 
-根因通常是 evaluator 的 `replan_guidance` 没有改善信息。检查：
+根因通常是 delivery 的 `replan_guidance` 没有改善信息。检查：
 
-1. Spec 是否本身就缺 acceptance criteria
-2. `done_definition` 里的命令是否可执行（见 [Evaluator](../opencorvus/evaluator.md)）
+1. Requirements / SpecSnapshot 是否本身就缺 acceptance criteria（`check_selectors` 为空）
+2. `done_definition` 里的命令是否可执行（见 [Delivery 检查与判决](../opencorvus/evaluator.md)）
 3. `assistant.max_executor_groups` 是否过大（默认 3，过大会同时启动更多 goal/build）
+4. `assistant.delivery.max_retries` 是否过大导致回修循环一直消耗预算
 
 ### 权限审批无限等待
 
@@ -66,15 +75,20 @@
 
 ### Benchmark 显示 "accepted" 但产物跑不起来
 
-典型症状是 delivery worktree 合并失败但 evaluator 没捕获。检查：
+典型症状是 delivery worktree 合并失败但 delivery checks 没捕获。检查：
 
 1. 合并日志里是否有 `EEXIST` / conflict
-2. Evaluator 的 `qa_rule_selectors` 是否包含 `build` 与 `startup`
+2. spec 的 `check_selectors` 是否包含 `build` 与 `startup`
 3. `selectorsSatisfied()` 是否把 skipped 检查误当通过——已修复，但 config 错误可能复发
+4. CLAUDE.md rule 7 提醒：`accepted` 只是自声明，必须**自己起项目** + 跑 verify 做二次复核
 
 ### TypeScript 编译错误未被检测
 
-确保 evaluator tier ≥ `standard`（包含 lint），或手工在 `qa_rule_selectors` 里加 `"lint"` / `"typecheck"`。
+确保 spec 的 `check_selectors` 包含 `lint` 或显式声明 `typecheck` family。check selector 必须来自 spec / architect 的结构化输出，**不从关键字推断**（`check/policy.ts::inferSelectors` 返回空数组）。
+
+### Task archive 导入失败
+
+`POST /import/task/archive` 失败常因 `ARCHIVE_VERSION` 不匹配（commit `4fc10fae5`）。检查 zip 顶层 `manifest.json` 的 `version` 字段是否被当前 server 接受；版本号在 `engine/workspace-export.ts` 中常量定义。
 
 ## Channel 类
 

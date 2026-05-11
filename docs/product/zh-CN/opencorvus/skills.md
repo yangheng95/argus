@@ -13,38 +13,41 @@ my-skill/
 └── references/     # 可选：参考资料
 ```
 
-Frontmatter 字段（`src/skill/skill.ts:26-45`）：
+Frontmatter 字段（`src/skill/skill.ts:23-63`）：
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `name` | string（必需） | 全局唯一 ID，被 permission 引用 |
 | `description` | string（必需） | 一句话描述，告诉 agent 何时激活 |
-| `platforms` | `("win32"\|"darwin"\|"linux")[]` | 平台过滤，空数组 = 全平台 |
-| `stage` | string | 流水线阶段：`spec` / `delivery` / ... |
+| `platforms` | `("win32" \| "darwin" \| "linux")[]` | 平台过滤，空数组 = 全平台 |
+| `stage` | string | 阶段：`spec` / `delivery` / `build` … |
 | `auto_detect.files` | string[] | 项目中存在这些文件时自动加载 |
 | `auto_detect.deps` | string[] | `package.json` 中存在这些依赖时自动加载 |
+| `auto_detect.task_signals` | object | 任务级信号（`has_attachment_image` / `request_contains_url` / `request_contains_figma_url` / `package_has_script[]` / `request_text_any[]`） |
 | `priority` | number | 多 skill 命中时的排序（大在前，默认 0） |
+| `required_tools` | string[] | 必须调过的 tool 名；delivery 通过 `submit_verdict` + `tool_call_evidence` 强制 |
 
 ## 2. 内置 Skills
 
-随二进制打包（`src/skill/skill.ts:74-81`）：
+随二进制打包（`src/skill/skill.ts:92-96` 的 `builtins` 数组），**只有三个**：
 
-| Skill | 阶段 | 说明 |
-|---|---|---|
-| `spec-research` | spec | web 搜索研究技术选型，priority=10 |
-| `prd-spec` | spec | 完整 PRD+SPEC 文档（含 ADR），priority=50 |
-| `delivery-verify-web` | delivery | 前端验收清单（MIME、SPA、SSE），auto-detect |
-| `delivery-verify-api` | delivery | 后端 API 验收清单，auto-detect |
-| `opencorvus-channel-config-wizard` | 通用 | 14 个 channel 统一配置向导 |
-| `opencorvus-<channel>-channel-config` | 通用 | 单 channel 配置引导（Slack / Telegram / Feishu / ...） |
+| Skill | 用途 |
+|---|---|
+| `webpage-generate` | 生成静态 HTML/CSS 网页（webpage replication 等场景的脚手架） |
+| `image-generate` | 调用外部图像生成接口产出参考图 |
+| `research-report` | 调研类任务的输出骨架 |
 
-内置 Skill 默认权限为 `allow`（`src/skill/manager.ts:493-495`）。
+> 历史文档曾把 `spec-research` / `prd-spec` / `delivery-verify-web` / `delivery-verify-api` / `opencorvus-<channel>-channel-config` 等列入"内置"——这些**不是 builtin**，它们是社区或本仓库 `skills-market/` 里的 Skill，需要通过 `skills.paths` / `skills.urls` 显式加载。
+>
+> `panel-control` builtin skill 已在 commit `f94f56231` 删除，仍引用它的客户端会找不到该 skill。
+
+内置 Skill 默认权限为 `allow`（`src/skill/manager.ts`）。
 
 ## 3. 添加本地 Skill
 
 **方式 A**：放到项目 `.opencorvus/skill/<name>/SKILL.md` 或全局 config 目录下，启动时自动扫描。
 
-**方式 B**：兼容 Claude Code 布局，`.claude/skills/` 或 `.agents/skills/` 也会被发现（`src/skill/skill.ts:68-69`）。
+**方式 B**：兼容 Claude Code 布局，`.claude/skills/` 或 `.agents/skills/` 也会被发现。
 
 **方式 C**：在 `opencorvus.jsonc` 中声明搜索路径：
 
@@ -60,7 +63,7 @@ Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 }
 ```
 
-路径下所有 `**/SKILL.md` 都会被加载（`src/skill/skill.ts:200-217`）。
+路径下所有 `**/SKILL.md` 都会被加载。
 
 ## 4. 从远程 URL 加载
 
@@ -72,15 +75,15 @@ Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 }
 ```
 
-加载流程（`src/skill/discovery.ts:39-97`）：
+加载流程（`src/skill/discovery.ts`）：
 
-1. `GET {url}/index.json` 期望格式 `{ skills: [{ name, description, files[] }] }`
+1. `GET {url}/index.json`，期望格式 `{ skills: [{ name, description, files[] }] }`
 2. 按 `files` 逐一下载到 `~/.cache/opencorvus/skills/<name>/`
 3. 加载缓存下的 `SKILL.md`
 
 ⚠️ 文件缓存后不再重新下载；更新需手动清缓存或 `opencorvus skill remove --url <url>`。
 
-内置 Skill Market 条目（`src/skill/manager.ts:107-165`）：
+内置 Skill Market 条目（`src/skill/manager.ts`）：
 
 | ID | 来源 | 信任等级 |
 |---|---|---|
@@ -94,16 +97,22 @@ Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 
 ```bash
 opencorvus skill install --git https://github.com/owner/repo.git
-# 简写：opencorvus skill install owner/repo
+# 简写：
+opencorvus skill install owner/repo
 ```
 
-Git 方式克隆到 `~/.config/opencorvus/skills-market/<slug>/` 并自动追加到 `skills.paths`；`.opencorvus-skill-source.json` 记录来源（`src/skill/manager.ts:285-302`）。
+克隆到 `~/.config/opencorvus/skills-market/<slug>/` 并自动追加到 `skills.paths`；`.opencorvus-skill-source.json` 记录来源。
 
 ## 6. Skill ↔ Agent 调用关系
 
-Skill 指令在 session 初始化时注入到 agent 的 system prompt。Agent 按 `description` 决定是否激活；`auto_detect` 提供文件/依赖自动匹配；`stage` 让流水线在对应阶段优先推送。
+Skill 指令在 session 初始化时注入对应 stage agent 的 system prompt：
 
-Skill 本身不能直接调用工具；它通过注入上下文影响 agent 行为。
+- `stage: "build"` 的 skill 只注入 build agent
+- `stage: "delivery"` 的 skill 只注入 delivery agent
+- 未声明 `stage` 的 skill 注入所有 agent
+- Planning-stage agent（`requirements` / `architect`）**不**接收 executor skills——他们规划目标，不实现
+
+Agent 按 `description` 决定是否激活；`auto_detect` 提供文件 / 依赖 / 任务信号的自动匹配。**Skill 本身不能直接调用工具**——它通过注入上下文影响 agent 行为。
 
 ## 7. Permission 配置
 
@@ -119,20 +128,20 @@ Skill 本身不能直接调用工具；它通过注入上下文影响 agent 行�
 }
 ```
 
-推荐策略：内置 `allow`；社区来源 `ask`；含 `scripts/` 目录的视为高风险（`src/skill/manager.ts:493-498`）。
+推荐策略：内置 `allow`；社区来源 `ask`；含 `scripts/` 目录的视为高风险。
 
 ## 8. 信任等级与风险
 
 | 等级 | 来源 |
 |---|---|
-| `builtin` | 随二进制打包 |
+| `builtin` | 随二进制打包（3 个） |
 | `official` | openai/skills 或 anthropics/skills |
 | `curated` | skills.sh / skillstore.io |
 | `community` | skills.pub |
 | `local` | 本地路径 |
 | `external` | `.claude/` 或 `.agents/` 目录发现 |
 
-风险评估：目录含 `scripts/` → 高风险；含 `agents/` 或 `references/` → 中等（`src/skill/manager.ts:465-491`）。
+风险评估：目录含 `scripts/` → 高风险；含 `agents/` 或 `references/` → 中等。
 
 ## 9. 禁用外部 Skills
 
@@ -142,4 +151,4 @@ OPENCORVUS_DISABLE_EXTERNAL_SKILLS=1
 OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS=1
 ```
 
-跳过 `.claude/` 与 `.agents/` 目录扫描，不影响 `skills.paths` 与 `skills.urls`（`src/flag/flag.ts:134-139`）。
+跳过 `.claude/` 与 `.agents/` 目录扫描，不影响 `skills.paths` 与 `skills.urls`。

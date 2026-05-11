@@ -29,8 +29,8 @@
 | `OPENCORVUS_EXECUTOR_CODEX_PERMISSION_MODE` | Codex executor 权限模式 | `ask` |
 | `OPENCORVUS_TOOL_TIMEOUT_MS` | 单工具调用无活动超时 | 无全局默认（按工具类型单独控制） |
 | `OPENCORVUS_GOAL_RUN_TIMEOUT_MS` | Goal 运行上限 | 无限 |
-| `OPENCORVUS_DECISION_INACTIVITY_MS` | Task Agent 决策无活动超时 | 600000（`src/orchestrator/task-loop.ts:49`） |
-| `OPENCORVUS_INTERACTION_TIMEOUT_MS` | 交互请求超时 | 30000（`src/orchestrator/runtime.ts:76`） |
+| `OPENCORVUS_DECISION_INACTIVITY_MS` | Orchestrator 决策无活动超时 | 600000（见 `src/orchestrator/loop.ts`） |
+| `OPENCORVUS_INTERACTION_TIMEOUT_MS` | 交互请求超时 | 30000（见 `src/engine/runtime.ts`） |
 
 ## Permission
 
@@ -45,7 +45,9 @@
 
 | 变量 | 用途 |
 |---|---|
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1` | 跳过 `opencorvus-anthropic-auth` 等默认插件安装（避免 npm 阻塞） |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1` | 跳过 `opencode-anthropic-auth@0.0.13` 默认插件安装（避免 npm 阻塞） |
+| `OPENCORVUS_DISABLE_EXTERNAL_SKILLS=1` | 跳过 `.claude/` 与 `.agents/` 目录的 skill 发现 |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS=1` | 同上，仅针对 `.claude/skills/` |
 
 ## Overlay
 
@@ -74,10 +76,11 @@
 | 变量 | 说明 |
 |---|---|
 | `DASHSCOPE_API_KEY` | 标准 intl endpoint（`sk-` 前缀） |
-| `CODING_DASHSCOPE_API_KEY` | Coding Plan 专线（`sk-sp-` 前缀） |
-| `DASHSCOPE_CODING_BASE_URL` | Coding 接入地址 |
-| `DASHSCOPE_INTL_BASE_URL` | 标准接入地址 |
+| `CODING_DASHSCOPE_API_KEY` | Coding Plan 专线（`sk-sp-` 前缀），用于 benchmark / coding 场景 |
 | `ALIBABA_CODING_PLAN_API_KEY` | Coding Plan 专用 Key（与上同值或独立） |
+| `DASHSCOPE_API_URL` | 显式覆盖 DashScope baseURL（例如 Coding Plan：`https://coding.dashscope.aliyuncs.com/v1`） |
+
+> 历史文档曾列出 `DASHSCOPE_CODING_BASE_URL` / `DASHSCOPE_INTL_BASE_URL`——这两个名字**未在 provider 代码中实装**，请改用上表的 `DASHSCOPE_API_URL`。
 
 ### Model override
 

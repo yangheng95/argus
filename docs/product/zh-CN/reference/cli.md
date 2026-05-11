@@ -145,24 +145,25 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 
 ### 其他子命令
 
-`packages/opencorvus/src/index.ts:106-127` 还注册了以下子命令，参数随版本迭代变化，以 `--help` 为准：
+`packages/opencorvus/src/index.ts` 注册的全部顶级子命令（权威源），参数以 `--help` 为准：
 
 | 命令 | 用途 |
 |---|---|
 | `opencorvus stats` | 统计信息 |
 | `opencorvus upgrade` | 升级自身 |
 | `opencorvus uninstall` | 卸载 |
-| `opencorvus import` | 导入 session / task |
+| `opencorvus sidecar` | 嵌入式 sidecar 进程入口（一般由 overlay / 上游 host 内部调用） |
+| `opencorvus import` | 导入 session / task（含 task archive zip，commit `4fc10fae5`） |
 | `opencorvus github` | GitHub Action runtime 入口（通常由 Action 内部调用） |
 | `opencorvus pr` | PR 相关辅助 |
-| `opencorvus attach` | attach 到现有 session |
-| `opencorvus tui-thread` | TUI thread 模式 |
 | `opencorvus mcp` | MCP 子命令族（`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`） |
 | `opencorvus session` | session 管理 |
 
+> ~~`opencorvus attach`~~ / ~~`opencorvus tui-thread`~~ 不是顶级 CLI 命令——`attach` 仅作为 TUI 内部功能存在于 `packages/opencorvus/src/cli/cmd/tui/attach.ts`。
+
 ## 退出码
 
-代码仅在错误路径显式调用 `process.exit(1)`（`packages/opencorvus/src/index.ts:144, 186, 192`）：
+代码仅在错误路径显式调用 `process.exit(1)`：
 
 | code | 语义 |
 |---|---|
@@ -175,6 +176,8 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 ## Shell 补全
 
 ```bash
-opencorvus completions bash > /etc/bash_completion.d/opencorvus
-opencorvus completions zsh  > ~/.zsh/completions/_opencorvus
+opencorvus completion bash > /etc/bash_completion.d/opencorvus
+opencorvus completion zsh  > ~/.zsh/completions/_opencorvus
 ```
+
+> 命令名是 **`completion`**（单数，cac 框架内置）。历史文档曾写 `completions`，已修正。

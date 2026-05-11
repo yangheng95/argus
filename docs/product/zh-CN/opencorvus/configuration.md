@@ -8,9 +8,9 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 |---|---|
 | `~/.opencorvus/config/opencorvus.json` | 全局默认 |
 | `<repo>/.opencorvus/opencorvus.jsonc` | 项目级覆盖（支持 JSONC 注释） |
-| `OPENCORVUS_CONFIG_CONTENT` env | 运行时注入（CI/容器推荐） |
+| `OPENCORVUS_CONFIG_CONTENT` env | 运行时注入（CI / 容器推荐） |
 
-同名字段，后者覆盖前者。
+同名字段，**后者覆盖前者**（managed → global → project → local → env）。
 
 ## 最小配置
 
@@ -21,6 +21,36 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 }
 ```
 
+## 字段分组（来自 `src/config/config.ts::ConfigSchema`）
+
+```
+顶层：
+  $schema · logLevel · server · share · autoupdate · snapshot · watcher
+  disabled_providers · enabled_providers · tool_permissions
+  provider · model · small_model · default_agent · agent · mcp · lsp
+  formatter · permission · compaction · preview · terminal
+  channel · command · skills · plugin · prompt · instructions
+  username · locale
+
+assistant:
+  requirements{} · architect{} · delivery{} · delivery_visual{}
+  design_analyst{} · intent_analysis{} · build{} · activity{} · debug{}
+  default_workflow · workflows[] · max_executor_groups
+  （每个 agent 子项是 agent 特化的：build 只有 max_steps + skills；
+    delivery 多一个 max_retries；delivery_visual 全是数值硬门槛阈值。
+    **没有**统一的 max_steps / timeout_ms / quality_threshold / max_attempts / skills 模板。）
+
+experimental:
+  auto_question · batch_tool · disable_paste_summary · continue_loop_on_deny
+  memory{} · mcp_timeout · primary_tools · openTelemetry
+```
+
+### 不再存在的字段（2026-05 清理）
+
+- ~~`assistant.spec{}`~~ / ~~`assistant.goal{}`~~ / ~~`assistant.planner{}`~~ / ~~`assistant.evaluator{}`~~ / ~~`assistant.adaptive{}`~~ —— planner / evaluator agent 整体下线（见 [Agent 家族](../../../specs/new-arch/01-agents.md)），spec / goal / adaptive 在 workflow 系统替代后删除
+- ~~`experimental.unattended`~~ / ~~`experimental.auto_permission`~~ —— 仅剩 `experimental.auto_question`
+- ~~`max_replans` · `same_plan_retry_limit` · `stage_max_retries`~~
+
 ## 完整示例
 
 参考仓库中的真实配置 `packages/opencorvus/.opencorvus/opencorvus.jsonc`：
@@ -29,6 +59,7 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 {
   "$schema": "https://opencorvus.ai/config.json",
   "model": "github-copilot/claude-haiku-4.5",
+  "locale": "zh-CN",
 
   "skills": {
     "paths": [
@@ -49,6 +80,13 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
     }
   },
 
+  "assistant": {
+    "max_executor_groups": 3,
+    "default_workflow": "pipeline",
+    "delivery": { "max_retries": 2 },
+    "build": { "max_steps": 80 }
+  },
+
   "experimental": {
     "auto_question": true
   }
@@ -59,52 +97,82 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
 ### `model`
 
-默认 LLM。格式 `<providerId>/<modelId>`，provider 需在 `provider` 块或内置列表里注册。
+默认 LLM。格式 `<providerId>/<modelId>`，provider 需在 `provider` 块或内置列表里注册（内置 20 个，见 [Providers](./providers.md)）。
+
+### `small_model`
+
+供 summary / title 等轻量任务使用的小模型；不设置时与 `model` 同。
+
+### `locale`
+
+`"en-US" | "zh-CN"`，operator 选定的系统语言，影响 LLM 回复语言与 SDK 透传。**与 Overlay UI 偏好的 `locale`（localStorage，仅控制前端文案）是两件事**——前者属配置（行为），后者属 UI 偏好。
 
 ### `skills.paths` / `skills.urls`
 
-本地 skill 市场路径与远程 skill URL。OpenCorvus 启动时加载全部 skill，供 Task Agent 按需调用。
+本地 skill 市场路径与远程 skill URL。OpenCorvus 启动时加载全部 skill，供 agent 按需调用。详见 [Skills](./skills.md)。
 
 ### `permission`
 
-每个 skill/tool 的 `allow / ask / deny`。**规则顺序 matters，后声明的覆盖前声明的**（last-match-wins）。
+每个 skill / tool 的 `allow / ask / deny`。**规则顺序 matters，后声明的覆盖前声明的**（last-match-wins）。详见 [Permissions](./permissions.md)。
 
-详见 [Permissions](./permissions.md)。
+> 2026-04 起 auto approval paths 机制已移除（commit `8d672db37`）——permission 系统只有声明式规则，没有自动放行白名单。
 
 ### `experimental.auto_question`
 
-悬置澄清提问的细粒度开关。权限提示不由这里控制；内置 agent 权限默认 `allow`，显式 `ask` 规则会等待操作员回复，直到拒绝超时触发。
+`question` tool 主动澄清的细粒度开关。默认 `true`。
 
 ### `assistant` 子块
 
-各 agent 的精细调优（在 `OrchestratorConfig.get()` 里合并，见 `src/orchestrator/config.ts:67`）：
+各 agent 的精细调优（合并入口 `src/engine/config.ts`，合并 DEFAULTS 后返回 typed config）：
 
 ```jsonc
 {
   "assistant": {
     "requirements": { "max_steps": 20 },
-    "evaluator": { "tier": "standard" },  // core | standard | full
-    "max_executor_groups": 3
+    "architect": { "max_steps": 40 },
+    "build": { "max_steps": 80, "skills": [] },
+    "delivery": { "max_retries": 2 },
+    "max_executor_groups": 3,
+    "default_workflow": "pipeline",
+    "workflows": []
   }
 }
 ```
 
+- `max_executor_groups`：同一任务内 build / goal 的并行上限，默认 3
+- `default_workflow`：`direct`（单文件 / bugfix）或 `pipeline`（多文件 / 复杂功能），见 [架构总览](../concepts/architecture.md#miniworkflow--两种声明式模板)
+- `workflows[]`：用户自定义 MiniWorkflow，注册到 `WorkflowRegistry`
+
+### `enabled_providers` / `disabled_providers`
+
+显式启用 / 禁用 provider 集合。优先级高于"未配置 env 即不启用"的启发式。详见 [Providers](./providers.md)。
+
+### `tool_permissions`
+
+任务级 tool 权限默认值（与 `permission.tool` 区别：前者影响新建任务时的快照默认，后者是项目持久规则）。
+
+### `preview` / `terminal`
+
+`preview`：前端实时预览配置（端口、wait timeout 等）。`terminal`：Workspace 外部终端 profile（命令、shell flag），用于"在系统终端打开 worktree"功能，详见 [Quickstart](../start/quickstart.md#workspace-与-terminal)。
+
 ## 配置加载顺序
 
-1. 读 `~/.opencorvus/config/opencorvus.json`
-2. 读 `$OPENCORVUS_CONFIG_DIR/opencorvus.json`（若设置）
-3. 读 `<repo>/.opencorvus/opencorvus.jsonc`
-4. 合并 `OPENCORVUS_CONFIG_CONTENT` 环境变量（JSON 字符串）
-5. CLI flag 覆盖
+1. 读 managed config（如有）
+2. 读 `~/.opencorvus/config/opencorvus.json`
+3. 读 `$OPENCORVUS_CONFIG_DIR/opencorvus.json`（若设置）
+4. 读 `<repo>/.opencorvus/opencorvus.jsonc`
+5. 合并 `OPENCORVUS_CONFIG_CONTENT` 环境变量（JSON 字符串）
+6. CLI flag 覆盖
 
 Env 快照时机：`Env.state()` 在实例创建时快照 `process.env`，因此 `.env` 文件必须在进程启动**前**加载。这是 benchmark 里要显式注入 env 的原因，详见 [Benchmark](../operations/benchmark.md)。
 
-## 热重载
+## 热重载与变更广播
 
-目前 OpenCorvus **不支持** config 热重载。修改配置后需重启 `opencorvus serve`。
+`PATCH /config` 接受 JSON Merge Patch（RFC 7396），写入后通过 `Bus.publish("config.changed")` SSE 广播，所有 Overlay 实例自动 `setAppStore("config", newConfig)` 刷新。**Overlay 不再做 `GET → clone → mutate → PATCH` 全量替换**，只发 partial diff。
 
 ## 你接下来要看的
 
 - [Providers](./providers.md)
 - [Permissions](./permissions.md)
-- [Evaluator](./evaluator.md)
+- [Delivery 检查与判决](./evaluator.md)
+- 完整 schema：[specs/new-arch/05-config.md](../../../specs/new-arch/05-config.md)
