@@ -48,8 +48,15 @@ function walkCss(dir: string): string[] {
 }
 
 // Concatenate all surface + cascade + primitive CSS files (styles.css was
-// dissolved 2026-05-04 into this decomposed architecture).
-const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
+// dissolved 2026-05-04 into this decomposed architecture). Comments are
+// stripped first so a /* ... */ block immediately preceding a rule does
+// not get folded into the rule's selector head when we split on }.
+function stripCssComments(input: string): string {
+  return input.replace(/\/\*[\s\S]*?\*\//g, "")
+}
+const STYLES = stripCssComments(
+  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+)
 
 function countSoloTopLevelRules(selector: string): number {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -100,9 +107,25 @@ describe(".chat-textarea is a single flat source", () => {
     // chain only updated the textarea side. The wrap's
     // canonical kept declaring 72px and rendered ~10px
     // taller than its inner textarea — a silent layout
-    // regression. Pin both at 62px so the wrap is flush
-    // with the textarea like it was pre-iter20.
+    // regression. Pin both at the same value so the wrap is
+    // flush with the textarea.
+    //
+    // The 62px floor was later promoted to a CSS variable
+    // (`--chat-textarea-height` in surfaces/composer.css), so we accept
+    // either the literal `calc(62px * var(--ui-scale))` or the
+    // variable reference here. The actual single-source invariant is
+    // that the wrap reads the *same* value the textarea does — the
+    // assertion below verifies they match instead of hardcoding the
+    // numeric floor in two test files.
     const wrapBody = soloRuleBody(".chat-textarea-wrap")
-    expect(wrapBody).toMatch(/min-height:\s*calc\(62px\s*\*\s*var\(--ui-scale\)\)/)
+    const textareaBody = soloRuleBody(".chat-textarea")
+    const extractMinHeight = (body: string) => {
+      const m = body.match(/min-height:\s*([^;]+);/)
+      return m ? m[1]!.trim() : null
+    }
+    const wrapMinHeight = extractMinHeight(wrapBody)
+    const textareaMinHeight = extractMinHeight(textareaBody)
+    expect(wrapMinHeight).not.toBeNull()
+    expect(wrapMinHeight).toBe(textareaMinHeight)
   })
 })

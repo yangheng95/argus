@@ -37,7 +37,19 @@ describe("workspace header controls share a single density tier", () => {
 
 describe("composer shell stays tighter than the surrounding canvas", () => {
   test("composer textarea floor is capped at the compact 56px size", () => {
-    expect(COMPOSER).toContain("min-height: calc(56px * var(--ui-scale));")
+    // The 56px floor is now declared once as `--chat-textarea-height`
+    // on `.chat-input`; both `.chat-textarea-wrap` and `.chat-textarea`
+    // read from it via `min-height: var(--chat-textarea-height);`.
+    // Pin both: the literal var declaration AND that the consumers
+    // route through the variable rather than re-declaring 56px or
+    // any other floor.
+    expect(COMPOSER).toContain("--chat-textarea-height: calc(56px * var(--ui-scale));")
+    expect(COMPOSER).toMatch(
+      /\.chat-textarea\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/,
+    )
+    expect(COMPOSER).toMatch(
+      /\.chat-textarea-wrap\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/,
+    )
   })
 
   test("send button stays on the reduced 64px vertical contract", () => {
@@ -58,7 +70,13 @@ describe("right-rail empty cards stay on the compact density contract", () => {
   })
 
   test("inspector section head/body keep the tighter 5/8 spacing rhythm", () => {
+    // Section heads stayed on the explicit 5/8 padding pair (vertical
+    // 5px, horizontal 8px) so head density is unmistakeable. The body
+    // padding migrated to the canonical `--ui-gap-sm` token after the
+    // gap-token sweep — accept that single-source form here.
     expect(INSPECTOR).toContain("padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));")
-    expect(INSPECTOR).toContain("padding: 0 calc(5px * var(--ui-scale)) calc(5px * var(--ui-scale));")
+    expect(INSPECTOR).toMatch(
+      /\.oc-section__body\s*\{\s*padding:\s*0\s+var\(--ui-gap-sm\)\s+var\(--ui-gap-sm\)\s*;\s*\}/,
+    )
   })
 })

@@ -766,7 +766,7 @@ export default function ProvidersPanel() {
           <div class="config-panel-card provider-add-card">
             <h4 class="provider-add-title">
               {editing()
-                ? t("provider.form.edit_title", { id: editing() || "" })
+                ? t("provider.form.edit_title", { id: editing() ?? "" })
                 : t("provider.form.add_title")}
             </h4>
 

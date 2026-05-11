@@ -39,47 +39,46 @@ const BOARD = readFileSync(
 )
 
 describe("DeliveryPanel renders inside a collapsible section frame", () => {
-  test("DeliveryPanel returns a <details class=\"section\"> wrapper", () => {
-    // Locate the function body and walk forward looking for
-    // the first JSX root after `return (`. The first tag must
-    // be `<details` with `class="section"`.
+  // 2026-05-04 follow-up: the bare `<details class="section">` wrapper
+  // was promoted into the shared `<Section>` primitive (see
+  // `components/primitives/Section.tsx`), which renders the same
+  // `<details>` tree but tags it with the namespaced `.oc-section*`
+  // class family. Pin the post-migration shape: DeliveryPanel mounts
+  // through Section and forwards the IDs the DOM accessors expect.
+  test("DeliveryPanel returns a <Section> wrapper as its JSX root", () => {
     const fnStart = BOARD.indexOf("export function DeliveryPanel")
     expect(fnStart).toBeGreaterThan(-1)
     const returnIdx = BOARD.indexOf("return (", fnStart)
     expect(returnIdx).toBeGreaterThan(-1)
     const slice = BOARD.slice(returnIdx, returnIdx + 1200)
-    expect(slice).toMatch(/return\s*\([^<]*<details\s+(?:id="deliverySection"\s+)?class="section"/)
+    expect(slice).toMatch(/return\s*\(\s*<Section\b/)
   })
 
-  test("the section-head carries an icon + title + badge", () => {
+  test("the Section wrapper passes icon + title + badge + badgeTone props", () => {
     const fnStart = BOARD.indexOf("export function DeliveryPanel")
-    const returnIdx = BOARD.indexOf("return (", fnStart)
-    const slice = BOARD.slice(returnIdx, returnIdx + 2000)
-    expect(slice).toContain('class="section-head"')
-    expect(slice).toContain('class="section-icon"')
-    expect(slice).toContain('class="section-title"')
-    expect(slice).toContain('class="section-badge"')
-    expect(slice).toContain('t("section.delivery")')
+    const slice = BOARD.slice(fnStart, fnStart + 4000)
+    expect(slice).toContain('title={t("section.delivery")}')
+    expect(slice).toMatch(/icon=\{<Icon\s+name="delivery"\s*\/>}/)
+    expect(slice).toMatch(/badge=\{[^}]*verdictPillLabel/)
+    expect(slice).toMatch(/badgeTone=\{/)
   })
 
   test("the section badge tone reacts to verdict (good / bad / accent)", () => {
     const fnStart = BOARD.indexOf("export function DeliveryPanel")
     const slice = BOARD.slice(fnStart, fnStart + 4000)
-    expect(slice).toMatch(/data-tone=\{[\s\S]*"accepted"[\s\S]*"good"[\s\S]*"rejected"[\s\S]*"bad"[\s\S]*\}/)
+    expect(slice).toMatch(/badgeTone=\{[\s\S]*"accepted"[\s\S]*"good"[\s\S]*"rejected"[\s\S]*"bad"[\s\S]*\}/)
   })
 
-  test("the rendered <details> carries id=deliverySection and the body id=deliveryBody (so dom.ts accessors resolve)", () => {
-    // iter31 functional fix: dom.ts queries `#deliverySection`
-    // and `#deliveryBody` to attach data-phase-state for
-    // section phase highlighting. Pre-iter31 the iter24 self-
-    // wrap rendered a bare `<details class="section">` with
-    // no IDs — `syncSectionPhases({delivery: "active"})`
-    // silently no-op'd. Pin the IDs so the highlight
-    // pipeline reaches the real nodes.
+  test("the Section forwards id=deliverySection and bodyId=deliveryBody so dom.ts accessors resolve", () => {
+    // iter31 functional fix: dom.ts queries `#deliverySection` and
+    // `#deliveryBody` to attach data-phase-state. Section forwards
+    // both `id` and `bodyId` to the underlying `<details>` /
+    // `.oc-section__body` so the highlight pipeline still reaches
+    // the real nodes after the primitive migration.
     const fnStart = BOARD.indexOf("export function DeliveryPanel")
     const slice = BOARD.slice(fnStart, fnStart + 4000)
-    expect(slice).toMatch(/<details\s+id="deliverySection"\s+class="section"/)
-    expect(slice).toMatch(/<div\s+id="deliveryBody"\s+class="section-body"/)
+    expect(slice).toContain('id="deliverySection"')
+    expect(slice).toContain('bodyId="deliveryBody"')
   })
 
   test("the <details> does NOT hardcode data-phase-state (owned by syncSectionPhases)", () => {
