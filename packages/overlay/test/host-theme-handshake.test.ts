@@ -1,25 +1,14 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { PROTOCOL_VERSION, type ExtensionMessage } from "@opencorvus-ai/transport-protocol";
 
-mock.module("../src/services/tauri-transport", () => ({
-  createTauriTransport(kind = "tauri") {
-    return {
-      kind,
-      async request() {
-        throw new Error("tauri request not used in host theme handshake tests");
-      },
-      openStream() {
-        throw new Error("tauri openStream not used in host theme handshake tests");
-      },
-      async native() {
-        throw new Error("tauri native not used in host theme handshake tests");
-      },
-      subscribeUiCommand() {
-        return { unsubscribe() {} };
-      },
-    };
-  },
-}));
+// NOTE: previously this file ran `mock.module("../src/services/tauri-transport", ...)` at
+// file scope to swap in a stub. bun:test's `mock.module` registers
+// process-wide and is not undone by `mock.restore()`, so the stub leaked
+// into later tests (e.g. tauri-transport-error-body.test.ts) and
+// crashed them with "tauri request not used in host theme handshake
+// tests". Every test in this file installs its own transport via
+// `__setHostTransportForTest` (or `installFakeVsCodeWindow`), so the
+// upstream stub is unnecessary — the real module imports cleanly.
 
 function fakeVsCodeSettingsTransport(settings: unknown) {
   return {

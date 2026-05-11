@@ -14,6 +14,7 @@ process.chdir(dir)
 
 import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
+import { selectBuildTargets, type BuildTarget } from "./build-targets"
 
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 // Fetch and generate models.dev snapshot
@@ -30,6 +31,16 @@ const singleFlag = process.argv.includes("--single")
 const allFlag = process.argv.includes("--all")
 const baselineFlag = process.argv.includes("--baseline")
 const binaryOnly = process.argv.includes("--binary-only")
+// --musl-only selects abi-tagged targets (musl) for the current arch
+// instead of the default glibc set. Used by the Linux docker step in
+// .github/workflows/build.yml, which runs inside `oven/bun:alpine` and
+// is responsible for producing the musl variants alongside the host's
+// glibc artifacts.
+const muslOnlyFlag = process.argv.includes("--musl-only")
+// --no-clean skips the `rm -rf dist` step so a follow-up single-target
+// invocation (e.g. the musl docker step running after the glibc step)
+// can augment an existing dist/ without wiping the earlier artifacts.
+const noCleanFlag = process.argv.includes("--no-clean")
 
 const embeddedEnv = (() => {
   const keys = (process.env.OPENCORVUS_EMBED_ENV_KEYS ?? "")
@@ -72,12 +83,7 @@ if (Object.keys(embeddedEnv).length > 0) {
 }
 const embeddedEnvDefine = Object.keys(embeddedEnv).length > 0 ? JSON.stringify(embeddedEnv) : "undefined"
 
-const allTargets: {
-  os: string
-  arch: "arm64" | "x64"
-  abi?: "musl"
-  avx2?: false
-}[] = [
+const allTargets: BuildTarget[] = [
   {
     os: "linux",
     arch: "arm64",
@@ -145,28 +151,25 @@ type Target = (typeof allTargets)[number]
 
 // Dev and CI builds only need a native binary; full matrix is for release packaging.
 const single = singleFlag || (!allFlag && !Script.release)
-const targets = single
-  ? allTargets.filter((item) => {
-      if (item.os !== process.platform || item.arch !== process.arch) {
-        return false
-      }
+const targets = selectBuildTargets(allTargets, {
+  platform: process.platform,
+  arch: process.arch,
+  single,
+  baseline: baselineFlag,
+  muslOnly: muslOnlyFlag,
+})
 
-      // When building for the current platform, prefer a single native binary by default.
-      // Baseline binaries require additional Bun artifacts and can be flaky to download.
-      if (item.avx2 === false) {
-        return baselineFlag
-      }
+if (single && targets.length === 0) {
+  throw new Error(
+    `build.ts: no targets matched for ${process.platform}-${process.arch}` +
+      ` (single=${single}, baseline=${baselineFlag}, muslOnly=${muslOnlyFlag}). ` +
+      `Check the workflow flags and the allTargets table.`,
+  )
+}
 
-      // also skip abi-specific builds for the same reason
-      if (item.abi !== undefined) {
-        return false
-      }
-
-      return true
-    })
-  : allTargets
-
-await $`rm -rf dist`.nothrow()
+if (!noCleanFlag) {
+  await $`rm -rf dist`.nothrow()
+}
 
 const binaries: Record<string, string> = {}
 for (const item of targets) {

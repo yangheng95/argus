@@ -600,8 +600,13 @@ function scheduleTasksCompat(delay = 0): void {
 
 export function handleEventStreamEvent(event: any): void {
   const type = normalizedEventType(event);
-  // Double-write to the new cardTreeStore before any legacy routing.
-  writeToTree(event);
+  // tree-writer projection has already happened upstream in
+  // `routeSSEEvent` (unconditional `writeToTree(event)` before its
+  // early returns). Calling it here again would double every side
+  // effect — in particular `notifyInteractionRequested` fired twice
+  // per `interaction.created` event. This function now only owns the
+  // board / task-sequence refresh path; tree projection is single-
+  // sourced through routeSSEEvent.
   if (type.startsWith("message.")) {
     if (shouldReloadConversationForMessageEvent({ ...event, type })) {
       void loadConversation();
