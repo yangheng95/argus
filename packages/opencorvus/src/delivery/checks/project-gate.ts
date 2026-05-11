@@ -21,9 +21,10 @@ import { arbitrateDeliveryGate } from "../arbiter"
 import { buildContractAuditReviewEvidence, type ContractAuditCriteriaStatus } from "./contract-audit-review"
 import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
 import { runSecurityDataReview } from "../specialists/security-data"
-import { ensureManagedPreviewSession } from "@/preview/session"
 import type { AcceptanceSpec } from "@/acceptance/types"
-import { ensureProjectReadyForRuntime } from "./runtime-readiness"
+import { ensureProjectReadyForRuntime, type ProjectRuntimeReadiness } from "./runtime-readiness"
+import { ManagedPreviewStartError, startManagedPreview } from "@/preview/managed"
+import type { ManagedPreviewSession } from "@/preview/session"
 import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
@@ -123,6 +124,7 @@ export async function buildDeliveryEvidenceManifest(input: {
         surfaceManifest,
         goals: input.goals,
         metadata: input.metadata,
+        runtimeReadiness,
       })
     : []
   const failedRuntimeFlowIds = runtimeFlows
@@ -524,6 +526,7 @@ async function runRuntimeFlows(input: {
   surfaceManifest: DeliverySurfaceManifest
   goals?: Array<{ acceptance_scenarios?: AcceptanceSpec[] }>
   metadata?: Record<string, unknown>
+  runtimeReadiness: ProjectRuntimeReadiness
 }): Promise<DeliveryRuntimeFlowResult[]> {
   const flows: DeliveryRuntimeFlowResult[] = []
   if (!input.surfaceManifest.surfaces.includes("frontend")) {
@@ -540,6 +543,7 @@ async function runRuntimeFlows(input: {
       taskID: input.taskID,
       projectDir: root,
       metadata: input.metadata,
+      runtimeReadiness: input.runtimeReadiness,
     })
     const report = await computeRuntimeEvidence({
       projectDir: root,
@@ -608,12 +612,27 @@ async function resolveRuntimeFlowPreview(input: {
   taskID?: string
   projectDir: string
   metadata?: Record<string, unknown>
+  runtimeReadiness: ProjectRuntimeReadiness
 }): Promise<{ url: string; evidence: string[]; dispose: () => Promise<void> }> {
-  const session = await ensureManagedPreviewSession({
-    taskID: input.taskID,
-    workspaceDir: input.projectDir,
-    metadata: input.metadata,
-  })
+  let session: ManagedPreviewSession | undefined
+  try {
+    const preview = await startManagedPreview({
+      taskID: input.taskID,
+      workspaceDir: input.projectDir,
+      projectRoot: input.projectDir,
+      metadata: input.metadata,
+      readiness: input.runtimeReadiness,
+    })
+    session = preview.session
+  } catch (error) {
+    if (error instanceof ManagedPreviewStartError) {
+      throw new Error(error.evidence.join(" | "))
+    }
+    throw error
+  }
+  if (!session) {
+    throw new Error("preview_session_not_ready: managed preview session was not created")
+  }
   if (session.status !== "ready" || !session.url) {
     throw new Error(`preview_session_not_ready: status=${session.status} reason=${session.reason ?? "none"}`)
   }

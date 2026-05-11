@@ -21,7 +21,8 @@ import { Log } from "@/util/log"
 import { EngineService } from "@/task-api"
 import { findTask } from "@/engine/store"
 import { Identifier } from "@/id/id"
-import { ensureManagedPreviewSession, type ManagedPreviewSession } from "@/preview/session"
+import { ManagedPreviewStartError, startManagedPreview } from "@/preview/managed"
+import { type ManagedPreviewSession } from "@/preview/session"
 import {
   captureRuntimePage,
   normalizeRuntimeCaptureRequest,
@@ -492,17 +493,20 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
 
         try {
           const task = findTask(taskID)
-          const session = await ensureManagedPreviewSession({
+          const preview = await startManagedPreview({
             taskID,
-            workspaceDir: projectDir,
+            workspaceDir: Instance.directory,
+            changedFiles: input?.delivery?.changedFiles,
             metadata: task?.metadata as Record<string, unknown> | undefined,
           })
+          const session = preview.session
           persistDeliveryPreviewSession({ taskID, deliveryID, session })
           return JSON.stringify({
             ok: session.status === "ready" && !!session.url,
             status: session.status,
             url: session.url,
             command: session.command,
+            project_root: preview.projectRoot,
             workspace_dir: session.workspaceDir,
             evidence: session.evidence,
             board_preview_url: session.status === "ready" ? session.url : undefined,
@@ -510,14 +514,23 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
           }, null, 2)
         } catch (err) {
           const reason = err instanceof Error ? err.message : String(err)
+          const projectRoot = err instanceof ManagedPreviewStartError
+            ? err.projectRoot
+            : projectDir
+          const evidence = err instanceof ManagedPreviewStartError
+            ? err.evidence
+            : [reason]
+          const command = err instanceof ManagedPreviewStartError
+            ? err.session?.command ?? "start_frontend_preview"
+            : "start_frontend_preview"
           const failedSession: ManagedPreviewSession = {
-            key: `${taskID}:${projectDir}`,
+            key: `${taskID}:${projectRoot}`,
             taskID,
-            workspaceDir: projectDir,
-            command: "start_frontend_preview",
+            workspaceDir: projectRoot,
+            command,
             status: "failed",
             reason,
-            evidence: [reason],
+            evidence,
             startedAt: Date.now(),
             updatedAt: Date.now(),
           }
@@ -525,6 +538,9 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
           return JSON.stringify({
             ok: false,
             status: "failed",
+            project_root: projectRoot,
+            command,
+            evidence,
             reason,
           }, null, 2)
         }

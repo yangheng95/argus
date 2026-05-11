@@ -3823,17 +3823,44 @@ export function createOrchestratorTools(input: {
               )
           if (imageAttachments.length > 0) {
             const { captureRuntimePage } = await import("@/delivery/runtime-capture")
-            const { ensureManagedPreviewSession } = await import("@/preview/session")
+            const { ManagedPreviewStartError, startManagedPreview } = await import("@/preview/managed")
             const { AttachmentStore } = await import("@/storage/attachment-store")
-            const preview = await ensureManagedPreviewSession({
-              taskID,
-              workspaceDir: Instance.directory,
-              metadata: liveTask.metadata as Record<string, unknown> | undefined,
-            })
-            if (preview.status !== "ready" || !preview.url) {
+            let preview:
+              | {
+                  projectRoot: string
+                  session: {
+                    status: string
+                    url?: string
+                    reason?: string
+                  }
+                }
+              | undefined
+            try {
+              preview = await startManagedPreview({
+                taskID,
+                workspaceDir: Instance.directory,
+                changedFiles: allDiffs.map((diff) => diff.file),
+                metadata: liveTask.metadata as Record<string, unknown> | undefined,
+              })
+            } catch (error) {
+              if (error instanceof ManagedPreviewStartError) {
+                renderFailure = {
+                  kind: "no_live_preview",
+                  detail: error.evidence.join(" | "),
+                }
+              } else {
+                throw error
+              }
+            }
+            if (!preview) {
+              // renderFailure already recorded above.
+            } else if (preview.session.status !== "ready" || !preview.session.url) {
               renderFailure = {
                 kind: "no_live_preview",
-                detail: `merged worktree at ${Instance.directory} has no live preview URL — visual deliverable cannot be rendered; status=${preview.status} reason=${preview.reason ?? "none"}`,
+                detail:
+                  `merged worktree at ${preview.projectRoot} has no live preview URL — ` +
+                  `visual deliverable cannot be rendered; status=${preview.session.status} ` +
+                  `reason=${preview.session.reason ?? "none"}`,
               }
             } else {
               // Pick the first image attachment to size the viewport. All
@@ -3852,7 +3879,7 @@ export function createOrchestratorTools(input: {
               }
               const visualOut = path.join(Instance.directory, ".opencorvus", "visual-diff")
               const rendered = await captureRuntimePage({
-                url: preview.url,
+                url: preview.session.url,
                 outDir: visualOut,
                 referenceForViewport: refPath,
                 viewport_width: refPath ? undefined : 1440,
