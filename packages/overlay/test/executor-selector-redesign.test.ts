@@ -1,3 +1,14 @@
+// Puppeteer-driven behavioral test for the dual-chip executor bar.
+//
+//   - Two chips (MirrorCode + external) render side-by-side under the
+//     composer.
+//   - Clicking MirrorCode opens its popover; only connected providers'
+//     models appear.
+//   - Clicking External opens its popover; all configured providers for
+//     the active executor appear, with availability flagged via
+//     data-available on the model row.
+//   - Opening one popover closes the other.
+
 import { expect, test } from "bun:test"
 import { launchBrowser } from "./launch"
 import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
@@ -18,9 +29,9 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
-test("executor selector separates long plan and edit models", async () => {
-  const planModel = "alibaba/alibaba-coding-plan-ultra-long-routing-profile"
-  const editModel = "openai/gpt-5.5-pro-priority-editing-profile"
+test("dual executor chip — mirror vs external popovers with availability", async () => {
+  const projectModel = "openai/gpt-5.5-pro"
+  const codexModel = "openai/gpt-5.5-codex"
 
   const server = Bun.serve({
     idleTimeout: 255,
@@ -38,42 +49,37 @@ test("executor selector separates long plan and edit models", async () => {
       if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
       if (path === "/vcs") return send({ branch: "dev", clean: true, dirty: false, staged: 0, modified: 0, untracked: 0, conflicts: 0, ahead: 0, behind: 0 })
       if (path === "/provider") {
+        // openai is connected; anthropic is configured but NOT connected
+        // — so the external Claude Code tab should show anthropic models
+        // dimmed/unavailable, and the mirror picker must hide them.
         return send({
           all: [
             {
               id: "openai",
               name: "OpenAI",
               models: {
-                "gpt-5.5-pro-priority-editing-profile": { id: "gpt-5.5-pro-priority-editing-profile" },
+                "gpt-5.5-pro": { id: "gpt-5.5-pro" },
+                "gpt-5.5-codex": { id: "gpt-5.5-codex" },
+              },
+            },
+            {
+              id: "anthropic",
+              name: "Anthropic",
+              models: {
+                "claude-sonnet-4-6": { id: "claude-sonnet-4-6" },
               },
             },
           ],
           connected: ["openai"],
-          default: { openai: "gpt-5.5-pro-priority-editing-profile" },
+          default: { openai: "gpt-5.5-pro" },
         })
       }
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") {
-        return send({
-          providers: [
-            {
-              id: "openai",
-              name: "OpenAI",
-              models: {
-                "gpt-5.5-pro-priority-editing-profile": { id: "gpt-5.5-pro-priority-editing-profile" },
-              },
-            },
-          ],
-          default: { openai: "gpt-5.5-pro-priority-editing-profile" },
-        })
+        return send({ providers: [], default: {} })
       }
       if (path === "/config" && req.method === "GET") {
-        return send({
-          model: planModel,
-          agent: {
-            build: { model: "openai/gpt-5.5-pro-priority-editing-profile" },
-          },
-        })
+        return send({ model: projectModel })
       }
       if (path === "/config/prompt") return send([])
       if (path === "/agent") return send([])
@@ -81,7 +87,8 @@ test("executor selector separates long plan and edit models", async () => {
       if (path === "/executor") {
         return send([
           { id: "mirrorcode", label: "MirrorCode", selectable: true, discovered: true },
-          { id: "codex", label: "Codex", selectable: true, discovered: true, model: editModel },
+          { id: "codex", label: "Codex", selectable: true, discovered: true, model: codexModel },
+          { id: "claude-code", label: "Claude Code", selectable: true, discovered: true },
         ])
       }
       if (path === "/skill/installed" || path === "/skill") return send([])
@@ -97,7 +104,7 @@ test("executor selector separates long plan and edit models", async () => {
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
-    await page.setViewport({ width: 760, height: 720 })
+    await page.setViewport({ width: 960, height: 720 })
     await page.evaluateOnNewDocument((serverUrl) => {
       localStorage.setItem("oc_locale", "en-US")
       window.__TAURI__ = {
@@ -133,68 +140,89 @@ test("executor selector separates long plan and edit models", async () => {
     }, `http://127.0.0.1:${server.port}`)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
-    await page.waitForSelector('[data-ui="executor-chip"]')
+    await page.waitForSelector('[data-ui="executor-chip-mirror"]')
+    await page.waitForSelector('[data-ui="executor-chip-external"]')
     await page.waitForFunction(() =>
-      (document.querySelector('[data-ui="executor-chip"]') as HTMLElement | null)?.innerText.includes("alibaba"),
+      (document.querySelector('[data-ui="executor-chip-mirror"]') as HTMLElement | null)?.innerText.includes("gpt-5.5-pro"),
     )
-    const chip = await page.$eval('[data-ui="executor-chip"]', (node) => {
-      const el = node as HTMLElement
-      const style = getComputedStyle(el)
-      const action = el.querySelector<HTMLElement>(".executor-chip-action")
-      const model = el.querySelector<HTMLElement>(".executor-chip-model")
-      const modelStyle = model ? getComputedStyle(model) : null
+
+    // Both chips share one bar that spans the composer row.
+    const layout = await page.evaluate(() => {
+      const bar = document.querySelector('[data-ui="executor-dualbar"]') as HTMLElement | null
+      const mirror = document.querySelector('[data-ui="executor-chip-mirror"]') as HTMLElement | null
+      const external = document.querySelector('[data-ui="executor-chip-external"]') as HTMLElement | null
       return {
-        text: el.innerText,
-        clientWidth: el.clientWidth,
-        scrollWidth: el.scrollWidth,
-        height: el.getBoundingClientRect().height,
-        borderTopWidth: style.borderTopWidth,
-        actionDisplay: action ? getComputedStyle(action).display : "",
-        modelBorderTopWidth: modelStyle?.borderTopWidth ?? "",
-        slotCount: el.querySelectorAll(".executor-chip-model").length,
+        barWidth: bar ? bar.getBoundingClientRect().width : 0,
+        mirrorLeft: mirror ? mirror.getBoundingClientRect().left : 0,
+        mirrorRight: mirror ? mirror.getBoundingClientRect().right : 0,
+        externalLeft: external ? external.getBoundingClientRect().left : 0,
+        mirrorText: mirror?.innerText ?? "",
+        externalText: external?.innerText ?? "",
       }
     })
-    expect(chip.text).toContain("OpenCorvus")
-    expect(chip.text).toContain("Codex")
-    expect(chip.text).toContain("Custom")
-    expect(chip.text).toContain("alibaba")
-    expect(chip.text).toContain("gpt-5.5-pro-priority-editing-profile")
-    expect(chip.slotCount).toBe(2)
-    expect(chip.scrollWidth).toBeLessThanOrEqual(chip.clientWidth + 1)
-    expect(chip.height).toBeLessThanOrEqual(34)
-    expect(chip.borderTopWidth).toBe("0px")
-    expect(chip.actionDisplay).toBe("none")
-    expect(chip.modelBorderTopWidth).toBe("0px")
+    expect(layout.barWidth).toBeGreaterThan(400)
+    expect(layout.externalLeft).toBeGreaterThan(layout.mirrorRight - 1)
+    expect(layout.mirrorText).toContain("MirrorCode")
+    expect(layout.mirrorText).toContain("gpt-5.5-pro")
+    expect(layout.externalText).toContain("Codex")
+    expect(layout.externalText).toContain("gpt-5.5-codex")
 
-    await page.click('[data-ui="executor-chip"]')
-    await page.waitForSelector(".executor-menu-summary")
-    const menuText = await page.$eval(".executor-menu", (node) => (node as HTMLElement).innerText)
-    expect(menuText).toContain(planModel)
-    expect(menuText).toContain("Custom")
-    expect(menuText).toContain(editModel)
-    expect(menuText).toContain("openai")
-    expect(menuText).toContain("gpt-5.5-pro-priority-editing-profile")
+    // Mirror popover: opens above the left chip and lists only connected
+    // providers (openai). Anthropic stays hidden because it isn't connected.
+    // innerText reflects text-transform; provider group headers are uppercased
+    // for the picker, so we match case-insensitively.
+    await page.click('[data-ui="executor-chip-mirror"]')
+    await page.waitForSelector('[data-section="mirror"]')
+    const mirrorBody = (
+      await page.$eval('[data-section="mirror"]', (node) => (node as HTMLElement).innerText)
+    ).toLowerCase()
+    expect(mirrorBody).toContain("openai")
+    expect(mirrorBody).not.toContain("anthropic")
+    expect(mirrorBody).toContain("gpt-5.5-pro")
+    expect(mirrorBody).toContain("gpt-5.5-codex")
+    // The external popover should NOT be open while the mirror popover is.
+    expect(await page.$('[data-section="external"]')).toBeNull()
 
-    // OpenCorvus model picker is always visible inside the open menu.
-    const projectSection = await page.$('[data-section="opencorvus"]')
-    expect(projectSection).not.toBeNull()
-    const projectButtons = await page.$$eval(
-      '[data-section="opencorvus"] .executor-menu-model',
-      (nodes) => nodes.length,
+    // Clicking the external chip closes the mirror popover and opens its own.
+    // Dispatch via .click() directly because startup notifications can hover
+    // over the bottom-right of the composer at low viewports and intercept a
+    // pixel-based puppeteer click.
+    await page.evaluate(() =>
+      (document.querySelector('[data-ui="executor-chip-external"]') as HTMLButtonElement).click(),
     )
-    expect(projectButtons).toBeGreaterThan(0)
+    await page.waitForSelector('[data-section="external"]')
+    expect(await page.$('[data-section="mirror"]')).toBeNull()
 
-    // External executor section starts collapsed — body not present until
-    // the user clicks the toggle.
-    const externalCollapsed = await page.$('[data-section="external"][data-open="false"]')
-    expect(externalCollapsed).not.toBeNull()
-    const bodyBefore = await page.$('[data-section="external"] .executor-menu-section-body')
-    expect(bodyBefore).toBeNull()
+    // External popover defaults to the active executor (codex).
+    const externalBody = (
+      await page.$eval('[data-section="external"]', (node) => (node as HTMLElement).innerText)
+    ).toLowerCase()
+    expect(externalBody).toContain("openai")
+    expect(externalBody).toContain("gpt-5.5-codex")
 
-    await page.click('[data-section="external"] .executor-menu-section-toggle')
-    await page.waitForSelector('[data-section="external"][data-open="true"]')
-    const bodyAfter = await page.$('[data-section="external"] .executor-menu-section-body')
-    expect(bodyAfter).not.toBeNull()
+    // Switching the focused tab to Claude Code should list anthropic models
+    // with the unavailable badge (anthropic is configured but not connected).
+    const claudeTab = await page.$$eval(
+      '[data-section="external"] .executor-popover-tab',
+      (nodes) =>
+        nodes
+          .map((node, index) => ({ index, text: (node as HTMLElement).innerText.trim() }))
+          .find((row) => row.text === "Claude Code")?.index ?? -1,
+    )
+    expect(claudeTab).toBeGreaterThanOrEqual(0)
+    const tabHandles = await page.$$('[data-section="external"] .executor-popover-tab')
+    await tabHandles[claudeTab]!.click()
+    await page.waitForFunction(() => {
+      const body = document.querySelector('[data-section="external"]') as HTMLElement | null
+      return (body?.innerText.toLowerCase().includes("anthropic")) ?? false
+    })
+    const claudeBody = (
+      await page.$eval('[data-section="external"]', (node) => (node as HTMLElement).innerText)
+    ).toLowerCase()
+    expect(claudeBody).toContain("anthropic")
+    expect(claudeBody).toContain("claude-sonnet-4-6")
+    const unavailableRow = await page.$('[data-section="external"] .executor-popover-model[data-available="false"]')
+    expect(unavailableRow).not.toBeNull()
     await page.close()
   } finally {
     await browser.close().catch(() => undefined)

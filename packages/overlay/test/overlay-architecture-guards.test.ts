@@ -386,6 +386,22 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("--body-bg alpha is the single source for window translucency", () => {
+    // Window-opacity slider must drive the body background alpha, not a
+    // separate `body { opacity }` rule (rule 8 — single source). Each theme
+    // file folds --ui-window-opacity into --body-bg via color-mix(); base.css
+    // must NOT carry the legacy body-opacity declaration.
+    const base = readText(join(OVERLAY_ROOT, "src/styles/cascade/base.css"))
+    const bodyBlock = base.match(/^body\s*\{[^}]*\}/m)?.[0] ?? ""
+    expect(bodyBlock).not.toMatch(/(?<!-)\bopacity\s*:/)
+
+    for (const file of ["dark.css", "vscode-dark.css", "light.css"] as const) {
+      const css = readText(join(OVERLAY_ROOT, "src/styles/cascade", file))
+      const decl = css.match(/--body-bg\s*:\s*[^;]+;/)?.[0] ?? ""
+      expect(decl).toContain("var(--ui-window-opacity)")
+    }
+  })
+
   test("vscode-dark :root surfaces transparent palette tokens for shell columns", () => {
     // Theme palette block moved to styles/cascade/vscode-dark.css 2026-05-04.
     const styles = readText(join(OVERLAY_ROOT, "src/styles/cascade/vscode-dark.css"))
@@ -803,16 +819,13 @@ describe("overlay architecture guards", () => {
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
     for (const className of [
-      "executor-selector",
+      "executor-dualbar",
+      "executor-chip-slot",
       "executor-chip-identity",
       "executor-chip-label",
-      "executor-chip-action",
-      "executor-chip-models",
       "executor-chip-model",
-      "executor-chip-role",
       "executor-chip-provider",
       "executor-chip-name",
-      "executor-chip-custom",
       "executor-chip-caret",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -832,12 +845,16 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toContain("var(--oc-radius-soft)")
     expect(composerSurface).not.toMatch(/border-radius:\s*999px/)
 
-    expect(composerSurface).toMatch(/\.executor-selector \.oc-button\[data-ui="executor-chip"\]\s*\{/)
-    expect(composerSurface).toMatch(/\.executor-selector \.oc-button\[data-ui="executor-chip"\]:hover\s*\{/)
     expect(composerSurface).toMatch(
-      /\.executor-selector\[data-open="true"\] \.oc-button\[data-ui="executor-chip"\]\s*\{/,
+      /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]\s*\{/,
     )
-    expect(composerSurface).toMatch(/\.executor-chip-model\[data-source="executor"\]\s*\{/)
+    expect(composerSurface).toMatch(
+      /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:hover\s*\{/,
+    )
+    expect(composerSurface).toMatch(
+      /\.executor-chip-slot\[data-open="true"\] \.oc-button\[data-ui\^="executor-chip-"\]\s*\{/,
+    )
+    expect(composerSurface).toMatch(/\.executor-chip-model\[data-empty="true"\]/)
   })
 
   test("workspace panel, diff preview, and file view are owned by surfaces/workspace.css", () => {
@@ -973,25 +990,32 @@ describe("overlay architecture guards", () => {
     expect(styles).not.toMatch(/^\.verdict-pill\s*\{/m)
   })
 
-  test("executor menu dropdown is owned by surfaces/composer.css", () => {
+  test("executor popover surface is owned by surfaces/composer.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
     for (const className of [
-      "executor-menu",
-      "executor-menu-group",
-      "executor-menu-row",
-      "executor-menu-current",
-      "executor-menu-models",
-      "executor-menu-model",
+      "executor-popover",
+      "executor-popover-header",
+      "executor-popover-title",
+      "executor-popover-hint",
+      "executor-popover-tabs",
+      "executor-popover-tab",
+      "executor-popover-body",
+      "executor-popover-empty",
+      "executor-popover-group",
+      "executor-popover-models",
+      "executor-popover-model",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(composerSurface).toMatch(/\.executor-menu-row:hover:not\(:disabled\)\s*\{/)
-    expect(composerSurface).toMatch(/\.executor-menu-group\[data-active="true"\] \> \.executor-menu-row\s*\{/)
-    expect(composerSurface).toMatch(/\.executor-menu-model\[data-active="true"\]\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-popover-tab\[data-active="true"\]\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-popover-model\[data-active="true"\]\s*\{/)
+    expect(composerSurface).toMatch(
+      /\.executor-popover-model\[data-available="false"\]\s*\{/,
+    )
     expect(composerSurface).not.toMatch(/rgba\(146,\s*184,\s*252/)
     expect(composerSurface).not.toMatch(/rgba\(86,\s*126,\s*196/)
     expect(composerSurface).not.toMatch(/rgba\(196,\s*215,\s*252/)
