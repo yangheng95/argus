@@ -76,15 +76,18 @@ export function bubbleAlign(node: CardNode): "left" | "right" {
 - helper 函数（`collectCardText / collectLatestActivityText / collectActivityCounts`）继续递归 childIDs —— 对气泡也是正确语义（user 复制 agent 全场对话理应含 interaction 问答；折叠态预览 / activity stats 把子对话计入也合理）。**不动 helper**。
 
 ### Bubble body 渲染 children
-agent / message bubble 在 body 内渲染：
-1. `node.parts` 通过 `<CardParts/>`（text / reasoning / inline tool / file / interaction-question part / interaction-permission part / boundary）
-2. `node.childIDs` 中每个 child：
-   - `kind === "message"` (interaction-card) → 嵌套小气泡（紧凑变体：`.chat-bubble--nested`，去掉头像列、缩窄 padding、保留 role label 单行 + 文本）。Role 用 `normalizeAgentRole(child.role)` 决定左/右倾向（user 答复仍微右倾，system 居中无倾）。
-   - `kind === "agent"` (rare：integrity verdict 是 sibling session card 而不是 child，但保留代码路径) → 嵌套小气泡 + `<IntegrityBody/>`（若 `child.integrity` 存在）
-   - `kind === "integrity"` legacy kind → `<IntegrityBody/>` 直接渲染
-   - 其它 → throw（rule 7 不允许 silent fallback）
+agent / message bubble 在 body 内顺序渲染：
 
-> 这样 bubble 与现有 `<Card/>` 渲染 children 的语义对齐，只是子节点的 chrome 不同。所有现有 helper 不需要变更。
+1. `node.parts` 通过 `<CardParts/>`（text / reasoning / inline tool / file / interaction-question part / interaction-permission part / boundary）
+2. `node.childIDs` 中每个 child（按出现顺序）—— **不**给 child 套额外 bubble chrome，而是 inline 把 child 的内容并入当前 bubble 的内容流：
+   - `child.kind === "message"`（interaction-card）：渲染 `<CardParts parts={child.parts} depth={depth+1}/>`。child 的 parts 通常是 `interaction-question` / `interaction-permission`，`CardParts` 既有的 switch 路径会渲染 `<InteractionCard/>`（含 form / button / markdown / 自带 chrome — `components/InteractionCard.tsx`）。**绝不**用 nested bubble 包它（codex round-3 反馈：会产生双 chrome）。
+   - `child.kind === "agent"` 且 `child.integrity` 存在（remnant integrity verdict child；当前 writer 较少触发但代码路径保留）：渲染 `<IntegrityBody integrity={child.integrity}/>`
+   - `child.kind === "integrity"`（legacy kind）：渲染 `<IntegrityBody integrity={child.integrity}/>`
+   - 其它 kind：throw（rule 7 不允许 silent fallback；writer 当前没有别的 child 类型，新出现的必须显式 spec'd）
+
+> 这样 bubble body 把 child cards 的 *内容* inline 进自己的流，不引入额外卡片/气泡 chrome；`<InteractionCard/>` 保持其 self-contained 的 form chrome。Helper 函数 `collectCardText / collectLatestActivityText / collectActivityCounts` 递归 childIDs 仍然语义正确（copy 含 interaction 文本；折叠预览拉子卡最新活动）。
+
+> **重要约束**：本节是 v3 最终 child-rendering 规则。spec 其它处任何提到"bubble 不渲染 childIDs" / "嵌套小气泡 wrap interaction-card" 的字样都已删除（v2 leftover）。如果 review 发现 spec 内部矛盾以本节为准。
 
 ### pruneCardsAfterCursor 修复（含在本 spec）
 现状 `store/card-tree.ts:261-277` 删 `cards[id]` 但不清理存活 parents 的 `childIDs`，导致 rewind 后 bubble 渲染 children 会触发 `visibleChildIDsForCard` 的 missing-child throw。
@@ -219,9 +222,9 @@ setCardTreeStore(
 - **user**：无 head；时间戳渲染在气泡下方
 
 ### bubble-body
-- 复用 `<CardParts parts={node.parts} depth={...}/>` 渲染 text / reasoning / boundary / inline tool / file / interaction-permission / interaction-question parts
-- **不渲染 childIDs**（agent/message 卡 childIDs 实证为空；invariant 测试守护）
-- agent 卡含 `node.integrity` 时，body 顶部插入 `<IntegrityBody integrity={node.integrity}/>`
+- 第一层：复用 `<CardParts parts={node.parts} depth={...}/>` 渲染 text / reasoning / boundary / inline tool / file / interaction-permission / interaction-question parts
+- 第二层：渲染 `node.childIDs` —— 见上节"Bubble body 渲染 children"。**bubble body 真渲染 children**（v2 的"不渲染"残留已废除）。
+- agent 卡含 `node.integrity` 时，在 children 渲染前插入 `<IntegrityBody integrity={node.integrity}/>`
 - step 卡的 `goalDescription` 渲染不归 bubble 管（step 走 card chrome）
 - `errorReason` chip：与现有 `<CardHeader/>` 一致，渲染在 bubble-head 的 title 行末尾
 
@@ -244,59 +247,51 @@ setCardTreeStore(
 ```ts
 interface UseCardHeadActionsInput {
   node: () => CardNode;
-  expanded: () => boolean;
-  /** 调用方提供的展开 callback；trace toggle 在打开 trace 前会调用它确保 body 可见 */
-  setExpanded: (next: boolean) => void;
-  /** 可选 — 父级注入的 rewind 端点（Card / ChatBubble 都从同一 task store 拿） */
+  /** 调用方注入的 rewind 端点（Card / ChatBubble 都从同一 task store 拿） */
   onRewind?: (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => Promise<void>;
-  /** 可选 — agent-cancel；sessionID 在 hook 内部用 node.id 解析失败时退回参数 */
+  /** agent-cancel；sessionID 由调用方解析（可能来自 node.id / phaseSessionID / promotedBuildPhase；规则与现 Card.tsx:129-145 一致） */
   onAgentCancel?: (sessionID: string) => Promise<void>;
   agentSessionID?: () => string | undefined;
-  /** 可选 — trace 仅 kind="agent" 卡可用 */
-  traceSessionID?: () => string | undefined;
 }
 
 interface UseCardHeadActionsOutput {
-  // 反应式 state
+  // 反应式 state（仅 copy / rewind / cancel pending；trace-open 不归 hook 管 — 见行为契约）
   state: {
     copied: () => boolean;
     rewinding: () => boolean;
     cancelling: () => boolean;
-    traceOpen: () => boolean;
   };
   // capabilities — 用于 view 决定按钮显示
   caps: {
     canCopy: () => boolean;
     canRewind: () => boolean;
     canCancel: () => boolean;
-    canTrace: () => boolean;
   };
   // 触发器（已绑定 stopPropagation + clipboard / dialog 逻辑）
   onCopy: (e: Event) => void;
   onRewind: (e: Event) => void;
   onAgentCancel: (e: Event) => void;
-  onTraceToggle: (e: Event) => void;
-  // i18n labels（hook 内调用 t()，view 只读）
+  // i18n labels
   labels: {
     copy: () => string;
     copied: () => string;
     rewind: () => string;
     rewindStep: () => string;
     cancel: () => string;
-    trace: () => string;
   };
 }
 ```
 
-行为契约：
-- `onTraceToggle`：内部检测 `expanded()`，若 false 先 `setExpanded(true)`（替代现在 `Card.tsx:151-153` 的 auto-expand）。
-- `onRewind`：保留现有 `showAppDialog` 弹窗逻辑；`rewinding()` 起止 timer 不变（800ms）。
-- `onCopy`：clipboard 写入后 `copied()` true 持续 1200ms。
-- 每个调用点（`CardHeader` 一次 / `ChatBubble` 一次）拿到独立的 signal — Solid hook 调用语义保证 per-call 隔离。
+行为契约（codex round-3 反馈：trace-open 由 surface 拥有，不入 hook）：
+- **trace open 状态留在 surface**：`Card.tsx` / `ChatBubble.tsx` 各自维护 `traceOpen` signal + `<TracePanel/>` 渲染。表单上写 trace 按钮 click handler 时调用 surface 自己的 toggle（toggle 内部按需调 `setCardExpanded(true)` 自动展开 body —— 现在 `Card.tsx:151-153` 的逻辑保留在 surface 层，不入 hook）。
+- **session-resolution 留在 surface**：`directAgentSessionID` / `toolCancelSessionID` 这些规则因 surface 类型不同（Card 可能是 step + promoted build phase；ChatBubble 一定是 agent kind）会有差异；surface 解析好后通过 `agentSessionID()` 入参传给 hook。
+- `onRewind`：保留 `showAppDialog` 弹窗 + reset-worktree 选项；`rewinding()` 起止 timer 800ms。
+- `onCopy`：clipboard 写入后 `copied()` 持续 1200ms。
+- 每个调用点拿到独立的 signal — Solid hook 调用语义保证 per-call 隔离。
 
-`CardHeader.tsx` 和 `ChatBubble.tsx` 各自渲染按钮 markup，但 state / handlers / labels 全部来自 hook。`utils/card-tree.ts` 的 `canCardSurfaceCollapse` 等 DOM 工具留在调用方（与 surface 物理结构强耦合）。
+`CardHeader.tsx` 和 `ChatBubble.tsx` 各自渲染按钮 markup + trace toggle，但 copy / rewind / cancel 的 state / handlers / labels 全部来自 hook。`utils/card-tree.ts` 的 `canCardSurfaceCollapse` 等 DOM 工具留在调用方。
 
-单测 `hooks/use-card-head-actions.test.ts`：mock `setExpanded` / `showAppDialog` / `navigator.clipboard`，验证 trace 自动展开、rewind 弹窗 + reset-worktree 选项透传、copy ack 1200ms timer、cancel pending 状态。
+单测 `hooks/use-card-head-actions.test.ts`：mock `showAppDialog` / `navigator.clipboard`，验证 rewind 弹窗 + reset-worktree 选项透传、copy ack 1200ms timer、cancel pending 状态。
 
 ---
 
@@ -343,6 +338,7 @@ interface UseCardHeadActionsOutput {
 | Status badge / spinner | CardHeader 左侧 | ChatBubble head 内 |
 | Duration chip | CardHeader 中部 | ChatBubble head 内 |
 | Collapsed preview | CardHeader `.card__collapsed-preview` | ChatBubble head 行下方 |
+| Collapsed todo-summary | CardHeader `.card__todo-summary`（progress bar + 计数 + current）— Card.tsx 折叠态 agent 卡显示 | ChatBubble head 行下方（preview 下方）；条件、阈值、progress 渲染保持一致 |
 | Token / usage hint | CardHeader actions | ChatBubble actions |
 | Activity foot stats | Card `.card__foot` | ChatBubble bubble-foot |
 | Tool 卡 inline 渲染 | CardParts toolToCardNode | 不变；inline 仍在 ChatBubble body |
@@ -355,6 +351,62 @@ interface UseCardHeadActionsOutput {
 | **Integrity body** | Card.tsx:342 `<IntegrityBody/>` 渲染 | ChatBubble body：当 `node.integrity` 存在时插入 IntegrityBody |
 | **step `goalDescription`** | Card.tsx:316 | 不归 bubble 管，step 走 Card 不变 |
 | **promotedBuildPhase / stepPayload** | Card.tsx:331 `<StepPayloadBody/>` | 不归 bubble 管，step 走 Card 不变 |
+
+---
+
+## 动画（不消耗资源原则）
+
+整体原则：**只动 `opacity` 和 `transform`**（compositor-only，不触发 layout/paint）；不用 `width / height / max-height / top / left` 动画；不用 JS RAF 循环；尊重 `prefers-reduced-motion`。
+
+| 场景 | 效果 | 实现 | 成本 |
+|------|------|------|------|
+| **气泡入场** | 新 bubble 挂载时 opacity 0 → 1 + `translateY(4px)` → 0 | CSS `@keyframes chat-bubble-enter`，`animation-duration: var(--ui-duration-base, 180ms)`，`animation-timing-function: var(--ui-timing-standard)`，`animation-fill-mode: backwards` | GPU compositor 单 frame；首次挂载触发一次后不重复 |
+| **avatar 闪入** | 头像在 bubble 入场后 60ms scale `0.85 → 1` + opacity 0 → 1 | CSS `animation-delay: 60ms` 接同一 keyframes 变体；transform-only | 同上 |
+| **status spinner（running）** | 已有 `.card__spinner`，沿用 | 现有 CSS rotate keyframes | 已有，无新增 |
+| **running agent halo** | 当 `data-status="running"`，avatar 圆形容器外圈光晕 1.6s `breath` 循环：opacity 0.0 → 0.4 → 0.0 + 不变 scale | `@keyframes` opacity-only loop；`pointer-events: none` | 极低；仅 GPU opacity |
+| **bubble hover** | 微微 raise：`transform: translateY(-1px)`；`transition: transform var(--ui-duration-fast)` | CSS `:hover` | 无 |
+| **展开/折叠 body** | 不动画 `height`（昂贵）。改用：folded 时 body 不挂 DOM；展开时 body opacity 0 → 1 100ms 渐入。整体卡片高度由 flow 自然变化（无 transition） | Solid `<Show/>` 控制挂载 + 内层 wrapper `animation: chat-bubble-body-enter` | 极低；DOM 切换 + opacity |
+| **新消息提示**（如有 unread） | 沿用现有徽章 | 不新增 | 无 |
+
+`@media (prefers-reduced-motion: reduce)`：禁用所有 animation / transition（设 `animation: none !important; transition: none !important;` on `.chat-bubble`）。
+
+具体 keyframes 实现（节选）：
+```css
+@keyframes chat-bubble-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes chat-bubble-avatar-enter {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes chat-bubble-running-halo {
+  0%, 100% { opacity: 0; }
+  50%      { opacity: 0.4; }
+}
+.chat-bubble {
+  animation: chat-bubble-enter var(--ui-duration-base, 180ms) var(--ui-timing-standard) backwards;
+}
+.chat-avatar {
+  animation: chat-bubble-avatar-enter var(--ui-duration-base, 180ms) var(--ui-timing-standard) 60ms backwards;
+}
+.chat-avatar[data-status="running"]::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  background: color-mix(in srgb, var(--card-stage, var(--accent)) 30%, transparent);
+  animation: chat-bubble-running-halo 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble, .chat-avatar, .chat-avatar::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+```
+
+测试：
+- `chat-bubble-animation.test.ts` — 检查 `prefers-reduced-motion: reduce` 时 `getComputedStyle(.chat-bubble).animationName` 为 `none`
+- 视觉验收阶段抽样滚动 100+ bubble 列表，DevTools Performance 面板帧率应稳 60fps（rule 25 视觉验收同条目）
 
 ---
 
@@ -405,7 +457,7 @@ interface UseCardHeadActionsOutput {
 - `overlay-architecture-guards.test.ts` 追加：
   - `chat-bubble.css` 禁止 hex 字面量
   - `ChatBubble.tsx` 禁止内联 SVG
-  - **src/ 内除 `utils/chat-bubble.ts` / `store/card-tree.ts`（类型定义）/ 测试外，禁止出现 `kind === "message"` 或 `kind === "agent"` 字符串**（防 duplicate 路由源 — codex round-2 反馈）
+  - **禁止 `Conversation.tsx` 之外的 src/ 组件文件出现 top-level bubble routing 逻辑**（narrow rule — codex round-3 反馈：直接全仓 ban `kind === "..."` 字符串会误伤 `utils/card-tree.ts` 默认展开 / `status-badge.ts` / `Card.tsx` 折叠判定等合法用途）。具体测试形态：grep src/components/*.tsx，要求 `renderAsBubble` 调用 必须 来自 `utils/chat-bubble.ts`，禁止其它组件文件出现"是否走 ChatBubble 还是 Card"形态的判定
 
 ---
 
