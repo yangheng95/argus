@@ -2,8 +2,8 @@
  * `analyzeFigma(CompressedDesign) → ProjectScaffold` — figma2code's analogue
  * of `mirror/url/pattern::analyzePage` and `mirror/image/analyze::analyzeImage`.
  *
- * Pure deterministic transform; zero LLM. The Figma REST fetch already
- * happened in `figma/fetch-tree`; this stage folds the resulting structured
+ * Pure deterministic transform; zero LLM. The isolated Figma mirror algorithm
+ * already produced the structured tree; this stage folds the resulting
  * `CompressedDesign` into the cross-source `ProjectScaffold` contract that
  * the build agent consumes uniformly (rule 22).
  *

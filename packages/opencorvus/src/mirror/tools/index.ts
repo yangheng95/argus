@@ -13,6 +13,9 @@
  *   - webpage_text_diff       reference DOM vs rendered DOM → missing tokens
  *   - webpage_vision_judge    (reference, rendered) → acceptance verdict + ranked diffs
  *
+ * Figma references are materialized by design_analysis through the connected
+ * Figma MCP server. This package does not expose Figma REST mirror tools.
+ *
  * Two skills compose them for the build agent:
  *   - \`src/skill/builtin/webpage-generate.md\`  URL → clone (DOM extract path)
  *   - \`src/skill/builtin/image-generate.md\`    Image → clone (vision-extract path)
@@ -33,6 +36,3 @@ export { WebpageRenderTool } from "./webpage-render"
 export { WebpageEvaluateTool } from "./webpage-evaluate"
 export { WebpageTextDiffTool } from "./webpage-text-diff"
 export { WebpageVisionJudgeTool } from "./webpage-vision-judge"
-export { FigmaExtractTool } from "./figma-extract"
-export { FigmaCompileTool } from "./figma-compile"
-export { FigmaAnalyzeTool } from "./figma-analyze"

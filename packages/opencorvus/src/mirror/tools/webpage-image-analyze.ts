@@ -24,7 +24,7 @@ import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 import { writeGeneratedSourceFiles } from "./generated-source"
 
 export const WebpageImageAnalyzeTool = Tool.define("webpage_image_analyze", {
-  description: `Analyze an ImageAnalysis into a deterministic ProjectScaffold (sections, file contracts, design-token system). Zero LLM — the vision-LLM call already ran in webpage_image_extract; this stage folds its structured output into the same cross-source ProjectScaffold contract that webpage_analyze (URL) and figma_analyze produce.
+  description: `Analyze an ImageAnalysis into a deterministic ProjectScaffold (sections, file contracts, design-token system). Zero LLM — the vision-LLM call already ran in webpage_image_extract; this stage folds its structured output into the same cross-source ProjectScaffold contract that webpage_analyze (URL) produces.
 
 Reads \`<outputDir>/image-analysis.json\` (from webpage_image_extract). Writes the same mirror facts and scaffold artifacts the URL analyze step writes:
   - scaffold.json           full ProjectScaffold
