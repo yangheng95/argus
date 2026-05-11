@@ -66,6 +66,7 @@ export async function buildDeliveryEvidenceManifest(input: {
   metadata?: Record<string, unknown>
   goals?: Array<{
     id: string
+    latest_goal_run_id?: string
     title: string
     priority: "blocking" | "advisory"
     requirement_ids: string[]
@@ -82,6 +83,8 @@ export async function buildDeliveryEvidenceManifest(input: {
     evidence?: string
     family?: string
     label?: string
+    goal_id?: string
+    goal_run_id?: string
   }>
 }): Promise<DeliveryEvidenceManifest> {
   const projectRoot = await discoverPackageRoot(input.changedFiles)
@@ -319,6 +322,8 @@ function buildReviewEvidence(input: {
   specSnapshotID?: string
   goals: Array<{
     priority?: "blocking" | "advisory"
+    id?: string
+    latest_goal_run_id?: string
     depends_on?: string[]
     imports?: string[]
     exports?: string[]
@@ -330,6 +335,8 @@ function buildReviewEvidence(input: {
     evidence?: string
     family?: string
     label?: string
+    goal_id?: string
+    goal_run_id?: string
   }>
 }): DeliveryReviewEvidence[] {
   const required = requiresIntegrityReview(input.goals)

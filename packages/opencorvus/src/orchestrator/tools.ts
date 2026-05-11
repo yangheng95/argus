@@ -121,6 +121,7 @@ function architectContractsFromDecisionLog(taskID: string): Array<{ ir: Contract
 async function runGoalContractAuditCriteria(input: {
   taskID: string
   goal: ReturnType<typeof findGoal>
+  goalRunID?: string
   workDir: string
   task: TaskRow
 }): Promise<ContractAuditCriteriaResult[]> {
@@ -164,16 +165,22 @@ async function runGoalContractAuditCriteria(input: {
       evidence: linked.issues.map((issue) =>
         `${issue.kind}${issue.goalID ? ` goal=${issue.goalID}` : ""}${issue.symbol ? ` symbol=${issue.symbol}` : ""}: ${issue.detail}`,
       ).join("\n"),
+      goal_id: goal.id,
+      goal_run_id: input.goalRunID,
     }))
   }
 
   return contractAuditSpecs.map(({ spec, scorer }) =>
-    runContractAudit({
+    ({
+      ...runContractAudit({
       workDir: input.workDir,
       index: linked.index,
       goal: goalContract,
       spec,
       scorer,
+      }),
+      goal_id: goal.id,
+      goal_run_id: input.goalRunID,
     }),
   )
 }
@@ -3717,8 +3724,10 @@ export function createOrchestratorTools(input: {
         const activeSpecSnapshot = findActiveSpecForTask(taskID)
         const goalInfos = allGoals.map(g => {
           const acceptanceSpecs = (g.acceptance_specs ?? []) as AcceptanceSpec[]
+          const latestGoalRun = findLatestTipGoalRun(g.id)
           return {
             id: g.id,
+            latest_goal_run_id: latestGoalRun?.id,
             title: g.title,
             description: g.objective,
             criteria: renderSpecsAsText(acceptanceSpecs),
@@ -5707,13 +5716,14 @@ export function createOrchestratorTools(input: {
               const contractAuditCriteria = await runGoalContractAuditCriteria({
                 taskID,
                 goal: findGoal(attachedGoalID),
+                goalRunID,
                 workDir: worktreeDir,
                 task,
               })
               if (contractAuditCriteria.length > 0) {
                 await EngineService.upsertTaskCriteria(taskID, contractAuditCriteria)
                 const failedEssential = contractAuditCriteria.filter((criteria) => {
-                  if (criteria.status !== "failed") return false
+                  if (criteria.status === "passed") return false
                   const goalRow = findGoal(attachedGoalID)
                   const specs = (Array.isArray(goalRow?.acceptance_specs) ? goalRow.acceptance_specs : []) as AcceptanceSpec[]
                   return specs.some((spec) =>

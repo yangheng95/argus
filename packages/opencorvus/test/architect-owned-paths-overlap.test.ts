@@ -39,7 +39,7 @@ describe("architectValidationIssues — owned_paths are collaboration responsibi
       { id: "goal_bootstrap", owned_paths: ["src/App.tsx", "src/main.tsx", "package.json"], kind: "bootstrap" },
       { id: "goal_pages", owned_paths: ["src/App.tsx", "src/pages/Home.tsx"] },
     ])
-    const issues = architectValidationIssues(collector)
+    const issues = architectValidationIssues(collector, { workDir: process.cwd() })
     expect(issues.filter((i) => i.startsWith("Owned path"))).toEqual([])
   })
 
@@ -48,7 +48,7 @@ describe("architectValidationIssues — owned_paths are collaboration responsibi
       { id: "goal_a", owned_paths: ["./src/App.tsx"] },
       { id: "goal_b", owned_paths: ["src\\App.tsx"] },
     ])
-    const issues = architectValidationIssues(collector)
+    const issues = architectValidationIssues(collector, { workDir: process.cwd() })
     expect(issues.find((i) => i.startsWith("Owned path"))).toBeUndefined()
   })
 })

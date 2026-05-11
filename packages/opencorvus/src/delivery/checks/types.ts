@@ -63,6 +63,7 @@ export interface GoalInfo {
    *  when writing rejection_details[].goal_id so the orchestrator can route
    *  each rejection back to the correct goal without string-matching. */
   id: string
+  latest_goal_run_id?: string
   /** Short human title — same as engine_goal.title. Shown alongside the id
    *  in the prompt so the agent has a label, not just a random identifier. */
   title: string
