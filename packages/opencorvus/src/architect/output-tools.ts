@@ -141,6 +141,14 @@ export function architectValidationIssues(
   }
 
   for (const g of collector.goals) {
+    if (g.kind === "verification") {
+      const featureSourcePaths = g.owned_paths.filter((ownedPath) => !isVerificationOwnedPath(ownedPath))
+      if (featureSourcePaths.length > 0) {
+        issues.push(
+          `Goal ${g.id}: verification owned_paths may only cover tests, integration, benchmark, or spec evidence paths; move feature source ownership to a feature goal: ${featureSourcePaths.join(", ")}`,
+        )
+      }
+    }
     for (const spec of g.acceptance_specs) {
       if (spec.goal_id !== g.id) {
         issues.push(`Goal ${g.id}: acceptance spec ${spec.id} has mismatched goal_id "${spec.goal_id}"`)
@@ -173,6 +181,11 @@ export function architectValidationIssues(
   }
 
   for (const contract of collector.contracts) {
+    if (contract.ir.kind === "function" && isTypeShapeContractName(contract.ir.name)) {
+      issues.push(
+        `Contract "${contract.ir.name}": props/data shape contracts must be registered as type_contract; function_contract is only for callable APIs.`,
+      )
+    }
     const unknownGoalIDs = contract.goalIDs.filter((goalID) => !knownGoalIDs.has(goalID))
     if (unknownGoalIDs.length > 0) {
       issues.push(`Contract "${contract.ir.name}": references unknown goals ${unknownGoalIDs.join(", ")}`)
@@ -295,6 +308,22 @@ function isEssentialDeliveryJudgeSpec(spec: AcceptanceSpec): boolean {
     spec.severity === "essential" &&
     spec.trigger === "on_delivery" &&
     spec.scorers.some((scorer) => scorer.type === "llm_judge")
+  )
+}
+
+function isTypeShapeContractName(name: string): boolean {
+  return /(Props|State|Config|Options|Payload|Data|Model|DTO)$/.test(name)
+}
+
+function isVerificationOwnedPath(ownedPath: string): boolean {
+  const normalized = ownedPath.replaceAll("\\", "/").replace(/^\.\//, "")
+  return (
+    /(^|\/)(__tests__|test|tests|e2e|integration|benchmark|benchmarks|playwright)(\/|$)/.test(normalized) ||
+    /\.(test|spec|e2e)\.(ts|tsx|js|jsx)$/.test(normalized) ||
+    /^specs\//.test(normalized) ||
+    /^docs\//.test(normalized) ||
+    /^analysis\//.test(normalized) ||
+    /^reports\//.test(normalized)
   )
 }
 

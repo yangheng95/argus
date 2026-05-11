@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { promptToolSwitchesForAgentRun } from "../../src/agent/runner"
+import { promptToolSwitchesForAgentRun, shouldFailUnreadableBuildReference } from "../../src/agent/runner"
 
 describe("agent runner build tool scope", () => {
   test("plain build runs keep terminal tools but hide non-build and reference tools", () => {
@@ -57,5 +57,21 @@ describe("agent runner build tool scope", () => {
     })
 
     expect(switches).toEqual({ submit_verdict: true })
+  })
+
+  test("build visual reference contract is a hard gate when reference bytes are filtered", () => {
+    expect(shouldFailUnreadableBuildReference({
+      kind: "build",
+      userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
+      droppedFileParts: [{ mime: "image/png" }],
+    })).toBe(true)
+  })
+
+  test("non-build filtered images keep the existing visible marker path", () => {
+    expect(shouldFailUnreadableBuildReference({
+      kind: "architect",
+      userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
+      droppedFileParts: [{ mime: "image/png" }],
+    })).toBe(false)
   })
 })

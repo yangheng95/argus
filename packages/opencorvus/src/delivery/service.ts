@@ -77,6 +77,8 @@ export namespace DeliveryService {
       evidence?: string
       family?: string
       label?: string
+      goal_id?: string
+      goal_run_id?: string
     }>
   }): Promise<DeliveryVerdictType> {
     log.info("delivery service verify starting", {

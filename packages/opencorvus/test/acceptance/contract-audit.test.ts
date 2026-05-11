@@ -19,7 +19,7 @@ afterEach(async () => {
 describe("contract_audit acceptance scorer", () => {
   test("literal_union reports an invalid field literal with file and line evidence", async () => {
     const workDir = await tempWorkDir({
-      "src/status.ts": "export const row = { status: \"archived\" }\n",
+      "src/status.ts": "interface Order { status: string }\nexport const row: Order = { status: \"archived\" }\n",
     })
 
     const result = runContractAudit({
@@ -31,15 +31,15 @@ describe("contract_audit acceptance scorer", () => {
     })
 
     expect(result.status).toBe("failed")
-    expect(result.evidence).toContain("src/status.ts:1")
-    expect(result.evidence).toContain("field=status")
+    expect(result.evidence).toContain("src/status.ts:2")
+    expect(result.evidence).toContain("field=Order.status")
     expect(result.evidence).toContain('literal="archived"')
     expect(result.evidence).toContain('expected="new"|"paid"')
   })
 
   test("literal_union passes when observed field literals are inside the declared domain", async () => {
     const workDir = await tempWorkDir({
-      "src/status.ts": "export const row = { status: \"paid\" }\n",
+      "src/status.ts": "interface Order { status: string }\nexport const row: Order = { status: \"paid\" }\n",
     })
 
     const result = runContractAudit({
@@ -58,8 +58,9 @@ describe("contract_audit acceptance scorer", () => {
   test("shorthand property pointing at a literal const is audited", async () => {
     const workDir = await tempWorkDir({
       "src/status.ts": [
+        "interface Order { status: string }",
         "const status = \"paid\"",
-        "export const row = { status }",
+        "export const row: Order = { status }",
         "",
       ].join("\n"),
     })
@@ -79,8 +80,9 @@ describe("contract_audit acceptance scorer", () => {
   test("property assignment initializer identifier pointing at a literal const is audited", async () => {
     const workDir = await tempWorkDir({
       "src/status.ts": [
+        "interface Order { status: string }",
         "const status = \"paid\"",
-        "export const row = { status: status }",
+        "export const row: Order = { status: status }",
         "",
       ].join("\n"),
     })
@@ -100,8 +102,10 @@ describe("contract_audit acceptance scorer", () => {
   test("default parameter literal backs shorthand property audit", async () => {
     const workDir = await tempWorkDir({
       "src/status.ts": [
+        "interface Order { status: string }",
         "function row(status: \"new\" | \"paid\" = \"new\") {",
-        "  return { status }",
+        "  const value: Order = { status }",
+        "  return value",
         "}",
         "export const current = row()",
         "",
@@ -120,7 +124,7 @@ describe("contract_audit acceptance scorer", () => {
     expect(result.evidence).toContain("observed_assignments=1")
   })
 
-  test("no observed assignments passes because absence of evidence is not a violation", async () => {
+  test("bare field-name matches are not audited without a contract owner", async () => {
     const workDir = await tempWorkDir({
       "src/status.ts": "export const row = { label: \"paid\" }\n",
     })
@@ -133,17 +137,92 @@ describe("contract_audit acceptance scorer", () => {
       scorer: auditScorer(),
     })
 
-    expect(result.status).toBe("passed")
-    expect(result.evidence).toContain("observed_assignments=0")
-    expect(result.evidence).toContain("no assignments observed; audit had no opportunity to find violations")
+    expect(result.status).toBe("inconclusive")
+    expect(result.evidence).toContain("no owner-bound assignments observed")
+  })
+
+  test("regression: unrelated menu label does not fail a SuggestionChipProps label contract", async () => {
+    const workDir = await tempWorkDir({
+      "src/menu.ts": "export const menu = { label: \"删除\" }\n",
+    })
+
+    const result = runContractAudit({
+      workDir,
+      index: new Map([["SuggestionChipProps", suggestionChipPropsContract()]]),
+      goal: boundaryGoal(["SuggestionChipProps"]),
+      spec: auditSpec(),
+      scorer: auditScorer(),
+    })
+
+    expect(result.status).toBe("inconclusive")
+    expect(result.evidence).not.toContain("literal=\"删除\"")
+  })
+
+  test("regression: owner-bound SuggestionChipProps label is audited", async () => {
+    const workDir = await tempWorkDir({
+      "src/chip.ts": "interface SuggestionChipProps { label: string }\nexport const chip: SuggestionChipProps = { label: \"删除\" }\n",
+    })
+
+    const result = runContractAudit({
+      workDir,
+      index: new Map([["SuggestionChipProps", suggestionChipPropsContract()]]),
+      goal: boundaryGoal(["SuggestionChipProps"]),
+      spec: auditSpec(),
+      scorer: auditScorer(),
+    })
+
+    expect(result.status).toBe("failed")
+    expect(result.evidence).toContain("field=SuggestionChipProps.label")
+    expect(result.evidence).toContain("literal=\"删除\"")
+  })
+
+  test("regression: satisfies-bound SuggestionChipProps label concatenation is audited", async () => {
+    const workDir = await tempWorkDir({
+      "src/chip.ts": "interface SuggestionChipProps { label: string }\nexport const chip = { label: \"删\" + \"除\" } satisfies SuggestionChipProps\n",
+    })
+
+    const result = runContractAudit({
+      workDir,
+      index: new Map([["SuggestionChipProps", suggestionChipPropsContract()]]),
+      goal: boundaryGoal(["SuggestionChipProps"]),
+      spec: auditSpec(),
+      scorer: auditScorer(),
+    })
+
+    expect(result.status).toBe("failed")
+    expect(result.evidence).toContain("literal=\"删除\"")
+  })
+
+  test("regression: JSX props bind to the component props contract", async () => {
+    const workDir = await tempWorkDir({
+      "src/chip.tsx": [
+        "interface SuggestionChipProps { label: string }",
+        "function SuggestionChip(props: SuggestionChipProps) { return null as any }",
+        "export const view = <SuggestionChip label=\"删除\" />",
+        "",
+      ].join("\n"),
+    })
+
+    const result = runContractAudit({
+      workDir,
+      index: new Map([["SuggestionChipProps", suggestionChipPropsContract()]]),
+      goal: boundaryGoal(["SuggestionChipProps"]),
+      spec: auditSpec(),
+      scorer: auditScorer(),
+    })
+
+    expect(result.status).toBe("failed")
+    expect(result.evidence).toContain("field=SuggestionChipProps.label")
+    expect(result.evidence).toContain("literal=\"删除\"")
   })
 
   test("unresolved identifier flow is inconclusive evidence and does not fail", async () => {
     const workDir = await tempWorkDir({
       "src/status.ts": [
+        "interface Order { status: string }",
         "declare function getStatus(): string",
         "const status = getStatus()",
-        "export const row = { status }",
+        "export const row: Order = { status }",
         "",
       ].join("\n"),
     })
@@ -165,8 +244,9 @@ describe("contract_audit acceptance scorer", () => {
   test("regression: BrushKey ternary plus let rebind catches violation", async () => {
     const workDir = await tempWorkDir({
       "src/hooks.ts": [
+        "interface AcrossItem { valueBrushKey: string }",
         "export function rows(rise: number) {",
-        "  const result: Array<{ valueBrushKey: string }> = []",
+        "  const result: AcrossItem[] = []",
         "  let colorBrushKey: string",
         "  colorBrushKey = rise > 0 ? \"brush-data-rise\" : rise < 0 ? \"brush-data-fall\" : \"brush-data-unchanged\"",
         "  result.push({ valueBrushKey: colorBrushKey })",
@@ -193,9 +273,10 @@ describe("contract_audit acceptance scorer", () => {
   test("regression: let rebind with single literal catches violation", async () => {
     const workDir = await tempWorkDir({
       "src/field.ts": [
+        "interface Payload { field: string }",
         "let x: string",
         "x = \"bad\"",
-        "export const obj = { field: x }",
+        "export const obj: Payload = { field: x }",
         "",
       ].join("\n"),
     })
@@ -215,10 +296,12 @@ describe("contract_audit acceptance scorer", () => {
   test("regression: ternary with all compliant literals passes", async () => {
     const workDir = await tempWorkDir({
       "src/hooks.ts": [
+        "interface AcrossItem { valueBrushKey: string }",
         "export function rows(rise: number) {",
         "  let colorBrushKey: string",
         "  colorBrushKey = rise > 0 ? \"DataRise\" : \"DataFall\"",
-        "  return { valueBrushKey: colorBrushKey }",
+        "  const item: AcrossItem = { valueBrushKey: colorBrushKey }",
+        "  return item",
         "}",
         "",
       ].join("\n"),
@@ -265,8 +348,9 @@ describe("contract_audit acceptance scorer", () => {
   test("regression: cross-function indirection produces inconclusive status", async () => {
     const workDir = await tempWorkDir({
       "src/status.ts": [
+        "interface Order { status: string }",
         "function helper() { return \"archived\" }",
-        "export const row = { status: helper() }",
+        "export const row: Order = { status: helper() }",
         "",
       ].join("\n"),
     })
@@ -282,9 +366,9 @@ describe("contract_audit acceptance scorer", () => {
     expect(result.status).toBe("inconclusive")
     expect(result.evidence).toContain("unable_to_statically_audit")
     expect(result.evidence).toContain("field=status")
-    expect(result.evidence).toContain("src/status.ts:2")
+    expect(result.evidence).toContain("src/status.ts:3")
     expect(result.evidence).toContain("Identifier 'helper'")
-    expect(result.evidence).toContain("cross-function")
+    expect(result.evidence).toContain("cannot be reduced")
     expect(result.evidence).toContain("suggestion:")
   })
 
@@ -309,14 +393,53 @@ describe("contract_audit acceptance scorer", () => {
 
     expect(evidence).toHaveLength(1)
     expect(evidence[0].id).toBe("review:contract_audit")
-    expect(evidence[0].status).toBe("passed")
-    expect(evidence[0].evidence.join("\n")).toContain("inconclusive=")
+    expect(evidence[0].status).toBe("failed")
+    expect(evidence[0].evidence.join("\n")).toContain("inconclusive evidence does not prove required contract compliance")
     expect(evidence[0].evidence.join("\n")).toContain("unable_to_statically_audit")
+  })
+
+  test("regression: delivery ignores superseded contract_audit criteria for older goal runs", () => {
+    const spec = auditSpec()
+    const scorer = auditScorer()
+    const name = `acceptance:${spec.id}:${scorer.name}`
+
+    const evidence = buildContractAuditReviewEvidence({
+      goals: [{
+        id: "goal_consumer",
+        latest_goal_run_id: "goal_run_new",
+        imports: ["Order"],
+        exports: [],
+        acceptance_specs: [spec],
+      }],
+      criteriaResults: [
+        {
+          name,
+          status: "failed",
+          family: "contract_audit",
+          evidence: "stale literal failure",
+          goal_id: "goal_consumer",
+          goal_run_id: "goal_run_old",
+        },
+        {
+          name,
+          status: "passed",
+          family: "contract_audit",
+          evidence: "fresh pass",
+          goal_id: "goal_consumer",
+          goal_run_id: "goal_run_new",
+        },
+      ],
+    })
+
+    expect(evidence).toHaveLength(1)
+    expect(evidence[0].status).toBe("passed")
+    expect(evidence[0].evidence.join("\n")).toContain("passed=1")
+    expect(evidence[0].evidence.join("\n")).not.toContain("stale literal failure")
   })
 
   test("ref resolves to an enum contract and applies the same literal rule", async () => {
     const workDir = await tempWorkDir({
-      "src/status.ts": "const payload = { status: \"archived\" }\n",
+      "src/status.ts": "interface Order { status: string }\nconst payload: Order = { status: \"archived\" }\n",
     })
     const orderWithRef: ContractIR = {
       kind: "type",
@@ -401,6 +524,52 @@ describe("contract_audit acceptance scorer", () => {
     const issues = architectValidationIssues(collector, { workDir: process.cwd() }).join("\n")
 
     expect(issues).toContain("audit-eligible imports require at least one essential on_goal contract_audit")
+  })
+
+  test("architect validation rejects props/data shapes registered as function contracts", () => {
+    const collector = collectorWithExportOnlyBootstrap()
+    collector.contracts.push({
+      ir: {
+        kind: "function",
+        name: "SuggestionChipProps",
+        params: [{
+          name: "label",
+          typeExpr: "string",
+          valueDomain: { kind: "literal_union", values: ["新增", "编辑"] },
+        }],
+        returns: {
+          typeExpr: "void",
+          valueDomain: { kind: "open", reason: "Callable return is intentionally unrestricted output." },
+        },
+      },
+      goalIDs: ["goal_bootstrap"],
+    })
+
+    const issues = architectValidationIssues(collector, { workDir: process.cwd() }).join("\n")
+
+    expect(issues).toContain("Contract \"SuggestionChipProps\": props/data shape contracts must be registered as type_contract")
+  })
+
+  test("architect validation rejects verification goals that own feature source files", () => {
+    const collector = collectorWithExportOnlyBootstrap()
+    collector.goals.push({
+      id: "goal_verify",
+      title: "Verification",
+      objective: "Verify final integration without owning feature implementation files.",
+      acceptance_specs: [],
+      owned_paths: ["src/renderer/shells/fusion/AutoTasksPage.tsx"],
+      depends_on: ["goal_bootstrap"],
+      exports: [],
+      imports: ["Order from goal_bootstrap"],
+      priority: "blocking",
+      kind: "verification",
+      requirement_ids: ["REQ-1"],
+    })
+
+    const issues = architectValidationIssues(collector, { workDir: process.cwd() }).join("\n")
+
+    expect(issues).toContain("Goal goal_verify: verification owned_paths may only cover tests")
+    expect(issues).toContain("src/renderer/shells/fusion/AutoTasksPage.tsx")
   })
 
   test("architect validation does not require contract_audit for export-only bootstrap contracts", () => {
@@ -523,6 +692,18 @@ function payloadContract(): ContractIR {
       name: "field",
       typeExpr: "string",
       valueDomain: { kind: "literal_union", values: ["ok"] },
+    }],
+  }
+}
+
+function suggestionChipPropsContract(): ContractIR {
+  return {
+    kind: "type",
+    name: "SuggestionChipProps",
+    fields: [{
+      name: "label",
+      typeExpr: "string",
+      valueDomain: { kind: "literal_union", values: ["新增", "编辑"] },
     }],
   }
 }

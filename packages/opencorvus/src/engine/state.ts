@@ -312,17 +312,29 @@ export async function upsertTaskCriteria(
     family?: string
     status: "passed" | "failed" | "skipped" | "inconclusive"
     evidence?: string
+    goal_id?: string
+    goal_run_id?: string
   }>,
 ) {
   const task = requireTask(taskID)
   const prev = Array.isArray(task.criteria_results) ? task.criteria_results : []
-  const byName = new Map<string, any>(prev.map((c) => [String((c as any)?.name ?? ""), c]))
+  const byName = new Map<string, any>(prev.map((c) => [criteriaMergeKey(c), c]))
   for (const incoming of checks) {
-    byName.set(incoming.name, { ...byName.get(incoming.name), ...incoming })
+    byName.set(criteriaMergeKey(incoming), { ...byName.get(criteriaMergeKey(incoming)), ...incoming })
   }
   const merged = [...byName.values()].filter((c) => c && typeof c.name === "string" && c.name)
   await updateTask(task, {
     criteria_results: merged,
   }, `criteria upsert: ${checks.map((c) => `${c.name}=${c.status}`).join(", ")}`)
   return merged
+}
+
+function criteriaMergeKey(value: unknown): string {
+  const record = value as Record<string, unknown>
+  const name = String(record?.name ?? "")
+  const goalRunID = typeof record?.goal_run_id === "string" ? record.goal_run_id : undefined
+  if (goalRunID) return `${name}::goal_run=${goalRunID}`
+  const goalID = typeof record?.goal_id === "string" ? record.goal_id : undefined
+  if (goalID) return `${name}::goal=${goalID}`
+  return name
 }

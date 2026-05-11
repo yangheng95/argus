@@ -25,11 +25,14 @@ export interface ContractAuditCriteriaResult {
   family: "contract_audit"
   status: ContractAuditStatus
   evidence: string
+  goal_id?: string
+  goal_run_id?: string
 }
 
 interface Finding {
   file: string
   line: number
+  contractName: string
   fieldName: string
   literal: string
   expectedValues: string[]
@@ -38,9 +41,15 @@ interface Finding {
 interface InconclusiveFinding {
   file: string
   line: number
+  contractName: string
   fieldName: string
   identifierName: string
   reason: string
+}
+
+interface LiteralValue {
+  value: string
+  node: ts.Node
 }
 
 export function contractAuditCriteriaName(spec: AcceptanceSpec, scorer: ContractAuditScorer): string {
@@ -112,52 +121,47 @@ export function runContractAudit(input: {
     }
   }
 
+  const fieldsByContract = groupAuditFieldsByContract(fields)
+  const program = createAuditProgram(files)
+  const checker = program.getTypeChecker()
+  const sourceFiles = new Map(files.map((file) => [path.normalize(file), file]))
   const findings: Finding[] = []
   const inconclusiveFindings = new Map<string, InconclusiveFinding>()
   let observedAssignments = 0
-  for (const file of files) {
-    const sourceText = fs.readFileSync(file, "utf8")
-    const sourceFile = ts.createSourceFile(
-      file,
-      sourceText,
-      scriptTargetForPath(file),
-      true,
-      scriptKindForPath(file),
-    )
-    const relativeFile = path.relative(input.workDir, file).replaceAll("\\", "/")
-    const fieldByName = new Map(fields.map((field) => [field.fieldName, field]))
-    visitStringLiteralAssignments(
-      sourceFile,
-      (fieldName, literal, node) => {
-        const field = fieldByName.get(fieldName)
-        if (!field) return
+  for (const sourceFile of program.getSourceFiles()) {
+    const originalFile = sourceFiles.get(path.normalize(sourceFile.fileName))
+    if (!originalFile) continue
+    const relativeFile = path.relative(input.workDir, originalFile).replaceAll("\\", "/")
+    visitOwnerBoundAssignments(sourceFile, checker, fieldsByContract, {
+      onAssignment(contractName, field, literal, node) {
         observedAssignments++
         if (field.expectedValues.includes(literal)) return
         const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
         findings.push({
           file: relativeFile,
           line: position.line + 1,
-          fieldName,
+          contractName,
+          fieldName: field.fieldName,
           literal,
           expectedValues: field.expectedValues,
         })
       },
-      (fieldName, node, identifierName, reason) => {
-        if (!fieldByName.has(fieldName)) return
+      onInconclusive(contractName, field, node, identifierName, reason) {
         const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
         const finding: InconclusiveFinding = {
           file: relativeFile,
           line: position.line + 1,
-          fieldName,
+          contractName,
+          fieldName: field.fieldName,
           identifierName,
           reason,
         }
         inconclusiveFindings.set(
-          `${finding.file}:${finding.line}:${finding.fieldName}:${finding.identifierName}:${finding.reason}`,
+          `${finding.file}:${finding.line}:${finding.contractName}.${finding.fieldName}:${finding.identifierName}:${finding.reason}`,
           finding,
         )
       },
-    )
+    })
   }
 
   if (findings.length > 0) {
@@ -167,7 +171,7 @@ export function runContractAudit(input: {
       family: "contract_audit",
       status: "failed",
       evidence: findings.map((finding) =>
-        `${finding.file}:${finding.line} field=${finding.fieldName} literal=${JSON.stringify(finding.literal)} expected=${finding.expectedValues.map((value) => JSON.stringify(value)).join("|")}`,
+        `${finding.file}:${finding.line} field=${finding.contractName}.${finding.fieldName} literal=${JSON.stringify(finding.literal)} expected=${finding.expectedValues.map((value) => JSON.stringify(value)).join("|")}`,
       ).join("\n"),
     }
   }
@@ -190,12 +194,12 @@ export function runContractAudit(input: {
       name: contractAuditCriteriaName(input.spec, input.scorer),
       label: `${input.spec.title} / ${input.scorer.name}`,
       family: "contract_audit",
-      status: "passed",
-      evidence: passEvidence({
+      status: "inconclusive",
+      evidence: inconclusiveEvidence({
         goalID: input.goal.id,
         fields,
-        observedAssignments,
-        note: "no assignments observed; audit had no opportunity to find violations",
+        findings: [],
+        note: "no owner-bound assignments observed; audit cannot prove contract compliance",
       }),
     }
   }
@@ -239,6 +243,7 @@ function inconclusiveEvidence(input: {
   goalID: string
   fields: AuditEligibleField[]
   findings: InconclusiveFinding[]
+  note?: string
 }): string {
   const lines = [
     `goal=${input.goalID}`,
@@ -252,6 +257,7 @@ function inconclusiveEvidence(input: {
     "- remove this contract_audit scorer if static audit is not required for this contract boundary",
     "- add an llm_judge scorer alongside this audit for Tier 2 semantic review",
   ]
+  if (input.note) lines.splice(3, 0, input.note)
   return lines.join("\n")
 }
 
@@ -288,188 +294,311 @@ function isSourceFile(file: string): boolean {
   return /\.(ts|tsx|js|jsx)$/.test(file)
 }
 
-function scriptKindForPath(file: string): ts.ScriptKind {
-  if (file.endsWith(".tsx")) return ts.ScriptKind.TSX
-  if (file.endsWith(".jsx")) return ts.ScriptKind.JSX
-  if (file.endsWith(".js")) return ts.ScriptKind.JS
-  return ts.ScriptKind.TS
+function createAuditProgram(files: readonly string[]): ts.Program {
+  return ts.createProgram([...files], {
+    allowJs: true,
+    allowSyntheticDefaultImports: true,
+    checkJs: false,
+    esModuleInterop: true,
+    jsx: ts.JsxEmit.ReactJSX,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    noEmit: true,
+    skipLibCheck: true,
+    target: ts.ScriptTarget.ES2022,
+  })
 }
 
-function scriptTargetForPath(_file: string): ts.ScriptTarget {
-  return ts.ScriptTarget.ES2022
+function groupAuditFieldsByContract(fields: readonly AuditEligibleField[]): Map<string, Map<string, AuditEligibleField>> {
+  const grouped = new Map<string, Map<string, AuditEligibleField>>()
+  for (const field of fields) {
+    const contractFields = grouped.get(field.contractName) ?? new Map<string, AuditEligibleField>()
+    contractFields.set(field.fieldName, field)
+    grouped.set(field.contractName, contractFields)
+  }
+  return grouped
 }
 
-function visitStringLiteralAssignments(
+function visitOwnerBoundAssignments(
   sourceFile: ts.SourceFile,
-  onAssignment: (fieldName: string, literal: string, node: ts.Node) => void,
-  onInconclusive: (fieldName: string, node: ts.Node, identifierName: string, reason: string) => void,
+  checker: ts.TypeChecker,
+  fieldsByContract: Map<string, Map<string, AuditEligibleField>>,
+  sink: {
+    onAssignment: (contractName: string, field: AuditEligibleField, literal: string, node: ts.Node) => void
+    onInconclusive: (
+      contractName: string,
+      field: AuditEligibleField,
+      node: ts.Node,
+      identifierName: string,
+      reason: string,
+    ) => void
+  },
 ) {
-  const bindings = collectStringLiteralBindings(sourceFile)
-  const assignLiteralValues = (fieldName: string, values: LiteralValue[]) => {
-    for (const value of values) onAssignment(fieldName, value.value, value.node)
-  }
-  const traceFailureReason = "was assigned via expression that is not currently traceable (could be ternary across control flow, cross-function return, computed expression, or cross-file value flow)"
   const visit = (node: ts.Node) => {
-    const propertyAssignmentName = ts.isPropertyAssignment(node) ? propertyNameText(node.name, sourceFile) : undefined
-    if (ts.isPropertyAssignment(node) && ts.isStringLiteralLike(node.initializer)) {
-      const name = propertyNameText(node.name, sourceFile)
-      if (name) onAssignment(name, node.initializer.text, node.initializer)
-    } else if (ts.isPropertyAssignment(node) && ts.isConditionalExpression(unwrapExpression(node.initializer))) {
-      const name = propertyAssignmentName
-      const values = flattenConditionalLiterals(node.initializer)
-      if (name && values !== "inconclusive") assignLiteralValues(name, values)
-      else if (name) onInconclusive(name, node.initializer, closestIdentifierName(node.initializer), traceFailureReason)
-    } else if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.initializer)) {
-      const name = propertyAssignmentName
-      if (name) {
-        const values = resolveIdentifierLiteralValues(node.initializer, bindings)
-        if (values === "inconclusive") onInconclusive(name, node.initializer, node.initializer.text, traceFailureReason)
-        else assignLiteralValues(name, values)
+    if (ts.isObjectLiteralExpression(node)) {
+      for (const contractName of contractsForObjectLiteral(node, checker, fieldsByContract)) {
+        auditObjectLiteral(node, contractName, fieldsByContract.get(contractName)!, checker, sink)
       }
-    } else if (ts.isPropertyAssignment(node) && propertyAssignmentName) {
-      onInconclusive(propertyAssignmentName, node.initializer, closestIdentifierName(node.initializer), traceFailureReason)
-    } else if (ts.isShorthandPropertyAssignment(node)) {
-      const name = node.name.text
-      const values = resolveIdentifierLiteralValues(node.name, bindings)
-      if (values === "inconclusive") onInconclusive(name, node.name, node.name.text, traceFailureReason)
-      else assignLiteralValues(name, values)
-    } else if (
-      ts.isJsxAttribute(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      ts.isStringLiteral(node.initializer)
-    ) {
-      onAssignment(node.name.text, node.initializer.text, node.initializer)
-    } else if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isStringLiteralLike(node.right)
-    ) {
-      const name = assignmentLeftName(node.left, sourceFile)
-      if (name) onAssignment(name, node.right.text, node.right)
-    } else if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isConditionalExpression(unwrapExpression(node.right))
-    ) {
-      const name = assignmentLeftName(node.left, sourceFile)
-      const values = flattenConditionalLiterals(node.right)
-      if (name && values !== "inconclusive") assignLiteralValues(name, values)
-      else if (name) onInconclusive(name, node.right, closestIdentifierName(node.right), traceFailureReason)
-    } else if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isIdentifier(node.right)
-    ) {
-      const name = assignmentLeftName(node.left, sourceFile)
-      if (name) {
-        const values = resolveIdentifierLiteralValues(node.right, bindings)
-        if (values === "inconclusive") onInconclusive(name, node.right, node.right.text, traceFailureReason)
-        else assignLiteralValues(name, values)
+    } else if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      for (const contractName of contractsForJsxElement(node, checker, fieldsByContract)) {
+        auditJsxAttributes(node.attributes, contractName, fieldsByContract.get(contractName)!, checker, sink)
       }
-    } else if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken
-    ) {
-      const name = assignmentLeftName(node.left, sourceFile)
-      if (name) onInconclusive(name, node.right, closestIdentifierName(node.right), traceFailureReason)
     }
     ts.forEachChild(node, visit)
   }
   visit(sourceFile)
 }
 
-interface LiteralValue {
-  value: string
-  node: ts.Node
+function contractsForObjectLiteral(
+  node: ts.ObjectLiteralExpression,
+  checker: ts.TypeChecker,
+  fieldsByContract: Map<string, Map<string, AuditEligibleField>>,
+): string[] {
+  const ownerType = checker.getContextualType(node)
+    ?? contextualTypeFromSatisfies(node, checker)
+    ?? checker.getTypeAtLocation(node)
+  return contractNamesForType(ownerType, checker, fieldsByContract)
 }
 
-interface StringLiteralBinding {
-  name: string
-  pos: number
-  literals: LiteralValue[]
-  inconclusiveNodes: ts.Node[]
+function contextualTypeFromSatisfies(node: ts.ObjectLiteralExpression, checker: ts.TypeChecker): ts.Type | undefined {
+  if (!ts.isSatisfiesExpression(node.parent)) return undefined
+  return checker.getTypeFromTypeNode(node.parent.type)
 }
 
-function collectStringLiteralBindings(sourceFile: ts.SourceFile): Map<string, StringLiteralBinding> {
-  const bindings = new Map<string, StringLiteralBinding>()
-  const ensureBinding = (name: string, pos: number) => {
-    const binding = bindings.get(name)
-    if (binding) return binding
-    const next: StringLiteralBinding = { name, pos, literals: [], inconclusiveNodes: [] }
-    bindings.set(name, next)
-    return next
+function contractsForJsxElement(
+  node: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  checker: ts.TypeChecker,
+  fieldsByContract: Map<string, Map<string, AuditEligibleField>>,
+): string[] {
+  const tagType = checker.getTypeAtLocation(node.tagName)
+  const signatures = checker.getSignaturesOfType(tagType, ts.SignatureKind.Call)
+  const propsTypes = signatures
+    .map((signature) => signature.getParameters()[0])
+    .filter((symbol): symbol is ts.Symbol => Boolean(symbol))
+    .map((symbol) => checker.getTypeOfSymbolAtLocation(symbol, node.tagName))
+  return [...new Set(propsTypes.flatMap((type) => contractNamesForType(type, checker, fieldsByContract)))]
+}
+
+function contractNamesForType(
+  type: ts.Type | undefined,
+  checker: ts.TypeChecker,
+  fieldsByContract: Map<string, Map<string, AuditEligibleField>>,
+): string[] {
+  if (!type) return []
+  const names: string[] = []
+  for (const contractName of fieldsByContract.keys()) {
+    if (typeReferencesContract(type, contractName, checker, new Set())) names.push(contractName)
   }
-  const addLiteral = (name: string, pos: number, literal: LiteralValue) => {
-    const binding = ensureBinding(name, pos)
-    binding.literals.push(literal)
-    binding.pos = Math.min(binding.pos, pos)
+  return names
+}
+
+function typeReferencesContract(
+  type: ts.Type,
+  contractName: string,
+  checker: ts.TypeChecker,
+  seen: Set<ts.Type>,
+): boolean {
+  if (seen.has(type)) return false
+  seen.add(type)
+  if (type.aliasSymbol?.getName() === contractName) return true
+  if (type.getSymbol()?.getName() === contractName) return true
+  const apparent = checker.getApparentType(type)
+  if (apparent !== type && typeReferencesContract(apparent, contractName, checker, seen)) return true
+  if (type.isUnionOrIntersection()) {
+    return type.types.some((part) => typeReferencesContract(part, contractName, checker, seen))
   }
-  const addInconclusive = (name: string, pos: number, node: ts.Node) => {
-    const binding = ensureBinding(name, pos)
-    binding.inconclusiveNodes.push(node)
-    binding.pos = Math.min(binding.pos, pos)
-  }
-  const visit = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const pos = node.name.getStart(sourceFile)
-      ensureBinding(node.name.text, pos)
-      if (node.initializer && ts.isStringLiteralLike(node.initializer)) {
-        addLiteral(node.name.text, pos, { value: node.initializer.text, node: node.initializer })
-      } else if (node.initializer) {
-        const values = flattenConditionalLiterals(node.initializer)
-        if (values === "inconclusive") addInconclusive(node.name.text, pos, node.initializer)
-        else for (const literal of values) addLiteral(node.name.text, pos, literal)
-      }
-    } else if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
-      const pos = node.name.getStart(sourceFile)
-      ensureBinding(node.name.text, pos)
-      if (node.initializer && ts.isStringLiteralLike(node.initializer)) {
-        addLiteral(node.name.text, pos, { value: node.initializer.text, node: node.initializer })
-      } else if (node.initializer) {
-        const values = flattenConditionalLiterals(node.initializer)
-        if (values === "inconclusive") addInconclusive(node.name.text, pos, node.initializer)
-        else for (const literal of values) addLiteral(node.name.text, pos, literal)
-      } else {
-        addInconclusive(node.name.text, pos, node.name)
-      }
-    } else if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isIdentifier(node.left)
-    ) {
-      const pos = node.left.getStart(sourceFile)
-      const values = flattenConditionalLiterals(node.right)
-      if (values === "inconclusive") addInconclusive(node.left.text, pos, node.right)
-      else for (const literal of values) addLiteral(node.left.text, pos, literal)
+  const baseTypes = type.isClassOrInterface() ? type.getBaseTypes() ?? [] : []
+  if (baseTypes.some((base) => typeReferencesContract(base, contractName, checker, seen))) return true
+  const rendered = checker.typeToString(type, undefined, ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope)
+  return rendered === contractName || rendered.startsWith(`${contractName}<`)
+}
+
+function auditObjectLiteral(
+  node: ts.ObjectLiteralExpression,
+  contractName: string,
+  fields: Map<string, AuditEligibleField>,
+  checker: ts.TypeChecker,
+  sink: {
+    onAssignment: (contractName: string, field: AuditEligibleField, literal: string, node: ts.Node) => void
+    onInconclusive: (
+      contractName: string,
+      field: AuditEligibleField,
+      node: ts.Node,
+      identifierName: string,
+      reason: string,
+    ) => void
+  },
+) {
+  for (const property of node.properties) {
+    if (ts.isPropertyAssignment(property)) {
+      const fieldName = propertyNameText(property.name)
+      if (!fieldName) continue
+      const field = fields.get(fieldName)
+      if (!field) continue
+      auditExpression(property.initializer, contractName, field, checker, sink)
+    } else if (ts.isShorthandPropertyAssignment(property)) {
+      const field = fields.get(property.name.text)
+      if (!field) continue
+      auditExpression(property.name, contractName, field, checker, sink)
     }
-    ts.forEachChild(node, visit)
   }
-  visit(sourceFile)
-  return bindings
 }
 
-function resolveIdentifierLiteralValues(
-  identifier: ts.Identifier,
-  bindings: Map<string, StringLiteralBinding>,
+function auditJsxAttributes(
+  attributes: ts.JsxAttributes,
+  contractName: string,
+  fields: Map<string, AuditEligibleField>,
+  checker: ts.TypeChecker,
+  sink: {
+    onAssignment: (contractName: string, field: AuditEligibleField, literal: string, node: ts.Node) => void
+    onInconclusive: (
+      contractName: string,
+      field: AuditEligibleField,
+      node: ts.Node,
+      identifierName: string,
+      reason: string,
+    ) => void
+  },
+) {
+  for (const property of attributes.properties) {
+    if (!ts.isJsxAttribute(property)) continue
+    if (!ts.isIdentifier(property.name)) continue
+    const field = fields.get(property.name.text)
+    if (!field || !property.initializer) continue
+    if (ts.isStringLiteral(property.initializer)) {
+      sink.onAssignment(contractName, field, property.initializer.text, property.initializer)
+      continue
+    }
+    if (ts.isJsxExpression(property.initializer) && property.initializer.expression) {
+      auditExpression(property.initializer.expression, contractName, field, checker, sink)
+    }
+  }
+}
+
+function auditExpression(
+  expression: ts.Expression,
+  contractName: string,
+  field: AuditEligibleField,
+  checker: ts.TypeChecker,
+  sink: {
+    onAssignment: (contractName: string, field: AuditEligibleField, literal: string, node: ts.Node) => void
+    onInconclusive: (
+      contractName: string,
+      field: AuditEligibleField,
+      node: ts.Node,
+      identifierName: string,
+      reason: string,
+    ) => void
+  },
+) {
+  const values = resolveExpressionStrings(expression, checker, new Set())
+  if (values === "inconclusive") {
+    sink.onInconclusive(
+      contractName,
+      field,
+      expression,
+      closestIdentifierName(expression),
+      "cannot be reduced to deterministic string literal values after owner binding",
+    )
+    return
+  }
+  for (const value of values) sink.onAssignment(contractName, field, value.value, value.node)
+}
+
+function resolveExpressionStrings(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+  resolving: Set<ts.Symbol>,
 ): LiteralValue[] | "inconclusive" {
-  const position = identifier.getStart()
-  const binding = bindings.get(identifier.text)
-  if (!binding || binding.pos >= position) return "inconclusive"
-  if (binding.inconclusiveNodes.some((node) => node.getStart() < position)) return "inconclusive"
-  const values = binding.literals.filter((literal) => literal.node.getStart() < position)
-  if (values.length === 0) return "inconclusive"
-  return values
+  const unwrapped = unwrapExpression(expression)
+  if (ts.isStringLiteralLike(unwrapped)) return [{ value: unwrapped.text, node: unwrapped }]
+  if (ts.isConditionalExpression(unwrapped)) {
+    const whenTrue = resolveExpressionStrings(unwrapped.whenTrue, checker, resolving)
+    const whenFalse = resolveExpressionStrings(unwrapped.whenFalse, checker, resolving)
+    if (whenTrue === "inconclusive" || whenFalse === "inconclusive") return "inconclusive"
+    return [...whenTrue, ...whenFalse]
+  }
+  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const left = resolveExpressionStrings(unwrapped.left, checker, resolving)
+    const right = resolveExpressionStrings(unwrapped.right, checker, resolving)
+    if (left === "inconclusive" || right === "inconclusive") return "inconclusive"
+    return left.flatMap((leftValue) =>
+      right.map((rightValue) => ({
+        value: `${leftValue.value}${rightValue.value}`,
+        node: unwrapped,
+      })),
+    )
+  }
+  if (ts.isIdentifier(unwrapped)) return resolveIdentifierStrings(unwrapped, checker, resolving)
+  return "inconclusive"
 }
 
-function flattenConditionalLiterals(expr: ts.Expression): LiteralValue[] | "inconclusive" {
-  const unwrapped = unwrapExpression(expr)
-  if (ts.isStringLiteralLike(unwrapped)) return [{ value: unwrapped.text, node: unwrapped }]
-  if (!ts.isConditionalExpression(unwrapped)) return "inconclusive"
-  const whenTrue = flattenConditionalLiterals(unwrapped.whenTrue)
-  const whenFalse = flattenConditionalLiterals(unwrapped.whenFalse)
-  if (whenTrue === "inconclusive" || whenFalse === "inconclusive") return "inconclusive"
-  return [...whenTrue, ...whenFalse]
+function resolveIdentifierStrings(
+  identifier: ts.Identifier,
+  checker: ts.TypeChecker,
+  resolving: Set<ts.Symbol>,
+): LiteralValue[] | "inconclusive" {
+  const symbol = ts.isShorthandPropertyAssignment(identifier.parent)
+    ? checker.getShorthandAssignmentValueSymbol(identifier.parent)
+    : checker.getSymbolAtLocation(identifier)
+  if (!symbol || resolving.has(symbol)) return "inconclusive"
+  resolving.add(symbol)
+  for (const declaration of symbol.getDeclarations() ?? []) {
+    if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+      if (!isReadonlyBinding(declaration)) continue
+      if (declaration.name.getStart() >= identifier.getStart()) continue
+      const values = resolveExpressionStrings(declaration.initializer, checker, resolving)
+      resolving.delete(symbol)
+      return values
+    }
+    if (ts.isParameter(declaration) && declaration.initializer) {
+      if (declaration.name.getStart() >= identifier.getStart()) continue
+      const values = resolveExpressionStrings(declaration.initializer, checker, resolving)
+      resolving.delete(symbol)
+      return values
+    }
+  }
+  const assigned = resolveSinglePriorAssignment(symbol, identifier, checker, resolving)
+  if (assigned) {
+    resolving.delete(symbol)
+    return assigned
+  }
+  resolving.delete(symbol)
+  return "inconclusive"
+}
+
+function resolveSinglePriorAssignment(
+  symbol: ts.Symbol,
+  identifier: ts.Identifier,
+  checker: ts.TypeChecker,
+  resolving: Set<ts.Symbol>,
+): LiteralValue[] | "inconclusive" | undefined {
+  const sourceFile = identifier.getSourceFile()
+  const usePosition = identifier.getStart(sourceFile)
+  const assignments: ts.Expression[] = []
+  const visit = (node: ts.Node) => {
+    if (node.getStart(sourceFile) >= usePosition) return
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left) &&
+      checker.getSymbolAtLocation(node.left) === symbol
+    ) {
+      assignments.push(node.right)
+      return
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  if (assignments.length === 0) return undefined
+  if (assignments.length > 1) return "inconclusive"
+  return resolveExpressionStrings(assignments[0]!, checker, resolving)
+}
+
+function isReadonlyBinding(declaration: ts.VariableDeclaration): boolean {
+  const list = declaration.parent
+  if (!ts.isVariableDeclarationList(list)) return false
+  return (ts.getCombinedNodeFlags(list) & ts.NodeFlags.Const) !== 0
 }
 
 function unwrapExpression(expr: ts.Expression): ts.Expression {
@@ -503,17 +632,8 @@ function closestIdentifierName(node: ts.Node): string {
   return found ?? "<expression>"
 }
 
-function propertyNameText(name: ts.PropertyName, sourceFile: ts.SourceFile): string | undefined {
+function propertyNameText(name: ts.PropertyName): string | undefined {
   if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text
   if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)) return name.expression.text
-  return undefined
-}
-
-function assignmentLeftName(node: ts.Expression, sourceFile: ts.SourceFile): string | undefined {
-  if (ts.isPropertyAccessExpression(node)) return node.name.text
-  if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression)) {
-    return node.argumentExpression.text
-  }
-  if (ts.isIdentifier(node)) return node.text
   return undefined
 }
