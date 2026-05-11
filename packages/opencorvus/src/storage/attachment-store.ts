@@ -2,6 +2,8 @@ import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Project } from "@/project/project"
+import { Database } from "@/storage/db"
+import { PartTable } from "@/session/session.sql"
 import { Log } from "@/util/log"
 
 // Map MIME types to the canonical file extension used when we lay attachments
@@ -38,6 +40,32 @@ function extensionFor(mime: string, filename?: string): string {
   }
   const key = (mime || "").toLowerCase()
   return MIME_EXT[key] ?? "bin"
+}
+
+// Reverse of MIME_EXT — built once at module load so writeFromPath can infer
+// MIME from a tool-produced PNG path without callers spelling out the MIME
+// string at every call site. Unknown extensions throw at write time (rule 1:
+// no silent application/octet-stream fallback for content the LLM is meant
+// to look at).
+const EXT_TO_MIME: Record<string, string> = (() => {
+  const out: Record<string, string> = {}
+  for (const [mime, ext] of Object.entries(MIME_EXT)) {
+    // First-write wins so canonical jpg → image/jpeg (not the duplicate
+    // jpg-only entry, if one were added later).
+    if (!(ext in out)) out[ext] = mime
+  }
+  return out
+})()
+
+function mimeFromPath(absPath: string): string {
+  const ext = path.extname(absPath).replace(/^\./, "").toLowerCase()
+  const mime = EXT_TO_MIME[ext]
+  if (!mime) {
+    throw new Error(
+      `AttachmentStore.writeFromPath: unsupported extension '.${ext}' at ${absPath} — pass an explicit mime`,
+    )
+  }
+  return mime
 }
 
 function storageDir(projectDir: string): string {
@@ -99,6 +127,25 @@ export namespace AttachmentStore {
       size: data.byteLength,
       filename,
     }
+  }
+
+  /**
+   * Convenience: read a file from absolute path and persist into the
+   * content-addressed store. Single source for tool producers (delivery
+   * screenshot/verify, future MCP image migration) so callers never roll
+   * their own readFile + base64 + data-URL pipeline (which was the OOM
+   * driver — see specs/delivery-attachment-store-single-source-2026-05-11.md).
+   */
+  export async function writeFromPath(
+    projectID: string,
+    absPath: string,
+    mime?: string,
+    filename?: string,
+  ): Promise<Reference> {
+    const bytes = await fs.readFile(absPath)
+    const resolvedMime = mime ?? mimeFromPath(absPath)
+    const resolvedFilename = filename ?? path.basename(absPath)
+    return await write(projectID, bytes, resolvedMime, resolvedFilename)
   }
 
   /** Resolve a stored filename back to its absolute path for the given project. */
@@ -490,5 +537,140 @@ export namespace AttachmentStore {
     const name = rest.slice(slash + 1)
     if (!projectID || !name || name.includes("/") || name.includes("\\")) return undefined
     return { projectID, name }
+  }
+
+  // ── Garbage collection ────────────────────────────────────────────────
+  //
+  // AttachmentStore.write is content-addressed and write-only: identical
+  // payloads dedupe to the same `<sha>.<ext>` file. Before the GC pass
+  // added below, nothing ever deleted those files — every removed part /
+  // session / task left its referenced bytes behind on disk. The first
+  // OOM forensic pass (specs/delivery-attachment-store-single-source-2026-05-11.md)
+  // found that delivery's screenshot tools were bloating `part.data` with
+  // inline base64 instead of using the store at all. As the migration
+  // moves them onto the store, the on-disk directory becomes the single
+  // source — and that source needs reaping.
+  //
+  // Strategy: on engine boot (wired in `Instance.provide` bootstrap),
+  // collect every `<sha>` referenced by any persisted `part.data`, then
+  // delete on-disk files whose sha is not in that set. Skip files newer
+  // than GC_MIN_AGE_MS so a sweep racing a fresh write does not delete a
+  // file before the part row that references it lands.
+
+  /** Files younger than this are skipped by sweep() so a write racing the
+   *  sweep is not deleted before its part row lands. */
+  const GC_MIN_AGE_MS = 60_000
+
+  const REFERENCE_RE = /\/attachment\/[^/"\s]+\/([0-9a-f]{64})\.[0-9a-z]+/gi
+
+  /**
+   * Enumerate every `<sha>.<ext>` currently on disk under the project's
+   * `.opencorvus/attachments/` directory. Returns `[]` when the directory
+   * does not exist (no attachments have ever been written for this project).
+   */
+  export async function listOnDisk(projectID: string): Promise<{
+    sha: string
+    name: string
+    abs: string
+    size: number
+    mtimeMs: number
+  }[]> {
+    const project = Project.get(projectID)
+    if (!project) throw new Error(`AttachmentStore.listOnDisk: unknown project ${projectID}`)
+    const dir = storageDir(project.worktree)
+    const entries = await fs.readdir(dir).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return [] as string[]
+      throw err
+    })
+    const out: { sha: string; name: string; abs: string; size: number; mtimeMs: number }[] = []
+    for (const name of entries) {
+      const m = name.match(/^([0-9a-f]{64})\./i)
+      if (!m) continue
+      const abs = path.join(dir, name)
+      const stat = await fs.stat(abs).catch(() => null)
+      if (!stat || !stat.isFile()) continue
+      out.push({ sha: m[1].toLowerCase(), name, abs, size: stat.size, mtimeMs: stat.mtimeMs })
+    }
+    return out
+  }
+
+  /**
+   * Scan every persisted `part.data` for canonical attachment URLs and
+   * return the deduplicated set of referenced shas, grouped by project.
+   * Used by sweep() to decide which on-disk files are still live.
+   *
+   * The lookup runs over `data` as a serialized JSON string — no need to
+   * parse each row. The reference regex requires the canonical
+   * `/attachment/<projectID>/<sha>.<ext>` shape that `Reference.url`
+   * always produces.
+   */
+  export function collectReferencedShas(): Map<string, Set<string>> {
+    const rows = Database.use((db) =>
+      db.select({ data: PartTable.data }).from(PartTable).all(),
+    )
+    const byProject = new Map<string, Set<string>>()
+    for (const row of rows) {
+      const json = JSON.stringify(row.data)
+      for (const match of json.matchAll(REFERENCE_RE)) {
+        const fullUrl = match[0]
+        const located = nameFromUrl(fullUrl)
+        if (!located) continue
+        const set = byProject.get(located.projectID) ?? new Set<string>()
+        set.add(match[1].toLowerCase())
+        byProject.set(located.projectID, set)
+      }
+    }
+    return byProject
+  }
+
+  /**
+   * Delete on-disk files in the project's attachment directory whose sha
+   * is not referenced by any persisted part. Files younger than
+   * `GC_MIN_AGE_MS` are skipped so a sweep racing a concurrent write does
+   * not delete a file before the part row that references it lands.
+   *
+   * Returns the count and total byte size of deleted orphans for logging.
+   * Idempotent: running twice in a row deletes 0 the second time.
+   */
+  export async function sweep(projectID: string): Promise<{
+    deleted: number
+    bytesFreed: number
+    skippedYoung: number
+    kept: number
+  }> {
+    const files = await listOnDisk(projectID)
+    if (files.length === 0) return { deleted: 0, bytesFreed: 0, skippedYoung: 0, kept: 0 }
+    const referenced = collectReferencedShas().get(projectID) ?? new Set<string>()
+    const now = Date.now()
+    let deleted = 0
+    let bytesFreed = 0
+    let skippedYoung = 0
+    let kept = 0
+    for (const f of files) {
+      if (referenced.has(f.sha)) {
+        kept++
+        continue
+      }
+      if (now - f.mtimeMs < GC_MIN_AGE_MS) {
+        skippedYoung++
+        continue
+      }
+      await fs.unlink(f.abs).catch((err: NodeJS.ErrnoException) => {
+        // EBUSY / EPERM on Windows when another process holds the handle —
+        // skip this round, next sweep will retry.
+        if (err.code === "EBUSY" || err.code === "EPERM" || err.code === "ENOENT") return
+        throw err
+      })
+      deleted++
+      bytesFreed += f.size
+    }
+    log.info("AttachmentStore.sweep", {
+      projectID,
+      deleted,
+      bytesFreed,
+      skippedYoung,
+      kept,
+    })
+    return { deleted, bytesFreed, skippedYoung, kept }
   }
 }

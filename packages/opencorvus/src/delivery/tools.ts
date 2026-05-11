@@ -194,6 +194,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         })
 
         return await buildMultimodalToolResult({
+          projectID: projectId,
           text: JSON.stringify({
             rendered_output: renderedMatch ? describeVisualArtifact(renderedMatch) : null,
             references: referenceMatches.map(describeVisualArtifact),

@@ -1,68 +1,62 @@
 /**
- * P0-0 · Delivery tool 多模态返回契约（stub，先于 Stream A 合入）。
+ * Delivery tool 多模态返回契约（single source）。
  *
- * 背景（spec delivery-quality-gate.md §P0-0）：现状 `screenshot` /
- * `verify_page_integrity` 只返回 `path` + 数字，LLM 需显式再调 read_file 才能
- * 把图拉进下一轮 multimodal context —— 事故证明从未触发，LLM 26 轮都"只看数字
- * 不看图"。Stream A 的核心动作就是把这两个 tool 的 execute 返回值改为携带
- * PNG（作为 attachment），本文件提供 A 与 C 共用的类型 + builder，避免双方各
- * 写一份产生双源（rule 22）。
+ * 背景（specs/delivery-attachment-store-single-source-2026-05-11.md）：
+ *   原契约由 tool 直接返回 `data:<mime>;base64,...` 形式的 url，把整张 PNG
+ *   的 base64 拼进 part.state.attachments[].url。一次 compare_visual_artifacts
+ *   产出 600 KB 单 part，单 session 同一张图被复制 40 次（DB 实测），叠加
+ *   Session.updatePart 写整列 + prompt 装配阶段 JSON.stringify → in-flight
+ *   单 turn 内存抖几百 MB。
  *
- * 和 session/message.ts::toModelOutput 的既有约定对齐：
- *    tool.execute() 返回 { text, attachments: [{ type: "file", mime, url: "data:..;base64,..", filename? }] }
- *    session loop 会把 attachments 拆进 UIMessage content 作为 media parts。
- * 参考实现：src/design-analyst/url-screenshot-tool.ts。
+ *   新契约（rule 8 单源）：tool execute 写盘（temp 或者已存在的 disk path），
+ *   然后通过 `AttachmentStore.writeFromPath` 把字节交给内容寻址存储，返回的
+ *   url 是 `/attachment/<projectID>/<sha>.<ext>` ref。后续轮次 toModelOutput
+ *   识别这种 ref 并按需读盘 + base64 inline 给 AI SDK。base64 字节再也不
+ *   落进 part.data。
  *
- * 契约要点（Stream A 必须遵守）：
- *  - 失败路径不得降级为"只返回文本描述"（rule 1）——要么返回 multimodal 含图，
- *    要么抛错让 submit_verdict 拒收；禁止静默返回不含图的 text-only 结构。
- *  - data URL 必须是当轮 puppeteer 新渲染的 PNG，禁止复用 prior-run cache。
+ * 失败路径（rule 1）：写 AttachmentStore 失败必须抛错，禁止静默 fallback
+ * 成"只返回文本"或"返回 data URL"。
  */
-import fs from "node:fs/promises"
 import path from "node:path"
+import { AttachmentStore } from "@/storage/attachment-store"
 
-/** 单个附件；与 session/message.ts::toModelOutput 的 attachment schema 对齐。 */
+/** 单个附件。url 是 canonical `/attachment/<projectID>/<sha>.<ext>` ref —
+ *  与 task attachments 共用同一种字符串形态（rule 8 单源），任何下游
+ *  消费者都通过 `AttachmentStore.nameFromUrl` 解析；sha 也可直接从 url
+ *  里取出来（避免把字段塞进 FilePart schema 又被 strip 掉）。 */
 export interface DeliveryToolAttachment {
   type: "file"
   mime: string
-  /** 必须是 data:<mime>;base64,<payload>，file:// 与 http 路径均不被 toModelOutput 采纳。 */
+  /** Canonical `/attachment/<projectID>/<sha>.<ext>` ref. Never `data:` —
+   *  the Session.updatePart guard rejects inline base64 at the write
+   *  boundary. */
   url: string
   filename?: string
 }
 
 /**
  * Delivery 多模态 tool 返回值。
- * text 字段承载结构化 JSON / 摘要；attachments 承载 PNG。
- * 任一工具调用要把"视觉证据"送进 LLM 的**当轮**输入，就必须用这个形状返回。
+ * text 字段承载结构化 JSON / 摘要；attachments 承载 PNG ref。
  */
 export interface DeliveryMultimodalToolOutput {
   text: string
   attachments: DeliveryToolAttachment[]
 }
 
-/** PNG 文件转 data URL 的统一入口；集中在此便于测试桩替换。 */
-export async function imagePathToDataUrl(absPath: string, mime: string = "image/png"): Promise<string> {
-  const buf = await fs.readFile(absPath)
-  return `data:${mime};base64,${buf.toString("base64")}`
-}
-
-/** 默认根据后缀名推断 mime；不认识的后缀一律抛错，禁猜（rule 1）。 */
-function mimeFromExt(absPath: string): string {
-  const ext = path.extname(absPath).toLowerCase()
-  if (ext === ".png") return "image/png"
-  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg"
-  if (ext === ".webp") return "image/webp"
-  throw new Error(`tool-result: unsupported image extension ${ext} (path=${absPath})`)
-}
-
 /**
- * Builder —— 所有 delivery tool 都应走这个入口产生返回值，保证 data URL 与
- * filename 的拼装不在每个 tool 里各写一遍（rule 24：抽象出共用模式）。
+ * Builder —— 所有 delivery tool 都应走这个入口产生返回值，保证图像 ref
+ * 的拼装不在每个 tool 里各写一遍（rule 24：抽象出共用模式）。
  *
- * `text` 应当是结构化 JSON 字符串（现 screenshot/verify_page_integrity 已经是
- * 这个形状），保证 LLM 继续按字段读数值指标；images 则直接走 multimodal 通道。
+ * - 每张图通过 `AttachmentStore.writeFromPath` 写入内容寻址存储。
+ *   同一字节序列写入多次自动去重（同一 sha 命名的 file 已存在则 skip）。
+ * - 返回值里的 url 是 `/attachment/<projectID>/<sha>.<ext>`，不是 data URL。
+ *   后续 toModelOutput 在装配 ModelMessage 时按 ref 读盘 + base64 inline。
+ *
+ * MIME 推断：若调用方未指定，则从 path 扩展名推断（见 AttachmentStore.writeFromPath）。
+ * 不认识的扩展名一律抛错（rule 1）。
  */
 export async function buildMultimodalToolResult(input: {
+  projectID: string
   text: string
   images: Array<{
     path: string
@@ -72,13 +66,13 @@ export async function buildMultimodalToolResult(input: {
 }): Promise<DeliveryMultimodalToolOutput> {
   const attachments: DeliveryToolAttachment[] = []
   for (const img of input.images) {
-    const mime = img.mime ?? mimeFromExt(img.path)
-    const dataUrl = await imagePathToDataUrl(img.path, mime)
+    const filename = img.filename ?? path.basename(img.path)
+    const ref = await AttachmentStore.writeFromPath(input.projectID, img.path, img.mime, filename)
     attachments.push({
       type: "file",
-      mime,
-      url: dataUrl,
-      filename: img.filename ?? path.basename(img.path),
+      mime: ref.mime,
+      url: ref.url,
+      filename,
     })
   }
   return { text: input.text, attachments }

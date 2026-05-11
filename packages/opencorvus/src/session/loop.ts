@@ -9,6 +9,7 @@ import { Provider } from "../provider/provider"
 import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema, type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
 import { Instance } from "../project/instance"
+import { AttachmentStore } from "@/storage/attachment-store"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
 import { SystemPrompt } from "./system"
@@ -1876,14 +1877,29 @@ export namespace SessionLoop {
           const textParts: string[] = []
           const attachments: Omit<Message.FilePart, "id" | "sessionID" | "messageID">[] = []
 
+          // MCP tool image / resource content used to inline as
+          // `data:<mime>;base64,...` directly into `attachment.url`,
+          // which (a) blew up `part.data` (see DB forensics in specs/
+          // delivery-attachment-store-single-source-2026-05-11.md) and
+          // (b) now trips Session.updatePart's inline-base64 guard.
+          // Funnel both branches through AttachmentStore so the
+          // persisted url is the canonical `/attachment/<id>/<sha>.<ext>`
+          // ref; bytes only re-inline transiently in toModelOutput when
+          // the AI SDK actually feeds the tool result back to the model.
+          const mcpProjectID = Instance.project.id
           for (const contentItem of result.content) {
             if (contentItem.type === "text") {
               textParts.push(contentItem.text)
             } else if (contentItem.type === "image") {
+              const ref = await AttachmentStore.write(
+                mcpProjectID,
+                Buffer.from(contentItem.data, "base64"),
+                contentItem.mimeType,
+              )
               attachments.push({
                 type: "file",
-                mime: contentItem.mimeType,
-                url: `data:${contentItem.mimeType};base64,${contentItem.data}`,
+                mime: ref.mime,
+                url: ref.url,
               })
             } else if (contentItem.type === "resource") {
               const { resource } = contentItem
@@ -1891,10 +1907,17 @@ export namespace SessionLoop {
                 textParts.push(resource.text)
               }
               if (resource.blob) {
+                const mime = resource.mimeType ?? "application/octet-stream"
+                const ref = await AttachmentStore.write(
+                  mcpProjectID,
+                  Buffer.from(resource.blob, "base64"),
+                  mime,
+                  resource.uri,
+                )
                 attachments.push({
                   type: "file",
-                  mime: resource.mimeType ?? "application/octet-stream",
-                  url: `data:${resource.mimeType ?? "application/octet-stream"};base64,${resource.blob}`,
+                  mime: ref.mime,
+                  url: ref.url,
                   filename: resource.uri,
                 })
               }

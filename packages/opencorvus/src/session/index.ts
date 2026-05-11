@@ -774,8 +774,46 @@ export namespace Session {
 
   const TOOL_STATUS_RANK: Record<string, number> = { pending: 0, running: 1, completed: 2, error: 2 }
 
+  /** Detector for inline base64 image / pdf / audio / video data URLs inside
+   *  a part's serialized data. Single source for the write-boundary guard
+   *  (see specs/delivery-attachment-store-single-source-2026-05-11.md):
+   *
+   *  - This is the inverse pattern of `AttachmentStore` refs
+   *    (`/attachment/<projectID>/<sha>.<ext>`). Every inline-base64 producer
+   *    that survived the migration must route through `AttachmentStore.write`
+   *    instead of stuffing data URLs into `part.state.attachments[].url`
+   *    (or `part.url`, for user file parts).
+   *
+   *  - rule 6.1 second branch: this is a data-integrity gate, not an
+   *    LLM-decision shortcut. The producer code path is the bug; this
+   *    guard surfaces the regression at the write boundary so it cannot
+   *    silently bloat the DB. */
+  const INLINE_BASE64_RE = /"data:[^";,]+;base64,/
+  export class InlineBase64InPartError extends Error {
+    constructor(public readonly partID: string, snippet: string) {
+      super(
+        `Session.updatePart: refusing inline base64 data URL in part ${partID}. ` +
+          `Route the producer through AttachmentStore.write so part.data stores a ` +
+          `/attachment/<sha>.<ext> ref instead of MB of inline bytes. ` +
+          `(specs/delivery-attachment-store-single-source-2026-05-11.md). ` +
+          `Offending snippet: ${snippet}`,
+      )
+      this.name = "InlineBase64InPartError"
+    }
+  }
+
   export const updatePart = fn(UpdatePartInput, async (part) => {
     const { id, messageID, sessionID, ...data } = part
+    // Cheap regex on the serialized string is O(N) over the part payload,
+    // dominated by the JSON.stringify cost the insert below would pay
+    // anyway. Triggers before the row touches SQLite — keeps the DB clean.
+    const serialized = JSON.stringify(data)
+    const match = INLINE_BASE64_RE.exec(serialized)
+    if (match) {
+      const start = Math.max(0, match.index - 40)
+      const snippet = serialized.slice(start, match.index + 80).replace(/\s+/g, " ")
+      throw new InlineBase64InPartError(id, snippet)
+    }
     const time = Date.now()
     Database.use((db) => {
       // Tool status monotonicity: never regress a tool part's status
