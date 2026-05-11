@@ -766,6 +766,27 @@
   line-height: 1.4;
 }
 
+/* Branch pill — folded-state worktree branch indicator. Long branch
+   names (e.g. `goal-qc8zgjhy`) are ellipsis-truncated so they don't
+   crowd revision/advisory; hover title exposes the full workspace dir. */
+.gwg-branch-pill {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: calc(10em * var(--ui-scale));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: var(--ui-letter-spacing-loose);
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  color: var(--text-soft);
+  line-height: 1.4;
+}
+
 /* GWG header action buttons (edit / delete) — hidden until the
    parent card is hovered or focus-within. Tone shifts on hover via
    surface-inset wash, and the delete variant tints to var(--bad). */
@@ -871,6 +892,57 @@
   font-size: var(--ui-font-body);
   color: var(--text);
   line-height: 1.6;
+}
+
+/* Worktree row — per-goal persistent workspace pointer. Same chrome
+   as the objective/done-definition cards; entire row is a button that
+   opens the directory in the host's file manager. Hidden when the
+   relative path can't be resolved (rule 7: no shortPath fallback). */
+.gwg-worktree {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  width: 100%;
+  margin: 0;
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  border: calc(1px * var(--ui-scale)) solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: var(--oc-radius-large);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gwg-worktree:hover,
+.gwg-worktree:focus-visible {
+  background: color-mix(in srgb, var(--surface-inset) 90%, transparent);
+}
+
+.gwg-worktree-label {
+  flex-shrink: 0;
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: var(--ui-letter-spacing-loose);
+  color: var(--text-soft);
+}
+
+.gwg-worktree-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-tiny);
+}
+
+.gwg-worktree-branch {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--ui-font-tiny);
+  font-weight: var(--ui-font-weight-strong);
+  color: var(--text-soft);
 }
 
 /* Markdown reset for goal-card prose blocks: nuke the default

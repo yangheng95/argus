@@ -918,6 +918,11 @@ function buildWorkflowFields(
     // the tip when the goal has never produced a delivery (initial run
     // still in flight).
     const deliveredRun = findLatestDeliveredGoalRun(goal.id)
+    // Single projection per goal — same query was previously called twice
+    // (workspaceDir + workspaceBranch). Caching it here avoids duplicate
+    // work and makes the rule 13 audit obvious: this is one artifact-tip
+    // read, not two priority sorts (codex review 2026-05-11 §6.5).
+    const latestWorkspace = findGoalLatestWorkspace(goal.id)
     return {
       goalID: goal.id,
       goalRunID: deliveredRun?.id ?? tipRun?.id,
@@ -931,12 +936,13 @@ function buildWorkflowFields(
       goalStatus: goalStatusByID(goal.id),
       orderIndex: goal.order_index,
       // Phase B (2026-05-05): persistent worktree pointer comes from the
-      // latest goal_run_attempt artifact, not engine_goal columns. The
-      // per-attempt resolution downstream (lines ~1148+) already reads from
-      // the artifact stream; this top-level slot now mirrors the same
-      // source so both paths show the same value.
-      workspaceDir: findGoalLatestWorkspace(goal.id).directory ?? undefined,
-      workspaceBranch: findGoalLatestWorkspace(goal.id).branch ?? undefined,
+      // latest goal_run_attempt artifact (append-only tip + supersede
+      // chain), not from engine_goal columns and not from a step-status
+      // priority sort. Surface here is the single source the overlay's
+      // GoalWorkflowGroup binds to; step payload no longer mirrors it
+      // (rule 8). See specs/new-arch/2026-05-11-goal-worktree-display.md.
+      workspaceDir: latestWorkspace.directory ?? undefined,
+      workspaceBranch: latestWorkspace.branch ?? undefined,
       // Phase E (2026-05-05): retry_count derived from artifact, not from a
       // goal column. Same source as orchestrator/architect V labels.
       retryCount: getGoalRetryCount(goal.id),
@@ -1198,18 +1204,22 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     : undefined
 
   let buildSessionID: string | undefined
-  let workspaceDir: string | undefined
   let changedFiles: string[] | undefined
   let changedFileDiffs: GoalStepPayload["changedFileDiffs"]
   let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
-  // buildSessionID / workspaceDir describe the live attempt — read from the
-  // tip. changedFiles / changedFileDiffs / diffStats describe what's been
-  // merged into master — read from the most-recently-delivered run, which
-  // can differ from the tip after a delivery-rejection reset (see
+  // buildSessionID describes the live attempt — read from the tip.
+  // changedFiles / changedFileDiffs / diffStats describe what's been merged
+  // into master — read from the most-recently-delivered run, which can
+  // differ from the tip after a delivery-rejection reset (see
   // findLatestDeliveredGoalRun for the full rationale).
+  //
+  // workspaceDir used to be projected here too, but it duplicated the
+  // goal-level workspace pointer (TaskBoardGoalWorkflow.workspaceDir,
+  // populated by findGoalLatestWorkspace upstream). The overlay now reads
+  // worktree at the goal level on GoalWorkflowGroup; step payload no
+  // longer carries it (rule 8 — single source).
   if (goalRun) {
     buildSessionID = goalRun.session_id ?? undefined
-    workspaceDir = goalRun.workspace_dir ?? undefined
   }
   const deliveredRun = findLatestDeliveredGoalRun(goalID)
   if (deliveredRun) {
@@ -1263,13 +1273,12 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   if (
     planNodes === undefined &&
     buildSessionID === undefined &&
-    workspaceDir === undefined &&
     changedFiles === undefined &&
     checks === undefined
   ) {
     return undefined
   }
-  return { planNodes, buildSessionID, workspaceDir, changedFiles, changedFileDiffs, diffStats, checks, evalSummary, verdict }
+  return { planNodes, buildSessionID, changedFiles, changedFileDiffs, diffStats, checks, evalSummary, verdict }
 }
 
 /** Build architect summary from Decision Log */

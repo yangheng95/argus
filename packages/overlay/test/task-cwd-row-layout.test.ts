@@ -4,28 +4,22 @@
 //
 // Pre-iter34 the task-bar's cwd cluster was a flex column —
 // the breadcrumb + caret on row 1, the vcs badge + execution
-// workspace label on row 2. Both rows left-aligned. The
-// `.task-meta` parent had `justify-content: space-between`
-// but only ever had one child (`.task-cwd`), so the
-// space-between never actually did anything.
+// workspace label on row 2. Both rows left-aligned.
 //
-// iter34 redesign: keep HTML structure intact (no JSX rewrites
-// touching the document-level event delegation that reads
-// data-path-action / data-path-set / data-path-open from the
-// breadcrumb), but flip `.task-cwd` from column to row so the
-// dropdown sits on the left edge and the vcs / workspace info
-// sits on the right edge. `space-between` finally does work.
+// iter34 redesign: flip `.task-cwd` from column to row so the
+// dropdown sits on the left edge and the vcs info sits on the
+// right edge.
 //
-// Long paths still ellipsize in the dropdown — `.task-cwd-dropdown`
-// gets `flex: 1 1 auto; min-width: 0` so the breadcrumb shrinks
-// before the workspace info on the right.
+// 2026-05-11: the execution-workspace button on this row is gone
+// (per-goal worktree now lives on GoalWorkflowGroup — see
+// specs/new-arch/2026-05-11-goal-worktree-display.md). This test
+// only covers what remains: the dropdown/breadcrumb layout.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
 const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
-const OVERLAY_ROOT = path.resolve(import.meta.dir, "..")
 
 function walkCss(dir: string): string[] {
   const out: string[] = []
@@ -73,34 +67,5 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     const body = soloRuleBody(".task-cwd-dropdown")
     expect(body).toMatch(/flex:\s*1\s+1\s+auto/)
     expect(body).toMatch(/min-width:\s*0/)
-  })
-
-  test(".task-workspace-row anchors to the right edge with no top margin (single-row layout)", () => {
-    const body = soloRuleBody(".task-workspace-row")
-    expect(body).not.toMatch(/margin-top:\s*calc\(2px/)
-    expect(body).toMatch(/flex-shrink:\s*0/)
-  })
-
-  test(".task-workspace is a button-shaped path control", () => {
-    const body = soloRuleBody(".task-workspace")
-    expect(body).toMatch(/cursor:\s*pointer/)
-    expect(body).toMatch(/background:\s*transparent/)
-    expect(body).toMatch(/border:\s*none/)
-  })
-})
-
-describe("execution workspace path control", () => {
-  const source = readFileSync(path.join(OVERLAY_ROOT, "src", "components", "TaskDirBar.tsx"), "utf8")
-
-  test("renders the execution workspace as a button", () => {
-    expect(source).toContain('data-ui="execution-workspace-open"')
-    expect(source).toContain('id="taskWorkspaceDir"')
-    expect(source).toContain('type="button"')
-  })
-
-  test("opens the exact execution workspace directory on click", () => {
-    expect(source).toContain("openDirectory")
-    expect(source).toContain("currentExecutionDirectory")
-    expect(source).toContain("onClick={() => void openDirectory(meta().title)}")
   })
 })

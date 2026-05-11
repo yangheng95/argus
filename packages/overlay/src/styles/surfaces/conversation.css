@@ -460,37 +460,6 @@
   overflow: hidden;
 }
 
-.task-workspace {
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-weight: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.task-workspace:hover,
-.task-workspace:focus-visible {
-  color: var(--accent);
-  outline: none;
-}
-
-.task-workspace-row {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  flex-shrink: 0;
-  min-width: 0;
-}
-
 .workspace-command-dock {
   display: inline-flex;
   align-items: center;

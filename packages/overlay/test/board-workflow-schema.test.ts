@@ -1,6 +1,4 @@
 import { expect, test } from "bun:test";
-import { setBoardStore } from "../src/store/board";
-import { currentExecutionDirectory } from "../src/services/workspace";
 import { deliveryGoalProgress, goalStepStatus } from "../src/utils/goal-workflow";
 
 test("goalStepStatus reads only the canonical build step", () => {
@@ -37,35 +35,3 @@ test("deliveryGoalProgress tracks only build completion or passed goals", () => 
   });
 });
 
-test("currentExecutionDirectory reads only canonical goal step payloads", () => {
-  setBoardStore("board", {
-    goalWorkflows: [
-      {
-        goalID: "goal_old",
-        steps: [
-          {
-            stepID: "execute",
-            status: "running",
-            payload: { workspaceDir: "D:/tmp/legacy-execute" },
-          },
-        ],
-      },
-      {
-        goalID: "goal_new",
-        steps: [
-          {
-            stepID: "build",
-            status: "running",
-            startedAt: 200,
-            payload: { workspaceDir: "D:/tmp/canonical-build" },
-          },
-        ],
-      },
-    ],
-    goalRuns: [
-      { workspaceDir: "D:/tmp/legacy-goal-run", status: "running" },
-    ],
-  } as any);
-
-  expect(currentExecutionDirectory()).toBe("D:/tmp/canonical-build");
-});

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "c67774a72eadbe30"
+    "panel_revision": "5bf6f1359799fea5"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -321,7 +321,6 @@
   "cwd.create_title": "Create Working Directory",
   "cwd.create_unavailable": "Directory creation unavailable",
   "cwd.create": "Create",
-  "cwd.execution_workspace": "Execution workspace: {{value}}",
   "cwd.folder": "Folder",
   "cwd.folder_placeholder": "my-project",
   "cwd.new": "New",
@@ -438,6 +437,7 @@
   "goal.field.objective": "Objective",
   "goal.field.title": "Title",
   "goal.field.title_placeholder": "Describe the goal…",
+  "goal.field.worktree": "Worktree",
   "goal.save": "Save",
   "goal.title": "Goal",
   "interaction.allow_once": "Allow Once",

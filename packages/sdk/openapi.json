@@ -8255,6 +8255,10 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "terminalProfileID": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "cwd": {
                     "type": "string",
                     "minLength": 1
@@ -8262,6 +8266,7 @@
                 },
                 "required": [
                   "cliID",
+                  "terminalProfileID",
                   "cwd"
                 ]
               }
@@ -16612,9 +16617,6 @@
                                         "buildSessionID": {
                                           "type": "string"
                                         },
-                                        "workspaceDir": {
-                                          "type": "string"
-                                        },
                                         "changedFiles": {
                                           "type": "array",
                                           "items": {
@@ -18853,9 +18855,6 @@
                                       }
                                     },
                                     "buildSessionID": {
-                                      "type": "string"
-                                    },
-                                    "workspaceDir": {
                                       "type": "string"
                                     },
                                     "changedFiles": {

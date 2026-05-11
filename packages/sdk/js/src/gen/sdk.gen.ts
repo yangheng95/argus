@@ -3842,6 +3842,7 @@ export class Cli extends HeyApiClient {
     parameters?: {
       directory?: string
       cliID?: string
+      terminalProfileID?: string
       cwd?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -3853,6 +3854,7 @@ export class Cli extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "body", key: "cliID" },
+            { in: "body", key: "terminalProfileID" },
             { in: "body", key: "cwd" },
           ],
         },

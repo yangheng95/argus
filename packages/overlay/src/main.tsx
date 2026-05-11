@@ -9,7 +9,7 @@ import { Conversation } from "./components/Conversation";
 import { TaskList } from "./components/TaskList";
 import { Board } from "./components/Board";
 import { TaskStatusHeader } from "./components/TaskStatusHeader";
-import { TaskDirContent, TaskWorkspaceLine } from "./components/TaskDirBar";
+import { TaskDirContent } from "./components/TaskDirBar";
 import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
 import { WorkspaceEditorLaunchers } from "./components/WorkspaceEditorLaunchers";
@@ -766,17 +766,14 @@ if (connBadgeEl) {
   render(() => <ConnectionBadge />, connBadgeEl);
 }
 
-// ── Mount: TaskDirContent + TaskWorkspaceLine ──
-// Reactive replacement for services/meta.ts renderMeta() — both spans now
-// derive from settingsStore.directory + boardStore.path through Solid memos.
+// ── Mount: TaskDirContent ──
+// Reactive replacement for services/meta.ts renderMeta(). TaskDirContent
+// fragments the task-dir breadcrumb + VcsBadge into the same mount so the
+// dropdown shell click target covers both (rule 8 — single owner surface).
 
 const taskDirMountEl = document.getElementById("solidTaskDirMount");
 if (taskDirMountEl) {
   render(() => <TaskDirContent />, taskDirMountEl);
-}
-const taskWorkspaceMountEl = document.getElementById("solidTaskWorkspaceLineMount");
-if (taskWorkspaceMountEl) {
-  render(() => <TaskWorkspaceLine />, taskWorkspaceMountEl);
 }
 
 // ── Mount: TaskStatusHeader ──

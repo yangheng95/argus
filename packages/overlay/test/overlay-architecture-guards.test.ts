@@ -714,8 +714,6 @@ describe("overlay architecture guards", () => {
       "task-meta",
       "task-cwd",
       "task-dir",
-      "task-workspace",
-      "task-workspace-row",
       "vcs-badge",
       "vcs-badge-icon",
       "vcs-badge-branch",

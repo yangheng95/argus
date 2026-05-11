@@ -365,6 +365,11 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
   expect(cardTreeStore.cards[stepCardID]?.goalID).toBe(GOAL_ID);
   expect(cardTreeStore.cards[stepCardID]?.stepPayload?.buildSessionID).toBe(BUILD_SID);
   expect(cardTreeStore.cards[stepCardID]?.stepPayload?.planNodes?.[0]?.title).toBe("Create shell");
+  // §6.4 negative guard — worktree was demoted from step payload to the
+  // goal-level workspaceDir/workspaceBranch (board.ts projection). The
+  // copied step payload must not regrow it; otherwise the wire-collapse
+  // gets silently undone (rule 8 — single source).
+  expect(Object.keys(cardTreeStore.cards[stepCardID]?.stepPayload ?? {})).not.toContain("workspaceDir");
 });
 
 test("tree-writer projects interactions into session children and top-level cards", () => {
