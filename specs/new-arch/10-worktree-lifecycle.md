@@ -65,7 +65,7 @@ Claude Code 本地 worktree 会话的清理策略（公开文档）：
 
 ### 2.3 什么是终态
 触发 worktree 清理的时机（**只有这些**）：
-1. **最新 goal_run.status = completed**：build passed / accept_build 成功，并且 merge_back 已经落到 primary 后。
+1. **最新 goal_run.status = completed**：build passed，并且 merge_back 已经落到 primary 后。
 
 禁止清理的时机：
 - `failed`：失败现场是下一轮修复的输入。
@@ -182,7 +182,7 @@ listLiveGoalRunsForProject → 每个关联的 goal.workspace_dir：
   updateGoalWorkspace(...null workspace fields...)
   ```
 - 调用点：
-  - build passed / accept_build 成功 merge_back 之后
+  - build passed merge_back 之后
   - deliver 发布完成时对已 completed goals 的幂等清理
 
 ### 5.4 goal/runner.ts::cleanupGoalWorkspace
