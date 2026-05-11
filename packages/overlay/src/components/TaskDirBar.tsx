@@ -1,13 +1,8 @@
-// ── TaskDirContent ──
-// Solid component for the directory breadcrumb + co-located VCS badge that
-// live at the top of the conversation panel. Renders into
-// `#solidTaskDirMount` in index.html.
-//
-// The badge sits as a sibling span inside the same mount node so the
-// task-cwd-dropdown's click handler covers both (rule 8 — single mount
-// point for the task-dir surface). The breadcrumb itself still uses
-// innerHTML for `pathBreadcrumb()` markup — its buttons are dispatched via
-// document-level delegation in main.tsx reading `data-path-*` attributes.
+// ── TaskDirBar ──
+// Solid components for the task-bar project cluster. The cwd dropdown owns
+// only the breadcrumb + path actions; the git branch badge is a separate
+// sibling surface because it reflects workspace state rather than being a
+// cwd-selection control. Both render into dedicated mounts in index.html.
 //
 // IDE launchers live in WorkspaceEditorLaunchers so this module does not
 // own editor shortcuts. Per-goal worktree display lives in
@@ -44,12 +39,11 @@ export function TaskDirContent() {
 }
 
 // VcsBadge — surfaces the current branch + dirty/ahead/behind count next to
-// the working directory breadcrumb. Pulls from boardStore.vcs (populated by
-// services/meta.ts via GET /vcs). Renders nothing when vcs.initialized is
-// false so non-git projects stay silent. The underlying signals refresh
-// every time meta.ts polls so the badge tracks branch switches without
-// extra wiring.
-function VcsBadge() {
+// the cwd dropdown. Pulls from boardStore.vcs (populated by services/meta.ts
+// via GET /vcs). Renders nothing when vcs.initialized is false so non-git
+// projects stay silent. The underlying signals refresh every time meta.ts
+// polls so the badge tracks branch switches without extra wiring.
+export function VcsBadge() {
   const vcs = createMemo(() => boardStore.vcs as null | {
     initialized?: boolean;
     branch?: string;

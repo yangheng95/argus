@@ -9,7 +9,7 @@ import { Conversation } from "./components/Conversation";
 import { TaskList } from "./components/TaskList";
 import { Board } from "./components/Board";
 import { TaskStatusHeader } from "./components/TaskStatusHeader";
-import { TaskDirContent } from "./components/TaskDirBar";
+import { TaskDirContent, VcsBadge } from "./components/TaskDirBar";
 import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
 import { WorkspaceEditorLaunchers } from "./components/WorkspaceEditorLaunchers";
@@ -766,14 +766,19 @@ if (connBadgeEl) {
   render(() => <ConnectionBadge />, connBadgeEl);
 }
 
-// ── Mount: TaskDirContent ──
-// Reactive replacement for services/meta.ts renderMeta(). TaskDirContent
-// fragments the task-dir breadcrumb + VcsBadge into the same mount so the
-// dropdown shell click target covers both (rule 8 — single owner surface).
+// ── Mount: TaskDirContent / VcsBadge ──
+// Reactive replacement for services/meta.ts renderMeta(). The cwd dropdown
+// owns breadcrumb selection; the VCS badge is mounted beside it as a
+// sibling project-surface indicator.
 
 const taskDirMountEl = document.getElementById("solidTaskDirMount");
 if (taskDirMountEl) {
   render(() => <TaskDirContent />, taskDirMountEl);
+}
+
+const taskVcsMountEl = document.getElementById("solidTaskVcsMount");
+if (taskVcsMountEl) {
+  render(() => <VcsBadge />, taskVcsMountEl);
 }
 
 // ── Mount: TaskStatusHeader ──
