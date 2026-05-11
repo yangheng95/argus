@@ -110,6 +110,7 @@ export namespace DesignAnalystAgent {
           ...submitDesignPrdSpecTool,
         },
         getCollector: () => outputToolKit.getCollector(),
+        buildReport: () => outputToolKit.buildReport(),
       },
       buildUserPrompt: () => buildUserPrompt(input),
       buildUserParts: () => buildPromptParts(input),

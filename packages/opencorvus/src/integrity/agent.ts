@@ -50,6 +50,7 @@ import type { DecisionLog } from "@/decision-log"
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
 import type { RequirementStatusRow } from "./requirement-status"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { limitSummary, markdownList } from "@/agent/report"
 import {
   INTEGRITY_DIMENSIONS,
   renderDimensionCatalogue,
@@ -327,6 +328,27 @@ export async function reviewIntegrity(input: {
     }
   }
 
+  function buildIntegrityReport(collector: IntegrityCollector) {
+    const dimensions = INTEGRITY_DIMENSIONS
+      .map((d) => collector.dimensions.get(d.id))
+      .filter((item): item is IntegrityDimensionResult => Boolean(item))
+    const verdict = dimensions.length > 0 ? aggregateVerdict(dimensions) : "needs_correction"
+    const lines = dimensions.map((dimension) => {
+      const issues = dimension.issues.length > 0
+        ? `; issues: ${dimension.issues.map((issue) => issue.description).join(" | ")}`
+        : ""
+      return `${dimension.id}: ${dimension.verdict}${issues}`
+    })
+    const summary = `Integrity review ${verdict} across ${dimensions.length} dimension(s).`
+    return {
+      summary: limitSummary(summary),
+      detail: [
+        `## Summary\n${summary}`,
+        `## Dimensions\n${lines.length ? markdownList(lines) : "- no dimension verdicts submitted"}`,
+      ].join("\n\n"),
+    }
+  }
+
   function buildDimensionTool(collector: IntegrityCollector, d: IntegrityDimension) {
     const correctionsClause = d.canProposeCorrections
       ? ` Mutating corrections + missing_goals are allowed under this dimension; reference only goal_ids that appear in the goal list.`
@@ -423,17 +445,18 @@ export async function reviewIntegrity(input: {
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
     signal: input.signal,
-    toolKit: {
-      tools: {
+      toolKit: {
+        tools: {
         ...Object.fromEntries(
           INTEGRITY_DIMENSIONS.map(
             (d) => [`submit_${d.id}_verdict`, buildDimensionTool(collector, d)] as const,
           ),
         ),
         submit_integrity_review: buildSubmitIntegrityTool(collector),
+        },
+        getCollector: () => collector,
+        buildReport: () => buildIntegrityReport(collector),
       },
-      getCollector: () => collector,
-    },
     buildUserPrompt: () => buildIntegrityPrompt(input),
     buildUserParts: (input.attachments && input.attachments.length > 0)
       ? async () => {

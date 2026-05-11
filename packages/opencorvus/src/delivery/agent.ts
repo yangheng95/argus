@@ -137,6 +137,7 @@ export namespace DeliveryAgent {
         return {
           tools: guard.tools as any,
           getCollector: () => outputToolKit.getCollector(),
+          buildReport: () => outputToolKit.buildReport(),
         }
       },
       isComplete: (collector) => {

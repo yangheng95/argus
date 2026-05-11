@@ -11,6 +11,7 @@
 import { tool } from "ai"
 import z from "zod"
 import type { VisualSpec, VisualSpecCategory } from "./types"
+import { limitSummary, markdownList, requireReportString } from "@/agent/report"
 
 // ---------------------------------------------------------------------------
 // Collector — private. Callers read through getSpecs() / getStats().
@@ -31,6 +32,29 @@ const DESIGN_SPEC_BUDGET = 80
 
 function emptyCollector(): DesignOutputCollector {
   return { specs: [] }
+}
+
+function titleFromMarkdown(text: string): string | undefined {
+  const line = text.split("\n").map((item) => item.trim()).find((item) => item.startsWith("# "))
+  return line?.replace(/^#+\s*/, "").trim()
+}
+
+export function buildDesignReport(collector: DesignOutputCollector) {
+  if (!collector.final) throw new Error("agent report design final is missing")
+  const title = titleFromMarkdown(collector.final.product_spec)
+  const summary = title
+    ? title
+    : `${collector.specs.length} visual spec(s) for ${collector.final.design_system}`
+  const specLines = collector.specs.map((spec) => `${spec.id} [${spec.category}]: ${spec.title}`)
+  return {
+    summary: limitSummary(summary),
+    detail: [
+      `## Product Spec\n${requireReportString(collector.final.product_spec, "design product_spec")}`,
+      `## Frontend Spec\n${collector.final.frontend_spec}`,
+      `## Backend Spec\n${collector.final.backend_spec}`,
+      `## Visual Anchors\n${specLines.length ? markdownList(specLines) : "- no compact visual anchors submitted"}`,
+    ].join("\n\n"),
+  }
 }
 
 // Terminal JSON-schema: payload submit_design_prd_spec must deliver.
@@ -431,6 +455,9 @@ export function createDesignOutputTools() {
     tools,
     getCollector(): DesignOutputCollector {
       return { specs: [...collector.specs], final: collector.final }
+    },
+    buildReport() {
+      return buildDesignReport({ specs: [...collector.specs], final: collector.final })
     },
     getSpecs(): VisualSpec[] {
       return [...collector.specs]

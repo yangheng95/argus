@@ -11,6 +11,7 @@
  */
 import { tool } from "ai"
 import z from "zod"
+import { limitSummary, markdownList } from "@/agent/report"
 
 // ---------------------------------------------------------------------------
 // Collector — accumulates registered items across tool calls
@@ -43,6 +44,29 @@ function emptyCollector(): RequirementsCollector {
     requirements: [],
     decisions: [],
     finalized: false,
+  }
+}
+
+export function summarizeRequirements(collector: RequirementsCollector): string {
+  const explicit = collector.requirements.filter((r) => r.type === "explicit").length
+  const implicit = collector.requirements.length - explicit
+  return `Parsed ${collector.requirements.length} requirement(s): ${explicit} explicit, ${implicit} implicit.`
+}
+
+export function buildRequirementsReport(collector: RequirementsCollector) {
+  const requirementLines = collector.requirements.map(
+    (r) => `${r.id} [${r.type}]: ${r.description}`,
+  )
+  const decisionLines = collector.decisions.map(
+    (d) => `${d.key}=${d.value} - ${d.reason}`,
+  )
+  return {
+    summary: limitSummary(summarizeRequirements(collector)),
+    detail: [
+      `## Summary\n${summarizeRequirements(collector)}`,
+      `## Requirements\n${requirementLines.length ? markdownList(requirementLines) : "- none submitted"}`,
+      `## Decisions\n${decisionLines.length ? markdownList(decisionLines) : "- none submitted"}`,
+    ].join("\n\n"),
   }
 }
 
@@ -112,6 +136,9 @@ export function createRequirementsOutputTools() {
     /** Get current collector reference. */
     getCollector() {
       return collector
+    },
+    buildReport() {
+      return buildRequirementsReport(collector)
     },
   }
 }

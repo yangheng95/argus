@@ -3,6 +3,7 @@ import { Tool } from "./tool"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Session } from "@/session"
+import { limitSummary, markdownList, requireReportString } from "@/agent/report"
 
 export namespace GoalReport {
   export const FileChange = z.object({
@@ -85,6 +86,18 @@ Do not call this tool more than once. Do not call it as a progress update mid-go
   },
 })
 
+export function buildGoalReport(report: GoalReport.ReportInput) {
+  const approach = requireReportString(report.implementation_approach, "goal implementation_approach")
+  const fileLines = report.files_changed.map((file) => `${file.path}: ${file.summary}`)
+  return {
+    summary: limitSummary(approach),
+    detail: [
+      `## Implementation Approach\n${approach}`,
+      `## Files Changed\n${fileLines.length ? markdownList(fileLines) : "- no files changed"}`,
+    ].join("\n\n"),
+  }
+}
+
 /**
  * Extract the structured report emitted by the goal executor via the
  * `goal_report` tool call. Reads the executor session's messages, locates
@@ -137,4 +150,3 @@ export async function extractGoalReport(sessionID: string): Promise<GoalReport.R
   }
   return parsed.data
 }
-

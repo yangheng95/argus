@@ -65,6 +65,7 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { withStreamActivity } from "@/util/stream-activity"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
+import { buildBuildAgentReport } from "./report"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 
@@ -489,6 +490,7 @@ export namespace BuildAgent {
         result?: BuildResult
       }
       const buildCollector: BuildCollector = {}
+      const buildBuildReport = () => buildBuildAgentReport(buildCollector)
       const createBuildReportTools = (): ToolSet => ({
         report_build_result: tool({
           description:
@@ -527,7 +529,7 @@ export namespace BuildAgent {
         }),
       })
 
-      const buildToolKit: { tools: ToolSet; getCollector: () => BuildCollector } = ownsWorktree && worktreeBranch && worktreeDir
+      const buildToolKit: { tools: ToolSet; getCollector: () => BuildCollector; buildReport: () => ReturnType<typeof buildBuildReport> } = ownsWorktree && worktreeBranch && worktreeDir
         ? {
             tools: {
               merge_back: tool({
@@ -610,6 +612,7 @@ export namespace BuildAgent {
               ...createBuildReportTools(),
             },
             getCollector: () => buildCollector,
+            buildReport: buildBuildReport,
           }
         : {
             // Caller-owned worktrees (input.workDir set) skip merge_back — the
@@ -617,6 +620,7 @@ export namespace BuildAgent {
             // tool's presence so the LLM does not invent the call.
             tools: createBuildReportTools(),
             getCollector: () => buildCollector,
+            buildReport: buildBuildReport,
           }
 
       let out: { session: { id: string }; structured?: unknown; collector?: BuildCollector } | undefined

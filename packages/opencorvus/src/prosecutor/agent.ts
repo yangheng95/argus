@@ -42,12 +42,14 @@ import {
 } from "@/metrics/store"
 import type { Counterexample } from "@/metrics/types"
 import type { DeliveryVerdictType } from "@/delivery/agent"
+import { limitSummary, markdownList, requireReportString, type AgentReportContext } from "@/agent/report"
 
 const log = Log.create({ service: "prosecutor" })
 
 export interface ProsecutorCollector {
   counterexamples: Counterexample[]
   challenges: Array<{ spec_id: string; name: string; goal_id: string | null }>
+  rationale?: string
 }
 
 function emptyCollector(): ProsecutorCollector {
@@ -239,6 +241,24 @@ export function createProsecutorTools(input: CreateProsecutorToolsInput) {
     getCollector() {
       return collector
     },
+    buildReport(context?: AgentReportContext) {
+      const rationale = requireReportString(context?.finalText ?? collector.rationale, "prosecutor rationale")
+      collector.rationale = rationale.slice(0, 8000)
+      const counterexampleLines = collector.counterexamples.map(
+        (item) => `${item.id}: ${item.claim}`,
+      )
+      const challengeLines = collector.challenges.map(
+        (item) => `${item.spec_id}: ${item.name}${item.goal_id ? ` (${item.goal_id})` : ""}`,
+      )
+      return {
+        summary: limitSummary(collector.rationale),
+        detail: [
+          `## Rationale\n${collector.rationale}`,
+          `## Counterexamples\n${counterexampleLines.length ? markdownList(counterexampleLines) : "- none filed"}`,
+          `## Challenges\n${challengeLines.length ? markdownList(challengeLines) : "- none proposed"}`,
+        ].join("\n\n"),
+      }
+    },
   }
 }
 
@@ -338,6 +358,7 @@ export async function runProsecutor(
       toolKit: {
         tools: guard.tools as any,
         getCollector: () => kit.getCollector(),
+        buildReport: (context) => kit.buildReport(context),
       },
       buildUserPrompt: () => brief,
       buildUserParts: async () => {
@@ -350,7 +371,8 @@ export async function runProsecutor(
         return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
       },
     })
-    rationale = extractRationaleFromMessage(out.finalMessage)
+    kit.buildReport({ finalText: finalTextFromMessage(out.finalMessage) })
+    rationale = kit.getCollector().rationale ?? ""
     log.info("prosecutor finished", {
       task: input.task.id,
       iteration: input.iteration,
@@ -381,9 +403,7 @@ export async function runProsecutor(
   }
 }
 
-function extractRationaleFromMessage(message: Message.WithParts | undefined): string {
-  // SessionPrompt returns the final Message.WithParts. Text parts carry the
-  // prose rationale; accumulate them in order.
+function finalTextFromMessage(message: Message.WithParts | undefined): string {
   if (!message) return ""
   const lines: string[] = []
   for (const part of message.parts ?? []) {

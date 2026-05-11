@@ -76,6 +76,7 @@ import { Event as EngineEvent } from "@/engine/model"
 import { describeTask, renderTaskDescription } from "@/engine/describe"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
 import { AgentTrace } from "@/trace"
+import { paragraphSummary } from "@/agent/report"
 
 const log = Log.create({ service: "orchestrator" })
 // MAX_STEPS lives on agent.orchestrator.steps in src/agent/agent.ts. SessionLoop
@@ -416,6 +417,10 @@ export namespace Orchestrator {
           finishReason: assistantInfo?.finish,
           finalText,
           streamErrors: streamErrors.map((e) => ({ reason: e.reason, name: e.errorName })),
+          report: {
+            summary: paragraphSummary(finalText ?? "orchestrator completed without final text"),
+            detail: finalText ?? "orchestrator completed without final text",
+          },
         })
       }
 
@@ -493,6 +498,7 @@ export namespace Orchestrator {
           agentName: "orchestrator",
           kind: "orchestrator_wake_failure",
           error: msg,
+          report: { summary: msg, detail: msg },
         })
       }
       // Surface the error on the task so UI/orphan-recovery can see it.
