@@ -29,6 +29,7 @@ import {
   setExecutorModel,
   type ExecutorDescriptor,
 } from "../services/executor";
+import { patchConfig } from "../services/config";
 import { t } from "../utils/i18n";
 import { Button } from "./ui/Button";
 
@@ -60,6 +61,44 @@ function splitModelID(modelID: string): ModelParts {
   };
 }
 
+interface ProjectModelGroup {
+  providerID: string;
+  providerName: string;
+  models: string[];
+}
+
+// OpenCorvus model picker draws from appStore.providerCatalog (loaded from
+// /provider). All providers contribute their models; selection writes
+// appStore.config.model via patchConfig. Same source of truth as
+// AgentModelsPanel project-default row.
+function projectModelGroups(): ProjectModelGroup[] {
+  const catalog = appStore.providerCatalog as { all?: unknown } | null | undefined
+  const all = Array.isArray(catalog?.all) ? (catalog!.all as Array<Record<string, unknown>>) : []
+  const groups: ProjectModelGroup[] = []
+  for (const provider of all) {
+    const id = typeof provider.id === "string" ? provider.id : ""
+    if (!id) continue
+    const modelsField = provider.models
+    if (!modelsField || typeof modelsField !== "object" || Array.isArray(modelsField)) continue
+    const modelIDs: string[] = []
+    for (const entry of Object.values(modelsField as Record<string, unknown>)) {
+      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+        const modelID = (entry as { id?: unknown }).id
+        if (typeof modelID === "string" && modelID) modelIDs.push(modelID)
+      }
+    }
+    if (modelIDs.length === 0) continue
+    modelIDs.sort()
+    groups.push({
+      providerID: id,
+      providerName: typeof provider.name === "string" && provider.name ? provider.name : id,
+      models: modelIDs.map((modelID) => `${id}/${modelID}`),
+    })
+  }
+  groups.sort((a, b) => a.providerName.localeCompare(b.providerName))
+  return groups
+}
+
 function agentModelOverridesFromConfig(): string[] {
   const cfg = appStore.config as { agent?: unknown } | null | undefined
   const agents = cfg?.agent
@@ -75,6 +114,10 @@ function agentModelOverridesFromConfig(): string[] {
 
 export function ExecutorSelector() {
   const menu = useDisclosure();
+  // External executor section is collapsed by default — OpenCorvus is the
+  // always-on path, external executors are an opt-in addition.
+  const [externalOpen, setExternalOpen] = createSignal(false);
+  const [savingProjectModel, setSavingProjectModel] = createSignal(false);
 
   // Chip renders from settingsStore after the same executor-id validation
   // used by task submission. The menu still iterates appStore.executors
@@ -165,6 +208,31 @@ export function ExecutorSelector() {
     }
     await setExecutorModel(executorID, model);
   }
+
+  // OpenCorvus model selection — same write path as AgentModelsPanel:
+  // patchConfig diffs into appStore.config.model. Menu stays open so the
+  // user can verify the new active row without re-opening.
+  async function pickProjectModel(value: string) {
+    if (value === openCorvusModel()) return;
+    setSavingProjectModel(true);
+    try {
+      await patchConfig({ model: value ? value : null });
+    } finally {
+      setSavingProjectModel(false);
+    }
+  }
+
+  const projectGroups = createMemo(projectModelGroups);
+  // The executor list in the collapsible section keeps MirrorCode alongside
+  // the real external executors so the user can switch back to the
+  // "no external executor" state. MirrorCode's row is just an empty selection.
+  const externalExecutors = createMemo(() => executors());
+  const externalSelectionLabel = createMemo(() => {
+    const id = activeID();
+    if (id === INTERNAL_EXECUTOR_ID) return t("executor.external_disabled");
+    const model = externalExecutorModel();
+    return model ? `${activeLabel()} · ${model}` : activeLabel();
+  });
 
   return (
     // Chip is always rendered: activeID comes from settingsStore (never
@@ -261,62 +329,138 @@ export function ExecutorSelector() {
                 </Show>
               </div>
             </div>
-            <For each={executors()}>
-              {(item) => {
-                const id = item.id;
-                const selectable = createMemo(() => executorSelectable(id));
-                const isActive = createMemo(() => id === activeID());
-                const hasModels = createMemo(() => executorHasModelChoice(id));
-                const models = createMemo(() => (hasModels() ? executorModels(id) : []));
-                const current = createMemo(() => executorCurrentModel(id));
-                return (
-                  <div
-                    class="executor-menu-group"
-                    data-active={isActive() ? "true" : "false"}
-                    data-selectable={selectable() ? "true" : "false"}
-                  >
-                    <button
-                      type="button"
-                      class="executor-menu-row"
-                      role="option"
-                      aria-selected={isActive() ? "true" : "false"}
-                      disabled={!selectable()}
-                      title={executorTitle(id)}
-                      onClick={() => pickExecutor(id)}
-                    >
-                      <span class="executor-menu-label">
-                        {item.label || executorLabel(id)}
-                      </span>
-                      <Show when={current()}>
-                        <span class="executor-menu-current">{current()}</span>
-                      </Show>
-                    </button>
-                    <Show when={isActive() && hasModels() && models().length > 0}>
-                      <div class="executor-menu-models">
-                        <For each={models()}>
-                          {(modelID) => (
-                            <button
-                              type="button"
-                              class="executor-menu-model"
-                              data-active={modelID === current() ? "true" : "false"}
-                              title={modelID}
-                              onClick={() => void pickModel(id, modelID)}
-                            >
-                              <span class="executor-menu-model-provider">
-                                {splitModelID(modelID).provider}
-                              </span>
-                              <span class="executor-menu-model-name">
-                                {splitModelID(modelID).name}
-                              </span>
-                            </button>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
+            <div
+              class="executor-menu-project"
+              data-section="opencorvus"
+              aria-label={t("executor.opencorvus_section_label")}
+            >
+              <div class="executor-menu-section-header">
+                <span class="executor-menu-section-title">
+                  {t("executor.opencorvus_section_label")}
+                </span>
+                <Show when={savingProjectModel()}>
+                  <span class="executor-menu-section-status">
+                    {t("agent_models.saving")}
+                  </span>
+                </Show>
+              </div>
+              <Show
+                when={projectGroups().length > 0}
+                fallback={
+                  <div class="executor-menu-empty">
+                    {t("executor.opencorvus_no_providers")}
                   </div>
-                );
-              }}
-            </For>
+                }
+              >
+                <div class="executor-menu-models">
+                  <For each={projectGroups()}>
+                    {(group) => (
+                      <For each={group.models}>
+                        {(modelID) => (
+                          <button
+                            type="button"
+                            class="executor-menu-model"
+                            data-active={modelID === openCorvusModel() ? "true" : "false"}
+                            disabled={savingProjectModel()}
+                            title={modelID}
+                            onClick={() => void pickProjectModel(modelID)}
+                          >
+                            <span class="executor-menu-model-provider">
+                              {splitModelID(modelID).provider}
+                            </span>
+                            <span class="executor-menu-model-name">
+                              {splitModelID(modelID).name}
+                            </span>
+                          </button>
+                        )}
+                      </For>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
+            <div
+              class="executor-menu-external"
+              data-section="external"
+              data-open={externalOpen() ? "true" : "false"}
+            >
+              <button
+                type="button"
+                class="executor-menu-section-toggle"
+                aria-expanded={externalOpen() ? "true" : "false"}
+                onClick={() => setExternalOpen((v) => !v)}
+              >
+                <span class="executor-menu-section-title">
+                  {t("executor.external_section_label")}
+                </span>
+                <span class="executor-menu-section-summary">
+                  {externalSelectionLabel()}
+                </span>
+                <span class="executor-menu-section-caret" aria-hidden="true">
+                  <Icon name={externalOpen() ? "caret-up" : "caret-down"} size={8} />
+                </span>
+              </button>
+              <Show when={externalOpen()}>
+                <div class="executor-menu-section-body">
+                  <For each={externalExecutors()}>
+                    {(item) => {
+                      const id = item.id;
+                      const selectable = createMemo(() => executorSelectable(id));
+                      const isActive = createMemo(() => id === activeID());
+                      const hasModels = createMemo(() => executorHasModelChoice(id));
+                      const models = createMemo(() => (hasModels() ? executorModels(id) : []));
+                      const current = createMemo(() => executorCurrentModel(id));
+                      return (
+                        <div
+                          class="executor-menu-group"
+                          data-active={isActive() ? "true" : "false"}
+                          data-selectable={selectable() ? "true" : "false"}
+                        >
+                          <button
+                            type="button"
+                            class="executor-menu-row"
+                            role="option"
+                            aria-selected={isActive() ? "true" : "false"}
+                            disabled={!selectable()}
+                            title={executorTitle(id)}
+                            onClick={() => pickExecutor(id)}
+                          >
+                            <span class="executor-menu-label">
+                              {item.label || executorLabel(id)}
+                            </span>
+                            <Show when={current()}>
+                              <span class="executor-menu-current">{current()}</span>
+                            </Show>
+                          </button>
+                          <Show when={isActive() && hasModels() && models().length > 0}>
+                            <div class="executor-menu-models">
+                              <For each={models()}>
+                                {(modelID) => (
+                                  <button
+                                    type="button"
+                                    class="executor-menu-model"
+                                    data-active={modelID === current() ? "true" : "false"}
+                                    title={modelID}
+                                    onClick={() => void pickModel(id, modelID)}
+                                  >
+                                    <span class="executor-menu-model-provider">
+                                      {splitModelID(modelID).provider}
+                                    </span>
+                                    <span class="executor-menu-model-name">
+                                      {splitModelID(modelID).name}
+                                    </span>
+                                  </button>
+                                )}
+                              </For>
+                            </div>
+                          </Show>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
+            </div>
           </div>
         </Show>
       </div>
