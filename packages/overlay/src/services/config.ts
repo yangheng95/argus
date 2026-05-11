@@ -13,6 +13,7 @@ import { loadExecutors } from "./executor";
 import { restoreWorkspaceDirectory } from "./workspace";
 import { loadTasks, clearTasksForMissingDirectory } from "../store/board";
 import { getHostTransport } from "./host-transport";
+import { sanitizeLocale } from "../utils/i18n";
 
 // ── Check Config Accessors ──
 
@@ -134,6 +135,10 @@ export async function patchConfig(diff: Record<string, any>): Promise<any> {
     console.error("[config] patchConfig failed", e);
     return null;
   }
+}
+
+export async function syncAgentPromptLocale(locale: string): Promise<void> {
+  await patchConfig({ locale: sanitizeLocale(locale) });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

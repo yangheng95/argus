@@ -53,6 +53,24 @@ function utcOffset(now: Date): string {
 }
 
 export namespace SystemPrompt {
+  export function responseLanguage(locale: string | undefined): string | undefined {
+    if (locale === "zh-CN") {
+      return [
+        "## Response Language",
+        "",
+        "请使用简体中文进行回复。除非用户明确要求其他语言，面向用户的总结、问题、状态说明、计划和交付说明都应使用简体中文；代码、命令、文件路径、API 名称和必须保留的原文不要翻译。",
+      ].join("\n")
+    }
+    if (locale === "en-US") {
+      return [
+        "## Response Language",
+        "",
+        "Please respond in English. Unless the user explicitly asks for another language, user-facing summaries, questions, status updates, plans, and delivery notes should be written in English; keep code, commands, file paths, API names, and required source text unchanged.",
+      ].join("\n")
+    }
+    return
+  }
+
   /** Resolve the core system prompt string, respecting config.prompt.core_header override. */
   export async function instructions(): Promise<string> {
     const cfg = await Config.get()

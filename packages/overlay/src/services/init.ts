@@ -98,6 +98,11 @@ async function loadInitialData(): Promise<boolean> {
     });
     return false;
   }
+  await apiJsonWithTimeout("config", CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ locale: settingsStore.locale }),
+  });
   await Promise.all([
     loadTasks(),
     loadMeta(),

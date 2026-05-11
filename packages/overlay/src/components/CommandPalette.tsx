@@ -20,6 +20,7 @@
 import { For, Show, createMemo, createSignal, createEffect } from "solid-js";
 import { boardStore } from "../store/board";
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
+import { syncAgentPromptLocale } from "../services/config";
 import { applyTheme } from "../services/theme";
 import { themeOptionsForCurrentHost } from "../services/theme-registry";
 import { selectTask } from "../services/task";
@@ -144,6 +145,7 @@ export function CommandPalette() {
         run: () => {
           setSettingsStore("locale", loc.id);
           void setLocale(loc.id);
+          void syncAgentPromptLocale(loc.id);
           saveSettings();
         },
       });
