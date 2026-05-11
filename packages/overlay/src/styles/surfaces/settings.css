@@ -480,22 +480,33 @@
 
 /* ── SkillMarketPanel.tsx ────────────────────────────────── */
 
-/* Market card layout: each registry entry renders as a card with
-   a copy block (title + meta) + actions cluster. The card chrome
-   (border / radius / background / padding) is owned by the
-   shared `.goal-item, .market-card, .knowledge-item, .pref-item,
-   .criteria-check` multi-class in styles.css; the surface here
-   only declares the unique layout properties to avoid a rule-8
-   double source on the shared chrome. */
+/* Market card layout: each registry entry renders as a settings
+   row with a copy block (title + meta) + actions cluster. The
+   chrome lives here rather than in the inspector shared-card
+   treatment because the modal's translucent light surface makes
+   accent-washed cards read as heavy color blocks. */
 .market-card {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: calc(10px * var(--ui-scale));
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  transition:
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base);
 }
 
 .market-card + .market-card {
   margin-top: calc(8px * var(--ui-scale));
+}
+
+.market-card:hover,
+.market-card:focus-within {
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .market-card-main {
@@ -788,12 +799,7 @@
 }
 
 .config-nav-item.active {
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--accent) 15%, transparent),
-      color-mix(in srgb, var(--accent) 6%, transparent)
-    );
+  background: transparent;
   color: var(--accent-hover);
   font-weight: var(--ui-font-weight-strong);
 }
@@ -2225,7 +2231,6 @@
 .config-content .knowledge-toolbar:focus-within,
 .config-content .channel-doc-card:hover,
 .config-content .channel-doc-card:focus-within,
-.config-content .market-card:hover,
 .config-content .knowledge-item:hover,
 .config-content .pref-item:hover {
   border-color: var(--guide-card-border);
