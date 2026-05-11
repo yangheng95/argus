@@ -1,4 +1,4 @@
-import { Show, createSignal } from "solid-js";
+import { Show, createMemo, createSignal } from "solid-js";
 import { displayToolIcon } from "../utils/tool";
 import {
   collectCardText,
@@ -8,6 +8,8 @@ import {
 } from "../utils/card-tree";
 import { statusBadge } from "../utils/status-badge";
 import { t } from "../utils/i18n";
+import { formatDuration } from "../utils/time";
+import { useNowTick } from "../services/clock";
 import { goalRevisionLabel } from "../utils/goal-label";
 import { showAppDialog } from "../services/app-dialog";
 import { Icon } from "./Icon";
@@ -39,20 +41,6 @@ function formatCostUSD(n: number): string {
   if (n < 0.01) return "<$0.01";
   if (n < 1) return "$" + n.toFixed(3);
   return "$" + n.toFixed(2);
-}
-
-/** Human-friendly duration in ms → "12s" / "3m 14s" / "1h 02m". Used by the
- *  CardHeader running-or-finished duration chip. */
-function formatDuration(ms: number): string {
-  if (!Number.isFinite(ms) || ms <= 0) return "";
-  const total = Math.round(ms / 1000);
-  if (total < 60) return `${total}s`;
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  if (minutes < 60) return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
-  const hours = Math.floor(minutes / 60);
-  const mm = minutes % 60;
-  return mm === 0 ? `${hours}h` : `${hours}h ${String(mm).padStart(2, "0")}m`;
 }
 
 function previewPlainText(text: string): string {
@@ -161,6 +149,31 @@ export function CardHeader(props: {
   const canAgentCancel = () =>
     props.node.status === "running" && !!props.agentSessionID && !!props.onAgentCancel;
 
+  // Single source for the card's elapsed/duration chip. Completed/error
+  // cards subtract `timeCompleted - time`; running cards subtract
+  // `now() - time` where `now` is a shared 1Hz tick (services/clock.ts).
+  // The tick is reference-counted, so any number of running cards share
+  // a single setInterval. Cards without a valid `time`, or finished
+  // cards missing `timeCompleted`, render nothing.
+  const now = useNowTick();
+  const durationMs = createMemo<number | null>(() => {
+    const start = props.node.time;
+    if (!Number.isFinite(start) || (start as number) <= 0) return null;
+    const end = props.node.timeCompleted;
+    if (Number.isFinite(end) && (end as number) > (start as number)) {
+      return (end as number) - (start as number);
+    }
+    if (props.node.status === "running") {
+      const ms = now() - (start as number);
+      return ms > 0 ? ms : null;
+    }
+    return null;
+  });
+  const durationText = createMemo(() => {
+    const ms = durationMs();
+    return ms === null ? "" : formatDuration(ms);
+  });
+
   const onCopy = async (e: MouseEvent | KeyboardEvent) => {
     e.stopPropagation();
     const text = collectCardText(props.node);
@@ -252,20 +265,13 @@ export function CardHeader(props: {
             <span class="card__round card__round--lead">{stepRevisionLabel()}</span>
           </Show>
           <span class="card__title">{t(props.node.title)}</span>
-          <Show when={(() => {
-            const start = props.node.time;
-            const end = props.node.timeCompleted;
-            if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
-            return (end as number) > (start as number);
-          })()}>
+          <Show when={durationText()}>
             <span
               class="card__duration"
-              title={t("card.duration_tooltip", {
-                value: formatDuration((props.node.timeCompleted as number) - props.node.time),
-              })}
+              title={t("card.duration_tooltip", { value: durationText() })}
               onClick={(e) => e.stopPropagation()}
             >
-              {formatDuration((props.node.timeCompleted as number) - props.node.time)}
+              {durationText()}
             </span>
           </Show>
           <Show when={props.node.subtitle}>
