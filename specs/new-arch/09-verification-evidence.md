@@ -5,7 +5,9 @@
 >
 > 现行公开 API：
 > - `verification/persist.ts` — `persistEvidence` / `findLatestGoalRunEvidence` /
->   `findLatestDeliveryEvidence` / `findGoalRunEvidence` / `findPreviousDeliveryEvidence`
+>   `findGoalRunEvidence` / `findLatestDeliveryEvidence`（**4 个 export**；该文件顶部注释里
+>   出现的 `findPreviousDeliveryEvidence` 名字属于跨文件描述，真函数是
+>   `delivery/manifest.ts:findPreviousDeliveryEvidenceManifest`，按 manifest 角度查 evidence）
 > - `verification/query.ts` — `queryEvidence` / `renderEvidence`（`query_evidence` tool 包装在
 >   `delivery/tools.ts` 的 `createDeliveryTools` 里）
 > - `delivery/arbiter.ts` — `arbitrateDeliveryGate` / `arbitrateDeliveryVerdict`
