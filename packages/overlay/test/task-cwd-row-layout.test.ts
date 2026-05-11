@@ -20,6 +20,10 @@ import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
 const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
+const OVERLAY_ROOT = path.resolve(import.meta.dir, "..", "src")
+const INDEX_HTML = readFileSync(path.join(OVERLAY_ROOT, "index.html"), "utf8")
+const TASK_DIR_BAR = readFileSync(path.join(OVERLAY_ROOT, "components", "TaskDirBar.tsx"), "utf8")
+const DOM_UTILS = readFileSync(path.join(OVERLAY_ROOT, "utils", "dom-utils.ts"), "utf8")
 
 function walkCss(dir: string): string[] {
   const out: string[] = []
@@ -74,5 +78,16 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     const body = soloRuleBody(".task-cwd-dropdown")
     expect(body).toMatch(/flex:\s*1\s+1\s+auto/)
     expect(body).toMatch(/min-width:\s*0/)
+  })
+
+  test("branch badge mounts beside the cwd dropdown instead of inside it", () => {
+    expect(INDEX_HTML).toMatch(/<span id="solidTaskDirMount"><\/span>/)
+    expect(INDEX_HTML).toMatch(/<span id="solidTaskVcsMount"><\/span>/)
+    expect(TASK_DIR_BAR).toMatch(/export function VcsBadge\(\)/)
+  })
+
+  test("path breadcrumb markup does not nest a second task-dir shell", () => {
+    expect(DOM_UTILS).not.toMatch(/<span class="task-dir-shell"/)
+    expect(DOM_UTILS).toMatch(/<span class="task-dir-path">/)
   })
 })

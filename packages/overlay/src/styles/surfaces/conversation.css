@@ -452,7 +452,9 @@
 .task-dir {
   min-width: 0;
   flex: 1;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
   padding: 0;
   border: none;
   border-radius: 0;
@@ -768,6 +770,7 @@
   line-height: 1;
   white-space: nowrap;
   cursor: default;
+  flex-shrink: 0;
 }
 
 .vcs-badge[data-tone="good"] {
@@ -985,10 +988,6 @@
 
 .task-dir[data-empty="false"] .task-dir-empty {
   display: none;
-}
-
-.task-dir[data-empty="true"] .task-dir-shell {
-  gap: calc(6px * var(--ui-scale));
 }
 
 .task-dir[data-empty="true"] .task-dir-path {

@@ -376,10 +376,8 @@ export function pathBreadcrumb(value: string): string {
   ].join("");
   if (!value) {
     return `
-      <span class="task-dir-shell" data-empty="true">
-        <span class="task-dir-empty">${escapeHtml(t("cwd.unavailable"))}</span>
-        <span class="task-dir-actions">${actions}</span>
-      </span>
+      <span class="task-dir-empty">${escapeHtml(t("cwd.unavailable"))}</span>
+      <span class="task-dir-actions">${actions}</span>
     `;
   }
   const items = pathItems(value);
@@ -395,9 +393,7 @@ export function pathBreadcrumb(value: string): string {
     })
     .join("");
   return `
-    <span class="task-dir-shell">
-      <span class="task-dir-path">${nodes}</span>
-      <span class="task-dir-actions">${actions}</span>
-    </span>
+    <span class="task-dir-path">${nodes}</span>
+    <span class="task-dir-actions">${actions}</span>
   `;
 }
