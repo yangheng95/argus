@@ -94,7 +94,11 @@ export function applyTheme(theme: string): void {
 
 // Tauri's native setOpacity is unreliable on transparent windows (returns ok
 // but the compositor ignores it on Windows DWM). Single source of truth: the
-// --ui-window-opacity CSS variable consumed by `body { opacity: ... }`.
+// --ui-window-opacity CSS variable, which the theme files fold into the
+// `--body-bg` alpha via color-mix(). At slider=100 the body bg becomes fully
+// opaque; lower values mix toward `transparent` so the desktop bleeds
+// through. We don't set `body { opacity }` — that would double-apply with
+// the bg alpha (rule 8) and would dim text/UI unnecessarily.
 export function applyOpacity(opacity: number): void {
   if (typeof document === "undefined") return;
   document.documentElement.style.setProperty(

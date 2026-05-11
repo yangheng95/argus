@@ -25,7 +25,18 @@ body[data-theme="light"] {
   --chat-canvas: rgba(255, 255, 255, 0.78);
   --inspector-surface: rgba(250, 252, 255, 0.9);
 
-  --body-bg: linear-gradient(135deg, rgba(251, 253, 255, 0.72) 0%, rgba(244, 247, 255, 0.66) 42%, rgba(238, 241, 255, 0.62) 100%);
+  /* Body background alpha tracks --ui-window-opacity (single source for
+   * window translucency, rule 8). Slider at 100 → calc(100%) → fully opaque;
+   * lower values mix toward `transparent`, exposing the Tauri transparent
+   * window. Color stops keep the original gradient hue shift; the per-stop
+   * alpha differences from the previous design are folded into the single
+   * opacity knob. */
+  --body-bg: linear-gradient(
+    135deg,
+    color-mix(in srgb, rgb(251, 253, 255) calc(var(--ui-window-opacity) * 100%), transparent) 0%,
+    color-mix(in srgb, rgb(244, 247, 255) calc(var(--ui-window-opacity) * 100%), transparent) 42%,
+    color-mix(in srgb, rgb(238, 241, 255) calc(var(--ui-window-opacity) * 100%), transparent) 100%
+  );
   --panel-body-bg: rgba(255, 255, 255, 0.44);
   --panel-body-blur: blur(20px);
   --chrome: rgba(255, 255, 255, 0.78);
@@ -74,20 +85,20 @@ body[data-theme="light"] {
   --subtle-3: color-mix(in srgb, var(--accent) 8.5%, transparent);
   --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
-  --dialog-bg: rgba(255, 255, 255, 0.86);
+  --dialog-bg: rgb(255, 255, 255);
   --dialog-backdrop: rgba(0, 0, 0, 0.4);
   --ui-scrim: color-mix(in srgb, black 40%, transparent);
   --ui-shadow-tone: color-mix(in srgb, black 12%, transparent);
   --ui-highlight-tone: color-mix(in srgb, white 56%, transparent);
   --ui-glass-tint: color-mix(in srgb, white 62%, transparent);
-  --executor-menu-bg: rgba(255, 255, 255, 0.86);
+  --executor-menu-bg: var(--menu-panel-bg);
   --executor-menu-shadow:
     0 calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale)) var(--ui-shadow-tone);
   --executor-menu-row-hover-bg: var(--subtle-5);
   --task-bar-bg: var(--ui-glass-tint);
   --task-bar-backdrop-filter: blur(calc(18px * var(--ui-scale)));
   --task-bar-border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
-  --menu-panel-bg: rgba(255, 255, 255, 0.86);
+  --menu-panel-bg: rgb(255, 255, 255);
   --divider-soft: rgba(92, 112, 163, 0.12);
   --panel-fill:
     linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 58%, rgba(255, 255, 255, 0.5)),

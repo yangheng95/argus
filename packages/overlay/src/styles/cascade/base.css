@@ -89,7 +89,6 @@ body {
   position: relative;
   isolation: isolate;
   background: var(--body-bg);
-  opacity: var(--ui-window-opacity, 1);
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;

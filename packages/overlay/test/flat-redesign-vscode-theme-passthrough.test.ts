@@ -43,7 +43,7 @@ describe("vscode-dark overlay palette — no host-token passthrough", () => {
     expect(themeToken(VSCODE_DARK, "--chrome")).toBe("rgba(60, 60, 60, 0.76)")
     expect(themeToken(VSCODE_DARK, "--text")).toBe("#cccccc")
     expect(themeToken(VSCODE_DARK, "--accent")).toBe("#007acc")
-    expect(themeToken(VSCODE_DARK, "--menu-panel-bg")).toBe("rgba(31, 31, 31, 0.9)")
+    expect(themeToken(VSCODE_DARK, "--menu-panel-bg")).toBe("rgb(31, 31, 31)")
   })
 })
 

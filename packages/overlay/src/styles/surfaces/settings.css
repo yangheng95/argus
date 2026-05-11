@@ -2551,7 +2551,7 @@
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: var(--oc-radius-large);
   border: var(--oc-border-width) solid var(--border);
-  background: var(--surface);
+  background: var(--dialog-bg);
   color: var(--text);
   font-size: var(--ui-font-body);
   line-height: 1.45;
@@ -2571,19 +2571,19 @@
 
 .config-inline-popup[data-status="active"] {
   border-color: color-mix(in srgb, var(--good) 30%, transparent);
-  background: var(--good-dim);
+  background: color-mix(in srgb, var(--good) 10%, var(--dialog-bg));
   color: var(--good);
 }
 
 .config-inline-popup[data-status="warn"] {
   border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-  background: var(--warn-dim);
+  background: color-mix(in srgb, var(--warn) 10%, var(--dialog-bg));
   color: var(--warn);
 }
 
 .config-inline-popup[data-status="error"] {
   border-color: color-mix(in srgb, var(--bad) 30%, transparent);
-  background: var(--bad-dim);
+  background: color-mix(in srgb, var(--bad) 10%, var(--dialog-bg));
   color: var(--bad);
 }
 

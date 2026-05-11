@@ -34,7 +34,11 @@ body[data-theme="dark"] {
   --chat-canvas: var(--bg);
   --inspector-surface: var(--surface);
 
-  --body-bg: var(--bg);
+  /* Body background alpha tracks --ui-window-opacity (single source for
+   * window translucency, rule 8). Does NOT alias --bg because --bg is the
+   * fixed-alpha surface tint shared by panels/canvases; only the body
+   * itself reacts to the opacity slider. */
+  --body-bg: color-mix(in srgb, rgb(26, 27, 30) calc(var(--ui-window-opacity) * 100%), transparent);
   --panel-body-bg: var(--bg);
   --panel-body-blur: none;
   --chrome: rgba(32, 34, 38, 0.76);
@@ -79,7 +83,7 @@ body[data-theme="dark"] {
   --subtle-3: rgba(255, 255, 255, 0.07);
   --subtle-4: rgba(255, 255, 255, 0.09);
   --subtle-5: rgba(255, 255, 255, 0.12);
-  --dialog-bg: rgba(40, 42, 46, 0.84);
+  --dialog-bg: rgb(40, 42, 46);
   --dialog-backdrop: rgba(0, 0, 0, 0.38);
   --ui-scrim: rgba(0, 0, 0, 0.38);
   --ui-shadow-tone: rgba(0, 0, 0, 0.32);
@@ -93,7 +97,7 @@ body[data-theme="dark"] {
   --task-bar-bg: var(--chrome);
   --task-bar-backdrop-filter: none;
   --task-bar-border-color: var(--border);
-  --menu-panel-bg: rgba(32, 34, 38, 0.9);
+  --menu-panel-bg: rgb(32, 34, 38);
   --divider-soft: rgba(255, 255, 255, 0.06);
   --panel-fill: var(--surface);
   --panel-fill-hover:
