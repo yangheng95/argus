@@ -31,13 +31,16 @@ import {
 // powers the conversation view.
 function writeToTree(event: any): void {
   applyTreeWriterEvent(event);
-  // Permission / question prompts surface as `interaction.created`; ring
+  // Permission / question prompts surface as `interaction.requested`; ring
   // the OS so an operator who has tabbed away gets pulled back. Lifecycle
   // events live in the global task-list stream and are handled by
   // handleTaskListNotification — this branch only handles the per-task
-  // stream's interaction signal.
+  // stream's interaction signal. The producer name is `interaction.requested`
+  // (engine/model.ts::Event.InteractionRequested); a previous typo
+  // (`interaction.created`) silently never matched and left the OS toast for
+  // "LLM is waiting on your answer" inert.
   const type = String(event?.type || "");
-  if (type === "interaction.created") {
+  if (type === "interaction.requested") {
     const props = event?.properties ?? event?.payload ?? {};
     const taskID = String(props.taskID || "");
     const summary = typeof props.summary === "string" ? props.summary
@@ -604,7 +607,7 @@ export function handleEventStreamEvent(event: any): void {
   // `routeSSEEvent` (unconditional `writeToTree(event)` before its
   // early returns). Calling it here again would double every side
   // effect — in particular `notifyInteractionRequested` fired twice
-  // per `interaction.created` event. This function now only owns the
+  // per `interaction.requested` event. This function now only owns the
   // board / task-sequence refresh path; tree projection is single-
   // sourced through routeSSEEvent.
   if (type.startsWith("message.")) {

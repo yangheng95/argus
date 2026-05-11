@@ -110,18 +110,37 @@ describe("orchestrator protocol", () => {
           error: "something went wrong",
         }, "Task failed")
 
+        // The state writer emits task.updated AND the terminal counterpart
+        // (task.failed here) on every status transition. Both must land in
+        // the protocol log so OS-toast / channel-runtime consumers can
+        // subscribe to the terminal event directly without re-deriving the
+        // transition from a stream of task.updated.
         let events = await EngineService.listProtocolEvents(taskID)
-        for (const _ of Array.from({ length: 20 })) {
-          if (events.length > 0) break
+        for (const _ of Array.from({ length: 40 })) {
+          if (events.length >= 2) break
           await Bun.sleep(20)
           events = await EngineService.listProtocolEvents(taskID)
         }
-        expect(events).toHaveLength(1)
+        expect(events.map((event) => event.type)).toEqual([
+          "task.updated",
+          "task.failed",
+        ])
         expect(events[0]).toMatchObject({
           type: "task.updated",
           source: "state.task",
           summary: "Task failed",
           sequence: 1,
+        })
+        expect(events[1]).toMatchObject({
+          type: "task.failed",
+          source: "state.task",
+          summary: "Task failed",
+          sequence: 2,
+        })
+        expect(events[1]?.payload).toMatchObject({
+          taskID,
+          status: "failed",
+          error: "something went wrong",
         })
 
         // Phase-6-f-2: task.status column deleted; derive status from
@@ -129,6 +148,87 @@ describe("orchestrator protocol", () => {
         const stored = findTask(taskID)
         const { deriveTaskStatus } = await import("../../src/engine/task-status")
         expect(stored ? deriveTaskStatus(stored) : undefined).toBe("failed")
+      },
+    })
+  })
+
+  test("emits task.completed when transition is queued → completed", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const row = findTask(taskID)
+        if (!row) throw new Error("missing seeded task")
+
+        await updateTask(row, { status: "completed" }, "Task done")
+
+        let events = await EngineService.listProtocolEvents(taskID)
+        for (const _ of Array.from({ length: 40 })) {
+          if (events.length >= 2) break
+          await Bun.sleep(20)
+          events = await EngineService.listProtocolEvents(taskID)
+        }
+        expect(events.map((event) => event.type)).toEqual([
+          "task.updated",
+          "task.completed",
+        ])
+      },
+    })
+  })
+
+  test("emits task.cancelled when transition is queued → cancelled", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const row = findTask(taskID)
+        if (!row) throw new Error("missing seeded task")
+
+        await updateTask(row, {
+          status: "cancelled",
+          error: "Operator cancelled",
+        }, "Task cancelled")
+
+        let events = await EngineService.listProtocolEvents(taskID)
+        for (const _ of Array.from({ length: 40 })) {
+          if (events.length >= 2) break
+          await Bun.sleep(20)
+          events = await EngineService.listProtocolEvents(taskID)
+        }
+        expect(events.map((event) => event.type)).toEqual([
+          "task.updated",
+          "task.cancelled",
+        ])
+      },
+    })
+  })
+
+  test("does NOT emit a terminal event when status does not change", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const row = findTask(taskID)
+        if (!row) throw new Error("missing seeded task")
+
+        await updateTask(row, {
+          status: "failed",
+          error: "first failure",
+        }, "Task failed")
+        // Re-call updateTask on a task already in failed state with a new
+        // summary. deriveTaskStatus is still "failed", so the terminal event
+        // must NOT fire again — only the task.updated pulse should land.
+        const after = findTask(taskID)
+        if (!after) throw new Error("task disappeared")
+        await updateTask(after, { error: "still failing, retried" }, "Retried")
+
+        let events = await EngineService.listProtocolEvents(taskID)
+        for (const _ of Array.from({ length: 40 })) {
+          if (events.length >= 3) break
+          await Bun.sleep(20)
+          events = await EngineService.listProtocolEvents(taskID)
+        }
+        const types = events.map((event) => event.type)
+        expect(types.filter((type) => type === "task.failed")).toHaveLength(1)
+        // task.updated may fire once or twice depending on the second call's
+        // no-op guard; the point is only ONE task.failed in either case.
       },
     })
   })

@@ -284,7 +284,7 @@ export const EVENTS: FixtureEvent[] = [
   }, 4200),
 
   // ── Interaction (permission request) during execution ──
-  e("interaction.created", {
+  e("interaction.requested", {
     interaction: {
       id: "int_1",
       type: "permission",

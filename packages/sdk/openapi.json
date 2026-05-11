@@ -26042,6 +26042,129 @@
           "properties"
         ]
       },
+      "Event.task.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "active",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "active",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.cancelled": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.cancelled"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "active",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.spec.created": {
         "type": "object",
         "properties": {
@@ -30801,6 +30924,15 @@
           },
           {
             "$ref": "#/components/schemas/Event.task.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.completed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.cancelled"
           },
           {
             "$ref": "#/components/schemas/Event.spec.created"
