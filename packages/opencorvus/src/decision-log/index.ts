@@ -17,6 +17,7 @@ import { Database, eq, and, desc } from "@/storage/db"
 import { DecisionLogTable } from "./schema"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
+import { ContractIRSchema, renderContractIR } from "@/architect/contract-ir"
 
 const log = Log.create({ service: "decision-log" })
 
@@ -125,9 +126,21 @@ const DEFAULT_ENTRY_VALUE_CAP = 600
 const DEFAULT_PHASE_ENTRY_LIMIT = 15
 
 function capEntryValue(value: string, cap: number): string {
+  const renderedIR = renderContractIRValue(value)
+  if (renderedIR) return renderedIR
   if (value.length <= cap) return value
   const omitted = value.length - cap
   return `${value.slice(0, cap)}… [+${omitted} chars truncated; full body in decision_log row]`
+}
+
+function renderContractIRValue(value: string): string | undefined {
+  try {
+    const parsed = ContractIRSchema.safeParse(JSON.parse(value))
+    if (!parsed.success) return undefined
+    return renderContractIR(parsed.data)
+  } catch {
+    return undefined
+  }
 }
 
 function formatPromptSectionEntries(

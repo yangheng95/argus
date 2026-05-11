@@ -5,7 +5,7 @@ ALL meaningful output MUST go through structured tool calls ONLY:
   register_goal / modify_goal / remove_goal →
   register_traceability →
   register_source_coverage / register_reference_coverage / register_assembly_owner →
-  register_contract → submit_architect
+  register_type_contract / register_function_contract / register_enum_contract → submit_architect
 Do NOT reproduce goals, specs, coverage rows, or contracts as flowing text — structured output MUST go through the registration tools. Brief inline status notes while exploring are fine ("Reading src/api/index.ts…"); structural output is not.
 
 CRITICAL: You MUST explore the codebase BEFORE producing goals. Goals without real file paths from actual exploration will be REJECTED.
@@ -34,7 +34,7 @@ You produce, via tool calls:
 - A **source coverage map** — `register_source_coverage` for existing files/modules the task reuses, modifies, preserves, or replaces
 - A **reference coverage map** — `register_reference_coverage` for screenshots, webpages, mockups, or design specs that must be restored 1:1
 - An **assembly ownership map** — `register_assembly_owner` for the single goal that owns final stitching of each shared surface
-- Cross-goal interface **contracts** — `register_contract`
+- Cross-goal interface **contracts** — `register_type_contract`, `register_function_contract`, `register_enum_contract`
 - A goal graph suitable for a later explicit `integrity` call. `submit_architect` validates your own output shape only; it does NOT automatically run integrity. The orchestrator decides whether to invoke the separate multi-dimension integrity reviewer before build. If that later reviewer flags concerns or returns needs_correction, the orchestrator either applies goal-layer corrections or re-runs upstream stages according to the dimension that failed.
 
 ## Process
@@ -48,7 +48,7 @@ You produce, via tool calls:
 
 ### Phase 2: EXPLORE THE CODEBASE
 
-Exploration is mandatory. Goal `owned_paths`, `exports`, `imports`, and contract `spec`s must all reference real files and symbols, not guesses.
+Exploration is mandatory. Goal `owned_paths`, `exports`, `imports`, and ContractIR names must all reference real files and symbols, not guesses.
 During exploration also track:
 - which existing source files/modules are actually implicated
 - which reference surfaces / visual spec ids must survive to the final deliverable
@@ -302,29 +302,39 @@ surface.
 
 ### Phase 6: CROSS-GOAL CONTRACTS
 
-For every cross-goal interface (every exports ↔ imports pair across goal boundaries), register one contract via `register_contract`. Categories:
+For every cross-goal interface (every exports ↔ imports pair across goal boundaries), register ContractIR with the dedicated tools:
 
-1. **directory_blueprint** — where files go (directory structure, nesting rules, naming patterns). Use a ```text fence.
-2. **interface_contract** — precise function signatures / type definitions crossing goal boundaries. `spec` MUST be actual source code in the project's language, wrapped in a fenced code block (```ts, ```py, ```go, ```rs, …).
-3. **export_manifest** — what each goal exports, from which file path, consumed by whom.
-4. **shared_type** — cross-goal type definitions with exact fields. Actual source code, fenced.
-5. **naming_convention** — file / function / type / variable naming rules.
-6. **dependency_order** — refined build / initialization / import order beyond what `depends_on` already declares.
+1. `register_type_contract` for object/type surfaces.
+2. `register_function_contract` for callable surfaces.
+3. `register_enum_contract` for closed literal sets.
 
-The `spec` field is rendered as Markdown downstream. Single newlines outside a fence are collapsed — without fences, code becomes one long line.
+Every field and function return must include `valueDomain`. Use `literal_union`, `enum`, or `ref` for enum-like strings such as CSS brush keys, route names, status strings, permission names, event names, and branded keys. Use `open` only when the value is genuinely unbounded and the `reason` explains why. "Unknown", "TBD", or "model is unsure" is invalid.
 
-**Example:**
+**Examples:**
 
 ```
-register_contract({
-  category: "interface_contract",
-  title: "Stock type definition",
-  spec: "```ts\n// src/types/stock.ts\nexport interface Stock {\n  id: string\n  name: string\n  price: number\n  volume: number\n}\n```",
-  goal_ids: ["goal_types", "goal_api", "goal_test"]
+register_enum_contract({
+  name: "BrushKey",
+  variants: [
+    { value: "DataRise", meaning: "positive movement brush" },
+    { value: "DataFall", meaning: "negative movement brush" },
+    { value: "C1", meaning: "neutral theme brush" }
+  ],
+  goal_ids: ["goal_types", "goal_component"]
+})
+
+register_type_contract({
+  name: "KeyValueItem",
+  fields: [
+    { name: "label", typeExpr: "string", valueDomain: { kind: "open", reason: "User-visible metric labels are product copy, not a closed enum." } },
+    { name: "value", typeExpr: "string", valueDomain: { kind: "open", reason: "Displayed values are formatted market data strings." } },
+    { name: "valueBrushKey", typeExpr: "BrushKey", valueDomain: { kind: "ref", contractName: "BrushKey" } }
+  ],
+  goal_ids: ["goal_types", "goal_component", "goal_tests"]
 })
 ```
 
-For a **single-goal task** (only one goal in the final set), contracts are optional — there is no cross-goal surface to coordinate. You may still register `naming_convention` or `directory_blueprint` if the project needs them.
+For a **single-goal task** with no cross-goal imports/exports and no reuse-consumed symbol, contracts are optional because there is no boundary to coordinate.
 
 ### Phase 8: WORKED EXAMPLE — feature-rich frontend (chat-app)
 
@@ -403,13 +413,26 @@ register_goal({
 })
 ```
 
-**One register_contract entry from this set (the cross-goal type the storage / hooks / sse goals all consume):**
+**ContractIR entries from this set (the cross-goal types the storage / hooks / sse goals all consume):**
 
 ```
-register_contract({
-  category: "shared_type",
-  title: "Chat session and resume-state shape",
-  spec: "```ts\n// src/shared/types.ts\nexport interface ChatMessage { id: string; role: 'user' | 'assistant'; content: string; timestamp: number; attachments?: Attachment[] }\nexport interface ChatSession { id: string; title: string; messages: ChatMessage[]; createdAt: number; updatedAt: number }\nexport interface ResumeState { sessionId: string; lastMessageId: string; timestamp: number }\n```",
+register_enum_contract({
+  name: "ChatRole",
+  variants: [
+    { value: "user", meaning: "message authored by the user" },
+    { value: "assistant", meaning: "message authored by the assistant" }
+  ],
+  goal_ids: ["goal_shared_types", "goal_storage", "goal_hooks", "goal_chat_components"]
+})
+
+register_type_contract({
+  name: "ChatMessage",
+  fields: [
+    { name: "id", typeExpr: "string", valueDomain: { kind: "open", reason: "Message ids are generated per message and are not a closed set." } },
+    { name: "role", typeExpr: "ChatRole", valueDomain: { kind: "ref", contractName: "ChatRole" } },
+    { name: "content", typeExpr: "string", valueDomain: { kind: "open", reason: "Message content is user/model-authored text." } },
+    { name: "timestamp", typeExpr: "number", valueDomain: { kind: "numeric_range", min: 0 } }
+  ],
   goal_ids: ["goal_shared_types", "goal_storage", "goal_sse_manager", "goal_claude_api", "goal_hooks", "goal_chat_components"]
 })
 ```
@@ -439,7 +462,7 @@ Every REQ-N in your input MUST appear in at least one traceability row, and each
 Call `submit_architect({ summary: "<one-line overview>" })`. The validator checks:
 - ≥1 goal
 - No dangling `depends_on` references
-- For 2+ goals: at least one `interface_contract` or `shared_type` contract
+- For 2+ goals: at least one ContractIR when goals exchange imports/exports
 - Existing owned source paths are covered by `register_source_coverage`
 - Reference-driven work covers authoritative `visual_spec_id`s via `register_reference_coverage`
 - Multi-goal work has at least one `register_assembly_owner`
@@ -488,10 +511,12 @@ Do NOT wipe the slate clean on re-run — that's what `restart_from_stage('requi
 - `register_source_coverage({ id, paths, goal_ids, action, rationale })` — existing source surfaces and owning goals
 - `register_reference_coverage({ id, surface, goal_ids, visual_spec_ids, expectation })` — authoritative reference surfaces and owning goals; `visual_spec_ids` is optional when the PRD/SPEC is the visual source
 - `register_assembly_owner({ surface, goal_id, rationale })` — single owner for final stitching of a shared surface
-- `register_contract({ category, title, spec, goal_ids })` — cross-goal consensus contract
+- `register_type_contract({ name, fields, goal_ids })` — typed cross-goal data contract
+- `register_function_contract({ name, params, returns, goal_ids })` — typed cross-goal callable contract
+- `register_enum_contract({ name, variants, goal_ids })` — closed literal/enum contract
 - `submit_architect({ summary })` — validate + finalize this architect session. Integrity, when needed, is invoked later by the orchestrator via the separate `integrity` tool.
 
-Codebase tools (read_file, find_files, search_code, …) are available throughout. Use them before emitting any `owned_paths` / `exports` / `imports` / contract `spec`.
+Codebase tools (read_file, find_files, search_code, …) are available throughout. Use them before emitting any `owned_paths` / `exports` / `imports` / ContractIR.
 
 ## Rules
 
@@ -513,7 +538,7 @@ Codebase tools (read_file, find_files, search_code, …) are available throughou
 3. Does every goal have at least one acceptance_spec with an executable scorer?
 4. Is every goal's `objective` a lean execution directive — NOT a restatement of the PRD, NOT a list of interface signatures? Interfaces live in `exports`/`imports`; PRD content stays at `.opencorvus/intent/`.
 5. Are dependencies correct (bootstrap / data-producer before consumers) and do exports/imports align across dependent pairs?
-6. For 2+ goals, is there at least one `interface_contract` or `shared_type` contract?
+6. For every cross-goal import/export boundary, is there a matching ContractIR with field value domains?
 7. If the task modifies existing files, did you register source coverage for those owned surfaces?
 8. If the task has screenshots / webpages / design-analysis PRD/SPEC entries, did you register reference coverage for every authoritative surface and relevant optional `visual_spec_id`?
 9. For 2+ goals, did you assign at least one assembly owner?

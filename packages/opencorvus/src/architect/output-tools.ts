@@ -24,17 +24,22 @@ import {
 } from "@/pipeline/goal-contract.schema"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import type { VisualSpec } from "@/design-analyst/types"
-import type {
-  ArchitectContract,
-  ArchitectDecisionKey,
-  TraceabilityEntry,
-} from "./types"
+import type { TraceabilityEntry } from "./types"
 import {
   architectFidelityIssues,
   AssemblyOwnerEntrySchema,
   SourceCoverageEntrySchema,
   ReferenceCoverageEntrySchema,
 } from "./fidelity"
+import {
+  ContractIRSchema,
+  FieldSpecSchema,
+  TypeSpecSchema,
+  contractCategory,
+  renderContractIR,
+  type ContractIR,
+} from "./contract-ir"
+import { linkContracts } from "./linker"
 
 // ---------------------------------------------------------------------------
 // Collector — single buffer for the full Architect output
@@ -55,9 +60,7 @@ export interface RegisteredGoal {
 }
 
 export interface RegisteredContract {
-  category: ArchitectDecisionKey
-  title: string
-  spec: string
+  ir: ContractIR
   goalIDs: string[]
 }
 
@@ -80,15 +83,6 @@ type ArchitectValidationInput = {
   requireReferenceCoverage?: boolean
   referenceCoverageReasons?: string[]
 }
-
-const VALID_CONTRACT_CATEGORIES: ArchitectDecisionKey[] = [
-  "directory_blueprint",
-  "interface_contract",
-  "export_manifest",
-  "shared_type",
-  "naming_convention",
-  "dependency_order",
-]
 
 function toRegisteredGoal(input: unknown): RegisteredGoal {
   const parsed = normalizeGoalContractFields(
@@ -165,7 +159,7 @@ export function architectValidationIssues(
   for (const contract of collector.contracts) {
     const unknownGoalIDs = contract.goalIDs.filter((goalID) => !knownGoalIDs.has(goalID))
     if (unknownGoalIDs.length > 0) {
-      issues.push(`Contract "${contract.title}": references unknown goals ${unknownGoalIDs.join(", ")}`)
+      issues.push(`Contract "${contract.ir.name}": references unknown goals ${unknownGoalIDs.join(", ")}`)
     }
   }
 
@@ -196,16 +190,23 @@ export function architectValidationIssues(
     }
   }
 
-  const categories = new Set(collector.contracts.map((c) => c.category))
   if (collector.goals.length >= 2) {
-    if (
-      !categories.has("interface_contract") &&
-      !categories.has("shared_type")
-    ) {
+    if (collector.contracts.length === 0) {
       issues.push(
-        "No interface_contract or shared_type contract - cross-goal types will be undefined",
+        "No ContractIR registered - cross-goal imports/exports will be undefined",
       )
     }
+  }
+
+  const linked = linkContracts({
+    goals: collector.goals,
+    contracts: collector.contracts,
+    sourceCoverage: collector.source_coverage,
+    workDir: input?.workDir ?? Instance.directory,
+  })
+  for (const issue of linked.issues) {
+    const scope = issue.goalID ? `Goal ${issue.goalID}: ` : ""
+    issues.push(`Linker ${issue.kind}: ${scope}${issue.detail}`)
   }
 
   issues.push(
@@ -602,56 +603,44 @@ export function createArchitectOutputTools(input: {
       },
     }),
 
-    register_contract: tool({
+    register_type_contract: tool({
       description:
-        "Register a cross-goal consensus contract. Each contract is written to " +
-        "the Decision Log and becomes BINDING for all Planners and Executors. " +
-        "For interface_contract and shared_type categories, spec MUST be actual " +
-        "source code in the project's language, wrapped in a fenced code block.",
+        "Register a typed cross-goal data contract. Every field must declare a valueDomain; use ref/literal_union/enum for enum-like strings and open only for truly unbounded values with a concrete reason.",
       inputSchema: z.object({
-        category: z
-          .enum([
-            "directory_blueprint",
-            "interface_contract",
-            "export_manifest",
-            "shared_type",
-            "naming_convention",
-            "dependency_order",
-          ] as const)
-          .describe("Contract category — determines how it's used downstream"),
-        title: z.string().min(1).describe("Short title for this contract"),
-        spec: z
-          .string()
-          .min(10)
-          .describe(
-            "The contract specification. Rendered as Markdown downstream — wrap " +
-              "source code in a fenced block tagged with the project's actual " +
-              "language (```ts, ```py, ```go, ```rs, ```java, ```sql, ...) and " +
-              "directory trees / ASCII layouts in ```text. For interface_contract " +
-              "and shared_type, this MUST be actual source code (not English " +
-              "description). For directory_blueprint, use path → description " +
-              "format inside a ```text fence.",
-          ),
-        goal_ids: z
-          .array(z.string().min(1))
-          .min(1)
-          .describe("Goal IDs this contract relates to (producer + consumers)"),
+        name: z.string().min(1),
+        fields: z.array(FieldSpecSchema).min(1),
+        goal_ids: z.array(z.string().min(1)).min(1),
       }),
-      execute: async ({ category, title, spec, goal_ids }) => {
-        const knownGoals = new Set(collector.goals.map((g) => g.id))
-        const unknown = goal_ids.filter((g) => !knownGoals.has(g))
-        if (unknown.length > 0) {
-          return `Error: goal IDs not found: ${unknown.join(", ")}. Register the goals first.`
-        }
-        if (
-          (category === "interface_contract" || category === "shared_type") &&
-          !spec.includes("```")
-        ) {
-          return `Warning: ${category} spec must contain a fenced code block (\`\`\`<lang> ... \`\`\`) with actual source code, not an English description.`
-        }
-        collector.contracts.push({ category, title, spec, goalIDs: goal_ids })
-        return `OK: ${category} "${title}" registered (${collector.contracts.length} contracts total)`
-      },
+      execute: async ({ name, fields, goal_ids }) =>
+        registerIRContract({ kind: "type", name, fields }, goal_ids),
+    }),
+
+    register_function_contract: tool({
+      description:
+        "Register a typed cross-goal function contract. Parameters and return value must declare valueDomain.",
+      inputSchema: z.object({
+        name: z.string().min(1),
+        params: z.array(FieldSpecSchema),
+        returns: TypeSpecSchema,
+        goal_ids: z.array(z.string().min(1)).min(1),
+      }),
+      execute: async ({ name, params, returns, goal_ids }) =>
+        registerIRContract({ kind: "function", name, params, returns }, goal_ids),
+    }),
+
+    register_enum_contract: tool({
+      description:
+        "Register a closed cross-goal enum/literal contract. Consumers should reference this by name through valueDomain kind=ref.",
+      inputSchema: z.object({
+        name: z.string().min(1),
+        variants: z.array(z.object({
+          value: z.string().min(1),
+          meaning: z.string().min(1),
+        })).min(1),
+        goal_ids: z.array(z.string().min(1)).min(1),
+      }),
+      execute: async ({ name, variants, goal_ids }) =>
+        registerIRContract({ kind: "enum", name, variants }, goal_ids),
     }),
 
     submit_architect: tool({
@@ -666,7 +655,7 @@ export function createArchitectOutputTools(input: {
       execute: async ({ summary }) => {
         collector.summary = summary
         const issues = validate()
-        const categories = new Set(collector.contracts.map((c) => c.category))
+        const categories = new Set(collector.contracts.map((c) => contractCategory(c.ir)))
 
         if (issues.length === 0) {
           collector.finalized = true
@@ -682,6 +671,22 @@ export function createArchitectOutputTools(input: {
         return `ISSUES (${issues.length}):\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}\n\nFix and call submit_architect again.`
       },
     }),
+  }
+
+  function registerIRContract(irInput: ContractIR, goalIDs: string[]): string {
+    const ir = ContractIRSchema.parse(irInput)
+    const knownGoals = new Set(collector.goals.map((g) => g.id))
+    const unknown = goalIDs.filter((g) => !knownGoals.has(g))
+    if (unknown.length > 0) {
+      return `Error: goal IDs not found: ${unknown.join(", ")}. Register the goals first.`
+    }
+    const existingIdx = collector.contracts.findIndex((contract) => contract.ir.name === ir.name)
+    if (existingIdx >= 0) {
+      collector.contracts[existingIdx] = { ir, goalIDs }
+      return `OK: ${contractCategory(ir)} "${ir.name}" overwritten (${collector.contracts.length} contracts total)\n${renderContractIR(ir)}`
+    }
+    collector.contracts.push({ ir, goalIDs })
+    return `OK: ${contractCategory(ir)} "${ir.name}" registered (${collector.contracts.length} contracts total)\n${renderContractIR(ir)}`
   }
 
   return {

@@ -6,7 +6,6 @@ import path from "path"
 import {
   architectValidationIssues,
   createArchitectOutputTools,
-  isArchitectReadyToFinalize,
 } from "../../src/architect/output-tools"
 
 function freshWorkDir() {
@@ -26,6 +25,12 @@ function acceptance(goalID: string, requirementID: string) {
         name: `${goalID}-tests`,
         spec: { kind: "shell" as const, cmd: "bun test" },
         expect: { exit_code: 0 },
+      },
+      {
+        type: "contract_audit" as const,
+        name: `${goalID}-contract-ir`,
+        spec: { kind: "contract_ir" as const },
+        expect: { status: "passed" as const },
       },
     ],
   }
@@ -92,10 +97,53 @@ async function registerAssemblyOwner(
   )
 }
 
-function readinessMatchesSubmitPrecondition(
-  collector: ReturnType<ReturnType<typeof createArchitectOutputTools>["getCollector"]>,
+function openField(name: string = "value") {
+  return {
+    name,
+    typeExpr: "unknown",
+    valueDomain: {
+      kind: "open" as const,
+      reason: "Runtime integration value can vary by framework adapter.",
+    },
+  }
+}
+
+function typeContract(name: string, fields = [openField()]) {
+  return {
+    kind: "type" as const,
+    name,
+    fields,
+  }
+}
+
+async function registerTypeContract(
+  tools: ReturnType<typeof createArchitectOutputTools>["tools"],
+  name: string,
+  goalIDs: string[],
+  fields = [openField()],
 ) {
-  expect(isArchitectReadyToFinalize(collector)).toBe(architectValidationIssues(collector).length === 0)
+  await tools.register_type_contract.execute!(
+    {
+      name,
+      fields,
+      goal_ids: goalIDs,
+    } as any,
+    {} as any,
+  )
+}
+
+function validationIssues(
+  collector: ReturnType<ReturnType<typeof createArchitectOutputTools>["getCollector"]>,
+  workDir: string = freshWorkDir(),
+) {
+  return architectValidationIssues(collector, { workDir })
+}
+
+function readinessMatchesSubmitPrecondition(
+  kit: ReturnType<typeof createArchitectOutputTools>,
+  workDir: string = freshWorkDir(),
+) {
+  expect(kit.isReadyToFinalize()).toBe(validationIssues(kit.getCollector(), workDir).length === 0)
 }
 
 test("remove_goal cascades to traceability, contracts, and fidelity rows", async () => {
@@ -114,15 +162,7 @@ test("remove_goal cascades to traceability, contracts, and fidelity rows", async
     {} as any,
   )
 
-  await tools.register_contract.execute!(
-    {
-      category: "interface_contract",
-      title: "Router shape",
-      spec: "```ts\nexport type Router = unknown\n```",
-      goal_ids: ["goal_feature", "goal_verify"],
-    } as any,
-    {} as any,
-  )
+  await registerTypeContract(tools, "Router", ["goal_feature", "goal_verify"])
   await registerAssemblyOwner(tools)
   await tools.register_source_coverage.execute!(
     {
@@ -134,15 +174,7 @@ test("remove_goal cascades to traceability, contracts, and fidelity rows", async
     } as any,
     {} as any,
   )
-  await tools.register_contract.execute!(
-    {
-      category: "shared_type",
-      title: "Verify-only type",
-      spec: "```ts\nexport type T = unknown\n```",
-      goal_ids: ["goal_verify"],
-    } as any,
-    {} as any,
-  )
+  await registerTypeContract(tools, "T", ["goal_verify"])
 
   const before = kit.getCollector()
   expect(before.traceability.length).toBe(2)
@@ -162,7 +194,7 @@ test("remove_goal cascades to traceability, contracts, and fidelity rows", async
   const reqTwo = c.traceability.find((t) => t.requirementID === "REQ-2")!
   expect(reqTwo.goalIDs).toEqual(["goal_feature"])
   expect(c.source_coverage[0].goal_ids).toEqual(["goal_feature"])
-  expect(c.contracts.map((x) => x.title)).toEqual(["Router shape"])
+  expect(c.contracts.map((x) => x.ir.name)).toEqual(["Router"])
   expect(c.contracts[0].goalIDs).toEqual(["goal_feature"])
 })
 
@@ -236,15 +268,7 @@ test("remove_goal followed by submit_architect finalizes without orphaned depend
     { requirement_id: "REQ-3", goal_ids: ["goal_old"] } as any,
     {} as any,
   )
-  await tools.register_contract.execute!(
-    {
-      category: "interface_contract",
-      title: "Router",
-      spec: "```ts\nexport type Router = unknown\n```",
-      goal_ids: ["goal_feature", "goal_verify", "goal_old"],
-    } as any,
-    {} as any,
-  )
+  await registerTypeContract(tools, "Router", ["goal_feature", "goal_verify", "goal_old"])
   await registerAssemblyOwner(tools)
 
   await tools.remove_goal.execute!(
@@ -278,15 +302,7 @@ test("submit_architect rejects missing source coverage for existing owned paths"
     { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
     {} as any,
   )
-  await tools.register_contract.execute!(
-    {
-      category: "interface_contract",
-      title: "Router",
-      spec: "```ts\nexport type Router = unknown\n```",
-      goal_ids: ["goal_feature", "goal_verify"],
-    } as any,
-    {} as any,
-  )
+  await registerTypeContract(tools, "Router", ["goal_feature", "goal_verify"])
   await registerAssemblyOwner(tools)
 
   const rejected = await tools.submit_architect.execute!(
@@ -348,15 +364,7 @@ test("submit_architect rejects missing reference coverage for visual specs", asy
     { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
     {} as any,
   )
-  await tools.register_contract.execute!(
-    {
-      category: "interface_contract",
-      title: "Router",
-      spec: "```ts\nexport type Router = unknown\n```",
-      goal_ids: ["goal_feature", "goal_verify"],
-    } as any,
-    {} as any,
-  )
+  await registerTypeContract(tools, "Router", ["goal_feature", "goal_verify"])
   await registerAssemblyOwner(tools)
 
   const rejected = await tools.submit_architect.execute!(
@@ -464,14 +472,33 @@ test("reference-driven bootstrap feature verification graph finalizes with final
     } as any,
     {} as any,
   )
-  await tools.register_contract.execute!(
-    {
-      category: "interface_contract",
-      title: "KeyStatistics rewrite handoff",
-      spec: "```ts\nexport interface KeyStatisticsMTtsProps { className?: string }\n```",
-      goal_ids: ["goal_bootstrap", "goal_rewrite_workflow", "goal_tests"],
-    } as any,
-    {} as any,
+  await registerTypeContract(
+    tools,
+    "KeyStatistics",
+    ["goal_bootstrap", "goal_rewrite_workflow", "goal_tests"],
+    [{
+      name: "behaviorInventory",
+      typeExpr: "string",
+      valueDomain: {
+        kind: "open" as const,
+        reason: "Behavior inventory prose is intentionally authored by analysis.",
+      },
+      semantic: "Source-analysis handoff consumed by the rewrite and final tests.",
+    }],
+  )
+  await registerTypeContract(
+    tools,
+    "KeyStatisticsMTts",
+    ["goal_rewrite_workflow", "goal_tests"],
+    [{
+      name: "className",
+      typeExpr: "string | undefined",
+      valueDomain: {
+        kind: "open" as const,
+        reason: "CSS class names are intentionally unbounded integration strings.",
+      },
+      semantic: "Optional root element CSS class.",
+    }],
   )
 
   const accepted = await tools.submit_architect.execute!(
@@ -519,15 +546,7 @@ test("reference-driven visual acceptance diagnostic names trigger reason and goa
     } as any,
     {} as any,
   )
-  await tools.register_contract.execute!(
-    {
-      category: "interface_contract",
-      title: "Router",
-      spec: "```ts\nexport type Router = unknown\n```",
-      goal_ids: ["goal_feature", "goal_verify"],
-    } as any,
-    {} as any,
-  )
+  await registerTypeContract(tools, "Router", ["goal_feature", "goal_verify"])
   await registerAssemblyOwner(tools)
 
   const rejected = await tools.submit_architect.execute!(
@@ -550,7 +569,7 @@ test("register_goal and modify_goal return the current goal snapshot", async () 
   )
   expect(registered).toContain("Current: goal_verify kind=verification priority=blocking")
   expect(registered).toContain("depends_on=[goal_feature]")
-  expect(registered).toContain("acc-goal_verify:essential:default:heuristic")
+  expect(registered).toContain("acc-goal_verify:essential:default:heuristic+contract_audit")
 
   const modified = await kit.tools.modify_goal.execute!(
     {
@@ -570,9 +589,10 @@ test("register_goal and modify_goal return the current goal snapshot", async () 
 })
 
 test("architect readiness remains identical to submit_architect validation precondition", async () => {
-  const incomplete = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
-  readinessMatchesSubmitPrecondition(incomplete.getCollector())
-  expect(isArchitectReadyToFinalize(incomplete.getCollector())).toBe(false)
+  const incompleteWorkDir = freshWorkDir()
+  const incomplete = createArchitectOutputTools({ existingGoals: [], workDir: incompleteWorkDir })
+  readinessMatchesSubmitPrecondition(incomplete, incompleteWorkDir)
+  expect(incomplete.isReadyToFinalize()).toBe(false)
   const rejected = await incomplete.tools.submit_architect.execute!(
     { summary: "Incomplete architecture should not finalize." } as any,
     {} as any,
@@ -580,23 +600,16 @@ test("architect readiness remains identical to submit_architect validation preco
   expect(rejected).toMatch(/^ISSUES \(/)
   expect(incomplete.getCollector().finalized).toBe(false)
 
-  const complete = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
+  const completeWorkDir = freshWorkDir()
+  const complete = createArchitectOutputTools({ existingGoals: [], workDir: completeWorkDir })
   const { tools } = complete
   await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
   await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
-  await tools.register_contract.execute!(
-    {
-      category: "interface_contract",
-      title: "Router",
-      spec: "```ts\nexport type Router = unknown\n```",
-      goal_ids: ["goal_feature", "goal_verify"],
-    } as any,
-    {} as any,
-  )
+  await registerTypeContract(tools, "Router", ["goal_feature", "goal_verify"])
   await registerAssemblyOwner(tools)
 
-  readinessMatchesSubmitPrecondition(complete.getCollector())
-  expect(isArchitectReadyToFinalize(complete.getCollector())).toBe(false)
+  readinessMatchesSubmitPrecondition(complete, completeWorkDir)
+  expect(complete.isReadyToFinalize()).toBe(false)
   const missingTraceability = await tools.submit_architect.execute!(
     { summary: "Single feature goal without traceability must not finalize." } as any,
     {} as any,
@@ -611,8 +624,8 @@ test("architect readiness remains identical to submit_architect validation preco
     { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
     {} as any,
   )
-  readinessMatchesSubmitPrecondition(complete.getCollector())
-  expect(isArchitectReadyToFinalize(complete.getCollector())).toBe(true)
+  readinessMatchesSubmitPrecondition(complete, completeWorkDir)
+  expect(complete.isReadyToFinalize()).toBe(true)
   const accepted = await tools.submit_architect.execute!(
     { summary: "Single complete feature goal without duplicate metric rulers." } as any,
     {} as any,
@@ -635,18 +648,10 @@ test("architect finalizes from goals traceability and contracts without metric r
     { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
     {} as any,
   )
-  await tools.register_contract.execute!(
-    {
-      category: "interface_contract",
-      title: "Router",
-      spec: "```ts\nexport type Router = unknown\n```",
-      goal_ids: ["goal_feature", "goal_verify"],
-    } as any,
-    {} as any,
-  )
+  await registerTypeContract(tools, "Router", ["goal_feature", "goal_verify"])
   await registerAssemblyOwner(tools)
 
-  expect(architectValidationIssues(kit.getCollector())).toEqual([])
+  expect(validationIssues(kit.getCollector())).toEqual([])
   const accepted = await tools.submit_architect.execute!(
     { summary: "Goal contracts are complete without duplicate metric gates." } as any,
     {} as any,
@@ -660,8 +665,8 @@ test("architect readiness stays false until every prompt-level finalize invarian
 
   await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
   await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
-  expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(false)
-  expect(architectValidationIssues(kit.getCollector()).join("\n")).toContain("No interface_contract or shared_type contract")
+  expect(kit.isReadyToFinalize()).toBe(false)
+  expect(validationIssues(kit.getCollector()).join("\n")).toContain("No ContractIR registered")
 
   await tools.register_traceability.execute!(
     { requirement_id: "REQ-1", goal_ids: ["goal_feature"] } as any,
@@ -671,18 +676,10 @@ test("architect readiness stays false until every prompt-level finalize invarian
     { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
     {} as any,
   )
-  await tools.register_contract.execute!(
-    {
-      category: "interface_contract",
-      title: "Router",
-      spec: "```ts\nexport type Router = unknown\n```",
-      goal_ids: ["goal_feature", "goal_verify"],
-    } as any,
-    {} as any,
-  )
+  await registerTypeContract(tools, "Router", ["goal_feature", "goal_verify"])
   await registerAssemblyOwner(tools)
-  readinessMatchesSubmitPrecondition(kit.getCollector())
-  expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(true)
+  readinessMatchesSubmitPrecondition(kit)
+  expect(kit.isReadyToFinalize()).toBe(true)
 })
 
 test("architect validator rejects every fixable registration inconsistency before terminal scoping", () => {
@@ -698,16 +695,14 @@ test("architect validator rejects every fixable registration inconsistency befor
     imports: [],
   })
   collector.contracts.push({
-    category: "interface_contract",
-    title: "Missing goal contract",
-    spec: "```ts\nexport type Missing = unknown\n```",
+    ir: typeContract("Missing"),
     goalIDs: ["goal_missing"],
   })
 
-  const issues = architectValidationIssues(collector).join("\n")
+  const issues = validationIssues(collector).join("\n")
   expect(issues).toContain("acceptance spec acc-goal_feature has mismatched goal_id")
-  expect(issues).toContain("Contract \"Missing goal contract\": references unknown goals goal_missing")
-  expect(isArchitectReadyToFinalize(collector)).toBe(false)
+  expect(issues).toContain("Contract \"Missing\": references unknown goals goal_missing")
+  expect(validationIssues(collector).length === 0).toBe(false)
 })
 
 test("architect validator rejects a bootstrap goal that is not in every downstream depends_on", () => {
@@ -738,7 +733,7 @@ test("architect validator rejects a bootstrap goal that is not in every downstre
     imports: ["ThemeProvider from goal_theme"],
   })
 
-  const rejected = architectValidationIssues(collector).join("\n")
+  const rejected = validationIssues(collector).join("\n")
   expect(rejected).toContain(
     "Bootstrap goal goal_bootstrap: every non-bootstrap goal must list it in depends_on; missing goal_theme, goal_verify",
   )
@@ -757,7 +752,7 @@ test("architect validator rejects a bootstrap goal that is not in every downstre
     ],
   }
 
-  const acceptedBootstrapIssues = architectValidationIssues(collector)
+  const acceptedBootstrapIssues = validationIssues(collector)
     .filter((issue) => issue.startsWith("Bootstrap goal "))
   expect(acceptedBootstrapIssues).toEqual([])
 })
@@ -791,20 +786,13 @@ test("architect validator allows pure bootstrap dependencies without fake import
     imports: ["Message, Conversation from goal_types"],
   })
 
-  const issues = architectValidationIssues(collector)
+  const issues = validationIssues(collector)
   expect(issues).not.toContain("Goal goal_types: depends_on is set but imports is empty")
 })
 
 // Regression: terminal-tool scoping must not disagree with submit_architect's
-// own validation. Earlier `architect/agent.ts` passed the standalone
-// `isArchitectReadyToFinalize(collector)` (no workDir) to
-// `shouldExposeOnlyTerminalTool` while submit_architect ran the full check
-// against the workDir filesystem; if a registered owned_path existed on disk
-// without matching `register_source_coverage`, the predicate said "ready,
-// expose only submit_architect" but submit_architect kept returning ISSUES,
-// trapping the model in a tight retry loop ("鬼打墙"). The toolkit-bound
-// `isReadyToFinalize()` MUST share the closure with `submit_architect.execute`
-// (rule 8: single source of truth).
+// own validation. The toolkit-bound `isReadyToFinalize()` MUST share the
+// workDir-aware validation closure with `submit_architect.execute`.
 test("toolkit isReadyToFinalize agrees with submit_architect when workDir owned paths exist", async () => {
   const dir = freshWorkDir()
   // Create a file that matches FEATURE_GOAL.owned_paths so the workDir-aware
@@ -829,23 +817,9 @@ test("toolkit isReadyToFinalize agrees with submit_architect when workDir owned 
     { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
     {} as any,
   )
-  await tools.register_contract.execute!(
-    {
-      category: "interface_contract",
-      title: "Router",
-      spec: "```ts\nexport type Router = unknown\n```",
-      goal_ids: ["goal_feature", "goal_verify"],
-    } as any,
-    {} as any,
-  )
+  await registerTypeContract(tools, "Router", ["goal_feature", "goal_verify"])
   await registerAssemblyOwner(tools)
 
-  // The standalone (workDir-less) predicate would return TRUE here — that was
-  // exactly the bug. Capturing it in the test pins the divergence so any
-  // future regression that re-introduces the standalone form is caught.
-  expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(true)
-  // The toolkit-bound predicate sees workDir and refuses until source
-  // coverage is registered for the existing owned path.
   expect(kit.isReadyToFinalize()).toBe(false)
   const rejected = await tools.submit_architect.execute!(
     { summary: "Workdir owned paths still need source coverage." } as any,

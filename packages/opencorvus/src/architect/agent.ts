@@ -36,23 +36,18 @@ import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
 import type {
   ArchitectContract,
-  ArchitectDecisionKey,
   ArchitectResult,
   ArchitectRetryContext,
   ParsedRequirement,
   RequirementsDecision,
 } from "./types"
 import { createArchitectOutputTools, type RegisteredGoal } from "./output-tools"
+import { contractCategory } from "./contract-ir"
 import { AttachmentStore } from "@/storage/attachment-store"
 
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 
 const log = Log.create({ service: "architect-agent" })
-
-const VALID_CATEGORIES = new Set<ArchitectDecisionKey>([
-  "directory_blueprint", "interface_contract", "export_manifest",
-  "shared_type", "naming_convention", "dependency_order",
-])
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -213,13 +208,12 @@ export namespace ArchitectAgent {
 
     // Decision Log seed — one entry per contract, tagged with goal scope.
     const contracts: ArchitectContract[] = collector.contracts.map((c) => ({
-      category: c.category,
-      title: c.title,
-      spec: c.spec,
+      category: contractCategory(c.ir),
+      title: c.ir.name,
+      ir: c.ir,
       goalIDs: c.goalIDs,
     }))
     for (const contract of contracts) {
-      if (!VALID_CATEGORIES.has(contract.category)) continue
       // Single-goal contracts tag the owning goal so the per-goal prompt
       // section renders it; multi-goal contracts tag as task-scoped
       // (goalID=undefined) so every goal's prompt reads it.
@@ -228,7 +222,7 @@ export namespace ArchitectAgent {
         goalID: tagAsGoalID,
         phase: "architect",
         key: contract.category,
-        value: `## ${contract.title}\n${contract.spec}`,
+        value: JSON.stringify(contract.ir),
         reason: `Architect consensus for goals: ${contract.goalIDs.join(", ") || "(task-wide)"}`,
       })
     }

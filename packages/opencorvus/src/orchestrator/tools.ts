@@ -82,6 +82,7 @@ import {
   SourceCoverageEntrySchema,
   type ArchitectFidelityState,
 } from "@/architect/fidelity"
+import { ContractIRSchema, renderContractIR } from "@/architect/contract-ir"
 import type {
   GoalCorrection,
   IntegrityDimensionResult,
@@ -91,6 +92,15 @@ import type {
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 
 const log = Log.create({ service: "task-tools" })
+
+function parseArchitectContractDecision(value: string) {
+  try {
+    const parsed = ContractIRSchema.safeParse(JSON.parse(value))
+    return parsed.success ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
+}
 
 type IntegrityReviewOutcome =
   | {
@@ -5218,12 +5228,16 @@ export function createOrchestratorTools(input: {
             const { createDecisionLog } = await import("@/decision-log")
             const decisionLog = createDecisionLog(taskID)
             const archEntries = decisionLog.readByPhase("architect")
-            const architectContracts = archEntries.map((e) => {
+            const architectContracts = archEntries.flatMap((e) => {
+              const ir = parseArchitectContractDecision(e.value)
+              if (!ir) return []
               const goalIDs = e.goalID ? [e.goalID] : []
-              const titleMatch = e.value.match(/^##\s+(.+?)(?:\n|$)/)
-              const title = titleMatch ? titleMatch[1].trim() : e.key
-              const spec = titleMatch ? e.value.slice(titleMatch[0].length).trimStart() : e.value
-              return { category: e.key, title, spec, goalIDs }
+              return [{
+                category: e.key,
+                title: ir.name,
+                spec: renderContractIR(ir),
+                goalIDs,
+              }]
             })
 
             const siblingGoals = listGoals(taskID)
