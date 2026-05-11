@@ -1811,7 +1811,6 @@ describe("overlay architecture guards", () => {
       "chat-version",
       "chat-version-link",
       "chat-version-sep",
-      "chat-compose-tip",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))

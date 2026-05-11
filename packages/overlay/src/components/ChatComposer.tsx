@@ -484,7 +484,7 @@ export function ChatComposer(props: ChatComposerProps) {
 
       {/* Compose row: textarea + send */}
       <div class="chat-compose-row">
-        <div class="chat-textarea-wrap">
+        <div class="chat-textarea-wrap" title={t("chat.tip")}>
           <textarea
             ref={textareaRef}
             id="chatTextarea"
@@ -492,6 +492,7 @@ export function ChatComposer(props: ChatComposerProps) {
             rows={2}
             disabled={!props.enabled}
             placeholder={props.enabled ? "" : t("chat.placeholder_disabled")}
+            title={t("chat.tip")}
             value={text()}
             onInput={(e) => {
               setText(e.currentTarget.value);
@@ -535,13 +536,12 @@ export function ChatComposer(props: ChatComposerProps) {
         </button>
       </div>
 
-      {/* Compose meta (executor selector + tip) */}
+      {/* Compose meta (executor selector). The drag/resize tip is now a
+       * native title on the textarea — appears only on hover so the row
+       * stays clean. */}
       <div class="chat-compose-meta">
         <div class="chat-compose-meta-left">
           <ExecutorSelector />
-        </div>
-        <div class="chat-compose-meta-right">
-          <div class="chat-compose-tip">{t("chat.tip")}</div>
         </div>
       </div>
     </form>
