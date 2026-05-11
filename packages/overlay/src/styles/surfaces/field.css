@@ -289,7 +289,6 @@ select.field-input option {
 .field-input,
 .custom-select,
 .config-status-box,
-.recent-dir-panel,
 .engine-model-panel {
   background: var(--surface-inset);
   border-color: var(--border);
