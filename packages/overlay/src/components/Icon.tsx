@@ -44,6 +44,22 @@ export type IconName =
   | "coding-gemini"
   | "coding-copilot"
   | "coding-glm"
+  // Chat-bubble avatar glyphs
+  | "avatar-user"
+  | "avatar-assistant"
+  | "avatar-system"
+  | "avatar-orchestrator"
+  | "avatar-spec"
+  | "avatar-requirements"
+  | "avatar-design-analyst"
+  | "avatar-architect"
+  | "avatar-planner"
+  | "avatar-goal"
+  | "avatar-executor"
+  | "avatar-build"
+  | "avatar-evaluator"
+  | "avatar-delivery"
+  | "avatar-integrity"
   // Empty-state / cwd
   | "folder"
   | "folder-open"
@@ -459,6 +475,132 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
           d="M14.53,22.91l1.31-1.86c0.2-0.29,0.54-0.47,0.9-0.47h7.09v2.33H14.53z"
         />
       </g>
+    ),
+  },
+  "avatar-user": {
+    body: () => (
+      <>
+        <circle cx="8" cy="5.25" r="2.1" />
+        <path d="M4 12.5c.8-2 2.2-3 4-3s3.2 1 4 3" />
+      </>
+    ),
+  },
+  "avatar-assistant": {
+    body: () => (
+      <>
+        <path d="M4 5.5h6a2.5 2.5 0 0 1 0 5H8l-2.6 2v-2H4a2.5 2.5 0 0 1 0-5Z" />
+        <path d="M11.7 3.2v1.6M10.9 4h1.6" />
+      </>
+    ),
+  },
+  "avatar-system": {
+    body: () => (
+      <>
+        <circle cx="8" cy="8" r="2.1" />
+        <path d="M8 2.6v1.4M8 12v1.4M13.4 8H12M4 8H2.6M11.8 4.2l-1 1M5.2 10.8l-1 1M11.8 11.8l-1-1M5.2 5.2l-1-1" />
+      </>
+    ),
+    strokeWidth: 1.3,
+  },
+  "avatar-orchestrator": {
+    body: () => (
+      <>
+        <circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" />
+        <circle cx="8" cy="3.4" r="1.1" />
+        <circle cx="12.2" cy="10.5" r="1.1" />
+        <circle cx="3.8" cy="10.5" r="1.1" />
+        <path d="M8 6.6V4.5M9.1 8.7l2 1M6.9 8.7l-2 1" />
+      </>
+    ),
+  },
+  "avatar-spec": {
+    body: () => (
+      <>
+        <path d="M5 3.5h5.3a1.7 1.7 0 0 1 1.7 1.7v5.6a1.7 1.7 0 0 1-1.7 1.7H5.7A1.7 1.7 0 0 0 4 14.2V5.2A1.7 1.7 0 0 1 5.7 3.5" />
+        <path d="M6 6h4M6 8.2h4M6 10.4h2.8" />
+      </>
+    ),
+  },
+  "avatar-requirements": {
+    body: () => (
+      <>
+        <rect x="4.2" y="3.4" width="7.6" height="9.2" rx="1.2" />
+        <path d="M6.1 6h3.8M6.1 8.2h2.6M6.2 10.3l1.1 1.1 2-2.1" />
+      </>
+    ),
+  },
+  "avatar-design-analyst": {
+    body: () => (
+      <>
+        <circle cx="7" cy="7" r="2.6" />
+        <path d="M7 3.2v1.2M7 9.6v1.2M3.2 7h1.2M9.6 7h1.2M9 9l2 2" />
+      </>
+    ),
+  },
+  "avatar-architect": {
+    body: () => (
+      <>
+        <path d="M5.2 11.8 8 4l2.8 7.8" />
+        <path d="M6.2 9.2h3.6" />
+        <path d="M11.6 4.6 9.9 6.3l1.9 1.9" />
+      </>
+    ),
+  },
+  "avatar-planner": {
+    body: () => (
+      <>
+        <circle cx="4.3" cy="4.3" r="1.1" />
+        <circle cx="11.7" cy="4.3" r="1.1" />
+        <circle cx="8" cy="11.7" r="1.1" />
+        <path d="M5.2 4.9 7.1 10.9M10.8 4.9 8.9 10.9M5.4 4.3h5.2" />
+      </>
+    ),
+  },
+  "avatar-goal": {
+    body: () => (
+      <>
+        <circle cx="8" cy="8" r="4.4" />
+        <circle cx="8" cy="8" r="2.4" />
+        <circle cx="8" cy="8" r="0.9" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+  "avatar-executor": {
+    body: () => <path d="M5 4.2 11.4 8 5 11.8Z" fill="currentColor" stroke="none" />,
+  },
+  "avatar-build": {
+    body: () => (
+      <>
+        <path d="M5 5.1 8.7 8.8" />
+        <path d="M9 4.2 11.8 7l-1.1 1.1L7.9 5.3Z" />
+        <path d="M4.8 6.8 3.6 8l3.8 3.8L8.6 10.6Z" />
+      </>
+    ),
+  },
+  "avatar-evaluator": {
+    body: () => (
+      <>
+        <path d="M8 3.2v2.1M5.1 5.4h5.8" />
+        <path d="M6 5.4 4.4 8.8h3.2Z" />
+        <path d="M10 5.4 8.4 8.8h3.2Z" />
+        <path d="M4.4 10.8h7.2" />
+      </>
+    ),
+  },
+  "avatar-delivery": {
+    body: () => (
+      <>
+        <path d="M3.8 5.5 8 3.2l4.2 2.3v5L8 12.8l-4.2-2.3Z" />
+        <path d="M3.8 5.5 8 7.8l4.2-2.3M8 7.8v5" />
+      </>
+    ),
+  },
+  "avatar-integrity": {
+    body: () => (
+      <>
+        <path d="M8 3.1 11.5 4.4v2.8c0 2.3-1.5 4.3-3.5 5.4-2-1.1-3.5-3.1-3.5-5.4V4.4Z" />
+        <path d="M6.4 7.6 7.6 8.8l2.1-2.3" />
+      </>
     ),
   },
   folder: {

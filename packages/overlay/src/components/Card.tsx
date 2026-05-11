@@ -23,24 +23,11 @@ import { IntegrityBody } from "./IntegrityCard";
 import { TracePanel } from "./TracePanel";
 import { t } from "../utils/i18n";
 
-/** Extract the opencorvus sessionID encoded in agent-card ids. The writer
- *  builds them as `<stage>:session:<sid>` (services/tree-writer.ts::sessionCardID),
- *  so any card whose id matches that pattern can surface its session-scoped
- *  AgentTrace events. Returns undefined when the card isn't a session card
- *  (message bubbles, tool promotions, etc). */
-function sessionIDFromCardID(id: string): string | undefined {
-  const idx = id.indexOf(":session:");
-  if (idx < 0) return undefined;
-  const sid = id.slice(idx + ":session:".length);
-  return sid || undefined;
-}
-
 /**
- * Unified recursive card primitive.
- *
- * Every conversation item — whether a goal group, a stage agent card,
- * a promoted tool call, or a plain message bubble — is rendered through
- * this component. Nesting is handled by recursion on `node.children`.
+ * Recursive structured-card primitive for non-bubble conversation items.
+ * Conversation.tsx routes top-level `message` / `agent` nodes into
+ * <ChatBubble/>; this component retains the step / phase / tool /
+ * integrity surfaces plus nested transient tool cards.
  *
  * Folding state lives in the unified `expandedCards` store. The
  * (status, statusAtSet) stale-override protocol is preserved: when
@@ -53,7 +40,7 @@ export function Card(props: { node: CardNode; depth: number }) {
   const [stickyInlineSize, setStickyInlineSize] = createSignal<number | undefined>();
 
   const isStageCard = () =>
-    props.node.kind === "agent" || props.node.kind === "phase" || props.node.kind === "step";
+    props.node.kind === "phase" || props.node.kind === "step";
 
   const expanded = () =>
     cardExpanded(props.node.id, props.node.status, defaultExpanded());
@@ -75,16 +62,10 @@ export function Card(props: { node: CardNode; depth: number }) {
   });
 
   const shouldLockInlineSize = () =>
-    (props.depth === 0 &&
-      !(props.node.kind === "message" &&
-        (props.node.role === "user" || props.node.role === "system"))) ||
+    props.depth === 0 ||
     (props.node.kind === "tool" && expanded());
 
-  const collapsible = () => {
-    // User bubbles render as non-foldable bubbles.
-    if (props.node.kind === "message" && props.node.role === "user") return false;
-    return true;
-  };
+  const collapsible = () => true;
 
   const expand = () => {
     if (!collapsible() || expanded()) return;
@@ -120,25 +101,19 @@ export function Card(props: { node: CardNode; depth: number }) {
     return interactive == null;
   };
 
-  // Per-card AgentTrace toggle. Only meaningful for session cards (kind="agent")
-  // whose id encodes a sessionID. Local signal — no need to persist across
-  // reloads; the trace endpoint is cheap and idempotent.
   const traceSessionID = createMemo(() =>
-    props.node.kind === "agent" ? sessionIDFromCardID(props.node.id) : undefined,
+    props.node.kind === "phase"
+      ? props.node.phaseSessionID
+      : props.node.kind === "step"
+        ? promotedBuildPhase()?.phaseSessionID
+        : undefined,
   );
   const directAgentSessionID = createMemo(() => {
-    // kind="agent" cards encode the sessionID in their card id. kind="phase"
-    // cards absorb their sub-agent session's parts into themselves and
-    // therefore never produce a `kind="agent"` card. For step cards, the
-    // build phase is visually promoted into the parent goal card, so its
-    // direct-reply session also belongs to the parent surface.
     const sessionID =
-      props.node.kind === "agent"
-        ? traceSessionID()
-        : props.node.kind === "phase"
-          ? props.node.phaseSessionID
-          : props.node.kind === "step"
-            ? promotedBuildPhase()?.phaseSessionID
+      props.node.kind === "phase"
+        ? props.node.phaseSessionID
+        : props.node.kind === "step"
+          ? promotedBuildPhase()?.phaseSessionID
           : undefined;
     if (!sessionID) return undefined;
     if (sessionID === rootTaskSessionID()) return undefined;

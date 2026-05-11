@@ -65,6 +65,7 @@ body {
      instead of hardcoded hex landing wrong on light/vscode-dark. */
   --card-stage-user:           var(--accent);
   --card-stage-assistant:      color-mix(in oklch, var(--good) 75%, var(--accent) 25%);
+  --card-stage-system:         var(--warn);
   --card-stage-orchestrator:   color-mix(in oklch, var(--accent) 80%, var(--bad) 20%);
   --card-stage-spec:           color-mix(in oklch, var(--good) 50%, var(--accent) 50%);
   --card-stage-requirements:   var(--warn);
@@ -76,6 +77,7 @@ body {
   --card-stage-build:          color-mix(in oklch, var(--warn) 55%, var(--bad) 45%);
   --card-stage-evaluator:      color-mix(in oklch, var(--good) 70%, var(--accent) 30%);
   --card-stage-delivery:       var(--good);
+  --card-stage-integrity:      color-mix(in oklch, var(--good) 45%, var(--bad) 55%);
   --card-stage-tool:           color-mix(in srgb, var(--text-soft) 70%, transparent);
 
   /* System-message tint kept distinct (warn-toned) since system
@@ -164,7 +166,6 @@ body {
    color is the semantic --card-stage-info default; per-stage
    overrides below pick a different semantic tone (success /
    warn / danger) where appropriate. */
-.card[data-depth="0"][data-kind="agent"],
 .card[data-depth="0"][data-kind="goal"],
 .card[data-depth="0"][data-kind="phase"],
 .card[data-depth="0"][data-kind="step"],
@@ -190,7 +191,6 @@ body {
   border-left-color: var(--card-stage-danger);
 }
 
-.card[data-depth="0"][data-kind="agent"] > .card__head,
 .card[data-depth="0"][data-kind="goal"] > .card__head,
 .card[data-depth="0"][data-kind="step"] > .card__head,
 .card[data-depth="0"][data-kind="tool"] > .card__head {
@@ -618,7 +618,6 @@ body {
    (accent). The depth-0 left-rail thickness drops from 3px
    to 2px to match the calm/flat trajectory. */
 
-.card[data-depth="0"][data-kind="agent"][data-stage] { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info)); }
 .card[data-depth="0"][data-kind="goal"]              { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-goal)); }
 .card[data-depth="0"][data-kind="step"][data-stage]  { border-left: calc(2px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info)); }
 
@@ -827,77 +826,6 @@ body {
 .card-boundary-time {
   font-variant-numeric: tabular-nums;
   opacity: var(--ui-opacity-dim);
-}
-
-/* ── Message bubble variant (kind=message, role=user/system) ── */
-
-.card[data-kind="message"] {
-  border: var(--oc-border-width) solid var(--card-border);
-  border-color: var(--card-border);
-  background: var(--surface-inset);
-}
-
-.card[data-depth="0"][data-kind="message"] > .card__head {
-  min-height: calc(34px * var(--ui-scale, 1));
-  padding-bottom: 2px;
-  border-bottom: 0;
-  background: transparent;
-}
-
-.card[data-depth="0"][data-kind="message"] > .card__body {
-  border-bottom: 0;
-  padding-top: 0;
-}
-
-/* User: accent bubble — solid left rail, stronger tint, accent title. */
-.card[data-kind="message"][data-role="user"] {
-  background: var(--accent-dim);
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  border-left: calc(3px * var(--ui-scale)) solid var(--accent);
-  box-shadow: none;
-}
-.card[data-kind="message"][data-role="user"] > .card__head {
-  cursor: default;
-  padding-bottom: calc(2px * var(--ui-scale));
-}
-.card[data-kind="message"][data-role="user"] > .card__head .card__badge {
-  display: none;
-}
-.card[data-kind="message"][data-role="user"] > .card__head .card__title {
-  color: var(--text-strong);
-  font-weight: var(--ui-font-weight-strong);
-}
-.card[data-kind="message"][data-role="user"] > .card__body {
-  border-top: none;
-  padding-top: 0;
-  color: var(--text-strong);
-}
-
-/* System: muted meta-note — dashed left rail, faint amber tint, tiny uppercase title. */
-.card[data-kind="message"][data-role="system"] {
-  background: var(--card-system-bg);
-  border-color: var(--card-system-border);
-  border-left: calc(2px * var(--ui-scale)) solid var(--card-system-rail);
-  box-shadow: none;
-}
-.card[data-kind="message"][data-role="system"] > .card__head {
-  padding-bottom: calc(2px * var(--ui-scale));
-}
-.card[data-kind="message"][data-role="system"] > .card__head .card__title {
-  font-size: var(--ui-font-tiny);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  color: var(--card-system-rail);
-  font-weight: var(--ui-font-weight-strong);
-}
-.card[data-kind="message"][data-role="system"] > .card__head .card__badge {
-  display: none;
-}
-.card[data-kind="message"][data-role="system"] > .card__body {
-  border-top: none;
-  padding-top: 0;
-  color: var(--text-soft);
-  font-style: italic;
 }
 
 /* ── Compatibility: make sure inline tool chips inside a card

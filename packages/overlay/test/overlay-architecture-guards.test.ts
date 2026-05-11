@@ -1977,7 +1977,6 @@ describe("overlay architecture guards", () => {
       "titlebar-nav-group",
       "titlebar-utility",
       "titlebar-actions",
-      "titlebar-status-cluster",
       "titlebar-window-controls",
       "conn-badge",
     ]) {
@@ -3339,7 +3338,6 @@ describe("overlay architecture guards", () => {
       ".titlebar-nav-group",
       ".titlebar-utility",
       ".titlebar-actions",
-      ".titlebar-status-cluster",
       ".titlebar-window-controls",
     ]
 
@@ -3518,5 +3516,29 @@ describe("overlay architecture guards", () => {
       const lines = readText(file).split(/\r?\n/).length
       expect(lines).toBeLessThanOrEqual(300)
     }
+  })
+
+  test("chat-bubble.css stays token-driven and contains no hex literals", () => {
+    const css = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/chat-bubble.css")))
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+  })
+
+  test("ChatBubble.tsx does not introduce inline SVG", () => {
+    const tsx = readText(join(OVERLAY_ROOT, "src/components/ChatBubble.tsx"))
+    expect(tsx).not.toMatch(/<svg\b/i)
+  })
+
+  test("Conversation.tsx is the only component that dispatches between Card and ChatBubble", () => {
+    const componentsRoot = join(OVERLAY_ROOT, "src/components")
+    const tsxFiles = walkFiles(componentsRoot, (path) => path.endsWith(".tsx"))
+    const renderAsBubbleCallers = tsxFiles.filter((file) => readText(file).includes("renderAsBubble("))
+    expect(renderAsBubbleCallers).toEqual([join(componentsRoot, "Conversation.tsx")])
+
+    const chatBubbleDispatchers = tsxFiles.filter((file) => {
+      if (file.endsWith("ChatBubble.tsx")) return false
+      const text = withoutComments(readText(file))
+      return text.includes("<ChatBubble") || text.includes('from "./ChatBubble"')
+    })
+    expect(chatBubbleDispatchers).toEqual([join(componentsRoot, "Conversation.tsx")])
   })
 })

@@ -39,7 +39,7 @@
 // walk `cardTreeStore.cards[id]` through the Solid proxy, and Solid's
 // fine-grained reactivity handles the rest.
 
-import { createStore } from "solid-js/store";
+import { createStore, produce, reconcile } from "solid-js/store";
 
 export type CardKind =
   | "agent"     // per-session agent card (orchestrator, build worker, planner, ...)
@@ -274,7 +274,20 @@ export function pruneCardsAfterCursor(cursorTime: number) {
   for (const [id, card] of Object.entries(cardTreeStore.cards)) {
     if ((card.time ?? 0) <= cursorTime) survivors[id] = card;
   }
-  setCardTreeStore("cards", survivors);
+  setCardTreeStore("cards", reconcile(survivors, { merge: false }));
+  const liveCardIDs = new Set(Object.keys(survivors));
+  setCardTreeStore(
+    "cards",
+    produce((cards) => {
+      for (const card of Object.values(cards)) {
+        if (!card?.childIDs?.length) continue;
+        const nextChildIDs = card.childIDs.filter((childID) => liveCardIDs.has(childID));
+        if (nextChildIDs.length !== card.childIDs.length) {
+          card.childIDs = nextChildIDs;
+        }
+      }
+    }),
+  );
 }
 
 /** Clear the rewind cursor without re-fetching — used when the backend
