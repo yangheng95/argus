@@ -85,6 +85,7 @@ import type { SessionKind } from "@/session/session.sql"
 import type { ToolSet } from "ai"
 import { AgentTrace } from "@/trace"
 import { TaskContext } from "@/task-context"
+import type { AgentReport, AgentReportContext } from "@/agent/report"
 
 const log = Log.create({ service: "agent-runner" })
 
@@ -100,6 +101,7 @@ const log = Log.create({ service: "agent-runner" })
 export interface AgentToolKit<C> {
   tools: ToolSet
   getCollector: () => C
+  buildReport: (context?: AgentReportContext) => AgentReport
 }
 
 /**
@@ -256,6 +258,32 @@ export interface RunAgentSessionOutput<C> {
    *  (currently delivery) that wire skill-declared tool requirements
    *  into their output-tool validation. */
   requiredTools: string[]
+}
+
+function errorReport(message: string): AgentReport {
+  const text = message.trim() || "agent failed"
+  return { summary: text, detail: text }
+}
+
+function buildTraceReport<C>(
+  toolKit: AgentToolKit<C>,
+  context?: AgentReportContext,
+): AgentReport {
+  try {
+    return toolKit.buildReport(context)
+  } catch (err) {
+    if (context?.error) return errorReport(context.error)
+    throw err
+  }
+}
+
+function finalTextFromMessage(message: Message.WithParts | undefined): string | undefined {
+  const text = message?.parts
+    ?.filter((part) => part.type === "text")
+    .map((part) => (part as { text?: string }).text?.trim() ?? "")
+    .filter(Boolean)
+    .join("\n\n")
+  return text || undefined
 }
 
 const BUILD_SKILL_GATED_TOOLS = [
@@ -850,6 +878,7 @@ export async function runAgentSession<C>(
     })
     if (hardError) throw hardError
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
     await recordAgentErrorForOrchestrator({
       taskID: input.taskID,
       goalID: input.goalID,
@@ -870,7 +899,8 @@ export async function runAgentSession<C>(
           try { return input.toolKit.getCollector() } catch { return undefined }
         })(),
         streamErrors,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage,
+        report: buildTraceReport(input.toolKit, { error: errorMessage }),
       })
     }
     // Subagent dispatch boundary: surface terminal to the overlay the moment
@@ -883,7 +913,7 @@ export async function runAgentSession<C>(
     SessionStatus.set(session.id, {
       type: "terminal",
       reason: input.signal?.aborted ? "aborted" : "error",
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage,
     })
     throw err
   }
@@ -895,6 +925,7 @@ export async function runAgentSession<C>(
     ? (finalMessage.info as Message.Assistant).structured
     : undefined
   const collector = input.toolKit.getCollector()
+  const finalText = finalTextFromMessage(finalMessage)
 
   log.info(`${agentName} agent finished`, {
     kind,
@@ -913,6 +944,8 @@ export async function runAgentSession<C>(
       collector,
       structured,
       streamErrors,
+      finalText,
+      report: buildTraceReport(input.toolKit, { structured, finalText }),
     })
   }
 
@@ -1102,6 +1135,7 @@ export async function runAgentSessionWithRetry<C>(
   const agentLabel = input.agentName ?? input.kind
   let lastError: Error | undefined
   let lastOutput: RunAgentSessionOutput<C> | undefined
+  let lastReport: AgentReport | undefined
 
   for (let attempt = 1; attempt <= input.maxRetries; attempt++) {
     if (input.signal?.aborted) {
@@ -1120,11 +1154,18 @@ export async function runAgentSessionWithRetry<C>(
       out = await runAgentSession({ ...input, toolKit: kit })
     } catch (err) {
       thrownError = err instanceof Error ? err : new Error(String(err))
+      lastReport = errorReport(thrownError.message)
       const aborted =
         input.signal?.aborted || (err instanceof Error && err.name === "AbortError")
       if (aborted) throw thrownError
     }
-    if (out) lastOutput = out
+    if (out) {
+      lastOutput = out
+      lastReport = buildTraceReport(kit, {
+        structured: out.structured,
+        finalText: finalTextFromMessage(out.finalMessage),
+      })
+    }
 
     const decision = out
       ? input.isComplete(out.collector, out.streamErrors, out.structured)
@@ -1155,6 +1196,11 @@ export async function runAgentSessionWithRetry<C>(
           structured: out.structured,
           streamErrors: out.streamErrors,
           attempts: attempt,
+          finalText: finalTextFromMessage(out.finalMessage),
+          report: buildTraceReport(kit, {
+            structured: out.structured,
+            finalText: finalTextFromMessage(out.finalMessage),
+          }),
         })
       }
       return { ...out, attempts: attempt }
@@ -1220,6 +1266,7 @@ export async function runAgentSessionWithRetry<C>(
       streamErrors: lastOutput?.streamErrors,
       attempts: input.maxRetries,
       error: lastError?.message ?? `agent did not complete after ${input.maxRetries} attempts`,
+      report: lastReport ?? errorReport(lastError?.message ?? `agent did not complete after ${input.maxRetries} attempts`),
     })
   }
 

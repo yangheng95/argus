@@ -16,6 +16,7 @@ import z from "zod"
 import path from "path"
 import fs from "fs"
 import { Instance } from "@/project/instance"
+import { limitSummary, markdownList, requireReportString } from "@/agent/report"
 import {
   GoalContractFieldsSchema,
   GoalContractUpdateSchema,
@@ -302,6 +303,21 @@ export function isArchitectReadyToFinalize(
   input?: ArchitectValidationInput,
 ): boolean {
   return architectValidationIssues(collector, input).length === 0
+}
+
+export function buildArchitectReport(collector: ArchitectCollector) {
+  const summary = requireReportString(collector.summary, "architect summary")
+  const goalLines = collector.goals.map((goal) => {
+    const owned = goal.owned_paths.length > 0 ? goal.owned_paths.join(", ") : "no owned paths"
+    return `${goal.title} [${goal.kind}] - owned_paths: ${owned}`
+  })
+  return {
+    summary: limitSummary(summary),
+    detail: [
+      `## Summary\n${summary}`,
+      `## Goals\n${goalLines.length ? markdownList(goalLines) : "- no goals submitted"}`,
+    ].join("\n\n"),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -716,6 +732,9 @@ export function createArchitectOutputTools(input: {
     },
     getCollector() {
       return collector
+    },
+    buildReport() {
+      return buildArchitectReport(collector)
     },
     /** Same predicate `submit_architect` uses to decide PASS — pass this to
      *  `terminalTool.shouldExposeOnlyTerminalTool` so scoping never gets

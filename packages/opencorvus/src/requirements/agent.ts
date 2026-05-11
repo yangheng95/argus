@@ -31,6 +31,7 @@ import type {
 } from "./types"
 import {
   createRequirementsOutputTools,
+  summarizeRequirements,
   type RequirementsCollector,
 } from "./output-tools"
 import type { DecisionLog } from "@/decision-log"
@@ -107,6 +108,7 @@ export namespace RequirementsAgent {
       toolKit: {
         tools: { ...contextTools, ...outputToolKit.tools },
         getCollector: () => outputToolKit.getCollector(),
+        buildReport: () => outputToolKit.buildReport(),
       },
       buildUserPrompt: () => buildUserPrompt(input, context),
       buildUserParts: () => buildPromptParts(buildUserPrompt(input, context), input.attachments),
@@ -190,12 +192,6 @@ function collectorToOutput(
       reason: d.reason,
     })),
   }
-}
-
-function summarizeRequirements(collector: RequirementsCollector): string {
-  const explicit = collector.requirements.filter((r) => r.type === "explicit").length
-  const implicit = collector.requirements.length - explicit
-  return `Parsed ${collector.requirements.length} requirement(s): ${explicit} explicit, ${implicit} implicit.`
 }
 
 // ---------------------------------------------------------------------------

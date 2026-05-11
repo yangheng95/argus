@@ -80,6 +80,7 @@ export namespace IntentAnalysisAgent {
       toolKit: {
         tools: toolKit.tools,
         getCollector: toolKit.getCollector,
+        buildReport: toolKit.buildReport,
       },
       buildUserPrompt: () => buildUserPrompt(input),
       buildUserParts: async () => {
@@ -131,6 +132,7 @@ async function buildToolKit() {
   return {
     tools: { ...contextTools, ...outputToolKit.tools },
     getCollector: () => outputToolKit.getCollector(),
+    buildReport: outputToolKit.buildReport,
   }
 }
 

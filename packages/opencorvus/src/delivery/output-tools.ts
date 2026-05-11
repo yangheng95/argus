@@ -28,6 +28,7 @@ import {
   type DeliveryEvidenceFacetType,
   type DeliveryVerdictType,
 } from "./verdict"
+import { limitSummary, markdownJson, requireReportString } from "@/agent/report"
 
 export interface DeliveryCollector {
   /** Raw collector slot. Callers must parse with DeliveryVerdict before using it. */
@@ -37,6 +38,19 @@ export interface DeliveryCollector {
 
 function emptyCollector(): DeliveryCollector {
   return { finalized: false }
+}
+
+export function buildDeliveryReport(collector: DeliveryCollector) {
+  const verdict = DeliveryVerdict.parse(collector.verdict)
+  const summary = requireReportString(verdict.summary, "delivery verdict summary")
+  return {
+    summary: limitSummary(summary),
+    detail: [
+      `## Verdict\n${verdict.verdict}`,
+      `## Summary\n${summary}`,
+      `## Full Verdict\n${markdownJson(verdict)}`,
+    ].join("\n\n"),
+  }
 }
 
 export function createDeliveryOutputTools(input?: {
@@ -224,6 +238,9 @@ export function createDeliveryOutputTools(input?: {
     tools,
     getCollector() {
       return collector
+    },
+    buildReport() {
+      return buildDeliveryReport(collector)
     },
     reset() {
       collector = emptyCollector()

@@ -17,6 +17,7 @@
  */
 import { tool } from "ai"
 import z from "zod"
+import { limitSummary, markdownJson, requireReportString, type AgentReportContext } from "@/agent/report"
 import type {
   IntentAnalysisResult,
   IntentClarification,
@@ -194,6 +195,17 @@ export function createIntentOutputTools() {
     },
     getCollector() {
       return collector
+    },
+    buildReport(context?: AgentReportContext) {
+      const structured = IntentFinalSchema.parse(context?.structured)
+      const summary = requireReportString(structured.summary, "intent summary")
+      return {
+        summary: limitSummary(summary),
+        detail: [
+          `## Summary\n${summary}`,
+          `## Structured Payload\n${markdownJson(structured)}`,
+        ].join("\n\n"),
+      }
     },
   }
 }

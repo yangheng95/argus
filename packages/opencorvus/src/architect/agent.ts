@@ -138,6 +138,7 @@ export namespace ArchitectAgent {
       toolKit: {
         tools: { ...contextTools, ...outputToolKit.tools },
         getCollector: () => outputToolKit.getCollector(),
+        buildReport: () => outputToolKit.buildReport(),
       },
       buildUserPrompt: () => buildUserPrompt(input),
       buildUserParts: async () => {

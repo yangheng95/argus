@@ -55,6 +55,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
+import type { AgentReport } from "@/agent/report"
 
 const log = Log.create({ service: "agent-trace" })
 
@@ -366,6 +367,7 @@ export namespace AgentTrace {
     finishReason?: string
     finalText?: string
     error?: string
+    report: AgentReport
   }) {
     if (!ENABLED) return
     append(input.sessionID, {
@@ -383,6 +385,7 @@ export namespace AgentTrace {
         finishReason: input.finishReason,
         finalText: input.finalText,
         error: input.error,
+        report: input.report,
       },
     })
   }
