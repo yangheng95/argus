@@ -2,7 +2,7 @@ import { For, Show, createMemo, onCleanup } from "solid-js";
 import type { JSX } from "solid-js";
 import PromptCatalog from "./settings/PromptCatalog";
 import ChannelsPanel from "./settings/ChannelsPanel";
-import SkillMarketPanel from "./settings/SkillMarketPanel";
+import { McpPanel, SkillMarketPanel, SkillsPanel } from "./settings/SkillMarketPanel";
 import ProvidersPanel from "./settings/ProvidersPanel";
 import GeneralPanel from "./settings/GeneralPanel";
 import AgentModelsPanel from "./settings/AgentModelsPanel";
@@ -69,11 +69,34 @@ const CONFIG_TABS: ConfigTabDef[] = [
     ),
   },
   {
-    id: "tools",
-    labelKey: "extensions.title",
+    id: "skill",
+    labelKey: "skill.title",
     icon: (
       <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
-        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.1-3.1a6 6 0 0 1-7.9 7.9l-5.7 5.7a2.1 2.1 0 0 1-3-3l5.7-5.7a6 6 0 0 1 7.9-7.9l-3.1 3.1z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M7 3h10l2 4v14H5V7l2-4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+        <path d="M7 7h10M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: "skill-market",
+    labelKey: "skill.market.title",
+    icon: (
+      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+        <path d="M4 10h16v11H4V10z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+        <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        <path d="M9 15h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: "mcp",
+    labelKey: "mcp.title",
+    icon: (
+      <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none">
+        <path d="M7 8h10M7 16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        <path d="M9 4h6a4 4 0 0 1 0 8H9a4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.5" />
+        <path d="M9 12h6a4 4 0 0 1 0 8H9a4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.5" />
       </svg>
     ),
   },
@@ -120,6 +143,9 @@ const CONFIG_TABS: ConfigTabDef[] = [
     ),
   },
 ];
+
+const MAIN_CONFIG_TABS = CONFIG_TABS.filter((tab) => tab.id !== "about");
+const ABOUT_CONFIG_TAB = CONFIG_TABS.find((tab) => tab.id === "about") as ConfigTabDef;
 
 function runtimeTypeLabel(): string {
   const hostKind = getHostTransport().kind;
@@ -248,7 +274,7 @@ export function ConfigDialogHost() {
     >
       <div class="config-dialog-layout">
         <nav class="config-sidebar" id="configSidebar" style={sidebarStyle()}>
-          <For each={CONFIG_TABS.slice(0, 8)}>
+          <For each={MAIN_CONFIG_TABS}>
             {(tab) => (
               <button
                 type="button"
@@ -277,8 +303,8 @@ export function ConfigDialogHost() {
             data-config-tab="about"
             onClick={() => switchConfigTab("about")}
           >
-            {CONFIG_TABS[8].icon}
-            <span>{t(CONFIG_TABS[8].labelKey)}</span>
+            {ABOUT_CONFIG_TAB.icon}
+            <span>{t(ABOUT_CONFIG_TAB.labelKey)}</span>
           </button>
         </nav>
         <div class="config-resizer" id="configResizer" onPointerDown={startResize} />
@@ -303,9 +329,19 @@ export function ConfigDialogHost() {
               <ChannelsPanel />
             </div>
           </div>
-          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "tools" }} data-config-panel="tools">
-            <div class="config-section-body" id="toolsConfigBody">
+          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "skill" }} data-config-panel="skill">
+            <div class="config-section-body" id="skillConfigBody">
+              <SkillsPanel />
+            </div>
+          </div>
+          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "skill-market" }} data-config-panel="skill-market">
+            <div class="config-section-body" id="skillMarketConfigBody">
               <SkillMarketPanel />
+            </div>
+          </div>
+          <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "mcp" }} data-config-panel="mcp">
+            <div class="config-section-body" id="mcpConfigBody">
+              <McpPanel />
             </div>
           </div>
           <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "memory" }} data-config-panel="memory">

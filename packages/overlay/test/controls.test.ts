@@ -1135,9 +1135,41 @@ test(
       await page.waitForFunction(
         () =>
           (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
-          document.querySelector('[data-config-panel="tools"]')?.classList.contains("active") === true,
+          document.querySelector('[data-config-panel="skill"]')?.classList.contains("active") === true,
       )
       await page.waitForFunction(() => document.body.textContent?.includes("alpha-skill"))
+      seen.push("#btnCloseConfigDialog")
+      await tap("#btnCloseConfigDialog")
+      await page.waitForFunction(
+        () => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open !== true,
+      )
+
+      await ensureMenuOpen("mcp")
+      await page.waitForSelector('[data-testid="titlebar-open-mcp"]')
+      seen.push('[data-testid="titlebar-open-mcp"]')
+      await tap('[data-testid="titlebar-open-mcp"]')
+      await page.waitForFunction(
+        () =>
+          (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
+          document.querySelector('[data-config-panel="mcp"]')?.classList.contains("active") === true,
+      )
+      await page.waitForFunction(() => document.body.textContent?.includes("docs"))
+      seen.push("#btnCloseConfigDialog")
+      await tap("#btnCloseConfigDialog")
+      await page.waitForFunction(
+        () => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open !== true,
+      )
+
+      await ensureMenuOpen("skill")
+      await page.waitForSelector('[data-testid="titlebar-open-skill-market"]')
+      seen.push('[data-testid="titlebar-open-skill-market"]')
+      await tap('[data-testid="titlebar-open-skill-market"]')
+      await page.waitForFunction(
+        () =>
+          (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
+          document.querySelector('[data-config-panel="skill-market"]')?.classList.contains("active") === true,
+      )
+      await page.waitForFunction(() => document.body.textContent?.includes("market-install"))
       seen.push("#btnCloseConfigDialog")
       await tap("#btnCloseConfigDialog")
       await page.waitForFunction(
@@ -1148,6 +1180,8 @@ test(
         () => (window as typeof window & { __overlayTest: Record<string, unknown> }).__overlayTest,
       )
       expect(seen).toContain('[data-testid="titlebar-open-skills"]')
+      expect(seen).toContain('[data-testid="titlebar-open-mcp"]')
+      expect(seen).toContain('[data-testid="titlebar-open-skill-market"]')
       expect(stub.open).toBeDefined()
       expect(stub.close).toBe(0)
       expect(errors).toEqual([])
