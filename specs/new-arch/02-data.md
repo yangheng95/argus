@@ -30,7 +30,7 @@
 ### 执行与交付（artifact-centric）
 | 表 | 关键字段 / 状态 |
 |---|---|
-| `engine_artifact` | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot`。kind 涵盖 run / goal-run / delivery / verification-evidence / goal-snapshot / diff / log / image / report 等 |
+| `engine_artifact` | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot`。完整 `EngineArtifactKind` 取值（见 `engine.sql.ts:97`）：`run` · `goal_run_attempt` · `delivery` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `delivery_evidence_manifest` · `delivery_surface_manifest` · `delivery_specialist_review` · `delivery_verification_threw` · `delivery_preview` · `orchestrator-stream-error` |
 | `engine_progress_snapshot` | 进度快照（旧名 `orchestrator_progress_snapshot` 已重命名） |
 | `engine_executor_session` | 执行器会话绑定 |
 
@@ -56,7 +56,15 @@
 | `todo` | session 内 todo |
 | `permission` | 权限请求（project 级全量规则集） |
 
-**SessionKind**（固定在 creation time，见 `session.sql.ts:52-68`）：`root` · `assistant` · `orchestrator` · `requirements` · `design-analyst` · `planner` · `goal` · `architect` · `delivery` · `executor` · `build` · `evaluator` · `gateway` · `intent-analysis` · `integrity` · `system`（共 16 种）。
+**SessionKind**（固定在 creation time，见 `session.sql.ts:50-65`，按代码出现顺序）：
+`root` · `orchestrator` · `assistant` · `gateway` · `intent-analysis` · `requirements` ·
+`design-analyst` · `goal` · `architect` · `integrity` · `delivery` · `executor` · `build` ·
+`evaluator` · `system` —— **共 15 种**。
+
+> 历史版本本文档曾写"16 种"且把 `planner` 列入，那是抄旧 `planner/` 包时代的草稿。
+> Planner agent 已随 `src/planner/` 整目录删除（见 [01-agents.md](01-agents.md)），
+> `planner` 不再是合法的 SessionKind。`goal` kind 仍保留——用于 historical task rows
+> 与早于 `requirements` / `design-analyst` 拆分前的 catch-all。
 
 **去掉的字段 / 索引**（旧文档还在提，代码已清理）：
 - ~~`session.channel_key`~~ — Gateway 单例概念删除
@@ -64,7 +72,7 @@
 
 `kind='gateway'` 的 SessionKind **保留**——`src/gateway/` 目录仍在，承担"SDK gateway 客户端会话"职责（见 [03-control.md](03-control.md)）；只是不再有 per-channel 单例。
 
-新增的字段 `goal_id`：当 session 归属某个 goal（planner / executor / build session）时写入，overlay 据此把消息嵌在 goal 卡片下。
+新增的字段 `goal_id`：当 session 归属某个 goal（`executor` / `build` / `evaluator` session）时写入，overlay 据此把消息嵌在 goal 卡片下。`planner` kind 已删除，此处不再列入。
 
 ## 控制 / 工作区
 

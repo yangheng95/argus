@@ -7,10 +7,14 @@
 > 但不是更好的业务抽象。未来实现应当保留单一 agent 身份模型，只把运行方式
 > 抽象为 runtime mode。
 >
-> 对应代码（现状真源）：
-> `src/agent/agent.ts` · `src/agent/runtime/runtime.ts` ·
-> `src/session/loop.ts` · `src/session/compaction.ts` ·
-> `src/provider/llm.ts` · `src/orchestrator/agent.ts`
+> 对应代码（现状真源，2026-05-12）：
+> `src/agent/agent.ts` · `src/agent/runner.ts`（旧 `src/agent/runtime/runtime.ts` 已删，
+> 现统一为 `runAgentSession`） · `src/session/loop.ts` · `src/session/compaction.ts` ·
+> `src/session/llm.ts` · `src/orchestrator/agent.ts`
+>
+> 注：`ProviderLLM.stream` 已从 `src/provider/llm.ts` 移除，该文件仅保留 `wrapModel` /
+> `baseHeaders`。下文 §1 描述的"双执行路径"在 phase-3-d 后已收口到单一 `runAgentSession`，
+> 本文剩余价值在于 spec / runtime / context / budget 四层语义切分本身。
 
 ---
 
@@ -197,9 +201,15 @@ interface AgentExecutionPlan {
 | `requirements` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `architect` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `design-analyst` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `planner` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `intent-analysis` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `integrity` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `prosecutor` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `delivery` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `summary` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+
+> 注：`planner` 已不在表中——`src/planner/` 整目录已删除，相关 episodic 调用并入
+> orchestrator 自身的 LLM 推理（详见 [01-agents.md](01-agents.md) 与
+> [11-agent-oop-protocol.md](11-agent-oop-protocol.md)）。
 
 注意：这里的“derived-state”不是说它们完全不写 session，而是说**LLM 的输入真源**不是 session transcript。
 现状里 orchestrator 已明确如此：每个 task root 下只有一个持久 orchestrator child session 承载真实 wake 消息与 UI/audit persistence，真正 prompt 每次仍从 DB state 重建。

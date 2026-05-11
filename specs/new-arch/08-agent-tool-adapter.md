@@ -1,8 +1,34 @@
 # 08 — Agent Tool Adapter
 
-> 对应代码：`src/agent/agent.ts` · `src/agent/filter-tools.ts` · `src/tool/registry.ts` ·
-> `src/session/loop.ts` · `src/session/tool-resolver.ts` · `src/orchestrator/tools.ts` ·
-> `src/config/config.ts`
+> **状态（2026-05-12）**：核心 include/exclude 适配机制**已落地**（`Agent.Info.tools` schema +
+> `ToolRegistry.tools(model, agent)` 过滤）。本文档若干细节仍为旧草稿，已在下方加注更正。
+>
+> 对应代码（真源）：`src/agent/agent.ts`（Agent.Info 注册） · `src/tool/registry.ts`
+> （`tools(model, agent)` 过滤） · `src/session/loop.ts`（`resolveTools` 在 line 1732
+> 附近——**没有** `src/session/tool-resolver.ts` 这个文件） · `src/orchestrator/tools.ts` ·
+> `src/config/config.ts` · `src/mirror/`（`MIRROR_TOOL_IDS` 集合）
+>
+> **关键修正**：
+> 1. `Agent.Info.tools` schema 是 `z.object({ include?: string[], exclude?: string[] }).optional()`，
+>    include 与 exclude **同时可选并存**（不是 union；下文 §Agent.Info 的草稿写法不准确）。
+> 2. `spec_enter` / `spec_exit` / `plan_enter` / `plan_exit` 这四个 tool **从未在代码里
+>    存在**——下文 §各 native agent 工具声明 / §Build 快速通道里用到这些名字的行均为
+>    早期草稿，不要照抄。spec / plan 这两个 native agent 也不存在。
+> 3. 实际 build agent 的 `exclude` 集合（`agent.ts:125`）是
+>    `["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS]`——无 `planner` / `tui`。
+> 4. 实际 general agent 的 `exclude`（`agent.ts:140`）是
+>    `["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...MIRROR_TOOL_IDS]`。
+> 5. 实际 explore agent 的 `include`（`agent.ts:157`）是
+>    `["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"]`
+>    ——下文里写的 `grep` / `codesearch` 都已重命名为 `search_code` / `external_code_search`。
+> 6. 实际 delivery agent（`agent.ts:233`）用 `tools: { include: [] }` 空白名单，
+>    review/output tools 由 `DeliveryAgent.verify` 通过 SessionLoop extra tools 在运行时注入。
+> 7. `requirements` / `architect` / `design-analyst` / `intent-analysis` 等 stage agent
+>    **走** ToolRegistry（在 `agent.ts:316+` 注册），不属于"不走 ToolRegistry"那一类。
+>    真正"不走 ToolRegistry"的只有 orchestrator tools 内部自建工具集（`build` / `deliver`
+>    等 tool 内部创建子 session 时手动组装）。
+> 8. `task` / `planner` agent 不存在——`task` 是个 tool（`src/tool/task.ts`），
+>    `planner` agent 已随 `src/planner/` 删除。
 
 ## 问题
 

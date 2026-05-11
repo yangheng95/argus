@@ -22,20 +22,25 @@
            provider · model · agent · mcp · lsp · formatter · permission · compaction
            channel · command · skills · plugin · prompt · instructions · username
 
-assistant: requirements{}  ← 替代 spec
-           goal{} · planner{} · evaluator{tier, model, ...} · delivery{}
-           adaptive{}
-           max_executor_groups
+assistant: requirements{} · architect{} · delivery{} · delivery_visual{} ·
+           design_analyst{} · intent_analysis{} · build{} · activity{} · debug{} ·
+           default_workflow · workflows[] · max_executor_groups
            每个 agent 子项含: max_steps · timeout_ms · quality_threshold? · max_attempts? · skills[]
 
-experimental: unattended · auto_permission · auto_question · batch_tool
+experimental: auto_question · batch_tool · disable_paste_summary · continue_loop_on_deny
              memory{} · mcp_timeout · primary_tools · openTelemetry
 ```
 
 > 文档此前未列出的顶级 key：`$schema` / `logLevel` / `server` / `share` / `autoupdate` / `snapshot` / `watcher`（含 `watcher.ignore`） / `enabled_providers` / `tool_permissions`（任务级权限默认值）—— 全部以 `config.ts` 现状为准。
+>
+> **2026-05-12 更正**：以下旧 schema 字段已删除，不再存在：
+> - `assistant.spec{}` / `assistant.goal{}` / `assistant.planner{}` / `assistant.evaluator{}` /
+>   `assistant.adaptive{}` —— planner / evaluator agent 整体下线（见 [01-agents.md](01-agents.md)），
+>   spec/goal/adaptive 字段在 workflow 系统替代后删除。
+> - `experimental.unattended` / `experimental.auto_permission` —— 仅剩 `experimental.auto_question`。
 
 **关键原则**：此层决定「系统做什么」，跨设备/session/客户端一致。
-行为类设置（unattended / auto_permission）属于此层，**不属于 UI 偏好**。
+行为类设置（如 `experimental.auto_question`）属于此层，**不属于 UI 偏好**。
 
 ### Layer 2: Overlay Preferences — 客户端 UI 偏好
 

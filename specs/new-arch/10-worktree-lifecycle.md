@@ -1,8 +1,31 @@
 # 10 · Worktree Lifecycle — "Preserve on Progress" 设计方案
 
-**Status**: Draft (2026-04-19)
-**For**: Codex cross-validation before implementation
+**Status**: Implemented (2026-05-05 起在主干)
 **Author**: Claude + manual review
+
+> **2026-05-12 数据模型更正**：本设计落地时**没有**采用 §3.1 的"把 `workspace_dir` /
+> `workspace_branch` / `workspace_base_ref` 直接列加在 `engine_goal` 上"的方案，而是采用
+> §3.2 注脚里提到的"挂在 per-attempt artifact payload 上"的备选。当前真源：
+>
+> - `engine_goal` **没有** worktree 列（曾在 Phase B 短暂出现，2026-05-05 被回退；
+>   见 `engine.sql.ts:383-391` 注释）
+> - `engine_goal_run` **整表已删**（Phase 6-d，合并入 `engine_artifact[kind="goal_run_attempt"]`）
+> - workspace 信息以 `payload.workspace_dir` / `payload.workspace_branch` /
+>   `payload.workspace_base_ref` 写在每次 attempt 的 `engine_artifact` payload 上
+> - "success-only cleanup" 由 `engine/writer.ts:cleanupGoalWorkspaceForGoal` 实现
+> - 旧 `goal-pool.ts` 三处 cleanup 调用点全部下线（`goal-pool.ts` 已删）
+> - `goal/runner.ts` 现在只剩 121 行的 `cleanupGoalWorkspace`；retry-feedback prompt
+>   section 由 build tool 在 `orchestrator/tools.ts`（≈L5436-5453，读 `decision_log.phase="retry"`
+>   后 inline 拼装 markdown，结果以 `context.retryFeedback` 透传给 build agent）。**单写
+>   入口**是 `engine/persist.ts:startNewAttempt`——所有 reopen 路径（delivery_rework /
+>   manual_retry / modify_contract）都经此写入 `decision_log.phase="retry"`，再由前述读取
+>   方拼装。**没有**名为 `buildRetryFeedbackSection` 的函数；persist.ts 注释里出现该名称
+>   是历史命名遗存。
+>
+> 下文 §3 数据模型、§5 代码变更面（含 §5.2 `engine/goal-pool.ts`、§5.5
+> `buildRetryFeedbackSection`）、§9 实施顺序与 §10 待定问题，均以**历史决策记录**形式保留。
+> 落地后的真源以 `engine.sql.ts` + `engine/writer.ts` + `engine/persist.ts` +
+> `orchestrator/tools.ts`（retry-feedback inline 拼装）为准；本文不再追文档级修订。
 
 ## 0 · TL;DR
 

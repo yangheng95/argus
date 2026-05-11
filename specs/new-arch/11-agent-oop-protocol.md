@@ -287,11 +287,12 @@ abstract class SessionAgent<TIn extends z.ZodType, TOut extends z.ZodType>
 | 目录 | 存放内容 |
 |---|---|
 | `src/agent/prompt/` | SessionAgent 的 prompt（build, general, explore, compaction, title） |
-| `src/prompt/core/` | PipelineAgent 的 prompt（requirements, architect, planner, delivery, design-analyst, intent-analysis, orchestrator） |
+| `src/prompt/core/` | PipelineAgent 的 prompt（requirements, architect, delivery, design-analyst, intent-analysis, orchestrator, integrity, prosecutor） |
 
-**待迁移（当前违规）**：
-- `orchestrator/agent.ts` → `ORCHESTRATOR_INSTRUCTIONS` 内联常量 → 迁移到 `src/prompt/core/orchestrator-core.txt`
-- `delivery/agent.ts` → `DELIVERY_AGENT_SYSTEM` 内联常量 → 迁移到 `src/prompt/core/delivery-core.txt`
+**迁移状态（2026-05-12）**：
+- ✅ `orchestrator/agent.ts:ORCHESTRATOR_INSTRUCTIONS` 已迁移：`= ORCHESTRATOR_CORE`（来自 `src/prompt/core/orchestrator-core.txt`）
+- ✅ `delivery/agent.ts:DELIVERY_AGENT_SYSTEM` 已迁移：`= DELIVERY_CORE`（来自 `src/prompt/core/delivery-core.txt`）
+- ⚠️ `planner-core.txt` 不再存在（`src/planner/` 整目录删除；planner-as-agent 概念已下线）
 
 ### 4.2 运行时分层（三级覆盖）
 
@@ -467,15 +468,17 @@ Orchestrator system prompt 中明确指引：
 | `RequirementsAgent.run()` | `PipelineAgent` | `RequirementsInputSchema` | `RequirementsResultSchema` | 已在 `.txt`，无需迁移 |
 | `ArchitectAgent.coordinate()` | `PipelineAgent` | `ArchitectInputSchema` | `ArchitectResultSchema` | 已在 `.txt`，无需迁移 |
 | `DesignAnalystAgent.analyze()` | `PipelineAgent` | `DesignAnalystInputSchema` | `DesignAnalystResultSchema` | 已在 `.txt`，无需迁移 |
-| `planGoal()` 函数 | `PipelineAgent` | `PlannerInputSchema` | `PlanStepsSchema` | 已在 `.txt`，无需迁移 |
-| `DeliveryAgent.verify()` | `PipelineAgent` | `DeliveryInputSchema` | `DeliveryVerdictSchema` | **待迁移** inline→`.txt` |
-| `Orchestrator.processTask()` | `PipelineAgent` | `OrchestratorTriggerSchema` | `z.void()` | **待迁移** inline→`.txt` |
-| `IntentAnalysisAgent.analyze()` | `PipelineAgent` | `IntentInputSchema` | `IntentResultSchema` | 已在 `.txt`，无需迁移 |
+| ~~`planGoal()` 函数~~ | — | — | — | **已删除**：`src/planner/` 整目录下线，build agent 直接读 architect contract 推进 |
+| `DeliveryAgent.verify()` | `PipelineAgent` | `DeliveryInputSchema` | `DeliveryVerdictSchema` | ✅ 已迁移：`DELIVERY_AGENT_SYSTEM = DELIVERY_CORE` |
+| `Orchestrator.runTaskLoop()` | `PipelineAgent` | `OrchestratorTriggerSchema` | `z.void()` | ✅ 已迁移：`ORCHESTRATOR_INSTRUCTIONS = ORCHESTRATOR_CORE` |
+| `IntentAnalysisAgent.analyze()` | `PipelineAgent` | `IntentInputSchema` | `IntentResultSchema` | 已在 `.txt`，已接线 `analyze_intent` tool |
+| `IntegrityAgent.review()` | `PipelineAgent` | `IntegrityInputSchema` | `IntegrityResultSchema` | 已在 `.txt`，已接线 `integrity` tool |
+| `ProsecutorAgent.review()` | `PipelineAgent` | `ProsecutorInputSchema` | `ProsecutorResultSchema` | 已在 `.txt`，已接线 `prosecute` tool |
 | `Agent.Info["build"]` via `SessionPrompt` | `SessionAgent` | `BuildInputSchema` | `BuildSummarySchema` | 已在 `.txt`，无需迁移 |
 | `Agent.Info["general"]` | `SessionAgent` | `GeneralInputSchema` | `GeneralSummarySchema` | 已在 `.txt`，无需迁移 |
 | `Agent.Info["explore"]` | `SessionAgent` | `ExploreInputSchema` | `ExploreSummarySchema` | 已在 `.txt`，无需迁移 |
 
-**迁移优先级**：Orchestrator（最大 inline prompt）> Delivery > 其余已合规。
+**迁移状态（2026-05-12）**：Orchestrator + Delivery 内联 prompt 已全部移到 `.txt`。整张表的所有 `.txt` 迁移项已完成；剩下未完成的只有 base-class / mailbox / whitelist 等结构性抽象，本文整体仍标记 "未来方案"。
 
 ---
 
