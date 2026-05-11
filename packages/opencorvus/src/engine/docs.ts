@@ -59,7 +59,7 @@ function evaluationGroups(checks: GroupCheck[]) {
 
 type Check = {
   name: string
-  status: "passed" | "failed" | "skipped"
+  status: "passed" | "failed" | "skipped" | "inconclusive"
   evidence?: string
   label?: string
   family?: string

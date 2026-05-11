@@ -73,7 +73,7 @@ export namespace DeliveryService {
     specSnapshotID?: string
     criteriaResults?: Array<{
       name: string
-      status: "passed" | "failed" | "skipped"
+      status: "passed" | "failed" | "skipped" | "inconclusive"
       evidence?: string
       family?: string
       label?: string

@@ -310,7 +310,7 @@ export async function upsertTaskCriteria(
     name: string
     label?: string
     family?: string
-    status: "passed" | "failed" | "skipped"
+    status: "passed" | "failed" | "skipped" | "inconclusive"
     evidence?: string
   }>,
 ) {

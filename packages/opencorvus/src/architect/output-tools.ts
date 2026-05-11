@@ -35,11 +35,12 @@ import {
   ContractIRSchema,
   FieldSpecSchema,
   TypeSpecSchema,
+  auditEligibleSymbols,
   contractCategory,
   renderContractIR,
   type ContractIR,
 } from "./contract-ir"
-import { linkContracts } from "./linker"
+import { linkContracts, parseContractSymbols } from "./linker"
 
 // ---------------------------------------------------------------------------
 // Collector — single buffer for the full Architect output
@@ -118,6 +119,7 @@ export function architectValidationIssues(
     issues.push("No goals registered - Architect must produce at least one goal")
   }
   const knownGoalIDs = new Set(collector.goals.map((g) => g.id))
+  const contractIndex = new Map(collector.contracts.map((contract) => [contract.ir.name, contract.ir]))
   const requiredTraceability = new Map<string, Set<string>>()
   const bootstrapGoals = collector.goals.filter((g) => g.kind === "bootstrap")
   if (bootstrapGoals.length > 1) {
@@ -143,14 +145,17 @@ export function architectValidationIssues(
         issues.push(`Goal ${g.id}: acceptance spec ${spec.id} has mismatched goal_id "${spec.goal_id}"`)
       }
     }
-    const hasContractBoundary = g.imports.length > 0 || g.exports.length > 0
+    const auditEligibleImports = auditEligibleSymbols({
+      index: contractIndex,
+      symbols: parseContractSymbols(g.imports),
+    })
     const hasEssentialContractAudit = g.acceptance_specs.some((spec) =>
       spec.severity === "essential" &&
       spec.scorers.some((scorer) => scorer.type === "contract_audit" && resolveTrigger(spec, scorer) === "on_goal")
     )
-    if (hasContractBoundary && !hasEssentialContractAudit) {
+    if (g.kind !== "bootstrap" && auditEligibleImports.length > 0 && !hasEssentialContractAudit) {
       issues.push(
-        `Goal ${g.id}: imports/exports require at least one essential on_goal contract_audit acceptance scorer.`,
+        `Goal ${g.id}: audit-eligible imports require at least one essential on_goal contract_audit acceptance scorer.`,
       )
     }
     for (const requirementID of g.requirement_ids) {

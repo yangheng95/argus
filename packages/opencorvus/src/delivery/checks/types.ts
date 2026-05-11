@@ -54,7 +54,7 @@ export type GoalJudgmentType = EvaluatorAnalysisType
 
 export interface CheckResult {
   name: string
-  status: "passed" | "failed" | "skipped"
+  status: "passed" | "failed" | "skipped" | "inconclusive"
   evidence?: string
 }
 

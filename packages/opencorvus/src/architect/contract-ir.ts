@@ -70,10 +70,88 @@ export const ContractIRSchema = z.discriminatedUnion("kind", [
 export type ContractIR = z.infer<typeof ContractIRSchema>
 export type ContractCategory = "type_contract" | "function_contract" | "enum_contract"
 
+export interface AuditEligibleField {
+  contractName: string
+  fieldName: string
+  expectedValues: string[]
+}
+
 export function contractCategory(ir: ContractIR): ContractCategory {
   if (ir.kind === "type") return "type_contract"
   if (ir.kind === "function") return "function_contract"
   return "enum_contract"
+}
+
+export function auditEligibleFieldsForSymbols(input: {
+  index: Map<string, ContractIR>
+  symbols: readonly string[]
+}): AuditEligibleField[] {
+  const fields: AuditEligibleField[] = []
+  for (const symbol of input.symbols) {
+    const contract = input.index.get(symbol)
+    if (!contract) continue
+    if (contract.kind === "type") {
+      for (const field of contract.fields) {
+        const values = closedStringValuesForValueDomain(field.valueDomain, input.index)
+        if (values) fields.push({ contractName: contract.name, fieldName: field.name, expectedValues: values })
+      }
+      continue
+    }
+    if (contract.kind === "function") {
+      for (const param of contract.params) {
+        const values = closedStringValuesForValueDomain(param.valueDomain, input.index)
+        if (values) fields.push({ contractName: contract.name, fieldName: param.name, expectedValues: values })
+      }
+      const returnValues = closedStringValuesForValueDomain(contract.returns.valueDomain, input.index)
+      if (returnValues) fields.push({ contractName: contract.name, fieldName: "return", expectedValues: returnValues })
+    }
+  }
+  return fields
+}
+
+export function auditEligibleSymbols(input: {
+  index: Map<string, ContractIR>
+  symbols: readonly string[]
+}): string[] {
+  return input.symbols.filter((symbol) =>
+    auditEligibleFieldsForSymbols({ index: input.index, symbols: [symbol] }).length > 0
+  )
+}
+
+export function closedStringValuesForValueDomain(
+  domain: ValueDomain,
+  index: Map<string, ContractIR>,
+): string[] | undefined {
+  if (domain.kind === "literal_union") return domain.values
+  if (domain.kind === "ref") return closedStringValuesFromContract(index.get(domain.contractName), index, new Set([domain.contractName]))
+  if (domain.kind === "branded") return closedStringValuesFromContract(index.get(domain.brand), index, new Set([domain.brand]))
+  return undefined
+}
+
+function closedStringValuesFromContract(
+  contract: ContractIR | undefined,
+  index: Map<string, ContractIR>,
+  resolving: Set<string>,
+): string[] | undefined {
+  if (!contract) return undefined
+  if (contract.kind === "enum") return contract.variants.map((variant) => variant.value)
+  if (contract.kind === "type" && contract.fields.length === 1) {
+    return closedStringValuesFromValueDomainWithCycleGuard(contract.fields[0].valueDomain, index, resolving)
+  }
+  return undefined
+}
+
+function closedStringValuesFromValueDomainWithCycleGuard(
+  domain: ValueDomain,
+  index: Map<string, ContractIR>,
+  resolving: Set<string>,
+): string[] | undefined {
+  if (domain.kind === "literal_union") return domain.values
+  if (domain.kind !== "ref" && domain.kind !== "branded") return undefined
+  const contractName = domain.kind === "ref" ? domain.contractName : domain.brand
+  if (resolving.has(contractName)) return undefined
+  resolving.add(contractName)
+  return closedStringValuesFromContract(index.get(contractName), index, resolving)
 }
 
 export function renderContractIR(ir: ContractIR): string {
