@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "c67774a72eadbe30"
+    "panel_revision": "5bf6f1359799fea5"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -321,7 +321,6 @@
   "cwd.create_title": "新建工作目录",
   "cwd.create_unavailable": "当前环境不支持创建目录",
   "cwd.create": "新建",
-  "cwd.execution_workspace": "执行工作区：{{value}}",
   "cwd.folder": "目录",
   "cwd.folder_placeholder": "my-project",
   "cwd.new": "新建",
@@ -438,6 +437,7 @@
   "goal.field.objective": "目标说明",
   "goal.field.title": "标题",
   "goal.field.title_placeholder": "描述目标…",
+  "goal.field.worktree": "工作区",
   "goal.save": "保存",
   "goal.title": "目标",
   "interaction.allow_once": "本次允许",

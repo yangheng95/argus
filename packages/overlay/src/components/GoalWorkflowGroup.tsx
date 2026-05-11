@@ -10,6 +10,8 @@ import { t } from "../utils/i18n";
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
 import { goalStatusToTaskStatus, statusIconName } from "../utils/status-mapping";
+import { relativePathFrom } from "../utils/path";
+import { activeDirectory, openDirectory } from "../services/workspace";
 import { StaticTextPart } from "./TextPart";
 import { Icon } from "./Icon";
 
@@ -57,6 +59,11 @@ interface GoalWorkflow {
    *  objective is the prose description a human reads first. */
   goalObjective?: string;
   goalStatus: string;
+  /** Persistent worktree pointer for this goal (single source — projected
+   *  from goal_run_attempt artifact via findGoalLatestWorkspace; not a
+   *  status-priority sort, just append-only tip + supersede). */
+  workspaceDir?: string;
+  workspaceBranch?: string;
   /** Typed acceptance specs from the backend (board.ts). */
   acceptanceSpecs?: AcceptanceSpecLike[];
   priority: "blocking" | "advisory";
@@ -107,6 +114,15 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
   };
   const revisionLabel = () =>
     goalRevisionLabelFromIndexes(props.goal.orderIndex, props.goal.retryCount);
+  /** Display label for the worktree row. Returns empty string when the
+   *  relative path cannot be resolved (rule 7: no fallback to shortPath /
+   *  absolute path / hydration placeholder — the row is hidden instead). */
+  const worktreeLabel = () => {
+    const wt = props.goal.workspaceDir;
+    if (!wt) return "";
+    const base = activeDirectory();
+    return relativePathFrom(base, wt);
+  };
 
   const canSurfaceCollapse = (event: MouseEvent) => {
     const target = event.target as HTMLElement | null;
@@ -164,6 +180,15 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
           <Show when={props.goal.priority === "advisory"}>
             <span class="gwg-priority-badge">advisory</span>
           </Show>
+          <Show when={props.goal.workspaceBranch}>
+            <span
+              class="gwg-branch-pill"
+              title={props.goal.workspaceDir}
+              aria-label={`worktree: ${props.goal.workspaceDir ?? ""}`}
+            >
+              ⎇ {props.goal.workspaceBranch}
+            </span>
+          </Show>
         </div>
         {/* iter44: edit + delete buttons removed per user feedback
             (2026-05-03) \u2014 goal authoring lives elsewhere (the
@@ -192,6 +217,23 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
                 <StaticTextPart text={previewAcceptance(props.goal.acceptanceSpecs)} />
               </div>
             </div>
+          </Show>
+          <Show when={worktreeLabel()}>
+            <button
+              type="button"
+              class="gwg-worktree"
+              data-ui="goal-worktree-open"
+              title={props.goal.workspaceDir}
+              aria-label={`${t("cwd.open")}: ${props.goal.workspaceDir ?? ""}`}
+              onClick={() => void openDirectory(props.goal.workspaceDir!)}
+              data-card-dblclick-ignore="true"
+            >
+              <span class="gwg-worktree-label">{t("goal.field.worktree")}</span>
+              <span class="gwg-worktree-path">{worktreeLabel()}</span>
+              <Show when={props.goal.workspaceBranch}>
+                <span class="gwg-worktree-branch">⎇ {props.goal.workspaceBranch}</span>
+              </Show>
+            </button>
           </Show>
         </div>
       </Show>

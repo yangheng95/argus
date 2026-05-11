@@ -708,7 +708,6 @@ export const TaskBoardGoalStepPayload = z.object({
    *  Distinct from EngineExecutorSession.id, which tracks the managed
    *  executor provider session. */
   buildSessionID: z.string().optional(),
-  workspaceDir: z.string().optional(),
   changedFiles: z.array(z.string()).optional(),
   /** Per-file diff stats sourced from the goal_run delivery row. Carries
    *  additions/deletions/status so the overlay's ChangesPanel renders

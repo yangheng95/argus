@@ -6554,6 +6554,7 @@ export type CodingCliProfilesResponse = CodingCliProfilesResponses[keyof CodingC
 export type CodingCliOpenData = {
   body?: {
     cliID: string
+    terminalProfileID: string
     cwd: string
   }
   path?: never
@@ -8777,7 +8778,6 @@ export type TaskConversationResponses = {
               }>
             }>
             buildSessionID?: string
-            workspaceDir?: string
             changedFiles?: Array<string>
             changedFileDiffs?: Array<{
               file: string
@@ -9321,7 +9321,6 @@ export type TaskBoardResponses = {
             }>
           }>
           buildSessionID?: string
-          workspaceDir?: string
           changedFiles?: Array<string>
           changedFileDiffs?: Array<{
             file: string

@@ -26,10 +26,11 @@ export interface DiffItem {
 
 /**
  * Fetches the current working path and VCS info from the server and updates
- * the app store. The directory breadcrumb + workspace-line render through
- * <TaskDirContent /> + <TaskWorkspaceLine /> Solid components — they react
- * to settingsStore.directory / boardStore.path automatically; loadMeta only
- * pushes data into the stores.
+ * the app store. The directory breadcrumb + co-located VCS badge render
+ * through the <TaskDirContent /> Solid component (TaskDirBar.tsx), which
+ * reacts to settingsStore.directory / boardStore.path automatically;
+ * loadMeta only pushes data into the stores. Per-goal worktree display
+ * lives on the right-side GoalWorkflowGroup card, not on this surface.
  */
 export async function loadMeta(): Promise<void> {
   const epoch = settingsStore.directoryEpoch;

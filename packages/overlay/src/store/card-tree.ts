@@ -79,7 +79,6 @@ export interface StepPayload {
     verificationCommands?: Array<{ command: string; purpose: string }>;
   }>;
   buildSessionID?: string;
-  workspaceDir?: string;
   changedFiles?: string[];
   diffStats?: { files?: number; additions?: number; deletions?: number };
   checks?: Array<{ name: string; status: string; evidence?: string; family?: string }>;

@@ -1,41 +1,25 @@
-// ── TaskDirContent / TaskWorkspaceLine ──
-// Reactive replacement for renderMeta() — the directory breadcrumb +
-// workspace-dir line in the task header. Previously a function in
-// services/meta.ts that grabbed #taskDir / #taskWorkspaceDir via
-// getElementById and wrote innerHTML / textContent / hidden / setAttribute
-// every time a meta call ran. Now driven by Solid signals.
+// ── TaskDirContent ──
+// Solid component for the directory breadcrumb + co-located VCS badge that
+// live at the top of the conversation panel. Renders into
+// `#solidTaskDirMount` in index.html.
 //
-// The two spans live in different parents in index.html (#taskDir nests
-// inside the task-cwd-dropdown shell; #taskWorkspaceDir is a sibling),
-// so we render two independent Solid components mounted into the original
-// slots — preserving the layout + the document-level event delegation that
-// reads `data-path-action` / `data-path-set` / `data-path-open` from the
-// breadcrumb buttons. IDE launchers live in WorkspaceEditorLaunchers so the
-// directory control does not own editor shortcuts.
+// The badge sits as a sibling span inside the same mount node so the
+// task-cwd-dropdown's click handler covers both (rule 8 — single mount
+// point for the task-dir surface). The breadcrumb itself still uses
+// innerHTML for `pathBreadcrumb()` markup — its buttons are dispatched via
+// document-level delegation in main.tsx reading `data-path-*` attributes.
 //
-// pathBreadcrumb() still returns an HTML string (its buttons are clicked
-// via document-level delegation in main.tsx); innerHTML on a Solid element
-// is the right primitive for this trusted static markup.
+// IDE launchers live in WorkspaceEditorLaunchers so this module does not
+// own editor shortcuts. Per-goal worktree display lives in
+// GoalWorkflowGroup (right-side goal panel); see
+// specs/new-arch/2026-05-11-goal-worktree-display.md for the rationale on
+// why worktree is a per-goal surface, not a task-header one.
 
 import { createMemo, Show } from "solid-js";
 import { boardStore } from "../store/board";
 import { pathBreadcrumb } from "../utils/dom-utils";
-import { activeDirectory, currentExecutionDirectory, openDirectory } from "../services/workspace";
+import { activeDirectory } from "../services/workspace";
 import { t } from "../utils/i18n";
-
-function relativePathFrom(base: string, target: string): string {
-  if (!base || !target) return "";
-  const norm = (s: string) => s.replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
-  const nb = norm(base);
-  const nt = norm(target);
-  if (nt.startsWith(nb + "/")) return target.slice(base.replace(/[\\/]+$/, "").length + 1);
-  return "";
-}
-
-function shortPath(p: string): string {
-  const parts = p.replace(/[\\/]+/g, "/").replace(/\/+$/, "").split("/");
-  return parts.length <= 2 ? p : `…/${parts.slice(-2).join("/")}`;
-}
 
 const directoryMemo = () => activeDirectory();
 
@@ -46,13 +30,16 @@ export function TaskDirContent() {
   const dirEmpty = createMemo(() => (dir() ? "false" : "true"));
 
   return (
-    <span
-      class="task-dir"
-      id="taskDir"
-      title={dirTitle()}
-      data-empty={dirEmpty()}
-      innerHTML={breadcrumbHtml()}
-    />
+    <>
+      <span
+        class="task-dir"
+        id="taskDir"
+        title={dirTitle()}
+        data-empty={dirEmpty()}
+        innerHTML={breadcrumbHtml()}
+      />
+      <VcsBadge />
+    </>
   );
 }
 
@@ -131,38 +118,6 @@ function VcsBadge() {
       <Show when={arrows()}>
         <span class="vcs-badge-arrows">{arrows()}</span>
       </Show>
-    </span>
-  );
-}
-
-export function TaskWorkspaceLine() {
-  const dir = createMemo(directoryMemo);
-  const workspaceText = createMemo(() => currentExecutionDirectory());
-  const meta = createMemo(() => {
-    const dirText = dir().replace(/[\\/]+$/, "");
-    const wt = workspaceText();
-    const same = !!dirText && !!wt && dirText.toLowerCase() === wt.toLowerCase();
-    const show = !!wt && !same;
-    if (!show) return { show: false, label: "", title: "" };
-    const label = relativePathFrom(dirText, wt) || shortPath(wt);
-    return { show: true, label: t("cwd.execution_workspace", { value: label }), title: wt };
-  });
-
-  return (
-    <span class="task-workspace-row">
-      <VcsBadge />
-      <button
-        type="button"
-        class="task-workspace"
-        id="taskWorkspaceDir"
-        hidden={!meta().show}
-        title={meta().title}
-        aria-label={`${t("cwd.open")}: ${meta().title}`}
-        data-ui="execution-workspace-open"
-        onClick={() => void openDirectory(meta().title)}
-      >
-        {meta().label}
-      </button>
     </span>
   );
 }
