@@ -33,7 +33,7 @@ export namespace SystemTerminal {
     platform: NodeJS.Platform
     cwd: string
     terminalApp: string
-    profile?: Pick<TerminalProfile.Resolved, "command" | "args">
+    profile?: Pick<TerminalProfile.Resolved, "command" | "args" | "icon">
     command?: string
     args?: string[]
     keepOpen?: boolean
@@ -74,20 +74,32 @@ export namespace SystemTerminal {
     }
   }
 
+  async function resolveProfile(profileID: string): Promise<TerminalProfile.Resolved> {
+    try {
+      return await TerminalProfile.resolve(profileID)
+    } catch (error) {
+      if (error instanceof TerminalProfile.ConfigError) {
+        throw new ConfigError({ message: error.data.message })
+      }
+      throw error
+    }
+  }
+
   function shellQuote(value: string): string {
     return `'${value.replaceAll("'", "'\"'\"'")}'`
   }
 
-  function cmdQuote(value: string): string {
-    return `"${value.replaceAll('"', '""')}"`
+  function powerShellQuote(value: string): string {
+    return `'${value.replaceAll("'", "''")}'`
   }
 
   function appleScriptString(value: string): string {
     return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
   }
 
-  function defaultInteractiveShell(input?: string): string {
-    return input?.trim() || process.env.SHELL?.trim() || "sh"
+  function interactiveShellArgv(options: BuildOptions): string[] {
+    if (options.profile) return [unwrapCommandQuotes(options.profile.command), ...options.profile.args]
+    return [options.defaultShell?.trim() ?? process.env.SHELL?.trim() ?? "sh"]
   }
 
   function commandArgv(options: BuildOptions): string[] {
@@ -99,12 +111,28 @@ export namespace SystemTerminal {
   function shellLine(options: BuildOptions): string {
     const argv = commandArgv(options)
     const prefix = `cd ${shellQuote(options.cwd)}`
-    if (argv.length === 0) return `${prefix}; exec ${shellQuote(defaultInteractiveShell(options.defaultShell))} -i`
+    if (argv.length === 0) return `${prefix}; exec ${interactiveShellArgv(options).map(shellQuote).join(" ")}`
     const command = argv.map(shellQuote).join(" ")
     if (options.keepOpen) {
-      return `${prefix} && ${command}; exec ${shellQuote(defaultInteractiveShell(options.defaultShell))} -i`
+      return `${prefix} && ${command}; exec ${[...interactiveShellArgv(options), "-i"].map(shellQuote).join(" ")}`
     }
     return `${prefix}; exec ${command}`
+  }
+
+  function windowsCommandProfileArgs(options: BuildOptions, argv: string[]): string[] {
+    if (!options.profile) {
+      throw new ConfigError({ message: "System terminal profile is required to open a command" })
+    }
+    const profileCommand = unwrapCommandQuotes(options.profile.command)
+    const keepFlag = options.keepOpen ? "/k" : "/c"
+    if (options.profile.icon === "powershell") {
+      const command = `& ${argv.map(powerShellQuote).join(" ")}`
+      return [profileCommand, ...options.profile.args, ...(options.keepOpen ? ["-NoExit"] : []), "-Command", command]
+    }
+    if (options.profile.icon === "bash") {
+      return [profileCommand, ...options.profile.args, "-lc", shellLine(options)]
+    }
+    return [profileCommand, ...options.profile.args, keepFlag, ...argv]
   }
 
   export function buildCommand(options: BuildOptions): CommandSpec {
@@ -113,7 +141,7 @@ export namespace SystemTerminal {
       if (options.command) {
         return {
           command: options.terminalApp,
-          args: ["/d", "/s", "/c", "start", "", "/D", options.cwd, "cmd.exe", "/k", argv.map(cmdQuote).join(" ")],
+          args: ["/d", "/s", "/c", "start", "", "/D", options.cwd, ...windowsCommandProfileArgs(options, argv)],
         }
       }
       const command = argv.length > 0 ? argv : ["cmd.exe", "/k"]
@@ -164,7 +192,7 @@ export namespace SystemTerminal {
 
   export async function open(input: OpenInput): Promise<OpenResponse> {
     const cwd = await validateCwd(input.cwd)
-    const profile = input.profileID ? await TerminalProfile.resolve(input.profileID) : undefined
+    const profile = input.profileID ? await resolveProfile(input.profileID) : undefined
     const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
     const spec = buildCommand({
       platform: process.platform,
@@ -176,13 +204,20 @@ export namespace SystemTerminal {
     return await launch(spec, cwd, shellEnv.env as Record<string, string>)
   }
 
-  export async function openCommand(input: { cwd: string; command: string; args?: string[] }): Promise<OpenResponse> {
+  export async function openCommand(input: {
+    cwd: string
+    terminalProfileID: string
+    command: string
+    args?: string[]
+  }): Promise<OpenResponse> {
     const cwd = await validateCwd(input.cwd)
+    const profile = await resolveProfile(input.terminalProfileID)
     const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
     const spec = buildCommand({
       platform: process.platform,
       cwd,
       terminalApp: terminalApp(),
+      profile,
       command: input.command,
       args: input.args ?? [],
       keepOpen: true,

@@ -54,6 +54,7 @@ describe("coding CLI external launch", () => {
       platform: "win32",
       cwd: "C:\\repo",
       terminalApp: "cmd.exe",
+      profile: { command: "cmd.exe", args: [], icon: "command-prompt" },
       command: "C:\\Tools\\Codex CLI\\codex.cmd",
       args: [],
       keepOpen: true,
@@ -61,8 +62,7 @@ describe("coding CLI external launch", () => {
 
     expect(command.command).toBe("cmd.exe")
     expect(command.args.slice(0, 9)).toEqual(["/d", "/s", "/c", "start", "", "/D", "C:\\repo", "cmd.exe", "/k"])
-    expect(command.args.join(" ")).toContain("codex.cmd")
-    expect(command.args.join(" ")).not.toContain("profileID")
+    expect(command.args.at(-1)).toBe("C:\\Tools\\Codex CLI\\codex.cmd")
   })
 
   test("open rejects unknown CLI and outside cwd before spawning", async () => {
@@ -75,12 +75,19 @@ describe("coding CLI external launch", () => {
       await Instance.provide({
         directory: dir.path,
         fn: async () => {
-          await expect(CodingCli.open({ cliID: "missing", cwd: dir.path })).rejects.toBeInstanceOf(
+          await expect(
+            CodingCli.open({ cliID: "missing", terminalProfileID: "powershell", cwd: dir.path }),
+          ).rejects.toBeInstanceOf(
             CodingCli.ConfigError,
           )
-          await expect(CodingCli.open({ cliID: "codex", cwd: outside.path })).rejects.toBeInstanceOf(
+          await expect(
+            CodingCli.open({ cliID: "codex", terminalProfileID: "powershell", cwd: outside.path }),
+          ).rejects.toBeInstanceOf(
             SystemTerminal.ConfigError,
           )
+          await expect(
+            CodingCli.open({ cliID: "codex", terminalProfileID: "missing", cwd: dir.path }),
+          ).rejects.toBeInstanceOf(SystemTerminal.ConfigError)
         },
       })
     } finally {

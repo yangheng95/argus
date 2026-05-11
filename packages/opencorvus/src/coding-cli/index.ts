@@ -35,6 +35,7 @@ export namespace CodingCli {
 
   export const OpenInput = z.object({
     cliID: z.string().min(1),
+    terminalProfileID: z.string().min(1),
     cwd: z.string().min(1),
   })
   export type OpenInput = z.infer<typeof OpenInput>
@@ -191,7 +192,12 @@ export namespace CodingCli {
 
   export async function open(input: OpenInput): Promise<OpenResponse> {
     const cli = resolve(input.cliID)
-    await SystemTerminal.openCommand({ cwd: input.cwd, command: cli.command, args: cli.args })
+    await SystemTerminal.openCommand({
+      cwd: input.cwd,
+      terminalProfileID: input.terminalProfileID,
+      command: cli.command,
+      args: cli.args,
+    })
     return { ok: true }
   }
 }

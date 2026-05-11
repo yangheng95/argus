@@ -189,7 +189,19 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(codingCliOpenBodies).toHaveLength(1);
     expect(codingCliOpenBodies[0]).toMatchObject({
       cliID: "codex",
+      terminalProfileID: "powershell",
       cwd: "D:/overlay/workspace/app",
+    });
+
+    await page.click(".workspace-command-dock [data-ui='workspace-terminal-menu']");
+    await page.click('[data-terminal-profile="cmd"]');
+    for (let i = 0; i < 40 && terminalOpenBodies.length < 2; i++) {
+      await Bun.sleep(50);
+    }
+    expect(terminalOpenBodies).toHaveLength(2);
+    expect(terminalOpenBodies[1]).toMatchObject({
+      cwd: "D:/overlay/workspace/app",
+      profileID: "cmd",
     });
 
     await page.click(".workspace-command-dock [data-ui='workspace-coding-cli-menu']");
@@ -220,6 +232,7 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(codingCliOpenBodies).toHaveLength(2);
     expect(codingCliOpenBodies[1]).toMatchObject({
       cliID: "claude-code",
+      terminalProfileID: "cmd",
       cwd: "D:/overlay/workspace/app",
     });
 

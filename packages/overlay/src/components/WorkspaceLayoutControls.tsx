@@ -1,8 +1,14 @@
 import { For, createEffect, createMemo, createSignal } from "solid-js";
 import {
-  listTerminalProfiles,
+  clearTerminalProfileSelection,
+  defaultTerminalProfileID,
+  reloadTerminalProfileSelection,
+  selectTerminalProfileID,
+  selectedTerminalProfileID,
+  terminalProfiles,
+} from "../services/terminal-selection";
+import {
   openSystemTerminal,
-  type TerminalProfile,
   type TerminalProfileIcon,
 } from "../services/terminal";
 import { activeDirectory } from "../services/workspace";
@@ -18,17 +24,14 @@ const TERMINAL_ICONS: Record<TerminalProfileIcon, IconName> = {
 };
 
 export function WorkspaceLayoutControls() {
-  const [profiles, setProfiles] = createSignal<TerminalProfile[]>([]);
-  const [defaultProfileID, setDefaultProfileID] = createSignal("");
-  const [selectedProfileID, setSelectedProfileID] = createSignal("");
   const [open, setOpen] = createSignal(false);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal("");
 
-  const disabled = () => !activeDirectory() || loading() || profiles().length === 0;
+  const disabled = () => !activeDirectory() || loading() || terminalProfiles().length === 0;
   const selectedProfile = createMemo(() =>
-    profiles().find((profile) => profile.id === selectedProfileID()) ??
-    profiles().find((profile) => profile.id === defaultProfileID()) ??
+    terminalProfiles().find((profile) => profile.id === selectedTerminalProfileID()) ??
+    terminalProfiles().find((profile) => profile.id === defaultTerminalProfileID()) ??
     null,
   );
   const triggerIcon = createMemo(() => {
@@ -46,29 +49,17 @@ export function WorkspaceLayoutControls() {
 
   async function reloadProfiles() {
     if (!activeDirectory()) {
-      setProfiles([]);
-      setDefaultProfileID("");
-      setSelectedProfileID("");
+      clearTerminalProfileSelection();
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const response = await listTerminalProfiles();
-      if (!response.profiles.some((profile) => profile.id === response.defaultProfileID)) {
-        throw new Error(t("terminal.default_profile_missing"));
-      }
-      const current = selectedProfileID();
-      const selected = response.profiles.some((profile) => profile.id === current)
-        ? current
-        : response.defaultProfileID;
-      setProfiles(response.profiles);
-      setDefaultProfileID(response.defaultProfileID);
-      setSelectedProfileID(selected);
+      await reloadTerminalProfileSelection({
+        defaultProfileMissingMessage: t("terminal.default_profile_missing"),
+      });
     } catch (reason) {
-      setProfiles([]);
-      setDefaultProfileID("");
-      setSelectedProfileID("");
+      clearTerminalProfileSelection();
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setLoading(false);
@@ -80,12 +71,9 @@ export function WorkspaceLayoutControls() {
   }
 
   async function openProfile(profileID: string) {
-    if (!profiles().some((profile) => profile.id === profileID)) {
-      throw new Error(`Unknown terminal profile selected: ${profileID}`);
-    }
     const cwd = activeDirectory();
     if (!cwd) throw new Error("Workspace directory is required");
-    setSelectedProfileID(profileID);
+    selectTerminalProfileID(profileID);
     close();
     setError("");
     try {
@@ -128,7 +116,7 @@ export function WorkspaceLayoutControls() {
         </span>
       )}
     >
-      <For each={profiles()}>
+      <For each={terminalProfiles()}>
         {(profile) => (
           <button
             type="button"
@@ -145,7 +133,7 @@ export function WorkspaceLayoutControls() {
               <Icon name={terminalIconName(profile.icon)} size={16} />
             </span>
             <span class="workspace-terminal-option-label">
-              {profile.label}{profile.id === defaultProfileID() ? ` ${t("terminal.default_profile_suffix")}` : ""}
+              {profile.label}{profile.id === defaultTerminalProfileID() ? ` ${t("terminal.default_profile_suffix")}` : ""}
             </span>
           </button>
         )}
