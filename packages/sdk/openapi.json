@@ -11720,6 +11720,56 @@
                                         "type",
                                         "name"
                                       ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "contract_audit"
+                                        },
+                                        "name": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        "spec": {
+                                          "type": "object",
+                                          "properties": {
+                                            "kind": {
+                                              "type": "string",
+                                              "const": "contract_ir"
+                                            },
+                                            "symbols": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string",
+                                                "minLength": 1
+                                              }
+                                            }
+                                          },
+                                          "required": [
+                                            "kind"
+                                          ]
+                                        },
+                                        "expect": {
+                                          "type": "object",
+                                          "properties": {
+                                            "status": {
+                                              "type": "string",
+                                              "const": "passed"
+                                            }
+                                          },
+                                          "required": [
+                                            "status"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "name",
+                                        "spec",
+                                        "expect"
+                                      ]
                                     }
                                   ]
                                 }
@@ -12081,6 +12131,56 @@
                                             "required": [
                                               "type",
                                               "name"
+                                            ]
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
+                                                "const": "contract_audit"
+                                              },
+                                              "name": {
+                                                "type": "string",
+                                                "minLength": 1
+                                              },
+                                              "spec": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "const": "contract_ir"
+                                                  },
+                                                  "symbols": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string",
+                                                      "minLength": 1
+                                                    }
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind"
+                                                ]
+                                              },
+                                              "expect": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "status": {
+                                                    "type": "string",
+                                                    "const": "passed"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "status"
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "name",
+                                              "spec",
+                                              "expect"
                                             ]
                                           }
                                         ]
@@ -12768,7 +12868,8 @@
                                       "enum": [
                                         "passed",
                                         "failed",
-                                        "skipped"
+                                        "skipped",
+                                        "inconclusive"
                                       ]
                                     },
                                     "evidence": {
@@ -13425,7 +13526,8 @@
                                       "enum": [
                                         "passed",
                                         "failed",
-                                        "skipped"
+                                        "skipped",
+                                        "inconclusive"
                                       ]
                                     },
                                     "evidence": {
@@ -14779,7 +14881,8 @@
                                 "enum": [
                                   "passed",
                                   "failed",
-                                  "skipped"
+                                  "skipped",
+                                  "inconclusive"
                                 ]
                               },
                               "evidence": {
@@ -15887,7 +15990,8 @@
                                     "enum": [
                                       "passed",
                                       "failed",
-                                      "skipped"
+                                      "skipped",
+                                      "inconclusive"
                                     ]
                                   },
                                   "evidence": {
@@ -16202,7 +16306,8 @@
                                         "enum": [
                                           "passed",
                                           "failed",
-                                          "skipped"
+                                          "skipped",
+                                          "inconclusive"
                                         ]
                                       },
                                       "evidence": {
@@ -16790,7 +16895,8 @@
                                 "enum": [
                                   "passed",
                                   "failed",
-                                  "skipped"
+                                  "skipped",
+                                  "inconclusive"
                                 ]
                               },
                               "evidence": {
@@ -18127,7 +18233,8 @@
                                 "enum": [
                                   "passed",
                                   "failed",
-                                  "skipped"
+                                  "skipped",
+                                  "inconclusive"
                                 ]
                               },
                               "evidence": {
@@ -18442,7 +18549,8 @@
                                     "enum": [
                                       "passed",
                                       "failed",
-                                      "skipped"
+                                      "skipped",
+                                      "inconclusive"
                                     ]
                                   },
                                   "evidence": {
@@ -19030,7 +19138,8 @@
                             "enum": [
                               "passed",
                               "failed",
-                              "skipped"
+                              "skipped",
+                              "inconclusive"
                             ]
                           },
                           "evidence": {
@@ -21949,7 +22058,8 @@
                               "enum": [
                                 "passed",
                                 "failed",
-                                "skipped"
+                                "skipped",
+                                "inconclusive"
                               ]
                             },
                             "evidence": {
@@ -22677,6 +22787,56 @@
                                 "required": [
                                   "type",
                                   "name"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "contract_audit"
+                                  },
+                                  "name": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "spec": {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "contract_ir"
+                                      },
+                                      "symbols": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ]
+                                  },
+                                  "expect": {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "passed"
+                                      }
+                                    },
+                                    "required": [
+                                      "status"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "name",
+                                  "spec",
+                                  "expect"
                                 ]
                               }
                             ]

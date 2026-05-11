@@ -37,7 +37,7 @@ describe("MCP overlay service", () => {
     configure({ directory: "" });
   });
 
-  test("posts new remote MCP servers to the canonical /mcp route", async () => {
+  test("persists new remote MCP servers to config and then connects them", async () => {
     const requests: TransportRequest[] = [];
     __setHostTransportForTest(fakeTransport((req) => requests.push(req)));
     configure({ directory: "C:/Users/chuan/myhexin-local/vibecodingclient" });
@@ -48,22 +48,37 @@ describe("MCP overlay service", () => {
       url: "https://mcp.example.com/api",
     });
 
-    expect(requests).toHaveLength(1);
-    expect(requests[0].path).toBe("mcp");
-    expect(requests[0].method).toBe("POST");
+    expect(requests).toHaveLength(3);
+
+    expect(requests[0].path).toBe("config");
+    expect(requests[0].method).toBe("GET");
     expect(requests[0].query).toEqual({
       directory: "C:/Users/chuan/myhexin-local/vibecodingclient",
     });
-    expect(requests[0].body).toEqual({
+
+    expect(requests[1].path).toBe("config");
+    expect(requests[1].method).toBe("PATCH");
+    expect(requests[1].query).toEqual({
+      directory: "C:/Users/chuan/myhexin-local/vibecodingclient",
+    });
+    expect(requests[1].body).toEqual({
       kind: "json",
       value: {
-        name: "docs",
-        config: {
-          type: "remote",
-          url: "https://mcp.example.com/api",
+        mcp: {
+          docs: {
+            type: "remote",
+            url: "https://mcp.example.com/api",
+          },
         },
       },
     });
+
+    expect(requests[2].path).toBe("mcp/docs/connect");
+    expect(requests[2].method).toBe("POST");
+    expect(requests[2].query).toEqual({
+      directory: "C:/Users/chuan/myhexin-local/vibecodingclient",
+    });
+    expect(requests[2].body).toBeUndefined();
   });
 
   test("builds local MCP config using the server-side command array contract", () => {

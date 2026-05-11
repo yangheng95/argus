@@ -4,6 +4,7 @@
 
 import { appStore } from "../store/app";
 import { apiJson } from "./api";
+import { updateConfig } from "./config";
 
 export interface AddMcpInput {
   name: string;
@@ -72,10 +73,19 @@ export function buildMcpAddRequest(input: AddMcpInput): McpAddRequest {
 }
 
 export async function addMcpServer(input: AddMcpInput): Promise<void> {
-  await apiJson("mcp", {
+  const request = buildMcpAddRequest(input);
+  await updateConfig((current: any) => {
+    const existing =
+      current.mcp && typeof current.mcp === "object" && !Array.isArray(current.mcp)
+        ? current.mcp
+        : {};
+    current.mcp = {
+      ...existing,
+      [request.name]: request.config,
+    };
+  });
+  await apiJson(`mcp/${encodeURIComponent(request.name)}/connect`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildMcpAddRequest(input)),
   });
 }
 
