@@ -174,6 +174,27 @@ test("executor selector separates long plan and edit models", async () => {
     expect(menuText).toContain(editModel)
     expect(menuText).toContain("openai")
     expect(menuText).toContain("gpt-5.5-pro-priority-editing-profile")
+
+    // OpenCorvus model picker is always visible inside the open menu.
+    const projectSection = await page.$('[data-section="opencorvus"]')
+    expect(projectSection).not.toBeNull()
+    const projectButtons = await page.$$eval(
+      '[data-section="opencorvus"] .executor-menu-model',
+      (nodes) => nodes.length,
+    )
+    expect(projectButtons).toBeGreaterThan(0)
+
+    // External executor section starts collapsed — body not present until
+    // the user clicks the toggle.
+    const externalCollapsed = await page.$('[data-section="external"][data-open="false"]')
+    expect(externalCollapsed).not.toBeNull()
+    const bodyBefore = await page.$('[data-section="external"] .executor-menu-section-body')
+    expect(bodyBefore).toBeNull()
+
+    await page.click('[data-section="external"] .executor-menu-section-toggle')
+    await page.waitForSelector('[data-section="external"][data-open="true"]')
+    const bodyAfter = await page.$('[data-section="external"] .executor-menu-section-body')
+    expect(bodyAfter).not.toBeNull()
     await page.close()
   } finally {
     await browser.close().catch(() => undefined)

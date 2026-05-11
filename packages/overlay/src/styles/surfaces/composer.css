@@ -552,6 +552,86 @@
   white-space: nowrap;
 }
 
+.executor-menu-project,
+.executor-menu-external {
+  display: flex;
+  flex-direction: column;
+  margin-top: calc(8px * var(--ui-scale));
+}
+
+.executor-menu-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: 0 calc(4px * var(--ui-scale)) calc(4px * var(--ui-scale));
+}
+
+.executor-menu-section-title {
+  color: var(--text-strong);
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: var(--ui-letter-spacing-normal);
+}
+
+.executor-menu-section-status {
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+}
+
+.executor-menu-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  width: 100%;
+  border: var(--oc-border-width) solid transparent;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  color: var(--text-soft);
+  cursor: pointer;
+  transition:
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+}
+
+.executor-menu-section-toggle:hover {
+  background: var(--executor-menu-row-hover-bg);
+  color: var(--text-strong);
+}
+
+.executor-menu-section-summary {
+  min-width: 0;
+  flex: 1;
+  text-align: right;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.executor-menu-section-caret {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.executor-menu-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+  padding-top: calc(4px * var(--ui-scale));
+}
+
+.executor-menu-empty {
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+}
+
 .executor-menu-group {
   display: flex;
   flex-direction: column;
