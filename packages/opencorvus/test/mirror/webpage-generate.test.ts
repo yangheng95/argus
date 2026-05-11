@@ -6,6 +6,7 @@ import { WebpageCompileTool } from "../../src/mirror/tools/webpage-compile"
 import { WebpageAnalyzeTool } from "../../src/mirror/tools/webpage-analyze"
 import webpageGenerateMd from "../../src/skill/builtin/webpage-generate.md" with { type: "text" }
 import imageGenerateMd from "../../src/skill/builtin/image-generate.md" with { type: "text" }
+import { MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
 
 describe("webpage-generate dependency guards", () => {
   test("skill declares design-analysis PRD/SPEC mirror pipeline only", () => {
@@ -64,6 +65,12 @@ describe("webpage-generate dependency guards", () => {
       expect(parsed.content).not.toMatch(/static mode|Live-server mode|defaults render `<worktree>/i)
       expect(parsed.content).not.toMatch(/overall score\s+\*\*≥\s*95\*\*\s+AND/i)
     }
+  })
+
+  test("mirror tool surface does not expose Figma REST tools", () => {
+    expect(MIRROR_TOOL_IDS).not.toContain("figma_extract" as any)
+    expect(MIRROR_TOOL_IDS).not.toContain("figma_compile" as any)
+    expect(MIRROR_TOOL_IDS).not.toContain("figma_analyze" as any)
   })
 
   test("read_file refuses raw mirror extraction JSON and unbounded dense mirror artifacts", async () => {

@@ -2,9 +2,9 @@
  * Compile helpers shared across all `mirror/*` IR → XML compilers.
  *
  * Originally folded into `mirror/figma/compile.ts` (see commit history of that
- * file). Promoted to `shared/` when `image2code` joined `figma2code` /
- * `url2code` as a third compile target — same XML dialect, same attribute
- * layout, same text-style serialisation. Single source per rule 22.
+ * file). Promoted to `shared/` when image and URL compile needed the same XML
+ * dialect, attribute layout, and text-style serialisation. Single source per
+ * rule 22.
  *
  * No cross-module imports inside `mirror/` — these helpers depend only on
  * native types so `figma/`, `image/`, and any future `<source>/compile.ts`

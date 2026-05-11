@@ -2,8 +2,8 @@
  * Figma REST → `CompressedDesign`.
  *
  * Ported from `mirror/src/infra/figma/extract-core.ts`. Adaptations:
- *   - URL parsing reuses `design-analyst/figma-fetch::parseFigmaUrl` (opencorvus
- *     owns one canonical Figma URL parser; we extend, not duplicate).
+ *   - URL parsing is local to this isolated mirror algorithm. The product
+ *     design_analysis path uses Figma MCP instead of this REST path.
  *   - Token default: `FIGMA_API_TOKEN` env (opencorvus convention), not
  *     mirror's `FIGMA_TOKEN` / `FIGMA_OAUTH_TOKEN`. Callers may pass their
  *     own `token`. OAuth is not yet covered — add later if a skill needs it.

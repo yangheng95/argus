@@ -5,9 +5,6 @@ export const MIRROR_ANALYSIS_TOOL_IDS = [
   "webpage_image_extract",
   "webpage_image_compile",
   "webpage_image_analyze",
-  "figma_extract",
-  "figma_compile",
-  "figma_analyze",
 ] as const
 
 export const MIRROR_DELIVERY_TOOL_IDS = [

@@ -1,4 +1,4 @@
-# Mirror — Figma/URL → Code 算法移植
+# Mirror — URL/Image → Code 算法移植；Figma 产品入口走 MCP
 
 > 从 `opencode-private/packages/mirror` 抽取的确定性算法（零 LLM 的部分），作为 opencorvus 内部模块。
 > **本阶段只做 isolated integration**：算法 + 单测落地，不注册工具、不动 orchestrator/agent。
@@ -7,7 +7,7 @@
 
 ## 核心原则
 
-1. **工具组件 + skill 组合，不是 e2e 算法**：每个模块暴露一个原子算法函数（Zod 严格约束输入输出），模块之间**不互相调用**、**不共享 ctx**、**不做 stage 传参**。像 `figma-to-code.ts`、`url-to-code.ts` 这种"把阶段串起来的 composite service"在本仓库里**不存在**——组合工作由 skill markdown + orchestrator 完成，不由代码固化。
+1. **工具组件 + skill 组合，不是 e2e 算法**：每个模块暴露一个原子算法函数（Zod 严格约束输入输出），模块之间**不互相调用**、**不共享 ctx**、**不做 stage 传参**。像 `url-to-code.ts` 这种"把阶段串起来的 composite service"在本仓库里**不存在**——组合工作由 skill markdown + orchestrator 完成，不由代码固化。Figma 产品入口不再使用 mirror/REST，统一由 design_analysis 通过 Figma MCP materialize。
 2. **算法移植，基建复用**：mirror 只带算法本体，LLM / 事件 / 配置 / Worktree / Puppeteer 全部接 opencorvus 现有设施。
 3. **隔离落地**：`src/mirror/` 独立模块树。不动 `tool/registry.ts`、`agent/agent.ts`、`config.ts`、`permission/defaults.ts`、`prompt-catalog`。
 4. **Zod 在边界**：每个 export 的算法函数必须有 Zod 输入/输出 schema；内部辅助用 TS 类型。
@@ -38,17 +38,17 @@ export const CompileOutput = XmlIRSchema
 export async function compileDesignToXML(input: z.infer<typeof CompileInput>): Promise<z.infer<typeof CompileOutput>> { ... }
 ```
 
-skill（Phase 2）负责序列：
+历史 Figma mirror/REST 序列已下线；不要新增 `figma_extract` / `figma_compile` / `figma_analyze` 工具或 skill。Figma 参考由 design_analysis 调 Figma MCP 获取截图和文本证据后交给 PRD/SPEC 合成。
 
 ```markdown
 ---
-name: figma-to-code
+name: webpage-generate
 ---
 调用顺序：
-1. `figma_extract` → 拿 CompressedDesign
-2. `figma_compile` → 拿 XML IR
-3. 把 XML IR 交给 build agent 生成代码
-  4. `visual_render url=<explicit URL>` + `webpage_vision_judge` 验收；`visual_evaluate` 只作诊断
+1. `webpage_extract` → 拿 ExtractedPage
+2. `webpage_compile` → 拿 XML IR
+3. `webpage_analyze` → 拿 scaffold/shared-context
+4. PRD/SPEC 合成；build agent 不直接调用 mirror extraction
 ```
 
 ---
@@ -111,7 +111,7 @@ mirror/* 禁止依赖:
 
 mirror/* 允许依赖:
   src/util, src/llm, src/engine/protocol, src/worktree,
-  src/design-analyst/figma-fetch, src/design-analyst/url-screenshot,
+  src/design-analyst/url-screenshot,
   src/delivery/checks/visual (findBrowserExecutable)
 ```
 
@@ -137,7 +137,7 @@ mirror/* 允许依赖:
 | `infra/content-compare.ts` | `shared/content-compare.ts` | 直接移植 |
 | `infra/compile/ir-utils.ts` | 并入 `figma/compile.ts` | 折叠 |
 | `infra/figma-cache.ts` | `figma/cache.ts` | 独立工具，路径改 worktree；不被 fetch-tree 隐式调用 |
-| `infra/figma/extract-core.ts` | `figma/fetch-tree.ts` | URL parser/token 复用 `design-analyst/figma-fetch`；单一函数 `fetchFigmaTree` |
+| `infra/figma/extract-core.ts` | `figma/fetch-tree.ts` | isolated algorithm only；产品入口禁用 REST，走 Figma MCP |
 | `service/figma-extract.ts` | **删除**（是 mirror 的 stage 壳，不是算法） | — |
 | `service/figma-graph-analyze.ts` | `figma/graph-analyze.ts` | 单一函数 `compressDesignTree(design) → compressed` |
 | `service/figma-compile.ts` | `figma/compile.ts` | 单一函数 `compileDesignToXML(design) → xmlIR` |
@@ -214,7 +214,7 @@ Bun 1.3.13 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 
 | **A. shared utilities** | `shared/*` 8 个文件 + 单测 | 4 | `bun test src/mirror/shared/**` 100% 通过；零网络/磁盘 side effect |
 | **B. IR schemas** | `types.ts` + `ir/*` Zod + fixture 校验 | 1.5 | 3 份 fixture JSON 解析通过 |
 | **C. visual QA** | `visual/render.ts` + `visual/evaluate.ts` | 1.5 | 固定双 PNG 分数误差 ±0.5 |
-| **D. figma 链路** | `figma/fetch-tree` + `cache` + `graph-analyze` + `compile` | 4.5 | FIGMA_API_TOKEN 可用时 live test 通过，无 token 时 skip |
+| **D. figma 链路** | isolated legacy algorithms only；不注册工具、不进 design_analysis 产品路径 | 4.5 | 单元测试可保留，产品验收以 Figma MCP 为准 |
 | **E. url 链路 - extract** | `url/extract.ts` | 1.5 | 离线 fixture + 真实 puppeteer，ExtractedPage 通过 schema 校验 |
 | **F. url 链路 - compile + pattern** | `url/compile.ts` + `url/pattern/*` | 3 | fixture 驱动，输出与 mirror 字节级一致 |
 | **G. 冒烟脚本 + 文档** | `script/mirror-smoke.ts` | 1 | 本地一把跑通三条链路 |
@@ -235,7 +235,7 @@ Bun 1.3.13 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 
 ## 剩余真实风险
 
 1. `infra/pattern/*` 算法密度高（~1800 行），需金标对比验证
-2. Figma token 缓存目录策略（走 `Instance.project.path + .mirror/figma-cache`，TTL 1h）
+2. Figma REST mirror 算法仍是 isolated legacy；不要把 token/cache 重新接入产品入口
 3. 进度事件触点多（Phase 2 兑现）
 4. Bun TLA 静态 import 纪律（参照 `engine/persist.ts` 教训）
 
@@ -263,10 +263,10 @@ Bun 1.3.13 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 
 ## Phase 2 预告（不在本次范围）
 
 完成 isolated integration 后，phase 2 接线约 5 人日：
-- 每个原子算法包一层 `Tool.define`（薄壳，只做 Zod validate + 调用 + `EngineProtocol.emit` 事件），例：`figma_extract` / `figma_compile` / `url_extract` / `url_compile` / `url_analyze` / `visual_render` / `visual_evaluate`
+- 每个 URL/Image 原子算法包一层 `Tool.define`（薄壳，只做 Zod validate + 调用 + `EngineProtocol.emit` 事件），例：`url_extract` / `url_compile` / `url_analyze` / `visual_render` / `visual_evaluate`
 - `tool/registry.ts` 注册
 - `permission/defaults.ts` 新增 deny（出站请求：Figma API / 任意 URL 抓取）
 - `agent/agent.ts` build agent allow list
-- **skill markdown** 承载组合逻辑：`src/skill/builtin/figma-to-code.md` / `url-to-code.md` — 每个 skill 用自然语言描述调用顺序、中间产物如何交给 build agent、何时做 visual 验收。skill 是唯一把原子工具串成流程的位置。
+- **skill markdown** 承载组合逻辑：`src/skill/builtin/url-to-code.md` — skill 用自然语言描述调用顺序、中间产物如何交给 design_analysis、何时做 visual 验收。skill 是唯一把原子工具串成流程的位置。Figma 不再有 mirror skill。
 
 前提：phase 1 的 `script/mirror-smoke.ts` 稳定 pass 两周以上。
