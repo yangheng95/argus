@@ -312,7 +312,7 @@ function buildUserPrompt(
     `# Delivery\n\nSummary: ${input.delivery.summary}\n\n${filesHeader}\n` +
       filesShown.map((f) => `- ${f}`).join("\n") +
       `\n\nFor full diffs or executor claims, call inspect_delivery_context.`,
-    5_000,
+    10_000,
   )
 
   if (input.delivery.manifestGate) {

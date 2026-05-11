@@ -454,7 +454,7 @@ export const EvaluationCheck = z.object({
   name: z.string(),
   label: z.string().optional(),
   family: z.string().optional(),
-  status: z.enum(["passed", "failed", "skipped"]),
+  status: z.enum(["passed", "failed", "skipped", "inconclusive"]),
   evidence: z.string().optional(),
 })
 

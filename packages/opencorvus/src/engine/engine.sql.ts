@@ -144,7 +144,7 @@ export type EngineEvaluationCheck = {
   name: string
   label?: string
   family?: string
-  status: "passed" | "failed" | "skipped"
+  status: "passed" | "failed" | "skipped" | "inconclusive"
   evidence?: string
   spec_id?: string
   scorer_kind?: EngineEvaluationCheckScorerKind

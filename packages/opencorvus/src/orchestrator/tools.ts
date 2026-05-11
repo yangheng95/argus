@@ -149,6 +149,7 @@ async function runGoalContractAuditCriteria(input: {
 
   const goalContract = {
     id: goal.id,
+    kind: typeof goal.kind === "string" ? goal.kind : undefined,
     imports: Array.isArray(goal.imports) ? goal.imports as string[] : [],
     exports: Array.isArray(goal.exports) ? goal.exports as string[] : [],
     owned_paths: Array.isArray(goal.owned_paths) ? goal.owned_paths as string[] : [],
@@ -781,7 +782,7 @@ async function sinkDeliveryVerdictToCriteria(
 ): Promise<void> {
   const checks: Array<{
     name: string
-    status: "passed" | "failed" | "skipped"
+    status: "passed" | "failed" | "skipped" | "inconclusive"
     family: string
     evidence?: string
     label?: string
