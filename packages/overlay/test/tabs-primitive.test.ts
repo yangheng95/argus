@@ -1,10 +1,23 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const TABS_SOURCE = join(import.meta.dir, "../src/components/ui/Tabs.tsx");
 const TABS_CSS = join(import.meta.dir, "../src/styles/primitives/tabs.css");
-const LEGACY_STYLES = join(import.meta.dir, "../src/styles.css");
+// 2026-05-04: `src/styles.css` was decomposed into `src/styles/...`. The
+// "only one chrome owner" check walks the new tree to confirm no rule
+// for the retired `.right-panel-tab*` class survives anywhere.
+const STYLES_ROOT = join(import.meta.dir, "../src/styles");
+
+function walkCss(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) out.push(...walkCss(full));
+    else if (entry.endsWith(".css")) out.push(full);
+  }
+  return out;
+}
 
 function sourceArray(source: string, name: string): string[] {
   const match = source.match(new RegExp(`export const ${name} = \\[([^\\]]+)\\] as const`));
@@ -49,7 +62,9 @@ test("Tabs primitive TypeScript API and CSS data variants stay in lockstep", () 
 });
 
 test("Tabs primitive is the only right-panel tab chrome owner", () => {
-  const legacy = readFileSync(LEGACY_STYLES, "utf8");
+  const styles = walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n");
 
-  expect(legacy).not.toMatch(/\.right-panel-tab(?:list)?\b/);
+  expect(styles).not.toMatch(/\.right-panel-tab(?:list)?\b/);
 });

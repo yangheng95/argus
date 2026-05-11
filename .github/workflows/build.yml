@@ -172,6 +172,39 @@ jobs:
             cp -R "$src"/. "$d/ui/"
           done
 
+      - name: Package CLI archive
+        # Required by `check-release-assets.ts --require-archives` in
+        # release mode. Linux ships a `.tar.gz`, macOS / Windows ship a
+        # `.zip`, matching `script/check-release-assets.ts`'s contract.
+        # The matrix runner determines the host platform, so the case
+        # match always picks a tool available in that runner image
+        # (tar on Linux, /usr/bin/zip on macOS, 7-Zip on Windows).
+        if: needs.prepare.outputs.release == '1'
+        shell: bash
+        working-directory: packages/opencorvus/dist
+        run: |
+          set -euo pipefail
+          name="opencorvus-${{ matrix.platform }}"
+          if [[ ! -d "$name" ]]; then
+            echo "missing $name directory under packages/opencorvus/dist" >&2
+            exit 1
+          fi
+          case "${{ matrix.platform }}" in
+            linux-*)
+              tar -czf "${name}.tar.gz" "${name}"
+              ;;
+            darwin-*)
+              zip -rq "${name}.zip" "${name}"
+              ;;
+            windows-*)
+              7z a -tzip "${name}.zip" "${name}" > /dev/null
+              ;;
+            *)
+              echo "Unknown matrix.platform: ${{ matrix.platform }}" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Validate CLI assets
         run: |
           EXTRA=""
