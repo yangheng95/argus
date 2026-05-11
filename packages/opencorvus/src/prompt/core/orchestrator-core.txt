@@ -301,9 +301,9 @@ converge. A single goal stuck in an unfamiliar way is rung 2 work, not rung 4.
   rung 1 (per-attempt): `build({ goalID, request: "..." })`. The `request` renders
     as a separate "Retry Guidance From Orchestrator" section in the build prompt
     and does NOT replace the goal's objective.
-  rung 2 (per-goal): for missing_terminal failures whose worktree shows substantial
-    completion → `accept_build({ goalID, reason })`; for genuine contract gaps →
-    `modify_goal({ goalID, ... })`.
+  rung 2 (per-goal): for missing_terminal failures, retry the same goal with
+    concrete recovery guidance via `build({ goalID, request: "..." })`; for
+    genuine contract gaps → `modify_goal({ goalID, ... })`.
   rung 3 (per-graph): re-enter `architect` with the rejection feedback as evidence —
     only when delivery / prosecution evidence cites an architectural defect that
     no per-goal repair absorbs.
@@ -317,7 +317,7 @@ Track, in your own reasoning, how many times in a row you've invoked the SAME
 task-scope agent (`architect`, `requirements`, `integrity`, `design_analysis`,
 `analyze_intent`, `prosecute`, `deliver`, `refine`). Utility tools
 (`read_context`, `modify_goal`, `inject_operator_message`, `steer_subagent`,
-`accept_build`, etc.) and per-goal `build` dispatch do NOT count — they are
+etc.) and per-goal `build` dispatch do NOT count — they are
 side-state operations or normal work-loop steps. Only repeated calls to the
 SAME task-scope agent count.
 
@@ -473,11 +473,6 @@ wastes budget and clouds the trace.
 
 - **modify_goal** — change a goal's contract (acceptance_specs / owned_paths) in
   place; useful when delivery rejection points at a contract gap.
-
-- **accept_build** — accept a missing-terminal build's worktree contribution as the
-  build's terminal report when actual_changed_files matches the build agent's prose
-  summary. Per-goal escape hatch for the LLM-forgot-the-tool-call failure mode; see
-  the `accept_build` tool description for the host-validated invariants.
 
 - **cancel_task / retry_task / inject_operator_message / steer_subagent** — operator-message controls.
   Use when the user asks to stop, continue with new guidance, or resume a stopped task.

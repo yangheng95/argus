@@ -12,7 +12,7 @@ const promptPath = path.join(
  *
  * Source-text pins on orchestrator-core.txt's escalation ladder. The
  * fix is prompt-only — no host code changed. Pin the rung structure
- * + accept_build placement + the absence of the prior "→ restart_from_stage"
+ * + missing-terminal retry placement + the absence of the prior "→ restart_from_stage"
  * reflexive escalation pattern, so future prompt edits cannot silently
  * regress the grain discipline.
  *
@@ -37,11 +37,13 @@ describe("orchestrator-core grain ladder hardening", () => {
     expect(text).toContain("Retry Guidance From Orchestrator")
   })
 
-  test("rung 2 names accept_build for missing_terminal failure mode", async () => {
+  test("rung 2 routes missing_terminal through build retry guidance", async () => {
     const text = await Bun.file(promptPath).text()
     expect(text).toContain("rung 2 (per-goal)")
     expect(text).toContain("missing_terminal")
-    expect(text).toMatch(/accept_build\(\{ goalID, reason \}\)/)
+    expect(text).toMatch(/build\(\{ goalID, request:/)
+    expect(text).toContain("concrete recovery guidance")
+    expect(text).not.toContain("accept" + "_build")
   })
 
   test("rung 3 names architect re-entry as the per-graph escalation", async () => {
@@ -66,11 +68,10 @@ describe("orchestrator-core grain ladder hardening", () => {
     expect(text).toMatch(/only after architect\s+re-entry produced no convergence/)
   })
 
-  test("tools list mentions accept_build alongside modify_goal", async () => {
+  test("tools list does not advertise removed terminal-acceptance path", async () => {
     const text = await Bun.file(promptPath).text()
-    expect(text).toMatch(
-      /\*\*accept_build\*\*\s+—\s+accept\s+a\s+missing-terminal\s+build's\s+worktree\s+contribution/,
-    )
+    expect(text).toContain("**modify_goal**")
+    expect(text).not.toContain("**accept" + "_build**")
   })
 
   test("does NOT advertise restart_from_stage as the upstream-broken default", async () => {
