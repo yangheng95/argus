@@ -108,6 +108,10 @@ export namespace LLM {
     const isOpenaiOauth = provider.id === "openai" && auth?.type === "oauth"
 
     const system = await composeSystem(input)
+    const responseLanguage = SystemPrompt.responseLanguage(cfg.locale)
+    if (responseLanguage) {
+      system[0] = [system[0], responseLanguage].filter(Boolean).join("\n\n")
+    }
 
     const header = system[0]
     await Plugin.trigger(

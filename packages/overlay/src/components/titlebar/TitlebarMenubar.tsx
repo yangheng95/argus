@@ -3,7 +3,7 @@ import { appStore } from "../../store/app";
 import { boardStore } from "../../store/board";
 import { Icon } from "../Icon";
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings";
-import { patchConfig, reloadProjectScope } from "../../services/config";
+import { patchConfig, reloadProjectScope, syncAgentPromptLocale } from "../../services/config";
 import { openConfigDialog } from "../../services/dialog";
 import { applyOpacity, applyTheme, applyZoom, sanitizeOpacity, sanitizeZoom, toggleDevtools } from "../../services/theme";
 import { themeOptionsForCurrentHost } from "../../services/theme-registry";
@@ -268,6 +268,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
 
   function setLocale(value: string) {
     setSettingsStore("locale", value);
+    void syncAgentPromptLocale(value);
     saveSettings();
   }
 

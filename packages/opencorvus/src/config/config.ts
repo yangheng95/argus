@@ -1106,6 +1106,10 @@ export namespace Config {
         .string()
         .optional()
         .describe("Custom username to display in conversations instead of system username"),
+      locale: z
+        .enum(["en-US", "zh-CN"])
+        .optional()
+        .describe("Operator-selected system language used for assistant replies and Overlay localization."),
       agent: z
         .object({
           // primary
