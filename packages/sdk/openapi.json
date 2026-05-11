@@ -32297,6 +32297,14 @@
             "description": "Custom username to display in conversations instead of system username",
             "type": "string"
           },
+          "locale": {
+            "description": "Operator-selected system language used for assistant replies and Overlay localization.",
+            "type": "string",
+            "enum": [
+              "en-US",
+              "zh-CN"
+            ]
+          },
           "agent": {
             "description": "Agent configuration, see https://opencorvus.ai/docs/agents",
             "type": "object",
