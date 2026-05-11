@@ -5092,6 +5092,17 @@ export class Task extends HeyApiClient {
                   [key: string]: unknown
                 }
               }
+            | {
+                type: "contract_audit"
+                name: string
+                spec: {
+                  kind: "contract_ir"
+                  symbols?: Array<string>
+                }
+                expect: {
+                  status: "passed"
+                }
+              }
           >
           severity: "essential" | "important" | "optional" | "pitfall"
           /**
@@ -5206,6 +5217,17 @@ export class Task extends HeyApiClient {
                   name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
                   config?: {
                     [key: string]: unknown
+                  }
+                }
+              | {
+                  type: "contract_audit"
+                  name: string
+                  spec: {
+                    kind: "contract_ir"
+                    symbols?: Array<string>
+                  }
+                  expect: {
+                    status: "passed"
                   }
                 }
             >
@@ -6348,6 +6370,17 @@ export class Goal extends HeyApiClient {
               name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
               config?: {
                 [key: string]: unknown
+              }
+            }
+          | {
+              type: "contract_audit"
+              name: string
+              spec: {
+                kind: "contract_ir"
+                symbols?: Array<string>
+              }
+              expect: {
+                status: "passed"
               }
             }
         >

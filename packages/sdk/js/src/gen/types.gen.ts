@@ -7524,6 +7524,17 @@ export type TaskCreateData = {
                 [key: string]: unknown
               }
             }
+          | {
+              type: "contract_audit"
+              name: string
+              spec: {
+                kind: "contract_ir"
+                symbols?: Array<string>
+              }
+              expect: {
+                status: "passed"
+              }
+            }
         >
         severity: "essential" | "important" | "optional" | "pitfall"
         /**
@@ -7638,6 +7649,17 @@ export type TaskCreateData = {
                 name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
                 config?: {
                   [key: string]: unknown
+                }
+              }
+            | {
+                type: "contract_audit"
+                name: string
+                spec: {
+                  kind: "contract_ir"
+                  symbols?: Array<string>
+                }
+                expect: {
+                  status: "passed"
                 }
               }
           >
@@ -7826,7 +7848,7 @@ export type TaskListResponses = {
           name: string
           label?: string
           family?: string
-          status: "passed" | "failed" | "skipped"
+          status: "passed" | "failed" | "skipped" | "inconclusive"
           evidence?: string
         }>
         time: {
@@ -7971,7 +7993,7 @@ export type TaskGlobalListResponses = {
           name: string
           label?: string
           family?: string
-          status: "passed" | "failed" | "skipped"
+          status: "passed" | "failed" | "skipped" | "inconclusive"
           evidence?: string
         }>
         time: {
@@ -8345,7 +8367,7 @@ export type TaskProgressResponses = {
         name: string
         label?: string
         family?: string
-        status: "passed" | "failed" | "skipped"
+        status: "passed" | "failed" | "skipped" | "inconclusive"
         evidence?: string
       }>
       time: {
@@ -8620,7 +8642,7 @@ export type TaskConversationResponses = {
           name: string
           label?: string
           family?: string
-          status: "passed" | "failed" | "skipped"
+          status: "passed" | "failed" | "skipped" | "inconclusive"
           evidence?: string
         }>
         time: {
@@ -8690,7 +8712,7 @@ export type TaskConversationResponses = {
             name: string
             label?: string
             family?: string
-            status: "passed" | "failed" | "skipped"
+            status: "passed" | "failed" | "skipped" | "inconclusive"
             evidence?: string
           }>
         }
@@ -8817,7 +8839,7 @@ export type TaskConversationResponses = {
         name: string
         label?: string
         family?: string
-        status: "passed" | "failed" | "skipped"
+        status: "passed" | "failed" | "skipped" | "inconclusive"
         evidence?: string
       }>
     }
@@ -9163,7 +9185,7 @@ export type TaskBoardResponses = {
         name: string
         label?: string
         family?: string
-        status: "passed" | "failed" | "skipped"
+        status: "passed" | "failed" | "skipped" | "inconclusive"
         evidence?: string
       }>
       time: {
@@ -9233,7 +9255,7 @@ export type TaskBoardResponses = {
           name: string
           label?: string
           family?: string
-          status: "passed" | "failed" | "skipped"
+          status: "passed" | "failed" | "skipped" | "inconclusive"
           evidence?: string
         }>
       }
@@ -9360,7 +9382,7 @@ export type TaskBoardResponses = {
       name: string
       label?: string
       family?: string
-      status: "passed" | "failed" | "skipped"
+      status: "passed" | "failed" | "skipped" | "inconclusive"
       evidence?: string
     }>
   }
@@ -10403,7 +10425,7 @@ export type RunEvaluationsResponses = {
       name: string
       label?: string
       family?: string
-      status: "passed" | "failed" | "skipped"
+      status: "passed" | "failed" | "skipped" | "inconclusive"
       evidence?: string
     }>
     time: {
@@ -10652,6 +10674,17 @@ export type GoalUpdateData = {
             name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
             config?: {
               [key: string]: unknown
+            }
+          }
+        | {
+            type: "contract_audit"
+            name: string
+            spec: {
+              kind: "contract_ir"
+              symbols?: Array<string>
+            }
+            expect: {
+              status: "passed"
             }
           }
       >
