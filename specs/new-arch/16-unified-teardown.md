@@ -5,11 +5,17 @@
 - 替代：`15-no-fsm.md`（该文档废止，以本文为准）
 - 约束：CLAUDE.md 规则 22（禁双源）、23（禁状态机）、13（直接 reset DB）、26（禁过度工程）
 
-> **2026-04-27 状态核查**：拆除工程已基本完成（Phase 6 把 5 张过程表合并为 `engine_artifact`，
-> orphan observation 落在 `engine/orphan.ts`），但 teardown 调用图仍未完全收口：
-> - `engine/writer.ts:224` `abortRuns` 与 `engine/ownership.ts:445` `cleanup` 是两条独立清理
+> **2026-05-12 状态核查**：拆除工程已基本完成（Phase 6 把 5 张过程表合并为 `engine_artifact`，
+> orphan observation 落在 `engine/orphan.ts`，`pipeline/executor.ts` 已删，`engine/goal-pool.ts`
+> 已删，`task.status / active_run_id / workflow_state / blocking_reason` 等 FSM 列已移除），
+> 但 teardown 调用图仍有两处残留：
+> - `engine/writer.ts:234` `abortRuns` 与 `engine/ownership.ts` `cleanup` 仍是两条独立清理
 >   路径，待统一到一个入口（本文 §1.5 / §12 的目标）。
-> - `session/revert.ts` 的"禁动 goal worktree"边界尚未在代码中加注释式断言。
+> - `engine/runtime.ts:123,182,193` 仍按 `run.status === "completed" / "failed" / "aborted"`
+>   做 switch 分支，`engine/goal-status.ts:40-62 mapRunStatus` 仍是状态机式映射；
+>   两处 FSM-shaped residue 是 [15-no-fsm.md](15-no-fsm.md) 拆除清单的尾巴。
+> - `session/revert.ts` 此路径已不存在（仓库当前只有 `engine/rewind.ts`）；本节遗留的
+>   "禁动 goal worktree 边界注释"目标需重新定位到 `engine/rewind.ts`。
 > 上述项作为 follow-up ticket 单独推进，不阻塞本文档主线结论。
 
 ---

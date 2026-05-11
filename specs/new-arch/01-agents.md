@@ -1,10 +1,16 @@
 # 01 — Agent 家族
 
 > 对应代码：`src/orchestrator/` · `src/engine/` · `src/agent/` · `src/requirements/` ·
-> `src/architect/` · `src/planner/` · `src/design-analyst/` · `src/delivery/` · `src/delivery/checks/` ·
-> `src/executor/` · `src/goal/` · `src/task-api/` · `src/control/` · `src/channel/` · `src/decision-log/`
+> `src/architect/` · `src/build/` · `src/design-analyst/` · `src/intent-analysis/` ·
+> `src/integrity/` · `src/prosecutor/` · `src/delivery/` · `src/delivery/checks/` ·
+> `src/executor/` · `src/goal/runner.ts` · `src/task-api/` · `src/control/` ·
+> `src/channel/` · `src/decision-log/`
 >
-> 注：旧 `src/pipeline/` 已与 build tool 合并；本文档此前提到的 `src/engine/goal-pool.ts` 和 `src/pipeline/executor.ts` 在 Phase 5 后已删除。
+> 注（2026-05-11 状态）：旧 `src/pipeline/` 仅保留 `goal-contract.schema.ts` + `types.ts`
+> 两个 schema 文件，运行时代码全部迁走；`src/engine/goal-pool.ts` / `src/pipeline/executor.ts`
+> 已在 Phase 5 删除；`src/planner/` 整目录删除（不再有 per-goal planner agent，session 级的
+> `src/tool/planner.ts` 是 working-memory + scratchpad 工具，与旧 planner agent 完全不同）；
+> `src/decompose/` 已删除，需求分解逻辑统一落在 `src/requirements/`。
 
 ## 核心原则
 
@@ -116,28 +122,37 @@ orchestrator/loop.ts — runTaskLoop()
 
 | Agent | 代码 | 职责 | 何时被调用 |
 |---|---|---|---|
+| Intent Analysis | `intent-analysis/agent.ts` | 解读用户的简短/模糊请求，输出 `IntentAnalysisResult`（intent class / complexity band / missing-info / clarifications） | 由 `analyze_intent` orchestrator tool 调起；可选 stage（已接线，旧 13 号文档"not wired yet"已过期） |
 | Requirements | `requirements/agent.ts` | Zod tool 输出 Goals[] + 追溯矩阵 + fidelity | pipeline workflow 或 Orchestrator 判断需要 |
-| Architect | `architect/agent.ts` | 接口契约、目录蓝图、导出清单；写 decision-log | 跨目标协调需要时 |
+| Architect | `architect/agent.ts` | 接口契约、目录蓝图、导出清单；写 decision-log；fidelity / contract IR / linker 拆到独立文件 | 跨目标协调需要时 |
 | Design Analyst | `design-analyst/agent.ts` | 视觉参考（Figma / 图片 / URL）→ 布局 / 样式 / 组件清单 | 有视觉参考的前端任务 |
-| Planner | `planner/tools.ts` + `agent/agent.ts` 注册项 | per-goal 实现步骤；当前**无独立 `planner/agent.ts` 文件**，仅以 Agent.Info 注册 + tools 暴露，作为 build tool 的内置助手而非显式 stage tool | 由 build tool 内部按需调用；不出现在 orchestrator/tools.ts |
-| Delivery | `delivery/agent.ts` | diff 验收 + 触发回修（通过 deliver→重新 call build 的循环） | 每个 workflow 末尾 |
-| Build | `Agent.get("build")` → executor session（执行体在 `goal/runner.ts`） | 在 worktree 中实际写代码 | Orchestrator 通过 `build` tool 调起 |
+| Integrity Reviewer | `integrity/agent.ts` | 多维 integrity review：requirement_fidelity / technical_feasibility / hallucination / solution_quality | 由 `integrity` orchestrator tool 调起（旧 `fidelity` kind 已并入此 agent） |
+| Prosecutor | `prosecutor/agent.ts` | 对交付候选发起对抗性复核 | 由 `prosecute` orchestrator tool 调起 |
+| Delivery | `delivery/agent.ts` | diff 验收 + 触发回修（通过 deliver→重新 call build 的循环）；新增 arbiter / specialist-review / specialists/ / verdict / visual-metric | 每个 workflow 末尾 |
+| Build | `build/agent.ts`（独立包：`agent.ts` / `index.ts` / `report.ts` / `types.ts`） + `goal/runner.ts`（worktree + executor 执行体）+ `agent/sub-agent-protocol.ts`（共享 subagent 协议） | 在 worktree 中实际写代码；通过 `Agent.get("build")` 暴露给 orchestrator | Orchestrator 通过 `build` tool 调起 |
+
+> Planner-as-agent 已删除。session 级的 `src/tool/planner.ts` 是一个 working-memory
+> 工具（add_task / update_task / scratchpad_*），任何 agent 都可以挂载它来管理自己的子
+> 任务树，**不是** 旧 per-goal planner 的替代。pipeline 流程里 "per-goal 实现步骤" 的职责
+> 已归并到 build agent 自身（结合 architect 写的 contract）。
 
 **Checks（原 evaluator 模块）**：移到 `delivery/checks/`，不再是独立 sub-agent。delivery agent 通过 `discovery.ts` 解析 check family，调 `per-goal.ts` / `llm-judge-runner.ts` / `visual.ts` 执行确定性或 LLM judge 验证。旧 `src/evaluator/` 目录已删除。
 
-**`orchestrator/tools.ts` 当前导出 19 个 tool**（按文件出现顺序）：
+**`orchestrator/tools.ts` 当前导出 21 个 tool**（2026-05-11，按文件出现顺序）：
 1. **Stage 调用**：`requirements`、`design_analysis`、`architect`、`build`、`deliver`、`publish_delivery`
 2. **审查 / 复核**：`integrity`（integrity reviewer）、`prosecute`（prosecutor）、`analyze_intent`
 3. **Goal 维护**：`modify_goal`、`query_failed_goals`
 4. **状态 / 上下文**：`read_context`
-5. **任务级控制**：`fail_task`、`cancel_task`、`retry_task`、`inject_operator_message`、`restart_from_stage`、`refine`
+5. **任务级控制**：`fail_task`、`cancel_task`、`retry_task`、`inject_operator_message`、
+   `steer_subagent`、`restart_from_stage`、`refine`
 6. **用户交互**：`question`
+7. **任务繁衍**：`propose_task`（拟新建关联任务，需用户确认后才落 `EngineService.createTask`）
 
-`planner` **不**出现在 orchestrator tools 中——它的调用埋在 build tool 内部，由 build executor 按需触发；详见 [13-agent-communication-matrix.md](13-agent-communication-matrix.md)。
+**Planner agent 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同 `engine/goal-pool.ts` 一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
 
 `panel` control-plane tool **不**属于 orchestrator。Gateway 入口独占 panel capability action；orchestrator 只能通过自身的 workflow / task-control tools 推进任务。
 
-orchestrator 可以通过 `propose_task` 提供“完善上一个 request 的新任务”候选；该工具必须先等待用户确认，确认后才调用 `EngineService.createTask`。这不是恢复 `panel`，也不是恢复 generic `task` subagent 工具。
+orchestrator 通过 `propose_task` 提供"完善上一个 request 的新任务"候选；该工具必须先等待用户确认，确认后才调用 `EngineService.createTask`。这不是恢复 `panel`，也不是恢复 generic `task` subagent 工具。
 
 ## Decision Log
 
@@ -170,7 +185,7 @@ Executor 是**外部**进程，不属于 Agent Team：
 
 ## 相关文档
 
-- [02-data.md](02-data.md) — `engine_*` 18 张表的行为
+- [02-data.md](02-data.md) — `engine_*` 13 张表的行为
 - [03-control.md](03-control.md) — ChannelIngress / ControlMessage / Panel Capability 路由
 - [04-extensions.md](04-extensions.md) — Executor 与 plugin/mcp/acp 的边界
 - [13-agent-communication-matrix.md](13-agent-communication-matrix.md) — 预期 whitelist 与当前 direct/indirect 通信真相对照

@@ -39,18 +39,23 @@
 
 **调用链**：
 ```
-Orchestrator build tool → goal/runner.ts → ExecutorRegistry.require()
-                        → worktree 隔离 → Executor 进程 → diff / delivery
+Orchestrator build tool → build/agent.ts (LLM 决策) →
+   goal/runner.ts (worktree 隔离)
+   + engine/runtime.ts + task-api/index.ts 通过 ExecutorRegistry.require()
+   → Executor 进程 → diff / delivery
 ```
-（旧 `pipeline/executor.ts` 已删除；调度逻辑直接落在 `goal/runner.ts` 和 ExecutorRegistry。）
+（旧 `pipeline/executor.ts` 与 `engine/goal-pool.ts` 已删除。`goal/runner.ts` 当前仅
+121 行，只保留 `cleanupGoalWorkspace`；实际 `ExecutorRegistry.require()` 调用点散落在
+`build/agent.ts` · `engine/runtime.ts` · `task-api/index.ts` 三处。）
 
 ## Plugin —— 非执行器插件
 
-**代码**：`src/plugin/index.ts`
+**代码**：`src/plugin/index.ts` + `src/plugin/isolate.ts`（`runHookIsolated`）
 
 - 通过 `@opencorvus-ai/plugin` SDK 加载第三方 Hook / auth plugin
 - 内置示例：`GitlabAuthPlugin`
 - 运行时注入 `Plugin.state`，暴露 `Bus` / `Session` / `Config` / `Server` 给 plugin
+- `isolate.ts` 用 isolated runtime 跑第三方 hook，避免污染主进程
 
 **与 executor 的区别**：plugin 提供 hook 能力（生命周期回调、auth、rewrite），**不承担**"在 worktree 里跑完整任务产生 diff" 的职责。
 
@@ -65,6 +70,7 @@ Orchestrator build tool → goal/runner.ts → ExecutorRegistry.require()
 | `index.ts` | MCP client 管理（连接、生命周期） |
 | `serve.ts` | argus 自身作为 MCP server 暴露工具 |
 | `stdio.ts` | stdio transport 适配（本地子进程） |
+| `materialize.ts` | 把 MCP 工具实例化进 ToolRegistry / agent 上下文 |
 | `auth.ts` | MCP 鉴权 |
 | `oauth-callback.ts` · `oauth-provider.ts` | OAuth 流 |
 

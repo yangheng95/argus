@@ -62,19 +62,22 @@
 - 支持流式 `ControlMessage.handleStream`（SSE，overlay 实时消费）
 - `surface` 区分面板：`panel` · `slack` · `tui` · `cli`（见 `channel/catalog.ts`）
 
-**完整 Capability 列表**（来源：`panel/capability.ts`，共 19 个 action）：
+**完整 Capability 列表**（来源：`panel/capability.ts`，2026-05-11 共 20 个 action，按文件顺序）：
 
 | 类别 | actions |
 |---|---|
 | 查询视图 | `view_plan` · `view_board` · `view_tasks` |
-| Task 生命周期 | `create_task` · `send_task_message` · `cancel_task` · `retry_task` · `replan_task` |
+| Task 生命周期 | `create_task` · `send_task_message` · `retry_task` · `replan_task` · `cancel_task` |
 | Interaction 回复 | `reply_interaction` · `reject_interaction` |
 | Goal / Checks | `update_checks` · `update_goal` · `delete_goal` |
 | 视觉证据 | `capture_overlay_screenshot` |
 | Executor / 选择 | `set_executor` · `select_task` · `select_session` |
 | Session 操作 | `create_session` · `fork_session` · `delete_session` |
 
-> 文档历史版本提到的 `invalidate_session` / `export_session_html` 当前未实际注册，请以代码为准。
+> `PanelLocalActionType`（前端 only，不属于 capability registry）当前是 `set_executor` /
+> `select_task` / `select_session` / `invalidate_session` 四个；其中 `invalidate_session`
+> **只**是 local action 类型，没有对应的 mutation capability，请勿当作可向后端发送的 action。
+> 历史版本提到的 `export_session_html` 现仍未注册。
 
 ## channel 子系统
 
@@ -144,13 +147,20 @@ SSE 消费者订阅 Bus → overlay 实时刷新。事件定义集中在 `engine
 **代码**：`src/server/`
 
 - 承载 overlay / CLI / 外部 bot 的 HTTP API
-- 关键路由：
+- 关键路由（`src/server/routes/` 共 25 个文件，2026-05-12）：
   - `routes/channel.ts` — `ChannelIngress.message` HTTP 端点
-  - `routes/panel.ts` — `ControlMessage.handle` / `handleStream`
-  - `routes/orchestrator.ts` — EngineService.createTask 等 task API
-  - `routes/task-event.ts` — SSE 事件消费 Bus
-  - `routes/session.ts` + `routes/session-management-mutate-core.ts` — session mutation
-  - `routes/permission.ts` · `routes/workspace.ts` · `routes/project.ts` · `routes/config.ts`
+  - `routes/panel.ts` — `ControlMessage.handle` / `handleStream`（含 panel SSE 流）
+  - `routes/orchestrator.ts` — EngineService.createTask 等 task API（共 41 个 describeRoute；含 task-list change stream 与 task event stream 两条 SSE 主线）
+  - `routes/session.ts` — session mutation
+  - `routes/control.ts` · `routes/executor.ts` — 控制平面（外部账号 / executor profile）
+  - `routes/permission.ts` · `routes/project.ts` · `routes/config.ts` · `routes/question.ts` ·
+    `routes/provider.ts` · `routes/mcp.ts` · `routes/file.ts` · `routes/skill.ts` ·
+    `routes/preview.ts` · `routes/terminal.ts` · `routes/gateway.ts` · `routes/global.ts` ·
+    `routes/app.ts` · `routes/attachment.ts` · `routes/auth.ts` · `routes/coding.ts` ·
+    `routes/experimental.ts` · `routes/export.ts` · `routes/tui.ts`
+- **SSE 端点**：分散在 5 个 route 文件——`routes/orchestrator.ts`（task / task event 双流，主线）·
+  `routes/panel.ts`（control stream）· `routes/global.ts` · `routes/app.ts` · `routes/coding.ts`。
+  `src/server/event.ts` **不是** SSE 端点，只是一个 7 行的 BusEvent 类型声明文件（`server.connected` / `global.disposed`）。历史文档中"`routes/task-event.ts`"路径不存在；该角色已并入 `routes/orchestrator.ts`。
 
 ## 关键文件一览
 
@@ -164,8 +174,9 @@ workspace/workspace.ts          多工作区
 control/control.sql.ts          外部账号 + control_message
 bus/bus-event.ts                事件总线
 trace/index.ts                  JSONL + Bus 双写
-server/routes/task-event.ts     SSE 端点
-server/routes/panel.ts          ControlMessage HTTP 入口
+server/event.ts                 BusEvent 类型声明（`server.connected` / `global.disposed`，**不是** SSE 端点）
+server/routes/orchestrator.ts   task / task event SSE 主线（`streamSSE`）
+server/routes/panel.ts          ControlMessage HTTP 入口 + control stream SSE
 ```
 
 ## 相关文档

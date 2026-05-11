@@ -1,8 +1,25 @@
 # 07-panel-reactivity — Overlay 反应式架构重构
 
-> 对应代码：`packages/overlay/src/store/`、`src/components/Conversation.tsx`、
-> `src/components/Board.tsx`、`src/utils/conversation.ts`、`src/utils/card-tree.ts`、
-> `src/services/events.ts`、`src/services/sse.ts`、`src/services/chat.ts`
+> **状态（2026-05-12）**：P0 / P1 / P2 已落地；P3 清理**未完成**。
+> - `agentEvents` / `computeAgentCards` / `toCardTree` / `resolveCardTree` /
+>   `combineConversation` / `AGENT_FLUSH_INTERVAL` 全部 grep 0 hits ✓
+> - `utils/conversation.ts` 与 `components/SessionTokenBadge.tsx` 已删除 ✓
+> - `Conversation.tsx` 已切到 `cardTreeStore` 读 ✓
+> - 但 `store/messages.ts` 仍 923 行，`FLUSH_INTERVAL` / `enqueueEvent` /
+>   `coalesceDeltas` / `flushEvents` / `messagesBySession` 仍存在；
+>   `services/events.ts:7,452,509,524,615` + `services/sse.ts` 仍引用这些符号
+> - `partitionInteractions` 还活在 `utils/interaction.ts:90`，被
+>   `services/tree-writer.ts:37/1701` 引用
+> - 2026-04-19 已在 `store/card-tree.ts:25-30` flatten 掉 `goal-group:<gid>` 容器层；
+>   下文 §身份规则 与 §顶层 order 仍把 `goal-group:<gid>` 当顶层 id 是过时的
+>
+> 对应代码（真源）：`packages/overlay/src/store/card-tree.ts` ·
+> `packages/overlay/src/store/messages.ts` ·
+> `packages/overlay/src/components/Conversation.tsx` ·
+> `packages/overlay/src/components/Board.tsx` ·
+> `packages/overlay/src/utils/card-tree.ts`（不再有 `utils/conversation.ts`） ·
+> `packages/overlay/src/services/events.ts` · `services/sse.ts` · `services/chat.ts` ·
+> `services/tree-writer.ts`
 >
 > 起因：task `tsk_d9f5d9e9f001sl07PPCdRLIhGL` goal 阶段 overlay 频繁卡死。
 > 本文档是系统性重构方案（不是打补丁），执行前必须先读完。

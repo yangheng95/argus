@@ -131,21 +131,22 @@ goalWorkflows: Array<GoalWorkflowGroup>    // per-goal 工作流状态
   Auto-select Workflow: [on/off]
 
 ▼ Agent Config                            ← 新增
-  ├ Requirements  max_steps:30  timeout:5min  quality:0.5
-  ├ Architect     max_steps:20  timeout:3min
-  ├ Planner       max_steps:30  timeout:5min  quality:0.5
-  ├ Evaluator     max_steps:25  timeout:4min  tier:[std ▾]
-  └ Delivery      max_steps:40  timeout:10min retries:2
+  ├ Requirements    max_steps:30  timeout:5min  quality:0.5
+  ├ Architect       max_steps:20  timeout:3min
+  ├ Design-Analyst  max_steps:20  timeout:3min
+  ├ Intent-Analysis max_steps:15  timeout:2min
+  ├ Build           max_steps:40  timeout:15min
+  └ Delivery        max_steps:40  timeout:10min retries:2
   每个 agent 可展开: skills[] · model 选择
   → PATCH /config { assistant: { architect: { ... } } }
+  注：planner / evaluator agent 已下线（详见 [01-agents.md](01-agents.md)）。
 
 ▼ Orchestration
   max_executor_groups: 3
-  Adaptive Pipeline: [on/off]
 
 ▼ Behavior                                ← 来自 Config.Info.experimental
-  Unattended Mode · Auto-permission · Auto-question
-  (不再是 localStorage)
+  Auto-question
+  注：unattended / auto_permission 配置项已删除，仅保留 auto_question。
 
 ▼ Model / Provider
   Per-agent 模型选择
@@ -164,15 +165,17 @@ Panel → PATCH /config {partial} → mergeDeep → 写文件
 
 ## SSE 事件扩展
 
-新增事件：
+实际注册的事件（见 `engine/model.ts:1067-1069`）：
 
 | 事件 | 触发 |
 |---|---|
-| `requirements.completed` | 刷新需求分析区 |
-| `architect.completed` | 刷新 architect 区 |
 | `workflow.selected` | 更新 workflow 标识 |
+| `workflow.step.updated` | 刷新 stage（requirements / architect / build / delivery 等步骤进度） |
+| `goal.workflow.progress` | per-goal workflow 进度 |
 
-> 历史版本规划过 `goal.workflow.updated` 事件，当前 `engine/model.ts` 未注册——`GoalWorkflowGroup` 通过现有 `goal.*` 与 task board 重编译事件驱动刷新即可。
+> 历史版本规划过 `requirements.completed` / `architect.completed` / `goal.workflow.updated` 等
+> 独立事件，当前**均未注册**——stage 进度统一通过 `workflow.step.updated` + `goal.workflow.progress`
+> 推。`GoalWorkflowGroup` 通过现有 `goal.*` 与 task board 重编译事件驱动刷新即可。
 
 ## 后端对接
 

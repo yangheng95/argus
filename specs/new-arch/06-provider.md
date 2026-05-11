@@ -30,7 +30,7 @@
 | **B. 代理网关** | LiteLLM / OpenRouter | ✓ 零代码 · 100+ provider · ✗ 额外跳转 · 参数丢失 · 第三方依赖 |
 | **C. 抽象基类** | LangChain / LlamaIndex | ✓ 清晰分层 · OOP · ✗ 抽象泄漏 · TypeScript 生态弱 |
 
-**本项目采用方案 A 深度定制**，与 opencode 同源，已支持 21+ provider，六层适配。
+**本项目采用方案 A 深度定制**，与 opencode 同源，已支持 20 个 bundled provider（见 `provider/bundled.ts:27-48`），六层适配。
 
 ## 六层适配架构
 
@@ -43,7 +43,7 @@
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─ Layer 2 · SDK Router ─────────────────────────────────────┐
-│  BUNDLED_PROVIDERS (21 SDK) + 动态 npm install             │
+│  BUNDLED_PROVIDERS (20 SDK) + 动态 npm install             │
 │  + xxHash 实例缓存                                          │
 └─────────────────────────────────────────────────────────────┘
                            ↓
@@ -120,11 +120,13 @@ Agent.run()                                     agent 发起 LLM 调用
 // opencorvus.jsonc
 {
   "agent": {
-    "task": { "model": "anthropic/claude-sonnet-4-..." },         // 协调者，最强
+    "orchestrator": { "model": "anthropic/claude-sonnet-4-..." }, // 协调者，最强
     "requirements": { "model": "anthropic/claude-sonnet-4-..." }, // 需求分析
-    "planner":      { "model": "openai/gpt-5" },                  // 规划
-    "evaluator":    { "model": "openai/gpt-4o-mini" }             // 低成本评估
+    "architect":    { "model": "openai/gpt-5" },                  // 跨目标契约
+    "build":        { "model": "anthropic/claude-sonnet-4-..." }, // 实际写代码
+    "delivery":     { "model": "openai/gpt-4o-mini" }             // 低成本验收
   },
+  // 注：planner / evaluator agent 已下线（见 [01-agents.md](01-agents.md)），不要再配。
   "model": "anthropic/claude-sonnet-4-...",   // 全局默认
   "small_model": "openai/gpt-4o-mini"         // 小任务快速
 }
@@ -149,7 +151,7 @@ Agent.run()                                     agent 发起 LLM 调用
 | `provider/hexin-discovery.ts` · `hexin-profiles.ts` | 内部供应商发现 / profile 管理（项目特化） |
 | `provider/auth.ts` | Auth 管理 — API Key / OAuth / IAM |
 | `provider/error.ts` | Error Normalization + Overflow 检测 |
-| `provider/bundled.ts` | 21 个打包 SDK 映射 |
+| `provider/bundled.ts` | 20 个打包 SDK 映射（`bundled.ts:27-48`） |
 | `provider/base-url.ts` | 自定义 base URL 解析 |
 | `provider/models.ts` · `models-snapshot.ts` | 模型元数据 + 本地快照 |
 | `provider/dashscope.ts` | 特殊 provider 实现（动态密钥） |

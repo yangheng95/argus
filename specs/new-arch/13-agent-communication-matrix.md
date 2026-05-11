@@ -1,19 +1,25 @@
 # 13 — Agent 通信矩阵（预期 vs 实际）
 
-> 对应代码：`src/orchestrator/tools.ts` · `src/engine/goal-pool.ts` · `src/planner/agent.ts` ·
+> 对应代码（2026-05-12 真源）：`src/orchestrator/tools.ts` · `src/orchestrator/loop.ts` ·
+> `src/goal/runner.ts`（build tool 的 worktree+executor 执行体） ·
+> `src/build/agent.ts`（build agent；独立包仅 4 文件 `agent.ts` / `index.ts` / `report.ts` / `types.ts`） ·
+> `src/agent/sub-agent-protocol.ts`（共享 sub-agent 协议） ·
 > `src/delivery/agent.ts` · `src/tool/task.ts` · `src/agent/agent.ts` ·
-> `src/intent-analysis/agent.ts` · `src/control/message.ts` · `src/channel/ingress.ts`
+> `src/intent-analysis/agent.ts` · `src/integrity/agent.ts` · `src/prosecutor/agent.ts` ·
+> `src/requirements/agent.ts` · `src/architect/agent.ts` · `src/design-analyst/agent.ts` ·
+> `src/control/message.ts` · `src/channel/ingress.ts`
 >
-> 用途：把“规范里允许谁对谁发消息”和“当前代码里谁真正能触发/接收/间接拿到上下文”并列出来，便于排查通信问题。
+> 用途：把"规范里允许谁对谁发消息"和"当前代码里谁真正能触发/接收/间接拿到上下文"并列出来，便于排查通信问题。
 
 ## 先看结论
 
-- 当前运行时的真源不是 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 里的 mailbox/registry 协议，而是 `ChannelIngress / ControlMessage / EngineService / Orchestrator tools / GoalPool / task subagent` 的混合路径。
-- `planner` 当前不是 Orchestrator 的显式 tool 目标；它在 pipeline build 路径里由 `engine/goal-pool.ts` 调用 `planGoal()`。
-- `intent-analysis` 已有 agent 实现，但源码明确写着“not wired yet”；当前 runtime 里没有接线。
+- 当前运行时的真源不是 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 里的 mailbox/registry 协议，而是 `ChannelIngress / ControlMessage / EngineService / Orchestrator tools / build tool / task subagent` 的混合路径。
+- **Planner agent 已删除**：`src/planner/` 整目录、`src/engine/goal-pool.ts`、`planGoal()` 全部移除。Orchestrator 没有 `planner` tool；pipeline build 路径里 "per-goal 实现步骤" 现由 build agent 直接基于 architect contract + decision-log 推进。`src/tool/planner.ts` 是 session 级 working-memory 工具（task tree / scratchpad），**不是** planner agent 的替代。
+- **`intent-analysis` 已接线**：orchestrator 通过 `analyze_intent` tool 调 `IntentAnalysisAgent.analyze`，落 `intent-analysis` SessionKind。13 号文档此前的"not wired yet"已过期。
+- **`integrity` 与 `prosecute` 是新加的 orchestrator tools**：分别对应 `IntegrityAgent`（多维 review：requirement_fidelity / technical_feasibility / hallucination / solution_quality）与 `ProsecutorAgent`（对抗性复核）。
 - `build -> general/explore`、`deliver -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；`general -> general` 自递归被权限拒绝。
-- `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：先向用户展示“完善上一个 request 的新任务”候选，用户确认后才创建新 task；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
-- [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的“双向都要声明”规则，`general -> explore` 在 spec 文本上并不成立。
+- `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：先向用户展示"完善上一个 request 的新任务"候选，用户确认后才创建新 task；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
+- [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的"双向都要声明"规则，`general -> explore` 在 spec 文本上并不成立。
 
 ## 节点缩写
 
@@ -24,12 +30,16 @@
 | `R` | `requirements` | 需求分解 |
 | `X` | `design-analysis` | 视觉分析；代码里的 tool 名是 `design_analysis` |
 | `A` | `architect` | 跨目标契约 |
-| `P` | `planner` | per-goal 计划 |
-| `B` | `build` | 实际写代码的执行 agent |
+| `B` | `build` | 实际写代码的执行 agent（自己读 contract，不再有外置 planner agent） |
 | `D` | `delivery` | 交付验收；代码里的 tool 名是 `deliver` |
+| `IT` | `integrity` | 多维 integrity review（orchestrator tool: `integrity`） |
+| `PR` | `prosecutor` | 对抗性复核（orchestrator tool: `prosecute`） |
 | `G` | `general` | 通用 subagent |
 | `E` | `explore` | 只读探索 subagent |
-| `I` | `intent-analysis` | 已实现但当前未接线 |
+| `I` | `intent-analysis` | 已接线（orchestrator tool: `analyze_intent`） |
+
+> 历史草稿曾保留 `P = planner` 节点；当前 runtime 已无独立 planner agent，相关行被
+> 整列移除（不是"代码里没接"，是 agent 本身不存在）。
 
 ## 入口层（不算 agent，但经常是故障起点）
 
@@ -43,22 +53,23 @@
 
 ## 预期矩阵（来自 11 号协议，direct whitelist）
 
+> 矩阵列已对齐当前 agent 集（删除 `P`，新增 `IT` / `PR`）。`SYS -> O = D`。
+
 图例：`D` = spec 允许 direct send。空白 = spec 未声明。
 
-`SYS -> O = D`。
-
-| from\\to | O | R | X | A | P | B | D | G | E | I |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| O | - | D | D | D | D | D | D | - | - | D |
-| R | D | - | - | - | - | - | - | - | - | - |
-| X | D | - | - | - | - | - | - | - | - | - |
-| A | D | - | - | - | - | - | - | - | - | - |
-| P | D | - | - | - | - | - | - | - | - | - |
-| B | D | - | - | - | - | - | - | D | D | - |
-| D | D | - | - | - | - | - | - | - | - | - |
-| G | D | - | - | - | - | - | - | - | - | - |
-| E | D | - | - | - | - | - | - | - | - | - |
-| I | D | - | - | - | - | - | - | - | - | - |
+| from\\to | O | R | X | A | B | D | IT | PR | G | E | I |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| O | - | D | D | D | D | D | D | D | - | - | D |
+| R | D | - | - | - | - | - | - | - | - | - | - |
+| X | D | - | - | - | - | - | - | - | - | - | - |
+| A | D | - | - | - | - | - | - | - | - | - | - |
+| B | D | - | - | - | - | - | - | - | D | D | - |
+| D | D | - | - | - | - | - | - | - | D | D | - |
+| IT | D | - | - | - | - | - | - | - | - | - | - |
+| PR | D | - | - | - | - | - | - | - | - | - | - |
+| G | D | - | - | - | - | - | - | - | - | - | - |
+| E | D | - | - | - | - | - | - | - | - | - | - |
+| I | D | - | - | - | - | - | - | - | - | - | - |
 
 ### 预期拓扑图
 
@@ -71,9 +82,10 @@ flowchart LR
   R[requirements]
   X[design-analysis]
   A[architect]
-  P[planner]
   B[build]
   D[delivery]
+  IT[integrity]
+  PR[prosecutor]
   G[general]
   E[explore]
   I[intent-analysis]
@@ -85,16 +97,20 @@ flowchart LR
   X --> O
   O --> A
   A --> O
-  O --> P
-  P --> O
   O --> B
   B --> O
   O --> D
   D --> O
+  O --> IT
+  IT --> O
+  O --> PR
+  PR --> O
   O --> I
   I --> O
   B --> G
   B --> E
+  D --> G
+  D --> E
   G --> O
   E --> O
 ```
@@ -109,47 +125,51 @@ flowchart LR
 - `RQ` = `task` subagent 结果回到调用方上下文
 - `Q/RQ` = 同一个节点既能发起也能接收该类 direct 子任务
 
-| from\\to | O | R | X | A | P | B | D | G | E | I |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| O | - | T | T | T | - | T | T | - | - | - |
-| R | RT | - | - | - | - | - | - | - | - | - |
-| X | RT | - | - | - | - | - | - | - | - | - |
-| A | RT | - | - | - | - | - | - | - | - | - |
-| P | - | - | - | - | - | - | - | - | - | - |
-| B | RT | - | - | - | - | - | - | Q | Q | - |
-| D | RT | - | - | - | - | - | - | Q | Q | - |
-| G | - | - | - | - | - | RQ | RQ | - | Q | - |
-| E | - | - | - | - | - | RQ | RQ | RQ | - | - |
-| I | - | - | - | - | - | - | - | - | - | - |
+| from\\to | O | R | X | A | B | D | IT | PR | G | E | I |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| O | - | T | T | T | T | T | T | T | - | - | T |
+| R | RT | - | - | - | - | - | - | - | - | - | - |
+| X | RT | - | - | - | - | - | - | - | - | - | - |
+| A | RT | - | - | - | - | - | - | - | - | - | - |
+| B | RT | - | - | - | - | - | - | - | Q | Q | - |
+| D | RT | - | - | - | - | - | - | - | Q | Q | - |
+| IT | RT | - | - | - | - | - | - | - | - | - | - |
+| PR | RT | - | - | - | - | - | - | - | - | - | - |
+| G | - | - | - | - | RQ | RQ | - | - | - | Q | - |
+| E | - | - | - | - | RQ | RQ | - | - | RQ | - | - |
+| I | RT | - | - | - | - | - | - | - | - | - | - |
 
 说明：
 
-- `O -> P` 在当前实现里不是 direct tool，所以这一格刻意留空。
-- `I` 整行整列为空，不是“没画”，而是“当前 runtime 确实没接线”。
+- `O -> I` (intent-analysis) 现在已是 direct tool（`analyze_intent`）；`I -> O` 由 tool result 回写到 orchestrator session。
+- `O -> IT` (`integrity`) 与 `O -> PR` (`prosecute`) 是新加的 review 路径。
 - `G -> G` 被显式拒绝，避免 `general` 自递归；`general -> explore` 仍是当前实现真实存在的二级探索路径。
+- Planner 节点已从代码与本矩阵双向删除；旧的 "build 里通过 plan_node.brief 收到 planner 输出" 这条间接路径不再存在。
 
 ## 实际矩阵二：当前代码里的间接传递（只列高信号链路）
 
-这张表不是做全闭包，而是只列“排障时最容易误判成 direct P2P，实际却是通过持久化状态/下一轮 loop 传递”的链路。
+这张表不是做全闭包，而是只列"排障时最容易误判成 direct P2P，实际却是通过持久化状态/下一轮 loop 传递"的链路。
 
 图例：
 
-- `GP` = `goal-pool` 调 `planGoal()`
-- `DL` = `decision_log` / goal contract / intent bundle
+- `DL` = `decision_log` / goal contract / intent bundle（intent-analysis 结果也走这条路径）
 - `DS` = `task.design_specs` / `system_artifacts`
-- `PL` = `plan_node.brief`
 - `DV` = aggregated delivery diff / goal report / verdict artifact
 - `RB` = delivery rejection 打开新 attempt，等待下一轮 Orchestrator 再进 build
 
-| from\\to | O | A | P | B | D |
-| --- | --- | --- | --- | --- | --- |
-| O | - | - | GP | - | - |
-| R | - | DL | DL | DL | - |
-| X | - | - | - | DS | DS |
-| A | - | - | DL | DL | - |
-| P | - | - | - | PL | - |
-| B | - | - | - | - | DV |
-| D | - | - | - | RB | - |
+| from\\to | O | A | B | D |
+| --- | --- | --- | --- | --- |
+| O | - | - | - | - |
+| I | DL | - | DL | DL |
+| R | - | DL | DL | - |
+| X | - | - | DS | DS |
+| A | - | - | DL | - |
+| B | - | - | - | DV |
+| D | - | - | RB | - |
+
+> 删除了 `O -> GP -> P -> B` 这条 pipeline 链路：`goal-pool` 与 `planner` 都已下线。
+> 当前 pipeline build 路径是 `O --build tool--> goal/runner.ts --> Executor`，
+> 其中 build agent 直接读 `decision_log` + architect contract + design specs。
 
 ## 实际拓扑图
 
@@ -161,13 +181,13 @@ flowchart LR
   R[requirements]
   X[design_analysis]
   A[architect]
-  P[planner]
   B[build]
   D[deliver]
+  IT[integrity]
+  PR[prosecutor]
+  I[intent-analysis]
   G[general]
   E[explore]
-  I[intent-analysis not wired]
-  GP[[goal-pool]]
 
   O -->|tool| R
   R -->|result| O
@@ -179,17 +199,20 @@ flowchart LR
   B -->|result| O
   O -->|tool| D
   D -->|result| O
-
-  O -.->|pipeline build| GP
-  GP -.->|planGoal| P
-  P -.->|plan_node.brief| B
+  O -->|analyze_intent| I
+  I -->|result| O
+  O -->|integrity| IT
+  IT -->|result| O
+  O -->|prosecute| PR
+  PR -->|result| O
 
   X -.->|design_specs| B
   X -.->|design_specs/system_artifacts| D
-  A -.->|decision_log/contracts| P
   A -.->|decision_log/contracts| B
   R -.->|goals/contracts| A
-  R -.->|goals/contracts| P
+  R -.->|goals/contracts| B
+  I -.->|intent artifact| B
+  I -.->|intent artifact| D
   B -.->|delivery.diffs/goalReports| D
   D -.->|rejection verdict / next turn| B
 
@@ -209,20 +232,26 @@ flowchart LR
 
 ## 用这张表排障
 
-1. 看不到 `planner` session 时，先确认 task 是否真的走了 pipeline build；当前不是 `O -> P` 直呼，direct workflow 根本不会起 `planner`。
-2. `intent-analysis` 没有任何消息时，优先结论不是“模型没调起来”，而是“当前 runtime 未接线”。
+1. 看不到独立 "planner" session / agent 时，结论应该是 **"planner 已下线"**，而不是 "在 pipeline 里隐式起着"。`src/planner/` 目录、`engine/goal-pool.ts`、`planGoal()` 全部不存在；旧文档里的 "O -> GP -> P -> B" 链路已失效。
+2. `intent-analysis` 没有任何消息时，先查 orchestrator 是否调了 `analyze_intent` tool（`engine_artifact` kind=`intent-analysis`），再查 `IntentAnalysisAgent.analyze` 的 session 是否成功建出。**不要**再援引"not wired yet"。
 3. `design-analysis` 的结果如果 `build` 看得到、`delivery` 看不到，先查 `task.design_specs` 和 `system_artifacts` 是否都已写入，而不是查 agent prompt。
 4. `delivery` 拒绝后没有进入回修时，先查 `deliver` 是否写出了 `affected_goal_ids`，以及 reopen attempt 后下一轮 Orchestrator 是否真的再次调了 `build`。
-5. 如果未来切到 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的 mailbox 协议，`general -> explore` 这条当前真实可用的链路会先卡在 whitelist 定义不闭合的问题上。
+5. integrity / prosecute 结果没出现时，确认 orchestrator 是否真的调了对应 tool 而不是直接 deliver；这两个 tool 是 review 路径，不会被 build 自动触发。
+6. 如果未来切到 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的 mailbox 协议，`general -> explore` 这条当前真实可用的链路会先卡在 whitelist 定义不闭合的问题上。
 
 ## 真源文件索引
 
 - `src/channel/ingress.ts`：外部入站是否直接回填 interaction，还是委托 control 层
 - `src/control/message.ts`：panel/control 入口，任务真正创建前的 LLM 路由
-- `src/orchestrator/tools.ts`：`requirements / design_analysis / architect / build / deliver`
-- `src/engine/goal-pool.ts`：pipeline 路径里实际拉起 `planner`
-- `src/planner/agent.ts`：`planGoal()` 的真实 planner 入口
+- `src/orchestrator/tools.ts`：21 个 orchestrator tools（含 `requirements / design_analysis / architect / build / deliver / analyze_intent / integrity / prosecute / propose_task / steer_subagent / refine` 等）
+- `src/orchestrator/loop.ts`：`runTaskLoop` 决策入口
+- `src/goal/runner.ts`：build tool 落到 worktree + executor 的执行体
+- `src/build/agent.ts`：build agent 入口（`build/` 独立包共 4 个文件：`agent.ts` / `index.ts` / `report.ts` / `types.ts`）
+- `src/agent/sub-agent-protocol.ts`：共享 sub-agent 协议（不在 `build/`）
+- `src/goal/runner.ts`：build tool 真正落到 worktree + executor 的执行体（已在上一条单独列出）
 - `src/tool/task.ts`：`general / explore` subagent 的 direct 调用边界
 - `src/agent/agent.ts`：哪些 agent 是 `primary`，哪些是 `subagent`
-- `src/delivery/agent.ts`：delivery 如何并行派发 `general / explore`
-- `src/intent-analysis/agent.ts`：明确标注了当前“not wired yet”
+- `src/delivery/agent.ts` + `src/delivery/specialists/` + `src/delivery/arbiter.ts`：delivery 如何并行派发 `general / explore`，以及多 specialist 复核
+- `src/intent-analysis/agent.ts`：`IntentAnalysisAgent.analyze`（已接线，对应 orchestrator tool `analyze_intent`）
+- `src/integrity/agent.ts`：integrity reviewer 入口（多维 review）
+- `src/prosecutor/agent.ts`：prosecutor 入口（对抗性复核）
