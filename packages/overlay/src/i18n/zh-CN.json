@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "0a30d24fd080eff5"
+    "panel_revision": "eba4e9d19cd44e76"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -119,8 +119,6 @@
   "task_overlay.load_failed": "加载失败：{{error}}",
   "agent_models.loading": "加载 Agent 中…",
   "agent_models.load_failed": "Agent 模型加载失败：{{error}}",
-  "agent_models.refreshing": "刷新中…",
-  "agent_models.refresh_hexin": "刷新 Hexin 模型",
   "agent_models.intro": "为每个 Agent 选择 LLM。留空则继承项目默认模型（opencorvus.jsonc 顶层 `model`）。",
   "agent_models.project_default": "项目默认",
   "agent_models.project_default_title": "opencorvus.jsonc 顶层 `model`",
