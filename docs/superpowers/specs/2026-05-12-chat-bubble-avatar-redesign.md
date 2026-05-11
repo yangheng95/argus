@@ -1,8 +1,22 @@
 # Chat-Bubble Avatar Redesign
 
 **Date:** 2026-05-12
-**Scope:** `packages/overlay/src` — conversation surface only（`<Conversation/>` 渲染的 `cardTreeStore` 流）
+**Scope:** `packages/overlay/src` — conversation surface only
 **Trigger:** 用户反馈"现在的卡片堆叠感太重，莫名其妙"。目标改成多角色聊天形态：头像 + 毛玻璃气泡。
+
+## Revision history
+
+- **2026-05-12 v1**：初稿。基于错误假设——以为子 agent 嵌在 parent agent 内部需要拍平。
+- **2026-05-12 v2 (this)**：folded codex review 反馈：
+  - 非 goal sub-agent 早就是 top-level 平铺（`tree-writer.ts:1785` 注释明文）；不存在"拍平 subtree"的工作量
+  - 范围不能仅按 `kind` 区分：integrity 渲染为 `kind="agent" stage="integrity"`；interaction 渲染为 `kind="message"`；`goal` kind 根本不存在
+  - 三个 helper（`collectCardText / collectLatestActivityText / collectActivityCounts`）若 agent/message 卡停止渲染 children 但仍保留 `childIDs`，会泄漏到隐藏子树
+  - `CardHeadActions` 抽组件过早 —— actions 强耦合 state（copy ack / rewind confirm / cancel pending / trace toggle）
+  - 单一 `createMemo` 走 DFS 是反向优化，比现有 recursive `<Card>` 订阅差
+  - `pruneCardsAfterCursor` 非原子（两次 `setCardTreeStore`），任何"全树扫描" selector 会观察到 transient gap
+  - "Tauri 是 WebKit 必支持" 在 Windows 上是错的（WebView2/Chromium）
+  - `--card-stage-system` / `--card-stage-integrity` token 不存在，`stageAccent()` 不认这两 role
+  - 行为保留表漏掉：`ResizeObserver` 粘附宽度、`dblClick` 折叠、键盘展开、step `goalDescription`、`<IntegrityBody/>`、`errorReason` chip
 
 ---
 
@@ -10,79 +24,107 @@
 
 | 问题 | 决定 |
 |------|------|
-| 改造范围 | 仅 `kind === "message"` 和 `kind === "agent"`。`goal` / `step` / `phase` / `tool` / `integrity` 保持现有 card chrome |
+| 改造范围 | "消息态" 卡片（详见下方范围矩阵）。`step` / `phase` / `tool` 容器保持现有 card chrome |
 | 气泡对齐 | `user` 靠右；其它（assistant / system / 所有 stage agent）靠左 |
-| 嵌套行为 | **拍平** — sub-agent / sub-message 在主 timeline 里独立头像气泡；不再嵌套在 parent agent 气泡内 |
+| 嵌套行为 | 不存在子-agent 拍平问题 —— 非 goal 子 session 已经是 top-level 平铺；goal 子 session 已被 `phase` 卡吸收 |
 
 ---
 
-## 数据流改动
+## 范围矩阵（rule 35：穷举）
 
-### 现状
-`cardTreeStore` 是「id → CardNode」字典 + `order: string[]`（top-level）。每个 CardNode 通过 `childIDs: string[]` 引用子节点；`<Conversation/>` 遍历 `cardTreeStore.order`，每个 top-level 节点丢给 `<Card>`，`<Card>` 递归渲染 `childIDs` → 形成 tree DOM。
+按 `(kind, stage)` 路由到「气泡」或「卡片」：
 
-### 改造后
-新增 `services/chat-stream.ts`，从同一份 `cardTreeStore` 派生「线性聊天流」选择器 `chatStream(): string[]`：
+| `node.kind` | `node.stage` | 渲染 | 备注 |
+|-------------|--------------|------|------|
+| `message` | `user` | bubble (右) | user 输入 |
+| `message` | `system` / `compaction` / `title` / `summary` | bubble (左) | 经 `normalizeAgentRole` 折成 `system` |
+| `message` | 其它（interaction-question / -permission as part；boundary） | bubble (左) | interaction parts 仍走 `<CardParts>` inline 在 message bubble body 内 |
+| `agent` | `assistant` / `orchestrator` / `spec` / `requirements` / `design-analyst` / `architect` / `planner` / `executor` / `build` / `evaluator` / `delivery` | bubble (左) | 主要 agent stages |
+| `agent` | `integrity` | bubble (左) | body 内嵌 `<IntegrityBody/>` 渲染 structured verdict |
+| `step` | (任意) | **card**（不动） | 承载 goal metadata + plan nodes + verdict |
+| `phase` | (任意) | **card**（不动） | 吸收 session parts；step card 内部 child |
+| `tool` | (任意) | **card**（不动） | 通过 `CardParts` inline 在 agent bubble body 内出现 |
+| `integrity` (legacy kind) | — | **card**（不动） | 当前数据流已不再产生此 kind；保留 fallback |
 
-1. 遍历 `cardTreeStore.order`（保持当前的 top-level 时间排序）。
-2. 对每个 top-level 节点：
-   - 若 `kind === "agent"` 或 `kind === "message"` → 直接进入流。
-   - 若 `kind ∈ {"goal", "step", "phase", "tool", "integrity"}` → 直接进入流（仍以现有 card chrome 渲染）。
-3. 在「拍平 emitter」里，对 `kind ∈ {"agent", "message"}` 的节点的整棵子树做 DFS，把所有后代里的 `agent` / `message` 节点按 `time` 升序、相对位置插入到 parent 气泡之后，作为独立 top-level 条目；但保留 parent 内的 `tool` / `boundary` / `text` / `reasoning` parts（这些是 parent 气泡自身的"话语"）。
-4. 对 `kind ∈ {"goal", "step", "phase"}` 的节点的子树同理：把里面的 `agent` / `message` 后代抽出来作为独立 top-level 项；剩下的 `tool` / `phase` 仍走容器卡渲染。
-5. 抽出后的"独立条目"id 后挂载一个 `chatStreamParent` 标记（仅 UI 用，写在 selector 输出里，不污染 store），让气泡内可显示一个 "↑ from <ParentTitle>" pill —— 用户能看出调用链来源。
-6. 排序仍按 `node.time`。
+**判定单点：** 新增 `utils/chat-bubble.ts` 导出 `renderAsBubble(node): boolean`：
+```ts
+export function renderAsBubble(node: CardNode): boolean {
+  if (node.kind === "message") return true;
+  if (node.kind === "agent") return true;  // 含 integrity stage
+  return false;
+}
+```
+所有 `<Conversation/>` 和测试通过这个函数判定。**禁止**在 `Card.tsx` / `ChatBubble.tsx` 重复实现条件。
 
-> **为什么不写回 store？** Store 由 `tree-writer.ts` 维护（"writer 是唯一写者"约定）。拍平只是 UI 投影；selector 派生不破坏这个约定。
+---
 
-### Reactivity
-`chatStream()` 是 SolidJS createMemo，依赖 `cardTreeStore.order` + 每个 reachable card 的 `childIDs` + `kind` + `time`。Solid 细粒度让单条 child append 只重算 affected branch。`<Conversation/>` 仅取 `chatStream()` 这一层订阅，<Card/> 子树内仍按现有方式订阅 `cardTreeStore.cards[id]` 字段。
+## 数据流改动（与 v1 相比大幅简化）
 
-### Rewind / prune
-`pruneCardsAfterCursor` 维持现状（直接清 store）。selector 自动重算。
+### 现状回顾（v2 重新校准）
+- `cardTreeStore.order` 是 top-level 卡列表，按 time 排序，writer 维护
+- 非 goal sub-agent session 已直接位于 top-level（`tree-writer.ts:1785` 注释合同：除 goal phase 外，session container 一律 null → top-level）
+- goal-scoped sub-agent（planner / build / evaluator session）被 `resolveGoalContainerCardID` 吸收进 step 卡下的 `phase` 子卡；session 不产生独立 agent 卡
+- 因此当前 store 里 `kind="agent"` 节点的 `childIDs` 普遍为空（writer 不主动给 agent 卡挂子卡；childIDs 默认 `[]`）
+
+### 改造
+- **不引入** chat-stream selector / DFS / parent-pill
+- `Conversation.tsx` 仍直接 walk `cardTreeStore.order`
+- 对每个 top-level 节点：`renderAsBubble(node) ? <ChatBubble/> : <Card/>`
+- 子树渲染逻辑不变（`<Card/>` 仍递归处理 step / phase 的 childIDs）
+- **关键不变量**：bubble 不渲染 `childIDs`。验证：所有 agent kind 节点的 childIDs 实证为空（rule 35：穷举 grep `kind:\s*"agent".*childIDs`）；若 writer 未来变更，加 assertion guard
+- `pruneCardsAfterCursor` 行为不变；因为没有 selector 全扫，transient gap 不构成 UI 问题
+
+### Helper leak 防护（高风险点）
+三个 helper 递归走 `childIDs`：
+- `collectCardText(node)` — copy 全文（utils/card-tree.ts:136）
+- `collectLatestActivityText(node)` — 折叠态预览（utils/card-tree.ts:310）
+- `collectActivityCounts(node)` — foot stats（utils/card-tree.ts:390）
+
+对气泡场景：
+- agent/message 节点的 childIDs 默认为空 → 不泄漏
+- 但 step / phase 节点（仍走 Card.tsx）可能引用 phase / tool 子卡 → helper 正常工作
+- 加 **invariant test**：snapshot 全部 `kind="agent"` 卡的 `childIDs.length === 0`；若未来 writer 给 agent 挂子卡，CI 立即红
+
+> **不**修改 helper 函数本身。它们的语义对 step/phase 仍正确。只用 invariant 锁住"agent kind 没有 children"这个 writer 合同。
 
 ---
 
 ## 视觉合同
 
 ### 气泡几何
-
 ```
 左侧（assistant / system / agent）：
 ┌─────────────────────────────────────────────────────┐
 │ ╭───╮                                                │
-│ │ 📐│  <role-name> · <duration> · <status>  [actions]│ ←--- bubble-head 行（24-26px）
+│ │ 📐│  <role-name> · <duration> · <status>  [actions]│
 │ ╰───╯  ┌──────────────────────────────────────────┐ │
-│        │                                          │ │
 │        │  正文 parts（text / reasoning / inline   │ │
 │        │  tool / files）                          │ │
-│        │                                          │ │
 │        └──────────────────────────────────────────┘ │
-│        ↑ from <ParentRole>  ·  ⓘ activity stats     │ ←--- bubble-foot 行（可选）
+│        12:34:56  ·  ⓘ activity stats（如有）        │
 └─────────────────────────────────────────────────────┘
 
 右侧（user）：
 ┌─────────────────────────────────────────────────────┐
 │             ┌─────────────────────────────┐  ╭───╮ │
-│             │                             │  │ 👤│ │
-│             │  user 输入                   │  ╰───╯ │
-│             │                             │        │
-│             └─────────────────────────────┘        │
+│             │  user 输入                   │  │ 👤│ │
+│             └─────────────────────────────┘  ╰───╯ │
 │                                       12:34:56     │
 └─────────────────────────────────────────────────────┘
 ```
 
 - 头像列宽度：`calc(36px * var(--ui-scale))`
-- 头像本身：`calc(28px * var(--ui-scale))` 圆形容器 + `calc(16px * var(--ui-scale))` SVG（viewBox 16）
+- 头像圆形容器：`calc(28px * var(--ui-scale))`；图标 `calc(16px * var(--ui-scale))`
 - 头像与气泡间距：`calc(10px * var(--ui-scale))`
 - 气泡最大宽度：`min(76%, calc(720px * var(--ui-scale)))`
 - 气泡内边距：`calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale))`
-- 气泡圆角：`var(--oc-radius-large)`（≈14px），user 气泡右上角强调（`border-top-right-radius: var(--oc-radius-soft)`），左侧气泡左上角强调 —— 仅作为方向暗示，差异不必过大。
-- 气泡间垂直间距：`calc(10px * var(--ui-scale))`。**连续同一发言人不合并**（每条仍独立头像）—— 多 agent 流里身份感更强。
+- 气泡圆角：`var(--oc-radius-large)`
+- 气泡间垂直间距：`calc(10px * var(--ui-scale))`
+- **同发言人不合并**：保持身份感
 
-### 毛玻璃配方
+### 毛玻璃配方（修订）
 
-不依赖现有的 `.card` 背景，从头声明 `.chat-bubble`：
+**Tauri 跨平台 webview 兼容**：Tauri 在 macOS = WKWebView (WebKit)；Linux = WebKitGTK；**Windows = WebView2 (Chromium)**。三家都支持 `backdrop-filter`（Chromium 76+ / WebKit ≥ 6）。v1 spec 的 "Tauri 是 WebKit 必支持" 论断不准确但结论碰巧成立。
 
 ```css
 .chat-bubble {
@@ -91,218 +133,237 @@
   backdrop-filter: blur(calc(14px * var(--ui-scale))) saturate(135%);
   -webkit-backdrop-filter: blur(calc(14px * var(--ui-scale))) saturate(135%);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--text) 8%, transparent);
-  /* 内描边高光，强化"玻璃"感 */
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--text-strong) 6%, transparent),
     0 1px 2px color-mix(in srgb, var(--text) 4%, transparent);
 }
-.chat-bubble[data-role="user"] {
+.chat-bubble[data-align="right"] {
   background: color-mix(in srgb, var(--accent) 16%, color-mix(in srgb, var(--surface) 44%, transparent));
   border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
-.chat-bubble[data-role="system"] {
+.chat-bubble[data-stage="system"] {
   background: color-mix(in srgb, var(--warn) 12%, color-mix(in srgb, var(--surface) 50%, transparent));
   border-color: color-mix(in srgb, var(--warn) 24%, transparent);
 }
+@supports not (backdrop-filter: blur(0)) {
+  .chat-bubble { background: var(--surface); }  /* 优雅降级：仍可读 */
+}
 ```
 
-**三套主题适配**：所有颜色用 `var(--surface)` / `var(--accent)` / `var(--warn)` / `var(--text)` token；`color-mix` 在 srgb 下完成。light / dark / vscode-dark 三种 surface 各自给气泡不同的玻璃底色，但配方一致。已知约束：参考 `feedback_overlay_typography.md` ——禁止 hex 字面量，禁止滥用 bold。
+所有颜色 token 来源；禁止 hex 字面量（rule 10 + feedback_overlay_typography）。
 
-**Fallback**：若浏览器不支持 `backdrop-filter`（Tauri webview 是 WebKit，必支持），气泡仍可读 —— 半透明 surface + border 仍能区分。
+### Avatar SVG —— 完整 13 个 role
 
-### Avatar SVG
+复用 `Icon.tsx` 注册中心，新增 `avatar-<role>` 命名空间。**一次性补全** `normalizeAgentRole` 返回的全部 role（codex Q4 反馈：避免 partial rollout 造成双视觉语言）：
 
-新增 15 个 avatar，**不复用** 当前 `Icon.tsx` 中的功能 icon（那些是 utility chrome：copy / inspect / cancel / rewind / etc，stroke-width 1.4，太"功能味"）。Avatar 需要"形象感"——填充为主、stroke-width 1.6、viewBox 16x16、有人物/物体的轮廓识别度。
+| AgentRole（from message.ts:47） | avatar 名 | 形象 |
+|-----------|-----------|------|
+| `user` | `avatar-user` | 人形剪影 |
+| `assistant` | `avatar-assistant` | 火花 + 对话气泡 |
+| `system` | `avatar-system` | 齿轮 |
+| `orchestrator` | `avatar-orchestrator` | 辐射节点 |
+| `spec` | `avatar-spec` | 卷轴 |
+| `requirements` | `avatar-requirements` | 剪贴板带勾 |
+| `design-analyst` | `avatar-design-analyst` | 放大镜叠十字线 |
+| `architect` | `avatar-architect` | 圆规 + 三角板 |
+| `planner` | `avatar-planner` | 流程节点 |
+| `goal` | `avatar-goal` | 靶心 |
+| `executor` | `avatar-executor` | 实心 ▶ |
+| `build` | `avatar-build` | 锤子 |
+| `evaluator` | `avatar-evaluator` | 天平 |
+| `delivery` | `avatar-delivery` | 包裹立方 |
+| `integrity` | `avatar-integrity` | 盾牌带勾 |
 
-| role | 视觉 | 关键元素 |
-|------|------|----------|
-| user | 人形剪影 | 圆头 + 肩部弧线，filled |
-| assistant | 火花/星标 + 对话气泡轮廓 | 4-point spark inside speech bubble |
-| system | 齿轮 | 6 齿的 cog |
-| orchestrator | 辐射节点 | 中心圆 + 4 条放射臂指向四个外圆 |
-| spec | 卷轴 | 上下卷轴 + 中间文档线 |
-| requirements | 剪贴板带勾 | 夹板 + 中央 ✓ |
-| design-analyst | 放大镜叠十字线 | 圆 + 十字线 + 把手 |
-| architect | 圆规 + 三角板 | 三角形 + 圆规腿叠加 |
-| planner | 流程节点串联 | 3 节点 + 2 连线 + 一处分支 |
-| executor | 实心 ▶ | filled play triangle |
-| build | 锤子 | 锤头 + 把手 |
-| evaluator | 天平 | 中心轴 + 两侧托盘 |
-| delivery | 包裹立方 | 立方体 + 顶部对角线分箱 |
-| integrity | 盾牌带勾 | shield + center ✓ |
-| goal | 靶心 | 三同心圆 + 中心点 |
+**抽 `Avatar.tsx` 薄 facade**（codex 反馈：spec v1 的"不抽 primitive"过强）：
+- 输入 `role: AgentRole`
+- 输出：圆形容器 + 对应 `<Icon name="avatar-<role>"/>` + role-stage 着色
+- 内部使用 `normalizeAgentRole(stage)` 把 raw stage 映射到 AgentRole
+- 不绕过 Icon 注册中心（rule 9 — 仍单一来源）
+- 测试：`avatar-coverage.test.ts` 断言 `AgentRole` 全集映射齐全
 
-实现：在 `Icon.tsx` 现有 `IconName` union 中追加 `avatar-<role>` 名称（15 个），与现有 icon 共享一套渲染管线。**避免**单独建 `Avatar.tsx` 组件—— Icon 已经是单一来源（`flat-redesign-icon-coverage.test.ts` 兜底），分裂会违反 rule 8（双源）和 rule 9（抽象）。
+### Avatar 配色 token 补齐
+`--card-stage-system` 和 `--card-stage-integrity` 当前不存在（card.css:66 起的 14 token 清单只覆盖 14 个 role，少了这两个）。`stageAccent()` 在 `utils/card-color.ts:7` 也不认。
 
-Avatar 渲染容器（`.chat-avatar`）单独建样式，自带圆形背景：`background: color-mix(in srgb, var(--surface-inset) 86%, transparent)` + 1px border。`data-role` 控制 `color`（驱动 currentColor）。Color 来自现有 `--card-stage-*` token —— 每个 role 已经有一套主题适配的色相。
+**修复路径**：
+- `styles/surfaces/card.css` 补 `--card-stage-system: var(--warn);` 和 `--card-stage-integrity: color-mix(in oklch, var(--good) 45%, var(--bad) 55%);`（compliance/security 色感）
+- `utils/card-color.ts` `stageAccent()` 函数补这两个 case
+- 这两处补齐对现有 card 渲染零回归（之前 fallback 走 `card-stage-info`）
 
 ---
 
 ## 气泡内部结构
 
-### bubble-head（替代现有 `.card__head`）
-- **左**（agent / assistant / system）：role label（i18n via `agentStageLabel`）+ duration chip + status badge spinner
-- **右**：actions（copy / trace / agent-cancel / rewind） —— 复用 `CardHeader.tsx` 现有按钮渲染逻辑
-- **user**：无 head 行，时间戳渲染在气泡下方（右对齐）。无 actions、无 status —— user 消息没这些维度。
+### bubble-head
+- **左**（agent / system / assistant）：role label（i18n via `agentStageLabel`）+ duration chip + status badge spinner
+- **右**：action chips（copy / trace / agent-cancel / rewind / token-hint / usage-hint）
+- **user**：无 head；时间戳渲染在气泡下方
 
 ### bubble-body
-- 复用 `<CardParts parts={node.parts} depth={...}/>` 渲染 `text` / `reasoning` / `boundary` / `inline tool` / `file` / `interaction-permission` 等
-- **agent 气泡内不再渲染 children**——子 agent / 子 message 已被拍平到主流。仅渲染 `parts`。
-- **tool parts** 仍按 `CardParts` 现有 `<Card kind="tool"/>` 嵌入 inline —— 这是 agent 的话的一部分，不拍平。
+- 复用 `<CardParts parts={node.parts} depth={...}/>` 渲染 text / reasoning / boundary / inline tool / file / interaction-permission / interaction-question parts
+- **不渲染 childIDs**（agent/message 卡 childIDs 实证为空；invariant 测试守护）
+- agent 卡含 `node.integrity` 时，body 顶部插入 `<IntegrityBody integrity={node.integrity}/>`
+- step 卡的 `goalDescription` 渲染不归 bubble 管（step 走 card chrome）
+- `errorReason` chip：与现有 `<CardHeader/>` 一致，渲染在 bubble-head 的 title 行末尾
 
 ### bubble-foot（可选）
-- "↑ from <ParentTitle>" pill：当节点是被拍平上来的子节点时出现，可点击聚焦/折叠 parent。Pill 用 `--text-muted` + 1px border。
-- activity stats（counts pill）：仅当本节点其下有 `tool` / `skill` 活动且 expand 状态下显示。复用现有 `collectActivityCounts` —— 但因为拍平后 sub-agent 已经独立，这里 count 仅含 inline tool/skill。
-- 时间戳：用 `stamp(time)` 渲染在气泡右下（左侧气泡）或气泡下方右对齐（user 气泡）。
+- activity stats（仅展开 + 有 inline tool/skill 活动）
+- 时间戳：`stamp(time)` 
 
-### 折叠
-- 折叠仍生效。折叠态下气泡只显示 head 行 + 一行 `collapsedPreview()`（复用现有 util）。
-- 折叠按钮：head 行点击 = 折叠/展开（保持现有交互）。
-- 状态机：`cardExpanded` store 不变。
+### 折叠态
+- 折叠：仅 bubble-head + 一行 `collapsedPreview`
+- 触发：bubble-head 单击 = 展开；bubble surface 双击 = 折叠（`Card.tsx:290` 的 dblClick 逻辑搬到 ChatBubble）
+- 键盘：bubble-head `role="button" tabindex="0"` + Enter/Space 展开（`CardHeader.tsx:224` 的逻辑搬过来）
+- `cardExpanded` store 不变
 
 ---
 
-## 文件改动清单
+## CardHeader 复用（codex 反馈：不抽组件，抽 handlers）
+
+不新建 `<CardHeadActions/>` 组件。改为：
+- 抽 `useCardHeadActions(node)` Solid hook 到 `hooks/use-card-head-actions.ts`，集中 state（copy ack timeout / rewind pending / cancel pending / trace toggle）+ handlers + i18n labels
+- `<CardHeader/>` 和 `<ChatBubble/>` 各自调用 hook，渲染自己的 markup
+- 这样 view 解耦，state 单一来源
+- 测试 `use-card-head-actions.test.ts` 单测 hook：copy 动作触发 clipboard、rewind 弹窗逻辑、cancel 路径
+
+---
+
+## 文件改动
 
 ### 新建
-- `packages/overlay/src/services/chat-stream.ts` — `chatStream()` selector，DFS 拍平 agent/message 子树
-- `packages/overlay/src/components/ChatBubble.tsx` — 气泡组件（avatar 列 + bubble-head / body / foot + 用户右对齐变体）
-- `packages/overlay/src/styles/surfaces/chat-bubble.css` — bubble + avatar + glass 样式
+- `packages/overlay/src/utils/chat-bubble.ts` — `renderAsBubble(node)` 单点判定
+- `packages/overlay/src/components/Avatar.tsx` — 薄 facade over Icon，role→glyph + 圆形容器
+- `packages/overlay/src/components/ChatBubble.tsx` — 气泡组件
+- `packages/overlay/src/hooks/use-card-head-actions.ts` — 共享 actions state + handlers
+- `packages/overlay/src/styles/surfaces/chat-bubble.css` — bubble + avatar + glass
 - 测试：
-  - `packages/overlay/test/chat-stream.test.ts` — 拍平算法（多层 agent 嵌套、user 消息插入、按 time 排序、parent 标记正确）
-  - `packages/overlay/test/chat-bubble.test.ts` — DOM 断言：user 气泡 `data-align="right"`、avatar 存在、role 对应正确 SVG、actions/duration 仅在 agent 气泡出现
+  - `test/chat-bubble-routing.test.ts` — `renderAsBubble` 全 (kind,stage) 矩阵
+  - `test/chat-bubble.test.ts` — DOM 契约（user 右对齐、avatar 命中、actions 行为）
+  - `test/chat-bubble-invariants.test.ts` — 守护 `kind="agent"` 卡 `childIDs` 为空
+  - `test/avatar-coverage.test.ts` — AgentRole 全集映射
+  - `test/use-card-head-actions.test.ts` — hook 单测
 
 ### 修改
-- `packages/overlay/src/components/Icon.tsx` — 追加 15 个 `avatar-<role>` SVG 路径
-- `packages/overlay/src/components/Conversation.tsx` — `For each={cardTreeStore.order}` 替换为 `For each={chatStream()}`；根据 node.kind 路由到 `<ChatBubble/>`（message / agent）或 `<Card/>`（goal / step / phase / tool / integrity）
-- `packages/overlay/src/components/Card.tsx`
-  - 删除「message 卡里嵌 children」逻辑（kind=message 已经走 ChatBubble，不再进 Card）
-  - 删除「agent 卡递归 children」逻辑（kind=agent 已经走 ChatBubble，不再进 Card）
-  - 保留 goal/step/phase/tool/integrity 的现有渲染（包括 promoted build phase）
-- `packages/overlay/src/components/CardHeader.tsx`
-  - 抽出可复用的 actions 工具栏到一个内部 sub-component `<CardHeadActions>`，让 `<ChatBubble/>` 也能装 actions（copy / rewind / trace / agent-cancel）
-  - 或者：把 actions 抽到独立 `components/CardHeadActions.tsx`（更符合 rule 9 抽象）
-- `packages/overlay/src/styles/surfaces/card.css` — 删除 message / agent 专属的 card 样式分支（按 `[data-kind="message"]` / `[data-kind="agent"]` 的选择器）。其它 kind 不动。
-- `packages/overlay/src/utils/card-tree.ts` — `visibleChildIDsForCard` 增加：当 parent kind ∈ `{"goal", "step", "phase", "integrity"}` 时，过滤掉 `kind ∈ {"agent", "message"}` 的子卡（这些已被 chat-stream 拍到主流，否则会重复出现）。agent/message kind 的节点本身不再走 Card.tsx 渲染，无需在那一侧加防御。
-- `packages/overlay/src/i18n/zh-CN.json` + `en-US.json` —
-  - 新增 `chat.bubble.from`（"↑ from {role}"）
-  - 复用现有 `chat.role.*`
+- `packages/overlay/src/components/Icon.tsx` — 追加 15 个 `avatar-*` 注册项
+- `packages/overlay/src/components/Conversation.tsx` — 单卡路由：`renderAsBubble(node) ? <ChatBubble/> : <Card/>`
+- `packages/overlay/src/components/Card.tsx` — 不再处理 message/agent kind；保留 step/phase/tool/integrity（legacy kind）
+- `packages/overlay/src/components/CardHeader.tsx` — 改用 `useCardHeadActions(node)`；删除内联 state（state 现住 hook）；保留 markup
+- `packages/overlay/src/styles/surfaces/card.css` — 补 `--card-stage-system` / `--card-stage-integrity` token；删除 message/agent 专属规则
+- `packages/overlay/src/utils/card-color.ts` — `stageAccent()` 补 system / integrity case
+- `packages/overlay/src/utils/message.ts` — 无变更（已有 `normalizeAgentRole`）
+- `packages/overlay/src/i18n/{zh-CN,en-US}.json` — 无新增 key（不再有 "↑ from" pill）
 
 ### 删除
-- 暂无文件删除。原 `card.css` 中 message/agent 分支的 CSS 规则被裁剪即可。
+- 无文件删除
 
 ---
 
-## 行为保留清单（必须不回归）
+## 行为保留清单（补完）
 
 | 行为 | 现路径 | 新路径 |
 |------|--------|--------|
-| Rewind | CardHeader 的 ↶ 按钮 → POST `/task/:id/rewind` + `pruneCardsAfterCursor` | ChatBubble 的 head actions 复用同一 `onRewind` 入口 |
-| Agent cancel | CardHeader 的 ✕ 按钮 → `cancelAgentSession` | 同上，ChatBubble.head.actions |
-| Trace 面板 | CardHeader 的 🔍 按钮 → 内部 `<TracePanel/>` | ChatBubble body 顶部展示 TracePanel（同现状） |
-| Reply box | Card body 末尾 `<AgentSessionReplyBox/>` | ChatBubble body 末尾 `<AgentSessionReplyBox/>`，仅 `directAgentSessionID` 有值时挂载 |
-| Copy | CardHeader copy 按钮 | ChatBubble actions 复用 |
-| Status badge / running spinner | CardHeader 左侧 badge | ChatBubble head 内 |
+| Rewind | CardHeader → POST `/task/:id/rewind` + `pruneCardsAfterCursor` | ChatBubble actions（复用 hook） |
+| Agent cancel | CardHeader → `cancelAgentSession` | 同上 |
+| Trace 面板 | CardHeader → 内部 `<TracePanel/>` | ChatBubble body 顶部 |
+| Reply box | Card body 末尾 `<AgentSessionReplyBox/>` | ChatBubble body 末尾（仅 `directAgentSessionID` 有值） |
+| Copy | CardHeader copy 按钮 | ChatBubble actions（复用 hook） |
+| Status badge / spinner | CardHeader 左侧 | ChatBubble head 内 |
 | Duration chip | CardHeader 中部 | ChatBubble head 内 |
-| Collapsed preview | CardHeader `card__collapsed-preview` | ChatBubble head 行下面渲染 |
-| Token / usage hint | CardHeader actions 区 | ChatBubble actions 区（同样可见） |
-| Activity foot stats | Card 底部 `.card__foot` | ChatBubble bubble-foot 区 |
-| Tool 卡 inline 渲染 | CardParts → toolToCardNode → 嵌入式 Card | 不变。Inline tool 仍在 ChatBubble body 内（CardParts 复用） |
-| Auto-scroll | `setupAutoScroll(el)` on `.chat-scroll` | 不变 |
-| Rewind cursor | `pruneCardsAfterCursor` | 不变 —— chatStream selector 自动响应 |
+| Collapsed preview | CardHeader `.card__collapsed-preview` | ChatBubble head 行下方 |
+| Token / usage hint | CardHeader actions | ChatBubble actions |
+| Activity foot stats | Card `.card__foot` | ChatBubble bubble-foot |
+| Tool 卡 inline 渲染 | CardParts toolToCardNode | 不变；inline 仍在 ChatBubble body |
+| Auto-scroll | `setupAutoScroll` | 不变 |
+| Rewind cursor | `pruneCardsAfterCursor` | 不变 |
+| **Sticky inline width** | `ResizeObserver` 在 Card.tsx:53,250 | **ChatBubble 自己实现**（top-level 卡仍需稳定宽度，避免气泡跳动） |
+| **dblClick 折叠** | Card.tsx:290 `onDblClick` | ChatBubble surface 同接 |
+| **键盘展开** | CardHeader.tsx:224 `onKeyDown` | bubble-head 同接 |
+| **errorReason chip** | CardHeader.tsx:280 | bubble-head title 行末 |
+| **Integrity body** | Card.tsx:342 `<IntegrityBody/>` 渲染 | ChatBubble body：当 `node.integrity` 存在时插入 IntegrityBody |
+| **step `goalDescription`** | Card.tsx:316 | 不归 bubble 管，step 走 Card 不变 |
+| **promotedBuildPhase / stepPayload** | Card.tsx:331 `<StepPayloadBody/>` | 不归 bubble 管，step 走 Card 不变 |
 
 ---
 
 ## 主题适配
 
-所有色彩走 token，**禁止硬编码 hex**（rule 10 + feedback_overlay_typography）：
-
-| 元素 | 三主题 token 来源 |
-|------|-------------------|
+| 元素 | token |
+|------|-------|
 | 气泡背景 | `var(--surface)` + alpha |
-| 气泡边框 | `color-mix(in srgb, var(--text) 8%, transparent)` |
+| 气泡边框 | `color-mix(var(--text) 8%)` |
 | user 气泡背景 | `var(--accent)` + `var(--surface)` mix |
-| system 气泡背景 | `var(--warn)` + `var(--surface)` mix |
-| Avatar 容器底色 | `var(--surface-inset)` |
-| Avatar 图标色 | `var(--card-stage-<role>)`（已经主题适配） |
+| system 气泡 | `var(--warn)` + `var(--surface)` mix |
+| Avatar 容器 | `var(--surface-inset)` |
+| Avatar 图标色 | `var(--card-stage-<role>)`（**含新补的 system / integrity**） |
 | 文本 | `var(--text)` / `var(--text-soft)` / `var(--text-muted)` |
-| Pill 边框 | `color-mix` of `var(--text)` |
 
-`feedback_overlay_typography.md` 强调"颜色 token 必须 theme-adaptive，禁止 hex 字面量当 token 值"。所有 mix 配方在 srgb 下计算，三主题统一来源、值不同。
-
-字重控制（rule "overlay 禁止滥用 bold"）：
-- bubble-head 的 role label：`var(--ui-font-weight-medium)`，不加 strong
-- 正文：`var(--ui-font-weight-body)`
-- duration / pill 数值：`var(--ui-font-weight-strong)` 仅在数值上点缀
+字重（rule "no bold abuse"）：role label `medium`、正文 `body`、duration 数值 `strong`（仅数值）。
 
 ---
 
-## 测试覆盖
+## 测试覆盖（rule 36）
 
-按 rule 36（任何修改必须配测试）：
+### 路由
+- `chat-bubble-routing.test.ts`：对每个 `(CardKind, AgentRole)` 组合断言 `renderAsBubble` 是否返回正确值
+- 边界：interaction-question / interaction-permission 作为 `kind="message"` 的 part 不影响外层 bubble 判定（part 走 CardParts inline）
 
-1. **拍平算法**（`chat-stream.test.ts`）
-   - 多层嵌套：orchestrator → architect → executor → tool；输出顺序 orchestrator → architect → executor（tool 留在 executor body 里）
-   - 时间排序：A 在 B 之前 emit 的 sub-message，仍按 time 排序
-   - 多任务并行：两个 goal 同时跑，sub-agent 仍按 time 平铺
-   - Parent 标记：拍出来的子节点带正确 `chatStreamParent`
-2. **DOM 契约**（`chat-bubble.test.ts`）
-   - `kind="message" role="user"` → `data-align="right"`，无 head actions / status / duration
-   - `kind="agent" stage="architect"` → `data-align="left"`，avatar 渲染 `avatar-architect` 路径，head 含 duration + status spinner
-   - 折叠态：仅 head 行 + collapsedPreview；展开态：body 渲染 parts
-   - actions 复用：copy / rewind / cancel / trace 仍可点击触发对应 callback
-3. **架构守门**（`overlay-architecture-guards.test.ts`）
-   - 追加：`packages/overlay/src/styles/surfaces/chat-bubble.css` 中不能出现 `#` 开头的 hex（仅允许 `color-mix` / `var()`）
-   - 追加：禁止在 ChatBubble.tsx 中 inline SVG（必须走 Icon.tsx）
-4. **集成**：跑 overlay-web-benchmark 一次，视觉上确认气泡形态。**不允许 headless**（rule 25 + feedback_no_headless_benchmark）。
+### DOM 契约
+- `chat-bubble.test.ts`：
+  - `kind="message" stage="user"` → `data-align="right"`，无 head actions / status / duration
+  - `kind="agent" stage="architect"` → `data-align="left"`，avatar 命中 `avatar-architect`，head 含 duration + status spinner
+  - `kind="agent" stage="integrity"` → bubble 内插入 `<IntegrityBody/>`
+  - 折叠态：仅 head 行 + collapsedPreview；展开：parts 渲染
+  - keyboard / dblClick / role="button" focus parity 与原 Card 一致
+  - errorReason chip 仍出现且点击复制
+
+### Helper invariant
+- `chat-bubble-invariants.test.ts`：遍历 `cardTreeStore.cards`，断言所有 `kind === "agent"` 卡 `childIDs.length === 0`（基于真实 fixture：单 agent / 多 agent / goal workflow / interaction event 序列）
+
+### Hook
+- `use-card-head-actions.test.ts`：copy / rewind / cancel / trace 触发器隔离单测
+
+### 视觉
+- `overlay-web-benchmark` 一次（rule 25：不允许 headless）；分别截 light / dark / vscode-dark 三主题；人工对比 v1 卡片状 → v2 气泡
+
+### 架构守门
+- `overlay-architecture-guards.test.ts`：禁止 `chat-bubble.css` 出现 hex 字面量；禁止 `ChatBubble.tsx` 内联 SVG
 
 ---
 
-## 风险 & 决策点
+## 开放问题（codex round 1 已回答，关闭）
 
-### R1：拍平丢失"orchestrator 调了 architect"的层级感
-**缓解**：bubble-foot 显示 "↑ from Orchestrator" pill。点击可滚动/聚焦 parent 气泡或在 parent 气泡边亮一下。**不**重建嵌套 UI。
-
-### R2：goal/step 容器空壳化
-若 goal/step 里只有 agent 子节点（被拍平走了），goal/step 卡可能视觉空了。
-**缓解**：goal/step 卡仍承载 `stepPayload`（plan nodes / checks / verdict）+ `goalDescription` —— 它们有自己的内容，不是空壳。如果某个 goal/step 实证没有任何自有内容，selector 可降级为不渲染该容器卡（仅作为锚点），但不在本次范围内 —— 留作 follow-up。
-
-### R3：reply-box 归属
-现状：reply-box 挂在「direct-replyable agent session card」末尾。拍平后，sub-agent 已独立 —— reply-box 跟着它走，不进 parent。语义更清晰。
-**风险**：用户习惯了某个固定位置回复，可能找不到。
-**缓解**：placeholder text 标注 "Reply to <role>"。
-
-### R4：Backdrop-filter 性能
-20+ 个并发气泡同时 blur 在弱机器上可能掉帧。
-**缓解**：CSS `@supports (backdrop-filter: blur(0))` 已是 baseline；degrade 时改用半透明纯色不 blur 也仍可读。
-
-### R5：折叠态视觉一致性
-现在折叠态的 card 仍是个 bordered block，气泡的折叠态是个"小气泡"。视觉差异：折叠后气泡变短，但仍是 glass + avatar。OK。
-
-### R6：tree-writer 不动
-**确认**：本改造完全在渲染层，不动 store / writer。即使 tree-writer 改动时（feature_engine_fixes），这套布局也不需要重写。
+| Q | 决议 | 依据 |
+|---|------|------|
+| Q1 folded agent index in goal/step | **不加** | 当前层级不暴露可靠的 child-agent 列表，加索引会成为第二来源（rule 8） |
+| Q2 time tie-break with parent | **不引入** epsilon；保留 raw `time` 排序 | `parentSessionID` 在 writer 内部不在 CardNode 上；ancestry 不可靠 |
+| Q3 reply-box 单一 vs 双入口 | **单一**入口在真实 reply target | 与现有 session/phase 身份合同一致 |
+| Q4 avatar 分阶段 | **一次性**全 13 role | partial rollout 制造双视觉语言 |
+| Q5 CardHeadActions 抽组件 | **不抽组件**；抽 `useCardHeadActions` hook | actions 强耦合 state，组件 prop 表会爆炸 |
 
 ---
 
 ## 实施次序
 
-1. **Step 1**：扩 `Icon.tsx`，增加 15 个 avatar，跑测试覆盖（icon-coverage test 会自动验）。
-2. **Step 2**：抽 `<CardHeadActions/>` 组件，让 CardHeader 和将来的 ChatBubble 共享 actions（copy / trace / cancel / rewind / token / usage chips）。
-3. **Step 3**：写 `services/chat-stream.ts` + 单测 `chat-stream.test.ts`。
-4. **Step 4**：写 `ChatBubble.tsx` + `chat-bubble.css` + 单测 `chat-bubble.test.ts`。
-5. **Step 5**：修改 `Conversation.tsx` 切换到 `chatStream()`；修改 `Card.tsx` 删除 message/agent 渲染分支。
-6. **Step 6**：清理 `card.css` 中 message/agent 专属规则。
-7. **Step 7**：扩 i18n（`chat.bubble.from` 等）。
-8. **Step 8**：扩 `overlay-architecture-guards.test.ts`。
-9. **Step 9**：跑 overlay-web-benchmark（有界面），视觉验收。截图对比。
-10. **Step 10**：commit + push（按 rule 33，绝不 `--no-verify`）。
+1. 补 `--card-stage-system` / `--card-stage-integrity` token + `stageAccent()` 补 case + 单测
+2. `Icon.tsx` 追加 15 个 `avatar-*` 注册项；`flat-redesign-icon-coverage.test.ts` 自动验
+3. `Avatar.tsx` 薄 facade + `avatar-coverage.test.ts`
+4. `useCardHeadActions` hook + 单测
+5. `utils/chat-bubble.ts` + `chat-bubble-routing.test.ts`
+6. `ChatBubble.tsx` + `chat-bubble.css` + DOM 契约测试
+7. `chat-bubble-invariants.test.ts`（agent childIDs 为空）
+8. 改 `Conversation.tsx` 路由 + 删 `Card.tsx` message/agent 分支
+9. 清 `card.css` 中 message/agent 残留规则
+10. `CardHeader.tsx` 切换到 hook
+11. 跑 overlay-web-benchmark（visual，非 headless）三主题人工验收
+12. commit + push（rule 33；不带 `--no-verify`）
 
 ---
 
-## 开放问题（请 codex review 重点关注）
+## 风险
 
-1. **拍平粒度**：goal/step 容器卡的子 agent 被拍出来作为 top-level，是否需要在父 goal/step 卡里仍渲染一个"折叠的 agent 调用清单"作为索引？（当前方案：不渲染，只靠 `↑ from` pill 反向溯源。）
-2. **时间排序冲突**：若 sub-agent 的 `time` 早于 parent agent 的 `time`（理论上不会发生，但 server 时钟可能有偏差），如何处理？当前方案直接按 `time` 排序，sub 会出现在 parent 之前，破坏因果直观。建议加 secondary sort：若 child.time < parent.time，使用 `max(child.time, parent.time + epsilon)`。
-3. **reply-box 位置**：拍平后，sub-agent 的 reply-box 在 sub-agent 气泡末尾。考虑到「用户回复 sub-agent」是常见操作，是否需要在 parent agent 气泡里也复制一个 reply-box（双入口）？倾向 **不**，避免双源（rule 8）。
-4. **Avatar 形象一致性**：15 个手绘 SVG 是否风格不统一？建议先实现 4-5 个核心（user / assistant / system / orchestrator / executor），跑视觉验收后再补全。
-5. **CardHeadActions 抽出粒度**：actions 区有 6 个按钮（copy / trace / cancel / rewind / token-hint / usage-hint），是否需要按 "consumer 类型" 分两套（chat 用 vs 容器卡用）？倾向单一组件 + props 控制可见性。
+| ID | 风险 | 缓解 |
+|----|------|------|
+| R1 | 若 writer 未来给 agent 卡挂 children，bubble 不渲染 children 会丢内容 | `chat-bubble-invariants.test.ts` 守护 |
+| R2 | `useCardHeadActions` hook 在两处调用，state 会复制双份 | hook 内 state 是 per-call signal；CardHeader 和 ChatBubble 共享同一 node 时各自有独立交互态（copy ack 只影响自己的按钮），符合预期 |
+| R3 | Backdrop-filter 性能 | `@supports` 降级；视觉验收阶段抽样检查滚动帧率 |
+| R4 | step 卡仍是"卡片状"，与气泡视觉混搭 | step/phase 本质是 goal 流水容器，视觉上"卡片+段落标题"语义正确，不视为缺陷 |
+| R5 | `pruneCardsAfterCursor` 两次非原子写 | 与本改造无关；selector 不做全扫，transient gap 不影响 bubble 路由 |
