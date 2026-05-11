@@ -1,7 +1,6 @@
 import { Show, createMemo, createSignal } from "solid-js";
 import { displayToolIcon } from "../utils/tool";
 import {
-  collectCardText,
   collectLatestActivityText,
   collectTodoSummary,
   type CardNode,
@@ -11,7 +10,7 @@ import { t } from "../utils/i18n";
 import { formatDuration } from "../utils/time";
 import { useNowTick } from "../services/clock";
 import { goalRevisionLabel } from "../utils/goal-label";
-import { showAppDialog } from "../services/app-dialog";
+import { useCardHeadActions } from "../hooks/use-card-head-actions";
 import { Icon } from "./Icon";
 
 function leadingGlyph(node: CardNode): string {
@@ -20,7 +19,7 @@ function leadingGlyph(node: CardNode): string {
 }
 
 function isStageCard(node: CardNode): boolean {
-  return node.kind === "agent" || node.kind === "phase" || node.kind === "step";
+  return node.kind === "phase" || node.kind === "step";
 }
 
 /** Compact token count — "8.4k" rather than "8432", so the low-contrast
@@ -99,7 +98,7 @@ export function CardHeader(props: {
   /** Invoked when the user clicks the rewind (↶) button. Receives the
    *  card's `time` (ms — becomes cursorTime on the backend) and id
    *  (anchorEventID for audit). Parent routes it to POST /task/:id/rewind. */
-  onRewind?: (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => void | Promise<void>;
+  onRewind?: (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => Promise<void>;
   /** Set on cards that map 1:1 to an opencorvus session (kind="agent"
    *  cards whose id follows `<stage>:session:<sid>`). When present the
    *  header renders a 🔍 button that calls `onTrace` to toggle the
@@ -113,19 +112,17 @@ export function CardHeader(props: {
    *  passed. Reply moved to <AgentSessionReplyBox/> at the END of the card
    *  body — see Card.tsx. */
   agentSessionID?: string;
-  onAgentCancel?: (sessionID: string) => void | Promise<void>;
+  onAgentCancel?: (sessionID: string) => Promise<void>;
 }) {
   const badge = () => statusBadge(props.node);
   const glyph = () => leadingGlyph(props.node);
-  const [copied, setCopied] = createSignal(false);
-  const [rewinding, setRewinding] = createSignal(false);
-  const [agentCancelling, setAgentCancelling] = createSignal(false);
-  const canCopy = () => !!collectCardText(props.node);
-  const canRewind = () =>
-    !!props.onRewind &&
-    isStageCard(props.node) &&
-    typeof props.node.time === "number" &&
-    props.node.time > 0;
+  const [reasonCopied, setReasonCopied] = createSignal(false);
+  const headActions = useCardHeadActions({
+    node: () => props.node,
+    onRewind: props.onRewind,
+    onAgentCancel: props.onAgentCancel,
+    agentSessionID: () => props.agentSessionID,
+  });
   const collapsedActive = () =>
     !props.expanded && isStageCard(props.node) && props.node.kind !== "tool";
   const collapsedPreview = () =>
@@ -146,8 +143,6 @@ export function CardHeader(props: {
     props.node.kind === "step"
       ? goalRevisionLabel(props.node.round, props.node.attempt)
       : "";
-  const canAgentCancel = () =>
-    props.node.status === "running" && !!props.agentSessionID && !!props.onAgentCancel;
 
   // Single source for the card's elapsed/duration chip. Completed/error
   // cards subtract `timeCompleted - time`; running cards subtract
@@ -173,53 +168,6 @@ export function CardHeader(props: {
     const ms = durationMs();
     return ms === null ? "" : formatDuration(ms);
   });
-
-  const onCopy = async (e: MouseEvent | KeyboardEvent) => {
-    e.stopPropagation();
-    const text = collectCardText(props.node);
-    if (!text) return;
-    const ok = await writeClipboard(text);
-    if (!ok) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
-  };
-
-  const onRewind = async (e: MouseEvent | KeyboardEvent) => {
-    e.stopPropagation();
-    if (!props.onRewind || !canRewind()) return;
-    if (rewinding()) return;
-    const choice = await showAppDialog({
-      title: t("card.rewind_confirm.title"),
-      message: t("card.rewind_confirm.message"),
-      select: true,
-      selectValue: "view",
-      selectOptions: [
-        { value: "view", label: t("card.rewind_confirm.audit_only") },
-        { value: "worktree", label: t("card.rewind_confirm.with_worktree") },
-      ],
-      okLabel: t("card.rewind_confirm.apply"),
-      cancel: true,
-      cancelLabel: t("common.cancel"),
-    });
-    if (!choice.confirmed || !choice.value) return;
-    setRewinding(true);
-    try {
-      await props.onRewind(props.node.time, props.node.id, { resetWorktree: choice.value === "worktree" });
-    } finally {
-      setTimeout(() => setRewinding(false), 800);
-    }
-  };
-
-  const onAgentCancel = async (e: MouseEvent | KeyboardEvent) => {
-    e.stopPropagation();
-    if (!props.agentSessionID || !props.onAgentCancel || agentCancelling()) return;
-    setAgentCancelling(true);
-    try {
-      await props.onAgentCancel(props.agentSessionID);
-    } finally {
-      setTimeout(() => setAgentCancelling(false), 800);
-    }
-  };
 
   return (
     <div
@@ -277,21 +225,21 @@ export function CardHeader(props: {
           <Show when={props.node.subtitle}>
             <span class="card__subtitle" title={props.node.subtitle}>{props.node.subtitle}</span>
           </Show>
-          <Show when={props.node.status === "error" && !!props.node.errorReason}>
-            <button
-              type="button"
-              class="card__error-reason"
-              classList={{ "card__error-reason--copied": copied() }}
-              title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
-              aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
-              onClick={async (e) => {
+        <Show when={props.node.status === "error" && !!props.node.errorReason}>
+          <button
+            type="button"
+            class="card__error-reason"
+            classList={{ "card__error-reason--copied": reasonCopied() }}
+            title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
+            aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
+            onClick={async (e) => {
                 e.stopPropagation();
                 const reason = props.node.errorReason || "";
                 if (!reason) return;
                 const ok = await writeClipboard(reason);
                 if (!ok) return;
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1200);
+                setReasonCopied(true);
+                setTimeout(() => setReasonCopied(false), 1200);
               }}
             >
               {props.node.errorReason}
@@ -390,22 +338,22 @@ export function CardHeader(props: {
             );
           }}
         </Show>
-        <Show when={canCopy()}>
+        <Show when={headActions.caps.canCopy()}>
           <button
             type="button"
             class="card__copy"
-            classList={{ "card__copy--done": copied() }}
-            title={copied() ? t("common.copied") : t("common.copy")}
-            aria-label={copied() ? t("common.copied") : t("common.copy")}
-            onClick={onCopy}
+            classList={{ "card__copy--done": headActions.state.copied() }}
+            title={headActions.state.copied() ? headActions.labels.copied() : headActions.labels.copy()}
+            aria-label={headActions.state.copied() ? headActions.labels.copied() : headActions.labels.copy()}
+            onClick={headActions.onCopy}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                void onCopy(e);
+                headActions.onCopy(e);
               }
             }}
           >
-            <Show when={copied()} fallback={<Icon name="copy" size={13} />}>
+            <Show when={headActions.state.copied()} fallback={<Icon name="copy" size={13} />}>
               <Icon name="check" size={13} />
             </Show>
           </button>
@@ -433,38 +381,38 @@ export function CardHeader(props: {
             <Icon name="inspect" size={13} />
           </button>
         </Show>
-        <Show when={canAgentCancel()}>
+        <Show when={headActions.caps.canCancel()}>
           <button
             type="button"
             class="card__agent-cancel"
-            classList={{ "card__agent-cancel--pending": agentCancelling() }}
-            title={t("card.agent_cancel")}
-            aria-label={t("card.agent_cancel")}
-            disabled={agentCancelling()}
-            onClick={onAgentCancel}
+            classList={{ "card__agent-cancel--pending": headActions.state.cancelling() }}
+            title={headActions.labels.cancel()}
+            aria-label={headActions.labels.cancel()}
+            disabled={headActions.state.cancelling()}
+            onClick={headActions.onAgentCancel}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                void onAgentCancel(e);
+                headActions.onAgentCancel(e);
               }
             }}
           >
             <Icon name="cancel" size={13} />
           </button>
         </Show>
-        <Show when={canRewind()}>
+        <Show when={headActions.caps.canRewind()}>
           <button
             type="button"
             class="card__rewind"
-            classList={{ "card__rewind--pending": rewinding() }}
-            title={t("card.rewind")}
-            aria-label={t("card.rewind_step")}
-            disabled={rewinding()}
-            onClick={onRewind}
+            classList={{ "card__rewind--pending": headActions.state.rewinding() }}
+            title={headActions.labels.rewind()}
+            aria-label={headActions.labels.rewindStep()}
+            disabled={headActions.state.rewinding()}
+            onClick={headActions.onRewind}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                void onRewind(e);
+                headActions.onRewind(e);
               }
             }}
           >

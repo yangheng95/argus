@@ -12,6 +12,7 @@ const CARD_CSS = readFileSync(
 const KNOWN_STAGES = [
   "user",
   "assistant",
+  "system",
   "orchestrator",
   "spec",
   "requirements",
@@ -23,6 +24,7 @@ const KNOWN_STAGES = [
   "build",
   "evaluator",
   "delivery",
+  "integrity",
   "tool",
 ] as const
 
