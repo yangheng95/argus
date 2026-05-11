@@ -16,9 +16,10 @@ bun add @opencorvus-ai/sdk
 ### 1. 连接已运行的服务
 
 ```typescript
-import { createOpencodeClient } from "@opencorvus-ai/sdk/v2"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
+// 旧名 createOpencodeClient 仍是 alias，保留向后兼容
 
-const client = createOpencodeClient({
+const client = createOpenCorvusClient({
   baseUrl: "http://127.0.0.1:7878",
   password: process.env.OPENCORVUS_SERVER_PASSWORD,  // 可选
 })
@@ -37,13 +38,20 @@ for await (const event of client.event.subscribe()) {
 ### 2. 在进程内嵌入启动
 
 ```typescript
-import { createOpencode } from "@opencorvus-ai/sdk/v2"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
+// `createOpencode` 是 `createOpenCorvus` 的 alias
 
-const { client, shutdown } = await createOpencode({
+const { client, server } = await createOpenCorvus({
   directory: "/path/to/repo",
 })
 // ... 使用 client
-await shutdown()
+await server.close()  // server 句柄上的 close() 关闭进程
+```
+
+返回对象结构（来自 `packages/sdk/js/src/index.ts:30-43`）：
+
+```typescript
+{ client: OpenCorvusClient, server: { url: string, close: () => Promise<void> } }
 ```
 
 ## 主要命名空间
@@ -77,7 +85,7 @@ for await (const event of stream) {
 
 ## 类型生成
 
-SDK 的类型从 OpenAPI schema 自动生成（由 [`@hey-api/openapi-ts`](https://github.com/hey-api/openapi-ts) 工具链），源文件 `packages/sdk/js/src/v2/`。
+SDK 的类型从 OpenAPI schema 自动生成（由 [`@hey-api/openapi-ts`](https://github.com/hey-api/openapi-ts) 工具链），源文件 `packages/sdk/js/src/gen/`。
 
 重新生成：
 
@@ -87,8 +95,7 @@ bun ./packages/sdk/js/script/build.ts
 
 ## 版本
 
-- `v2`（默认 / 推荐）：当前 OpenCorvus 版本对应的 SDK
-- 早期 v1 已弃用，不要使用
+只有一份 SDK 入口（`packages/sdk/js/src/index.ts`），没有 v1 / v2 分支。历史子路径 `@opencorvus-ai/sdk/v2` 已不再需要——直接 `import { createOpenCorvusClient } from "@opencorvus-ai/sdk"`。
 
 ## 底层实现
 

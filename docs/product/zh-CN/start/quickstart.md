@@ -46,9 +46,22 @@ curl -X POST http://127.0.0.1:7878/task \
 curl -N http://127.0.0.1:7878/task/<task_id>/events
 ```
 
-你会依次看到：`spec_agent_running` → `goals_agent_running` → `planner_agent_running` → 多个 `goal.running` → `evaluator_running` → `delivery_running` → `done`。
+依次会看到的典型事件（事件名来自 `engine/model.ts`）：
 
-失败时会看到 `replan.triggered` 或 `retry.triggered`，然后回到执行阶段。
+```
+task.created
+workflow.selected          ← Orchestrator 选 direct 或 pipeline 模板
+workflow.step.updated      ← requirements / architect / build / deliver 各步骤推进
+goal.progress              ← 单个 goal 的 build attempt 在跑
+goal.workflow.progress     ← 单个 goal 的 step 计数
+goal.passed / goal.failed
+delivery.ready
+delivery.evidence.updated
+delivery.gate.rejected     ← 触发回修循环（不一定出现）
+task.completed | task.failed | task.cancelled
+```
+
+> 历史文档里的 `spec_agent_running` / `goals_agent_running` / `planner_agent_running` / `evaluator_running` 等名称**已不存在**——这些 agent 都已在 2026-05 重构中下线 / 重命名，参见 [架构总览](../concepts/architecture.md)。
 
 ## 5. 常用任务端点
 
@@ -61,6 +74,9 @@ curl -N http://127.0.0.1:7878/task/<task_id>/events
 | `POST /task/<id>/retry` | 保持 plan，重试执行 |
 | `POST /task/<id>/replan` | 丢弃当前 plan，重新规划 |
 | `POST /task/<id>/cancel` | 取消任务 |
+| `GET /export/task/<id>/archive` | 导出任务档案（zip，含 messages + artifacts + 工作区快照） |
+| `POST /import/task/archive` | 导入任务档案 |
+| `GET /preview/frontend` | 前端实时预览（开发服务器透传） |
 
 ## 6. 本地 TUI（交互模式）
 
@@ -70,9 +86,13 @@ curl -N http://127.0.0.1:7878/task/<task_id>/events
 opencorvus
 ```
 
-会进入 TUI：直接输入任务 → 实时看到 spec / goals / plan / run / eval / delivery 滚动。
+会进入 TUI：直接输入任务 → 实时看到 requirements / architect / build / delivery 滚动。
 
-## 7. 通过 Slack 创建任务
+## 7. Workspace 与 terminal
+
+Overlay 的 Workspace 面板可以在你配置的**系统终端**里打开当前 worktree（替代了旧的嵌入 PTY，commit `6edd471a3`）。在 `opencorvus.jsonc` 配置 `terminal` profile 后，点击 Workspace 卡的"打开终端"按钮即按 profile 启动 Windows Terminal / iTerm / GNOME Terminal 等。详见 [配置](../opencorvus/configuration.md#preview--terminal)。
+
+## 8. 通过 Slack 创建任务
 
 ```bash
 export SLACK_BOT_TOKEN=xoxb-...
@@ -84,8 +104,8 @@ opencorvus slack
 
 ## 常见陷阱
 
-1. **任务卡在 spec 阶段**：多半是 LLM provider 连不通。`opencorvus doctor` 检查。
-2. **evaluator 永远 rejected**：仓库里可能没有可执行的 build/test 命令。Evaluator 会从 `owned_paths` 向上找最近的 `package.json`。
+1. **任务卡在 requirements 阶段**：多半是 LLM provider 连不通。`opencorvus doctor` 检查。
+2. **delivery 永远 rejected**：仓库里可能没有可执行的 build / test 命令。Delivery checks 会从 `owned_paths` 向上找最近的 `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`。
 3. **permission 无限等待**：内置权限默认 `allow`；检查项目配置是否显式写了 `ask`，然后在 UI 中回复，或把对应规则改为 `allow`。
 
 下一步：[架构总览](../concepts/architecture.md)。

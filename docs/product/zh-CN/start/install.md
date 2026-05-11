@@ -72,6 +72,8 @@ export OPENAI_API_KEY=sk-...          # OpenAI
 
 ## 启用外部 executor（可选）
 
+OpenCorvus 内置的默认 executor 是 **MirrorCode**（实体名仍为 `opencode`，仅显示品牌名替换，commit `b85ff20d4` / `1ee285e5b`），不需额外安装即可工作。
+
 若本机已装 `codex` 或 `claude-code` CLI，让 OpenCorvus 自动发现并调度：
 
 ```bash

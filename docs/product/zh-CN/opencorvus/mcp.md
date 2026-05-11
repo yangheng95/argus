@@ -3,10 +3,10 @@
 MCP 是 Anthropic 主导、社区维护的开放协议，定义 LLM 应用与外部工具服务器的标准通信接口。协议规范：[modelcontextprotocol.io](https://modelcontextprotocol.io)。
 
 OpenCorvus 同时扮演：
-1. **MCP Client** — 连接外部 MCP Server，将其工具/提示词/资源暴露给内部 agent
+1. **MCP Client** — 连接外部 MCP Server，将其工具 / 提示词 / 资源暴露给内部 agent
 2. **MCP Server** — 运行中的 `opencorvus serve` 进程通过 Streamable HTTP 在 `/mcp/transport` 暴露自身工具给外部编码执行器
 
-源码：`packages/opencorvus/src/mcp/index.ts`、`packages/opencorvus/src/mcp/serve.ts`
+源码：`packages/opencorvus/src/mcp/index.ts`、`packages/opencorvus/src/mcp/serve.ts`。MCP 路由直接挂载在主 HTTP server 上（commit `796c384b0`，不再有独立的 `routes/mcp.ts`）；transport 仍是统一的 `/mcp/transport` 端点。
 
 ## 1. 消费外部 MCP Server
 
@@ -162,4 +162,4 @@ OpenCorvus 自动把这个 URL 注入到执行器配置里：
 | `needs_auth` | 需要 OAuth |
 | `needs_client_registration` | 服务器不支持动态注册，需提供 `clientId` |
 
-默认超时 30000ms（`src/mcp/index.ts:31`）；可由 `timeout` 字段或全局 `experimental.mcp_timeout` 调整。
+默认超时 30000ms（见 `src/mcp/index.ts` 的 `DEFAULT_TIMEOUT`）；可由单个 server 的 `timeout` 字段或全局 `experimental.mcp_timeout` 调整。
