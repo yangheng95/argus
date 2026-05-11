@@ -20,7 +20,7 @@ test("agent workflow projection stacks repeated retry sessions by parent and age
         kind: "agent_report",
         sessionID: "ses_root",
         agentName: "orchestrator",
-        payload: { collector: { summary: "Root planned the run" } },
+        payload: { report: { summary: "Root planned the run", detail: "Root planned the run" } },
       },
       {
         ts: 1200,
@@ -36,7 +36,7 @@ test("agent workflow projection stacks repeated retry sessions by parent and age
         sessionID: "ses_delivery_a",
         parentSessionID: "ses_root",
         agentName: "delivery",
-        payload: { error: "missing runtime evidence" },
+        payload: { error: "missing runtime evidence", report: { summary: "missing runtime evidence", detail: "missing runtime evidence" } },
       },
       {
         ts: 1400,
@@ -54,7 +54,10 @@ test("agent workflow projection stacks repeated retry sessions by parent and age
         agentName: "delivery",
         payload: {
           attempts: 2,
-          collector: { summary: "Accepted after runtime evidence was attached" },
+          report: {
+            summary: "Accepted after runtime evidence was attached",
+            detail: "Accepted after runtime evidence was attached",
+          },
         },
       },
     ],
@@ -104,4 +107,54 @@ test("agent workflow panel renders one current card per retry stack", () => {
   expect(source).not.toContain("<For each={stack.records}>");
   expect(source).toContain('current: String(attemptTotal())');
   expect(source).toContain('trace.loading && records().length === 0 ? t("common.loading") : t("common.refresh")');
+  expect(source).toContain("agent-workflow-card-subtitle");
+  expect(source).toContain("goalIdentityLabel(current)");
+  expect(source).toContain("agent-workflow-report-goal");
+});
+
+test("agent workflow projection carries goal identity for same-stage cards", () => {
+  const projection = buildAgentWorkflow({
+    traceEvents: [],
+    order: ["step:goal_a:build:phase:build", "step:goal_b:build:phase:build"],
+    cards: {
+      "step:goal_a:build:phase:build": {
+        id: "step:goal_a:build:phase:build",
+        kind: "phase",
+        stage: "build",
+        status: "running",
+        title: "Build",
+        parts: [{ type: "text", text: "Build A" }],
+        childIDs: [],
+        phaseSessionID: "ses_build_a",
+        time: 2000,
+        goalID: "goal_a",
+        goalDescription: "Implement account dashboard cards",
+        round: 1,
+        attempt: 1,
+      } as any,
+      "step:goal_b:build:phase:build": {
+        id: "step:goal_b:build:phase:build",
+        kind: "phase",
+        stage: "build",
+        status: "running",
+        title: "Build",
+        parts: [{ type: "text", text: "Build B" }],
+        childIDs: [],
+        phaseSessionID: "ses_build_b",
+        time: 3000,
+        goalID: "goal_b",
+        goalDescription: "Implement billing history cards",
+        round: 2,
+        attempt: 2,
+      } as any,
+    },
+  });
+
+  expect(projection.records.map((record) => record.round)).toEqual([1, 2]);
+  expect(projection.records.map((record) => record.goalDescription)).toEqual([
+    "Implement account dashboard cards",
+    "Implement billing history cards",
+  ]);
+  expect(projection.records[0]?.phaseID).toBe("build");
+  expect(projection.records[1]?.attempt).toBe(2);
 });

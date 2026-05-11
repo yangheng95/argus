@@ -600,6 +600,8 @@
   "agent_workflow.output_summary": "总结",
   "agent_workflow.output_report": "报告",
   "agent_workflow.model": "模型",
+  "agent_workflow.goal_round": "#G{{round}}",
+  "agent_workflow.goal_attempt": "V{{attempt}}",
   "frontend_preview.title": "前端预览",
   "frontend_preview.loading": "正在解析运行中的前端预览...",
   "frontend_preview.empty": "未检测到属于当前工作区的本地前端页面。",

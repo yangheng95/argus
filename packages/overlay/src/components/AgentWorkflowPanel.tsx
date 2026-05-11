@@ -40,6 +40,28 @@ function recordSummary(record: AgentWorkflowRecord): string {
   return record.report?.summary || t("agent_workflow.no_report");
 }
 
+function compactGoalDescription(value: string | undefined): string {
+  const text = (value || "").trim();
+  return text.length > 60 ? `${text.slice(0, 60).trimEnd()}...` : text;
+}
+
+function goalIdentityParts(record: AgentWorkflowRecord): string[] {
+  const parts: string[] = [];
+  if (typeof record.round === "number") {
+    parts.push(t("agent_workflow.goal_round", { round: String(record.round) }));
+  }
+  if (typeof record.attempt === "number" && record.attempt > 1) {
+    parts.push(t("agent_workflow.goal_attempt", { attempt: String(record.attempt) }));
+  }
+  const description = compactGoalDescription(record.goalDescription);
+  if (description) parts.push(description);
+  return parts;
+}
+
+function goalIdentityLabel(record: AgentWorkflowRecord): string {
+  return goalIdentityParts(record).join(" · ");
+}
+
 function statusGlyph(status: AgentWorkflowRecord["status"]): string {
   if (status === "completed") return "ok";
   if (status === "error") return "!";
@@ -173,6 +195,9 @@ export function AgentWorkflowPanel() {
                           </span>
                           <span class="agent-workflow-time">{formatClock(current.startedAt)}</span>
                         </span>
+                        <Show when={goalIdentityLabel(current)}>
+                          <span class="agent-workflow-card-subtitle">{goalIdentityLabel(current)}</span>
+                        </Show>
                         <span class="agent-workflow-card-body">
                           {recordSummary(current)}
                         </span>
@@ -213,6 +238,9 @@ export function AgentWorkflowPanel() {
               <header class="agent-workflow-report-head">
                 <div>
                   <h2>{reportTitle(record())}</h2>
+                  <Show when={goalIdentityLabel(record())}>
+                    <p class="agent-workflow-report-goal">{goalIdentityLabel(record())}</p>
+                  </Show>
                   <p>
                     {t("agent_workflow.report_meta", {
                       status: record().status,
@@ -230,20 +258,22 @@ export function AgentWorkflowPanel() {
                   x
                 </button>
               </header>
-              <section class="agent-workflow-report-section">
-                <h3>{t("agent_workflow.output_summary")}</h3>
-                <p>{recordSummary(record())}</p>
-              </section>
-              <Show when={record().model}>
+              <div class="agent-workflow-report-body">
                 <section class="agent-workflow-report-section">
-                  <h3>{t("agent_workflow.model")}</h3>
-                  <p>{record().model}</p>
+                  <h3>{t("agent_workflow.output_summary")}</h3>
+                  <p>{recordSummary(record())}</p>
                 </section>
-              </Show>
-              <section class="agent-workflow-report-section">
-                <h3>{t("agent_workflow.output_report")}</h3>
-                <pre>{record().report?.detail || t("agent_workflow.no_report")}</pre>
-              </section>
+                <Show when={record().model}>
+                  <section class="agent-workflow-report-section">
+                    <h3>{t("agent_workflow.model")}</h3>
+                    <p>{record().model}</p>
+                  </section>
+                </Show>
+                <section class="agent-workflow-report-section">
+                  <h3>{t("agent_workflow.output_report")}</h3>
+                  <pre>{record().report?.detail || t("agent_workflow.no_report")}</pre>
+                </section>
+              </div>
             </article>
           </div>
         )}

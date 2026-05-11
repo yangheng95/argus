@@ -600,6 +600,8 @@
   "agent_workflow.output_summary": "Summary",
   "agent_workflow.output_report": "Report",
   "agent_workflow.model": "Model",
+  "agent_workflow.goal_round": "#G{{round}}",
+  "agent_workflow.goal_attempt": "V{{attempt}}",
   "frontend_preview.title": "Frontend Preview",
   "frontend_preview.loading": "Resolving live frontend preview...",
   "frontend_preview.empty": "No running local frontend page was detected for this workspace.",
