@@ -71,6 +71,7 @@ export interface GoalInfo {
   priority: "blocking" | "advisory"
   acceptance_spec_count?: number
   acceptance_scenarios?: AcceptanceSpec[]
+  acceptance_specs?: AcceptanceSpec[]
   check_selector?: string[]
   requirement_ids: string[]
   depends_on: string[]

@@ -71,6 +71,13 @@ export namespace DeliveryService {
     runID?: string
     deliveryID?: string
     specSnapshotID?: string
+    criteriaResults?: Array<{
+      name: string
+      status: "passed" | "failed" | "skipped"
+      evidence?: string
+      family?: string
+      label?: string
+    }>
   }): Promise<DeliveryVerdictType> {
     log.info("delivery service verify starting", {
       title: input.task.title,
@@ -94,6 +101,7 @@ export namespace DeliveryService {
         taskRequest: input.task.request,
         metadata: input.task.metadata,
         goals: input.goals,
+        criteriaResults: input.criteriaResults ?? [],
       })
       persistDeliveryEvidenceManifest({ manifest })
     } catch (err) {

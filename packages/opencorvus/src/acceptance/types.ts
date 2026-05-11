@@ -86,10 +86,23 @@ const PrebuiltScorerSchema = z.object({
   config: z.record(z.string(), z.unknown()).default({}),
 })
 
+const ContractAuditScorerSchema = z.object({
+  type: z.literal("contract_audit"),
+  name: z.string().min(1),
+  spec: z.object({
+    kind: z.literal("contract_ir"),
+    symbols: z.array(z.string().min(1)).optional(),
+  }),
+  expect: z.object({
+    status: z.literal("passed"),
+  }),
+})
+
 export const ScorerSchema = z.discriminatedUnion("type", [
   HeuristicScorerSchema,
   LlmJudgeScorerSchema,
   PrebuiltScorerSchema,
+  ContractAuditScorerSchema,
 ])
 
 export const AcceptanceSpecSchema = z.object({
@@ -116,6 +129,7 @@ export type AcceptanceScorer = z.infer<typeof ScorerSchema>
 export type HeuristicScorer = Extract<AcceptanceScorer, { type: "heuristic" }>
 export type LlmJudgeScorer = Extract<AcceptanceScorer, { type: "llm_judge" }>
 export type PrebuiltScorer = Extract<AcceptanceScorer, { type: "prebuilt" }>
+export type ContractAuditScorer = Extract<AcceptanceScorer, { type: "contract_audit" }>
 export type RubricLevel = z.infer<typeof RubricLevelSchema>
 
 /**
@@ -124,7 +138,7 @@ export type RubricLevel = z.infer<typeof RubricLevelSchema>
  */
 export function resolveTrigger(spec: AcceptanceSpec, scorer: AcceptanceScorer): "on_goal" | "on_delivery" {
   if (spec.trigger) return spec.trigger
-  if (scorer.type === "heuristic" || scorer.type === "prebuilt") return "on_goal"
+  if (scorer.type === "heuristic" || scorer.type === "prebuilt" || scorer.type === "contract_audit") return "on_goal"
   // llm_judge: essential runs per-goal so failures fail fast; others batch at delivery.
   return spec.severity === "essential" ? "on_goal" : "on_delivery"
 }
@@ -149,6 +163,9 @@ export function renderSpecsAsText(specs: readonly AcceptanceSpec[]): string {
         lines.push(`    - [heuristic] ${sc.name} — ${desc}`)
       } else if (sc.type === "llm_judge") {
         lines.push(`    - [judge] ${sc.name} — ${sc.criteria}`)
+      } else if (sc.type === "contract_audit") {
+        const symbols = sc.spec.symbols?.length ? ` symbols=${sc.spec.symbols.join(", ")}` : ""
+        lines.push(`    - [contract_audit] ${sc.name} — ${sc.spec.kind}${symbols} expect=${sc.expect.status}`)
       } else {
         lines.push(`    - [prebuilt:${sc.name}] ${JSON.stringify(sc.config)}`)
       }

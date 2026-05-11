@@ -22,6 +22,7 @@ import { runBackendApiReview, runClientContractReview } from "../specialists/bac
 import { runSecurityDataReview } from "../specialists/security-data"
 import { ensureManagedPreviewSession } from "@/preview/session"
 import type { AcceptanceSpec } from "@/acceptance/types"
+import { contractAuditCriteriaName, contractAuditRequired } from "@/acceptance/contract-audit"
 import { ensureProjectReadyForRuntime } from "./runtime-readiness"
 import type { EvaluatorCommand } from "./types"
 import {
@@ -69,9 +70,17 @@ export async function buildDeliveryEvidenceManifest(input: {
     requirement_ids: string[]
     acceptance_spec_count?: number
     acceptance_scenarios?: AcceptanceSpec[]
+    acceptance_specs?: AcceptanceSpec[]
     depends_on?: string[]
     imports?: string[]
     exports?: string[]
+  }>
+  criteriaResults?: Array<{
+    name: string
+    status: "passed" | "failed" | "skipped"
+    evidence?: string
+    family?: string
+    label?: string
   }>
 }): Promise<DeliveryEvidenceManifest> {
   const projectRoot = await discoverPackageRoot(input.changedFiles)
@@ -135,6 +144,7 @@ export async function buildDeliveryEvidenceManifest(input: {
       taskID: input.taskID,
       specSnapshotID: input.specSnapshotID,
       goals: input.goals ?? [],
+      criteriaResults: input.criteriaResults ?? [],
     }),
     await buildWorkspaceExportEvidence({
       metadata: input.metadata,
@@ -227,7 +237,9 @@ function assessFunctionalCompletion(input: {
   failedReviewIds: string[]
   specialistReviews: DeliverySpecialistReview[]
 }): DeliveryManifestFunctionalAssessment {
-  const blockingReviewIds = input.failedReviewIds.filter((id) => id === "review:integrity")
+  const blockingReviewIds = input.failedReviewIds.filter((id) =>
+    id === "review:integrity" || id === "review:contract_audit"
+  )
   const blockingReviewIdSet = new Set<string>(blockingReviewIds)
   const primaryFailureIds = [
     ...input.failedReadinessIds,
@@ -308,12 +320,24 @@ function buildReviewEvidence(input: {
     depends_on?: string[]
     imports?: string[]
     exports?: string[]
+    acceptance_specs?: AcceptanceSpec[]
+  }>
+  criteriaResults?: Array<{
+    name: string
+    status: "passed" | "failed" | "skipped"
+    evidence?: string
+    family?: string
+    label?: string
   }>
 }): DeliveryReviewEvidence[] {
   const required = requiresIntegrityReview(input.goals)
+  const contractAuditEvidence = buildContractAuditReviewEvidence({
+    goals: input.goals,
+    criteriaResults: input.criteriaResults ?? [],
+  })
   const id = "review:integrity"
   if (!required) {
-    return [{
+    return [...contractAuditEvidence, {
       id,
       name: "Integrity Review",
       status: "skipped",
@@ -322,7 +346,7 @@ function buildReviewEvidence(input: {
     }]
   }
   if (!input.taskID || !input.specSnapshotID) {
-    return [{
+    return [...contractAuditEvidence, {
       id,
       name: "Integrity Review",
       status: "failed",
@@ -346,7 +370,7 @@ function buildReviewEvidence(input: {
       .get(),
   )
   if (!row) {
-    return [{
+    return [...contractAuditEvidence, {
       id,
       name: "Integrity Review",
       status: "failed",
@@ -382,7 +406,7 @@ function buildReviewEvidence(input: {
       .get(),
   )
   if (newerTerminalRun) {
-    return [{
+    return [...contractAuditEvidence, {
       id,
       name: "Integrity Review",
       status: "failed",
@@ -420,7 +444,7 @@ function buildReviewEvidence(input: {
     verdict === "pass" || (verdict === "concerns" && correctionsCount === 0 && missingCount === 0)
       ? "passed"
       : "failed"
-  return [{
+  return [...contractAuditEvidence, {
     id,
     name: "Integrity Review",
     status,
@@ -444,6 +468,61 @@ function buildReviewEvidence(input: {
       // return, and delivery — eliminates the prior count-only path.
       reviewMarkdown,
     ].filter((item): item is string => Boolean(item)),
+  }]
+}
+
+function buildContractAuditReviewEvidence(input: {
+  goals: Array<{
+    imports?: string[]
+    exports?: string[]
+    acceptance_specs?: AcceptanceSpec[]
+  }>
+  criteriaResults: Array<{
+    name: string
+    status: "passed" | "failed" | "skipped"
+    evidence?: string
+    family?: string
+    label?: string
+  }>
+}): DeliveryReviewEvidence[] {
+  const criteriaByName = new Map(input.criteriaResults.map((item) => [item.name, item]))
+  const required: string[] = []
+  const failures: string[] = []
+  const passes: string[] = []
+  const skips: string[] = []
+
+  for (const goal of input.goals) {
+    const hasBoundary = (goal.imports?.length ?? 0) > 0 || (goal.exports?.length ?? 0) > 0
+    if (!hasBoundary) continue
+    for (const spec of goal.acceptance_specs ?? []) {
+      for (const scorer of spec.scorers) {
+        if (scorer.type !== "contract_audit" || !contractAuditRequired(spec, scorer)) continue
+        const name = contractAuditCriteriaName(spec, scorer)
+        required.push(name)
+        const criteria = criteriaByName.get(name)
+        if (!criteria) {
+          failures.push(`${name}: no evidence in criteria_results`)
+          continue
+        }
+        const evidence = criteria.evidence ? `: ${criteria.evidence}` : ""
+        if (criteria.status === "failed") failures.push(`${name}${evidence}`)
+        else if (criteria.status === "passed") passes.push(name)
+        else skips.push(`${name}${evidence}`)
+      }
+    }
+  }
+
+  if (required.length === 0) return []
+  return [{
+    id: "review:contract_audit",
+    name: "Contract Audit",
+    status: failures.length === 0 ? "passed" : "failed",
+    evidence: failures.length > 0
+      ? failures
+      : [
+          `passed=${passes.length}`,
+          skips.length > 0 ? `skipped=${skips.join(" | ")}` : undefined,
+        ].filter((item): item is string => Boolean(item)),
   }]
 }
 
