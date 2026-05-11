@@ -85,10 +85,12 @@ describe("flat-redesign Rule A — surface containers have no resting self-borde
   })
 
   test("executor chip resting state has no border", () => {
-    const body = ruleBody(composer, '.executor-selector .oc-button[data-ui="executor-chip"]')
+    const body = ruleBody(
+      composer,
+      '.executor-chip-slot .oc-button[data-ui^="executor-chip-"]',
+    )
     expect(body).not.toMatch(/(?:^|\s)border\s*:\s*[^;]*\bsolid\b/)
     expect(body).toMatch(/--oc-button-border:\s*0 solid transparent/)
-    expect(ruleBody(composer, ".executor-chip-model")).toMatch(/border:\s*0 solid transparent/)
   })
 
   test(".chat-attachment-item has no border", () => {
@@ -160,7 +162,10 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
   })
 
   test("open executor chip uses bg-tint, not border-color", () => {
-    const body = ruleBody(composer, '.executor-selector[data-open="true"] .oc-button[data-ui="executor-chip"]')
+    const body = ruleBody(
+      composer,
+      '.executor-chip-slot[data-open="true"] .oc-button[data-ui^="executor-chip-"]',
+    )
     expect(body).not.toMatch(/border-color\s*:/)
     expect(body).toMatch(/--oc-button-bg\s*:/)
   })

@@ -1,33 +1,36 @@
 // ── ExecutorSelector ──
-// Compact executor + per-executor model picker that lives at the bottom-left
-// of the chat composer (chat-compose-meta-left). Replaces the imperative
-// engine-bar + #codexModelPanel/#claudeCodeModelPanel block in index.html
-// + main.tsx's getElementById click delegation.
+// Bottom-of-composer dual chip: MirrorCode (left) and external executor
+// (right). Each chip is an independent popover anchor with its own model
+// picker.
 //
-// State is unchanged (rule 22 single source):
-//   - selected executor → settingsStore.executor (persisted via saveSettings)
-//   - per-executor model → backend via setExecutorModel(...) → reloads
-//     appStore.executors which surfaces the new model on the chip.
+//   - MirrorCode picker lists only the models from providers that the
+//     server reports as connected (auth'd). Picking writes the project
+//     default via `patchConfig({ model })` — same write path as
+//     AgentModelsPanel project-default row.
+//   - External picker lists every model from the provider IDs mapped to
+//     that executor (EXECUTOR_PROVIDER_MAP), regardless of connection.
+//     Models whose provider is connected are highlighted; the rest stay
+//     visible but marked as unavailable so the user sees the full
+//     supported set without being misled about what currently works.
 //
-// Dropdown opens upward (composer is near viewport bottom). All DOM is
-// JSX; outside-click + Escape close handlers attached at component scope
-// with onCleanup so HMR / unmount disposes them cleanly.
+// State sources (rule 8 single source):
+//   - active external executor → settingsStore.executor
+//   - per-executor model → appStore.executors via setExecutorModel
+//   - project default model → appStore.config.model via patchConfig
 
-import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createMemo, For, onCleanup, Show } from "solid-js";
 import { useHotkey } from "../solid/hotkey";
 import { appStore } from "../store/app";
 import { settingsStore, setSettingsStore, saveSettings, sanitizeExecutor } from "../store/settings";
 import { Icon } from "./Icon";
-import { useDisclosure } from "../solid/disclosure";
+import { useDisclosure, type Disclosure } from "../solid/disclosure";
 import {
+  EXECUTOR_PROVIDER_MAP,
   executorCurrentModel,
-  executorHasModelChoice,
   executorLabel,
-  executorModels,
   executorSelectable,
   executorTitle,
   setExecutorModel,
-  type ExecutorDescriptor,
 } from "../services/executor";
 import { patchConfig } from "../services/config";
 import { t } from "../utils/i18n";
@@ -38,15 +41,17 @@ interface ModelParts {
   name: string;
 }
 
-// MirrorCode is the internal OpenCorvus executor. Its model is the project
-// default model from appStore.config.model. External executors carry their
-// own model and should only appear in the chip when that value exists.
-function projectModelFromConfig(): string {
-  const cfg = appStore.config as { model?: unknown } | null | undefined
-  return typeof cfg?.model === "string" ? cfg.model : ""
+interface ProviderGroup {
+  providerID: string;
+  providerName: string;
+  /** True when the server reports the provider as connected/auth'd. */
+  available: boolean;
+  /** Fully-qualified model IDs ("<provider>/<model>"). */
+  models: string[];
 }
 
-const INTERNAL_EXECUTOR_ID = "mirrorcode"
+const INTERNAL_EXECUTOR_ID = "mirrorcode";
+const EXTERNAL_EXECUTOR_IDS = ["codex", "claude-code"];
 
 function splitModelID(modelID: string): ModelParts {
   const trimmed = modelID.trim();
@@ -61,408 +66,447 @@ function splitModelID(modelID: string): ModelParts {
   };
 }
 
-interface ProjectModelGroup {
-  providerID: string;
-  providerName: string;
-  models: string[];
+function projectModelFromConfig(): string {
+  const cfg = appStore.config as { model?: unknown } | null | undefined;
+  return typeof cfg?.model === "string" ? cfg.model : "";
 }
 
-// OpenCorvus model picker draws from appStore.providerCatalog (loaded from
-// /provider). All providers contribute their models; selection writes
-// appStore.config.model via patchConfig. Same source of truth as
-// AgentModelsPanel project-default row.
-function projectModelGroups(): ProjectModelGroup[] {
-  const catalog = appStore.providerCatalog as { all?: unknown } | null | undefined
-  const all = Array.isArray(catalog?.all) ? (catalog!.all as Array<Record<string, unknown>>) : []
-  const groups: ProjectModelGroup[] = []
+function connectedProviderIDs(): Set<string> {
+  const catalog = appStore.providerCatalog as { connected?: unknown } | null | undefined;
+  const connected = catalog?.connected;
+  if (!Array.isArray(connected)) return new Set();
+  const out = new Set<string>();
+  for (const id of connected) if (typeof id === "string" && id) out.add(id);
+  return out;
+}
+
+function buildProviderGroups(filter?: (id: string) => boolean): ProviderGroup[] {
+  const catalog = appStore.providerCatalog as { all?: unknown } | null | undefined;
+  const all = Array.isArray(catalog?.all) ? (catalog!.all as Array<Record<string, unknown>>) : [];
+  const connected = connectedProviderIDs();
+  const groups: ProviderGroup[] = [];
   for (const provider of all) {
-    const id = typeof provider.id === "string" ? provider.id : ""
-    if (!id) continue
-    const modelsField = provider.models
-    if (!modelsField || typeof modelsField !== "object" || Array.isArray(modelsField)) continue
-    const modelIDs: string[] = []
+    const id = typeof provider.id === "string" ? provider.id : "";
+    if (!id) continue;
+    if (filter && !filter(id)) continue;
+    const modelsField = provider.models;
+    if (!modelsField || typeof modelsField !== "object" || Array.isArray(modelsField)) continue;
+    const modelIDs: string[] = [];
     for (const entry of Object.values(modelsField as Record<string, unknown>)) {
       if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-        const modelID = (entry as { id?: unknown }).id
-        if (typeof modelID === "string" && modelID) modelIDs.push(modelID)
+        const modelID = (entry as { id?: unknown }).id;
+        if (typeof modelID === "string" && modelID) modelIDs.push(modelID);
       }
     }
-    if (modelIDs.length === 0) continue
-    modelIDs.sort()
+    if (modelIDs.length === 0) continue;
+    modelIDs.sort();
     groups.push({
       providerID: id,
       providerName: typeof provider.name === "string" && provider.name ? provider.name : id,
+      available: connected.has(id),
       models: modelIDs.map((modelID) => `${id}/${modelID}`),
-    })
+    });
   }
-  groups.sort((a, b) => a.providerName.localeCompare(b.providerName))
-  return groups
+  groups.sort((a, b) => {
+    // Available providers first so the picker leads with usable rows.
+    if (a.available !== b.available) return a.available ? -1 : 1;
+    return a.providerName.localeCompare(b.providerName);
+  });
+  return groups;
 }
 
-function agentModelOverridesFromConfig(): string[] {
-  const cfg = appStore.config as { agent?: unknown } | null | undefined
-  const agents = cfg?.agent
-  if (!agents || typeof agents !== "object" || Array.isArray(agents)) return []
-  const out: string[] = []
-  for (const entry of Object.values(agents as Record<string, unknown>)) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue
-    const model = (entry as { model?: unknown }).model
-    if (typeof model === "string" && model.trim()) out.push(model.trim())
-  }
-  return out
+// MirrorCode (OpenCorvus internal) only surfaces models from providers that
+// are already authenticated — there is no point letting the user pick a
+// model whose provider can't actually serve it.
+function mirrorProviderGroups(): ProviderGroup[] {
+  return buildProviderGroups().filter((group) => group.available);
+}
+
+// External executor groups: every provider mapped to that executor, even
+// when not connected. The popover dims unavailable ones via data-available.
+function externalProviderGroups(executorID: string): ProviderGroup[] {
+  const wanted = EXECUTOR_PROVIDER_MAP[executorID];
+  if (!wanted || wanted.length === 0) return [];
+  const wantedSet = new Set(wanted);
+  return buildProviderGroups((id) => wantedSet.has(id));
+}
+
+function ChevronCaret(props: { open: boolean }) {
+  return (
+    <span class="executor-chip-caret" aria-hidden="true">
+      <Icon name={props.open ? "caret-down" : "caret-up"} size={8} />
+    </span>
+  );
+}
+
+function ChipModel(props: { model: string; placeholder: string }) {
+  const parts = createMemo(() => splitModelID(props.model));
+  return (
+    <span class="executor-chip-model" data-empty={props.model ? "false" : "true"}>
+      <Show
+        when={props.model}
+        fallback={<span class="executor-chip-name">{props.placeholder}</span>}
+      >
+        <span class="executor-chip-provider">{parts().provider}</span>
+        <span class="executor-chip-name">{parts().name || parts().provider}</span>
+      </Show>
+    </span>
+  );
 }
 
 export function ExecutorSelector() {
-  const menu = useDisclosure();
-  // External executor section is collapsed by default — OpenCorvus is the
-  // always-on path, external executors are an opt-in addition.
-  const [externalOpen, setExternalOpen] = createSignal(false);
-  const [savingProjectModel, setSavingProjectModel] = createSignal(false);
+  // Two independent disclosures — opening one closes the other so the
+  // popover stack never overlaps.
+  const mirror = useDisclosure();
+  const external = useDisclosure();
 
-  // Chip renders from settingsStore after the same executor-id validation
-  // used by task submission. The menu still iterates appStore.executors
-  // directly — whatever the backend reported from /executor.
   const activeID = createMemo(() => sanitizeExecutor(settingsStore.executor));
-  const executors = createMemo(() => appStore.executors as ExecutorDescriptor[]);
-  const activeLabel = createMemo(() => executorLabel(activeID()));
-  const activeModel = createMemo(() => executorCurrentModel(activeID()));
+  const isExternalActive = createMemo(() => activeID() !== INTERNAL_EXECUTOR_ID);
+  const externalActiveID = createMemo(() => (isExternalActive() ? activeID() : ""));
 
-  // The chip has two semantic model surfaces:
-  // - OpenCorvus model: appStore.config.model, annotated when the Agent
-  //   Models panel contains per-agent overrides.
-  // - External executor model: active external executor's own model, rendered
-  //   only when that value exists. Empty external values should not produce a
-  //   visible "-- not set --" slot.
-  const openCorvusModel = createMemo(projectModelFromConfig)
-  const isExternalExecutor = createMemo(() => activeID() !== INTERNAL_EXECUTOR_ID)
-  const externalExecutorModel = createMemo(() => (isExternalExecutor() ? activeModel().trim() : ""))
-  const hasExternalExecutorModel = createMemo(() => externalExecutorModel().length > 0)
-  const hasCustomAgentModels = createMemo(() => {
-    const project = openCorvusModel().trim()
-    const overrides = agentModelOverridesFromConfig()
-    if (overrides.length === 0) return false
-    const distinctOverrides = new Set(overrides)
-    if (distinctOverrides.size > 1) return true
-    if (!project) return true
-    return overrides.some((model) => model !== project)
-  })
-  const customSuffix = createMemo(() => (hasCustomAgentModels() ? t("executor.custom_agent_models") : ""))
-  const openCorvusDisplayModel = createMemo(() => {
-    const model = openCorvusModel() || t("agent_models.option_not_set")
-    return customSuffix() ? `${model}${customSuffix()}` : model
-  })
-  const openCorvusParts = createMemo(() => splitModelID(openCorvusModel()))
-  const externalExecutorParts = createMemo(() => splitModelID(externalExecutorModel()))
+  const openCorvusModel = createMemo(projectModelFromConfig);
+  const externalModel = createMemo(() => {
+    const id = externalActiveID();
+    return id ? executorCurrentModel(id) : "";
+  });
 
-  // Tooltip names the external executor model only when one is configured.
-  const chipTitle = createMemo(() => {
-    const openCorvus = openCorvusDisplayModel()
-    if (!hasExternalExecutorModel()) {
-      return [executorTitle(activeID()), t("executor.model_explainer_opencorvus", { model: openCorvus })]
-        .filter(Boolean)
-        .join("\n")
-    }
-    const pair = t("executor.model_explainer_pair", {
-      opencorvus: openCorvus,
-      executor: activeLabel(),
-      external: externalExecutorModel(),
-    })
-    return [executorTitle(activeID()), pair].filter(Boolean).join("\n")
-  })
-  const chipAriaLabel = createMemo(() => {
-    const base = `${activeLabel()}: ${t("executor.role_opencorvus")} ${openCorvusDisplayModel()}`
-    const external = hasExternalExecutorModel()
-      ? `; ${activeLabel()} ${t("executor.role_external")} ${externalExecutorModel()}`
-      : ""
-    return `${base}${external}. ${t("executor.change_model")}`
-  })
+  const mirrorGroups = createMemo(mirrorProviderGroups);
+  // External popover always renders a tab strip across the available external
+  // executor types, so the user can switch between Codex / Claude Code / None
+  // without leaving the popover.
+  const externalTabs = createMemo(() =>
+    EXTERNAL_EXECUTOR_IDS.map((id) => ({
+      id,
+      label: executorLabel(id),
+      selectable: executorSelectable(id),
+      title: executorTitle(id),
+    })),
+  );
+  // The "focused" external executor inside the popover defaults to the active
+  // one when there is one, otherwise the first selectable tab so the picker
+  // always has something to show. Tracked separately from settingsStore so
+  // peeking at another executor's model list doesn't auto-switch the active
+  // executor.
+  const focusedExternalID = createMemo(() => {
+    const id = externalActiveID();
+    if (id) return id;
+    const firstSelectable = externalTabs().find((tab) => tab.selectable);
+    return firstSelectable?.id ?? EXTERNAL_EXECUTOR_IDS[0];
+  });
+  const focusedGroups = createMemo(() => externalProviderGroups(focusedExternalID()));
+  const focusedCurrentModel = createMemo(() => executorCurrentModel(focusedExternalID()));
 
-  let rootRef: HTMLDivElement | undefined;
+  function openMirror() {
+    external.close();
+    mirror.openIt();
+  }
+  function openExternal() {
+    mirror.close();
+    external.openIt();
+  }
 
-  const onDocClick = (event: MouseEvent) => {
-    if (!menu.open()) return;
+  let mirrorRef: HTMLDivElement | undefined;
+  let externalRef: HTMLDivElement | undefined;
+
+  const onDocPointerDown = (event: PointerEvent | MouseEvent) => {
+    if (!mirror.open() && !external.open()) return;
     const target = event.target as Node | null;
-    if (rootRef && target && rootRef.contains(target)) return;
-    menu.close();
+    // Skip when the press lands inside either chip slot — the chip's own
+    // click handler routes the open/close transition. Only true outside
+    // clicks should dismiss every popover.
+    if (target && mirrorRef && mirrorRef.contains(target)) return;
+    if (target && externalRef && externalRef.contains(target)) return;
+    mirror.close();
+    external.close();
   };
   if (typeof document !== "undefined") {
-    document.addEventListener("click", onDocClick, { capture: true });
-    onCleanup(() => document.removeEventListener("click", onDocClick, { capture: true }));
+    document.addEventListener("pointerdown", onDocPointerDown);
+    onCleanup(() => document.removeEventListener("pointerdown", onDocPointerDown));
   }
-  useHotkey({ key: "Escape", when: () => menu.open(), run: () => menu.close() })
+  useHotkey({
+    key: "Escape",
+    when: () => mirror.open() || external.open(),
+    run: () => {
+      mirror.close();
+      external.close();
+    },
+  });
 
-  function pickExecutor(id: string) {
-    if (!executorSelectable(id)) return;
-    if (id !== activeID()) {
-      setSettingsStore("executor", sanitizeExecutor(id));
-      saveSettings();
+  async function pickMirrorModel(value: string) {
+    if (value === openCorvusModel()) {
+      mirror.close();
+      return;
     }
-    if (!executorHasModelChoice(id)) menu.close();
+    await patchConfig({ model: value ? value : null });
+    mirror.close();
   }
 
-  async function pickModel(executorID: string, model: string) {
-    menu.close();
+  async function pickExternalModel(executorID: string, model: string) {
     if (executorID !== activeID()) {
       setSettingsStore("executor", sanitizeExecutor(executorID));
       saveSettings();
     }
     await setExecutorModel(executorID, model);
+    external.close();
   }
 
-  // OpenCorvus model selection — same write path as AgentModelsPanel:
-  // patchConfig diffs into appStore.config.model. Menu stays open so the
-  // user can verify the new active row without re-opening.
-  async function pickProjectModel(value: string) {
-    if (value === openCorvusModel()) return;
-    setSavingProjectModel(true);
-    try {
-      await patchConfig({ model: value ? value : null });
-    } finally {
-      setSavingProjectModel(false);
+  function disableExternal() {
+    if (activeID() !== INTERNAL_EXECUTOR_ID) {
+      setSettingsStore("executor", sanitizeExecutor(INTERNAL_EXECUTOR_ID));
+      saveSettings();
+    }
+    external.close();
+  }
+
+  function focusExternal(executorID: string) {
+    // Switching the popover tab makes that executor active so subsequent
+    // model picks land on the right executor descriptor.
+    if (executorID !== activeID()) {
+      setSettingsStore("executor", sanitizeExecutor(executorID));
+      saveSettings();
     }
   }
 
-  const projectGroups = createMemo(projectModelGroups);
-  // The executor list in the collapsible section keeps MirrorCode alongside
-  // the real external executors so the user can switch back to the
-  // "no external executor" state. MirrorCode's row is just an empty selection.
-  const externalExecutors = createMemo(() => executors());
-  const externalSelectionLabel = createMemo(() => {
-    const id = activeID();
-    if (id === INTERNAL_EXECUTOR_ID) return t("executor.external_disabled");
-    const model = externalExecutorModel();
-    return model ? `${activeLabel()} · ${model}` : activeLabel();
-  });
-
   return (
-    // Chip is always rendered: activeID comes from settingsStore (never
-    // empty, defaults to the MirrorCode executor id ("mirrorcode")) and
-    // executorLabel handles the three
-    // known ids without any backend round-trip. The menu body shows
-    // whatever appStore.executors holds — empty during the brief
-    // cold-start gap before loadExecutors() resolves, full afterwards.
-    <div
-      class="executor-selector"
-      data-open={menu.open() ? "true" : "false"}
-      ref={(el) => (rootRef = el)}
-    >
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          tone="neutral"
-          data-ui="executor-chip"
-          data-active="true"
-          data-has-external={hasExternalExecutorModel() ? "true" : "false"}
-          aria-haspopup="listbox"
-          aria-expanded={menu.open() ? "true" : "false"}
-          title={chipTitle()}
-          aria-label={chipAriaLabel()}
-          onClick={(event) => {
-            event.stopPropagation();
-            menu.toggle();
-          }}
-        >
-          <span class="executor-chip-identity">
-            <span class="executor-chip-label">{activeLabel()}</span>
-            <span class="executor-chip-action">{t("executor.change_model")}</span>
-          </span>
-          <span class="executor-chip-models" aria-hidden="true">
-            <span
-              class="executor-chip-model"
-              data-source="opencorvus"
-              data-empty={openCorvusModel() ? "false" : "true"}
-              data-custom={hasCustomAgentModels() ? "true" : "false"}
-              title={t("executor.model_explainer_opencorvus", {
-                model: openCorvusDisplayModel(),
-              })}
-            >
-              <span class="executor-chip-role">{t("executor.role_opencorvus")}</span>
-              <span class="executor-chip-provider">{openCorvusParts().provider}</span>
-              <span class="executor-chip-name">
-                {openCorvusParts().name || t("agent_models.option_not_set")}
-                <Show when={customSuffix()}>
-                  <span class="executor-chip-custom">{customSuffix()}</span>
-                </Show>
-              </span>
+    <div class="executor-dualbar" data-ui="executor-dualbar">
+      <ExecutorChip
+        side="mirror"
+        ref={(el) => (mirrorRef = el)}
+        disclosure={mirror}
+        onActivate={openMirror}
+        label={executorLabel(INTERNAL_EXECUTOR_ID)}
+        model={openCorvusModel()}
+        modelPlaceholder={t("agent_models.option_not_set")}
+        title={t("executor.mirror_chip_title", {
+          model: openCorvusModel() || t("agent_models.option_not_set"),
+        })}
+        ariaLabel={t("executor.mirror_chip_aria", {
+          model: openCorvusModel() || t("agent_models.option_not_set"),
+        })}
+      >
+        <div class="executor-popover" data-section="mirror">
+          <div class="executor-popover-header">
+            <span class="executor-popover-title">
+              {t("executor.mirror_popover_title")}
             </span>
-            <Show when={hasExternalExecutorModel()}>
-              <span
-                class="executor-chip-model"
-                data-source="executor"
-                data-empty="false"
-                title={t("executor.model_explainer_external", {
-                  executor: activeLabel(),
-                  model: externalExecutorModel(),
-                })}
-              >
-                <span class="executor-chip-role">{activeLabel()}</span>
-                <span class="executor-chip-provider">{externalExecutorParts().provider}</span>
-                <span class="executor-chip-name">
-                  {externalExecutorParts().name}
-                </span>
-              </span>
-            </Show>
-          </span>
-          <span class="executor-chip-caret" aria-hidden="true">
-            <Icon name="caret-up" size={8} />
-          </span>
-        </Button>
-
-        <Show when={menu.open()}>
-          <div class="executor-menu" role="listbox" aria-label={t("executor.group")}>
-            <div class="executor-menu-summary">
-              <div class="executor-menu-summary-title">
-                <span>{activeLabel()}</span>
-                <span>{t("executor.change_model")}</span>
-              </div>
-              <div class="executor-menu-summary-grid">
-                <div class="executor-menu-summary-row">
-                  <span>{t("executor.role_opencorvus")}</span>
-                  <strong>{openCorvusDisplayModel()}</strong>
-                </div>
-                <Show when={hasExternalExecutorModel()}>
-                  <div class="executor-menu-summary-row">
-                    <span>{activeLabel()}</span>
-                    <strong>{externalExecutorModel()}</strong>
-                  </div>
-                </Show>
-              </div>
-            </div>
-            <div
-              class="executor-menu-project"
-              data-section="opencorvus"
-              aria-label={t("executor.opencorvus_section_label")}
-            >
-              <div class="executor-menu-section-header">
-                <span class="executor-menu-section-title">
-                  {t("executor.opencorvus_section_label")}
-                </span>
-                <Show when={savingProjectModel()}>
-                  <span class="executor-menu-section-status">
-                    {t("agent_models.saving")}
-                  </span>
-                </Show>
-              </div>
-              <Show
-                when={projectGroups().length > 0}
-                fallback={
-                  <div class="executor-menu-empty">
-                    {t("executor.opencorvus_no_providers")}
-                  </div>
-                }
-              >
-                <div class="executor-menu-models">
-                  <For each={projectGroups()}>
-                    {(group) => (
-                      <For each={group.models}>
-                        {(modelID) => (
-                          <button
-                            type="button"
-                            class="executor-menu-model"
-                            data-active={modelID === openCorvusModel() ? "true" : "false"}
-                            disabled={savingProjectModel()}
-                            title={modelID}
-                            onClick={() => void pickProjectModel(modelID)}
-                          >
-                            <span class="executor-menu-model-provider">
-                              {splitModelID(modelID).provider}
-                            </span>
-                            <span class="executor-menu-model-name">
-                              {splitModelID(modelID).name}
-                            </span>
-                          </button>
-                        )}
-                      </For>
-                    )}
-                  </For>
-                </div>
-              </Show>
-            </div>
-            <div
-              class="executor-menu-external"
-              data-section="external"
-              data-open={externalOpen() ? "true" : "false"}
-            >
-              <button
-                type="button"
-                class="executor-menu-section-toggle"
-                aria-expanded={externalOpen() ? "true" : "false"}
-                onClick={() => setExternalOpen((v) => !v)}
-              >
-                <span class="executor-menu-section-title">
-                  {t("executor.external_section_label")}
-                </span>
-                <span class="executor-menu-section-summary">
-                  {externalSelectionLabel()}
-                </span>
-                <span class="executor-menu-section-caret" aria-hidden="true">
-                  <Icon name={externalOpen() ? "caret-up" : "caret-down"} size={8} />
-                </span>
-              </button>
-              <Show when={externalOpen()}>
-                <div class="executor-menu-section-body">
-                  <For each={externalExecutors()}>
-                    {(item) => {
-                      const id = item.id;
-                      const selectable = createMemo(() => executorSelectable(id));
-                      const isActive = createMemo(() => id === activeID());
-                      const hasModels = createMemo(() => executorHasModelChoice(id));
-                      const models = createMemo(() => (hasModels() ? executorModels(id) : []));
-                      const current = createMemo(() => executorCurrentModel(id));
-                      return (
-                        <div
-                          class="executor-menu-group"
-                          data-active={isActive() ? "true" : "false"}
-                          data-selectable={selectable() ? "true" : "false"}
-                        >
-                          <button
-                            type="button"
-                            class="executor-menu-row"
-                            role="option"
-                            aria-selected={isActive() ? "true" : "false"}
-                            disabled={!selectable()}
-                            title={executorTitle(id)}
-                            onClick={() => pickExecutor(id)}
-                          >
-                            <span class="executor-menu-label">
-                              {item.label || executorLabel(id)}
-                            </span>
-                            <Show when={current()}>
-                              <span class="executor-menu-current">{current()}</span>
-                            </Show>
-                          </button>
-                          <Show when={isActive() && hasModels() && models().length > 0}>
-                            <div class="executor-menu-models">
-                              <For each={models()}>
-                                {(modelID) => (
-                                  <button
-                                    type="button"
-                                    class="executor-menu-model"
-                                    data-active={modelID === current() ? "true" : "false"}
-                                    title={modelID}
-                                    onClick={() => void pickModel(id, modelID)}
-                                  >
-                                    <span class="executor-menu-model-provider">
-                                      {splitModelID(modelID).provider}
-                                    </span>
-                                    <span class="executor-menu-model-name">
-                                      {splitModelID(modelID).name}
-                                    </span>
-                                  </button>
-                                )}
-                              </For>
-                            </div>
-                          </Show>
-                        </div>
-                      );
-                    }}
-                  </For>
-                </div>
-              </Show>
-            </div>
+            <span class="executor-popover-hint">
+              {t("executor.mirror_popover_hint")}
+            </span>
           </div>
+          <Show
+            when={mirrorGroups().length > 0}
+            fallback={
+              <div class="executor-popover-empty">
+                {t("executor.mirror_no_connected_providers")}
+              </div>
+            }
+          >
+            <div class="executor-popover-body">
+              <For each={mirrorGroups()}>
+                {(group) => (
+                  <ProviderModelGroup
+                    group={group}
+                    currentModel={openCorvusModel()}
+                    onPick={(modelID) => void pickMirrorModel(modelID)}
+                  />
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
+      </ExecutorChip>
+
+      <ExecutorChip
+        side="external"
+        ref={(el) => (externalRef = el)}
+        disclosure={external}
+        onActivate={openExternal}
+        label={isExternalActive() ? executorLabel(activeID()) : t("executor.external_disabled")}
+        model={externalModel()}
+        modelPlaceholder={isExternalActive() ? t("agent_models.option_not_set") : ""}
+        title={
+          isExternalActive()
+            ? t("executor.external_chip_title", {
+                executor: executorLabel(activeID()),
+                model: externalModel() || t("agent_models.option_not_set"),
+              })
+            : t("executor.external_chip_title_disabled")
+        }
+        ariaLabel={
+          isExternalActive()
+            ? t("executor.external_chip_aria_active", {
+                executor: executorLabel(activeID()),
+                model: externalModel() || t("agent_models.option_not_set"),
+              })
+            : t("executor.external_chip_aria_disabled")
+        }
+      >
+        <div class="executor-popover" data-section="external">
+          <div class="executor-popover-header">
+            <span class="executor-popover-title">
+              {t("executor.external_popover_title")}
+            </span>
+            <span class="executor-popover-hint">
+              {t("executor.external_popover_hint")}
+            </span>
+          </div>
+          <div class="executor-popover-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              class="executor-popover-tab"
+              data-active={!isExternalActive() ? "true" : "false"}
+              aria-selected={!isExternalActive() ? "true" : "false"}
+              onClick={disableExternal}
+            >
+              {t("executor.external_disabled")}
+            </button>
+            <For each={externalTabs()}>
+              {(tab) => (
+                <button
+                  type="button"
+                  role="tab"
+                  class="executor-popover-tab"
+                  data-active={tab.id === focusedExternalID() ? "true" : "false"}
+                  aria-selected={tab.id === focusedExternalID() ? "true" : "false"}
+                  disabled={!tab.selectable}
+                  title={tab.title}
+                  onClick={() => focusExternal(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              )}
+            </For>
+          </div>
+          <Show
+            when={isExternalActive()}
+            fallback={
+              <div class="executor-popover-empty">
+                {t("executor.external_disabled_hint")}
+              </div>
+            }
+          >
+            <Show
+              when={focusedGroups().length > 0}
+              fallback={
+                <div class="executor-popover-empty">
+                  {t("executor.external_no_models")}
+                </div>
+              }
+            >
+              <div class="executor-popover-body">
+                <For each={focusedGroups()}>
+                  {(group) => (
+                    <ProviderModelGroup
+                      group={group}
+                      currentModel={focusedCurrentModel()}
+                      onPick={(modelID) => void pickExternalModel(focusedExternalID(), modelID)}
+                      showAvailability
+                    />
+                  )}
+                </For>
+              </div>
+            </Show>
+          </Show>
+        </div>
+      </ExecutorChip>
+    </div>
+  );
+}
+
+interface ExecutorChipProps {
+  side: "mirror" | "external";
+  ref?: (el: HTMLDivElement) => void;
+  disclosure: Disclosure;
+  onActivate: () => void;
+  label: string;
+  model: string;
+  modelPlaceholder: string;
+  title: string;
+  ariaLabel: string;
+  children: any;
+}
+
+function ExecutorChip(props: ExecutorChipProps) {
+  return (
+    <div
+      class="executor-chip-slot"
+      data-side={props.side}
+      data-open={props.disclosure.open() ? "true" : "false"}
+      ref={(el) => props.ref?.(el)}
+    >
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        tone="neutral"
+        data-ui={`executor-chip-${props.side}`}
+        aria-haspopup="dialog"
+        aria-expanded={props.disclosure.open() ? "true" : "false"}
+        title={props.title}
+        aria-label={props.ariaLabel}
+        onClick={(event) => {
+          event.stopPropagation();
+          props.onActivate();
+        }}
+      >
+        <span class="executor-chip-identity">
+          <span class="executor-chip-label">{props.label}</span>
+        </span>
+        <ChipModel model={props.model} placeholder={props.modelPlaceholder} />
+        <ChevronCaret open={props.disclosure.open()} />
+      </Button>
+      <Show when={props.disclosure.open()}>{props.children}</Show>
+    </div>
+  );
+}
+
+interface ProviderModelGroupProps {
+  group: ProviderGroup;
+  currentModel: string;
+  onPick: (modelID: string) => void;
+  showAvailability?: boolean;
+}
+
+function ProviderModelGroup(props: ProviderModelGroupProps) {
+  return (
+    <div
+      class="executor-popover-group"
+      data-available={props.group.available ? "true" : "false"}
+    >
+      <div class="executor-popover-group-header">
+        <span class="executor-popover-group-name">{props.group.providerName}</span>
+        <Show when={props.showAvailability}>
+          <span class="executor-popover-group-status">
+            {props.group.available
+              ? t("executor.provider_status_connected")
+              : t("executor.provider_status_disconnected")}
+          </span>
         </Show>
       </div>
+      <div class="executor-popover-models">
+        <For each={props.group.models}>
+          {(modelID) => (
+            <button
+              type="button"
+              class="executor-popover-model"
+              data-active={modelID === props.currentModel ? "true" : "false"}
+              data-available={props.group.available ? "true" : "false"}
+              title={modelID}
+              onClick={() => props.onPick(modelID)}
+            >
+              <span class="executor-popover-model-name">
+                {splitModelID(modelID).name}
+              </span>
+              <Show when={props.showAvailability && !props.group.available}>
+                <span class="executor-popover-model-badge">
+                  {t("executor.provider_status_disconnected")}
+                </span>
+              </Show>
+            </button>
+          )}
+        </For>
+      </div>
+    </div>
   );
 }
