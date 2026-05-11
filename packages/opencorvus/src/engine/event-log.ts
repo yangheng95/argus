@@ -16,6 +16,9 @@ import { Log } from "@/util/log"
 const LOGGED_TYPES = new Set([
   "engine.task.created",
   "engine.task.updated",
+  "engine.task.completed",
+  "engine.task.failed",
+  "engine.task.cancelled",
   "engine.spec.created",
   "engine.spec.updated",
   "engine.plan.created",
@@ -181,6 +184,14 @@ export namespace EngineEventLog {
         tl(ctx, `[${elapsed(ctx)}] TASK → ${status}  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, status, summary })
         break
+      case "engine.task.completed":
+      case "engine.task.failed":
+      case "engine.task.cancelled": {
+        const verb = type.slice("engine.task.".length).toUpperCase()
+        tl(ctx, `[${elapsed(ctx)}] TASK ${verb}  ${summary}`)
+        nd(ctx, { at: now, elapsed_ms: ms, type, taskID, status, summary })
+        break
+      }
       case "engine.spec.created":
       case "engine.spec.updated": {
         const label = type.endsWith("created") ? "SPEC created" : "SPEC updated"

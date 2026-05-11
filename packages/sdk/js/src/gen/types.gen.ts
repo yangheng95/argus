@@ -77,6 +77,34 @@ export type EventTaskUpdated = {
   }
 }
 
+export type EventTaskCompleted = {
+  type: "task.completed"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskFailed = {
+  type: "task.failed"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+    error?: string
+  }
+}
+
+export type EventTaskCancelled = {
+  type: "task.cancelled"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
 export type EventSpecCreated = {
   type: "spec.created"
   properties: {
@@ -1456,6 +1484,9 @@ export type Event =
   | EventSessionIdle
   | EventTaskCreated
   | EventTaskUpdated
+  | EventTaskCompleted
+  | EventTaskFailed
+  | EventTaskCancelled
   | EventSpecCreated
   | EventSpecUpdated
   | EventSpecApproved

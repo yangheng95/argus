@@ -144,13 +144,41 @@ export async function updateTask(
         time_updated: now,
       })
       .run()
-    Database.effect(() =>
-      EngineProtocol.emit(
+    const prevStatus = deriveTaskStatus(row)
+    Database.effect(async () => {
+      await EngineProtocol.emit(
         Event.TaskUpdated,
         { taskID: row.id, status: nextStatus, summary },
         { source: "state.task" },
-      ),
-    )
+      )
+      // Emit terminal transition events alongside TaskUpdated so OS-level
+      // notification consumers don't have to re-derive transitions from a
+      // running stream of `task.updated`. Only fires on actual transitions
+      // (prev !== next) to avoid double-ringing on retry/restart paths that
+      // touch a terminal task again without crossing the boundary. Sequencing
+      // matters — emit task.updated first so consumers that refresh state on
+      // it have the new status by the time the terminal event arrives.
+      if (prevStatus === nextStatus) return
+      if (nextStatus === "completed") {
+        await EngineProtocol.emit(
+          Event.TaskCompleted,
+          { taskID: row.id, status: nextStatus, summary },
+          { source: "state.task" },
+        )
+      } else if (nextStatus === "failed") {
+        await EngineProtocol.emit(
+          Event.TaskFailed,
+          { taskID: row.id, status: nextStatus, summary, error: nextError ?? undefined },
+          { source: "state.task" },
+        )
+      } else if (nextStatus === "cancelled") {
+        await EngineProtocol.emit(
+          Event.TaskCancelled,
+          { taskID: row.id, status: nextStatus, summary },
+          { source: "state.task" },
+        )
+      }
+    })
   })
   const result = updated ?? requireTask(row.id)
   await finalizeLiveRunForTerminalTask(result, intent, resolved, summary)

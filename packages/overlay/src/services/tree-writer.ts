@@ -196,7 +196,7 @@ export function applyEvent(event: any): void {
   }
 
   // ── Interactions ──
-  if (type === "interaction.created" || type === "interaction.resolved") {
+  if (type === "interaction.requested" || type === "interaction.resolved") {
     return handleInteraction(event);
   }
 

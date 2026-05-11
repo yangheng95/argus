@@ -1021,6 +1021,15 @@ export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "a
 export const Event = {
   TaskCreated: BusEvent.define("task.created", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   TaskUpdated: BusEvent.define("task.updated", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
+  /** Terminal task transition events. Emitted alongside TaskUpdated when the
+   *  derived status (`deriveTaskStatus`) crosses from non-terminal to one of
+   *  the three terminal verbs. Consumers that surface OS-level "task
+   *  succeeded / failed / cancelled" toasts (overlay, channel-runtime) read
+   *  these instead of re-deriving from `task.updated.status` to avoid every
+   *  consumer reimplementing the transition predicate (rule 8: single source). */
+   TaskCompleted: BusEvent.define("task.completed", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
+   TaskFailed: BusEvent.define("task.failed", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string(), error: z.string().optional() })),
+   TaskCancelled: BusEvent.define("task.cancelled", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   SpecCreated: BusEvent.define("spec.created", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
   SpecUpdated: BusEvent.define("spec.updated", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), status: z.string(), summary: z.string() })),
   SpecApproved: BusEvent.define("spec.approved", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),

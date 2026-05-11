@@ -124,7 +124,7 @@ function applyBoardEvent(event: FixtureEvent): boolean {
     if (incomingTask.id) setBoardStore("selectedTaskID", incomingTask.id);
     return true;
   }
-  if (type === "interaction.created" || type === "interaction.resolved") {
+  if (type === "interaction.requested" || type === "interaction.resolved") {
     const current = boardStore.board || {};
     const existing: any[] = Array.isArray(current.interactions) ? current.interactions : [];
     const incoming = p.interaction;
