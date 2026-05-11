@@ -24,6 +24,7 @@ import {
   loadExtensions,
   loadSkillMarket,
 } from "../../services/extensions";
+import { addMcpServer } from "../../services/mcp";
 import { Button } from "../ui/Button";
 import { SurfaceHeader } from "../ui/SurfaceHeader";
 
@@ -282,22 +283,13 @@ export default function SkillMarketPanel() {
   });
 
   async function handleAddMcp() {
-    const name = mcpForm.name.trim();
-    if (!name) return;
-    const payload: Record<string, any> = { name, type: mcpForm.type };
-    if (mcpForm.type === "remote") {
-      payload.url = mcpForm.url.trim();
-      if (!payload.url) return;
-    } else {
-      payload.command = mcpForm.command.trim();
-      if (!payload.command) return;
-      if (mcpForm.args.trim()) payload.args = mcpForm.args.trim();
-    }
     try {
-      await apiJson("mcp/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      await addMcpServer({
+        name: mcpForm.name,
+        type: mcpForm.type,
+        url: mcpForm.url,
+        command: mcpForm.command,
+        args: mcpForm.args,
       });
       setMcpForm({ name: "", type: "remote", url: "", command: "", args: "" });
       setShowAddMcp(false);
