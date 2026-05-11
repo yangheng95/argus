@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "0a30d24fd080eff5"
+    "panel_revision": "eba4e9d19cd44e76"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -119,8 +119,6 @@
   "task_overlay.load_failed": "Failed to load: {{error}}",
   "agent_models.loading": "Loading agents…",
   "agent_models.load_failed": "Failed to load agent models: {{error}}",
-  "agent_models.refreshing": "Refreshing…",
-  "agent_models.refresh_hexin": "Refresh Hexin Models",
   "agent_models.intro": "Choose which LLM each agent uses. Leave unset to inherit the project default (top-level `model` in opencorvus.jsonc).",
   "agent_models.project_default": "Project default",
   "agent_models.project_default_title": "Top-level `model` in opencorvus.jsonc",
