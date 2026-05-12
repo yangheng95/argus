@@ -70,7 +70,6 @@ describe("overlay theme palette intent", () => {
       "--panel-fill-hover",
       "--card-fill",
       "--card-fill-hover",
-      "--guide-card-bg",
     ]
     const violations: string[] = []
 
@@ -84,6 +83,13 @@ describe("overlay theme palette intent", () => {
     }
 
     expect(violations).toEqual([])
+  })
+
+  test("retired card-shadow theme tokens stay removed", () => {
+    for (const css of [dark, light, vscodeDark]) {
+      expect(css).not.toContain("--guide-card-")
+      expect(css).not.toContain("--hover-accent-shadow")
+    }
   })
 
   test("popup window backing materials are opaque", () => {

@@ -260,10 +260,10 @@
 }
 
 .msg-tool-diff-card {
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface-inset) 82%, transparent);
-  overflow: hidden;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .msg-tool-diff-card__head {
@@ -272,7 +272,7 @@
   justify-content: space-between;
   gap: calc(10px * var(--ui-scale));
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-bottom: 0 solid transparent;
 }
 
 .msg-tool-diff-card__copy {
@@ -318,9 +318,9 @@
   gap: calc(10px * var(--ui-scale));
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
-  border: var(--oc-border-width) solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  border: 0 solid transparent;
 }
 .msg-todo-card__summary {
   display: flex;
@@ -406,9 +406,9 @@
   list-style: none;
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
-  border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
-  border: var(--oc-border-width) solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  border: 0 solid transparent;
   font-size: var(--ui-font-control);
   line-height: 1.5;
   display: flex;
@@ -431,9 +431,9 @@
 }
 .msg-todo-list--card .msg-todo-item {
   padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
-  border: var(--oc-border-width) solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  border: 0 solid transparent;
 }
 .msg-todo-icon {
   display: inline-flex;
@@ -507,9 +507,9 @@
 .msg-read-meta {
   margin: calc(2px * var(--ui-scale)) 0 0 0;
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
-  border: var(--oc-border-width) solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  border: 0 solid transparent;
   font-family: var(--mono);
   font-size: var(--ui-font-control);
   line-height: 1.55;
@@ -523,9 +523,9 @@
   gap: calc(6px * var(--ui-scale));
   margin-top: calc(8px * var(--ui-scale));
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
-  border: var(--oc-border-width) solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  border: 0 solid transparent;
 }
 
 .msg-read-reminder__label {

@@ -269,7 +269,7 @@ describe("overlay architecture guards", () => {
     // VS Code-Dark palette and the late block re-painted with the
     // workbench palette; the cascade winner was always the late block,
     // so the early values rendered nowhere AND the early-only tokens
-    // (--hover-accent-border, --guide-card-bg, --accent-glow, etc.)
+    // (--hover-accent-border, --accent-glow, etc.)
     // were stuck on the OLD accent's rgb expansion (e.g. #2470b3
     // instead of the active #5b5ff0). This guard pins the single-block
     // invariant so any future palette tweak lands in one place.
@@ -1265,9 +1265,9 @@ describe("overlay architecture guards", () => {
     expect(channelDocBody).toContain("border: 0")
 
     const marketCardBody = settingsSurface.match(/(^|\n)\.market-card\s*\{([^}]*)\}/)?.[2] ?? ""
-    expect(marketCardBody).toContain("background: var(--surface-inset)")
+    expect(marketCardBody).toContain("background: transparent")
     expect(marketCardBody).toContain("border: 0")
-    expect(marketCardBody).toContain("border-radius: var(--oc-radius-soft)")
+    expect(marketCardBody).toContain("border-radius: 0")
     expect(settingsSurface).toMatch(/\.market-card:hover,\s*\.market-card:focus-within\s*\{/)
   })
 
@@ -2173,11 +2173,11 @@ describe("overlay architecture guards", () => {
 
     const channelDocBody =
       settingsSurface.match(/\.channel-doc-card\s*\{([^}]*)\}/)?.[1] ?? ""
-    expect(channelDocBody).toContain("background: var(--surface-inset)")
+    expect(channelDocBody).toContain("background: transparent")
     expect(channelDocBody).toContain("border: 0")
 
     const detailCardBody = settingsSurface.match(/\.detail-card\s*\{([^}]*)\}/)?.[1] ?? ""
-    expect(detailCardBody).toContain("background: var(--surface-inset)")
+    expect(detailCardBody).toContain("background: transparent")
     expect(detailCardBody).toContain("border: 0")
   })
 
@@ -2204,7 +2204,7 @@ describe("overlay architecture guards", () => {
     }
 
     const body = settingsSurface.match(/\.extension-row\s*\{([^}]*)\}/)?.[1] ?? ""
-    expect(body).toContain("background: var(--surface-inset)")
+    expect(body).toContain("background: transparent")
     expect(body).toContain("border: 0")
   })
 
@@ -2233,7 +2233,7 @@ describe("overlay architecture guards", () => {
 
     for (const selector of [".config-section", ".config-subsection"]) {
       const body = soloRuleBody(settingsSurface, selector)
-      expect(body).toContain("background: var(--surface-inset)")
+      expect(body).toContain("background: transparent")
       expect(body).toContain("border: 0")
     }
   })
