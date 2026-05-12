@@ -60,20 +60,8 @@ export interface ChatComposerProps {
 // services/chat-attach-limits (audit W2-V15) so the cap can be
 // unit-tested without rendering the component.
 
-// Default routing prefix prefilled into the composer. The trailing space is
-// load-bearing — the user types after it without manually hitting space, and
-// the orchestrator's prefix rule keys on `@team ` / `@agent ` / no prefix.
-// Stripping or replacing this prefix is how the user opts into the direct
-// build-deliver path (see prompt/core/orchestrator-core.txt §Path selection).
-const DEFAULT_PROMPT_PREFIX = "@team ";
 // Cap auto-grow at 10 visible lines; beyond that the textarea scrolls.
 const MAX_VISIBLE_LINES = 10;
-
-function stripDefaultPrefix(value: string): string {
-  return value.startsWith(DEFAULT_PROMPT_PREFIX)
-    ? value.slice(DEFAULT_PROMPT_PREFIX.length)
-    : value;
-}
 
 // ── Helpers ──
 //
@@ -117,7 +105,7 @@ export function ChatComposer(props: ChatComposerProps) {
   let textareaRef!: HTMLTextAreaElement;
   let formRef!: HTMLFormElement;
 
-  const [text, setText] = createSignal(DEFAULT_PROMPT_PREFIX);
+  const [text, setText] = createSignal("");
   // audit-2026-04-29 W2-V12 — single source of truth for staged
   // chat attachments lives in `messageStore.chatAttachments`. The
   // composer used to keep its own local signal, which meant
@@ -143,9 +131,7 @@ export function ChatComposer(props: ChatComposerProps) {
     | { pointerID: number; startY: number; startHeight: number }
     | undefined;
 
-  // Routing prefixes are not user content. Disable Send when the composer
-  // holds nothing beyond the default `@team ` (or any other bare prefix).
-  const hasText = createMemo(() => stripDefaultPrefix(text()).trim().length > 0);
+  const hasText = createMemo(() => text().trim().length > 0);
   const stopping = () => props.stopping === true;
 
   // ── Rotating placeholder ──
@@ -236,7 +222,7 @@ export function ChatComposer(props: ChatComposerProps) {
     const pending = props.pendingSuggestion?.trim();
     if (!pending) return;
     if (!props.enabled || props.busy) return;
-    if (text() === DEFAULT_PROMPT_PREFIX || text().length === 0) {
+    if (text().length === 0) {
       setText(pending);
       if (textareaRef) textareaRef.value = pending;
     }
@@ -268,11 +254,10 @@ export function ChatComposer(props: ChatComposerProps) {
 
   onMount(() => {
     if (!textareaRef) return;
-    // Park the caret after the prefix so Tab / programmatic focus puts the
-    // user where they want to type. Click-focus uses the click position, so
-    // this only matters for keyboard-driven focus.
+    // Park the caret at the start of the input. Click-focus uses the click
+    // position, so this only matters for keyboard-driven focus.
     try {
-      textareaRef.setSelectionRange(DEFAULT_PROMPT_PREFIX.length, DEFAULT_PROMPT_PREFIX.length);
+      textareaRef.setSelectionRange(0, 0);
     } catch {
       /* ignore — selection APIs throw on detached elements in some hosts */
     }
@@ -359,19 +344,16 @@ export function ChatComposer(props: ChatComposerProps) {
     if (!props.enabled) return;
     const trimmed = text().trim();
     if (!trimmed) return;
-    // Reject "bare prefix" submissions — `@team` or `@team ` alone is a
-    // routing signal with no actual instruction.
-    if (!stripDefaultPrefix(trimmed).trim()) return;
     const sentAttachments = [...attachments()];
     setSubmitting(true);
     try {
       await props.onSubmit(trimmed, sentAttachments, false);
-      setText(DEFAULT_PROMPT_PREFIX);
+      setText("");
       setAttachments([]);
       if (textareaRef) {
-        textareaRef.value = DEFAULT_PROMPT_PREFIX;
+        textareaRef.value = "";
         try {
-          textareaRef.setSelectionRange(DEFAULT_PROMPT_PREFIX.length, DEFAULT_PROMPT_PREFIX.length);
+          textareaRef.setSelectionRange(0, 0);
         } catch {
           /* selection APIs may throw if the element has been detached */
         }

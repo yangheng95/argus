@@ -1,9 +1,8 @@
 import { Session } from ".."
 import { Agent } from "../../agent/agent"
-import { Provider } from "../../provider/provider"
 import { Message } from "../message"
 import { LLM } from "../llm"
-import { iife } from "@/util/iife"
+import { resolveAgentModel } from "@/agent/model"
 import { Log } from "../../util/log"
 
 const log = Log.create({ service: "session.prompt" })
@@ -11,8 +10,6 @@ const log = Log.create({ service: "session.prompt" })
 export async function ensureTitle(input: {
   session: Session.Info
   history: Message.WithParts[]
-  providerID: string
-  modelID: string
 }) {
   if (input.session.parentID) return
   if (!Session.isDefaultTitle(input.session.title)) return
@@ -35,12 +32,7 @@ export async function ensureTitle(input: {
 
   const agent = await Agent.get("title")
   if (!agent) return
-  const model = await iife(async () => {
-    if (agent.model) return await Provider.getModel(agent.model.providerID, agent.model.modelID)
-    return (
-      (await Provider.getSmallModel(input.providerID)) ?? (await Provider.getModel(input.providerID, input.modelID))
-    )
-  })
+  const model = await resolveAgentModel("title", { sessionID: input.session.id })
   const result = await LLM.stream({
     agent,
     user: firstRealUser.info as Message.User,
