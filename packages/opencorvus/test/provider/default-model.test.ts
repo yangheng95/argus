@@ -40,8 +40,8 @@ describe("Provider.defaultModel - strict config only", () => {
       fn: async () => {
         const fresh = (await import("../../src/provider/provider")).Provider
         await expect(fresh.defaultModel()).resolves.toEqual({
-          providerID: "alibaba-coding-plan-cn",
-          modelID: "kimi-k2.5",
+          providerID: "deepseek",
+          modelID: "deepseek-v4-pro",
         })
       },
     })

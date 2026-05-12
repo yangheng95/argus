@@ -77,10 +77,66 @@ import { describeTask, renderTaskDescription } from "@/engine/describe"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
 import { AgentTrace } from "@/trace"
 import { paragraphSummary } from "@/agent/report"
+import { NamedError } from "@opencorvus-ai/util/error"
 
 const log = Log.create({ service: "orchestrator" })
 // MAX_STEPS lives on agent.orchestrator.steps in src/agent/agent.ts. SessionLoop
 // reads that directly via Agent.get("orchestrator") — no local constant needed.
+
+export interface OrchestratorTaskErrorEnvelope {
+  errorName: string
+  message: string
+  data?: unknown
+}
+
+export const ORCHESTRATOR_TASK_ERROR_ENVELOPE_MARKER = "\n[orchestrator-error-envelope]"
+
+export function parseOrchestratorTaskErrorEnvelope(
+  input?: string | null,
+): OrchestratorTaskErrorEnvelope | undefined {
+  if (!input) return undefined
+  const markerIndex = input.indexOf(ORCHESTRATOR_TASK_ERROR_ENVELOPE_MARKER)
+  if (markerIndex < 0) return undefined
+  const raw = input.slice(markerIndex + ORCHESTRATOR_TASK_ERROR_ENVELOPE_MARKER.length).trim()
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== "object") return undefined
+    const candidate = parsed as Record<string, unknown>
+    if (typeof candidate.errorName !== "string" || typeof candidate.message !== "string") return undefined
+    return {
+      errorName: candidate.errorName,
+      message: candidate.message,
+      data: candidate.data,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function serializeOrchestratorTaskError(error: unknown): {
+  envelope: OrchestratorTaskErrorEnvelope
+  message: string
+  taskError: string
+} {
+  const message = error instanceof Error ? error.message : String(error)
+  const errorName =
+    error instanceof Error
+      ? (typeof error.name === "string" && error.name.length > 0 ? error.name : error.constructor.name || "Error")
+      : "UnknownError"
+  const envelope: OrchestratorTaskErrorEnvelope = {
+    errorName,
+    message,
+    ...(error instanceof NamedError ? { data: (error as NamedError & { data: unknown }).data } : {}),
+  }
+  return {
+    envelope,
+    message,
+    taskError:
+      `Orchestrator error: ${message}` +
+      `${ORCHESTRATOR_TASK_ERROR_ENVELOPE_MARKER}${JSON.stringify(envelope)}`,
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Wake event — free-form hint about WHY the orchestrator is being woken.
@@ -178,9 +234,18 @@ export namespace Orchestrator {
       try {
         model = await resolveAgentModel("orchestrator", { sessionID: task.session_id })
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        log.error("orchestrator: no LLM model available", { taskID, error: msg })
-        await updateTask(task, { status: "failed", error: `Orchestrator error: ${msg}` }, `Orchestrator failed: ${msg}`)
+        const structured = serializeOrchestratorTaskError(e)
+        log.error("orchestrator: no LLM model available", {
+          taskID,
+          errorName: structured.envelope.errorName,
+          error: structured.message,
+          data: structured.envelope.data,
+        })
+        await updateTask(
+          task,
+          { status: "failed", error: structured.taskError },
+          `Orchestrator failed: ${structured.message}`,
+        )
         return
       }
 
@@ -489,16 +554,22 @@ export namespace Orchestrator {
         log.info("orchestrator stopped after dispatch", { taskID, note: event?.note })
         return
       }
-      const msg = error instanceof Error ? error.message : String(error)
-      log.error("orchestrator failed", { taskID, note: event?.note, error: msg })
+      const structured = serializeOrchestratorTaskError(error)
+      log.error("orchestrator failed", {
+        taskID,
+        note: event?.note,
+        errorName: structured.envelope.errorName,
+        error: structured.message,
+        data: structured.envelope.data,
+      })
       if (AgentTrace.isEnabled() && agentSessionID) {
         AgentTrace.recordAgentReport({
           sessionID: agentSessionID,
           taskID,
           agentName: "orchestrator",
           kind: "orchestrator_wake_failure",
-          error: msg,
-          report: { summary: msg, detail: msg },
+          error: structured.message,
+          report: { summary: structured.message, detail: structured.message },
         })
       }
       // Surface the error on the task so UI/orphan-recovery can see it.
@@ -509,7 +580,11 @@ export namespace Orchestrator {
         const current = requireTask(taskID)
         const { isTaskTerminal } = await import("@/engine/task-status")
         if (!isTaskTerminal(current)) {
-          await updateTask(current, { error: `Orchestrator error: ${msg}` }, `Orchestrator failed: ${msg}`)
+          await updateTask(
+            current,
+            { error: structured.taskError },
+            `Orchestrator failed: ${structured.message}`,
+          )
         }
       } catch { /* task may have been deleted */ }
     } finally {
@@ -599,7 +674,8 @@ export const OrchestratorEventNote = {
   },
 
   retry(task: TaskRow): string {
-    return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
+    const previousError = parseOrchestratorTaskErrorEnvelope(task.error)?.message ?? task.error
+    return `User requested retry.${previousError ? ` Previous error: ${previousError}` : ""}\nDecide how to proceed.`
   },
 
   deliveryRework(input: { reason: string; iteration: number; summary?: string; affectedGoalCount?: number }): string {
