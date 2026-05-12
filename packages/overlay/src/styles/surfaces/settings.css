@@ -117,22 +117,17 @@
 
 /* ── MemoryPanel.tsx (Knowledge tab) ─────────────────────── */
 
-/* Toolbar above the knowledge list — wraps the search input +
-   action buttons. The shared-card multi-class rule
-   `.goal-item, .market-card, .knowledge-item, .pref-item,
-   .criteria-check { border / bg / radius / padding }` and the
-   shared hover treatment that includes `.knowledge-item:hover`
-   stay in styles.css as cross-surface primitives — extracting
-   either would split the rule-9 abstraction across files. */
+/* Toolbar above the knowledge list. Settings uses a flat toolbar:
+   controls own their chrome, the toolbar itself does not draw a card. */
 .knowledge-toolbar {
   display: flex;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
   flex-wrap: wrap;
-  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--settings-surface-base);
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   transition:
     border-color var(--ui-duration-base),
     background var(--ui-duration-base),
@@ -142,12 +137,10 @@
 
 .knowledge-toolbar:hover,
 .knowledge-toolbar:focus-within {
-  background: var(--hover-accent-wash);
-  border-color: var(--hover-accent-border);
-  box-shadow:
-    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
-    var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
 }
 
 .knowledge-search {
@@ -333,10 +326,10 @@
   justify-content: space-between;
   gap: calc(8px * var(--ui-scale));
   flex-wrap: wrap;
-  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--settings-surface-base);
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   transition:
     border-color var(--ui-duration-base),
     background var(--ui-duration-base),
@@ -346,12 +339,10 @@
 
 .extension-head:hover,
 .extension-head:focus-within {
-  background: var(--hover-accent-wash);
-  border-color: var(--hover-accent-border);
-  box-shadow:
-    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
-    var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
 }
 
 .extension-list {
@@ -370,10 +361,10 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: calc(10px * var(--ui-scale));
-  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
-  border-radius: var(--oc-radius-soft);
+  padding: var(--ui-card-padding-y) 0;
+  border-radius: 0;
   border: 0;
-  background: var(--surface-inset);
+  background: transparent;
 }
 
 .extension-row-main {
@@ -444,10 +435,10 @@
   justify-content: space-between;
   gap: var(--ui-gap-md);
   flex-wrap: wrap;
-  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
-  border-radius: var(--oc-radius-soft);
+  padding: var(--ui-card-padding-y) 0;
+  border-radius: 0;
   border: 0;
-  background: var(--surface-inset);
+  background: transparent;
   box-shadow: none;
   transition:
     border-color var(--ui-duration-base),
@@ -490,10 +481,10 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: calc(10px * var(--ui-scale));
-  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
+  padding: var(--ui-card-padding-y) 0;
   border: 0;
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
+  border-radius: 0;
+  background: transparent;
   transition:
     background var(--ui-duration-base),
     box-shadow var(--ui-duration-base);
@@ -505,7 +496,7 @@
 
 .market-card:hover,
 .market-card:focus-within {
-  background: var(--surface);
+  background: var(--settings-surface-hover);
   box-shadow: none;
 }
 
@@ -954,17 +945,13 @@
 
 /* ── Settings collapsible section + subsection ───────────── */
 
-/* Outer collapsible card (one per top-level config tab body
-   group). Hover/focus-within wash uses raw rgba on `--accent`
-   (rgb(91,141,239) is the literal expansion of `--accent`,
-   `#548af7`) — routed through `color-mix(var(--accent) X%,
-   transparent)`. The inset highlight reads the shared UI
-   highlight tone token. */
+/* Outer collapsible group. In settings, groups are flat owner
+   surfaces: no card border, no nested background block. */
 .config-section {
   border: 0;
-  border-radius: var(--oc-radius-soft);
-  background: var(--settings-surface-base);
-  overflow: hidden;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
   box-shadow: none;
   transition:
     border-color var(--ui-duration-base),
@@ -974,35 +961,19 @@
 }
 
 .config-section[open] {
-  background: var(--settings-surface-hover);
+  background: transparent;
 }
 
 .config-section:hover,
 .config-section:focus-within {
-  border-color: var(--hover-accent-border);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 8%, transparent),
-      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
-      transparent
-    ),
-    var(--settings-surface-base);
-  box-shadow:
-    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
-    var(--hover-accent-shadow);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .config-section[open]:hover,
 .config-section[open]:focus-within {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 8%, transparent),
-      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
-      transparent
-    ),
-    var(--settings-surface-hover);
+  background: transparent;
 }
 
 /* Section head: clickable summary row. The early `::before`
@@ -1025,10 +996,9 @@
   display: flex;
   align-items: center;
   gap: var(--section-field-gap);
-  border: var(--oc-border-width) solid transparent;
-  border-bottom-color: var(--divider-soft);
-  border-radius: var(--oc-radius-soft) var(--oc-radius-soft) 0 0;
-  background: var(--oc-header-bg);
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
   position: relative;
   transition:
@@ -1069,14 +1039,9 @@
 
 .config-section-head:hover {
   color: var(--text-strong);
-  background: var(--hover-accent-wash);
-  border-top-color: var(--hover-accent-border);
-  border-right-color: var(--hover-accent-border);
-  border-bottom-color: var(--hover-accent-border);
-  border-left-color: var(--hover-accent-border);
-  box-shadow:
-    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
-    0 0 0 var(--oc-border-width) var(--hover-accent-border);
+  background: var(--settings-surface-hover);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .config-section-body {
@@ -1084,9 +1049,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--section-field-gap);
-  border: var(--oc-border-width) solid transparent;
+  border: 0 solid transparent;
   border-top: none;
-  border-radius: 0 0 var(--oc-radius-soft) var(--oc-radius-soft);
+  border-radius: 0;
   transition:
     background var(--ui-duration-base) var(--ui-timing-standard),
     border-color var(--ui-duration-base) var(--ui-timing-standard),
@@ -1096,25 +1061,18 @@
 
 .config-section:hover > .config-section-body,
 .config-section:focus-within > .config-section-body {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 6%, transparent),
-      color-mix(in srgb, var(--accent) 2%, transparent) 68%,
-      transparent
-    );
-  border-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: transparent;
+  border-color: transparent;
   border-top-color: transparent;
-  box-shadow: inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone);
+  box-shadow: none;
 }
 
-/* Inner collapsible (one per group inside Extensions). Mirrors
-   the outer .config-section chrome with the same accent wash +
-   inset highlight tokens. */
+/* Inner collapsible group. It follows the same flat settings
+   surface contract as the outer group. */
 .config-subsection {
   border: 0;
-  border-radius: var(--oc-radius-soft);
-  background: var(--settings-surface-base);
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
   transition:
     border-color var(--ui-duration-base),
@@ -1124,35 +1082,19 @@
 }
 
 .config-subsection[open] {
-  background: var(--settings-surface-hover);
+  background: transparent;
 }
 
 .config-subsection:hover,
 .config-subsection:focus-within {
-  border-color: var(--hover-accent-border);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 8%, transparent),
-      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
-      transparent
-    ),
-    var(--surface-inset);
-  box-shadow:
-    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
-    var(--hover-accent-shadow);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .config-subsection[open]:hover,
 .config-subsection[open]:focus-within {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 8%, transparent),
-      color-mix(in srgb, var(--accent) 2%, transparent) 62%,
-      transparent
-    ),
-    var(--settings-surface-hover);
+  background: transparent;
 }
 
 .config-subsection-head {
@@ -1167,9 +1109,9 @@
   gap: var(--section-field-gap);
   min-height: calc(32px * var(--ui-scale));
   line-height: 1.2;
-  border: var(--oc-border-width) solid transparent;
-  border-radius: var(--oc-radius-soft) var(--oc-radius-soft) 0 0;
-  background: var(--oc-header-bg);
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
   transition:
     background var(--ui-duration-base),
@@ -1205,14 +1147,9 @@
 }
 
 .config-subsection-head:hover {
-  background: var(--hover-accent-wash);
-  border-top-color: var(--hover-accent-border);
-  border-right-color: var(--hover-accent-border);
-  border-bottom-color: var(--hover-accent-border);
-  border-left-color: var(--hover-accent-border);
-  box-shadow:
-    inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
-    0 0 0 var(--oc-border-width) var(--hover-accent-border);
+  background: var(--settings-surface-hover);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .config-subsection-body {
@@ -1220,9 +1157,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--section-row-gap);
-  border: var(--oc-border-width) solid transparent;
+  border: 0 solid transparent;
   border-top: none;
-  border-radius: 0 0 var(--oc-radius-soft) var(--oc-radius-soft);
+  border-radius: 0;
   transition:
     background var(--ui-duration-base) var(--ui-timing-standard),
     border-color var(--ui-duration-base) var(--ui-timing-standard),
@@ -1232,16 +1169,10 @@
 
 .config-subsection:hover > .config-subsection-body,
 .config-subsection:focus-within > .config-subsection-body {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 6%, transparent),
-      color-mix(in srgb, var(--accent) 2%, transparent) 68%,
-      transparent
-    );
-  border-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: transparent;
+  border-color: transparent;
   border-top-color: transparent;
-  box-shadow: inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone);
+  box-shadow: none;
 }
 
 /* Flat (non-collapsible) groups inside the Extensions tab —
@@ -1257,7 +1188,7 @@
 .ext-group + .ext-group {
   margin-top: calc(10px * var(--ui-scale));
   padding-top: calc(10px * var(--ui-scale));
-  border-top: var(--oc-border-width) solid var(--border);
+  border-top: 0 solid transparent;
 }
 
 .ext-group-body {
@@ -1274,10 +1205,10 @@
   align-items: center;
   white-space: normal;
   line-height: 1.45;
-  background: var(--settings-surface-base);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  background: transparent;
+  border: 0 solid transparent;
+  border-radius: 0;
+  padding: 0;
   box-shadow: none;
 }
 
@@ -1316,10 +1247,10 @@
   display: flex;
   align-items: center;
   gap: calc(14px * var(--ui-scale));
-  padding: calc(12px * var(--ui-scale)) calc(16px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
-  background: var(--settings-surface-base);
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
 }
 
 .about-author-avatar {
@@ -1353,10 +1284,10 @@
   grid-template-columns: auto 1fr;
   gap: calc(4px * var(--ui-scale)) calc(16px * var(--ui-scale));
   font-size: var(--ui-font-small);
-  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
-  background: var(--settings-surface-base);
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
 }
 
 .about-info-label {
@@ -1404,10 +1335,10 @@
   grid-template-columns: auto 1fr;
   gap: calc(6px * var(--ui-scale)) calc(14px * var(--ui-scale));
   align-items: center;
-  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
-  background: var(--settings-surface-base);
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
 }
 
 .about-shortcut-grid kbd {
@@ -1437,11 +1368,11 @@
 .prompt-card {
   display: grid;
   gap: calc(12px * var(--ui-scale));
-  padding: calc(14px * var(--ui-scale));
-  border-radius: var(--oc-radius-large);
-  border: var(--oc-border-width) solid var(--border);
-  background: color-mix(in srgb, var(--settings-surface-base) 90%, transparent);
-  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 8%, transparent);
+  padding: 0;
+  border-radius: 0;
+  border: 0 solid transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .prompt-card-head,
@@ -1481,9 +1412,9 @@
 /* Diff <details> shell. The Unicode-glyph chevron here is the
    single source — no late CSS-drawn rewrite shadows it. */
 .prompt-diff-details {
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
-  overflow: hidden;
+  border-radius: 0;
+  border: 0 solid transparent;
+  overflow: visible;
 }
 
 .prompt-diff-summary {
@@ -1528,10 +1459,10 @@
 .prompt-preview-card {
   display: grid;
   gap: calc(8px * var(--ui-scale));
-  padding: calc(12px * var(--ui-scale));
-  border-radius: var(--oc-radius-large);
-  border: var(--oc-border-width) solid var(--border);
-  background: color-mix(in srgb, var(--settings-surface-base) 88%, transparent);
+  padding: 0;
+  border-radius: 0;
+  border: 0 solid transparent;
+  background: transparent;
 }
 
 .prompt-preview-body {
@@ -1573,16 +1504,10 @@
   grid-template-columns: minmax(0, 1fr) max-content;
   gap: var(--ui-gap-md);
   align-items: start;
-  padding: var(--ui-gap-md);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--accent) 8%, transparent),
-      transparent 44%
-    ),
-    var(--settings-surface-base);
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
 }
 .provider-command-main {
   min-width: 0;
@@ -1623,9 +1548,9 @@
   align-items: baseline;
   gap: calc(6px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 74%, transparent);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
 }
 .provider-stat-value {
   color: var(--text-strong);
@@ -1785,10 +1710,10 @@
     "models models models";
   gap: var(--ui-gap-sm) var(--ui-gap-md);
   align-items: start;
-  padding: var(--ui-gap-md);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
-  background: var(--settings-surface-base);
+  padding: var(--ui-gap-md) 0;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   transition:
     border-color var(--ui-duration-base),
     background var(--ui-duration-base),
@@ -1796,9 +1721,9 @@
 }
 .provider-flat-row:hover,
 .provider-flat-row:focus-within {
-  border-color: var(--guide-card-border);
-  background: var(--guide-card-bg);
-  box-shadow: var(--guide-card-shadow);
+  border-color: transparent;
+  background: var(--settings-surface-hover);
+  box-shadow: none;
 }
 .provider-row-main {
   grid-area: main;
@@ -1909,7 +1834,7 @@
   grid-area: models;
   min-width: 0;
   padding-top: var(--ui-gap-xs);
-  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-top: 0 solid transparent;
   color: var(--text-muted);
   font-family: var(--mono);
   overflow-wrap: anywhere;
@@ -1922,7 +1847,7 @@
 }
 .provider-add-card {
   margin-top: var(--ui-gap-md);
-  border: var(--oc-border-width) solid var(--border);
+  border: 0 solid transparent;
 }
 .provider-add-title {
   color: var(--text-strong);
@@ -2003,11 +1928,11 @@
   display: flex;
   align-items: center;
   gap: var(--ui-gap-sm);
-  padding: var(--ui-gap-md) var(--ui-gap-lg);
+  padding: 0;
   margin: var(--ui-gap-md) 0;
-  border-radius: var(--oc-radius-soft);
-  background: var(--settings-surface-base);
-  border: var(--oc-border-width) solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  border: 0 solid transparent;
   color: var(--text-soft);
   font-size: var(--ui-font-control);
 }
@@ -2149,20 +2074,20 @@
 .config-panel-card {
   display: flex;
   flex-direction: column;
-  /* Density refresh: gap 10 → 6, padding 14/16 → 10/12. Cards now
-   * read as a unit instead of a stack of separated rows. */
+  /* Flat settings group: spacing only; the owner surface does not draw
+   * another card around controls that already have their own chrome. */
   gap: calc(6px * var(--ui-scale));
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
-  background: var(--settings-surface-base);
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   transition:
     border-color var(--ui-duration-base),
     background var(--ui-duration-base);
 }
 
 .config-panel-card:hover {
-  border-color: var(--border-hover);
+  border-color: transparent;
 }
 
 .config-panel-card-head {
@@ -2238,55 +2163,53 @@
 
 .config-content .extension-head:hover,
 .config-content .extension-head:focus-within,
-.config-content .knowledge-toolbar:hover,
-.config-content .knowledge-toolbar:focus-within,
 .config-content .channel-doc-card:hover,
 .config-content .channel-doc-card:focus-within,
 .config-content .knowledge-item:hover,
 .config-content .pref-item:hover {
-  border-color: var(--guide-card-border);
-  background: var(--guide-card-bg);
-  box-shadow: var(--guide-card-shadow);
+  border-color: transparent;
+  background: var(--settings-surface-hover);
+  box-shadow: none;
   transform: none;
 }
 
 .config-content .config-subsection-head:hover,
 .config-content .config-subsection-head:focus-visible {
-  border-color: var(--hover-accent-border);
-  background: var(--hover-accent-wash);
-  box-shadow: var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
+  border-color: transparent;
+  background: var(--settings-surface-hover);
+  box-shadow: none;
+  transform: none;
 }
 
 .config-content .config-subsection:hover > .config-subsection-body,
 .config-content .config-subsection:focus-within > .config-subsection-body,
 .config-content .config-subsection[open]:hover > .config-subsection-body,
 .config-content .config-subsection[open]:focus-within > .config-subsection-body {
-  background: var(--hover-accent-wash);
-  border-color: var(--hover-accent-border);
+  background: transparent;
+  border-color: transparent;
   border-top-color: transparent;
-  box-shadow: var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
+  box-shadow: none;
+  transform: none;
 }
 
 .agent-model-table {
   display: flex;
   flex-direction: column;
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--settings-surface-base);
-  overflow: hidden;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .agent-model-tier-label {
   font-size: var(--ui-font-meta);
   color: var(--text-muted);
-  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  background: var(--settings-surface-hover);
+  padding: calc(8px * var(--ui-scale)) 0 calc(4px * var(--ui-scale));
+  background: transparent;
 }
 
 .agent-model-tier-label:not(:first-child) {
-  border-top: var(--oc-border-width) solid var(--divider-soft);
+  border-top: 0 solid transparent;
   margin-top: calc(2px * var(--ui-scale));
 }
 
@@ -2294,8 +2217,8 @@
   display: flex;
   align-items: center;
   gap: calc(10px * var(--ui-scale));
-  padding: calc(5px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-top: var(--oc-border-width) solid var(--divider-soft);
+  padding: calc(5px * var(--ui-scale)) 0;
+  border-top: 0 solid transparent;
 }
 
 .agent-model-row:hover {
@@ -2686,15 +2609,15 @@
   align-items: center;
   justify-content: space-between;
   gap: calc(10px * var(--ui-scale));
-  padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
-  background: var(--settings-surface-base);
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   min-height: calc(40px * var(--ui-scale));
   transition: border-color var(--ui-duration-base);
 }
 .llm-summary-row:hover {
-  border-color: var(--border-hover);
+  border-color: transparent;
 }
 
 .llm-summary {

@@ -20,6 +20,14 @@
 
 .oc-surface-header[data-surface="settings-group"] {
   width: 100%;
+  height: auto;
+  min-height: calc(28px * var(--ui-scale));
+  max-height: none;
+  padding: 0;
+  background: transparent;
+  border-block-end: 0 solid transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .chat-header.oc-surface-header {

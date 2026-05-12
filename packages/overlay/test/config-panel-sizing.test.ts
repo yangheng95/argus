@@ -8,16 +8,21 @@ await ensureOverlayDist()
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "settings.css"), "utf8")
+const HEADER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "header.css"), "utf8")
 const PROVIDERS_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "ProvidersPanel.tsx"), "utf8")
 
-function bodyOf(selector: string): string {
-  const css = SETTINGS_CSS.replace(/\/\*[\s\S]*?\*\//g, "")
+function bodyOfSource(source: string, selector: string): string {
+  const css = source.replace(/\/\*[\s\S]*?\*\//g, "")
   for (const chunk of css.split("}")) {
     const open = chunk.indexOf("{")
     if (open < 0) continue
     if (chunk.slice(0, open).trim() === selector) return chunk.slice(open + 1)
   }
   throw new Error(`CSS rule not found: ${selector}`)
+}
+
+function bodyOf(selector: string): string {
+  return bodyOfSource(SETTINGS_CSS, selector)
 }
 
 function route(url: URL) {
@@ -41,7 +46,7 @@ describe("config panel sizing", () => {
     expect(bodyOf(".config-content")).toMatch(/min-height\s*:\s*0/)
   })
 
-  test("settings panels share one neutral surface token family", () => {
+  test("settings panels keep a flat borderless owner surface", () => {
     const layoutBody = bodyOf(".config-dialog-layout")
     expect(layoutBody).toContain("--settings-surface-base: var(--surface-inset)")
     expect(layoutBody).toContain("--settings-surface-hover:")
@@ -49,16 +54,27 @@ describe("config panel sizing", () => {
     expect(layoutBody).toContain("--settings-surface-emphasis:")
 
     for (const selector of [
-      ".config-sidebar",
       ".config-panel-card",
-      ".perm-row",
       ".provider-flat-row",
-      ".agent-model-table",
+      ".provider-command",
       ".config-status-box",
       ".about-author-card",
+      ".about-info-grid",
+      ".about-shortcut-grid",
+      ".prompt-card",
+      ".prompt-preview-card",
+      ".extension-head",
+      ".extension-row",
+      ".channel-doc-card",
+      ".market-card",
+      ".config-section",
+      ".config-subsection",
+      ".agent-model-table",
       ".llm-summary-row",
     ]) {
-      expect(bodyOf(selector)).toMatch(/background:\s*var\(--settings-surface-base\)/)
+      const body = bodyOf(selector)
+      expect(body).toMatch(/background:\s*transparent/)
+      expect(body).toMatch(/border:\s*0(?:\s+solid transparent)?/)
     }
 
     for (const selector of [
@@ -66,9 +82,17 @@ describe("config panel sizing", () => {
       ".config-toggle-list-item:hover",
       ".agent-model-row:hover",
       ".perm-row:hover",
+      ".provider-flat-row:hover,\n.provider-flat-row:focus-within",
     ]) {
       expect(bodyOf(selector)).toMatch(/background:\s*var\(--settings-surface-hover\)/)
     }
+
+    expect(bodyOf(".knowledge-toolbar")).toMatch(/background:\s*transparent/)
+    expect(bodyOf(".knowledge-toolbar")).toMatch(/border:\s*0 solid transparent/)
+    expect(bodyOf(".config-section-head")).toMatch(/background:\s*transparent/)
+    expect(bodyOf(".config-section-body")).toMatch(/border:\s*0 solid transparent/)
+    expect(bodyOfSource(HEADER_CSS, '.oc-surface-header[data-surface="settings-group"]')).toMatch(/background:\s*transparent/)
+    expect(bodyOfSource(HEADER_CSS, '.oc-surface-header[data-surface="settings-group"]')).toMatch(/border-block-end:\s*0 solid transparent/)
   })
 
   test("settings content normalizes same-level small button dimensions", () => {
