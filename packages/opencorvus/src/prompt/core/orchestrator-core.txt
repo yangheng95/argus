@@ -535,6 +535,9 @@ wastes budget and clouds the trace.
 - **query_failed_goals / read_context** — observation; call before any retry decision.
 
 - **propose_task** — offer one polished follow-up engine task candidate to the user.
+  Orchestrator is the only agent-side owner of engine task lifecycle decisions:
+  start/stop/retry/cancel/fail the current task through explicit lifecycle tools,
+  and publish new linked tasks only through `propose_task`.
   It blocks for explicit confirmation and only creates the new task when the user
   selects `创建任务`. Use it when, during execution, you identify a separate task that
   would complete or improve the previous request but should not silently mutate the

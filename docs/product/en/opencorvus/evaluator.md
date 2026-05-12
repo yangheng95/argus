@@ -66,6 +66,12 @@ Set via `assistant.evaluator.tier`:
 | `rejected` | retry (same plan) or replan (new plan) — `replan_guidance` decides |
 | `inconclusive` | treated as rejected but prefers replan (missing info) |
 
+Lifecycle boundary: the Delivery/Evaluator surface provides verdicts and
+evidence only. Starting, stopping, retrying, cancelling, failing the current
+task, and publishing linked follow-up tasks are Orchestrator lifecycle
+decisions. If delivery evidence implies a new task, report the recommendation
+as evidence; do not create the task from the delivery agent.
+
 ## Known traps
 
 1. **Empty output → `inconclusive`, not `accepted`.** Historical bug: empty executor output treated as "no problems → pass".

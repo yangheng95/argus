@@ -323,6 +323,7 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt routes follow-up task creation through confirmed proposals", async () => {
     const text = await readPrompt("orchestrator")
     expect(text).toContain("propose_task")
+    expect(text).toContain("Orchestrator is the only agent-side owner of engine task lifecycle decisions")
     expect(text).toContain("only creates the new task when the user")
     expect(text).toContain("Never call generic `task` or control-plane `panel`")
   })

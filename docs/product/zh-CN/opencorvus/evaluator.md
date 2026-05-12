@@ -59,6 +59,8 @@ verdict 以 `engine_artifact[kind="verdict"]` 形式落盘：
 | `rejected` | 走 `delivery-retry-feedback.ts` 回修；超过 `delivery.max_retries` 后由 Orchestrator 决定 retry / replan / fail |
 | `inconclusive` | 视为 rejected，但优先 replan（无法判决通常意味着信息不全或 doom-loop） |
 
+Delivery agent 只负责 verdict 和证据。启动 / 停止 / retry / cancel / fail 当前 task，以及发布新的 follow-up task，是 Orchestrator 的 lifecycle 权限；Delivery 如果发现应拆成新 task，只能在 verdict evidence 中提出建议，不能直接创建 task。
+
 ## 与 Benchmark 的关系
 
 benchmark 的 `qualityVerdict === "accepted"` 现在表示 delivery agent 写下的 verdict artifact 为 `accepted` 且 `verification-evidence` 中 `required_check_pass_rate > 0`（`script/benchmark/quality-gates.ts`）。

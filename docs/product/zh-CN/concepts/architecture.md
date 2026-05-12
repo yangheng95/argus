@@ -94,6 +94,8 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
 | **Prosecutor** | `prosecutor/agent.ts` | 对交付候选发起对抗性复核 |
 | **Delivery** | `delivery/agent.ts` + `delivery/checks/` + `delivery/specialists/` | diff 验收 + 触发回修 + 确定性 / LLM judge 检查 |
 
+Task 生命周期的 agent-side 权限只属于 **Orchestrator**：启动 / 停止 / retry / cancel / fail 当前 task，以及发布新的 follow-up task，都必须通过 Orchestrator 的显式 lifecycle tools（例如 `propose_task`）。Delivery 只能输出验收 verdict、证据和建议，不能直接创建、取消、重试或终止 engine task。
+
 > **Planner agent 已删**。session 级的 `src/tool/planner.ts` 是 working-memory 工具（`add_task / update_task / scratchpad_*`），任何 agent 均可挂载来管自己的子任务树；它**不是**旧 per-goal planner 的替代。
 >
 > **Evaluator agent 已删**。验证职责并入 `delivery/checks/`（`discovery.ts` 解析 check family → `per-goal.ts` / `llm-judge-runner.ts` / `visual.ts`）。
