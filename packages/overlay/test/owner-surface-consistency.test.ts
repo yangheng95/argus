@@ -7,6 +7,9 @@ const TITLEBAR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces"
 const SIDEBAR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "sidebar.css"), "utf8")
 const INSPECTOR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "inspector.css"), "utf8")
 const MESSAGES_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "messages.css"), "utf8")
+const AGENT_WORKFLOW_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "agent-workflow.css"), "utf8")
+const CONVERSATION_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "conversation.css"), "utf8")
+const COMPOSER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "composer.css"), "utf8")
 
 function bodyOf(source: string, selector: string): string {
   const css = source.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -58,4 +61,16 @@ test("message content carriers keep a neutral surface base", () => {
   expect(bodyOf(MESSAGES_CSS, ".msg-read-meta")).toMatch(/background:\s*transparent/)
   expect(bodyOf(MESSAGES_CSS, ".msg-read-reminder")).toMatch(/background:\s*transparent/)
   expect(bodyOf(MESSAGES_CSS, ".msg-file-chip")).toMatch(/background:\s*var\(--surface-inset\)/)
+})
+
+test("workflow and conversation owner surfaces stay flat", () => {
+  expect(bodyOf(AGENT_WORKFLOW_CSS, ".agent-workflow-panel")).toMatch(/background:\s*transparent/)
+  expect(bodyOf(AGENT_WORKFLOW_CSS, ".agent-workflow-card")).toMatch(/border:\s*0 solid transparent/)
+  expect(bodyOf(AGENT_WORKFLOW_CSS, ".agent-workflow-card")).toMatch(/border-radius:\s*0/)
+  expect(bodyOf(AGENT_WORKFLOW_CSS, ".agent-workflow-card")).toMatch(/box-shadow:\s*none/)
+  expect(bodyOf(AGENT_WORKFLOW_CSS, ".agent-workflow-card:hover, .agent-workflow-card:focus-visible")).toMatch(/background:\s*var\(--surface-hover\)/)
+  expect(bodyOf(CONVERSATION_CSS, ".goal-chip")).toMatch(/border:\s*0 solid transparent/)
+  expect(bodyOf(CONVERSATION_CSS, ".goal-chip")).toMatch(/background:\s*transparent/)
+  expect(bodyOf(COMPOSER_CSS, ".chat-empty--task")).toMatch(/border:\s*0 solid transparent/)
+  expect(bodyOf(COMPOSER_CSS, ".chat-empty--task")).toMatch(/background:\s*transparent/)
 })

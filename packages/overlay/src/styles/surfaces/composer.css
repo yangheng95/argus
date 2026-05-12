@@ -729,9 +729,9 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Empty-task chip (.chat-empty--task) — placeholder rendered when
+   Empty-task row (.chat-empty--task) — placeholder rendered when
    the chat column has no current task. Stage tone routes through
-   --warn / --bad on left rail.
+   text color instead of a card border.
    ───────────────────────────────────────────────────────────── */
 
 .chat-empty--task {
@@ -742,18 +742,18 @@
   width: min(100%, calc(520px * var(--ui-scale)));
   min-height: auto;
   padding: calc(18px * var(--ui-scale)) calc(20px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-left: calc(3px * var(--ui-scale)) solid var(--accent);
-  border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
+  border: 0 solid transparent;
+  border-left: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   opacity: var(--ui-opacity-full);
 }
 
 .chat-empty--task[data-status="queued"] {
-  border-left-color: var(--warn);
+  color: var(--warn);
 }
 
 .chat-empty--task[data-status="failed"],
 .chat-empty--task[data-status="cancelled"] {
-  border-left-color: var(--bad);
+  color: var(--bad);
 }
