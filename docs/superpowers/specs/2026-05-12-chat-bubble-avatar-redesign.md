@@ -236,6 +236,7 @@ setCardTreeStore(
 - `message` / `agent` 是 transcript 消息卡片，必须默认且始终显示正文；不再接入 `cardExpanded`。
 - 折叠只保留给 `Card` / workflow 等结构化过程卡，不能把 agent 消息折成无边框 head。
 - 结构化卡片折叠交互统一为 header 单击/Enter/Space 双向 toggle；禁止再用“单击只展开、双击收起”的双入口契约。
+- 结构化卡片 body 是内容层，不是第二张卡片：`goalDescription`、step 正文、collapsed preview 禁止再画内层边框、渐变底、圆角盒或额外竖向 rail。
 - ChatBubble 不渲染 `collapsedPreview` / `card__todo-summary`；todo progress 属于结构化卡折叠摘要，不属于消息卡片。
 - ChatBubble 使用单一 flat card surface：head 与 body 同处一个 `.chat-bubble` 边界内，禁止 head 外置再套一个空 bubble 形成“实心 bar”。
 
