@@ -80,7 +80,7 @@ describe("core prompt hygiene", () => {
     expect(integrityFlat).toContain("unsupported REQ IDs")
     expect(integrityFlat).toContain("requirement_ids")
     expect(integrity).toContain("does not apply graph mutations automatically")
-    expect(orchestrator).toContain("not a pre-build dispatch gate")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("not a pre-build or wave-level dispatch gate")
     expect(orchestrator).not.toContain("zero correction")
     expect(tools).not.toContain("integrityAttemptExecutionBlockReason")
     expect(tools).not.toContain("Diagnostic-only findings require upstream repair")
@@ -110,7 +110,9 @@ describe("core prompt hygiene", () => {
     }
     // The fully-worked register_goal anchor and the cross-goal contract anchor must both survive edits.
     expect(text).toContain('id: "goal_sse_manager"')
-    expect(text).toContain('category: "shared_type"')
+    expect(text).toContain("register_type_contract({")
+    expect(text).toContain('name: "ChatMessage"')
+    expect(text).toContain('goal_ids: ["goal_shared_types", "goal_storage", "goal_sse_manager", "goal_claude_api", "goal_hooks", "goal_chat_components"]')
   })
 
   test("architect prompt and tool surface do not expose duplicate metric or challenge lanes", async () => {
@@ -256,6 +258,9 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("`start_frontend_preview`")
     expect(text).toContain("board `delivery.previewUrl`")
     expect(text).toContain("required runtime flow cannot be")
+    expect(text).not.toContain("create follow-up tasks")
+    expect(text).toContain("recommend follow-up")
+    expect(text).toContain("Do not create the task yourself")
   })
 
   test("design-analysis and delivery agree that visual_consistency_spec is delivery-gated", async () => {
@@ -342,6 +347,43 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("Base-rate prior: this is a low-frequency option, roughly 2-8%")
     expect(text).toContain("remaining work is clearly outside the current")
     expect(text).toContain("Never call generic `task` or control-plane `panel`")
+  })
+
+  test("orchestrator prompt keeps visual workflow ordering and verification-goal lifecycle coherent", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+    expect(normalized).toContain("`design_analysis` MUST be first, before `analyze_intent`")
+    expect(normalized).toContain("UI replication from visual reference")
+    expect(normalized).toContain("`design_analysis` (mandatory when an image or live page URL is the visual spec) → `analyze_intent`")
+    expect(normalized).not.toContain("UI replication from visual reference` in `Kind: workflow` → `analyze_intent`")
+    expect(normalized).not.toContain("verification` goals are integration checks; they stay pending until **deliver**")
+    expect(normalized).toContain("dispatch them with `build({ goalID })` like every other goal")
+    expect(normalized).toContain("Every non-delivery-only verification goal must be terminal before `deliver`")
+  })
+
+  test("integrity prompt audits original request mining, not only generated REQ rows", async () => {
+    const integrity = await readPrompt("integrity")
+    const orchestrator = await readPrompt("orchestrator")
+    const architect = await readPrompt("architect")
+    const dimensions = await readSource("integrity/dimensions.ts")
+    const agent = await readSource("integrity/agent.ts")
+
+    for (const text of [integrity, dimensions, agent]) {
+      const normalized = text.replace(/\s+/g, " ")
+      const lower = normalized.toLowerCase()
+      expect(lower).toContain("original user request")
+      expect(lower).toContain("generated req rows")
+      expect(lower).toContain("evidence")
+      expect(lower).toContain("audit universe")
+      expect(lower).toContain("requirements extraction")
+    }
+    expect(integrity).toContain("If the original request implies a requirement that has no corresponding REQ-N row")
+    expect(integrity).toContain("leave `requirement_ids` empty")
+    expect(orchestrator).toContain("late-stage requirements-mining and system-integrity review")
+    expect(orchestrator.replace(/\s+/g, " ")).toContain("after Delivery acceptance and before publish")
+    expect(orchestrator).toContain("No standalone wave-level integrity loop")
+    expect(architect).toContain("near task end to audit the original user request, requirements extraction, and delivered system")
+    expect(architect).not.toContain("integrity reviewer before build")
   })
 
   test("orchestrator prompt forbids `deliver` while non-terminal goals remain", async () => {

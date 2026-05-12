@@ -261,9 +261,11 @@ once and decide upstream:
   - `architect` requires a requirements spec snapshot. If you call it without
     requirements, it has no REQ-N rows to decompose against.
   - `integrity` requires architect goals on the active spec snapshot. It records
-    advisory architecture-review findings; it does not rewrite requirements or goals,
-    and it is not a pre-build dispatch gate. Post-build review findings become retry
-    feedback for the goal IDs the review names; unscoped concerns are advisory.
+    late-stage requirements-mining / system-integrity findings against the original
+    user request; it does not rewrite requirements or goals, and it is not a
+    pre-build or wave-level dispatch gate. Use it near task end, typically after
+    Delivery acceptance and before publish/follow-up/failure decisions, when you need
+    to know whether requirements extraction missed or distorted the user's request.
   - `build({ goalID })` requires architect goals. The task-level shape
     `build({ request, directBuildIntent })` without goalID is a supported direct-build
     path. Prefer it for explicit `Kind: build`, whole-task rework after delivery
@@ -474,15 +476,18 @@ wastes budget and clouds the trace.
   edits; Build sessions own those edits and report them in `files_changed[]`. For
   contract-level point fixes prefer `modify_goal`.
 
-- **integrity** — advisory architecture review of the active architect graph along
-  four orthogonal axes: (1) requirement_fidelity (REQ-N completion at the system
-  level — audit unit is each REQ row, NOT goal contracts; `issue.requirement_ids`
-  names which REQ failed and `issue.spec_ids` names which acceptance spec failed
-  post-build), (2) technical_feasibility (imports/exports/owned_paths/dep-graph
-  viability + foundational-decision coherence + user-deliverable tier walk:
-  FE→BE/data, CLI→runtime, etc.), (3) hallucination (ungrounded REQs / fabricated
-  specs / out-of-scope additions), (4) solution_quality (granularity,
-  acceptance-spec strength, ownership clarity, ordering smell). Returns a
+- **integrity** — late-stage requirements-mining and system-integrity review of the
+  original user request, generated REQ rows, active architect graph, and available
+  Build / Delivery evidence along four orthogonal axes: (1) requirement_fidelity
+  (starts from the original user request and asks whether requirements extraction
+  captured every user-visible capability; generated REQ rows are evidence, not the
+  audit universe; `issue.requirement_ids` names an existing REQ when one exists and
+  `issue.spec_ids` names which acceptance spec failed post-build), (2)
+  technical_feasibility (imports/exports/owned_paths/dep-graph viability +
+  foundational-decision coherence + user-deliverable tier walk: FE→BE/data,
+  CLI→runtime, etc.), (3) hallucination (ungrounded REQs / fabricated specs /
+  out-of-scope additions), (4) solution_quality (granularity, acceptance-spec
+  strength, ownership clarity, ordering smell). Returns a
   per-dimension verdict (pass / concerns / needs_correction) plus an aggregate
   (worst-of) AND the full per-dimension issue / correction / missing-goal text. The
   review records findings only: it NEVER re-upserts goals, NEVER rewrites
@@ -491,10 +496,13 @@ wastes budget and clouds the trace.
   correction proposal, every missing-goal proposal — and choose modify_goal /
   build({goalID}) / architect / deliver / fail_task explicitly. Standalone integrity
   findings are evidence for the next decision turn, nothing more.
-  Use when: you need architecture feedback after a Build/Delivery result. Goal
-    builds already run a post-build architecture_review automatically.
-  Skip when: there is no new Build/Delivery evidence and no explicit architecture
-    question to answer.
+  Use when: after the task is otherwise complete or Delivery has accepted, you need
+    to audit whether the original request was mined into requirements adequately
+    before publish / fail_task / propose_task. It is also appropriate when delivery
+    evidence points at a requirements-extraction miss rather than a local build bug.
+  Skip when: you only have an ordinary build failure, a minor Delivery rejection that
+    can be repaired by build, or no concrete risk that the original request was
+    mis-mined.
 
 - **modify_goal** — change a goal's contract (acceptance_specs / owned_paths) in
   place; useful when delivery rejection points at a contract gap.
@@ -571,9 +579,9 @@ wastes budget and clouds the trace.
      wave-by-wave `build({ goalID })` (each wave = goals whose `depends_on`
      are all `passed`) → `deliver` → optional `prosecute` → `publish_delivery`.
 
-   - **UI replication from visual reference** in `Kind: workflow` → `analyze_intent`
-     (terse "复刻 X" needs scope clarification) → `design_analysis` (mandatory when an
-     image or live page URL is the visual spec) → `requirements` → `architect` →
+   - **UI replication from visual reference** in `Kind: workflow` → `design_analysis`
+     (mandatory when an image or live page URL is the visual spec) → `analyze_intent`
+     only if scope still needs clarification after the visual handoff → `requirements` → `architect` →
      builds → `deliver`. Every build receives the visual/reference contract; reference
      fidelity is binding, not inspirational.
 
@@ -605,8 +613,8 @@ wastes budget and clouds the trace.
 ## After a goal batch completes (next wake)
 
 - If any build tool_call is still running in this turn, AI SDK waits for all of them before the next step. This is the wave boundary: when control returns, recompute the eligible wave (status≠passed AND every depends_on=passed) and emit the next batch.
-- `verification` goals are integration checks; they stay pending until **deliver** runs merged-worktree verification.
-- **Wave-level architecture review.** Once the current wave reaches terminal state (every dispatchable goal in this wave is passed or failed and merged into primary), call `integrity` ONCE — not once per goal. The review reads the merged primary state, persists a compact summary to decision_log under `phase=review`, and stores the full per-dimension markdown in the integrity_attempt artifact (read_context's "Architecture review history" section surfaces the last 5 review summaries). Skipping wave-level review and pushing straight to the next wave is allowed when delivery evidence is already strong; calling it once per goal in a tight loop is wasteful and creates noisy decision_log churn.
+- `verification` goals are integration checks; dispatch them with `build({ goalID })` like every other goal. Their executor writes / runs the final test suite and reports `passed` or `failed`; they do not stay pending for `deliver` to flip. Every non-delivery-only verification goal must be terminal before `deliver`.
+- **No standalone wave-level integrity loop.** Do not call `integrity` after every build wave. Standalone integrity is a task-end requirements-extraction audit: run it only when the integrated evidence or accepted deliverable raises a real question about whether the original user request was mined into requirements adequately. Post-build `architecture_review` text embedded in build results remains normal build feedback; standalone `integrity` is not the accumulator for every wave.
 - Once ALL dispatchable goals are terminal (passed/failed):
   - All blocking goals passed → call **deliver** (delivery agent verifies and accepts or rejects).
   - Some failed → call **query_failed_goals** first, then call `build({ goalID, request })` again with a concrete root_cause + targeted instruction per failing goal. This opens a new implementation version for that same goal: e.g. the second implementation of the first goal displays as `#G1V2`. Reflexive re-call without analysis wastes budget.
