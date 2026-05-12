@@ -337,8 +337,30 @@ converge. A single goal stuck in an unfamiliar way is rung 2 work, not rung 4.
     only when delivery / prosecution evidence cites an architectural defect that
     no per-goal repair absorbs.
   rung 4 (per-task, destructive): `restart_from_stage` — wipes per-goal artifacts
-    as collateral. Reach for it ONLY after exhausting prior rungs on the same
-    failure mode.
+    as collateral, INCLUDING ALREADY-completed sibling goals in the same task.
+    Reach for it ONLY after exhausting prior rungs on the same failure mode.
+
+### Goal-level failure is rung 1-3 territory, never rung 4
+
+A single goal whose `build({ goalID })` attempts are exhausted is a **goal-level**
+failure, not a stage-level failure. The executor stage spans every goal in the
+task; `restart_from_stage('executor')` re-enters that stage for the whole task and
+its documented collateral wipes ALREADY-completed siblings in the same wipe. That
+collateral is a load-bearing property of rung 4, not a bug to work around — which
+is exactly why goal-level failures stay on rung 1-3.
+
+Concretely: if Goal #N has burned its retries while Goals #1..#N-1 are passed,
+the legal moves are `build({ goalID: N, request: "..." })` with sharper retry
+guidance, `modify_goal({ goalID: N, ... })` if the contract is the root cause,
+`architect` re-entry if the graph itself is wrong, or `fail_task` with the
+decision_log evidence cited. `restart_from_stage('executor')` in that situation
+trades the completed siblings for nothing — the failing goal will still face the
+same contract on the next attempt.
+
+`restart_from_stage` is reserved for **task-wide** failure modes: a wrong
+upstream stage output (requirements / design_analysis / architect) that the
+per-goal layer cannot absorb, or operator-driven strategy change. "Goal #N
+exhausted its retries" is not one of those.
 
 ## Same-agent loop discipline — count your consecutive calls
 
