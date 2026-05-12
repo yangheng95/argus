@@ -26,7 +26,7 @@
   gap: 0;
   padding: 0;
   overflow: hidden;
-  background: color-mix(in srgb, var(--surface-inset) 92%, var(--surface));
+  background: transparent;
 }
 
 .agent-workflow-panel::before {
@@ -179,16 +179,14 @@
   flex-direction: column;
   gap: calc(7px * var(--ui-scale));
   padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  overflow: hidden;
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--workflow-tone) 28%, var(--border));
-  border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--surface) 88%, var(--workflow-tone) 4%);
+  overflow: visible;
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
   text-align: left;
   cursor: pointer;
-  box-shadow:
-    calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 16%, transparent),
-    0 calc(6px * var(--ui-scale)) calc(16px * var(--ui-scale)) color-mix(in srgb, var(--bg) 60%, transparent);
+  box-shadow: none;
   transition:
     transform var(--ui-duration-base) var(--ui-timing-standard),
     border-color var(--ui-duration-base) var(--ui-timing-standard),
@@ -200,7 +198,7 @@
 }
 
 .agent-workflow-card[data-status="running"] {
-  border-style: dashed;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
 .agent-workflow-card[data-status="completed"] {
@@ -217,12 +215,11 @@
 
 .agent-workflow-card:hover,
 .agent-workflow-card:focus-visible {
-  border-color: color-mix(in srgb, var(--workflow-tone) 58%, var(--border));
-  box-shadow:
-    calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 18%, transparent),
-    0 calc(8px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, var(--bg) 70%, transparent);
+  border-color: transparent;
+  background: var(--surface-hover);
+  box-shadow: none;
   outline: none;
-  transform: translate(var(--stack-offset), calc(var(--stack-offset) - calc(1px * var(--ui-scale))));
+  transform: translate(var(--stack-offset), var(--stack-offset));
 }
 
 .agent-workflow-card-head,

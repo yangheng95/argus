@@ -334,11 +334,9 @@ describe("overlay architecture guards", () => {
     // The shell families (`.sidebar` / `.chat` / `.sections` for the
     // three workbench columns; `.section` / `.gwg` for inspector cards;
     // `.board-intro` / `.chat-empty--task` for empty states; the four
-    // `.board-intro__*` children) all canonicalize on palette tokens
-    // (`--rail-surface` / `--chat-canvas` / `--inspector-surface` /
-    // `--surface-inset` / `--subtle-1` / `--subtle-2` / color-mix on
-    // `--accent`+`--surface`). Themes only swap palette behind those
-    // tokens; no `body[data-theme]` selector touches the shell chrome.
+    // `.board-intro__*` children) canonicalize on one surface language.
+    // Themes only swap palette behind those tokens; no `body[data-theme]`
+    // selector touches the shell chrome.
     for (const cls of [
       "sidebar",
       "chat",
@@ -2440,7 +2438,7 @@ describe("overlay architecture guards", () => {
       "gap: 0",
       "padding: 0",
       "overflow: hidden",
-      "background: color-mix(in srgb, var(--surface-inset) 92%, var(--surface))",
+      "background: transparent",
     ]) {
       expect(panelBody).toContain(declaration)
     }
@@ -2618,19 +2616,17 @@ describe("overlay architecture guards", () => {
       "min-height: calc(94px * var(--ui-scale))",
       "gap: calc(7px * var(--ui-scale))",
       "padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale))",
-      "overflow: hidden",
-      // The literal `1px solid` border was rewritten to read the
-      // `--oc-border-width` token during the surface migration so the
-      // border width tracks the rest of the chromed-control family.
-      "border: var(--oc-border-width) solid color-mix(in srgb, var(--workflow-tone) 28%, var(--border))",
-      "border-radius: var(--oc-radius-large)",
-      "background: color-mix(in srgb, var(--surface) 88%, var(--workflow-tone) 4%)",
+      "overflow: visible",
+      "border: 0 solid transparent",
+      "border-radius: 0",
+      "background: transparent",
+      "box-shadow: none",
     ]) {
       expect(cardBody).toContain(declaration)
     }
 
     expect(soloRuleBody(surface, '.agent-workflow-card[data-status="running"]')).toContain(
-      "border-style: dashed",
+      "background: color-mix(in srgb, var(--accent) 7%, transparent)",
     )
     expect(soloRuleBody(surface, '.agent-workflow-card[data-status="completed"]')).toContain(
       "--workflow-tone: var(--good)",
@@ -2643,14 +2639,10 @@ describe("overlay architecture guards", () => {
     )
 
     const hoverBody = soloRuleBody(surface, ".agent-workflow-card:hover,\n.agent-workflow-card:focus-visible")
-    expect(hoverBody).toContain("border-color: color-mix(in srgb, var(--workflow-tone) 58%, var(--border))")
-    // The `var(--stack-offset, 0)` fallback was split into a default
-    // declaration on `.agent-workflow-card` itself, and the literal
-    // `1px` lift wrapped in `calc(1px * var(--ui-scale))` so the lift
-    // follows ui-scale.
-    expect(hoverBody).toContain(
-      "transform: translate(var(--stack-offset), calc(var(--stack-offset) - calc(1px * var(--ui-scale))))",
-    )
+    expect(hoverBody).toContain("border-color: transparent")
+    expect(hoverBody).toContain("background: var(--surface-hover)")
+    expect(hoverBody).toContain("box-shadow: none")
+    expect(hoverBody).toContain("transform: translate(var(--stack-offset), var(--stack-offset))")
   })
 
   test("workflow card text density is canonical, not theme scoped", () => {
