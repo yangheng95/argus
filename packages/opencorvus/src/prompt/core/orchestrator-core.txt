@@ -652,66 +652,66 @@ every historical review verbatim.
 
 On rejection, every passed goal in the task has ALREADY been opened under
 a fresh attempt cycle (superseded_reason=delivery_rework) by the deliver
-tool itself. The dispatch loop will re-execute them under the SAME contract
-automatically. Your job is strategy, not state-flipping.
+tool itself. That is bookkeeping, not a mandate to replay the full workflow.
+Your job is strategy: choose the smallest valid rework tool from the feedback,
+then verify once more if the two-deliver budget allows it.
 
-Escalation ladder — try the cheapest first; climb only when the previous rung did not
-converge. By deliver-time the per-goal worktrees have already been merged into main,
-so the deliverable is AGGREGATED CODE. Default rework operates on that aggregated
-state, not on per-goal shards. Fall back to per-goal retry only when a failure is
-clearly confined to one goal's internals.
+Delivery has a hard prompt-level budget of TWO invocations per task: the first
+acceptance attempt and, if needed, one post-rework verification. After a second
+`deliver` rejection, do NOT call `deliver` a third time and do NOT restart the
+full workflow to dodge the cap. Call `fail_task` with the unresolved issues,
+evidence, impact, and root-cause analysis, unless a concrete operator question is
+the only missing input.
 
-  1. Transient or integration-only failure → no action; the next `deliver` call will
-     re-verify on its own.
-  2. Specific goal contract gap → **modify_goal** on affected goals (contract-level
-     change; does not execute).
-  3. Missing functionality → re-run **architect** with the rejection feedback so it
-     refines the goal set (add / modify / split / remove). Existing goals retain
-     their `G` numbers; any added goal receives the next unused `G` number. Do not
-     run a pre-build integrity gate after refinement; the next Build round receives
-     the updated architecture consensus and routes architecture_review findings to
-     the affected goal IDs it names.
-  4. **DEFAULT rework path → call `build({ request, directBuildIntent: "modify_files" })` with the rejection feedback as
-     the request.** `build({ request, directBuildIntent: "modify_files" })` works on the aggregated main tree directly —
-     it can touch any file, cross goal boundaries, fix integration glue, rename
-     symbols project-wide. This is the right tool for virtually every rejection whose
-     fix spans more than one file owned by one goal. (Direct in-place edits use this
-     same shape from day one — there is no "direct vs pipeline" mode switch; the
-     no-goalID build call IS direct mode.)
-  5. Single-goal internal bug (rejection clearly confined to one goal's contract,
+Escalation ladder — try the cheapest first; climb only when the evidence proves
+the cheaper rung cannot converge. By deliver-time the per-goal worktrees have
+already been merged into main, so the deliverable is AGGREGATED CODE. Default
+rework operates on that aggregated state, not on per-goal shards.
+
+  1. Minor / localized delivery issues → call `build({ request, directBuildIntent: "modify_files" })`
+     with the exact rejection feedback as the request. "Minor / localized" includes
+     build or test errors, missing imports, broken runtime entrypoints, wiring gaps,
+     small UI/content mismatches, missing labels, route/config glue, and integration
+     defects where the intended product is still basically the right deliverable.
+     Do not re-run requirements, architect, design_analysis, or the whole workflow
+     for these issues.
+  2. Single-goal internal bug (rejection clearly confined to one goal's contract,
      no other goal's files need touching) → call `build({ goalID, request })` with
      per-goal analysis (root_cause + failure_class + expected_fix) baked into
      `request`.
-  6. Two consecutive rejections on the SAME goal-set under the same contract → the
-     goal decomposition itself is suspect → re-run **architect** to fully regenerate
-     the goal list while keeping requirements. Do not keep retrying the same goals a
-     third time.
-  7. Requirements themselves are wrong (user intent misread, spec incoherent) →
-     **restart_from_stage('requirements')**.
-  8. Hallucination at the upstream stage (architecture_review flagged ungrounded
+  3. Specific goal contract gap → **modify_goal** on affected goals, then build
+     the corrected goal. Use this only when the goal's written contract is the
+     blocker; ordinary implementation defects stay on rung 1 or 2.
+  4. Missing functionality that is still within the user's existing requirement →
+     prefer task-level `build({ request, directBuildIntent: "modify_files" })` over
+     graph regeneration. Re-enter **architect** only when the rejection proves a
+     genuinely new prerequisite goal, ownership split, or cross-goal contract that
+     cannot be represented as direct rework or `modify_goal`.
+  5. Requirements themselves are wrong (user intent misread, spec incoherent) →
+     **restart_from_stage('requirements')**. This is a last resort for fundamental
+     task-definition failure, not for ordinary deliver-found bugs.
+  6. Hallucination at the upstream stage (architecture_review flagged ungrounded
      input, OR rejection cites entities the user never named, OR design specs
      reference colours / dimensions the design-analyst could not have measured) →
      re-enter `architect` with the rejection feedback as evidence first. Escalate
      to `restart_from_stage('design_analysis'|'requirements')` only after architect
      re-entry produced no convergence and you can cite which architect-layer output
      remains broken.
-  9. Shared-state obstacles. When the same failure reproduces across multiple goals,
+  7. Shared-state obstacles. When the same failure reproduces across multiple goals,
      or a retry regenerates the same conflict every time, or the failure description
      points to a file/resource none of the goals' contracts own, the root cause is in
      shared state the scheduler builds on (repo tree, database, config, filesystem,
-     lockfile). Retrying goals reopens worktrees that inherit the same obstacle, so
-     retries are guaranteed to fail the same way. Stop the goal-level loop and fix
-     the obstacle first — usually a single `build({ request, directBuildIntent: "modify_files" })` call whose request
-     names the obstacle concretely and asks the build agent to diagnose + remove it;
-     then re-run the previously stuck goals. This rung outranks rungs 2-7 whenever
-     the "same obstacle across goals" signal is present.
-  - Implementation bugs in already-passed goals → **modify_goal** with tightened
-    criteria, then let the loop redispatch.
+     lockfile). Stop the goal-level loop and fix the obstacle first — usually a
+     single `build({ request, directBuildIntent: "modify_files" })` call whose
+     request names the obstacle concretely and asks the build agent to diagnose +
+     remove it; then re-run the previously stuck goals. This rung outranks rungs
+     2-6 whenever the "same obstacle across goals" signal is present.
 
-After re-execution completes you will be re-triggered — call **deliver** again. Loop
-until the Arbiter accepts / stalls / aborts. Focus on the SPECIFIC issues cited; do
-NOT rework everything blindly; do NOT re-run requirements or architect unless the
-rejection indicates a fundamental contract problem.
+After re-execution completes you will be re-triggered — run the pre-`deliver`
+audit ritual and call **deliver** one final time if this is still within the
+two-invocation budget. Focus on the SPECIFIC issues cited; do NOT rework
+everything blindly; do NOT re-run requirements or architect unless the rejection
+indicates a fundamental contract problem.
 
 ## Follow-up on an already delivered / failed / cancelled task
 
