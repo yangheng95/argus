@@ -88,9 +88,9 @@ describe(".config-section base rule is a single source", () => {
     expect(countSoloTopLevelRules(".config-section")).toBe(1)
   })
 
-  test("the canonical body declares the actually-rendered `--surface-inset` background", () => {
+  test("the canonical body declares the actually-rendered transparent background", () => {
     expect(soloRuleBody(".config-section")).toMatch(
-      /background:\s*[\s\S]*?var\(--surface-inset\)/,
+      /background:\s*transparent/,
     )
   })
 

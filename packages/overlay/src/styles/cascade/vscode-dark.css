@@ -67,7 +67,6 @@ body[data-theme="vscode-dark"] {
   --accent-glow: color-mix(in srgb, var(--accent) 24%, transparent);
   --hover-accent-border: color-mix(in srgb, var(--accent) 36%, transparent);
   --hover-accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
-  --hover-accent-shadow: 0 18px 40px color-mix(in srgb, black 50%, transparent);
 
   --info: #3794ff;
   --info-dim: color-mix(in srgb, var(--info) 12%, transparent);
@@ -123,9 +122,4 @@ body[data-theme="vscode-dark"] {
   --card-fill: rgba(45, 45, 48, 0.72);
   --card-fill-hover: var(--surface-hover);
 
-  --guide-card-border: color-mix(in srgb, var(--accent) 25%, transparent);
-  --guide-card-bg:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 44%),
-    var(--bg);
-  --guide-card-shadow: var(--shadow-lg);
 }

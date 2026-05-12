@@ -102,9 +102,9 @@ describe(".extension-row base rule is a single source", () => {
     expect(countSoloTopLevelRules(".extension-row")).toBe(1)
   })
 
-  test("the canonical body declares the actually-rendered `--surface-inset` background", () => {
+  test("the canonical body declares the actually-rendered transparent background", () => {
     expect(soloRuleBody(".extension-row")).toMatch(
-      /background:\s*var\(--surface-inset\)/,
+      /background:\s*transparent/,
     )
   })
 

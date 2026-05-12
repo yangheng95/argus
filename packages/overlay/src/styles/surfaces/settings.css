@@ -1453,7 +1453,7 @@
 
 .prompt-diff-summary:hover {
   color: var(--text-strong);
-  background: var(--hover-accent-wash);
+  background: var(--settings-surface-hover);
 }
 
 .prompt-preview-card {
@@ -2353,9 +2353,9 @@
   flex-direction: column;
   gap: var(--ui-gap-sm);
   padding: var(--ui-panel-padding-y) var(--ui-panel-padding-x);
-  border-radius: var(--oc-radius-soft);
+  border-radius: 0;
   border: 0;
-  background: var(--surface-inset);
+  background: transparent;
   box-shadow: none;
 }
 

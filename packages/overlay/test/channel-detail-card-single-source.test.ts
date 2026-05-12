@@ -13,12 +13,8 @@
 // forced `var(--surface-inset)` over them. Same rule-8 active
 // conflict — source said one thing, browser rendered another.
 //
-// Pin: canonicals declare `--surface-inset` directly so source
-// matches rendered. Both selectors drop out of both reset
-// chains. The 12428 reset chain is now down to its last 5
-// shell-level siblings (.section / .gwg / .delivery-panel /
-// .criteria-group / .eval-error) and the 13122 border-color
-// reset becomes empty (deleted).
+// Pin: canonicals declare transparent flat chrome directly so source
+// matches rendered. Both selectors drop out of both reset chains.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync, readdirSync, statSync } from "node:fs"
@@ -63,15 +59,15 @@ function soloRuleBody(selector: string): string {
 }
 
 describe(".channel-doc-card + .detail-card canonicals match the rendered bg", () => {
-  test(".channel-doc-card canonical declares --surface-inset background", () => {
+  test(".channel-doc-card canonical declares transparent background", () => {
     expect(soloRuleBody(".channel-doc-card")).toMatch(
-      /background:\s*var\(--surface-inset\)/,
+      /background:\s*transparent/,
     )
   })
 
-  test(".detail-card canonical declares --surface-inset background", () => {
+  test(".detail-card canonical declares transparent background", () => {
     expect(soloRuleBody(".detail-card")).toMatch(
-      /background:\s*var\(--surface-inset\)/,
+      /background:\s*transparent/,
     )
   })
 

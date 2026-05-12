@@ -569,22 +569,17 @@
   display: none;
 }
 
-/* Criteria group — flat card grouping a set of acceptance-criteria
-   checkboxes inside the eval/inspector tab. The hover state lives
-   in a shared multi-class rule in styles.css that targets
-   `.goal-item, .extension-row, .channel-doc-card, …, .criteria-
-   group` together — that is shared chrome, not surface-local, so
-   it stays where it is. The richer `.criteria-item` interactive
-   row + check-mark variants stay in styles.css until their raw
-   rgba accent washes get a palette-token pass. */
+/* Criteria group — flat content grouping a set of acceptance-criteria
+   checkboxes inside the eval/inspector tab. Structure is carried by
+   spacing and type hierarchy; rows own hover affordance only. */
 .criteria-group {
   display: flex;
   flex-direction: column;
   gap: calc(3px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale));
+  padding: 0;
   border: 0;
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface);
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
   transition:
     border-color var(--ui-duration-base),
@@ -849,15 +844,14 @@
   background: linear-gradient(180deg, var(--ui-highlight-tone), transparent 26%);
 }
 
-/* Objective block: Architect-written 1-2 sentence execution
-   directive that lives at the top of the body. Padded card with
-   subtle inset background and a 12-radius corner. */
+/* Objective block: Architect-written execution directive. Kept flat so
+   the GWG body does not become card-in-card chrome. */
 .gwg-objective {
   margin-bottom: 0;
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
+  background: transparent;
+  border: 0 solid transparent;
+  border-radius: 0;
 }
 
 .gwg-objective-label {
@@ -876,13 +870,13 @@
 }
 
 /* Done-definition block — Architect's success criteria for this
-   goal. Same chrome as the objective; carried in a sibling card. */
+   goal. Same flat chrome as the objective. */
 .gwg-done-definition {
   margin-bottom: 0;
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-large);
+  background: transparent;
+  border: 0 solid transparent;
+  border-radius: 0;
 }
 
 .gwg-done-definition-label {
@@ -899,8 +893,7 @@
   line-height: 1.6;
 }
 
-/* Worktree row — per-goal persistent workspace pointer. Same chrome
-   as the objective/done-definition cards; entire row is a button that
+/* Worktree row — per-goal persistent workspace pointer. Flat row button
    opens the directory in the host's file manager. Hidden when the
    relative path can't be resolved (rule 7: no shortPath fallback). */
 .gwg-worktree {
@@ -910,9 +903,9 @@
   width: 100%;
   margin: 0;
   padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
-  border: calc(1px * var(--ui-scale)) solid color-mix(in srgb, var(--border) 60%, transparent);
-  border-radius: var(--oc-radius-large);
+  background: transparent;
+  border: 0 solid transparent;
+  border-radius: 0;
   color: var(--text);
   font: inherit;
   text-align: left;
@@ -921,7 +914,8 @@
 
 .gwg-worktree:hover,
 .gwg-worktree:focus-visible {
-  background: color-mix(in srgb, var(--surface-inset) 90%, transparent);
+  background: var(--surface-hover);
+  outline: none;
 }
 
 .gwg-worktree-label {
@@ -1694,15 +1688,15 @@
 }
 
 /* Dimension row: shows a single integrity dimension's verdict +
-   issue counts. Left-rail border tone rotates with `[data-verdict]`. */
+   issue counts. The left rail carries state without drawing a card. */
 .integrity__dimension {
   display: flex;
   gap: var(--ui-gap-sm);
   align-items: baseline;
   padding: var(--ui-gap-xs) var(--ui-gap-sm);
-  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  background: transparent;
   border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: var(--oc-radius-soft);
+  border-radius: 0;
   font-size: var(--ui-font-control);
   line-height: 1.5;
 }
@@ -1732,18 +1726,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Issue / correction / missing row: the same chrome pattern as
-   `.integrity__dimension` (subtle bg + 2px left rail), shared via
-   a multi-class declaration to avoid copy-paste. The
-   `.integrity__issue` row layout layers a flex on top of the
-   shared chrome. */
+/* Issue / correction / missing row: the same flat rail pattern as
+   `.integrity__dimension`. */
 .integrity__issue,
 .integrity__correction,
 .integrity__missing {
   padding: var(--ui-gap-xs) var(--ui-gap-sm);
-  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  background: transparent;
   border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: var(--oc-radius-soft);
+  border-radius: 0;
   font-size: var(--ui-font-control);
   line-height: 1.5;
 }
@@ -1963,7 +1954,7 @@
   line-height: 1.5;
 }
 
-/* Decision list: each card carries the decision key, target
+/* Decision list: each flat row carries the decision key, target
    goal id, decision value, and rationale on separate rows. */
 .arch-decisions {
   display: grid;
@@ -1974,9 +1965,9 @@
   display: grid;
   gap: calc(5px * var(--ui-scale));
   padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
 }
 
 .arch-decision-head {
@@ -2038,9 +2029,9 @@
 }
 
 .delivery-evidence-group {
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
 }
 .delivery-evidence-group[open] {
   background: transparent;
@@ -2703,7 +2694,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   transition: background var(--ui-duration-fast);
 }
 .criteria-check:hover {
-  background: var(--hover-accent-wash);
+  background: var(--surface-hover);
 }
 .criteria-check input {
   /* `accent-color` declared globally on body (tokens/design-language.css). */
@@ -2763,10 +2754,10 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   min-height: calc(180px * var(--ui-scale));
   max-height: calc(320px * var(--ui-scale));
   overflow-y: auto;
-  padding: calc(6px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface-inset);
+  padding: 0;
+  border-radius: 0;
+  border: 0 solid transparent;
+  background: transparent;
 }
 
 .criteria-result,
@@ -2786,9 +2777,9 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .knowledge-item,
 .pref-item,
 .criteria-check {
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
+  border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
   padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
   transition:
     border-color var(--ui-duration-base),
@@ -2804,12 +2795,10 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .pref-item:hover,
 .criteria-check:hover,
 .criteria-group:hover {
-  background: var(--hover-accent-wash);
-  border-color: var(--hover-accent-border);
-  box-shadow:
-    var(--shadow),
-    var(--hover-accent-shadow);
-  transform: translateY(calc(-1px * var(--ui-scale)));
+  background: var(--surface-hover);
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
 }
 
 #goalsSection > .oc-section__body {

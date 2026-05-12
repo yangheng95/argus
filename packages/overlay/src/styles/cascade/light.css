@@ -4,9 +4,9 @@
    Theme-architecture Step 0 (2026-05-04): aligned with dark/vscode-
    dark to declare the **same palette token set** (rule 8 — single
    source). Previously this file was missing `--accent-shadow`,
-   `--accent-glow`, `--guide-card-shadow`, `--dialog-backdrop` (some
-   patched via design-language.css body block, others fell through
-   to dark's :root values — that leak is now closed). The structural
+   `--accent-glow`, `--dialog-backdrop` (some patched via
+   design-language.css body block, others fell through to dark's
+   :root values — that leak is now closed). The structural
    tokens that used to live here (font sizes, layout dimensions,
    titlebar/panel/rail widths) moved to `tokens/design-language.css`
    :root because they are theme-independent.
@@ -65,7 +65,6 @@ body[data-theme="light"] {
     color-mix(in srgb, var(--accent) 3%, transparent) 58%,
     rgba(255, 255, 255, 0.5)
   );
-  --hover-accent-shadow: 0 18px 34px rgba(0, 0, 0, 0.1);
   --info: #2f80ed;
   --info-dim: rgba(47, 128, 237, 0.1);
   --good: #28a66a;
@@ -109,9 +108,4 @@ body[data-theme="light"] {
   --card-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3) 72%), var(--subtle-1);
   --card-fill-hover:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, transparent), rgba(255, 255, 255, 0.5) 68%), var(--surface-hover);
-  --guide-card-border: color-mix(in srgb, var(--accent) 20%, transparent);
-  --guide-card-bg:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 0%, transparent) 42%),
-    var(--bg);
-  --guide-card-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
 }

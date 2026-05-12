@@ -63,7 +63,6 @@ body[data-theme="dark"] {
   --hover-accent-border: rgba(91, 141, 239, 0.24);
   --hover-accent-wash:
     linear-gradient(180deg, rgba(91, 141, 239, 0.14), rgba(91, 141, 239, 0.05) 58%, rgba(255, 255, 255, 0.02));
-  --hover-accent-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
   --info: #5b8def;
   --info-dim: rgba(91, 141, 239, 0.12);
   --good: #34d399;
@@ -107,9 +106,4 @@ body[data-theme="dark"] {
   --card-fill-hover:
     linear-gradient(180deg, rgba(91, 141, 239, 0.06), rgba(91, 141, 239, 0.02) 68%, transparent),
     var(--surface-inset);
-  --guide-card-border: rgba(91, 141, 239, 0.2);
-  --guide-card-bg:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.14), rgba(91, 141, 239, 0) 42%),
-    var(--surface-strong);
-  --guide-card-shadow: var(--shadow-lg);
 }

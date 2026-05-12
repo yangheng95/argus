@@ -270,10 +270,8 @@ body {
    * --text-muted`; consumers reference the canonical tokens directly.
    *
    * Theme-architecture Step 0 (2026-05-04): the body-scope patches
-   * for `--accent-shadow`, `--accent-glow`, `--guide-card-border`,
-   * `--guide-card-bg`, `--guide-card-shadow` were retired (rule 8 —
-   * no double source). Each theme file
-   * (`cascade/{dark,light,vscode-dark}.css`) now declares the full
-   * palette set including these tokens, and `flat-redesign-theme-
-   * symmetry.test.ts` enforces the parity. */
+   * for `--accent-shadow` and `--accent-glow` were retired (rule 8 —
+   * no double source). The old guide-card token family was removed
+   * entirely when the titlebar guide moved onto canonical popup tokens
+   * instead of a one-off card surface. */
 }

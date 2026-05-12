@@ -287,15 +287,14 @@
 .brand-guide:hover,
 .brand-guide:focus-visible,
 .brand-guide:focus-within {
-  border-color: var(--hover-accent-border);
-  background: var(--hover-accent-wash);
-  box-shadow: var(--hover-accent-shadow);
+  border-color: transparent;
+  background: var(--surface-hover);
+  box-shadow: none;
 }
 
 .brand-guide:focus-visible {
-  box-shadow:
-    0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 18%, transparent),
-    var(--hover-accent-shadow);
+  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
 }
 
 .brand-guide-copyblock {
@@ -328,10 +327,10 @@
   display: grid;
   gap: calc(12px * var(--ui-scale));
   padding: calc(14px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--guide-card-border);
+  border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
-  background: var(--guide-card-bg);
-  box-shadow: var(--guide-card-shadow);
+  background: var(--menu-panel-bg);
+  box-shadow: var(--shadow-lg);
   opacity: var(--ui-opacity-hidden);
   visibility: hidden;
   transform: translateY(calc(8px * var(--ui-scale)));
@@ -362,9 +361,9 @@
   left: calc(24px * var(--ui-scale));
   width: calc(12px * var(--ui-scale));
   height: calc(12px * var(--ui-scale));
-  background: var(--surface-strong);
-  border-left: var(--oc-border-width) solid var(--guide-card-border);
-  border-top: var(--oc-border-width) solid var(--guide-card-border);
+  background: var(--menu-panel-bg);
+  border-left: var(--oc-border-width) solid var(--border);
+  border-top: var(--oc-border-width) solid var(--border);
   transform: rotate(45deg);
 }
 

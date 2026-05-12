@@ -67,6 +67,7 @@ describe("config panel sizing", () => {
       ".extension-row",
       ".channel-doc-card",
       ".market-card",
+      ".detail-card",
       ".config-section",
       ".config-subsection",
       ".agent-model-table",
