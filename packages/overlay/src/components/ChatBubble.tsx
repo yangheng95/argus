@@ -3,9 +3,11 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "so
 import type { CardNode } from "../store/card-tree"
 import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree"
 import { boardStore, rootTaskSessionID } from "../store/board"
+import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
 import {
   collectActivityCounts,
   collectCardText,
+  defaultExpandedForNode,
   visibleChildIDsForCard,
 } from "../utils/card-tree"
 import { bubbleAlign } from "../utils/chat-bubble"
@@ -62,12 +64,48 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   const [traceOpen, setTraceOpen] = createSignal(false)
   const [reasonCopied, setReasonCopied] = createSignal(false)
 
-  const expanded = () => true
+  const defaultExpanded = () => defaultExpandedForNode(props.node)
+  const expanded = () => cardExpanded(props.node.id, props.node.status, defaultExpanded())
   const align = () => bubbleAlign(props.node)
   const normalizedRole = () => normalizeAgentRole(props.node.role || props.node.stage || "")
   const roleTitle = () => roleLabel(normalizedRole())
   const badge = () => statusBadge(props.node)
   const visibleChildIDs = createMemo(() => visibleChildIDsForCard(props.node))
+
+  const setExpanded = (value: boolean) => {
+    setCardExpanded(props.node.id, value, props.node.status)
+  }
+  const toggleExpanded = () => {
+    setExpanded(!expanded())
+  }
+
+  const canBubbleSurfaceToggle = (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null
+    if (!target || !articleRef) return false
+    const bubble = articleRef.querySelector<HTMLElement>(".chat-bubble")
+    if (!bubble) return false
+    if (target.closest(".chat-bubble") !== bubble) return false
+    if (window.getSelection()?.type === "Range") return false
+    const interactive = target.closest<HTMLElement>(
+      [
+        "button",
+        "a",
+        "input",
+        "textarea",
+        "select",
+        "summary",
+        "[contenteditable='true']",
+        "[role='button']",
+        "[role='menuitem']",
+        "[role='checkbox']",
+        "[role='tab']",
+        "[role='textbox']",
+        "[data-card-click-ignore='true']",
+        "[data-card-dblclick-ignore='true']",
+      ].join(","),
+    )
+    return interactive == null
+  }
 
   const now = useNowTick()
   const durationText = createMemo(() => {
@@ -103,6 +141,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
 
   const onTraceToggle = () => {
     if (!traceSessionID()) return
+    if (!expanded()) setExpanded(true)
     setTraceOpen((value) => !value)
   }
 
@@ -231,205 +270,206 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
       data-status={props.node.status || "none"}
       data-depth={props.depth}
       style={articleStyle()}
-      classList={{ "chat-bubble-row--expanded": true }}
+      classList={{ "chat-bubble-row--expanded": expanded(), "chat-bubble-row--collapsed": !expanded() }}
+      onDblClick={(event) => {
+        if (!canBubbleSurfaceToggle(event)) return
+        event.stopPropagation()
+        toggleExpanded()
+      }}
     >
       <div class="chat-bubble-shell" data-align={align()}>
-        <Show when={align() === "right"}>
-          <div class="chat-bubble__avatar-slot">
-            <Avatar role={normalizedRole()} status={props.node.status} />
-          </div>
-        </Show>
-        <div class="chat-bubble__column">
-          <div class="chat-bubble" data-align={align()} data-stage={normalizedRole()} data-status={props.node.status || "none"}>
-            <Show when={align() === "left"}>
-              <div class="chat-bubble__head">
-                <div class="chat-bubble__title-row">
-                  <div class="chat-bubble__identity">
-                    <Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />
-                    <div class="chat-bubble__identity-copy">
-                      <div class="chat-bubble__title-line">
-                        <Show
-                          when={props.node.status === "running"}
-                          fallback={
-                            <Show when={badge().tone !== "neutral"}>
-                              <span class={`card__badge card__badge--${badge().tone}`} title={props.node.status || ""}>
-                                {badge().glyph}
-                              </span>
-                            </Show>
-                          }
-                        >
-                          <span class="card__badge card__badge--running" title="running">
-                            <span class="card__spinner" />
+        <div
+          class="chat-bubble"
+          data-align={align()}
+          data-stage={normalizedRole()}
+          data-status={props.node.status || "none"}
+          classList={{ "chat-bubble--collapsed": !expanded() }}
+        >
+          <div class="chat-bubble__head" data-align={align()}>
+            <div class="chat-bubble__title-row">
+              <div class="chat-bubble__identity" data-align={align()}>
+                <Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />
+                <div class="chat-bubble__identity-copy">
+                  <div class="chat-bubble__title-line" data-align={align()}>
+                    <Show
+                      when={props.node.status === "running"}
+                      fallback={
+                        <Show when={badge().tone !== "neutral"}>
+                          <span class={`card__badge card__badge--${badge().tone}`} title={props.node.status || ""}>
+                            {badge().glyph}
                           </span>
                         </Show>
-                        <span class="chat-bubble__title">{roleTitle()}</span>
-                        <Show when={durationText()}>
-                          <span
-                            class="card__duration"
-                            title={t("card.duration_tooltip", { value: durationText() })}
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            {durationText()}
-                          </span>
-                        </Show>
-                        <Show when={props.node.status === "error" && !!props.node.errorReason}>
-                          <button
-                            type="button"
-                            class="card__error-reason"
-                            classList={{ "card__error-reason--copied": reasonCopied() }}
-                            title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
-                            aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void (async () => {
-                                const reason = props.node.errorReason || ""
-                                if (!reason) return
-                                const ok = await writeClipboard(reason)
-                                if (!ok) return
-                                setReasonCopied(true)
-                                setTimeout(() => setReasonCopied(false), 1200)
-                              })()
-                            }}
-                          >
-                            {props.node.errorReason}
-                          </button>
-                        </Show>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="chat-bubble__actions">
-                    <Show when={typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0}>
+                      }
+                    >
+                      <span class="card__badge card__badge--running" title="running">
+                        <span class="card__spinner" />
+                      </span>
+                    </Show>
+                    <span class="chat-bubble__title">{roleTitle()}</span>
+                    <Show when={durationText()}>
                       <span
-                        class="card__token-hint"
-                        data-estimated={props.node.contextTokensEstimated ? "true" : "false"}
-                        title={t(
-                          props.node.contextTokensEstimated
-                            ? "card.context_tokens_tooltip_estimated"
-                            : "card.context_tokens_tooltip",
-                          { value: String(props.node.contextTokens) },
-                        )}
-                        aria-label={t(
-                          props.node.contextTokensEstimated
-                            ? "card.context_tokens_tooltip_estimated"
-                            : "card.context_tokens_tooltip",
-                          { value: String(props.node.contextTokens) },
-                        )}
+                        class="card__duration"
+                        title={t("card.duration_tooltip", { value: durationText() })}
                         onClick={(event) => event.stopPropagation()}
                       >
-                        ~{formatTokenCount(props.node.contextTokens as number)} tok{props.node.contextTokensEstimated ? " · est." : ""}
+                        {durationText()}
                       </span>
                     </Show>
-                    <Show when={usageVisible()}>
-                      <span class="card__usage-hint" title={usageTip()} onClick={(event) => event.stopPropagation()}>
-                        <Show when={usageTotalLabel()}>
-                          <span class="card__usage-tokens">{usageTotalLabel()} tok</span>
-                        </Show>
-                        <Show when={usageCostLabel()}>
-                          <span class="card__usage-cost">{usageCostLabel()}</span>
-                        </Show>
-                      </span>
-                    </Show>
-                    <Show when={headActions.caps.canCopy()}>
+                    <Show when={props.node.status === "error" && !!props.node.errorReason}>
                       <button
                         type="button"
-                        class="card__copy"
-                        classList={{ "card__copy--done": headActions.state.copied() }}
-                        title={headActions.state.copied() ? headActions.labels.copied() : headActions.labels.copy()}
-                        aria-label={headActions.state.copied() ? headActions.labels.copied() : headActions.labels.copy()}
-                        onClick={headActions.onCopy}
-                      >
-                        <Show when={headActions.state.copied()} fallback={<Icon name="copy" size={13} />}>
-                          <Icon name="check" size={13} />
-                        </Show>
-                      </button>
-                    </Show>
-                    <Show when={!!traceSessionID()}>
-                      <button
-                        type="button"
-                        class="card__trace"
-                        classList={{ "card__trace--open": traceOpen() }}
-                        title={t("card.inspect_agent_trace")}
-                        aria-label={t("card.inspect_agent_trace")}
-                        aria-pressed={traceOpen()}
+                        class="card__error-reason"
+                        classList={{ "card__error-reason--copied": reasonCopied() }}
+                        title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
+                        aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
                         onClick={(event) => {
                           event.stopPropagation()
-                          onTraceToggle()
+                          void (async () => {
+                            const reason = props.node.errorReason || ""
+                            if (!reason) return
+                            const ok = await writeClipboard(reason)
+                            if (!ok) return
+                            setReasonCopied(true)
+                            setTimeout(() => setReasonCopied(false), 1200)
+                          })()
                         }}
                       >
-                        <Icon name="inspect" size={13} />
-                      </button>
-                    </Show>
-                    <Show when={headActions.caps.canCancel()}>
-                      <button
-                        type="button"
-                        class="card__agent-cancel"
-                        classList={{ "card__agent-cancel--pending": headActions.state.cancelling() }}
-                        title={headActions.labels.cancel()}
-                        aria-label={headActions.labels.cancel()}
-                        disabled={headActions.state.cancelling()}
-                        onClick={headActions.onAgentCancel}
-                      >
-                        <Icon name="cancel" size={13} />
-                      </button>
-                    </Show>
-                    <Show when={headActions.caps.canRewind()}>
-                      <button
-                        type="button"
-                        class="card__rewind"
-                        classList={{ "card__rewind--pending": headActions.state.rewinding() }}
-                        title={headActions.labels.rewind()}
-                        aria-label={headActions.labels.rewindStep()}
-                        disabled={headActions.state.rewinding()}
-                        onClick={headActions.onRewind}
-                      >
-                        <Icon name="rewind" size={13} />
+                        {props.node.errorReason}
                       </button>
                     </Show>
                   </div>
                 </div>
               </div>
-            </Show>
-            <Show when={expanded()}>
-              <div class="chat-bubble__body">
-                <Show when={traceOpen() && traceSessionID()}>
-                  <TracePanel sessionID={traceSessionID()!} onClose={() => setTraceOpen(false)} />
+              <div class="chat-bubble__actions">
+                <Show when={typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0}>
+                  <span
+                    class="card__token-hint"
+                    data-estimated={props.node.contextTokensEstimated ? "true" : "false"}
+                    title={t(
+                      props.node.contextTokensEstimated
+                        ? "card.context_tokens_tooltip_estimated"
+                        : "card.context_tokens_tooltip",
+                      { value: String(props.node.contextTokens) },
+                    )}
+                    aria-label={t(
+                      props.node.contextTokensEstimated
+                        ? "card.context_tokens_tooltip_estimated"
+                        : "card.context_tokens_tooltip",
+                      { value: String(props.node.contextTokens) },
+                    )}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    ~{formatTokenCount(props.node.contextTokens as number)} tok{props.node.contextTokensEstimated ? " · est." : ""}
+                  </span>
                 </Show>
-                <div class="chat-bubble__body-inner">
-                  <Show when={props.node.parts.length > 0}>
-                    <CardParts parts={props.node.parts} depth={props.depth} />
-                  </Show>
-                  <Show when={props.node.integrity}>
-                    <IntegrityBody integrity={props.node.integrity!} />
-                  </Show>
-                  <Show when={visibleChildIDs().length > 0}>
-                    <div class="chat-bubble__children">
-                      <For each={visibleChildIDs()}>
-                        {(childID) => {
-                          const child = cardTreeStore.cards[childID]!
-                          if (child.kind === "message") {
-                            return <CardParts parts={child.parts} depth={props.depth + 1} />
-                          }
-                          if (child.kind === "agent" && child.integrity) {
-                            return <IntegrityBody integrity={child.integrity} />
-                          }
-                          if (child.kind === "integrity" && child.integrity) {
-                            return <IntegrityBody integrity={child.integrity} />
-                          }
-                          throw new Error(`ChatBubble: unsupported child kind "${child.kind}" for ${props.node.id}`)
-                        }}
-                      </For>
-                    </div>
-                  </Show>
-                  <Show when={directAgentSessionID()}>
-                    <AgentSessionReplyBox
-                      onSend={(message) => onAgentReply(directAgentSessionID()!, message)}
-                    />
-                  </Show>
-                </div>
+                <Show when={usageVisible()}>
+                  <span class="card__usage-hint" title={usageTip()} onClick={(event) => event.stopPropagation()}>
+                    <Show when={usageTotalLabel()}>
+                      <span class="card__usage-tokens">{usageTotalLabel()} tok</span>
+                    </Show>
+                    <Show when={usageCostLabel()}>
+                      <span class="card__usage-cost">{usageCostLabel()}</span>
+                    </Show>
+                  </span>
+                </Show>
+                <Show when={headActions.caps.canCopy()}>
+                  <button
+                    type="button"
+                    class="card__copy"
+                    classList={{ "card__copy--done": headActions.state.copied() }}
+                    title={headActions.state.copied() ? headActions.labels.copied() : headActions.labels.copy()}
+                    aria-label={headActions.state.copied() ? headActions.labels.copied() : headActions.labels.copy()}
+                    onClick={headActions.onCopy}
+                  >
+                    <Show when={headActions.state.copied()} fallback={<Icon name="copy" size={13} />}>
+                      <Icon name="check" size={13} />
+                    </Show>
+                  </button>
+                </Show>
+                <Show when={!!traceSessionID()}>
+                  <button
+                    type="button"
+                    class="card__trace"
+                    classList={{ "card__trace--open": traceOpen() }}
+                    title={t("card.inspect_agent_trace")}
+                    aria-label={t("card.inspect_agent_trace")}
+                    aria-pressed={traceOpen()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onTraceToggle()
+                    }}
+                  >
+                    <Icon name="inspect" size={13} />
+                  </button>
+                </Show>
+                <Show when={headActions.caps.canCancel()}>
+                  <button
+                    type="button"
+                    class="card__agent-cancel"
+                    classList={{ "card__agent-cancel--pending": headActions.state.cancelling() }}
+                    title={headActions.labels.cancel()}
+                    aria-label={headActions.labels.cancel()}
+                    disabled={headActions.state.cancelling()}
+                    onClick={headActions.onAgentCancel}
+                  >
+                    <Icon name="cancel" size={13} />
+                  </button>
+                </Show>
+                <Show when={headActions.caps.canRewind()}>
+                  <button
+                    type="button"
+                    class="card__rewind"
+                    classList={{ "card__rewind--pending": headActions.state.rewinding() }}
+                    title={headActions.labels.rewind()}
+                    aria-label={headActions.labels.rewindStep()}
+                    disabled={headActions.state.rewinding()}
+                    onClick={headActions.onRewind}
+                  >
+                    <Icon name="rewind" size={13} />
+                  </button>
+                </Show>
               </div>
-            </Show>
+            </div>
           </div>
-
+          <Show when={expanded()}>
+            <div class="chat-bubble__body">
+              <Show when={traceOpen() && traceSessionID()}>
+                <TracePanel sessionID={traceSessionID()!} onClose={() => setTraceOpen(false)} />
+              </Show>
+              <div class="chat-bubble__body-inner">
+                <Show when={props.node.parts.length > 0}>
+                  <CardParts parts={props.node.parts} depth={props.depth} />
+                </Show>
+                <Show when={props.node.integrity}>
+                  <IntegrityBody integrity={props.node.integrity!} />
+                </Show>
+                <Show when={visibleChildIDs().length > 0}>
+                  <div class="chat-bubble__children">
+                    <For each={visibleChildIDs()}>
+                      {(childID) => {
+                        const child = cardTreeStore.cards[childID]!
+                        if (child.kind === "message") {
+                          return <CardParts parts={child.parts} depth={props.depth + 1} />
+                        }
+                        if (child.kind === "agent" && child.integrity) {
+                          return <IntegrityBody integrity={child.integrity} />
+                        }
+                        if (child.kind === "integrity" && child.integrity) {
+                          return <IntegrityBody integrity={child.integrity} />
+                        }
+                        throw new Error(`ChatBubble: unsupported child kind "${child.kind}" for ${props.node.id}`)
+                      }}
+                    </For>
+                  </div>
+                </Show>
+                <Show when={directAgentSessionID()}>
+                  <AgentSessionReplyBox
+                    onSend={(message) => onAgentReply(directAgentSessionID()!, message)}
+                  />
+                </Show>
+              </div>
+            </div>
+          </Show>
           <div class="chat-bubble__foot">
             <span class="chat-bubble__stamp" title={fullStampWithRelative(props.node.time)}>
               {stamp(props.node.time)}

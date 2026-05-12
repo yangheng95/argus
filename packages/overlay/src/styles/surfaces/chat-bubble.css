@@ -12,22 +12,13 @@
 
 .chat-bubble-shell {
   display: flex;
-  align-items: flex-start;
-  gap: calc(10px * var(--ui-scale));
+  justify-content: flex-start;
   width: min(100%, var(--card-sticky-inline-size, 100%));
   max-width: 100%;
 }
 
 .chat-bubble-shell[data-align="right"] {
-  flex-direction: row-reverse;
-}
-
-.chat-bubble__avatar-slot {
-  flex: 0 0 calc(44px * var(--ui-scale));
-  display: flex;
-  align-items: flex-start;
   justify-content: flex-end;
-  padding-top: calc(2px * var(--ui-scale));
 }
 
 .chat-avatar {
@@ -64,48 +55,56 @@
   height: calc(20px * var(--ui-scale));
 }
 
-.chat-bubble__column {
-  min-width: 0;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: calc(4px * var(--ui-scale));
-}
-
-.chat-bubble-row[data-align="right"] .chat-bubble__column {
-  align-items: flex-end;
-}
-
 .chat-bubble {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: calc(8px * var(--ui-scale));
-  width: min(76%, calc(720px * var(--ui-scale)));
+  gap: calc(10px * var(--ui-scale));
+  width: min(74%, calc(720px * var(--ui-scale)));
   max-width: 100%;
-  border-radius: var(--oc-radius-soft);
-  padding: calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  background: var(--card-bg-0);
-  border: var(--oc-border-width) solid var(--card-border);
-  border-inline-start: calc(3px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info));
-  box-shadow: none;
+  border-radius: var(--oc-radius-large);
+  padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-elevated, var(--surface)) 96%, transparent),
+      color-mix(in srgb, var(--surface) 92%, transparent)
+    );
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-inline-start: calc(3px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--card-stage-info)) 84%, transparent);
+  box-shadow:
+    inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, var(--text-strong) 6%, transparent),
+    0 calc(6px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, var(--shadow, var(--text)) 12%, transparent);
   box-sizing: border-box;
   animation: chat-bubble-enter var(--ui-duration-base) var(--ui-timing-standard) backwards;
-  transition:
-    background-color var(--ui-duration-base) var(--ui-timing-standard),
-    border-color var(--ui-duration-base) var(--ui-timing-standard);
+  transition: transform var(--ui-duration-fast) var(--ui-timing-standard);
 }
 
 .chat-bubble[data-align="right"] {
-  background: var(--card-bg-0);
-  border-color: var(--card-border);
-  border-inline-start-color: var(--card-border);
-  border-inline-end: calc(3px * var(--ui-scale)) solid var(--card-stage-user);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 12%, var(--surface-elevated, var(--surface)) 88%),
+      color-mix(in srgb, var(--accent) 8%, var(--surface) 92%)
+    );
+  border-inline-start-color: color-mix(in srgb, var(--text) 10%, transparent);
+  border-inline-end: calc(3px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage-user) 84%, transparent);
 }
 
 .chat-bubble[data-stage="system"] {
   border-inline-start-color: var(--card-system-rail);
+}
+
+.chat-bubble--collapsed {
+  gap: calc(6px * var(--ui-scale));
+}
+
+.chat-bubble--collapsed .chat-bubble__head,
+.chat-bubble--collapsed .chat-bubble__foot {
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top: 0;
+  border-bottom: 0;
 }
 
 .chat-bubble__head {
@@ -115,6 +114,8 @@
   display: flex;
   flex-direction: column;
   gap: calc(4px * var(--ui-scale));
+  padding-bottom: calc(8px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--text) 8%, transparent);
   cursor: default;
   user-select: text;
 }
@@ -124,6 +125,10 @@
   display: flex;
   align-items: flex-start;
   gap: calc(10px * var(--ui-scale));
+}
+
+.chat-bubble__head[data-align="right"] .chat-bubble__title-row {
+  flex-direction: row-reverse;
 }
 
 .chat-bubble__identity {
@@ -136,6 +141,11 @@
 
 .chat-bubble__head-avatar {
   flex: none;
+}
+
+.chat-bubble__identity[data-align="right"] {
+  flex-direction: row-reverse;
+  text-align: right;
 }
 
 .chat-bubble__identity-copy {
@@ -151,6 +161,10 @@
   gap: calc(7px * var(--ui-scale));
 }
 
+.chat-bubble__title-line[data-align="right"] {
+  justify-content: flex-end;
+}
+
 .chat-bubble__title {
   min-width: 0;
   font-size: var(--ui-font-title);
@@ -162,12 +176,16 @@
 .chat-bubble__actions {
   flex: none;
   min-width: 0;
-  margin-left: auto;
   display: inline-flex;
   align-items: flex-start;
   align-self: flex-start;
   flex-wrap: wrap;
   gap: calc(4px * var(--ui-scale));
+  justify-content: flex-end;
+}
+
+.chat-bubble__head[data-align="right"] .chat-bubble__actions {
+  justify-content: flex-start;
 }
 
 .chat-bubble__body {
@@ -189,16 +207,17 @@
 
 .chat-bubble__foot {
   min-width: 0;
-  width: min(76%, calc(720px * var(--ui-scale)));
-  max-width: 100%;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: calc(4px * var(--ui-scale));
+  padding-top: calc(6px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--text) 6%, transparent);
   color: color-mix(in srgb, var(--text-muted) 92%, transparent);
 }
 
-.chat-bubble-row[data-align="right"] .chat-bubble__foot {
+.chat-bubble[data-align="right"] .chat-bubble__foot {
   justify-content: flex-end;
 }
 
@@ -209,24 +228,17 @@
 }
 
 .chat-bubble:hover {
-  background: var(--card-bg-hover);
-  border-block-color: var(--card-border-strong);
-  border-inline-end-color: var(--card-border-strong);
-}
-
-.chat-bubble[data-align="right"]:hover {
-  border-inline-start-color: var(--card-border-strong);
-  border-inline-end-color: var(--card-stage-user);
+  transform: translateY(calc(-1px * var(--ui-scale)));
 }
 
 @keyframes chat-bubble-enter {
   from {
     opacity: var(--ui-opacity-hidden);
-    transform: translateY(calc(4px * var(--ui-scale)));
+    transform: translateY(calc(6px * var(--ui-scale))) scale(0.985);
   }
   to {
     opacity: var(--ui-opacity-full);
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -253,9 +265,11 @@
 @keyframes chat-bubble-body-enter {
   from {
     opacity: var(--ui-opacity-hidden);
+    transform: translateY(calc(3px * var(--ui-scale)));
   }
   to {
     opacity: var(--ui-opacity-full);
+    transform: translateY(0);
   }
 }
 
