@@ -260,16 +260,6 @@ export function AgentWorkflowPanel() {
               </header>
               <div class="agent-workflow-report-body">
                 <section class="agent-workflow-report-section">
-                  <h3>{t("agent_workflow.output_summary")}</h3>
-                  <p>{recordSummary(record())}</p>
-                </section>
-                <Show when={record().model}>
-                  <section class="agent-workflow-report-section">
-                    <h3>{t("agent_workflow.model")}</h3>
-                    <p>{record().model}</p>
-                  </section>
-                </Show>
-                <section class="agent-workflow-report-section">
                   <h3>{t("agent_workflow.output_report")}</h3>
                   <pre>{record().report?.detail || t("agent_workflow.no_report")}</pre>
                 </section>
