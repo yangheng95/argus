@@ -27,7 +27,6 @@ export interface ProvidersPayload {
 }
 
 export const AGENT_MODELS_LOAD_TIMEOUT_MILLISECONDS = 15_000;
-export const HEXIN_REFRESH_TIMEOUT_MILLISECONDS = 20_000;
 
 export function requireAgentModelsDirectory(): string {
   const directory = settingsStore.directory.trim();

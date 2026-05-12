@@ -1547,12 +1547,6 @@
   font-size: var(--ui-font-meta);
   color: var(--text-muted);
 }
-.agent-models-refresh-msg {
-  margin-bottom: var(--ui-gap-md);
-  padding: var(--ui-gap-sm) var(--ui-gap-md);
-  font-size: var(--ui-font-meta);
-  color: var(--text-soft);
-}
 .agent-models-warning {
   margin-top: var(--ui-gap-md);
   padding: var(--ui-gap-sm) var(--ui-gap-md);
@@ -1702,8 +1696,18 @@
   color: var(--text-muted);
   pointer-events: none;
 }
-.provider-search-input {
+/* Selector intentionally goes through .provider-search-field so it beats
+ * the equal-specificity .field-input rule in surfaces/field.css. field.css
+ * loads after settings.css and its `padding: 10px 14px` shorthand otherwise
+ * resets padding-left to 14px, leaving no room for the absolutely positioned
+ * search icon (icon then visibly overlaps the placeholder). Height matches
+ * the sm Refresh / + Add buttons (28px) sitting in .provider-head-actions
+ * so the search row doesn't tower over the header buttons. */
+.provider-search-field .provider-search-input {
   width: 100%;
+  height: calc(28px * var(--ui-scale));
+  padding-top: 0;
+  padding-bottom: 0;
   padding-left: calc(34px * var(--ui-scale));
   padding-right: calc(34px * var(--ui-scale));
 }

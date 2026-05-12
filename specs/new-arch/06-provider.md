@@ -53,8 +53,9 @@
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─ Layer 4 · Custom Loader ──────────────────────────────────┐
-│  OpenAI responses API · Bedrock 区域路由 · Vertex GCP Auth │
-│  · Copilot chat/responses                                   │
+│  OpenAI / Azure responses API · Bedrock 区域路由 ·         │
+│  Vertex GCP Auth · Anthropic beta header · OpenCorvus 内置 │
+│  free-tier 过滤 · DashScope 动态密钥                        │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─ Layer 5 · Parameter Transform ────────────────────────────┐
@@ -65,7 +66,7 @@
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─ Layer 6 · Error + Streaming ──────────────────────────────┐
-│  Overflow 检测 (12 regex) · HTTP 错误提取                   │
+│  Overflow 检测 (19 regex) · HTTP 错误提取                   │
 │  流不活跃超时 (300s) · 可重试判定                           │
 └─────────────────────────────────────────────────────────────┘
 ```

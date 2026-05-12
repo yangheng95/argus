@@ -248,7 +248,6 @@ flowchart LR
 - `src/goal/runner.ts`：build tool 落到 worktree + executor 的执行体
 - `src/build/agent.ts`：build agent 入口（`build/` 独立包共 4 个文件：`agent.ts` / `index.ts` / `report.ts` / `types.ts`）
 - `src/agent/sub-agent-protocol.ts`：共享 sub-agent 协议（不在 `build/`）
-- `src/goal/runner.ts`：build tool 真正落到 worktree + executor 的执行体（已在上一条单独列出）
 - `src/tool/task.ts`：`general / explore` subagent 的 direct 调用边界
 - `src/agent/agent.ts`：哪些 agent 是 `primary`，哪些是 `subagent`
 - `src/delivery/agent.ts` + `src/delivery/specialists/` + `src/delivery/arbiter.ts`：delivery 如何并行派发 `general / explore`，以及多 specialist 复核

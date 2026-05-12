@@ -18,7 +18,22 @@
 > 本文余下章节是**设计原始论证**，作为历史决策保留：所有 `goal-pool.ts` / `engine_evaluation`
 > 表 / `goal/runner.ts:467 buildRetryFeedbackSection` / `prefetchDeliveryContext` /
 > `FrontendCheck.renders_correctly` 等具体符号已不存在或已迁移；§Phase A-F 视为已完成或失效。
-> 表名 / 字段以代码为准。
+> 表名 / 字段以代码为准。`engine_evaluation` 表整张已下线（`engine.sql.ts:552-556`
+> 注释），verdict/checks 现以 `engine_artifact.kind="verification-evidence"` 的 payload
+> 持久化；`EngineEvaluationScope/Status/Verdict/Check` TypeScript 类型仍在
+> `engine.sql.ts:120-160` 区域，只是不再绑表。<br>
+> **2026-05-10 起的新增物（在本文中无对应章节）**：
+> - `AcceptanceSpec.scenario` 字段（Gherkin Given/When/Then，`acceptance/types.ts:24,119`）
+>   作为 walkthrough 的结构化来源，影响 evidence check 的人类可读 reasoning。
+> - `engine_artifact.kind="orchestrator-stream-error"`（`engine.sql.ts:120`、
+>   `engine/persist.ts:1964`）记录 orchestrator session 流式异常；与 verification-evidence
+>   并列，不是同一 kind。
+> - 集成度审计已迁出 evidence 管线：参考 `integrity/agent.ts` 的 post-build
+>   `Requirement Status Snapshot` 与 `contract_audit` / `ContractIR` /
+>   `architect/linker.ts` 链路。
+> - 仲裁层真源 `delivery/arbiter.ts` 现导出 `arbitrateDeliveryGate` /
+>   `arbitrateDeliveryVerdict` / `appendManifestEvidence`，verdict 失败签名走
+>   `delivery/manifest.ts:failureSignatureForCheck` + `repeatedDeliveryFailureSignatures`。
 >
 > 对应代码：`src/engine/engine.sql.ts` (EngineArtifactTable) · `src/engine/persist.ts` ·
 > `src/engine/store.ts` · `src/delivery/checks/` · `src/delivery/arbiter.ts` ·

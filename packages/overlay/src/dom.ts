@@ -14,7 +14,6 @@ export interface DomRefs {
 
  // Titlebar controls
   solidTitlebarMenu: HTMLElement | null;
-  solidTitlebarStatus: HTMLElement | null;
 
  // Window controls
   btnMinimize: HTMLButtonElement | null;
@@ -162,7 +161,6 @@ export function getDomRefs(): DomRefs {
 
  // Titlebar controls
     solidTitlebarMenu: $<HTMLElement>("#solidTitlebarMenu"),
-    solidTitlebarStatus: $<HTMLElement>("#solidTitlebarStatus"),
 
  // Window controls
     btnMinimize: $<HTMLButtonElement>("#btnMinimize"),

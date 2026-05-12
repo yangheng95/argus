@@ -186,4 +186,66 @@
   - **README + 03 + 13** — 修正 SSE 端点真源：分散在 5 个 route 文件（主线
     `routes/orchestrator.ts`），`src/server/event.ts` 只是 7 行 BusEvent 声明，不是 SSE 端点
   - **02-data.md** — `goal_id` 描述去掉 `planner` 字眼，改为 `executor / build / evaluator`
+- [x] 2026-05-12 同步（follow-up：4 个并行 agent 复核 13 个 numbered spec vs 当前代码）：
+  - **01-agents.md** — line 56 build-dispatch 描述：`goal/runner.ts` 只剩 `cleanupGoalWorkspace`
+    （121 行），build 派发实际由 `orchestrator/agent.ts:161` + `orchestrator/tools.ts:5075` +
+    `build/agent.ts` + `engine/workflow.ts` 协同；line 139 delivery checks 文件清单换成实际盘上
+    `visual.ts` / `runtime-evidence.ts` / `runtime-readiness.ts` / `walkthrough/` /
+    `content-fingerprint.ts` / `contract-audit-review.ts` / `project-gate.ts`；line 181-184
+    EngineService 暴露 API 改为 `handleTaskMessage` / `injectMessage` / `getBoard` / `getBrief` /
+    `getProjectBoard` / `getGlobalTaskBoard`（`taskMessage` / `compileBoard` / `compileBrief` 都不存在）
+  - **02-data.md** — `engine_goal` 行补充"无 `status` 列（Phase E 2026-05-05 退役）+ 无
+    `workspace_*` / `retry_count` / `cascade_state`（Phase B+E 2026-05-05，单源迁到 `engine_artifact`
+    payload via `findGoalLatestWorkspace` / `getGoalRetryCount`）"；Trace 段把
+    `Trace.event()` / `agent/runtime/stream-failures.ts` 替换为实际命名空间
+    `AgentTrace.recordLLMRequest / recordHelperLLMCall / recordAgentReport` 与四个挂点
+    （`session/llm.ts` / `agent/agent.ts` / `agent/runner.ts` / `orchestrator/agent.ts`）
+  - **03-control.md** — `createTask` → `handleTaskMessage` 流；Trace 一行同 02；
+    `routes/orchestrator.ts` describeRoute 数 41 → 42
+  - **04-extensions.md** — 调用链描述更正：worktree 创建是 `Worktree.create`，
+    实际从 `build/agent.ts` + `orchestrator/tools.ts` 调用；`goal/runner.ts` 只承担清理
+  - **05-config.md** — 顶层字段补 `disabled_providers / small_model / default_agent /
+    preview / terminal / locale`；移除"每个 agent 都有 `max_steps · timeout_ms · quality_threshold
+    · max_attempts · skills[]`"的谬误（`config.ts:1259-1365` 实际每个 agent 字段集
+    不一样：build = max_steps+skills，delivery = +max_retries，delivery_visual = numeric
+    thresholds，activity = idle/timeout ms gates）；标注 2026-05-11 新增 `locale` 与
+    Overlay UI locale 的区分
+  - **06-provider.md** — Layer 6 溢出 regex 数 12 → 19（`provider/error.ts:8-28`）；
+    Layer 4 删除不存在的 "Copilot chat/responses"，补 Azure responses API / Anthropic
+    beta header / OpenCorvus free-tier filter / DashScope dynamic key（实际 loader 在
+    `vendor.ts:20-91`）
+  - **07-panel.md** — Appearance > Locale 区分 Layer 1 vs Layer 2；Workflow 区移除
+    speculative `Auto-select Workflow` toggle，补真实 builtin IDs（`direct` / `pipeline`，
+    `engine/workflow.ts:262-265`）；Agent Config 区移除虚构 `max_steps:30 timeout:5min
+    quality:0.5` 默认值（真实默认 `max_steps: 1000`，无 timeout / quality 字段，
+    见 `engine/config.ts:170-212`）
+  - **07-panel-reactivity.md** — `pipeline.build` workflow 修正为 1 个 phase
+    `{id:"build", sessionKind:"build"}`（`engine/workflow.ts:232-234`），不是
+    `[plan, build, evaluate]` 3 个；`goalStagePhaseID`
+    （`overlay/src/utils/workflow-step.ts:25-35`）只映射 `planner → {build, plan}` 和
+    `build → {build, build}`，其他全部返回 null
+  - **08-agent-tool-adapter.md** — 头注修正 #7 扩展：`integrity` / `prosecutor` 也是
+    ToolRegistry agent（`agent.ts:379-405`），`include: []` 因为 verdict / counter-example
+    tools 是 per-call 由 SessionLoop extra tools 注入；新增 #9（orchestrator 本身走
+    ToolRegistry，include 在 `agent.ts:276-310`）和 #10（mirror tool gating 在
+    `tool/registry.ts:181-183`，仅 `design-analyst` 保留 mirror tools）
+  - **09-verification-evidence.md** — 头部加 `engine_evaluation` 表已删除（`engine.sql.ts:552-556`）
+    的注释；保留 `EngineEvaluation*` 类型仍存活（`engine.sql.ts:120-160`）；补 2026-05-10
+    后的事实：`AcceptanceSpec.scenario`（`acceptance/types.ts:24,119`）、
+    `engine_artifact.kind="orchestrator-stream-error"`、integrity post-build + freshness
+    gate、ContractIR/Linker/contract_audit 链接、arbiter 真源导出列表
+    （`arbitrateDeliveryGate` / `arbitrateDeliveryVerdict` / `appendManifestEvidence`）
+  - **11-agent-oop-protocol.md** — §三 inheritance hierarchy 删除 `PlannerAgent`，新增
+    `IntegrityAgent` / `ProsecutorAgent`；BuildAgent 双路径注（SessionAgent vs
+    PipelineAgent）；§4.1 prompt 目录表对齐实际盘上文件（`agent/prompt/` 有 `judge.txt`
+    无 `summary.txt`；`prompt/core/` 含 `build-core.txt`）；§七迁移表把
+    `IntegrityAgent.review()` / `ProsecutorAgent.review()` 改为函数式入口
+    `reviewIntegrity()`（`integrity/agent.ts:257`） / `runProsecutor()`
+    （`prosecutor/agent.ts:322`），补 tool 接线 cite（`tools.ts:2811` / `tools.ts:2858`）；
+    §5.3 whitelist 删 planner 行，补 integrity / prosecutor 行 + orchestrator 实际可调用
+    集权威来源 cite（`agent/agent.ts:276-310`）
+  - **13-agent-communication-matrix.md** — 真源文件索引删重复条目（`src/goal/runner.ts`
+    出现两次，第二条还自带"已在上一条单独列出"自承认）
+  - **14-agent-runtime-mode.md** — §6.3 `ProviderLLM.stream` 描述改写为说明 Phase E
+    已移除（`provider/llm.ts:6-14`）；明确该约束跨删除依然有效
 - [ ] 新 SVG 三张总览图按最新 MD 重绘（暂未做）

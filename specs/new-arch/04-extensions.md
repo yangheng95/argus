@@ -39,14 +39,15 @@
 
 **调用链**：
 ```
-Orchestrator build tool → build/agent.ts (LLM 决策) →
-   goal/runner.ts (worktree 隔离)
-   + engine/runtime.ts + task-api/index.ts 通过 ExecutorRegistry.require()
-   → Executor 进程 → diff / delivery
+Orchestrator build tool → build/agent.ts (LLM 决策 + Worktree.create) →
+   ExecutorRegistry.require() → Executor 进程 → diff / delivery
+   + goal/runner.ts::cleanupGoalWorkspace 在 worktree 生命周期末端回收
 ```
 （旧 `pipeline/executor.ts` 与 `engine/goal-pool.ts` 已删除。`goal/runner.ts` 当前仅
-121 行，只保留 `cleanupGoalWorkspace`；实际 `ExecutorRegistry.require()` 调用点散落在
-`build/agent.ts` · `engine/runtime.ts` · `task-api/index.ts` 三处。）
+121 行，只导出 `cleanupGoalWorkspace`，**不再**承担 worktree 创建或 executor dispatch
+职责；worktree 创建走 `Worktree.create`（在 `build/agent.ts` · `orchestrator/tools.ts`
+直接调用）。`ExecutorRegistry.require()` 调用点在 `build/agent.ts` · `engine/runtime.ts`
+· `task-api/index.ts` 三处。）
 
 ## Plugin —— 非执行器插件
 

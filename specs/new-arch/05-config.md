@@ -18,20 +18,26 @@
 **字段分组**（来源：`src/config/config.ts` 的 ConfigSchema）：
 ```
 顶层：      $schema · logLevel · server · share · autoupdate · snapshot · watcher
-           enabled_providers · tool_permissions
-           provider · model · agent · mcp · lsp · formatter · permission · compaction
-           channel · command · skills · plugin · prompt · instructions · username
+           disabled_providers · enabled_providers · tool_permissions
+           provider · model · small_model · default_agent · agent · mcp · lsp ·
+           formatter · permission · compaction · preview · terminal
+           channel · command · skills · plugin · prompt · instructions ·
+           username · locale
 
 assistant: requirements{} · architect{} · delivery{} · delivery_visual{} ·
            design_analyst{} · intent_analysis{} · build{} · activity{} · debug{} ·
            default_workflow · workflows[] · max_executor_groups
-           每个 agent 子项含: max_steps · timeout_ms · quality_threshold? · max_attempts? · skills[]
+           每个 agent 子项的形状是 agent 特化的（例如 build 只有 max_steps + skills；
+           delivery 多一个 max_retries；delivery_visual 全是数值硬门槛阈值）——
+           没有统一的 max_steps/timeout_ms/quality_threshold/max_attempts/skills 模板。
 
 experimental: auto_question · batch_tool · disable_paste_summary · continue_loop_on_deny
              memory{} · mcp_timeout · primary_tools · openTelemetry
 ```
 
-> 文档此前未列出的顶级 key：`$schema` / `logLevel` / `server` / `share` / `autoupdate` / `snapshot` / `watcher`（含 `watcher.ignore`） / `enabled_providers` / `tool_permissions`（任务级权限默认值）—— 全部以 `config.ts` 现状为准。
+> 文档此前未列出的顶级 key：`$schema` / `logLevel` / `server` / `share` / `autoupdate` / `snapshot` / `watcher`（含 `watcher.ignore`） / `disabled_providers` / `enabled_providers` / `tool_permissions`（任务级权限默认值） / `small_model` / `default_agent` / `preview` / `terminal` —— 全部以 `config.ts` 现状为准。
+>
+> **2026-05-11 新增**：顶级 `locale: "en-US" | "zh-CN"` —— operator-selected system language used for assistant replies and Overlay localization（commit `c19da3136` / `bdc33b9b0`）。**这是行为类设置**（影响 LLM 回复语言 + SDK 透传），属 Layer 1，**不**属 Overlay UI 偏好的 `locale`（后者继续存在于 localStorage，仅控制前端 UI 文案）。
 >
 > **2026-05-12 更正**：以下旧 schema 字段已删除，不再存在：
 > - `assistant.spec{}` / `assistant.goal{}` / `assistant.planner{}` / `assistant.evaluator{}` /

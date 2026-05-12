@@ -23,12 +23,21 @@
 >    ——下文里写的 `grep` / `codesearch` 都已重命名为 `search_code` / `external_code_search`。
 > 6. 实际 delivery agent（`agent.ts:233`）用 `tools: { include: [] }` 空白名单，
 >    review/output tools 由 `DeliveryAgent.verify` 通过 SessionLoop extra tools 在运行时注入。
-> 7. `requirements` / `architect` / `design-analyst` / `intent-analysis` 等 stage agent
->    **走** ToolRegistry（在 `agent.ts:316+` 注册），不属于"不走 ToolRegistry"那一类。
->    真正"不走 ToolRegistry"的只有 orchestrator tools 内部自建工具集（`build` / `deliver`
->    等 tool 内部创建子 session 时手动组装）。
+> 7. `requirements` / `architect` / `design-analyst` / `intent-analysis` / `integrity`
+>    / `prosecutor` 等 stage agent **走** ToolRegistry（在 `agent.ts:316+` 注册，全部是
+>    `mode: "primary" + hidden: true` 的 native），不属于"不走 ToolRegistry"那一类。
+>    `integrity` / `prosecutor` 的 verdict / counter-example 工具是运行时通过 SessionLoop
+>    extra tools 注入（registry `include: []` 故意留空——见 `agent.ts:382-405` 注释）。真正
+>    "不走 ToolRegistry"的只有 orchestrator tools 内部自建工具集（`build` / `deliver` 等
+>    tool 内部创建子 session 时手动组装）。
 > 8. `task` / `planner` agent 不存在——`task` 是个 tool（`src/tool/task.ts`），
 >    `planner` agent 已随 `src/planner/` 删除。
+> 9. `orchestrator` 自己也走 ToolRegistry（`agent.ts:243`，`tools.include` 列出 dispatch /
+>    observation / bookkeeping 三类约 30 个 tool id；见 §6 通信白名单与 11 spec 第五章）。
+> 10. design-analyst 是 mirror 工具的**唯一**消费者（`tool/registry.ts:181` 显式跳过
+>     `isMirrorToolId` 过滤）；其他 agent 的 registry 视图先剔除 `MIRROR_TOOL_IDS` 再做
+>     include/exclude。本文 §各 native agent 工具声明表里 `MIRROR_TOOL_IDS` 没显式列出，
+>     默认所有非 design-analyst agent 都看不到 mirror tools，与表格行为一致。
 
 ## 问题
 

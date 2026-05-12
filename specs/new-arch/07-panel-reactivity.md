@@ -119,7 +119,7 @@ overlay 端从 session 的 tool result part 自然读取，**不上总线**。
 - `<stage>:session:<sid>` —— 一个 session 一张卡，stage 取自 message.info.channel / agent / resolvedRole；stage 未知时临时用 `pending:session:<sid>`，收到真正的 message.updated 后 rename。**每个 session 默认都是顶级卡**——assistant orchestrator 和 design-analyst / requirements / architect / planner / build / evaluator / delivery 等 sub-agent session 在 `cardTreeStore.order` 里按 time 并列，没有 session ↔ session 的嵌套。
 - `goal-group:<gid>` —— 一个 goal 一个容器卡
 - `goal-group:<gid>:step:<stepID>` —— goal 容器内的 step 行
-- `goal-group:<gid>:step:<stepID>:phase:<phaseID>` —— step 内部的 phase 行（仅当 workflow 层在 step 上声明了 `phases` 时存在；例如 pipeline.build 声明 plan / build / evaluate 三个 phase）
+- `goal-group:<gid>:step:<stepID>:phase:<phaseID>` —— step 内部的 phase 行（仅当 workflow 层在 step 上声明了 `phases` 时存在；当前 `pipeline.build` 仅声明一个 phase `build`，见 `engine/workflow.ts:232-234`。历史上规划过 plan / build / evaluate 三 phase，2026-04-20 起 per-goal evaluator 下线、planner 不再作为独立 phase 渲染，最终落点是单 phase。`goalStagePhaseID` 兼容 `planner → {build, plan}` 是为历史 session.kind 留的兜底映射，没有 phase 卡片真正消费）
 - `ctx:user-request` —— task 请求气泡
 - `ctx:user-request:text` / `ctx:user-request:file:<url|idx>` —— 请求内容 / 附件（作为 `parts` 项，不是独立卡）
 - `interaction-card:<messageID>` —— synthetic interaction 卡（认得 session 就挂 session；否则作为 orphan 出现在顶层）
@@ -136,9 +136,9 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
 
 **phase 规则：**
 
-- phase 定义在 backend `packages/opencorvus/src/engine/workflow.ts` 的 `MiniWorkflowStep.phases`。pipeline.build 声明 `[{plan, planner}, {build, build}, {evaluate, evaluator}]`。
-- phase 状态从 `goal_run.status` 投影（`projectPhases` in workflow.ts）——timeline 映射：queued/accepted → all pending；planning → plan running；running → plan done + build running；evaluating → plan+build done + evaluate running；completed → all done；failed → 最后 phase failed。
-- overlay 的 `goalStagePhaseID(stage)` 按 session.kind 映射：planner → {build, plan}、build → {build, build}、evaluator → {build, evaluate}、executor → null（容器，不映 phase）。
+- phase 定义在 backend `packages/opencorvus/src/engine/workflow.ts` 的 `MiniWorkflowStep.phases`。当前 `pipeline.build` 仅声明 `[{ id: "build", label: "Build", sessionKind: "build" }]`（`engine/workflow.ts:232-234`）。
+- phase 状态从 `goal_run.status` 投影（`projectPhases` in workflow.ts）。多 phase 时按 queued / running / completed / failed 顺序推进；单 phase 时只跟随 step 自身状态。
+- overlay 的 `goalStagePhaseID(stage)`（`packages/overlay/src/utils/workflow-step.ts:25-35`）按 session.kind 映射：`planner → { build, plan }`（历史兜底，对应没有真正消费方的 phase ID）、`build → { build, build }`、其余（含 `evaluator` / `executor`）返回 `null`。`evaluator` 返回 null 是 2026-04-20 per-goal evaluator 下线后的现状；`executor` 容器没有视觉卡片。
 - phase 卡永远不独立出现在顶层，永远作为 step 的 children；step 卡的 children 永远是 phases（而非 session）；session 只挂在 phase 下。
 
 **顶层 order**（`rebuildTopLevelOrder` 按此顺序推入 `cardTreeStore.order`）：

@@ -23,7 +23,7 @@
 |---|---|
 | `engine_plan_version` | status ∈ {active, superseded} |
 | `engine_milestone` | status ∈ {pending, active, passed, failed} |
-| `engine_goal` | priority ∈ {blocking, advisory}; status ∈ {pending, running, passed, failed}; `workspace_dir` / `workspace_branch` / `workspace_base_ref`（worktree 生命周期） |
+| `engine_goal` | priority ∈ {blocking, advisory}；**无** `status` 列（live 派生自 `engine/describe.ts::goalStatusByID`，2026-05-05 Phase E 退役）；**无** `workspace_dir` / `workspace_branch` / `workspace_base_ref` / `retry_count` / `cascade_state`（Phase B+E 2026-05-05 退役，单一来源迁到 `engine_artifact[kind="goal_run_attempt"].payload`，通过 `engine/store.ts:findGoalLatestWorkspace` / `getGoalRetryCount` 读取） |
 | `engine_requirement` | 需求追溯记录（`requirements` agent 写入） |
 | `engine_plan_node` | 计划步骤 |
 
@@ -109,13 +109,15 @@
 **新设计**：
 ```
 每个 workflow 事件（task/agent 边界、llm.step deltas、tool.call/result、phase 变化）
-  ↓ Trace.event()
-  ├─ 追加 JSON 一行到 <Instance.directory>/.opencorvus/trace/<taskID>.jsonl
+  ↓ AgentTrace.recordLLMRequest / recordHelperLLMCall / recordAgentReport
+  ├─ 追加 JSON 一行到 <Instance.directory>/.opencorvus/trace/<sessionID>.jsonl
+  │  以及 _task-<taskID>.jsonl（taskID rollup）和 _index.jsonl（manifest）
   └─ Bus.publish — overlay SSE 消费者实时拿到
 ```
 
-**自动埋点**：`agent/runtime/stream-failures.ts` + session llm hooks 捕获每次 LLM 调用。
-Agent 代码不需要手工调用 `Trace.event()`（仅 orchestration 加 task/phase 元事件）。
+**自动埋点**：`session/llm.ts`（`LLM.stream` 入口）+ `agent/agent.ts`（`Agent.generate`
+helper）+ `agent/runner.ts`（`runAgentSession`）+ `orchestrator/agent.ts`（`Orchestrator.processTask`
+wake）。Agent 代码不手工调 trace；命名空间是 `AgentTrace`，不是历史文档里的 `Trace.event()`。
 
 ## Bus — 全局事件总线（横切）
 

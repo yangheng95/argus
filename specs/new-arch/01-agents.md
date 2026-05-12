@@ -53,7 +53,7 @@
 - `kind="workflow"`：默认路径，走完整 Task Control Loop（Orchestrator 决策 → Workflow 模板）。
 - `kind="build"`：跳过 Orchestrator 分解 / 计划 / 评估，直接运行 build agent。用于一次性编辑、Q&A、简单修复。仍占用 `engine_task` 行，享受统一的 cancel / list / audit。
 
-**没有独立的 `build-dispatch.ts` 文件**：build 快通道逻辑内嵌在 `goal/runner.ts`（session `kind="build"`，以 `build-dispatch` 作为 session 标签）。
+**没有独立的 `build-dispatch.ts` 文件**：`engine_task.kind="build"` 的快通道路由分布在 `orchestrator/agent.ts`（`task.kind === "build" ? "direct" : 默认 workflow`，~line 161）+ `orchestrator/tools.ts`（build tool 实现，~line 5075）+ `build/agent.ts`（build LLM 入口）+ `engine/workflow.ts`（`direct` workflow 模板）；`goal/runner.ts` 已只保留 `cleanupGoalWorkspace`（121 行），不再承担 dispatch。
 
 ## MiniWorkflow — 两个声明式模板
 
@@ -136,9 +136,9 @@ orchestrator/loop.ts — runTaskLoop()
 > 任务树，**不是** 旧 per-goal planner 的替代。pipeline 流程里 "per-goal 实现步骤" 的职责
 > 已归并到 build agent 自身（结合 architect 写的 contract）。
 
-**Checks（原 evaluator 模块）**：移到 `delivery/checks/`，不再是独立 sub-agent。delivery agent 通过 `discovery.ts` 解析 check family，调 `per-goal.ts` / `llm-judge-runner.ts` / `visual.ts` 执行确定性或 LLM judge 验证。旧 `src/evaluator/` 目录已删除。
+**Checks（原 evaluator 模块）**：移到 `delivery/checks/`，不再是独立 sub-agent。delivery agent 通过 `discovery.ts` 解析 check family，调 `visual.ts` / `runtime-evidence.ts` / `runtime-readiness.ts` / `walkthrough/` / `content-fingerprint.ts` / `contract-audit-review.ts` / `project-gate.ts` 执行确定性或 LLM judge 验证。旧 `src/evaluator/` 目录已删除。
 
-**`orchestrator/tools.ts` 当前导出 21 个 tool**（2026-05-11，按文件出现顺序）：
+**`orchestrator/tools.ts` 当前导出 21 个 tool**（2026-05-11，下面按职责分组；文件内的实际出现顺序为 `requirements` · `design_analysis` · `architect` · `integrity` · `prosecute` · `analyze_intent` · `modify_goal` · `query_failed_goals` · `read_context` · `fail_task` · `cancel_task` · `retry_task` · `inject_operator_message` · `steer_subagent` · `restart_from_stage` · `deliver` · `publish_delivery` · `refine` · `question` · `propose_task` · `build`）：
 1. **Stage 调用**：`requirements`、`design_analysis`、`architect`、`build`、`deliver`、`publish_delivery`
 2. **审查 / 复核**：`integrity`（integrity reviewer）、`prosecute`（prosecutor）、`analyze_intent`
 3. **Goal 维护**：`modify_goal`、`query_failed_goals`
@@ -180,8 +180,8 @@ Executor 是**外部**进程，不属于 Agent Team：
 
 - `EngineService.init()` — 注册 scheduler poll、订阅 auto-permission、串行队列 recovery
 - `EngineService.createTask(input)` — 创建任务 + 启动 Loop
-- `EngineService.taskMessage / replyInteraction / rejectInteraction / cancelTask / retryTask / updateGoal / deleteGoal / updateTaskChecks` — task mutation
-- `EngineService.compileBoard / compileBrief` — workbench 视图
+- `EngineService.handleTaskMessage / injectMessage / replyInteraction / rejectInteraction / cancelTask / retryTask / updateGoal / deleteGoal / updateTaskChecks` — task mutation
+- `EngineService.getBoard / getBrief / getProjectBoard / getGlobalTaskBoard` — workbench 视图（内部委托 `@/workbench/board` 与 `@/workbench/brief`）
 
 ## 相关文档
 
