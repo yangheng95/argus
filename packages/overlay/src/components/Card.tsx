@@ -67,38 +67,13 @@ export function Card(props: { node: CardNode; depth: number }) {
 
   const collapsible = () => true;
 
-  const expand = () => {
-    if (!collapsible() || expanded()) return;
-    setCardExpanded(props.node.id, true, props.node.status);
+  const setExpanded = (value: boolean) => {
+    if (!collapsible()) return;
+    setCardExpanded(props.node.id, value, props.node.status);
   };
 
-  const collapse = () => {
-    if (!collapsible() || !expanded()) return;
-    setCardExpanded(props.node.id, false, props.node.status);
-  };
-
-  const canCardSurfaceCollapse = (event: MouseEvent) => {
-    const target = event.target as HTMLElement | null;
-    if (!target || !articleRef) return false;
-    if (target.closest(".card") !== articleRef) return false;
-    const interactive = target.closest<HTMLElement>(
-      [
-        "button",
-        "a",
-        "input",
-        "textarea",
-        "select",
-        "summary",
-        "[contenteditable='true']",
-        "[role='button']",
-        "[role='menuitem']",
-        "[role='checkbox']",
-        "[role='tab']",
-        "[role='textbox']",
-        "[data-card-dblclick-ignore='true']",
-      ].join(","),
-    );
-    return interactive == null;
+  const toggleExpanded = () => {
+    setExpanded(!expanded());
   };
 
   const traceSessionID = createMemo(() =>
@@ -124,7 +99,7 @@ export function Card(props: { node: CardNode; depth: number }) {
     if (!traceSessionID()) return;
     // Auto-expand the card when opening the trace panel — collapsed cards
     // hide their body, which is where the panel renders.
-    if (!expanded()) setCardExpanded(props.node.id, true, props.node.status);
+    if (!expanded()) setExpanded(true);
     setTraceOpen((v) => !v);
   };
 
@@ -262,17 +237,12 @@ export function Card(props: { node: CardNode; depth: number }) {
       data-depth={props.depth}
       style={articleStyle()}
       classList={{ "card--expanded": expanded(), "card--collapsed": !expanded() }}
-      onDblClick={(event) => {
-        if (!canCardSurfaceCollapse(event)) return;
-        event.stopPropagation();
-        collapse();
-      }}
     >
       <CardHeader
         node={headerNode()}
         expanded={expanded()}
         collapsible={collapsible()}
-        onExpand={expand}
+        onToggle={toggleExpanded}
         onRewind={onRewind}
         traceSessionID={traceSessionID()}
         traceOpen={traceOpen()}

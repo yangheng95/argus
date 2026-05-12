@@ -235,6 +235,7 @@ setCardTreeStore(
 ### 折叠态（2026-05-12 用户反馈修订）
 - `message` / `agent` 是 transcript 消息卡片，必须默认且始终显示正文；不再接入 `cardExpanded`。
 - 折叠只保留给 `Card` / workflow 等结构化过程卡，不能把 agent 消息折成无边框 head。
+- 结构化卡片折叠交互统一为 header 单击/Enter/Space 双向 toggle；禁止再用“单击只展开、双击收起”的双入口契约。
 - ChatBubble 不渲染 `collapsedPreview` / `card__todo-summary`；todo progress 属于结构化卡折叠摘要，不属于消息卡片。
 - ChatBubble 使用单一 flat card surface：head 与 body 同处一个 `.chat-bubble` 边界内，禁止 head 外置再套一个空 bubble 形成“实心 bar”。
 
@@ -289,7 +290,7 @@ interface UseCardHeadActionsOutput {
 - `onCopy`：clipboard 写入后 `copied()` 持续 1200ms。
 - 每个调用点拿到独立的 signal — Solid hook 调用语义保证 per-call 隔离。
 
-`CardHeader.tsx` 和 `ChatBubble.tsx` 各自渲染按钮 markup + trace toggle，但 copy / rewind / cancel 的 state / handlers / labels 全部来自 hook。`utils/card-tree.ts` 的 `canCardSurfaceCollapse` 等 DOM 工具留在调用方。
+`CardHeader.tsx` 和 `ChatBubble.tsx` 各自渲染按钮 markup + trace toggle，但 copy / rewind / cancel 的 state / handlers / labels 全部来自 hook。结构化 Card 的折叠交互只由 header toggle 拥有，禁止再引入 surface double-click collapse DOM 工具。
 
 单测 `hooks/use-card-head-actions.test.ts`：mock `showAppDialog` / `navigator.clipboard`，验证 rewind 弹窗 + reset-worktree 选项透传、copy ack 1200ms timer、cancel pending 状态。
 
@@ -337,16 +338,15 @@ interface UseCardHeadActionsOutput {
 | Copy | CardHeader copy 按钮 | ChatBubble actions（复用 hook） |
 | Status badge / spinner | CardHeader 左侧 | ChatBubble head 内 |
 | Duration chip | CardHeader 中部 | ChatBubble head 内 |
-| Collapsed preview | CardHeader `.card__collapsed-preview` | ChatBubble head 行下方 |
-| Collapsed todo-summary | CardHeader `.card__todo-summary`（progress bar + 计数 + current）— Card.tsx 折叠态 agent 卡显示 | ChatBubble head 行下方（preview 下方）；条件、阈值、progress 渲染保持一致 |
+| Collapsed preview | CardHeader `.card__collapsed-preview`（仅结构化 Card） | 不进入 ChatBubble |
+| Collapsed todo-summary | CardHeader `.card__todo-summary`（progress bar + 计数 + current，仅结构化 Card） | 不进入 ChatBubble |
 | Token / usage hint | CardHeader actions | ChatBubble actions |
 | Activity foot stats | Card `.card__foot` | ChatBubble bubble-foot |
 | Tool 卡 inline 渲染 | CardParts toolToCardNode | 不变；inline 仍在 ChatBubble body |
 | Auto-scroll | `setupAutoScroll` | 不变 |
 | Rewind cursor | `pruneCardsAfterCursor` | 不变 |
 | **Sticky inline width** | `ResizeObserver` 在 Card.tsx:53,250 | **ChatBubble 自己实现**（top-level 卡仍需稳定宽度，避免气泡跳动） |
-| **dblClick 折叠** | Card.tsx:290 `onDblClick` | ChatBubble surface 同接 |
-| **键盘展开** | CardHeader.tsx:224 `onKeyDown` | bubble-head 同接 |
+| **折叠切换** | CardHeader header 单击 / Enter / Space 双向 toggle | 不进入 ChatBubble |
 | **errorReason chip** | CardHeader.tsx:280 | bubble-head title 行末 |
 | **Integrity body** | Card.tsx:342 `<IntegrityBody/>` 渲染 | ChatBubble body：当 `node.integrity` 存在时插入 IntegrityBody |
 | **step `goalDescription`** | Card.tsx:316 | 不归 bubble 管，step 走 Card 不变 |
