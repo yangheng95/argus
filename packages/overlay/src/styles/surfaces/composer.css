@@ -39,7 +39,7 @@
   justify-content: center;
   width: calc(28px * var(--ui-scale));
   height: calc(28px * var(--ui-scale));
-  background: var(--subtle-10);
+  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
   border-radius: var(--oc-radius-soft);
   font-size: var(--ui-font-small);
   font-weight: var(--ui-font-weight-strong);

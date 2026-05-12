@@ -23,7 +23,7 @@
 }
 
 .workspace-onboarding-kicker {
-  font-size: var(--ui-font-micro);
+  font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);
   text-transform: uppercase;
   letter-spacing: var(--ui-letter-spacing-loose);

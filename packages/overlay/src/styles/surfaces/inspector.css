@@ -645,9 +645,14 @@
    relocating them piecemeal would explode the surface size before
    the cleanup pays off. */
 .gwg {
+  --gwg-surface-base: color-mix(in srgb, var(--surface-inset) 88%, transparent);
+  --gwg-surface-hover: color-mix(in srgb, var(--surface-hover) 72%, var(--surface));
+  --gwg-surface-muted: color-mix(in srgb, var(--surface) 82%, var(--surface-inset));
+  --gwg-surface-emphasis: color-mix(in srgb, var(--surface-strong) 74%, var(--surface));
+
   position: relative;
   border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
+  background: var(--gwg-surface-base);
   overflow: hidden;
   transition: background var(--ui-duration-slow) var(--ui-timing-standard);
 }
@@ -663,7 +668,7 @@
       var(--ui-highlight-tone),
       color-mix(in srgb, var(--accent) 1.2%, transparent)
     ),
-    color-mix(in srgb, var(--surface) 96%, transparent);
+    var(--gwg-surface-muted);
 }
 
 /* GWG header bar: clickable summary row carrying the status icon,
@@ -933,7 +938,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-size: var(--ui-font-tiny);
 }
 
@@ -1007,12 +1012,12 @@
   height: calc(16px * var(--ui-scale));
   flex-shrink: 0;
   border-radius: 50%;
-  background: var(--subtle-2);
+  background: var(--gwg-surface-hover);
   color: var(--text-muted);
   font-size: calc(10px * var(--ui-scale));
   font-weight: var(--ui-font-weight-strong);
   line-height: 1;
-  box-shadow: 0 0 0 var(--oc-border-width) var(--subtle-3) inset;
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--border) 72%, transparent) inset;
 }
 
 .gwg-step-label {
@@ -1039,7 +1044,7 @@
   letter-spacing: var(--ui-letter-spacing-loose);
   padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-2);
+  background: var(--gwg-surface-hover);
   color: var(--text-muted);
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
@@ -1050,12 +1055,12 @@
    running/failed inset rings routed through color-mix on
    var(--accent) and var(--bad). */
 .gwg-step--pending .gwg-step-icon {
-  background: var(--subtle-2);
+  background: var(--gwg-surface-hover);
   color: var(--text-muted);
 }
 
 .gwg-step--pending .gwg-step-status {
-  background: var(--subtle-2);
+  background: var(--gwg-surface-hover);
   color: var(--text-muted);
 }
 
@@ -1101,7 +1106,7 @@
 }
 
 .gwg-step--skipped .gwg-step-icon {
-  background: var(--subtle-1);
+  background: var(--gwg-surface-base);
   color: var(--text-muted);
 }
 
@@ -1111,7 +1116,7 @@
 }
 
 .gwg-step--skipped .gwg-step-status {
-  background: var(--subtle-1);
+  background: var(--gwg-surface-base);
   color: var(--text-muted);
 }
 
@@ -1154,8 +1159,8 @@
    subtle wash gives the body its own depth. */
 .gwg-step-body {
   padding: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);
-  background: var(--subtle-1);
-  border-top: var(--oc-border-width) solid var(--subtle-2);
+  background: var(--gwg-surface-base);
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
   display: flex;
   flex-direction: column;
   gap: var(--ui-gap-sm);
@@ -1176,7 +1181,7 @@
   position: relative;
   padding: var(--ui-gap-xs) var(--ui-gap-sm) var(--ui-gap-xs)
     calc(18px * var(--ui-scale) + var(--ui-gap-md));
-  background: var(--subtle-2);
+  background: var(--gwg-surface-hover);
   border-radius: var(--oc-radius-soft);
   counter-increment: gwg-plan;
 }
@@ -1229,7 +1234,7 @@
   gap: var(--ui-gap-sm);
   margin-bottom: var(--ui-gap-xs);
   padding-bottom: var(--ui-gap-xs);
-  border-bottom: var(--oc-border-width) dashed var(--subtle-3);
+  border-bottom: var(--oc-border-width) dashed color-mix(in srgb, var(--border) 72%, transparent);
   font-size: var(--ui-font-tiny);
   font-variant-numeric: tabular-nums;
 }
@@ -1270,7 +1275,7 @@
 }
 
 .gwg-changed-file:hover {
-  background: var(--subtle-3);
+  background: var(--gwg-surface-muted);
   color: var(--text-strong);
 }
 
@@ -1341,8 +1346,8 @@
 
 .gwg-eval-summary {
   padding: var(--ui-gap-sm) var(--ui-gap-md);
-  background: var(--subtle-2);
-  border-left: calc(2px * var(--ui-scale)) solid var(--subtle-4);
+  background: var(--gwg-surface-hover);
+  border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--border) 84%, transparent);
   border-radius: var(--oc-radius-soft);
   font-size: var(--ui-font-small);
   color: var(--text);
@@ -1382,11 +1387,11 @@
 }
 
 .gwg-check + .gwg-check {
-  border-top: var(--oc-border-width) solid var(--subtle-2);
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .gwg-check:hover {
-  background: var(--subtle-2);
+  background: var(--gwg-surface-hover);
 }
 
 /* Check icon: same 14x14 round chip pattern as the step icon.
@@ -1404,7 +1409,7 @@
   font-size: calc(10px * var(--ui-scale));
   font-weight: var(--ui-font-weight-strong);
   line-height: 1;
-  background: var(--subtle-2);
+  background: var(--gwg-surface-hover);
   color: var(--text-muted);
 }
 
@@ -1427,7 +1432,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: calc(1px * var(--ui-scale)) calc(5px * var(--ui-scale));
-  background: var(--subtle-1);
+  background: var(--gwg-surface-base);
   border-radius: var(--oc-radius-soft);
 }
 
@@ -1450,7 +1455,7 @@
 }
 
 .gwg-check[data-check-status="pending"] .gwg-check-icon {
-  background: var(--subtle-2);
+  background: var(--gwg-surface-hover);
   color: var(--text-muted);
 }
 
@@ -2663,7 +2668,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .session-msg-text {
   font-size: var(--ui-font-small);
-  color: var(--text-base);
+  color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;

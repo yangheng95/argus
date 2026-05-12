@@ -41,6 +41,36 @@ describe("config panel sizing", () => {
     expect(bodyOf(".config-content")).toMatch(/min-height\s*:\s*0/)
   })
 
+  test("settings panels share one neutral surface token family", () => {
+    const layoutBody = bodyOf(".config-dialog-layout")
+    expect(layoutBody).toContain("--settings-surface-base: var(--surface-inset)")
+    expect(layoutBody).toContain("--settings-surface-hover:")
+    expect(layoutBody).toContain("--settings-surface-muted:")
+    expect(layoutBody).toContain("--settings-surface-emphasis:")
+
+    for (const selector of [
+      ".config-sidebar",
+      ".config-panel-card",
+      ".perm-row",
+      ".provider-flat-row",
+      ".agent-model-table",
+      ".config-status-box",
+      ".about-author-card",
+      ".llm-summary-row",
+    ]) {
+      expect(bodyOf(selector)).toMatch(/background:\s*var\(--settings-surface-base\)/)
+    }
+
+    for (const selector of [
+      ".config-nav-item:hover",
+      ".config-toggle-list-item:hover",
+      ".agent-model-row:hover",
+      ".perm-row:hover",
+    ]) {
+      expect(bodyOf(selector)).toMatch(/background:\s*var\(--settings-surface-hover\)/)
+    }
+  })
+
   test("settings content normalizes same-level small button dimensions", () => {
     expect(bodyOf('.config-content .oc-button[data-size="sm"]')).toMatch(/--oc-button-height\s*:/)
     expect(bodyOf(".config-content .provider-head-actions .oc-button[data-size=\"sm\"]")).toMatch(/min-width\s*:/)

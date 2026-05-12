@@ -52,7 +52,7 @@
   width: var(--oc-section-icon-size);
   height: var(--oc-section-icon-size);
   color: var(--text-muted);
-  transition: color var(--ui-duration-fast) var(--ui-ease-out);
+  transition: color var(--ui-duration-fast) var(--ui-timing-standard);
 }
 
 .oc-section[open] > .oc-section__head > .oc-section__icon {
