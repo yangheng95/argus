@@ -9,54 +9,39 @@ function read(relativePath: string): string {
 }
 
 describe("card expand and collapse contract", () => {
-  test("Card uses explicit expand/collapse writes instead of click toggle", () => {
+  test("Card uses a single explicit header toggle write", () => {
     const src = read("src/components/Card.tsx")
     expect(src).toContain("import { cardExpanded, setCardExpanded }")
     expect(src).not.toContain("toggleCard")
-    expect(src).toContain("const expand = () =>")
-    expect(src).toContain("const collapse = () =>")
-    expect(src).toContain("setCardExpanded(props.node.id, true, props.node.status)")
-    expect(src).toContain("setCardExpanded(props.node.id, false, props.node.status)")
+    expect(src).toContain("const setExpanded = (value: boolean) =>")
+    expect(src).toContain("const toggleExpanded = () =>")
+    expect(src).toContain("setCardExpanded(props.node.id, value, props.node.status)")
+    expect(src).toContain("setExpanded(!expanded())")
   })
 
-  test("Card double-click collapse ignores controls and nested cards", () => {
+  test("Card has no double-click collapse path competing with header toggle", () => {
     const src = read("src/components/Card.tsx")
-    expect(src).toContain("onDblClick={(event) =>")
-    expect(src).toContain('target.closest(".card") !== articleRef')
-    for (const selector of [
-      '"button"',
-      '"a"',
-      '"input"',
-      '"textarea"',
-      '"select"',
-      '"summary"',
-      '"[contenteditable=\'true\']"',
-      '"[role=\'button\']"',
-      '"[role=\'menuitem\']"',
-      '"[role=\'textbox\']"',
-      '"[data-card-dblclick-ignore=\'true\']"',
-    ]) {
-      expect(src).toContain(selector)
-    }
+    expect(src).not.toContain("onDblClick")
+    expect(src).not.toContain("canCardSurfaceCollapse")
   })
 
-  test("CardHeader single click expands collapsed cards only", () => {
+  test("CardHeader single click and keyboard toggle both directions", () => {
     const src = read("src/components/CardHeader.tsx")
-    expect(src).toContain("onExpand: () => void")
-    expect(src).toContain("if (!props.collapsible || props.expanded) return;")
-    expect(src).toContain("props.onExpand();")
-    expect(src).not.toContain("onToggle")
+    expect(src).toContain("onToggle: () => void")
+    expect(src).toContain("if (!props.collapsible) return;")
+    expect(src).toContain("props.onToggle();")
+    expect(src).not.toContain("props.expanded) return")
     expect(src).not.toContain("card__chevron")
   })
 
-  test("GoalWorkflowGroup follows the same click-expand double-click-collapse contract", () => {
+  test("GoalWorkflowGroup follows the same header toggle contract", () => {
     const src = read("src/components/GoalWorkflowGroup.tsx")
     expect(src).toContain("import { cardExpanded, setCardExpanded }")
     expect(src).not.toContain("toggleCard")
-    expect(src).toContain("const expand = () =>")
-    expect(src).toContain("const collapse = () =>")
-    expect(src).toContain("onDblClick={(event) =>")
-    expect(src).toContain("onClick={expand}")
+    expect(src).toContain("const toggleExpanded = () =>")
+    expect(src).toContain("setCardExpanded(cardKey(), !expanded(), status())")
+    expect(src).not.toContain("onDblClick")
+    expect(src).toContain("onClick={toggleExpanded}")
     expect(src).not.toContain("gwg-chevron")
   })
 
