@@ -61,7 +61,7 @@ delivery.gate.rejected     ← 触发回修循环（不一定出现）
 task.completed | task.failed | task.cancelled
 ```
 
-> 历史文档里的 `spec_agent_running` / `goals_agent_running` / `planner_agent_running` / `evaluator_running` 等名称**已不存在**——这些 agent 都已在 2026-05 重构中下线 / 重命名，参见 [架构总览](../concepts/architecture.md)。
+> 历史文档里的旧 `*_agent_running` 名称**已不存在**——相关 agent 已在 2026-05 重构中下线 / 重命名，参见 [架构总览](../concepts/architecture.md)。
 
 ## 5. 常用任务端点
 

@@ -49,7 +49,7 @@ curl -X POST http://127.0.0.1:7878/task \
 curl -N http://127.0.0.1:7878/task/<task_id>/events
 ```
 
-你会依次看到：`spec_agent_running` → `goals_agent_running` → `planner_agent_running` → 多个 `goal.running` → `evaluator_running` → `delivery_running` → `done`。
+你会看到 orchestrator 和各阶段事件，例如 `requirements`、`architect`、`goal.running`、`integrity`、`delivery_running`、`done`。
 
 失败时会看到 `replan.triggered` 或 `retry.triggered`，然后回到执行阶段。
 
