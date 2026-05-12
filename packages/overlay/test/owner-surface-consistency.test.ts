@@ -7,6 +7,7 @@ const TITLEBAR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces"
 const SIDEBAR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "sidebar.css"), "utf8")
 const INSPECTOR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "inspector.css"), "utf8")
 const MESSAGES_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "messages.css"), "utf8")
+const CARD_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "card.css"), "utf8")
 const AGENT_WORKFLOW_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "agent-workflow.css"), "utf8")
 const CONVERSATION_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "conversation.css"), "utf8")
 const COMPOSER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "composer.css"), "utf8")
@@ -61,6 +62,17 @@ test("message content carriers keep a neutral surface base", () => {
   expect(bodyOf(MESSAGES_CSS, ".msg-read-meta")).toMatch(/background:\s*transparent/)
   expect(bodyOf(MESSAGES_CSS, ".msg-read-reminder")).toMatch(/background:\s*transparent/)
   expect(bodyOf(MESSAGES_CSS, ".msg-file-chip")).toMatch(/background:\s*var\(--surface-inset\)/)
+})
+
+test("structured card body content does not create nested card chrome", () => {
+  expect(bodyOf(CARD_CSS, ".card__body")).toMatch(/border-top:\s*0 solid transparent/)
+  expect(bodyOf(CARD_CSS, ".card__collapsed-preview")).toMatch(/border-left:\s*0 solid transparent/)
+  expect(bodyOf(CARD_CSS, ".card__goal-desc")).toMatch(/background:\s*transparent/)
+  expect(bodyOf(CARD_CSS, ".card__goal-desc")).toMatch(/border:\s*0 solid transparent/)
+  expect(bodyOf(CARD_CSS, ".card__goal-desc")).toMatch(/box-shadow:\s*none/)
+  expect(bodyOf(CARD_CSS, ".card[data-kind=\"step\"] > .card__body > .msg-text")).toMatch(/background:\s*transparent/)
+  expect(bodyOf(CARD_CSS, ".card[data-kind=\"step\"] > .card__body > .msg-text")).toMatch(/box-shadow:\s*none/)
+  expect(bodyOf(CARD_CSS, ".card[data-kind=\"step\"] > .card__body > .msg-text::before")).toMatch(/content:\s*none/)
 })
 
 test("workflow and conversation owner surfaces stay flat", () => {

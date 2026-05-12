@@ -381,8 +381,8 @@ body {
   white-space: pre-wrap;
   line-height: 1.45;
   word-break: break-word;
-  border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--card-stage-info)) 35%, transparent);
-  padding-left: calc(8px * var(--ui-scale));
+  border-left: 0 solid transparent;
+  padding-left: 0;
 }
 
 /* Collapsed-only todo summary — bottom row under the preview line.
@@ -705,7 +705,7 @@ body {
 
 .card__body {
   padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x);
-  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--card-line-dim) 88%, transparent);
+  border-top: 0 solid transparent;
   background: transparent;
   font-size: var(--card-sub-size);
   color: var(--text-strong);
@@ -729,27 +729,25 @@ body {
 
 .card__goal-desc {
   margin: calc(6px * var(--ui-scale)) 0 calc(12px * var(--ui-scale)) 0;
-  padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card-stage) 10%, transparent), transparent 72%),
-    color-mix(in srgb, var(--card-bg-1) 92%, transparent);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--card-stage) 16%, var(--card-border));
-  border-radius: var(--oc-radius-large);
-  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--subtle-1);
+  padding: 0;
+  background: transparent;
+  border: 0 solid transparent;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .card__goal-desc-label {
   display: inline-flex;
   align-items: center;
-  margin-bottom: calc(7px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--card-stage) 16%, transparent);
-  color: color-mix(in srgb, var(--card-stage) 78%, var(--text-muted));
+  margin-bottom: calc(6px * var(--ui-scale));
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-medium);
   letter-spacing: var(--ui-letter-spacing-loose);
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .card__goal-desc-text,
@@ -775,24 +773,15 @@ body {
 
 .card[data-kind="step"] > .card__body > .msg-text {
   position: relative;
-  margin: calc(10px * var(--ui-scale)) 0 0;
-  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
-  border-radius: var(--oc-radius-large);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card-stage) 8%, transparent), transparent 74%),
-    color-mix(in srgb, var(--card-bg-1) 94%, transparent);
-  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--subtle-1);
+  margin: calc(6px * var(--ui-scale)) 0 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .card[data-kind="step"] > .card__body > .msg-text::before {
-  content: "";
-  position: absolute;
-  left: calc(10px * var(--ui-scale));
-  top: calc(14px * var(--ui-scale));
-  bottom: calc(14px * var(--ui-scale));
-  width: calc(2px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--card-stage) 58%, transparent);
+  content: none;
 }
 
 .card[data-kind="step"] > .card__body > .msg-text > :first-child {
