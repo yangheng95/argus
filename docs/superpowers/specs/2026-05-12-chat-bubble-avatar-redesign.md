@@ -235,7 +235,7 @@ setCardTreeStore(
 ### 折叠态（2026-05-12 用户反馈修订）
 - `message` / `agent` 是 transcript 消息卡片，必须默认且始终显示正文；不再接入 `cardExpanded`。
 - 折叠只保留给 `Card` / workflow 等结构化过程卡，不能把 agent 消息折成无边框 head。
-- 结构化卡片折叠交互统一为 header 单击/Enter/Space 双向 toggle；禁止再用“单击只展开、双击收起”的双入口契约。
+- 结构化卡片折叠交互统一为单击双向 toggle：header 负责语义按钮和 Enter/Space，card surface 负责正文/空白区单击；surface 必须过滤按钮、链接、输入框、文本选择和嵌套卡片，禁止再用“单击只展开、双击收起”的双入口契约。
 - 结构化卡片 body 是内容层，不是第二张卡片：`goalDescription`、step 正文、collapsed preview 禁止再画内层边框、渐变底、圆角盒或额外竖向 rail。
 - ChatBubble 不渲染 `collapsedPreview` / `card__todo-summary`；todo progress 属于结构化卡折叠摘要，不属于消息卡片。
 - ChatBubble 使用单一 flat card surface：head 与 body 同处一个 `.chat-bubble` 边界内，禁止 head 外置再套一个空 bubble 形成“实心 bar”。
@@ -347,7 +347,7 @@ interface UseCardHeadActionsOutput {
 | Auto-scroll | `setupAutoScroll` | 不变 |
 | Rewind cursor | `pruneCardsAfterCursor` | 不变 |
 | **Sticky inline width** | `ResizeObserver` 在 Card.tsx:53,250 | **ChatBubble 自己实现**（top-level 卡仍需稳定宽度，避免气泡跳动） |
-| **折叠切换** | CardHeader header 单击 / Enter / Space 双向 toggle | 不进入 ChatBubble |
+| **折叠切换** | CardHeader header 单击 / Enter / Space + Card surface 正文/空白区单击，均为双向 toggle | 不进入 ChatBubble |
 | **errorReason chip** | CardHeader.tsx:280 | bubble-head title 行末 |
 | **Integrity body** | Card.tsx:342 `<IntegrityBody/>` 渲染 | ChatBubble body：当 `node.integrity` 存在时插入 IntegrityBody |
 | **step `goalDescription`** | Card.tsx:316 | 不归 bubble 管，step 走 Card 不变 |

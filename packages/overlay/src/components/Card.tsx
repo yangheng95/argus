@@ -76,6 +76,32 @@ export function Card(props: { node: CardNode; depth: number }) {
     setExpanded(!expanded());
   };
 
+  const canCardSurfaceToggle = (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (!target || !articleRef) return false;
+    if (target.closest(".card") !== articleRef) return false;
+    if (window.getSelection()?.type === "Range") return false;
+    const interactive = target.closest<HTMLElement>(
+      [
+        "button",
+        "a",
+        "input",
+        "textarea",
+        "select",
+        "summary",
+        "[contenteditable='true']",
+        "[role='button']",
+        "[role='menuitem']",
+        "[role='checkbox']",
+        "[role='tab']",
+        "[role='textbox']",
+        "[data-card-click-ignore='true']",
+        "[data-card-dblclick-ignore='true']",
+      ].join(","),
+    );
+    return interactive == null;
+  };
+
   const traceSessionID = createMemo(() =>
     props.node.kind === "phase"
       ? props.node.phaseSessionID
@@ -237,6 +263,11 @@ export function Card(props: { node: CardNode; depth: number }) {
       data-depth={props.depth}
       style={articleStyle()}
       classList={{ "card--expanded": expanded(), "card--collapsed": !expanded() }}
+      onClick={(event) => {
+        if (!canCardSurfaceToggle(event)) return;
+        event.stopPropagation();
+        toggleExpanded();
+      }}
     >
       <CardHeader
         node={headerNode()}
