@@ -110,6 +110,9 @@ test("agent workflow panel renders one current card per retry stack", () => {
   expect(source).toContain("agent-workflow-card-subtitle");
   expect(source).toContain("goalIdentityLabel(current)");
   expect(source).toContain("agent-workflow-report-goal");
+  expect(source).toContain('t("agent_workflow.output_report")');
+  expect(source).not.toContain('t("agent_workflow.output_summary")');
+  expect(source).not.toContain('t("agent_workflow.model")');
 });
 
 test("agent workflow projection carries goal identity for same-stage cards", () => {
