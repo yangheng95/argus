@@ -48,7 +48,7 @@ export function Avatar(props: { role: string; status?: string; class?: string })
       style={{ "--card-stage": avatarAccent(props.role) }}
       aria-hidden="true"
     >
-      <Icon class="chat-avatar__icon" name={avatarIconName(props.role)} size={16} />
+      <Icon class="chat-avatar__icon" name={avatarIconName(props.role)} size={20} />
     </span>
   )
 }

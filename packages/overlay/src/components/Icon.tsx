@@ -488,8 +488,8 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
   "avatar-assistant": {
     body: () => (
       <>
-        <path d="M4 5.5h6a2.5 2.5 0 0 1 0 5H8l-2.6 2v-2H4a2.5 2.5 0 0 1 0-5Z" />
-        <path d="M11.7 3.2v1.6M10.9 4h1.6" />
+        <path d="M3.8 5.4h6.2a2.4 2.4 0 0 1 0 4.8H7.9l-2.7 2.1v-2.1H3.8a2.4 2.4 0 0 1 0-4.8Z" />
+        <path d="M11.8 2.9v1.8M10.9 3.8h1.8M10.9 6.1h1.8M11.8 5.2V7" />
       </>
     ),
   },
@@ -516,8 +516,8 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
   "avatar-spec": {
     body: () => (
       <>
-        <path d="M5 3.5h5.3a1.7 1.7 0 0 1 1.7 1.7v5.6a1.7 1.7 0 0 1-1.7 1.7H5.7A1.7 1.7 0 0 0 4 14.2V5.2A1.7 1.7 0 0 1 5.7 3.5" />
-        <path d="M6 6h4M6 8.2h4M6 10.4h2.8" />
+        <path d="M5.5 4.1h5.1a1.5 1.5 0 0 1 1.5 1.5v4.7a1.7 1.7 0 0 1-1.7 1.7H6.4a1.6 1.6 0 1 1 0-3.2H10" />
+        <path d="M6.2 6.3H10M6.2 8.3H9.8M6.2 10.2H8.6" />
       </>
     ),
   },
@@ -532,17 +532,18 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
   "avatar-design-analyst": {
     body: () => (
       <>
-        <circle cx="7" cy="7" r="2.6" />
-        <path d="M7 3.2v1.2M7 9.6v1.2M3.2 7h1.2M9.6 7h1.2M9 9l2 2" />
+        <circle cx="6.7" cy="6.7" r="2.5" />
+        <path d="M6.7 3.3v1.1M6.7 9v1.1M3.3 6.7h1.1M9 6.7h1.1M8.6 8.6l2.2 2.2" />
       </>
     ),
   },
   "avatar-architect": {
     body: () => (
       <>
-        <path d="M5.2 11.8 8 4l2.8 7.8" />
+        <path d="M7.3 4.1 5.3 11.6" />
+        <path d="M8.7 4.1 10.7 11.6" />
         <path d="M6.2 9.2h3.6" />
-        <path d="M11.6 4.6 9.9 6.3l1.9 1.9" />
+        <path d="M10.7 5 13 11.6H8.9" />
       </>
     ),
   },
@@ -571,9 +572,10 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
   "avatar-build": {
     body: () => (
       <>
-        <path d="M5 5.1 8.7 8.8" />
-        <path d="M9 4.2 11.8 7l-1.1 1.1L7.9 5.3Z" />
-        <path d="M4.8 6.8 3.6 8l3.8 3.8L8.6 10.6Z" />
+        <path d="M9.4 4.1 11.9 6.6l-1.2 1.2-2.5-2.5Z" />
+        <path d="M7.8 5.7 10.3 8.2" />
+        <path d="M4.2 8.1 7.9 11.8" />
+        <path d="M5.1 6.9 3.5 8.5l1.3 1.3 1.6-1.6" />
       </>
     ),
   },

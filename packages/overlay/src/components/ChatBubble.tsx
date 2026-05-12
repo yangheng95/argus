@@ -234,61 +234,69 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
       classList={{ "chat-bubble-row--expanded": true }}
     >
       <div class="chat-bubble-shell" data-align={align()}>
-        <div class="chat-bubble__avatar-slot">
-          <Avatar role={normalizedRole()} status={props.node.status} />
-        </div>
+        <Show when={align() === "right"}>
+          <div class="chat-bubble__avatar-slot">
+            <Avatar role={normalizedRole()} status={props.node.status} />
+          </div>
+        </Show>
         <div class="chat-bubble__column">
           <div class="chat-bubble" data-align={align()} data-stage={normalizedRole()} data-status={props.node.status || "none"}>
             <Show when={align() === "left"}>
               <div class="chat-bubble__head">
                 <div class="chat-bubble__title-row">
-                  <Show
-                    when={props.node.status === "running"}
-                    fallback={
-                      <Show when={badge().tone !== "neutral"}>
-                        <span class={`card__badge card__badge--${badge().tone}`} title={props.node.status || ""}>
-                          {badge().glyph}
-                        </span>
-                      </Show>
-                    }
-                  >
-                    <span class="card__badge card__badge--running" title="running">
-                      <span class="card__spinner" />
-                    </span>
-                  </Show>
-                  <span class="chat-bubble__title">{roleTitle()}</span>
-                  <Show when={durationText()}>
-                    <span
-                      class="card__duration"
-                      title={t("card.duration_tooltip", { value: durationText() })}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      {durationText()}
-                    </span>
-                  </Show>
-                  <Show when={props.node.status === "error" && !!props.node.errorReason}>
-                    <button
-                      type="button"
-                      class="card__error-reason"
-                      classList={{ "card__error-reason--copied": reasonCopied() }}
-                      title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
-                      aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        void (async () => {
-                          const reason = props.node.errorReason || ""
-                          if (!reason) return
-                          const ok = await writeClipboard(reason)
-                          if (!ok) return
-                          setReasonCopied(true)
-                          setTimeout(() => setReasonCopied(false), 1200)
-                        })()
-                      }}
-                    >
-                      {props.node.errorReason}
-                    </button>
-                  </Show>
-                  <span class="chat-bubble__title-spacer" aria-hidden="true" />
+                  <div class="chat-bubble__identity">
+                    <Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />
+                    <div class="chat-bubble__identity-copy">
+                      <div class="chat-bubble__title-line">
+                        <Show
+                          when={props.node.status === "running"}
+                          fallback={
+                            <Show when={badge().tone !== "neutral"}>
+                              <span class={`card__badge card__badge--${badge().tone}`} title={props.node.status || ""}>
+                                {badge().glyph}
+                              </span>
+                            </Show>
+                          }
+                        >
+                          <span class="card__badge card__badge--running" title="running">
+                            <span class="card__spinner" />
+                          </span>
+                        </Show>
+                        <span class="chat-bubble__title">{roleTitle()}</span>
+                        <Show when={durationText()}>
+                          <span
+                            class="card__duration"
+                            title={t("card.duration_tooltip", { value: durationText() })}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {durationText()}
+                          </span>
+                        </Show>
+                        <Show when={props.node.status === "error" && !!props.node.errorReason}>
+                          <button
+                            type="button"
+                            class="card__error-reason"
+                            classList={{ "card__error-reason--copied": reasonCopied() }}
+                            title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
+                            aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void (async () => {
+                                const reason = props.node.errorReason || ""
+                                if (!reason) return
+                                const ok = await writeClipboard(reason)
+                                if (!ok) return
+                                setReasonCopied(true)
+                                setTimeout(() => setReasonCopied(false), 1200)
+                              })()
+                            }}
+                          >
+                            {props.node.errorReason}
+                          </button>
+                        </Show>
+                      </div>
+                    </div>
+                  </div>
                   <div class="chat-bubble__actions">
                     <Show when={typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0}>
                       <span
