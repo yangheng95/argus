@@ -216,6 +216,7 @@ export namespace ProviderTransform {
     if (id.includes("glm-4.6")) return 1.0
     if (id.includes("glm-4.7")) return 1.0
     if (id.includes("minimax-m2")) return 1.0
+    if (id === "kimi-k2.6" || id.endsWith("/kimi-k2.6")) return undefined
     if (id.includes("kimi-k2")) {
       // kimi-k2-thinking & kimi-k2.5 && kimi-k2p5 && kimi-k2-5
       if (["thinking", "k2.", "k2p", "k2-5"].some((s) => id.includes(s))) {

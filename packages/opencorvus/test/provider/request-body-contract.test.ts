@@ -176,4 +176,92 @@ describe("provider request-body contract", () => {
 
     expect(SessionLoop.structuredOutputToolChoice(format, { capabilities: { reasoning: true } })).toBe("auto")
   })
+
+  test("Hexin Kimi K2.6 and GLM-5.1 use soft tool choice and preserve reasoning content", () => {
+    const targets = [
+      model({
+        id: "hexin/kimi-k2.6",
+        providerID: "hexin",
+        api: {
+          id: "kimi-k2.6",
+          url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        capabilities: {
+          ...model({}).capabilities,
+          temperature: false,
+          reasoning: true,
+          interleaved: { field: "reasoning_content" },
+        },
+      }),
+      model({
+        id: "hexin/openai/glm-5.1",
+        providerID: "hexin",
+        api: {
+          id: "openai/glm-5.1",
+          url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        capabilities: {
+          ...model({}).capabilities,
+          reasoning: true,
+          interleaved: { field: "reasoning_content" },
+        },
+      }),
+    ]
+    const format = { type: "json_schema" as const, schema: { type: "object" }, retryCount: 2 }
+    const terminalContract = {
+      toolName: "Finish",
+      isSatisfied: () => false,
+      shouldExposeOnlyTerminalTool: () => true,
+    }
+    const tools = { Finish: {} }
+
+    for (const target of targets) {
+      expect(SessionLoop.structuredOutputToolChoice(format, target)).toBe("auto")
+      expect(SessionLoop.terminalToolChoice(terminalContract as any, tools as any, target)).toBeUndefined()
+
+      const messages = ProviderTransform.message(
+        [
+          {
+            role: "assistant",
+            content: [
+              { type: "reasoning", text: "thinking before the call" },
+              {
+                type: "tool-call",
+                toolCallId: "call_1",
+                toolName: "Finish",
+                input: { ok: true },
+              },
+            ],
+          },
+        ] as any[],
+        target,
+        {},
+      )
+      const bodyMessages = convertToOpenAICompatibleChatMessages(messages as any)
+
+      expect(bodyMessages[0]).toMatchObject({
+        role: "assistant",
+        content: null,
+        reasoning_content: "thinking before the call",
+      })
+      expect(bodyMessages[0].tool_calls?.[0]?.function.name).toBe("Finish")
+    }
+  })
+
+  test("Hexin Kimi K2.6 does not inject sampling parameters that Moonshot fixes", () => {
+    const kimi = model({
+      id: "hexin/kimi-k2.6",
+      providerID: "hexin",
+      api: {
+        id: "kimi-k2.6",
+        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+    })
+
+    expect(ProviderTransform.temperature(kimi)).toBeUndefined()
+    expect(ProviderTransform.topP(kimi)).toBeUndefined()
+  })
 })

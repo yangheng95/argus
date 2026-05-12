@@ -88,7 +88,7 @@ function buildModel(id: string): Model {
     },
     status: "active",
     capabilities: {
-      temperature: true,
+      temperature: profile.temperature ?? true,
       reasoning: profile.reasoning,
       attachment: profile.attachment,
       toolcall: profile.toolcall,
@@ -100,7 +100,7 @@ function buildModel(id: string): Model {
         pdf: profile.pdf_in,
       },
       output: { text: true, audio: false, image: false, video: false, pdf: false },
-      interleaved: false,
+      interleaved: profile.interleaved ?? false,
     },
     cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
     limit: { context: profile.context, input: profile.input, output: profile.output },
