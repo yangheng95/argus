@@ -337,6 +337,12 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain('Minor / localized delivery issues → call `build({ request, directBuildIntent: "modify_files" })`')
     expect(normalized).toContain("Do not re-run requirements, architect, design_analysis, or the whole workflow for these issues")
     expect(normalized).toContain("Re-enter **architect** only when the rejection proves a genuinely new prerequisite goal")
+    expect(normalized).toContain("Task-fidelity shortfall recovery")
+    expect(normalized).toContain("First occurrence, when the missing or distorted capability is still inside the current task contract → use the lightest valid repair")
+    expect(normalized).toContain('`build({ request, directBuildIntent: "modify_files" })` with the exact fidelity delta as the request')
+    expect(normalized).toContain("If the same fidelity shortfall repeats after that build retry")
+    expect(normalized).toContain("use `modify_goal` or `architect` when the current task needs a corrected/new goal")
+    expect(normalized).toContain("Use `propose_task` only when the repeated fidelity gap has become a separate follow-up scope")
   })
 
   test("orchestrator prompt routes follow-up task creation through confirmed proposals", async () => {
