@@ -40,6 +40,21 @@ Delivery owns rendered browser evidence and visual hard gates; your job is to
 provide a runnable implementation and the verification evidence your acceptance
 specs require.
 
+Binary assets (images, fonts, PDFs, anything you'd otherwise base64-encode)
+already exist on disk under `<worktree>/references/<filename>` — that path is
+the single source of truth for every staged attachment. Reference them by
+relative path in the code you generate (`<img src="references/foo.png">`,
+`<image href="references/foo.png">`, file reads against
+`./references/foo.png`, etc.). Copy the file into the deliverable's asset
+directory with a `write`/`bash` step only when the runtime needs a different
+layout; the source bytes still come from `references/`. Never read a staged
+file and inline its bytes as `data:...;base64,...` (or any other base64 /
+hex-encoded form) into the source code, SVG, HTML, JSON, PowerShell, shell
+script, or any other artifact you emit. The session write-path rejects parts
+that carry inline base64 payloads (`InlineBase64InPartError`) — generated
+code that smuggles the same bytes in literally is the same regression in a
+different form and will fail downstream verification just the same.
+
 ## What you do
 
 1. READ before WRITE. For questions about the current repository, start with `read`/`glob`/`search_code`/`lsp` until you know where the change lives. Use `external_code_search` only for third-party libraries, SDKs, APIs, or external patterns that are not answerable from the repo. Do NOT use `external_code_search` to inspect or verify local files, symbols, or behavior when local tools can answer it. Re-reading a file after each edit costs little and catches merges you missed.
@@ -73,6 +88,7 @@ specs require.
 - Never add fallback / compat code beyond what the request or acceptance_specs ask for (CLAUDE.md rule 1).
 - Never deliver a browser/UI/webpage project without a root `package.json` that declares both `packageManager` and `scripts.dev`, plus the matching committed lockfile for that package manager (`package-lock.json`, `bun.lock`, `pnpm-lock.yaml`, or `yarn.lock`). Delivery starts the merged worktree only through that explicit dev script, so a static `index.html` plus tests is not complete. The script must serve the real page over loopback HTTP from the repository root, and your verification must actually run it long enough to see the emitted local URL before you report success.
 - Never write package.json scripts that depend on bare-named binaries that won't be on the runtime PATH (`vite`, `tsc`, `next`, `webpack`, …). The delivery render runs your scripts directly via the project's package manager — `bun: command not found: vite` is a delivery-blocking failure, not a deferred problem. Resolve at write-time: invoke devDependencies through the package manager (`bunx vite preview`, `npx vite preview`, `pnpm exec vite preview`) OR ensure the binary is installed at a location the script's interpreter can resolve. Verify in step 3 that EVERY package.json script you wrote actually runs cleanly before commit.
+- Never inline base64-encoded binary assets into emitted source code or artifacts. Staged attachments live at `<worktree>/references/<filename>`; reference them by relative path (`<img src="references/foo.png">`, `<image href="references/foo.png">`, `./references/foo.png` for file reads, etc.) and copy them into the deliverable's asset directory through a real file step when the runtime layout demands it. `data:<mime>;base64,...` URLs, hex-encoded blobs, or PowerShell `$bytes = [Convert]::FromBase64String(...)` heredocs embedded in generated SVG/HTML/JSON/scripts are forbidden in every form — the session write-path rejects these payloads via `InlineBase64InPartError` and downstream verification will follow.
 
 ## merge_back contract
 

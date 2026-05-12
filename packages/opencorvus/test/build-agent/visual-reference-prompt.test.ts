@@ -98,4 +98,47 @@ describe("renderVisualContractPreamble", () => {
     expect(out).toContain("missing on disk")
     expect(out).toContain("report_build_result")
   })
+
+  /**
+   * Spec: delivery-attachment-store-single-source-2026-05-11.md (companion
+   * to the `InlineBase64InPartError` session.updatePart guard). The host
+   * gate is rule-6.1 second branch (data integrity) and is permanent; the
+   * preamble carries rule-6.1 first branch (prompt-side correction) so the
+   * build LLM never reaches for `data:image/...;base64,...` when emitting
+   * code. Bench evidence: build agent generated PowerShell that inlined a
+   * PNG as `<image href="data:image/png;base64,$pngBase64" .../>` into an
+   * SVG; the gate caught it but the goal still failed retries.
+   */
+  describe("inline-base64 ban (rule 6.1 first branch)", () => {
+    const fixtures = [
+      { mode: "inlined" as const, label: "inlined mode" },
+      { mode: "staged-only" as const, label: "staged-only mode" },
+    ]
+    for (const { mode, label } of fixtures) {
+      test(`${label}: forbids inlining staged assets as data:...;base64,... URLs`, () => {
+        const out = renderVisualContractPreamble(
+          [{ mime: "image/png", filename: "hero.png", size: 1, sha: "v" }],
+          { mode },
+        )
+        // Explicit ban on the regression shape.
+        expect(out).toContain("data:")
+        expect(out).toContain("base64")
+        expect(out).toContain("Never inline")
+        // Names the host-side counterpart so the LLM understands both
+        // branches enforce the same invariant.
+        expect(out).toContain("InlineBase64InPartError")
+      })
+
+      test(`${label}: instructs the LLM to reference files by relative path`, () => {
+        const out = renderVisualContractPreamble(
+          [{ mime: "image/png", filename: "hero.png", size: 1, sha: "v" }],
+          { mode },
+        )
+        // Positive guidance: use the staged relative path, not raw bytes.
+        expect(out).toContain("references/<filename>")
+        // Concrete reference example so the LLM has a shape to copy.
+        expect(out).toContain('src="references/foo.png"')
+      })
+    }
+  })
 })

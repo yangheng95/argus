@@ -183,6 +183,30 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("serve the real page over loopback HTTP from the repository root")
   })
 
+  test("build prompt bans inline base64 in emitted code and routes assets through references/", async () => {
+    // Spec: delivery-attachment-store-single-source-2026-05-11.md companion
+    // (Session.updatePart `InlineBase64InPartError` host gate). The host gate
+    // is rule-6.1 second branch (data integrity); this prompt clause is
+    // rule-6.1 first branch — teach the LLM to never reach for inline
+    // base64 when generating SVG/HTML/scripts, and to reference the staged
+    // `references/<filename>` path instead. Bench evidence: build agent
+    // emitted PowerShell with `<image href="data:image/png;base64,$pngBase64">`
+    // and the gate rejected the part on write.
+    const build = await readPrompt("build")
+    // Explicit ban shape — both `data:` URL and base64 keyword present so a
+    // future paraphrase can't accidentally drop one half of the regression.
+    expect(build).toContain("Never inline base64-encoded binary assets")
+    expect(build).toContain("data:<mime>;base64")
+    expect(build).toContain("InlineBase64InPartError")
+    // Positive guidance: staged path is the single source.
+    expect(build).toContain("`<worktree>/references/<filename>`")
+    expect(build).toContain('src="references/foo.png"')
+    expect(build).toContain('href="references/foo.png"')
+    // The Reference fidelity section names the staged-assets contract so the
+    // ban lives next to the positive guidance (single source of truth).
+    expect(build).toContain("Binary assets (images, fonts, PDFs, anything you'd otherwise base64-encode)")
+  })
+
   test("build prompt requires failed report_build_result instead of prose stop", async () => {
     const build = await readPrompt("build")
     expect(build).toContain("report_build_result")
