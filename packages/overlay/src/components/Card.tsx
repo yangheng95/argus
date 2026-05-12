@@ -62,8 +62,7 @@ export function Card(props: { node: CardNode; depth: number }) {
   });
 
   const shouldLockInlineSize = () =>
-    props.depth === 0 ||
-    (props.node.kind === "tool" && expanded());
+    props.node.kind === "tool" && expanded();
 
   const collapsible = () => true;
 

@@ -105,7 +105,7 @@ body {
 .card {
   position: relative;
   display: block;
-  min-width: max(var(--card-min-inline-size), min(100%, var(--card-sticky-inline-size)));
+  min-width: max(var(--card-min-inline-size), min(100%, var(--card-sticky-inline-size, 0px)));
   max-width: 100%;
   border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--card-border);
@@ -145,6 +145,14 @@ body {
 
 .card[data-depth="0"] {
   box-shadow: none;
+}
+
+.card[data-depth="0"][data-kind="goal"],
+.card[data-depth="0"][data-kind="phase"],
+.card[data-depth="0"][data-kind="step"],
+.card[data-depth="0"][data-kind="tool"],
+.card[data-depth="0"][data-kind="integrity"] {
+  width: min(84%, calc(980px * var(--ui-scale)));
 }
 
 /* iter51: flat hover — only border-color tightens, no

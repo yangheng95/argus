@@ -18,6 +18,8 @@ describe("card expand and collapse contract", () => {
     expect(src).toContain("setCardExpanded(props.node.id, value, props.node.status)")
     expect(src).toContain("setExpanded(!expanded())")
     expect(src).toContain("const canCardSurfaceToggle = (event: MouseEvent) =>")
+    expect(src).toContain('props.node.kind === "tool" && expanded()')
+    expect(src).not.toContain("props.depth === 0 ||")
     expect(src).toContain('target.closest(".card") !== articleRef')
     expect(src).toContain('window.getSelection()?.type === "Range"')
     expect(src).toContain("onDblClick={(event) =>")
@@ -83,5 +85,12 @@ describe("card expand and collapse contract", () => {
     expect(css).not.toContain(".card__chevron")
     expect(goal).not.toContain("gwg-chevron")
     expect(inspector).not.toContain(".gwg-chevron")
+  })
+
+  test("top-level structured cards no longer hard-lock to full thread width", () => {
+    const css = read("src/styles/surfaces/card.css")
+    expect(css).toContain('var(--card-sticky-inline-size, 0px)')
+    expect(css).toContain('.card[data-depth="0"][data-kind="step"]')
+    expect(css).toContain('width: min(84%, calc(980px * var(--ui-scale)));')
   })
 })
