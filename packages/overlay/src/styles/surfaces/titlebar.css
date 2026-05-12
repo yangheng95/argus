@@ -219,8 +219,8 @@
 }
 
 .titlebar-theme-option:hover {
-  background: var(--subtle-3);
-  border-color: var(--subtle-5);
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
   color: var(--text-strong);
 }
 
@@ -513,7 +513,7 @@
 .titlebar-menubar-trigger:focus-visible,
 .titlebar-menubar-trigger[data-active="true"] {
   color: var(--text-strong);
-  background: var(--subtle-3);
+  background: var(--surface-hover);
   outline: none;
 }
 
@@ -594,7 +594,7 @@
 .titlebar-menubar-item:focus-visible,
 .titlebar-menubar-toggle:hover,
 .titlebar-menubar-range:hover {
-  background: var(--subtle-3);
+  background: var(--surface-hover);
   color: var(--text-strong);
   outline: none;
 }
@@ -652,7 +652,7 @@
   padding: calc(7px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-2);
+  background: var(--surface-inset);
   color: var(--text-soft);
   font-size: var(--ui-font-small);
   overflow: hidden;
@@ -725,7 +725,7 @@
   padding: 0;
   border: 0;
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-3);
+  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
   color: var(--text-soft);
   font-size: var(--ui-font-small);
   cursor: pointer;
@@ -766,7 +766,7 @@
 .titlebar-setup-cta:hover,
 .titlebar-status-icon:hover {
   color: var(--text-strong);
-  background: var(--subtle-4);
+  background: var(--surface-hover);
 }
 
 .titlebar-task-status {
@@ -792,7 +792,7 @@
 }
 
 .titlebar-task-status[data-status="queued"] {
-  background: var(--subtle-4);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
 }
 
 /* Flat-redesign Step 2 (2026-05-04): per-status border-color flip retired

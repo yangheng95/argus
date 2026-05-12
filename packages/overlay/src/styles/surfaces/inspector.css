@@ -2788,7 +2788,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .criteria-check {
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-1);
+  background: var(--surface-inset);
   padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
   transition:
     border-color var(--ui-duration-base),
