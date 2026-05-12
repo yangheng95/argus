@@ -1,8 +1,8 @@
 /**
  * Tool set for the DeliveryAgent.
  *
- * Includes exploration tools, execution tools, screenshot tools, follow-up
- * task tools, and memory tools. Delivery is review-only: it verifies runtime
+ * Includes exploration tools, execution tools, screenshot tools, and memory
+ * tools. Delivery is review-only: it verifies runtime
  * behavior and makes the final acceptance decision, while repair belongs to
  * orchestrator retry/replan and build agents.
  */
@@ -18,7 +18,6 @@ import { Shell } from "@/shell/shell"
 import { Database } from "@/storage/db"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
-import { EngineService } from "@/task-api"
 import { findTask } from "@/engine/store"
 import { Identifier } from "@/id/id"
 import { ManagedPreviewStartError, startManagedPreview } from "@/preview/managed"
@@ -34,7 +33,6 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { buildTaskUpstreamAgentContextSections } from "@/prompt/upstream-context"
 import type { DeliveryInfo, GoalInfo } from "@/delivery/checks"
 
-const TASK_CHAIN_DEPTH_LIMIT = 3
 const log = Log.create({ service: "delivery-tools" })
 
 type DeliveryToolAttachment = {
@@ -317,106 +315,6 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         } catch (err) {
           return `query_evidence error: ${err instanceof Error ? err.message : String(err)}`
         }
-      },
-    }),
-
-    submit_next_task: tool({
-      description:
-        "Spawn a follow-up task in the same project. Use this whenever what " +
-        "needs to happen next belongs in a fresh task rather than inside this " +
-        "one. Common shapes:\n" +
-        "  - Fix: repair failed acceptance criteria that need another executor " +
-        "pass. Pick priority='critical' so it jumps the queue ahead of new " +
-        "user work (but never preempts an already-active task).\n" +
-        "  - Iterate: continue the project's work — next milestone, hardening " +
-        "pass, follow-up feature surfaced during this round. Normal priority.\n" +
-        "  - Recommend: surface a suggested next step to the user. Low " +
-        "priority; it waits for the user (or queue) to promote it.\n" +
-        "The new task links back via `metadata.parent_task`, and chain depth " +
-        "is bounded to " + TASK_CHAIN_DEPTH_LIMIT + " to prevent runaway chains. " +
-        "When `failing_metrics` is provided, the latest iteration's metric " +
-        "results for those names are auto-attached to the new task's request.",
-      inputSchema: z.object({
-        title: z.string().describe(
-          "Short task title, e.g. 'Repair sidebar layout' or 'Add filter chip to feed'.",
-        ),
-        request: z.string().describe(
-          "Full task description — what the new task should accomplish, with " +
-          "enough context that a fresh agent run (not this one) can act on it.",
-        ),
-        priority: z.enum(["critical", "high", "normal", "low"]).describe(
-          "Queue priority. 'critical' jumps ahead of all user-submitted work — " +
-          "reserve it for repairing verification failures. 'high'/'normal'/'low' " +
-          "for iteration and recommendation tasks, matching urgency.",
-        ),
-        failing_metrics: z.array(z.string()).optional().describe(
-          "Optional: canonical names of metrics currently failing (e.g. " +
-          "'functional_correctness', 'user_intent_fidelity'). The latest " +
-          "iteration's result rows are attached to the new task request.",
-        ),
-        scope_files: z.array(z.string()).optional().describe(
-          "Optional list of files the next task should focus on (relative to project root).",
-        ),
-      }),
-      execute: async ({ title, request, priority, failing_metrics, scope_files }) => {
-        if (!taskID) return "submit_next_task: no task context available"
-        const original = findTask(taskID)
-        if (!original) return `submit_next_task: original task ${taskID} not found`
-        const meta = (original.metadata as Record<string, unknown> | null) ?? {}
-        const depth = typeof meta.task_chain_depth === "number" ? meta.task_chain_depth : 0
-        if (depth >= TASK_CHAIN_DEPTH_LIMIT) {
-          return `submit_next_task: task chain depth ${depth} reached limit ${TASK_CHAIN_DEPTH_LIMIT}; refusing to spawn another follow-up task`
-        }
-        let evidenceBlock = ""
-        if (failing_metrics && failing_metrics.length > 0) {
-          const {
-            readIterationHistory,
-            readResultsForIteration,
-            readSpecsForTask,
-          } = await import("@/metrics/store")
-          const history = readIterationHistory(taskID)
-          const currentIter = history.length > 0 ? history[history.length - 1].iteration : 0
-          const results = readResultsForIteration(taskID, currentIter)
-          const specs = new Map(readSpecsForTask(taskID).map((s) => [s.id, s]))
-          const wanted = new Set(failing_metrics)
-          const matched = results
-            .map((r) => ({ r, spec: specs.get(r.metric_spec_id) }))
-            .filter((x) => x.spec && wanted.has(x.spec.name))
-          evidenceBlock = matched.length > 0
-            ? "\n\n## Failing metrics from previous iteration\n" + matched
-                .map(({ r, spec }) =>
-                  `- **${spec!.name}** [${spec!.gate_class}]: raw=${r.raw_value.toFixed(3)} met_target=${r.met_target} met_floor=${r.met_floor} fresh=${r.evidence_fresh}\n  evidence_ref: ${String(r.evidence_ref).slice(0, 400)}`,
-                )
-                .join("\n") + "\n\nAddress every failing metric above. Do not regress metrics that currently pass."
-            : "\n\n## Failing metrics (no matching results in current iteration — query_metric_trajectory first)\n" +
-              failing_metrics.map((n) => `- **${n}**`).join("\n")
-        }
-        const scopeBlock = scope_files && scope_files.length > 0
-          ? `\n\n## Scope (focus area)\n${scope_files.map((f) => `- ${f}`).join("\n")}`
-          : ""
-        const fullRequest = [
-          `# Follow-up task — derived from \`${original.id}\` ("${original.title}")`,
-          ``,
-          request,
-          ``,
-          `## Original request`,
-          original.request,
-          evidenceBlock,
-          scopeBlock,
-        ].join("\n")
-        const newTaskID = await EngineService.createTask({
-          title: title.slice(0, 80),
-          request: fullRequest,
-          priority,
-          metadata: {
-            ...meta,
-            parent_task: original.id,
-            task_chain_depth: depth + 1,
-            ...(failing_metrics && failing_metrics.length > 0 ? { failing_metrics } : {}),
-            ...(scope_files && scope_files.length > 0 ? { next_task_scope_files: scope_files } : {}),
-          },
-        })
-        return `submit_next_task: created new task ${newTaskID} (priority=${priority}, task_chain_depth=${depth + 1}). It enters the queue at the requested priority.`
       },
     }),
 

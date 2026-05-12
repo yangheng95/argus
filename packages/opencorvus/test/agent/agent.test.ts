@@ -173,6 +173,7 @@ test("orchestrator does not inherit the generic task-tool prompt policy", async 
       expect(orchestrator).toBeDefined()
       expect(orchestrator?.prompt).toBeDefined()
       expect(orchestrator?.prompt).toContain("The generic `task` tool is not an orchestrator tool")
+      expect(orchestrator?.prompt).toContain("only agent-side owner of engine task lifecycle decisions")
       expect(orchestrator?.prompt).toContain("use `propose_task`")
       expect(orchestrator?.prompt).not.toContain("Use the Task tool")
       expect(orchestrator?.prompt).not.toContain("Proactively use the Task tool")

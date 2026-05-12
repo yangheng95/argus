@@ -30,7 +30,7 @@ describe("delivery review-only tool surface", () => {
           expect(Object.keys(tools)).toContain("screenshot")
           expect(Object.keys(tools)).toContain("inspect_delivery_context")
           expect(Object.keys(tools)).toContain("compare_visual_artifacts")
-          expect(Object.keys(tools)).toContain("submit_next_task")
+          expect(Object.keys(tools)).not.toContain("submit_next_task")
         },
       })
     } finally {
@@ -48,10 +48,21 @@ describe("delivery review-only tool surface", () => {
     expect(prompt).toContain("orchestrator can send the affected goal(s) back")
     expect(prompt).toContain("start_frontend_preview")
     expect(prompt).toContain("publishes the ready URL to the Overlay")
+    expect(prompt).toContain("Orchestrator is the only agent allowed")
     expect(prompt).not.toContain("write_file")
     expect(prompt).not.toContain("edit_file")
+    expect(prompt).not.toContain("submit_next_task")
     expect(prompt).not.toContain("Fix aggressively")
     expect(prompt).not.toContain(" or criteria")
+  })
+
+  test("delivery tools cannot create follow-up engine tasks", async () => {
+    const source = await Bun.file(
+      path.join(repoRoot, "packages/opencorvus/src/delivery/tools.ts"),
+    ).text()
+
+    expect(source).not.toContain("EngineService.createTask")
+    expect(source).not.toContain("submit_next_task")
   })
 
   test("delivery agent exposes no registry tools", async () => {

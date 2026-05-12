@@ -27,7 +27,7 @@ import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
   "Follow the per-wake orchestrator instructions and task context supplied by the orchestrator runtime.",
-  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `design_analysis`, `architect`, `build`, `deliver`, and `refine`. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
+  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `design_analysis`, `architect`, `build`, `deliver`, and `refine`. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
 ].join("\n")
 
 const CONTROL_RUNTIME_PROMPT = [
