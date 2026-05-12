@@ -143,7 +143,7 @@
 }
 .executor-tool-entry[data-live="true"] {
   opacity: var(--ui-opacity-full);
-  background: color-mix(in srgb, var(--executor-accent) 10%, transparent);
+  background: color-mix(in srgb, var(--oc-stage-executor) 10%, transparent);
 }
 
 .executor-tool-item {
@@ -180,7 +180,7 @@
   color: var(--good);
 }
 .executor-tool-status[data-status="running"] {
-  color: var(--executor-accent);
+  color: var(--oc-stage-executor);
 }
 .executor-tool-status[data-status="failed"] {
   color: var(--bad);

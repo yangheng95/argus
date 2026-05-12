@@ -469,19 +469,19 @@
 }
 .md-content th,
 .msg-text th {
-  background: var(--surface-raised);
+  background: var(--surface-strong);
   font-weight: var(--ui-font-weight-strong);
 }
 .md-content tr:nth-child(even),
 .msg-text tr:nth-child(even) {
-  background: var(--surface-subtle);
+  background: var(--surface-inset);
 }
 .md-content blockquote,
 .msg-text blockquote {
   border-left: calc(3px * var(--ui-scale)) solid var(--accent);
   margin: calc(6px * var(--ui-scale)) 0;
   padding: calc(4px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  color: var(--text-secondary);
+  color: var(--text-soft);
 }
 .md-content hr,
 .msg-text hr {

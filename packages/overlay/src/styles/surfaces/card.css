@@ -1277,7 +1277,7 @@ body {
   font-weight: var(--ui-font-weight-strong);
   font-size: calc(12px * var(--ui-scale));
   color: var(--text-strong);
-  font-family: var(--font-mono);
+  font-family: var(--mono);
 }
 .trace-panel-actions {
   display: inline-flex;
@@ -1317,7 +1317,7 @@ body {
   color: var(--text-muted);
 }
 .trace-panel-empty code {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-size: calc(11px * var(--ui-scale));
   background: var(--subtle-2);
   padding: calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale));
@@ -1341,7 +1341,7 @@ body {
   background: transparent;
   border: 0;
   color: var(--text);
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-size: calc(11.5px * var(--ui-scale));
   cursor: pointer;
   text-align: left;
@@ -1381,7 +1381,7 @@ body {
 .trace-event-body {
   margin: 0;
   padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale)) calc(28px * var(--ui-scale));
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-size: calc(11px * var(--ui-scale));
   line-height: 1.5;
   color: var(--text);

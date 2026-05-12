@@ -543,14 +543,14 @@
 .task-list-toolbar .oc-button[data-ui="task-list-import-button"] {
   --oc-button-gap: calc(4px * var(--ui-scale));
   --oc-button-padding-x: calc(8px * var(--ui-scale));
-  --oc-button-border: var(--oc-border-width) solid var(--border-soft);
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 78%, transparent);
   --oc-button-color: var(--text-muted);
 }
 
 .task-list-toolbar .oc-button[data-ui="task-list-import-button"]:hover:not(:disabled),
 .task-list-toolbar .oc-button[data-ui="task-list-import-button"]:focus-visible:not(:disabled) {
   --oc-button-bg: color-mix(in srgb, var(--accent) 8%, transparent);
-  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 32%, var(--border-soft));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 32%, var(--border));
   --oc-button-color: var(--accent);
 }
 

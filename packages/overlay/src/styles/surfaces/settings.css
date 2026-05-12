@@ -34,12 +34,12 @@
   gap: var(--ui-gap-lg);
   padding: var(--ui-gap-md) var(--ui-gap-lg);
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   transition: background var(--ui-duration-base);
 }
 
 .perm-row:hover {
-  background: var(--subtle-2);
+  background: var(--settings-surface-hover);
 }
 
 .perm-row-info {
@@ -88,7 +88,7 @@
 }
 
 .perm-action-btn:hover {
-  background: var(--subtle-3);
+  background: var(--settings-surface-muted);
   color: var(--text-strong);
 }
 
@@ -132,7 +132,7 @@
   padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   transition:
     border-color var(--ui-duration-base),
     background var(--ui-duration-base),
@@ -201,7 +201,7 @@
 }
 
 .knowledge-item:hover {
-  background: var(--subtle-3);
+  background: var(--settings-surface-muted);
 }
 
 .knowledge-item:last-child {
@@ -252,7 +252,7 @@
   border-radius: var(--oc-radius-soft);
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
-  background: var(--subtle-4);
+  background: var(--settings-surface-emphasis);
   color: var(--text-soft);
 }
 
@@ -267,7 +267,7 @@
 }
 
 .knowledge-scope[data-source="builtin_default"] {
-  background: var(--subtle-3);
+  background: var(--settings-surface-muted);
   color: var(--text-muted);
 }
 
@@ -336,7 +336,7 @@
   padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   transition:
     border-color var(--ui-duration-base),
     background var(--ui-duration-base),
@@ -659,7 +659,7 @@
   max-width: 100%;
   padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
-  background: var(--subtle-2);
+  background: var(--settings-surface-hover);
   border: var(--oc-border-width) solid var(--subtle-4);
   color: var(--text-soft);
   white-space: nowrap;
@@ -693,7 +693,7 @@
   padding: calc(8px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--border);
-  background: var(--subtle-2);
+  background: var(--settings-surface-hover);
   white-space: pre-wrap;
   word-break: break-word;
   overflow: auto;
@@ -718,7 +718,7 @@
 }
 
 .config-close-btn:hover {
-  background: var(--subtle-3);
+  background: var(--settings-surface-muted);
   color: var(--text-strong);
 }
 
@@ -728,6 +728,13 @@
    styles.css because they cross the inspector / settings
    surface boundary. */
 .config-dialog-layout {
+  /* Settings panels use a neutral surface stack so every theme reads as
+   * one family instead of mixing accent-washed blues with black cards. */
+  --settings-surface-base: var(--surface-inset);
+  --settings-surface-hover: color-mix(in srgb, var(--surface-hover) 72%, var(--surface));
+  --settings-surface-muted: color-mix(in srgb, var(--surface) 82%, var(--surface-inset));
+  --settings-surface-emphasis: color-mix(in srgb, var(--surface-strong) 74%, var(--surface));
+
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
@@ -759,7 +766,7 @@
    * full nav read as one block instead of a sparse list. */
   padding: calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-right: var(--oc-border-width) solid var(--divider-soft);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   overflow-y: auto;
   flex-shrink: 0;
 }
@@ -794,7 +801,7 @@
 }
 
 .config-nav-item:hover {
-  background: var(--subtle-2);
+  background: var(--settings-surface-hover);
   color: var(--text-strong);
 }
 
@@ -834,7 +841,7 @@
   height: calc(18px * var(--ui-scale));
   padding: 0 calc(5px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-3);
+  background: var(--settings-surface-muted);
   color: var(--text-soft);
   font-size: var(--ui-font-control);
   font-weight: var(--ui-font-weight-strong);
@@ -932,7 +939,7 @@
   width: var(--oc-border-width);
   transform: translateX(-50%);
   border-radius: var(--oc-radius-pill);
-  background: var(--subtle-3);
+  background: var(--settings-surface-muted);
   transition: background var(--ui-duration-fast);
 }
 
@@ -956,7 +963,7 @@
 .config-section {
   border: 0;
   border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
+  background: var(--settings-surface-base);
   overflow: hidden;
   box-shadow: none;
   transition:
@@ -967,7 +974,7 @@
 }
 
 .config-section[open] {
-  background: var(--subtle-2);
+  background: var(--settings-surface-hover);
 }
 
 .config-section:hover,
@@ -980,7 +987,7 @@
       color-mix(in srgb, var(--accent) 2%, transparent) 62%,
       transparent
     ),
-    var(--subtle-1);
+    var(--settings-surface-base);
   box-shadow:
     inset 0 var(--oc-border-width) 0 var(--ui-highlight-tone),
     var(--hover-accent-shadow);
@@ -995,7 +1002,7 @@
       color-mix(in srgb, var(--accent) 2%, transparent) 62%,
       transparent
     ),
-    var(--subtle-2);
+    var(--settings-surface-hover);
 }
 
 /* Section head: clickable summary row. The early `::before`
@@ -1107,7 +1114,7 @@
 .config-subsection {
   border: 0;
   border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
+  background: var(--settings-surface-base);
   box-shadow: none;
   transition:
     border-color var(--ui-duration-base),
@@ -1117,7 +1124,7 @@
 }
 
 .config-subsection[open] {
-  background: var(--subtle-2);
+  background: var(--settings-surface-hover);
 }
 
 .config-subsection:hover,
@@ -1145,7 +1152,7 @@
       color-mix(in srgb, var(--accent) 2%, transparent) 62%,
       transparent
     ),
-    var(--subtle-2);
+    var(--settings-surface-hover);
 }
 
 .config-subsection-head {
@@ -1267,7 +1274,7 @@
   align-items: center;
   white-space: normal;
   line-height: 1.45;
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
   padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
@@ -1312,7 +1319,7 @@
   padding: calc(12px * var(--ui-scale)) calc(16px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
 }
 
 .about-author-avatar {
@@ -1349,7 +1356,7 @@
   padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
 }
 
 .about-info-label {
@@ -1376,7 +1383,7 @@
   padding: calc(6px * var(--ui-scale)) calc(14px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   color: var(--text-soft);
   font-size: var(--ui-font-small);
   text-decoration: none;
@@ -1387,7 +1394,7 @@
 }
 
 .about-link:hover {
-  background: var(--subtle-3);
+  background: var(--settings-surface-muted);
   border-color: var(--border-hover);
   color: var(--text-strong);
 }
@@ -1400,11 +1407,11 @@
   padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
 }
 
 .about-shortcut-grid kbd {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-size: var(--ui-font-tiny);
   padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
@@ -1433,7 +1440,7 @@
   padding: calc(14px * var(--ui-scale));
   border-radius: var(--oc-radius-large);
   border: var(--oc-border-width) solid var(--border);
-  background: color-mix(in srgb, var(--subtle-1) 90%, transparent);
+  background: color-mix(in srgb, var(--settings-surface-base) 90%, transparent);
   box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
@@ -1524,7 +1531,7 @@
   padding: calc(12px * var(--ui-scale));
   border-radius: var(--oc-radius-large);
   border: var(--oc-border-width) solid var(--border);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  background: color-mix(in srgb, var(--settings-surface-base) 88%, transparent);
 }
 
 .prompt-preview-body {
@@ -1575,7 +1582,7 @@
       color-mix(in srgb, var(--accent) 8%, transparent),
       transparent 44%
     ),
-    var(--subtle-1);
+    var(--settings-surface-base);
 }
 .provider-command-main {
   min-width: 0;
@@ -1726,7 +1733,7 @@
 
 .provider-search-field .oc-button[data-ui="provider-search-clear"]:hover,
 .provider-search-field .oc-button[data-ui="provider-search-clear"]:focus-visible {
-  --oc-button-bg: var(--subtle-2);
+  --oc-button-bg: var(--settings-surface-hover);
   --oc-button-color: var(--text-strong);
 }
 .provider-empty {
@@ -1781,7 +1788,7 @@
   padding: var(--ui-gap-md);
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   transition:
     border-color var(--ui-duration-base),
     background var(--ui-duration-base),
@@ -1999,7 +2006,7 @@
   padding: var(--ui-gap-md) var(--ui-gap-lg);
   margin: var(--ui-gap-md) 0;
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   border: var(--oc-border-width) solid var(--border);
   color: var(--text-soft);
   font-size: var(--ui-font-control);
@@ -2045,7 +2052,7 @@
   font-size: var(--ui-font-control);
   line-height: 1.4;
   border: var(--oc-border-width) solid transparent;
-  background: var(--subtle-2);
+  background: var(--settings-surface-hover);
 }
 .provider-test-result[data-ok="true"] {
   background: var(--good-dim);
@@ -2148,7 +2155,7 @@
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   transition:
     border-color var(--ui-duration-base),
     background var(--ui-duration-base);
@@ -2267,7 +2274,7 @@
   flex-direction: column;
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   overflow: hidden;
 }
 
@@ -2275,7 +2282,7 @@
   font-size: var(--ui-font-meta);
   color: var(--text-muted);
   padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  background: var(--subtle-2);
+  background: var(--settings-surface-hover);
 }
 
 .agent-model-tier-label:not(:first-child) {
@@ -2292,7 +2299,7 @@
 }
 
 .agent-model-row:hover {
-  background: var(--subtle-2);
+  background: var(--settings-surface-hover);
 }
 
 .agent-model-tier-label + .agent-model-row {
@@ -2355,7 +2362,7 @@
   transition: background var(--ui-duration-fast);
 }
 .config-toggle-list-item:hover {
-  background: var(--subtle-2);
+  background: var(--settings-surface-hover);
 }
 .config-toggle-list-item:last-child {
   border-bottom: none;
@@ -2682,7 +2689,7 @@
   padding: calc(10px * var(--ui-scale)) calc(14px * var(--ui-scale));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
-  background: var(--subtle-1);
+  background: var(--settings-surface-base);
   min-height: calc(40px * var(--ui-scale));
   transition: border-color var(--ui-duration-base);
 }
