@@ -232,11 +232,11 @@ setCardTreeStore(
 - activity stats（仅展开 + 有 inline tool/skill 活动）
 - 时间戳：`stamp(time)` 
 
-### 折叠态
-- 折叠：仅 bubble-head + 一行 `collapsedPreview`
-- 触发：bubble-head 单击 = 展开；bubble surface 双击 = 折叠（`Card.tsx:290` 的 dblClick 逻辑搬到 ChatBubble）
-- 键盘：bubble-head `role="button" tabindex="0"` + Enter/Space 展开（`CardHeader.tsx:224` 的逻辑搬过来）
-- `cardExpanded` store 不变
+### 折叠态（2026-05-12 用户反馈修订）
+- `message` / `agent` 是 transcript 消息卡片，必须默认且始终显示正文；不再接入 `cardExpanded`。
+- 折叠只保留给 `Card` / workflow 等结构化过程卡，不能把 agent 消息折成无边框 head。
+- ChatBubble 不渲染 `collapsedPreview` / `card__todo-summary`；todo progress 属于结构化卡折叠摘要，不属于消息卡片。
+- ChatBubble 使用单一 flat card surface：head 与 body 同处一个 `.chat-bubble` 边界内，禁止 head 外置再套一个空 bubble 形成“实心 bar”。
 
 ---
 
