@@ -4,6 +4,7 @@ import path from "node:path"
 import { Project } from "@/project/project"
 import { Database } from "@/storage/db"
 import { PartTable } from "@/session/session.sql"
+import { EngineTaskTable } from "@/engine/engine.sql"
 import { Log } from "@/util/log"
 
 // Map MIME types to the canonical file extension used when we lay attachments
@@ -595,31 +596,69 @@ export namespace AttachmentStore {
   }
 
   /**
-   * Scan every persisted `part.data` for canonical attachment URLs and
-   * return the deduplicated set of referenced shas, grouped by project.
-   * Used by sweep() to decide which on-disk files are still live.
+   * Sha-extraction primitive shared by every contributor to the live set:
+   * stringify whatever JSON-shaped payload we got, run the canonical
+   * `/attachment/<projectID>/<sha>.<ext>` regex over it, accumulate into the
+   * per-project Map. Keeping the discovery rule in a single function is rule 8
+   * (no double source): the regex + URL parser pair is the only place that
+   * decides "is this a sha reference, and which project does it belong to".
    *
-   * The lookup runs over `data` as a serialized JSON string — no need to
-   * parse each row. The reference regex requires the canonical
-   * `/attachment/<projectID>/<sha>.<ext>` shape that `Reference.url`
-   * always produces.
+   * Callers pass any JSON-serializable value (drizzle gives us already-parsed
+   * objects for json-mode columns). Null / undefined payloads short-circuit
+   * so a nullable JSON column never costs an extra branch at every call site.
+   */
+  function harvestReferences(payload: unknown, byProject: Map<string, Set<string>>) {
+    if (payload === null || payload === undefined) return
+    const json = typeof payload === "string" ? payload : JSON.stringify(payload)
+    for (const match of json.matchAll(REFERENCE_RE)) {
+      const located = nameFromUrl(match[0])
+      if (!located) continue
+      const set = byProject.get(located.projectID) ?? new Set<string>()
+      set.add(match[1].toLowerCase())
+      byProject.set(located.projectID, set)
+    }
+  }
+
+  /**
+   * Return the deduplicated set of shas that are still live, grouped by
+   * project. A sha is live iff at least one of its three legitimate retain
+   * surfaces still references it:
+   *
+   *   • `part.data`                         (session conversation parts)
+   *   • `engine_task.attachments`           (USER-CONTRACT files: user uploads,
+   *                                          figma-mcp frames the user pointed
+   *                                          us at)
+   *   • `engine_task.system_artifacts`      (SYSTEM-GENERATED evidence: URL
+   *                                          screenshots, rendered.png, local
+   *                                          material reads)
+   *
+   * Walking only `part.data` (the pre-fix behaviour) violated rule 8: shas
+   * registered through `appendTaskAttachment` / `appendTaskSystemArtifact`
+   * looked orphan to sweep() between registration and the first session-part
+   * that referenced them, so any visual reference older than `GC_MIN_AGE_MS`
+   * got unlinked and the build agent ENOENTed on stageToWorktree() copy.
+   *
+   * All three sources share the canonical URL shape, so a single regex over
+   * the serialized JSON (see `harvestReferences`) covers every retain surface
+   * — no per-source parsing, no row-shape assumptions to drift.
    */
   export function collectReferencedShas(): Map<string, Set<string>> {
-    const rows = Database.use((db) =>
-      db.select({ data: PartTable.data }).from(PartTable).all(),
-    )
     const byProject = new Map<string, Set<string>>()
-    for (const row of rows) {
-      const json = JSON.stringify(row.data)
-      for (const match of json.matchAll(REFERENCE_RE)) {
-        const fullUrl = match[0]
-        const located = nameFromUrl(fullUrl)
-        if (!located) continue
-        const set = byProject.get(located.projectID) ?? new Set<string>()
-        set.add(match[1].toLowerCase())
-        byProject.set(located.projectID, set)
+    Database.use((db) => {
+      for (const row of db.select({ data: PartTable.data }).from(PartTable).all()) {
+        harvestReferences(row.data, byProject)
       }
-    }
+      for (const row of db
+        .select({
+          attachments: EngineTaskTable.attachments,
+          system_artifacts: EngineTaskTable.system_artifacts,
+        })
+        .from(EngineTaskTable)
+        .all()) {
+        harvestReferences(row.attachments, byProject)
+        harvestReferences(row.system_artifacts, byProject)
+      }
+    })
     return byProject
   }
 
