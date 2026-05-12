@@ -9,7 +9,7 @@ function read(relativePath: string): string {
 }
 
 describe("card expand and collapse contract", () => {
-  test("Card uses a single explicit header toggle write", () => {
+  test("Card uses one explicit toggle write from header and safe surface clicks", () => {
     const src = read("src/components/Card.tsx")
     expect(src).toContain("import { cardExpanded, setCardExpanded }")
     expect(src).not.toContain("toggleCard")
@@ -17,12 +17,36 @@ describe("card expand and collapse contract", () => {
     expect(src).toContain("const toggleExpanded = () =>")
     expect(src).toContain("setCardExpanded(props.node.id, value, props.node.status)")
     expect(src).toContain("setExpanded(!expanded())")
+    expect(src).toContain("const canCardSurfaceToggle = (event: MouseEvent) =>")
+    expect(src).toContain('target.closest(".card") !== articleRef')
+    expect(src).toContain('window.getSelection()?.type === "Range"')
+    expect(src).toContain("onClick={(event) =>")
+    expect(src).toContain("if (!canCardSurfaceToggle(event)) return;")
+    expect(src).toContain("toggleExpanded();")
   })
 
-  test("Card has no double-click collapse path competing with header toggle", () => {
+  test("Card surface toggle ignores controls and nested cards without a double-click path", () => {
     const src = read("src/components/Card.tsx")
     expect(src).not.toContain("onDblClick")
     expect(src).not.toContain("canCardSurfaceCollapse")
+    for (const selector of [
+      '"button"',
+      '"a"',
+      '"input"',
+      '"textarea"',
+      '"select"',
+      '"summary"',
+      '"[contenteditable=\'true\']"',
+      '"[role=\'button\']"',
+      '"[role=\'menuitem\']"',
+      '"[role=\'checkbox\']"',
+      '"[role=\'tab\']"',
+      '"[role=\'textbox\']"',
+      '"[data-card-click-ignore=\'true\']"',
+      '"[data-card-dblclick-ignore=\'true\']"',
+    ]) {
+      expect(src).toContain(selector)
+    }
   })
 
   test("CardHeader single click and keyboard toggle both directions", () => {
