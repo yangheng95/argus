@@ -14,10 +14,9 @@ The registry currently ships with the agents below. `mode` controls how the agen
 | `build` | primary | Default agent. Executes tools (read / edit / bash / mirror toolchain) under the configured permission ruleset. |
 | `general` | subagent | General-purpose multi-step research / parallel-work agent. Dispatched via the `task` tool. |
 | `explore` | subagent | Codebase exploration — fast file / code search, read-only by default. |
-| `planner` | subagent | Per-goal implementation planner. Reads the GoalContract + Architect decisions, emits a stepwise plan that `build` then implements. |
-| `delivery` | primary (hidden) | Delivery verification agent. Checks runtime behavior and makes acceptance decisions; can dispatch per-goal review subagents. |
-| `orchestrator` | primary (hidden) | Master agent. Drives the end-to-end task lifecycle through one of the workflows (direct or pipeline) by calling dispatch tools (`build`, `requirements`, `architect`, `deliver`, etc.). |
-| `requirements` | primary (hidden) | Requirements stage. Decomposes the user request into typed `GoalContract`s with acceptance specs. |
+| `delivery` | primary (hidden) | Delivery agent. Submits semantic accept/reject judgments from delivery evidence; deterministic arbitration finalizes the delivery-stage verdict. |
+| `orchestrator` | primary (hidden) | Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools (`requirements`, `architect`, `build`, `deliver`, etc.). |
+| `requirements` | primary (hidden) | Requirements stage. Extracts user requirements and foundational technical decisions; it does not produce goals. |
 
 Other registered agents (`architect`, `design-analyst`, `intent-analysis`, `integrity`, `prosecutor`, `summary`, `title`, `compaction`) are stage / utility slots invoked internally by the orchestrator or session loop. They surface in config (model + prompt overrides) but are not user-selectable.
 
@@ -37,7 +36,6 @@ Each agent's model is set under `agent.<name>.model` — see `packages/opencorvu
 {
   "agent": {
     "build":        { "model": "anthropic/claude-sonnet-4-6" },
-    "planner":      { "model": "anthropic/claude-sonnet-4-6" },
     "design-analyst": { "model": "anthropic/claude-sonnet-4-6" }
   }
 }
@@ -77,7 +75,6 @@ Per-agent step budgets and skill paths live under `assistant.<name>` (config.ts:
   "assistant": {
     "requirements":   { "max_steps": 20 },
     "architect":      { "max_steps": 40 },
-    "planner":        { "max_steps": 40 },
     "delivery":       { "max_steps": 160, "max_retries": 3 },
     "design_analyst": { "max_steps": 30 },
     "intent_analysis": { "max_steps": 10 },

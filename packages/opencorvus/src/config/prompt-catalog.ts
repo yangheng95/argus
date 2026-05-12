@@ -1,5 +1,6 @@
 import { Config } from "./config"
 import { Agent } from "@/agent/agent"
+import { AgentRoleContract } from "@/agent/role-contract"
 
 import PROMPT_SYSTEM from "@/session/prompt/system.txt"
 import PROMPT_GENERATE from "@/agent/generate.txt"
@@ -14,7 +15,11 @@ import PROMPT_GENERATE from "@/agent/generate.txt"
  *  - summary → `PROMPT_SUMMARY` is attached to the agent registry but has
  *    no consumer; `task-api/index.ts::generateFollowup` only picks a model
  *    via `resolveAgentModel("summary")` and constructs its own prompt. */
-const UNEDITABLE_AGENTS = new Set<string>(["orchestrator", "summary"])
+const UNEDITABLE_AGENTS = new Set<string>(
+  Object.values(AgentRoleContract.all)
+    .filter((contract) => !contract.promptEditable)
+    .map((contract) => contract.id),
+)
 
 export namespace PromptCatalog {
   export interface Entry {

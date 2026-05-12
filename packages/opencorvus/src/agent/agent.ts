@@ -12,12 +12,15 @@ import PROMPT_GENERATE from "./generate.txt"
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
+import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
+import PROSECUTOR_CORE from "@/prompt/core/prosecutor-core.txt"
 import PROMPT_BUILD from "./prompt/build.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_GENERAL from "./prompt/general.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import { AgentRoleContract } from "./role-contract"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Plugin } from "@/plugin"
@@ -121,7 +124,7 @@ export namespace Agent {
     const result: Record<string, Info> = {
       build: {
         name: "build",
-        description: "The default agent. Executes tools based on configured permissions.",
+        description: AgentRoleContract.description("build"),
         tools: { exclude: ["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS] },
         options: {},
         prompt: PROMPT_BUILD,
@@ -136,7 +139,7 @@ export namespace Agent {
       },
       general: {
         name: "general",
-        description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
+        description: AgentRoleContract.description("general"),
         tools: { exclude: ["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...MIRROR_TOOL_IDS] },
         prompt: PROMPT_GENERAL,
         permission: nonDesignPermissions(
@@ -153,7 +156,7 @@ export namespace Agent {
       explore: {
         name: "explore",
         permission: nonDesignPermissions(),
-        description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
+        description: AgentRoleContract.description("explore"),
         tools: { include: ["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"] },
         prompt: PROMPT_EXPLORE,
         options: {},
@@ -162,6 +165,7 @@ export namespace Agent {
       },
       compaction: {
         name: "compaction",
+        description: AgentRoleContract.description("compaction"),
         tools: { include: [] as string[] },
         mode: "primary",
         native: true,
@@ -172,6 +176,7 @@ export namespace Agent {
       },
       title: {
         name: "title",
+        description: AgentRoleContract.description("title"),
         tools: { include: [] as string[] },
         mode: "primary",
         options: {},
@@ -194,6 +199,7 @@ export namespace Agent {
       // constructs its own prompt inline.
       summary: {
         name: "summary",
+        description: AgentRoleContract.description("summary"),
         tools: { include: [] as string[] },
         mode: "primary",
         options: {},
@@ -202,7 +208,7 @@ export namespace Agent {
       },
       control: {
         name: "control",
-        description: "Control-plane agent. Routes panel and gateway natural-language requests through the panel tool.",
+        description: AgentRoleContract.description("control"),
         tools: { include: ["panel"] },
         permission: nonDesignPermissions(
           PermissionNext.fromConfig({
@@ -217,7 +223,7 @@ export namespace Agent {
       },
       delivery: {
         name: "delivery",
-        description: "Delivery verification agent. Verifies runtime behavior and makes final acceptance decisions without editing deliverables.",
+        description: AgentRoleContract.description("delivery"),
         // Hard step budget. Mirrors EngineConfig.delivery.max_steps (default
         // 160); SessionLoop reads this value directly. Operators that tune
         // EngineConfig.delivery.max_steps should also update this — an
@@ -242,7 +248,7 @@ export namespace Agent {
       },
       orchestrator: {
         name: "orchestrator",
-        description: "Orchestrator (master) agent. Drives the end-to-end task lifecycle through one of the two built-in workflows (direct or pipeline).",
+        description: AgentRoleContract.description("orchestrator"),
         // Prompt is constructed dynamically per-wake in src/orchestrator/agent.ts
         // (buildSystemParts) and sent with systemMode="complete". This
         // registry prompt only documents the agent if another path asks for it.
@@ -315,7 +321,7 @@ export namespace Agent {
       },
       requirements: {
         name: "requirements",
-        description: "Requirements agent. Analyzes user input and decomposes it into typed GoalContracts with acceptance specs.",
+        description: AgentRoleContract.description("requirements"),
         prompt: REQUIREMENTS_CORE,
         // Shared tools — structured-output tools from createRequirementsOutputTools()
         // bypass this filter (they are the agent's contract with the orchestrator).
@@ -330,7 +336,7 @@ export namespace Agent {
       },
       architect: {
         name: "architect",
-        description: "Architect agent. Resolves cross-goal interfaces, file layout, and shared types into binding Decision Log entries.",
+        description: AgentRoleContract.description("architect"),
         prompt: ARCHITECT_CORE,
         tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
         steps: 1000,
@@ -341,7 +347,7 @@ export namespace Agent {
       },
       "design-analyst": {
         name: "design-analyst",
-        description: "Design analyst agent. Uses visual evidence and mirror artifacts to produce a complete PRD/SPEC for faithful frontend and backend restoration.",
+        description: AgentRoleContract.description("design-analyst"),
         prompt: DESIGN_ANALYST_CORE,
         // design-analyst is the only stage that owns mirror extraction.
         // Requirements / architect / build consume the persisted SPEC and
@@ -368,7 +374,7 @@ export namespace Agent {
       },
       "intent-analysis": {
         name: "intent-analysis",
-        description: "Intent-analysis agent. Front-of-pipeline intent disambiguation — turns a short user request into a structured IntentAnalysisResult (class, complexity, slots, missing info, clarifications).",
+        description: AgentRoleContract.description("intent-analysis"),
         prompt: INTENT_ANALYSIS_CORE,
         tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
         options: {},
@@ -378,7 +384,7 @@ export namespace Agent {
       },
       integrity: {
         name: "integrity",
-        description: "Integrity review stage. Multi-dimension review of architect output: requirement_fidelity / technical_feasibility / hallucination / solution_quality. System prompt is built per-call in integrity/agent.ts from the dimension registry.",
+        description: AgentRoleContract.description("integrity"),
         steps: 1000,
         // Verdict tools are injected per run; registry tools only bloat the schema.
         tools: { include: [] as string[] },
@@ -389,7 +395,7 @@ export namespace Agent {
       },
       prosecutor: {
         name: "prosecutor",
-        description: "Prosecutor stage. Adversarial half of the delivery Dynamic Adversarial Metrics loop; files counterexamples against the defender (delivery) verdict.",
+        description: AgentRoleContract.description("prosecutor"),
         steps: 1000,
         // Prosecutor's tool surface (query_metric_trajectory, query_diff,
         // mark_counterexample, propose_challenge_metric,
@@ -459,6 +465,8 @@ export namespace Agent {
     requirements: REQUIREMENTS_CORE,
     "design-analyst": DESIGN_ANALYST_CORE,
     "intent-analysis": INTENT_ANALYSIS_CORE,
+    integrity: INTEGRITY_CORE,
+    prosecutor: PROSECUTOR_CORE,
   }
 
   /** Returns the built-in default prompt for a native agent (before config overrides).
@@ -473,6 +481,10 @@ export namespace Agent {
    *  next Agent.get()/list() call rebuilds with the fresh user overrides. */
   export function reset() {
     ;(state as any).reset()
+  }
+
+  export function resetAll() {
+    ;(state as any).resetAll()
   }
 
   export async function get(agent: string) {
