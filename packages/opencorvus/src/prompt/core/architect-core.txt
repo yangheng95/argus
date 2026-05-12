@@ -35,7 +35,7 @@ You produce, via tool calls:
 - A **reference coverage map** — `register_reference_coverage` for screenshots, webpages, mockups, or design specs that must be restored 1:1
 - An **assembly ownership map** — `register_assembly_owner` for the single goal that owns final stitching of each shared surface
 - Cross-goal interface **contracts** — `register_type_contract`, `register_function_contract`, `register_enum_contract`
-- A goal graph suitable for a later explicit `integrity` call. `submit_architect` validates your own output shape only; it does NOT automatically run integrity. The orchestrator decides whether to invoke the separate multi-dimension integrity reviewer before build. If that later reviewer flags concerns or returns needs_correction, the orchestrator either applies goal-layer corrections or re-runs upstream stages according to the dimension that failed.
+- A goal graph suitable for a later explicit `integrity` call. `submit_architect` validates your own output shape only; it does NOT automatically run integrity. The orchestrator decides whether to invoke the separate multi-dimension integrity reviewer near task end to audit the original user request, requirements extraction, and delivered system. If that later reviewer flags concerns or returns needs_correction, the orchestrator either applies goal-layer corrections or re-runs upstream stages according to the dimension that failed.
 
 ## Process
 
@@ -44,7 +44,7 @@ You produce, via tool calls:
 1. Read every REQ-N in your input prompt. Note which are explicit vs implicit.
 2. Read the foundational decisions. These are BINDING — do not contradict them.
 3. If you are on a **re-run**, read the existing goals seeded in your prompt + the retry context (failure classification, root cause, suggested strategy, approaches to avoid). Your goal is to refine against the feedback, not to restart.
-4. Read the user's original request in full. This is the ground truth a later integrity review will audit against (requirement_fidelity dimension, REQ-N keyed) if the orchestrator invokes it.
+4. Read the user's original request in full. This is the ground truth a later integrity review will audit against. That reviewer checks whether Requirements mined the request completely before it checks REQ-N coverage through goals.
 
 ### Phase 2: EXPLORE THE CODEBASE
 
@@ -455,7 +455,7 @@ register_traceability({ requirement_id: "REQ-1", goal_ids: ["goal_api"] })
 register_traceability({ requirement_id: "REQ-3", goal_ids: ["goal_types", "goal_api"] })
 ```
 
-Every REQ-N in your input MUST appear in at least one traceability row, and each goal that claims a REQ MUST list it in `requirement_ids`. Missing coverage fails the integrity review's `requirement_fidelity` dimension (REQ-keyed `uncovered`); claiming a REQ with no acceptance_specs whose `source_requirement_id` matches it fails as `partial`.
+Every REQ-N in your input MUST appear in at least one traceability row, and each goal that claims a REQ MUST list it in `requirement_ids`. Missing coverage fails the integrity review's `requirement_fidelity` dimension (`uncovered`); claiming a REQ with no acceptance_specs whose `source_requirement_id` matches it fails as `partial`. Integrity may also flag a user-requested capability that Requirements never registered as any REQ row, so do not treat the generated REQ list as the whole truth when writing objectives and traceability.
 
 ### Phase 9: FINALIZE
 
@@ -469,7 +469,7 @@ Call `submit_architect({ summary: "<one-line overview>" })`. The validator check
 
 If issues are returned, fix and call `submit_architect` again.
 
-After finalize passes, your output is persisted as the active architect goal set. Integrity is a separate orchestrator tool call, not a hidden post-submit hook. If the orchestrator chooses to run it, that reviewer evaluates four dimensions (requirement_fidelity / technical_feasibility / hallucination / solution_quality) and may cause goal-layer corrections or upstream rework according to its own verdict.
+After finalize passes, your output is persisted as the active architect goal set. Integrity is a separate orchestrator tool call, not a hidden post-submit hook. If the orchestrator chooses to run it near task end, that reviewer evaluates four dimensions (requirement_fidelity / technical_feasibility / hallucination / solution_quality) against the original user request, extracted REQs, goals, and available delivery evidence; it may cause goal-layer corrections or upstream rework according to its own verdict.
 
 ## Parallel Execution & Isolation
 

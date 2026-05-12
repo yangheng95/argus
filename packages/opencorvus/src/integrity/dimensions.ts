@@ -1,14 +1,15 @@
 /**
  * Integrity Check — extensible dimension registry.
  *
- * `integrity` is the advisory architecture-review dimension registry. Goal
- * builds turn non-pass post-build architecture_review findings from these four
- * orthogonal properties of the architect's output into targeted rework feedback:
+ * `integrity` is the late-stage requirements-mining + system-integrity dimension
+ * registry. Goal builds and task-end review turn non-pass findings from these four
+ * orthogonal properties of the original request, extracted requirements, and
+ * architect output into targeted rework feedback:
  *
- *   1. requirement_fidelity  — REQ-N completion at the system level (each
- *                              user-visible requirement is covered AND, when a
- *                              post-build status snapshot is present, actually
- *                              done end-to-end)
+ *   1. requirement_fidelity  — original request mining + REQ-N completion at the
+ *                              system level (each user-visible requirement is
+ *                              captured, covered, and, when a post-build status
+ *                              snapshot is present, actually done end-to-end)
  *   2. technical_feasibility — viability of the proposed contracts
  *   3. hallucination         — fabrication-free upstream reasoning
  *   4. solution_quality      — soundness of the decomposition itself
@@ -82,18 +83,26 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
     id: "requirement_fidelity",
     title: "Requirement Fidelity",
     summary:
-      "Audit unit is REQ-N (each row in the parsed requirements list), NOT goal contracts. " +
-      "Every user-visible REQ must be covered by at least one goal that claims it via " +
-      "`requirement_ids`, and the related acceptance specs (those whose `source_requirement_id` " +
-      "matches the REQ) must be strong enough to constitute real coverage. When a `Requirement " +
-      "Status Snapshot` block is present in the prompt, also judge real end-to-end completion " +
-      "from the raw run + spec outcomes; the host does not pre-compute aggregates — you decide.",
+      "Audit source is the original user request. Generated REQ rows are evidence, not the " +
+      "audit universe. Every user-visible capability in the original request must be mined " +
+      "into a REQ at the right acceptance granularity, then covered by at least one goal that " +
+      "claims it via `requirement_ids`; related acceptance specs (those whose " +
+      "`source_requirement_id` matches the REQ) must be strong enough to constitute real " +
+      "coverage. When a `Requirement Status Snapshot` block is present in the prompt, also " +
+      "judge real end-to-end completion from the raw run + spec outcomes; the host does not " +
+      "pre-compute aggregates — you decide.",
     checklist: [
-      "Walk REQ-N row by row, NOT goal by goal. For each REQ: which goal(s) claim it via " +
-        "`requirement_ids`? If none claim it = `uncovered` (cite the REQ id in `requirement_ids` " +
-        "on the issue). If exactly one goal claims a REQ that names two clearly separate concerns " +
-        "the user described (e.g. 'frontend page AND a separate auth flow'), that's " +
-        "`merged_incorrectly` — propose a split via missing_goal or modify-correction.",
+      "Start from the original user request, phrase by phrase / capability by capability. " +
+        "For each user-visible ask, confirm there is a matching REQ-N row. If no REQ row " +
+        "captures it, file `uncovered` or `partial`, leave `requirement_ids` empty, and cite " +
+        "the exact user phrase in `evidence`; propose a missing_goal only when a goal-layer " +
+        "repair is enough, otherwise make clear that requirements extraction must be rerun.",
+      "For each captured REQ, walk REQ-N row by row, NOT goal by goal. Which goal(s) claim it " +
+        "via `requirement_ids`? If none claim it = `uncovered` (cite the REQ id in " +
+        "`requirement_ids` on the issue). If exactly one goal claims a REQ that names two " +
+        "clearly separate concerns the user described (e.g. 'frontend page AND a separate " +
+        "auth flow'), that's `merged_incorrectly` — propose a split via missing_goal or " +
+        "modify-correction.",
       "For each REQ that IS claimed, walk the claiming goals' acceptance_specs filtered by " +
         "`source_requirement_id == REQ-id`. If those specs only cover a strict subset of what " +
         "the REQ describes (depth shortfall), that's `partial`. If a claiming goal's contract " +

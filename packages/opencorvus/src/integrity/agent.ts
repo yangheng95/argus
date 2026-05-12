@@ -5,9 +5,10 @@
  * ("does the goal set cover the user request?"), integrity asks four,
  * registered in `dimensions.ts`:
  *
- *   1. requirement_fidelity  — REQ-N completion (audit unit is REQ rows, not
- *                              goals; with post-build snapshot, also judges
- *                              real end-to-end completion)
+ *   1. requirement_fidelity  — original request mining + REQ-N completion
+ *                              (REQ rows are evidence, not the audit universe;
+ *                              with post-build snapshot, also judges real
+ *                              end-to-end completion)
  *   2. technical_feasibility — viability of the proposed contracts +
  *                              user-deliverable tier completeness (FE → BE,
  *                              CLI → runtime, etc.)
@@ -751,9 +752,11 @@ function buildIntegrityPrompt(input: {
       .map((r) => `- **${r.id}** (${r.type}): ${r.description}`)
       .join("\n")
     sections.push(
-      `# Requirements (${input.requirements.length}) — REQ-N is the audit unit for requirement_fidelity\n\n` +
-        `Walk these row by row. Each REQ-N is matched against the goals' \`requirement_ids\` and the ` +
-        `acceptance_specs whose \`source_requirement_id\` equals the REQ id.\n\n${reqText}`,
+      `# Requirements (${input.requirements.length}) — generated REQ rows are coverage evidence\n\n` +
+        `Start from the original user request above, then use these REQ-N rows to judge whether ` +
+        `requirements extraction captured every user-visible capability at the right acceptance ` +
+        `granularity. For each captured REQ-N, match it against the goals' \`requirement_ids\` and ` +
+        `the acceptance_specs whose \`source_requirement_id\` equals the REQ id.\n\n${reqText}`,
     )
   }
 
@@ -850,12 +853,14 @@ function buildIntegrityPrompt(input: {
   if (dlSection) sections.push(dlSection)
 
   sections.push(
-    "Now review every dimension above. The audit unit for `requirement_fidelity` is REQ-N — " +
-    "walk the Requirements list (and the Requirement Status Snapshot when present) row by row, " +
-    "NOT the goal contracts. Every `requirement_fidelity` issue MUST set `requirement_ids` to " +
-    "the affected REQ ids; post-build issues that point at failing acceptance specs MUST also " +
-    "set `spec_ids`. Cite REQ-N / spec ids / goal ids / verbatim user phrases as evidence in " +
-    "each issue.",
+    "Now review every dimension above. For `requirement_fidelity`, start from the original user " +
+    "request and judge whether requirements extraction was complete; generated REQ rows are " +
+    "evidence, not the audit universe. Then walk captured REQs (and the Requirement Status " +
+    "Snapshot when present) row by row, NOT goal contracts. If an issue maps to an existing REQ, " +
+    "set `requirement_ids`; if the issue is a missing extraction from the original request, leave " +
+    "`requirement_ids` empty and cite the exact user phrase. Post-build issues that point at " +
+    "failing acceptance specs MUST also set `spec_ids`. Cite REQ-N / spec ids / goal ids / " +
+    "verbatim user phrases as evidence in each issue.",
   )
 
   return sections.join("\n\n")
