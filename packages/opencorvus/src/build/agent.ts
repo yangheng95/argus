@@ -2049,6 +2049,8 @@ export function renderVisualContractPreamble(
     "They are the authoritative visual target for this dispatch — restore their pixels 1:1 within stack constraints.",
     "NOT inspiration. NOT optional. Restoring something that \"looks vaguely similar\" is a verified failure, not partial credit.",
     "",
+    "Reference each file by its `references/<filename>` relative path in the code you emit (`<img src=\"references/foo.png\">`, `<image href=\"references/foo.png\">`, `./references/foo.png` for file reads). When the deliverable's runtime needs a different layout, copy the file into the asset directory with a real `write` / `bash` step — the source bytes still come from `references/`. Never inline a staged asset as `data:<mime>;base64,...` (or any other base64 / hex-encoded form) inside generated SVG, HTML, JSON, PowerShell, shell scripts, or any other emitted artifact. That regression mirrors the `InlineBase64InPartError` the session write-path already rejects and will fail verification just the same.",
+    "",
   ]
   for (const att of visual) {
     const name = att.filename ?? att.sha ?? "(unnamed attachment)"
