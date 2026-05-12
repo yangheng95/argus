@@ -13,7 +13,10 @@ const CHAT_BUBBLE_CSS = readFileSync(
 
 test("ChatBubble keeps transcript messages visible inside one flat card surface", () => {
   expect(CHAT_BUBBLE_TSX).toContain('data-align={align()}')
-  expect(CHAT_BUBBLE_TSX).toContain('<Avatar role={normalizedRole()} status={props.node.status} />')
+  expect(CHAT_BUBBLE_TSX).toContain('<div class="chat-bubble__identity">')
+  expect(CHAT_BUBBLE_TSX).toContain('<Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />')
+  expect(CHAT_BUBBLE_TSX).toContain('<div class="chat-bubble__avatar-slot">')
+  expect(CHAT_BUBBLE_TSX).toContain('<Show when={align() === "right"}>')
   expect(CHAT_BUBBLE_TSX).toContain('<TracePanel sessionID={traceSessionID()!} onClose={() => setTraceOpen(false)} />')
   expect(CHAT_BUBBLE_TSX).toContain("<AgentSessionReplyBox")
   expect(CHAT_BUBBLE_TSX).toContain("const expanded = () => true")
@@ -24,6 +27,8 @@ test("ChatBubble keeps transcript messages visible inside one flat card surface"
   expect(CHAT_BUBBLE_TSX).not.toContain("card__todo-progress")
   expect(CHAT_BUBBLE_TSX).not.toContain("onDblClick")
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble[data-align="right"]')
+  expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__identity")
+  expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__title-line")
   expect(CHAT_BUBBLE_CSS).toContain("border-inline-start: calc(3px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info));")
   expect(CHAT_BUBBLE_CSS).toContain("border-inline-end: calc(3px * var(--ui-scale)) solid var(--card-stage-user);")
   expect(CHAT_BUBBLE_CSS).toContain(".chat-avatar")

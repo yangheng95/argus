@@ -39,4 +39,5 @@ test("Avatar covers every AgentRole with the canonical avatar-* icon mapping", (
   expect(AVATAR_TSX).toContain("normalizeAgentRole")
   expect(AVATAR_TSX).toContain('class={classes()}')
   expect(AVATAR_TSX).toContain('data-status={props.status || undefined}')
+  expect(AVATAR_TSX).toContain('size={20}')
 })
