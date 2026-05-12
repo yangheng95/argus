@@ -320,6 +320,16 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Task-level inspect-only build is not a workflow path")
   })
 
+  test("orchestrator prompt caps deliver retries and routes minor rejection fixes through build", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+    expect(normalized).toContain("Delivery has a hard prompt-level budget of TWO invocations per task")
+    expect(normalized).toContain("After a second `deliver` rejection, do NOT call `deliver` a third time")
+    expect(normalized).toContain('Minor / localized delivery issues → call `build({ request, directBuildIntent: "modify_files" })`')
+    expect(normalized).toContain("Do not re-run requirements, architect, design_analysis, or the whole workflow for these issues")
+    expect(normalized).toContain("Re-enter **architect** only when the rejection proves a genuinely new prerequisite goal")
+  })
+
   test("orchestrator prompt routes follow-up task creation through confirmed proposals", async () => {
     const text = await readPrompt("orchestrator")
     expect(text).toContain("propose_task")
