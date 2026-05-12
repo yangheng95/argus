@@ -40,7 +40,7 @@ import { withKeyedLock } from "@/util/lock"
 
 export namespace Config {
   const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
-  export const DEFAULT_MODEL = "alibaba-coding-plan-cn/kimi-k2.5"
+  export const DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
 
   const log = Log.create({ service: "config" })
 

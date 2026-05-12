@@ -89,7 +89,19 @@ export async function createUserMessage(input: PromptInput) {
   const model = input.model ?? agent.model ?? (await Provider.defaultModel())
   const full =
     !input.variant && agent.variant
-      ? await Provider.getModel(model.providerID, model.modelID).catch(() => undefined)
+      ? await Provider.getModel(model.providerID, model.modelID).catch((error) => {
+          log.warn("optional agent variant lookup failed", {
+            sessionID: input.sessionID,
+            agent: agent.name,
+            providerID: model.providerID,
+            modelID: model.modelID,
+            error,
+          })
+          if (Provider.ModelNotFoundError.isInstance(error)) {
+            return undefined
+          }
+          throw error
+        })
       : undefined
   const variant = input.variant ?? (agent.variant && full?.variants?.[agent.variant] ? agent.variant : undefined)
 
