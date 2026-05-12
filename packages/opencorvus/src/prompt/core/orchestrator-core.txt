@@ -689,6 +689,24 @@ Decision priors are guidance for the LLM, not host-side gates:
   - 2-8%: separate follow-up scope → `propose_task`.
   - 0-5%: no path to improve current task after the second deliver → `fail_task` with evidence, impact, and root-cause analysis.
 
+Task-fidelity shortfall recovery:
+
+  - "Task fidelity" means the integrated deliverable no longer faithfully matches
+    the original user request, visual/reference contract, or requirements-extraction
+    audit. It is not automatically a requirements/architect failure.
+  - First occurrence, when the missing or distorted capability is still inside the
+    current task contract → use the lightest valid repair: task-level
+    `build({ request, directBuildIntent: "modify_files" })` with the exact fidelity
+    delta as the request. Treat this as part of the 70-85% direct-build prior.
+  - If the same fidelity shortfall repeats after that build retry, read the evidence
+    as goal/contract signal instead of blindly repeating the same patch: use
+    `modify_goal` or `architect` when the current task needs a corrected/new goal
+    to finish honestly.
+  - Use `propose_task` only when the repeated fidelity gap has become a separate
+    follow-up scope rather than a valid continuation of the current task contract.
+    It should usually follow evidence of a repeated goal/contract boundary miss,
+    not the first task-fidelity complaint.
+
 Escalation ladder — try the cheapest first; climb only when the evidence proves
 the cheaper rung cannot converge. By deliver-time the per-goal worktrees have
 already been merged into main, so the deliverable is AGGREGATED CODE. Default
