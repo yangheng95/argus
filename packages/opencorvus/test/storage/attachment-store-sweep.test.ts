@@ -24,6 +24,8 @@ import { Instance } from "../../src/project/instance"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { Session } from "../../src/session"
 import { Identifier } from "../../src/id/id"
+import { Database } from "../../src/storage/db"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
@@ -36,6 +38,37 @@ async function ageFile(absPath: string, ageMs: number) {
   // old enough to delete. Using fs.utimes keeps the contents intact.
   const past = new Date(Date.now() - ageMs - 1_000)
   await fs.utimes(absPath, past, past)
+}
+
+/** Resolve the on-disk path for a written attachment so we can backdate it. */
+function attachmentAbs(projectID: string, url: string): string {
+  const located = AttachmentStore.nameFromUrl(url)!
+  return AttachmentStore.resolveAbsolute(projectID, located.name)!
+}
+
+/** Direct engine_task insert — sidesteps the full createTask pipeline so the
+ *  retain test only exercises the JSON columns under inspection. */
+function seedTaskWithFileRefs(input: {
+  projectID: string
+  taskID: string
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number }>
+  systemArtifacts?: Array<{ sha: string; url: string; mime: string; size: number }>
+}) {
+  const now = Date.now()
+  Database.use((db) => {
+    db.insert(EngineTaskTable).values({
+      id: input.taskID,
+      project_id: input.projectID,
+      source: "test",
+      title: "Sweep retain fixture",
+      request: "retain-fixture",
+      kind: "workflow",
+      attachments: input.attachments ?? [],
+      system_artifacts: input.systemArtifacts ?? [],
+      time_created: now,
+      time_updated: now,
+    }).run()
+  })
 }
 
 describe("AttachmentStore.sweep", () => {
@@ -143,6 +176,166 @@ describe("AttachmentStore.sweep", () => {
         expect(first.deleted).toBe(1)
         const second = await AttachmentStore.sweep(projectID)
         expect(second.deleted).toBe(0)
+      },
+    })
+  })
+
+  // ── Retain-surface coverage ─────────────────────────────────────────
+  //
+  // The live set is the union of three sources, not just `part.data`:
+  //   • session part.data           (conversation parts)
+  //   • engine_task.attachments     (USER-CONTRACT files — figma-mcp frames,
+  //                                   user uploads)
+  //   • engine_task.system_artifacts (SYSTEM-GENERATED evidence — URL
+  //                                   screenshots, rendered.png)
+  //
+  // Before the fix, collectReferencedShas only walked part.data. Any sha
+  // registered via appendTaskAttachment / appendTaskSystemArtifact looked
+  // orphan to sweep() between registration and the first session part that
+  // referenced it — so visual references older than GC_MIN_AGE_MS got
+  // unlinked and the build agent ENOENTed on stageToWorktree() copy. These
+  // tests pin the union as the retain invariant so future refactors cannot
+  // silently drop one surface and regress to that failure mode.
+
+  test("keeps files registered in engine_task.attachments", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const kept = await AttachmentStore.write(projectID, differentBytes(10), "image/png", "figma-frame.png")
+        seedTaskWithFileRefs({
+          projectID,
+          taskID: Identifier.ascending("task"),
+          attachments: [{ sha: kept.sha, url: kept.url, mime: "image/png", size: kept.size }],
+        })
+
+        await ageFile(attachmentAbs(projectID, kept.url), 120_000)
+
+        const result = await AttachmentStore.sweep(projectID)
+        expect(result.kept).toBe(1)
+        expect(result.deleted).toBe(0)
+        const remaining = await AttachmentStore.listOnDisk(projectID)
+        expect(remaining.map((f) => f.sha)).toEqual([kept.sha])
+      },
+    })
+  })
+
+  test("keeps files registered in engine_task.system_artifacts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const kept = await AttachmentStore.write(projectID, differentBytes(11), "image/png", "url-screenshot.png")
+        seedTaskWithFileRefs({
+          projectID,
+          taskID: Identifier.ascending("task"),
+          systemArtifacts: [{ sha: kept.sha, url: kept.url, mime: "image/png", size: kept.size }],
+        })
+
+        await ageFile(attachmentAbs(projectID, kept.url), 120_000)
+
+        const result = await AttachmentStore.sweep(projectID)
+        expect(result.kept).toBe(1)
+        expect(result.deleted).toBe(0)
+        const remaining = await AttachmentStore.listOnDisk(projectID)
+        expect(remaining.map((f) => f.sha)).toEqual([kept.sha])
+      },
+    })
+  })
+
+  test("retain set = union of part.data ∪ task.attachments ∪ task.system_artifacts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        // A: referenced from a session part.data
+        const partRef = await AttachmentStore.write(projectID, differentBytes(20), "image/png", "a.png")
+        // B: referenced from engine_task.attachments
+        const userAttachment = await AttachmentStore.write(projectID, differentBytes(21), "image/png", "b.png")
+        // C: referenced from engine_task.system_artifacts
+        const systemArtifact = await AttachmentStore.write(projectID, differentBytes(22), "image/png", "c.png")
+        // D: orphan — not referenced anywhere
+        const orphan = await AttachmentStore.write(projectID, differentBytes(23), "image/png", "d.png")
+
+        const session = await Session.create({ kind: "orchestrator" })
+        const message = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "user",
+          model: { providerID: "test", modelID: "test" },
+        } as any)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          messageID: message.id,
+          sessionID: session.id,
+          type: "file",
+          mime: "image/png",
+          filename: "a.png",
+          url: partRef.url,
+        } as any)
+
+        seedTaskWithFileRefs({
+          projectID,
+          taskID: Identifier.ascending("task"),
+          attachments: [{ sha: userAttachment.sha, url: userAttachment.url, mime: "image/png", size: userAttachment.size }],
+          systemArtifacts: [{ sha: systemArtifact.sha, url: systemArtifact.url, mime: "image/png", size: systemArtifact.size }],
+        })
+
+        // Sanity: the helper actually returns the union we expect, not just
+        // a permissive superset. Pinning this directly so a refactor that
+        // drops one source still fails fast even if sweep() somehow still
+        // passes.
+        const retain = AttachmentStore.collectReferencedShas().get(projectID) ?? new Set<string>()
+        expect([...retain].sort()).toEqual(
+          [partRef.sha, userAttachment.sha, systemArtifact.sha].sort(),
+        )
+
+        for (const ref of [partRef, userAttachment, systemArtifact, orphan]) {
+          await ageFile(attachmentAbs(projectID, ref.url), 120_000)
+        }
+
+        const result = await AttachmentStore.sweep(projectID)
+        expect(result.deleted).toBe(1)
+        expect(result.kept).toBe(3)
+
+        const remaining = (await AttachmentStore.listOnDisk(projectID)).map((f) => f.sha).sort()
+        expect(remaining).toEqual([partRef.sha, userAttachment.sha, systemArtifact.sha].sort())
+      },
+    })
+  })
+
+  test("still deletes a sha that is absent from all three retain surfaces", async () => {
+    // Negative control — confirms the wider retain set did not accidentally
+    // disable the GC: a task that has its OWN attachments registered, but
+    // doesn't reference some unrelated orphan, must still let that orphan be
+    // swept.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const kept = await AttachmentStore.write(projectID, differentBytes(30), "image/png", "live.png")
+        const orphan = await AttachmentStore.write(projectID, differentBytes(31), "image/png", "orphan.png")
+
+        seedTaskWithFileRefs({
+          projectID,
+          taskID: Identifier.ascending("task"),
+          attachments: [{ sha: kept.sha, url: kept.url, mime: "image/png", size: kept.size }],
+        })
+
+        await ageFile(attachmentAbs(projectID, kept.url), 120_000)
+        await ageFile(attachmentAbs(projectID, orphan.url), 120_000)
+
+        const result = await AttachmentStore.sweep(projectID)
+        expect(result.deleted).toBe(1)
+        expect(result.kept).toBe(1)
+        const remaining = await AttachmentStore.listOnDisk(projectID)
+        expect(remaining.map((f) => f.sha)).toEqual([kept.sha])
       },
     })
   })
