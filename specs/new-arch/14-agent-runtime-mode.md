@@ -255,7 +255,8 @@ interface AgentExecutionPlan {
 - episodic 路径一律叫 `prompt reduction` 或 `budget reduction`
 - 禁止把 episodic 的 pre-run 裁剪实现为 mid-stream prune
 
-原因很简单：`ProviderLLM.stream` 已明确记录 sub-agent stream 不允许 mid-run context pruning。
+原因很简单：sub-agent stream 历来不允许 mid-run context pruning（已删除的 `ProviderLLM.stream` 的旧
+注释记录过这一约束；现在统一走 `LLM.stream` / `SessionLoop`，约束本身未变）。
 
 ---
 

@@ -125,18 +125,26 @@ goalWorkflows: Array<GoalWorkflowGroup>    // per-goal 工作流状态
 ▼ Appearance
   Theme (dark/light/system) · Opacity · Zoom
   Always on Top · Locale (zh-CN/en-US)
+  注：Overlay 的 Locale 偏好属 Layer 2（localStorage，只控前端文案）。
+      2026-05-11 新增的顶层 `config.locale`（zh-CN / en-US）是 Layer 1 的
+      assistant reply language，独立于此处的 UI Locale。
 
 ▼ Workflow                                ← 新增
-  Default Workflow: [standard ▾]
-  Auto-select Workflow: [on/off]
+  Default Workflow: [pipeline ▾]   (built-in IDs: direct · pipeline)
 
 ▼ Agent Config                            ← 新增
-  ├ Requirements    max_steps:30  timeout:5min  quality:0.5
-  ├ Architect       max_steps:20  timeout:3min
-  ├ Design-Analyst  max_steps:20  timeout:3min
-  ├ Intent-Analysis max_steps:15  timeout:2min
-  ├ Build           max_steps:40  timeout:15min
-  └ Delivery        max_steps:40  timeout:10min retries:2
+  ├ Requirements    max_steps  skills[]
+  ├ Architect       max_steps  skills[]
+  ├ Design-Analyst  max_steps  skills[]
+  ├ Intent-Analysis max_steps  skills[]
+  ├ Build           max_steps  skills[]
+  └ Delivery        max_steps  max_retries  skills[]
+  注：实际默认 max_steps = 1000（见 `engine/config.ts:170-212`）；schema 中没有
+      `timeout_ms` / `quality_threshold` / `max_attempts` 字段（这些字段在
+      2026-05-12 sync 中随 assistant.spec / planner / evaluator 一同删除）。
+      delivery_visual{} 是数值硬门槛阈值，不在 agent 行内展示。
+      activity{} 的 stream-idle / executor-events-idle / task-queue-run-timeout
+      是 host 层 watchdog，归 Orchestration 而非 Agent Config。
   每个 agent 可展开: skills[] · model 选择
   → PATCH /config { assistant: { architect: { ... } } }
   注：planner / evaluator agent 已下线（详见 [01-agents.md](01-agents.md)）。

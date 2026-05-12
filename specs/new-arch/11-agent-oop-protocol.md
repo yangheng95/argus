@@ -231,15 +231,22 @@ BaseAgent<TInbox, TOutbox>          (抽象基类)
 │   ├── RequirementsAgent           inbox: RequirementsInput   outbox: RequirementsResult
 │   ├── ArchitectAgent              inbox: ArchitectInput      outbox: ArchitectResult
 │   ├── DesignAnalystAgent          inbox: DesignAnalystInput  outbox: DesignAnalystResult
-│   ├── PlannerAgent                inbox: PlannerInput        outbox: PlanSteps
 │   ├── DeliveryAgent               inbox: DeliveryInput       outbox: DeliveryVerdictType
 │   ├── IntentAnalysisAgent         inbox: IntentInput         outbox: IntentAnalysisResult
+│   ├── IntegrityAgent              inbox: IntegrityInput      outbox: IntegrityResult
+│   ├── ProsecutorAgent             inbox: ProsecutorInput     outbox: ProsecutorResult
 │   └── OrchestratorAgent           inbox: OrchestratorTrigger outbox: void
 └── SessionAgent                    (抽象，使用 SessionPrompt.prompt)
     ├── BuildAgent                  inbox: BuildInput          outbox: BuildSummary
     ├── GeneralAgent                inbox: GeneralInput        outbox: GeneralSummary
     └── ExploreAgent                inbox: ExploreInput        outbox: ExploreSummary
 ```
+
+> **注**：`PlannerAgent` 已从层次中移除——`src/planner/` 整目录已删除，planning
+> 现由 architect contract + build agent 直接消费，不再独立成 agent。BuildAgent
+> 同时存在 SessionAgent（用户交互态，见 `agent/agent.ts:122`）和 PipelineAgent
+> （orchestrator build tool 自建子 session，见 `build/agent.ts`）两条路径，本表只
+> 列前者；后者属于"不走 ToolRegistry"那类，见 [08-agent-tool-adapter.md](08-agent-tool-adapter.md)。
 
 ### `PipelineAgent` 抽象
 
@@ -286,12 +293,12 @@ abstract class SessionAgent<TIn extends z.ZodType, TOut extends z.ZodType>
 
 | 目录 | 存放内容 |
 |---|---|
-| `src/agent/prompt/` | SessionAgent 的 prompt（build, general, explore, compaction, title） |
-| `src/prompt/core/` | PipelineAgent 的 prompt（requirements, architect, delivery, design-analyst, intent-analysis, orchestrator, integrity, prosecutor） |
+| `src/agent/prompt/` | SessionAgent 的 prompt（实际盘上：`build.txt` / `general.txt` / `explore.txt` / `compaction.txt` / `title.txt` / `judge.txt`，**无** `summary.txt`） |
+| `src/prompt/core/` | PipelineAgent 的 prompt（实际盘上：`requirements-core.txt` / `architect-core.txt` / `delivery-core.txt` / `design-analyst-core.txt` / `intent-analysis-core.txt` / `orchestrator-core.txt` / `integrity-core.txt` / `prosecutor-core.txt` / `build-core.txt`——`build-core.txt` 服务于 `build/agent.ts` 这条 pipeline-agent 路径，与 `agent/prompt/build.txt` 的 SessionAgent 路径并行存在） |
 
 **迁移状态（2026-05-12）**：
-- ✅ `orchestrator/agent.ts:ORCHESTRATOR_INSTRUCTIONS` 已迁移：`= ORCHESTRATOR_CORE`（来自 `src/prompt/core/orchestrator-core.txt`）
-- ✅ `delivery/agent.ts:DELIVERY_AGENT_SYSTEM` 已迁移：`= DELIVERY_CORE`（来自 `src/prompt/core/delivery-core.txt`）
+- ✅ `orchestrator/agent.ts:ORCHESTRATOR_INSTRUCTIONS` 已迁移：`= ORCHESTRATOR_CORE`（来自 `src/prompt/core/orchestrator-core.txt`，常量在 `orchestrator/agent.ts:642`）
+- ✅ `delivery/agent.ts:DELIVERY_AGENT_SYSTEM` 已迁移：`= DELIVERY_CORE`（来自 `src/prompt/core/delivery-core.txt`，常量在 `delivery/agent.ts:494`）
 - ⚠️ `planner-core.txt` 不再存在（`src/planner/` 整目录删除；planner-as-agent 概念已下线）
 
 ### 4.2 运行时分层（三级覆盖）
@@ -382,19 +389,26 @@ private loadPromptFile(): string {
 
 ### 5.3 当前通信拓扑白名单
 
+> **2026-05-12 数据现状**：`planner` agent 已下线（`src/planner/` 整目录删除），从下表
+> 移除；`integrity` / `prosecutor` 在 orchestrator tool 集里已实装（见 §七表格），
+> 一并补入。orchestrator 实际可调用的子 agent 集合权威来源是
+> `agent/agent.ts:276-310` 的 `orchestrator.tools.include`。
+
 ```
 agent              receiveWhitelist              sendWhitelist
 ──────────────────────────────────────────────────────────────
 orchestrator       [system_entry]                [requirements, architect,
-                                                  design-analyst, planner,
-                                                  delivery, build, intent-analysis]
+                                                  design-analyst, delivery,
+                                                  build, intent-analysis,
+                                                  integrity, prosecutor]
 
 requirements       [orchestrator]                [orchestrator]
 architect          [orchestrator]                [orchestrator]
 design-analyst     [orchestrator]                [orchestrator]
-planner            [orchestrator]                [orchestrator]
 delivery           [orchestrator]                [orchestrator]
 intent-analysis    [orchestrator]                [orchestrator]
+integrity          [orchestrator]                [orchestrator]
+prosecutor         [orchestrator]                [orchestrator]
 
 build              [orchestrator]                [orchestrator, general, explore]
 general            [build, orchestrator]          [orchestrator]
@@ -472,8 +486,8 @@ Orchestrator system prompt 中明确指引：
 | `DeliveryAgent.verify()` | `PipelineAgent` | `DeliveryInputSchema` | `DeliveryVerdictSchema` | ✅ 已迁移：`DELIVERY_AGENT_SYSTEM = DELIVERY_CORE` |
 | `Orchestrator.runTaskLoop()` | `PipelineAgent` | `OrchestratorTriggerSchema` | `z.void()` | ✅ 已迁移：`ORCHESTRATOR_INSTRUCTIONS = ORCHESTRATOR_CORE` |
 | `IntentAnalysisAgent.analyze()` | `PipelineAgent` | `IntentInputSchema` | `IntentResultSchema` | 已在 `.txt`，已接线 `analyze_intent` tool |
-| `IntegrityAgent.review()` | `PipelineAgent` | `IntegrityInputSchema` | `IntegrityResultSchema` | 已在 `.txt`，已接线 `integrity` tool |
-| `ProsecutorAgent.review()` | `PipelineAgent` | `ProsecutorInputSchema` | `ProsecutorResultSchema` | 已在 `.txt`，已接线 `prosecute` tool |
+| `reviewIntegrity()` （`integrity/agent.ts:257`，函数式入口；本文 §三的 `IntegrityAgent` 类是未来形态） | `PipelineAgent` | `IntegrityInputSchema` | `IntegrityResultSchema` | 已在 `.txt`，已接线 orchestrator `integrity` tool（`tools.ts:2811`） |
+| `runProsecutor()` （`prosecutor/agent.ts:322`，函数式入口；本文 §三的 `ProsecutorAgent` 类是未来形态） | `PipelineAgent` | `ProsecutorInputSchema` | `ProsecutorResultSchema` | 已在 `.txt`，已接线 orchestrator `prosecute` tool（`tools.ts:2858`） |
 | `Agent.Info["build"]` via `SessionPrompt` | `SessionAgent` | `BuildInputSchema` | `BuildSummarySchema` | 已在 `.txt`，无需迁移 |
 | `Agent.Info["general"]` | `SessionAgent` | `GeneralInputSchema` | `GeneralSummarySchema` | 已在 `.txt`，无需迁移 |
 | `Agent.Info["explore"]` | `SessionAgent` | `ExploreInputSchema` | `ExploreSummarySchema` | 已在 `.txt`，无需迁移 |

@@ -1,7 +1,6 @@
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { appStore } from "../../store/app";
 import { boardStore } from "../../store/board";
-import { Icon } from "../Icon";
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings";
 import { patchConfig, reloadProjectScope, syncAgentPromptLocale } from "../../services/config";
 import { openConfigDialog } from "../../services/dialog";
@@ -70,14 +69,6 @@ function providerLabel(): string {
   if (!model.includes("/")) return t("agent_models.option_not_set");
   return model;
 }
-
-/* iter42 dropped `configuredChannelCount()` and
-   `hasProviderAuthSetup()` — both were only consumed by the
-   removed Channels status chip + the Setup CTA in
-   TitlebarStatusCluster. After the chips are gone (per user
-   feedback), the helpers have no remaining consumers. Both
-   states are still surfaced inside the settings dialog
-   (Channels panel + Providers panel) where they belong. */
 
 function activeTaskLabel(): string {
   const task = (boardStore.board as any)?.task;
@@ -176,35 +167,6 @@ function MenuRange(props: {
         onChange={commit}
       />
     </label>
-  );
-}
-
-export function TitlebarStatusCluster(props: { onOpenLog: () => void }) {
-  // iter42: user feedback (2026-05-03) "标题栏的 model 和 channel
-  // 不要再显示了". The Model + Channels chips and the conditional
-  // Setup CTA they fed are removed. Model status now lives ONLY in
-  // the composer chip (iter35/iter41) where it's contextual to the
-  // outgoing message. Channel status lives ONLY inside the Tools /
-  // Channels menu and the settings dialog. The cluster keeps the
-  // Logs icon button — that's a peripheral utility, not a status
-  // indicator, and it has no other entry point on the titlebar.
-  return (
-    <div class="titlebar-status-cluster" data-no-drag="true">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        tone="neutral"
-        data-chrome="icon-action"
-        data-ui="titlebar-status-icon"
-        aria-label={t("titlebar.logs")}
-        title={t("titlebar.logs")}
-        onClick={props.onOpenLog}
-        data-testid="titlebar-open-logs"
-      >
-        <Icon name="log-lines" size={14} />
-      </Button>
-    </div>
   );
 }
 
@@ -422,6 +384,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                     <MenuItem onClick={() => void browseDirectory().finally(closeMenu)}>{t("cwd.browse")}</MenuItem>
                     <MenuItem onClick={() => void createDirectory().finally(closeMenu)}>{t("cwd.create")}</MenuItem>
                     <MenuItem onClick={() => void openDirectory().finally(closeMenu)} disabled={!settingsStore.directory}>{t("cwd.open")}</MenuItem>
+                    <MenuItem onClick={() => openConfig("general")}>{t("config.title")}</MenuItem>
                   </MenuGroup>
                   <Show when={recentDirs().length > 0}>
                     <MenuGroup title={t("cwd.recent")}>
@@ -549,7 +512,6 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
 
                 <Show when={menu.id === "help"}>
                   <MenuGroup title={t("titlebar.menu.help")}>
-                    <MenuItem onClick={() => openConfig("general")}>{t("config.title")}</MenuItem>
                     <MenuItem onClick={() => void reloadProjectScope().finally(closeMenu)}>{t("common.refresh")}</MenuItem>
                     <MenuItem onClick={() => { toggleDevtools(); closeMenu(); }}>{t("titlebar.devtools")}</MenuItem>
                     <MenuItem onClick={() => { props.onOpenLog(); closeMenu(); }} testid="titlebar-help-logs">{t("titlebar.logs")}</MenuItem>

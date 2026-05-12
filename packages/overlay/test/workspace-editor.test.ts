@@ -46,9 +46,9 @@ test("openDirectoryInEditor routes the selected project editor through HostTrans
 
 test("cwd breadcrumb keeps editor launchers out of the directory control", () => {
   setLocaleData("en-US", {
-    "cwd.browse": "Browse",
+    "cwd.browse": "Switch Folder…",
     "cwd.new": "New",
-    "cwd.open": "Open",
+    "cwd.open": "Reveal in File Manager",
     "cwd.open_in_editor": "Open in {{name}}",
     "cwd.choose_level": "Use this folder",
   })

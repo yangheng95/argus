@@ -35,7 +35,7 @@
              └───────────────┬───────────────────────┘
                              ▼
                   EngineService (task-api/index.ts)
-                  createTask / taskMessage / replyInteraction /
+                  createTask / handleTaskMessage / replyInteraction /
                   cancelTask / retryTask / …
 ```
 
@@ -140,7 +140,7 @@ SSE 消费者订阅 Bus → overlay 实时刷新。事件定义集中在 `engine
 ## Trace — 追踪横切
 
 见 [02-data.md #Trace](02-data.md) — 此处不重复。
-简言之：`Trace.event()` → JSONL + Bus 双写。
+简言之：`AgentTrace.record*` → JSONL + Bus 双写。
 
 ## server/ — HTTP 路由
 
@@ -150,7 +150,7 @@ SSE 消费者订阅 Bus → overlay 实时刷新。事件定义集中在 `engine
 - 关键路由（`src/server/routes/` 共 25 个文件，2026-05-12）：
   - `routes/channel.ts` — `ChannelIngress.message` HTTP 端点
   - `routes/panel.ts` — `ControlMessage.handle` / `handleStream`（含 panel SSE 流）
-  - `routes/orchestrator.ts` — EngineService.createTask 等 task API（共 41 个 describeRoute；含 task-list change stream 与 task event stream 两条 SSE 主线）
+  - `routes/orchestrator.ts` — EngineService.createTask 等 task API（共 42 个 describeRoute；含 task-list change stream 与 task event stream 两条 SSE 主线）
   - `routes/session.ts` — session mutation
   - `routes/control.ts` · `routes/executor.ts` — 控制平面（外部账号 / executor profile）
   - `routes/permission.ts` · `routes/project.ts` · `routes/config.ts` · `routes/question.ts` ·

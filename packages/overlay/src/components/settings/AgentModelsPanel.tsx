@@ -17,13 +17,11 @@
 // and collapsed prompt cache.
 
 import { createSignal, createMemo, createResource, For, Show } from "solid-js";
-import { apiJsonWithTimeout } from "../../services/api";
 import { patchConfig } from "../../services/config";
 import { appStore } from "../../store/app";
 import { settingsStore } from "../../store/settings";
 import { t } from "../../utils/i18n";
 import {
-  HEXIN_REFRESH_TIMEOUT_MILLISECONDS,
   loadAgentModelsData,
   type AgentInfo,
   type ProvidersPayload,
@@ -55,8 +53,6 @@ const TIER_LABEL: Record<string, string> = {
 };
 
 export default function AgentModelsPanel() {
-  const [refreshing, setRefreshing] = createSignal(false);
-  const [refreshMsg, setRefreshMsg] = createSignal<string>("");
   const [savingAgents, setSavingAgents] = createSignal<Set<string>>(new Set());
   const [savingDefault, setSavingDefault] = createSignal(false);
   const [activeSelect, setActiveSelect] = createSignal<string>("");
@@ -149,31 +145,6 @@ export default function AgentModelsPanel() {
       console.error("[agent-models] save failed", e);
     } finally {
       setAgentSaving(agentName, false);
-    }
-  }
-
-  async function handleRefreshHexin() {
-    setRefreshing(true);
-    setRefreshMsg("");
-    try {
-      const result = (await apiJsonWithTimeout(
-        "provider/hexin/refresh",
-        HEXIN_REFRESH_TIMEOUT_MILLISECONDS,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        },
-      )) as { ok: boolean; count: number; error?: string };
-      if (result.ok) {
-        setRefreshMsg(`Refreshed: ${result.count} hexin models`);
-        setRefreshToken((x) => x + 1);
-      } else {
-        setRefreshMsg(`Refresh failed: ${result.error ?? "unknown"}`);
-      }
-    } catch (e) {
-      setRefreshMsg(`Refresh error: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setRefreshing(false);
     }
   }
 
@@ -279,27 +250,10 @@ export default function AgentModelsPanel() {
         <SurfaceHeader
           variant="settings-group"
           title="Agent Models"
-          actions={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              tone="neutral"
-              onClick={handleRefreshHexin}
-              disabled={refreshing()}
-            >
-              {refreshing() ? t("agent_models.refreshing") : t("agent_models.refresh_hexin")}
-            </Button>
-          }
         />
         <p class="agent-models-info">
           {t("agent_models.intro")}
         </p>
-        <Show when={refreshMsg()}>
-          <div class="config-panel-card agent-models-refresh-msg">
-            {refreshMsg()}
-          </div>
-        </Show>
 
         <Show when={data.loading}>
           <div class="agent-models-loading" role="status" aria-live="polite">
