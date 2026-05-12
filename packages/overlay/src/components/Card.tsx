@@ -263,7 +263,7 @@ export function Card(props: { node: CardNode; depth: number }) {
       data-depth={props.depth}
       style={articleStyle()}
       classList={{ "card--expanded": expanded(), "card--collapsed": !expanded() }}
-      onClick={(event) => {
+      onDblClick={(event) => {
         if (!canCardSurfaceToggle(event)) return;
         event.stopPropagation();
         toggleExpanded();

@@ -9,7 +9,7 @@ function read(relativePath: string): string {
 }
 
 describe("card expand and collapse contract", () => {
-  test("Card uses one explicit toggle write from header and safe surface clicks", () => {
+  test("Card uses one explicit toggle write from header and safe surface double-clicks", () => {
     const src = read("src/components/Card.tsx")
     expect(src).toContain("import { cardExpanded, setCardExpanded }")
     expect(src).not.toContain("toggleCard")
@@ -20,14 +20,13 @@ describe("card expand and collapse contract", () => {
     expect(src).toContain("const canCardSurfaceToggle = (event: MouseEvent) =>")
     expect(src).toContain('target.closest(".card") !== articleRef')
     expect(src).toContain('window.getSelection()?.type === "Range"')
-    expect(src).toContain("onClick={(event) =>")
+    expect(src).toContain("onDblClick={(event) =>")
     expect(src).toContain("if (!canCardSurfaceToggle(event)) return;")
     expect(src).toContain("toggleExpanded();")
   })
 
-  test("Card surface toggle ignores controls and nested cards without a double-click path", () => {
+  test("Card surface toggle ignores controls and nested cards on the double-click path", () => {
     const src = read("src/components/Card.tsx")
-    expect(src).not.toContain("onDblClick")
     expect(src).not.toContain("canCardSurfaceCollapse")
     for (const selector of [
       '"button"',
