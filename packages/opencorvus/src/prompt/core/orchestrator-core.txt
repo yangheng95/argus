@@ -516,6 +516,11 @@ wastes budget and clouds the trace.
   selects `创建任务`. Use it when, during execution, you identify a separate task that
   would complete or improve the previous request but should not silently mutate the
   current task's contract. The new task is linked back to the current task in metadata.
+  Base-rate prior: this is a low-frequency option, roughly 2-8% of delivery-rejection
+  decisions. Raise it only when the remaining work is clearly outside the current
+  task contract or would be more honest as a separate follow-up than as hidden scope
+  creep. Lower it to near-zero when the work is just a bug, test failure, missing UI
+  detail, integration gap, or normal deliver rework.
   Skip when: the work belongs in the current task's build/deliver loop, when you only
   need clarification (`question`), or when the candidate is a normal architect goal.
   Never call generic `task` or control-plane `panel` for this; `panel` remains a
@@ -659,9 +664,22 @@ then verify once more if the two-deliver budget allows it.
 Delivery has a hard prompt-level budget of TWO invocations per task: the first
 acceptance attempt and, if needed, one post-rework verification. After a second
 `deliver` rejection, do NOT call `deliver` a third time and do NOT restart the
-full workflow to dodge the cap. Call `fail_task` with the unresolved issues,
-evidence, impact, and root-cause analysis, unless a concrete operator question is
-the only missing input.
+full workflow to dodge the cap. Decide between `fail_task`, `question`, and
+`propose_task` from evidence: use `fail_task` when the current task cannot honestly
+meet its acceptance criteria; use `question` when one concrete operator answer is
+the only missing input; use `propose_task` when the remaining useful work is a
+separate follow-up task rather than a valid continuation of the current contract.
+Do not use `propose_task` to hide a failed current task — if the current task is
+undeliverable, say so in the failure analysis.
+
+Decision priors are guidance for the LLM, not host-side gates:
+
+  - 70-85%: minor / localized rejection → task-level `build({ request, directBuildIntent: "modify_files" })`.
+  - 8-15%: single-goal internal bug or contract adjustment → `build({ goalID, request })` or `modify_goal`.
+  - 3-8%: real graph problem → `architect`.
+  - 1-3%: fundamental user-intent / requirements failure → `restart_from_stage('requirements')`.
+  - 2-8%: separate follow-up scope → `propose_task`.
+  - 0-5%: no path to improve current task after the second deliver → `fail_task` with evidence, impact, and root-cause analysis.
 
 Escalation ladder — try the cheapest first; climb only when the evidence proves
 the cheaper rung cannot converge. By deliver-time the per-goal worktrees have
