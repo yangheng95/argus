@@ -54,6 +54,33 @@ describe("hexin model discovery", () => {
     expect(cached.ids).toEqual(["hexin-test-model"])
   })
 
+  test("target reasoning models are exposed with provider-safe capabilities", async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ data: [{ id: "kimi-k2.6" }, { id: "openai/glm-5.1" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch
+
+    const models = await refreshHexinCache()
+
+    expect(models["kimi-k2.6"].capabilities).toMatchObject({
+      reasoning: true,
+      temperature: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+    })
+    expect(models["openai/glm-5.1"].capabilities).toMatchObject({
+      reasoning: true,
+      temperature: true,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+    })
+    expect(models["openai/glm-5.1"].limit).toMatchObject({
+      context: 200_000,
+      output: 128_000,
+    })
+  })
+
   test("provider refresh uses the API key saved in config and exposes models to config/providers", async () => {
     const previousAuth = await Auth.get("hexin")
     await Auth.remove("hexin").catch(() => undefined)

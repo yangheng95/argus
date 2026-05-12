@@ -17,10 +17,12 @@ export interface HexinModelProfile {
   name: string
   family: string
   reasoning: boolean
+  temperature?: boolean
   attachment: boolean
   image_in: boolean
   pdf_in: boolean
   toolcall: boolean
+  interleaved?: false | { field: "reasoning_content" | "reasoning_details" }
   context: number
   input?: number
   output: number
@@ -30,10 +32,12 @@ const DEFAULT_PROFILE: HexinModelProfile = {
   name: "",
   family: "unknown",
   reasoning: false,
+  temperature: true,
   attachment: false,
   image_in: false,
   pdf_in: false,
   toolcall: true,
+  interleaved: false,
   context: 128_000,
   output: 16_384,
 }
@@ -169,6 +173,23 @@ const MATCHERS: Matcher[] = [
       output: 8_192,
     },
   },
+  // Kimi K2.6: thinking is enabled by default; fixed sampling and
+  // reasoning_content round-tripping are required by Moonshot's API contract.
+  {
+    test: (id) => /(^|\/)kimi-k2\.6$/i.test(id),
+    profile: {
+      family: "kimi",
+      reasoning: true,
+      temperature: false,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+      context: 256_000,
+      output: 128_000,
+    },
+  },
   // Kimi
   {
     test: (id) => /kimi/i.test(id),
@@ -183,7 +204,23 @@ const MATCHERS: Matcher[] = [
       output: 16_384,
     },
   },
-  // GLM
+  // GLM (General Language Model) 5.1 defaults to thinking mode and carries
+  // preserved reasoning through reasoning_content on OpenAI-compatible APIs.
+  {
+    test: (id) => /(^|\/)glm-5\.1$/i.test(id),
+    profile: {
+      family: "glm",
+      reasoning: true,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+      interleaved: { field: "reasoning_content" },
+      context: 200_000,
+      output: 128_000,
+    },
+  },
+  // GLM (General Language Model)
   {
     test: (id) => /^glm-|\/glm-/i.test(id),
     profile: {
