@@ -165,7 +165,7 @@
   transform: rotate(90deg);
 }
 .msg-tool-output-details > summary:hover {
-  background: var(--subtle-3);
+  background: var(--surface-hover);
   color: var(--text-strong);
 }
 .msg-tool-output-details > summary:focus-visible {
@@ -260,9 +260,9 @@
 }
 
 .msg-tool-diff-card {
-  border: var(--oc-border-width) solid var(--subtle-4);
+  border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--subtle-2) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 82%, transparent);
   overflow: hidden;
 }
 
@@ -272,7 +272,7 @@
   justify-content: space-between;
   gap: calc(10px * var(--ui-scale));
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-bottom: var(--oc-border-width) solid var(--subtle-4);
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .msg-tool-diff-card__copy {
@@ -319,8 +319,8 @@
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
   border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--subtle-2) 88%, transparent);
-  border: var(--oc-border-width) solid var(--subtle-4);
+  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
+  border: var(--oc-border-width) solid var(--border);
 }
 .msg-todo-card__summary {
   display: flex;
@@ -356,7 +356,7 @@
   height: calc(6px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
   overflow: hidden;
-  background: var(--subtle-3);
+  background: var(--surface-hover);
 }
 .msg-todo-card__progress-fill {
   display: block;
@@ -376,8 +376,8 @@
   min-height: calc(22px * var(--ui-scale));
   padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
-  border: var(--oc-border-width) solid var(--subtle-4);
-  background: var(--subtle-3);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface-hover);
   color: var(--text-muted);
   font-size: var(--ui-font-small);
   font-weight: var(--ui-font-weight-strong);
@@ -407,8 +407,8 @@
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
   border-radius: var(--oc-radius-large);
-  background: var(--subtle-2);
-  border: var(--oc-border-width) solid var(--subtle-4);
+  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  border: var(--oc-border-width) solid var(--border);
   font-size: var(--ui-font-control);
   line-height: 1.5;
   display: flex;
@@ -433,7 +433,7 @@
   padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: var(--oc-radius-large);
   background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
-  border: var(--oc-border-width) solid var(--subtle-4);
+  border: var(--oc-border-width) solid var(--border);
 }
 .msg-todo-icon {
   display: inline-flex;
@@ -488,8 +488,8 @@
   letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
   color: var(--text-muted);
-  background: var(--subtle-3);
-  border: var(--oc-border-width) solid var(--subtle-4);
+  background: var(--surface-hover);
+  border: var(--oc-border-width) solid var(--border);
 }
 .msg-todo-priority[data-priority="high"] {
   color: var(--bad);
@@ -508,8 +508,8 @@
   margin: calc(2px * var(--ui-scale)) 0 0 0;
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: var(--oc-radius-large);
-  background: var(--subtle-2);
-  border: var(--oc-border-width) solid var(--subtle-4);
+  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  border: var(--oc-border-width) solid var(--border);
   font-family: var(--mono);
   font-size: var(--ui-font-control);
   line-height: 1.55;
@@ -524,8 +524,8 @@
   margin-top: calc(8px * var(--ui-scale));
   padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
   border-radius: var(--oc-radius-large);
-  background: color-mix(in srgb, var(--subtle-2) 88%, transparent);
-  border: var(--oc-border-width) solid var(--subtle-4);
+  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
+  border: var(--oc-border-width) solid var(--border);
 }
 
 .msg-read-reminder__label {
@@ -565,7 +565,7 @@
   margin: calc(3px * var(--ui-scale)) 0;
   border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--border);
-  background: var(--subtle-2);
+  background: var(--surface-inset);
   font-size: var(--ui-font-small);
   max-width: 100%;
 }

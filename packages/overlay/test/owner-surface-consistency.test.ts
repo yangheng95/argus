@@ -6,6 +6,7 @@ const OVERLAY_ROOT = join(import.meta.dir, "..")
 const TITLEBAR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "titlebar.css"), "utf8")
 const SIDEBAR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "sidebar.css"), "utf8")
 const INSPECTOR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "inspector.css"), "utf8")
+const MESSAGES_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "messages.css"), "utf8")
 
 function bodyOf(source: string, selector: string): string {
   const css = source.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -34,4 +35,23 @@ test("sidebar search stays on the rail surface family", () => {
 
 test("inspector list rows keep a neutral inset base", () => {
   expect(bodyOf(INSPECTOR_CSS, ".goal-item, .knowledge-item, .pref-item, .criteria-check")).toMatch(/background:\s*var\(--surface-inset\)/)
+  expect(bodyOf(INSPECTOR_CSS, ".req-spec-content")).toMatch(/background:\s*var\(--surface-inset\)/)
+  expect(bodyOf(INSPECTOR_CSS, ".integrity__dimension")).toContain("color-mix(in srgb, var(--surface-inset) 84%, transparent)")
+  expect(bodyOf(INSPECTOR_CSS, ".integrity__issue, .integrity__correction, .integrity__missing")).toContain("color-mix(in srgb, var(--surface-inset) 84%, transparent)")
+  expect(bodyOf(INSPECTOR_CSS, ".gwg-objective")).toMatch(/border:\s*var\(--oc-border-width\) solid var\(--border\)/)
+  expect(bodyOf(INSPECTOR_CSS, ".gwg-done-definition")).toMatch(/border:\s*var\(--oc-border-width\) solid var\(--border\)/)
+  expect(bodyOf(INSPECTOR_CSS, ".arch-decision")).toMatch(/border:\s*var\(--oc-border-width\) solid var\(--border\)/)
+  expect(bodyOf(INSPECTOR_CSS, ".criteria-check:hover")).toMatch(/background:\s*var\(--hover-accent-wash\)/)
+  expect(bodyOf(INSPECTOR_CSS, ".goal-status-icon[data-status=\"pending\"]")).toMatch(/background:\s*var\(--surface-hover\)/)
+  expect(bodyOf(INSPECTOR_CSS, ".goal-priority[data-priority=\"advisory\"]")).toMatch(/background:\s*var\(--surface-hover\)/)
+})
+
+test("message content carriers keep a neutral surface base", () => {
+  expect(bodyOf(MESSAGES_CSS, ".msg-tool-output-details > summary:hover")).toMatch(/background:\s*var\(--surface-hover\)/)
+  expect(bodyOf(MESSAGES_CSS, ".msg-tool-diff-card")).toContain("color-mix(in srgb, var(--surface-inset) 82%, transparent)")
+  expect(bodyOf(MESSAGES_CSS, ".msg-todo-card")).toContain("color-mix(in srgb, var(--surface-inset) 88%, transparent)")
+  expect(bodyOf(MESSAGES_CSS, ".msg-todo-list")).toContain("color-mix(in srgb, var(--surface-inset) 84%, transparent)")
+  expect(bodyOf(MESSAGES_CSS, ".msg-read-meta")).toContain("color-mix(in srgb, var(--surface-inset) 84%, transparent)")
+  expect(bodyOf(MESSAGES_CSS, ".msg-read-reminder")).toContain("color-mix(in srgb, var(--surface-inset) 88%, transparent)")
+  expect(bodyOf(MESSAGES_CSS, ".msg-file-chip")).toMatch(/background:\s*var\(--surface-inset\)/)
 })
