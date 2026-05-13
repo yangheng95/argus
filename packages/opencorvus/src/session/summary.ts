@@ -81,7 +81,14 @@ export namespace SessionSummary {
   )
 
   async function summarizeSession(input: { sessionID: string; messages: Message.WithParts[] }) {
-    const diffs = await computeDiff({ messages: input.messages })
+    const diffs = await computeDiff({ messages: input.messages }).catch((err) => {
+      log.warn("computeDiff failed; refusing to persist session summary from invalid snapshot state", {
+        sessionID: input.sessionID,
+        error: err,
+      })
+      return undefined
+    })
+    if (!diffs) return
     await Session.setSummary({
       sessionID: input.sessionID,
       summary: {

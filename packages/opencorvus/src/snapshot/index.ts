@@ -7,10 +7,22 @@ import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
 import { Project } from "../project/project"
-import { git as runGit, type GitOptions } from "../util/git"
+import { git as runGit, type GitOptions, type GitResult } from "../util/git"
 import { Process } from "../util/process"
-import { FileDiff as _FileDiff, Patch as _Patch } from "./types"
-import type { FileDiff as _FileDiffType, Patch as _PatchType } from "./types"
+import {
+  EMPTY_TREE_HASH as _EMPTY_TREE_HASH,
+  EMPTY_TREE_WHOLE_WORKTREE_FILE_COUNT as _EMPTY_TREE_WHOLE_WORKTREE_FILE_COUNT,
+  FileDiff as _FileDiff,
+  formatPatchEvidence as _formatPatchEvidence,
+  Patch as _Patch,
+  patchEvidenceSummary as _patchEvidenceSummary,
+} from "./types"
+import type {
+  FileDiff as _FileDiffType,
+  Patch as _PatchType,
+  PatchEvidenceSummary as _PatchEvidenceSummaryType,
+} from "./types"
+import { NamedError } from "@opencorvus-ai/util/error"
 
 // Disk reclamation belongs to ProjectGC alone: every tree object emitted by
 // `track()` is dangling immediately (no ref, no reflog), so any local
@@ -23,6 +35,32 @@ import type { FileDiff as _FileDiffType, Patch as _PatchType } from "./types"
 
 export namespace Snapshot {
   const log = Log.create({ service: "snapshot" })
+  export const EMPTY_TREE_HASH = _EMPTY_TREE_HASH
+  export const EMPTY_TREE_WHOLE_WORKTREE_FILE_COUNT = _EMPTY_TREE_WHOLE_WORKTREE_FILE_COUNT
+  export const SnapshotIntegrityError = NamedError.create(
+    "SnapshotIntegrityError",
+    z.object({
+      message: z.string(),
+      operation: z.string(),
+      cwd: z.string(),
+      worktree: z.string(),
+      gitDir: z.string(),
+      exitCode: z.number().optional(),
+      stderr: z.string().optional(),
+      stdout: z.string().optional(),
+    }),
+  )
+  export const SnapshotEmptyTreeError = NamedError.create(
+    "SnapshotEmptyTreeError",
+    z.object({
+      message: z.string(),
+      operation: z.string(),
+      cwd: z.string(),
+      worktree: z.string(),
+      gitDir: z.string(),
+      fileCount: z.number().optional(),
+    }),
+  )
   const coreAutocrlf =
     process.env.OPENCORVUS_SNAPSHOT_CORE_AUTOCRLF || (process.platform === "win32" ? "input" : "false")
   const coreSymlinks =
@@ -34,15 +72,42 @@ export namespace Snapshot {
     if (cfg.snapshot === false) return
     const git = gitdir()
     if (await fs.mkdir(git, { recursive: true })) {
-      await runGit(["init"], {
-        cwd: Instance.directory,
-        env: { GIT_DIR: git, GIT_WORK_TREE: Instance.worktree },
-        timeoutProfile: "default",
-      })
-      await runGit(["--git-dir", git, "config", "core.autocrlf", coreAutocrlf], { cwd: Instance.directory, timeoutProfile: "fast" })
-      await runGit(["--git-dir", git, "config", "core.longpaths", "true"], { cwd: Instance.directory, timeoutProfile: "fast" })
-      await runGit(["--git-dir", git, "config", "core.symlinks", coreSymlinks], { cwd: Instance.directory, timeoutProfile: "fast" })
-      await runGit(["--git-dir", git, "config", "core.fsmonitor", "false"], { cwd: Instance.directory, timeoutProfile: "fast" })
+      await gitText(
+        runGit(["init"], {
+          cwd: Instance.directory,
+          env: { GIT_DIR: git, GIT_WORK_TREE: Instance.worktree },
+          timeoutProfile: "default",
+        }),
+        "snapshot init",
+      )
+      await gitText(
+        runGit(["--git-dir", git, "config", "core.autocrlf", coreAutocrlf], {
+          cwd: Instance.directory,
+          timeoutProfile: "fast",
+        }),
+        "snapshot config core.autocrlf",
+      )
+      await gitText(
+        runGit(["--git-dir", git, "config", "core.longpaths", "true"], {
+          cwd: Instance.directory,
+          timeoutProfile: "fast",
+        }),
+        "snapshot config core.longpaths",
+      )
+      await gitText(
+        runGit(["--git-dir", git, "config", "core.symlinks", coreSymlinks], {
+          cwd: Instance.directory,
+          timeoutProfile: "fast",
+        }),
+        "snapshot config core.symlinks",
+      )
+      await gitText(
+        runGit(["--git-dir", git, "config", "core.fsmonitor", "false"], {
+          cwd: Instance.directory,
+          timeoutProfile: "fast",
+        }),
+        "snapshot config core.fsmonitor",
+      )
       log.info("initialized")
     }
     // Use per-call temporary index to prevent race conditions when multiple
@@ -52,17 +117,30 @@ export namespace Snapshot {
     const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
     try {
       await add(git, indexFile)
-      const result = await runGit(
-        ["--git-dir", git, "--work-tree", Instance.worktree, "write-tree"],
-        {
+      const hash = (
+        await gitText(
+          runGit(
+            ["--git-dir", git, "--work-tree", Instance.worktree, "write-tree"],
+            {
+              cwd: Instance.directory,
+              env: { GIT_INDEX_FILE: indexFile },
+              timeoutProfile: "default",
+            },
+          ),
+          "snapshot write-tree",
+        )
+      ).trim()
+      if (hash === EMPTY_TREE_HASH && (await hasTrackableContent(git, indexFile))) {
+        throw new SnapshotEmptyTreeError({
+          message: "Snapshot track produced the Git empty tree for a non-empty worktree.",
+          operation: "snapshot track",
           cwd: Instance.directory,
-          env: { GIT_INDEX_FILE: indexFile },
-          timeoutProfile: "default",
-        },
-      )
-      const hash = result.text()
+          worktree: Instance.worktree,
+          gitDir: git,
+        })
+      }
       log.info("tracking", { hash, cwd: Instance.directory, git })
-      return hash.trim()
+      return hash
     } finally {
       await fs.unlink(indexFile).catch(() => {})
     }
@@ -74,36 +152,47 @@ export namespace Snapshot {
   // `Snapshot.Patch` namespace form keep working unchanged.
   export const Patch = _Patch
   export type Patch = _PatchType
+  export const patchEvidenceSummary = _patchEvidenceSummary
+  export type PatchEvidenceSummary = _PatchEvidenceSummaryType
+  export const formatPatchEvidence = _formatPatchEvidence
+
+  export function assertPatchEvidenceIntegrity(patch: Patch) {
+    if (patch.hash !== EMPTY_TREE_HASH) return
+    if (patch.files.length < EMPTY_TREE_WHOLE_WORKTREE_FILE_COUNT) return
+    throw new SnapshotEmptyTreeError({
+      message: "Refusing to persist empty-tree patch evidence that appears to cover the whole worktree.",
+      operation: "snapshot patch",
+      cwd: Instance.directory,
+      worktree: Instance.worktree,
+      gitDir: gitdir(),
+      fileCount: patch.files.length,
+    })
+  }
 
   export async function patch(hash: string): Promise<Patch> {
     const git = gitdir()
     const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
     try {
       await add(git, indexFile)
-      const result = await runGit(
-        [
-          "-c", `core.autocrlf=${coreAutocrlf}`,
-          "-c", "core.longpaths=true",
-          "-c", `core.symlinks=${coreSymlinks}`,
-          "-c", "core.quotepath=false",
-          "--git-dir", git,
-          "--work-tree", Instance.worktree,
-          "diff", "--no-ext-diff", "--name-only", hash, "--", ".",
-        ],
-        {
-          cwd: Instance.directory,
-          env: { GIT_INDEX_FILE: indexFile },
-          timeoutProfile: "default",
-        },
+      const files = await gitText(
+        runGit(
+          [
+            "-c", `core.autocrlf=${coreAutocrlf}`,
+            "-c", "core.longpaths=true",
+            "-c", `core.symlinks=${coreSymlinks}`,
+            "-c", "core.quotepath=false",
+            "--git-dir", git,
+            "--work-tree", Instance.worktree,
+            "diff", "--no-ext-diff", "--name-only", hash, "--", ".",
+          ],
+          {
+            cwd: Instance.directory,
+            env: { GIT_INDEX_FILE: indexFile },
+            timeoutProfile: "default",
+          },
+        ),
+        "snapshot patch diff",
       )
-
-      // If git diff fails, return empty patch
-      if (result.exitCode !== 0) {
-        log.warn("failed to get diff", { hash, exitCode: result.exitCode })
-        return { hash, files: [] }
-      }
-
-      const files = result.text()
       return {
         hash,
         files: files
@@ -166,34 +255,27 @@ export namespace Snapshot {
     const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
     try {
       await add(git, indexFile)
-      const result = await runGit(
-        [
-          "-c", `core.autocrlf=${coreAutocrlf}`,
-          "-c", "core.longpaths=true",
-          "-c", `core.symlinks=${coreSymlinks}`,
-          "-c", "core.quotepath=false",
-          "--git-dir", git,
-          "--work-tree", Instance.worktree,
-          "diff", "--no-ext-diff", hash, "--", ".",
-        ],
-        {
-          cwd: Instance.worktree,
-          env: { GIT_INDEX_FILE: indexFile },
-          timeoutProfile: "default",
-        },
-      )
-
-      if (result.exitCode !== 0) {
-        log.warn("failed to get diff", {
-          hash,
-          exitCode: result.exitCode,
-          stderr: result.stderr.toString(),
-          stdout: result.stdout.toString(),
-        })
-        return ""
-      }
-
-      return result.text().trim()
+      return (
+        await gitText(
+          runGit(
+            [
+              "-c", `core.autocrlf=${coreAutocrlf}`,
+              "-c", "core.longpaths=true",
+              "-c", `core.symlinks=${coreSymlinks}`,
+              "-c", "core.quotepath=false",
+              "--git-dir", git,
+              "--work-tree", Instance.worktree,
+              "diff", "--no-ext-diff", hash, "--", ".",
+            ],
+            {
+              cwd: Instance.worktree,
+              env: { GIT_INDEX_FILE: indexFile },
+              timeoutProfile: "default",
+            },
+          ),
+          "snapshot diff",
+        )
+      ).trim()
     } finally {
       await fs.unlink(indexFile).catch(() => {})
     }
@@ -293,15 +375,43 @@ export namespace Snapshot {
     return path.join(Global.Path.data, "snapshot", project.id)
   }
 
-  async function gitText(
-    command: Promise<{ exitCode: number; text(): string; stderr: Buffer | Uint8Array }>,
-    label: string,
-  ) {
+  async function gitText(command: Promise<GitResult>, label: string) {
     const result = await command
     if (result.exitCode !== 0) {
-      throw new Error(`${label} failed: ${new TextDecoder().decode(result.stderr).trim()}`)
+      const stderr = result.stderr.toString().trim()
+      const stdout = result.stdout.toString().trim()
+      throw new SnapshotIntegrityError({
+        message: `${label} failed${stderr ? `: ${stderr}` : ""}`,
+        operation: label,
+        cwd: Instance.directory,
+        worktree: Instance.worktree,
+        gitDir: gitdir(),
+        exitCode: result.exitCode,
+        stderr: stderr.slice(0, 4_000) || undefined,
+        stdout: stdout.slice(0, 4_000) || undefined,
+      })
     }
     return result.text()
+  }
+
+  async function hasTrackableContent(git: string, indexFile: string) {
+    const text = await gitText(
+      runGit(
+        [
+          "-c", "core.quotepath=false",
+          "--git-dir", git,
+          "--work-tree", Instance.worktree,
+          "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ".",
+        ],
+        {
+          cwd: Instance.directory,
+          env: { GIT_INDEX_FILE: indexFile },
+          timeoutProfile: "default",
+        },
+      ),
+      "snapshot list trackable content",
+    )
+    return text.split("\0").some((entry) => entry.trim().length > 0)
   }
 
   function toWorktreeRelative(file: string) {
@@ -455,16 +565,19 @@ export namespace Snapshot {
       timeoutProfile: "default",
     }
     if (indexFile) opts.env = { GIT_INDEX_FILE: indexFile }
-    await runGit(
-      [
-        "-c", `core.autocrlf=${coreAutocrlf}`,
-        "-c", "core.longpaths=true",
-        "-c", `core.symlinks=${coreSymlinks}`,
-        "--git-dir", git,
-        "--work-tree", Instance.worktree,
-        "add", ".",
-      ],
-      opts,
+    await gitText(
+      runGit(
+        [
+          "-c", `core.autocrlf=${coreAutocrlf}`,
+          "-c", "core.longpaths=true",
+          "-c", `core.symlinks=${coreSymlinks}`,
+          "--git-dir", git,
+          "--work-tree", Instance.worktree,
+          "add", ".",
+        ],
+        opts,
+      ),
+      "snapshot add",
     )
   }
 

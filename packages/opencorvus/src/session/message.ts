@@ -477,6 +477,8 @@ export namespace Message {
         StructuredOutputError.Schema,
         StructuredOutputPayloadError.Schema,
         TerminalToolMissingError.Schema,
+        Snapshot.SnapshotIntegrityError.Schema,
+        Snapshot.SnapshotEmptyTreeError.Schema,
         ContextOverflowError.Schema,
         APIError.Schema,
       ])
@@ -932,7 +934,7 @@ export namespace Message {
           if (part.type === "patch") {
             assistantMessage.parts.push({
               type: "text",
-              text: `[Patch evidence: ${part.hash}: ${part.files.join(", ") || "(no files)"}]`,
+              text: `[${Snapshot.formatPatchEvidence(part)}]`,
             })
           }
         }
@@ -1125,6 +1127,10 @@ export namespace Message {
       case Message.OutputLengthError.isInstance(e):
         return e
       case Message.StructuredOutputPayloadError.isInstance(e):
+        return e.toObject()
+      case Snapshot.SnapshotEmptyTreeError.isInstance(e):
+        return e.toObject()
+      case Snapshot.SnapshotIntegrityError.isInstance(e):
         return e.toObject()
       case LoadAPIKeyError.isInstance(e):
         return new Message.AuthError(

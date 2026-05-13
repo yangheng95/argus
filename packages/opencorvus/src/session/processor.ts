@@ -388,6 +388,7 @@ export namespace SessionProcessor {
                   await Session.updateMessage(input.assistantMessage)
                   if (snapshot) {
                     const patch = await Snapshot.patch(snapshot)
+                    Snapshot.assertPatchEvidenceIntegrity(patch)
                     if (patch.files.length) {
                       await Session.updatePart({
                         id: Identifier.ascending("part"),
@@ -525,15 +526,24 @@ export namespace SessionProcessor {
             }
           }
           if (snapshot) {
-            const patch = await Snapshot.patch(snapshot)
-            if (patch.files.length) {
-              await Session.updatePart({
-                id: Identifier.ascending("part"),
-                messageID: input.assistantMessage.id,
-                sessionID: input.sessionID,
-                type: "patch",
-                hash: patch.hash,
-                files: patch.files,
+            try {
+              const patch = await Snapshot.patch(snapshot)
+              Snapshot.assertPatchEvidenceIntegrity(patch)
+              if (patch.files.length) {
+                await Session.updatePart({
+                  id: Identifier.ascending("part"),
+                  messageID: input.assistantMessage.id,
+                  sessionID: input.sessionID,
+                  type: "patch",
+                  hash: patch.hash,
+                  files: patch.files,
+                })
+              }
+            } catch (e) {
+              input.assistantMessage.error = Message.fromError(e, { providerID: input.model.providerID })
+              Bus.publish(Session.Event.Error, {
+                sessionID: input.assistantMessage.sessionID,
+                error: input.assistantMessage.error,
               })
             }
             snapshot = undefined

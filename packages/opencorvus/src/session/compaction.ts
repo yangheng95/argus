@@ -20,6 +20,8 @@ import { CompactionHandoff } from "./compaction-handoff"
 import { InstructionPrompt } from "./instruction"
 import { TaskPlan } from "@/memory/task-plan"
 import { Scratchpad } from "@/memory/scratchpad"
+import { Snapshot } from "@/snapshot"
+import type { ModelMessage } from "ai"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -116,7 +118,7 @@ export namespace SessionCompaction {
     for (const msg of messages) {
       for (const part of msg.parts) {
         if (part.type !== "patch") continue
-        lines.push(`- ${part.hash}: ${part.files.join(", ") || "(no files)"}`)
+        lines.push(`- ${Snapshot.formatPatchEvidence(part)}`)
       }
     }
     return lines.length ? ["<patch-evidence>", ...lines, "</patch-evidence>"].join("\n") : undefined
@@ -169,6 +171,20 @@ export namespace SessionCompaction {
       input.runtime,
       ...input.context,
     ].join("\n\n")
+  }
+
+  export function requestBudget(input: {
+    messages: ModelMessage[]
+    config: Config.Info
+    model: Provider.Model
+  }) {
+    const estimatedTokens = Token.estimate(JSON.stringify(input.messages))
+    const usableBudget = ContextBudget.usable({ config: input.config, model: input.model })
+    return {
+      estimatedTokens,
+      usableBudget,
+      exceeds: input.model.limit.context > 0 && estimatedTokens > usableBudget,
+    }
   }
 
   function turns(messages: Message.WithParts[]) {
@@ -383,6 +399,27 @@ export namespace SessionCompaction {
       focus: compactionPart?.focus,
     })
     const promptText = buildPrompt({ previousSummary: prior.at(-1)?.summary, context: compacting.context, runtime })
+    const providerMessages: ModelMessage[] = [
+      ...(await Message.toModelMessages(selected.head, model, COMPACTION_PROJECTION)),
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: promptText,
+          },
+        ],
+      },
+    ]
+    const budget = requestBudget({ messages: providerMessages, config, model })
+    if (budget.exceeds) {
+      processor.message.error = new Message.ContextOverflowError({
+        message: `Compaction request exceeds model context budget before provider call: estimated ${budget.estimatedTokens} tokens, usable budget ${budget.usableBudget}.`,
+      }).toObject()
+      processor.message.finish = "error"
+      await Session.updateMessage(processor.message)
+      return "stop"
+    }
     const result = await processor.process({
       user: userMessage,
       agent,
@@ -390,18 +427,7 @@ export namespace SessionCompaction {
       sessionID: input.sessionID,
       tools: {},
       system: [],
-      messages: [
-        ...(await Message.toModelMessages(selected.head, model, COMPACTION_PROJECTION)),
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: promptText,
-            },
-          ],
-        },
-      ],
+      messages: providerMessages,
       model,
     })
 

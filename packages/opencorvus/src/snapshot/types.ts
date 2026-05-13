@@ -39,3 +39,55 @@ export const Patch = z.object({
   files: z.string().array(),
 })
 export type Patch = z.infer<typeof Patch>
+
+export const EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+export const PATCH_EVIDENCE_PREVIEW_HEAD = 20
+export const PATCH_EVIDENCE_PREVIEW_TAIL = 20
+export const EMPTY_TREE_WHOLE_WORKTREE_FILE_COUNT = 1_000
+
+export type PatchEvidenceSummary = {
+  hash: string
+  fileCount: number
+  filesPreviewHead: string[]
+  filesPreviewTail: string[]
+  truncated: boolean
+  omittedCount: number
+}
+
+export function patchEvidenceSummary(patch: Pick<Patch, "hash" | "files">): PatchEvidenceSummary {
+  const fileCount = patch.files.length
+  const maxFiles = PATCH_EVIDENCE_PREVIEW_HEAD + PATCH_EVIDENCE_PREVIEW_TAIL
+  if (fileCount <= maxFiles) {
+    return {
+      hash: patch.hash,
+      fileCount,
+      filesPreviewHead: patch.files,
+      filesPreviewTail: [],
+      truncated: false,
+      omittedCount: 0,
+    }
+  }
+
+  return {
+    hash: patch.hash,
+    fileCount,
+    filesPreviewHead: patch.files.slice(0, PATCH_EVIDENCE_PREVIEW_HEAD),
+    filesPreviewTail: patch.files.slice(-PATCH_EVIDENCE_PREVIEW_TAIL),
+    truncated: true,
+    omittedCount: fileCount - maxFiles,
+  }
+}
+
+export function formatPatchEvidence(patch: Pick<Patch, "hash" | "files">) {
+  const summary = patchEvidenceSummary(patch)
+  const files = [
+    ...summary.filesPreviewHead,
+    ...(summary.truncated ? [`... (${summary.omittedCount} files omitted)`] : []),
+    ...summary.filesPreviewTail,
+  ]
+  const fileText = files.length ? files.join(", ") : "(no files)"
+  const prefix = summary.truncated
+    ? `Patch evidence truncated: ${summary.fileCount} files total, ${summary.omittedCount} omitted`
+    : `Patch evidence: ${summary.fileCount} files`
+  return `${prefix}; hash=${summary.hash}; files=${fileText}`
+}

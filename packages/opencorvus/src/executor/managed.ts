@@ -133,7 +133,7 @@ export const ManagedCodingExecutor = {
       },
       async submit(input) {
         const id = Identifier.ascending("task")
-        const startHash = await Snapshot.track().catch(() => undefined)
+        const startHash = await Snapshot.track()
         const state: State = {
           id,
           sessionID: input.sessionID,
@@ -198,10 +198,8 @@ export const ManagedCodingExecutor = {
       async delivery(input) {
         const state = pick(tasks, latest, { sessionID: input.sessionID })
         if (!state) return { summary: "", diffs: [] }
-        const currentHash = await Snapshot.track().catch(() => undefined)
-        const diffs = state.startHash && currentHash
-          ? await Snapshot.diffFull(state.startHash, currentHash).catch(() => [])
-          : []
+        const currentHash = await Snapshot.track()
+        const diffs = state.startHash && currentHash ? await Snapshot.diffFull(state.startHash, currentHash) : []
         return {
           summary: state.output,
           diffs,
