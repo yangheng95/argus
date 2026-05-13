@@ -95,6 +95,120 @@ describe("CompactionHandoff", () => {
     expect(first).toContain("packages/opencorvus/src/session/compaction-handoff.ts")
   })
 
+  test("rejects schema-valid handoff that omits required input evidence", () => {
+    const handoff = {
+      ...handoffFixture(),
+      userMessages: [],
+      files: [],
+      evidence: [],
+    }
+
+    const result = CompactionHandoff.validateMinimumEvidence(handoff, {
+      sourceUserMessageID: "m-user",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: ["packages/opencorvus/src/session/compaction-handoff.ts"],
+      errorNames: [],
+      userMessages: true,
+      fileEvidence: true,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain("userMessages")
+      expect(result.error).toContain("files")
+    }
+  })
+
+  test("accepts explicit empty arrays only when input facts prove those fields absent", () => {
+    const handoff = {
+      ...handoffFixture(),
+      files: [],
+      testsAndCommands: [],
+      errorsAndBlockers: [],
+      openRisks: [],
+    }
+
+    const result = CompactionHandoff.validateMinimumEvidence(handoff, {
+      sourceUserMessageID: "m-user",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: [],
+      errorNames: [],
+      userMessages: true,
+      fileEvidence: false,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  test("rejects non-empty handoff evidence that does not match runtime facts", () => {
+    const handoff = {
+      ...handoffFixture(),
+      currentState: {
+        ...handoffFixture().currentState,
+        sourceUserMessage: {
+          ...handoffFixture().currentState.sourceUserMessage,
+          id: "forged-user",
+        },
+      },
+      durableInstructionSources: [{ path: "/repo/OTHER.md", role: "wrong source" }],
+      files: [{ path: "forged.ts", status: "modified", detail: "not present in patch evidence" }],
+    } satisfies CompactionHandoff.Info
+
+    const result = CompactionHandoff.validateMinimumEvidence(handoff, {
+      sourceUserMessageID: "m-user",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: ["packages/opencorvus/src/session/compaction-handoff.ts"],
+      errorNames: [],
+      userMessages: true,
+      fileEvidence: true,
+      errorsAndBlockers: false,
+      acceptanceCriteria: true,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain("currentState.sourceUserMessage.id")
+      expect(result.error).toContain("durableInstructionSources")
+      expect(result.error).toContain("files")
+    }
+  })
+
+  test("requires every runtime patch file and error name to be reported exactly", () => {
+    const handoff = {
+      ...handoffFixture(),
+      files: [{ path: "a.ts", status: "modified", detail: "first runtime patch file" }],
+      evidence: [
+        {
+          kind: "error",
+          value: "NotAPIErrorFake",
+          detail: "substring spoof must not satisfy exact error-name evidence",
+        },
+      ],
+      errorsAndBlockers: [],
+    } satisfies CompactionHandoff.Info
+
+    const result = CompactionHandoff.validateMinimumEvidence(handoff, {
+      sourceUserMessageID: "m-user",
+      instructionPaths: ["/repo/AGENTS.md"],
+      patchFiles: ["a.ts", "b.ts"],
+      errorNames: ["APIError", "ToolSchemaBudgetError"],
+      userMessages: true,
+      fileEvidence: true,
+      errorsAndBlockers: true,
+      acceptanceCriteria: true,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain("files")
+      expect(result.error).toContain("errorsAndBlockers")
+    }
+  })
+
   test("host prompt always includes the structured handoff schema", () => {
     const prompt = SessionCompaction.buildPrompt({
       previousSummary: undefined,

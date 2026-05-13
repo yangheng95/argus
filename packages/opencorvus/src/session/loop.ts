@@ -8,6 +8,7 @@ import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
 import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema, type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
+import { ContextBudget } from "./context-budget"
 import { Instance } from "../project/instance"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { materializeMcpToolResult } from "@/mcp/materialize"
@@ -37,6 +38,7 @@ import { TaskPlan } from "@/memory/task-plan"
 import { SessionSummary } from "./summary"
 import { SessionPromptState } from "./prompt/state"
 import { muteAISdkWarnings } from "@/runtime/shims"
+import { Config } from "@/config/config"
 
 muteAISdkWarnings()
 
@@ -420,11 +422,6 @@ export namespace SessionLoop {
   /**
    * Predictive-compaction decision constants (Phase C).
    *
-   * `PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT` — fraction of the model's
-   * usable input budget at which we attempt compaction proactively. Late
-   * enough that the prompt-cache prefix stays stable for most of a session.
-   * Override via env `OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD`.
-   *
    * `TOOL_SCHEMA_BUDGET_RATIO_DEFAULT` — fraction of usable budget that
    * tool schemas alone must NOT exceed. Compaction never touches tool
    * definitions, so this is a structural guard: when an agent's tool
@@ -436,13 +433,12 @@ export namespace SessionLoop {
    * summary in the message body. We use ~6 KB as a conservative residue
    * estimate (≈ 1.5 K tokens) for the post-compaction sizing check.
    */
-  const PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT = 0.9
   const TOOL_SCHEMA_BUDGET_RATIO_DEFAULT = 0.5
   const COMPACTION_MIN_RESIDUE_CHARS = 6_000
 
-  function readEnvRatio(name: string, defaultValue: number): number {
-    const raw = Number(Env.get(name) ?? "")
-    return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : defaultValue
+  function toolSchemaBudgetRatio(): number {
+    const raw = Number(Env.get("OPENCORVUS_TOOL_SCHEMA_BUDGET_RATIO") ?? "")
+    return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : TOOL_SCHEMA_BUDGET_RATIO_DEFAULT
   }
 
   export type PredictiveCompactionDecision =
@@ -512,6 +508,34 @@ export namespace SessionLoop {
     }
 
     return { kind: "compact" }
+  }
+
+  async function stopTurnWithPredictiveBudgetError(input: {
+    processor: SessionProcessor.Info
+    sessionID: string
+    error: Message.Assistant["error"]
+  }) {
+    const message = typeof input.error?.data?.message === "string" ? input.error.data.message : input.error?.name
+    input.processor.message.error = input.error
+    input.processor.message.finish = "error"
+    input.processor.message.time.completed = Date.now()
+    await Session.updatePart({
+      id: Identifier.ascending("part"),
+      sessionID: input.sessionID,
+      messageID: input.processor.message.id,
+      type: "text",
+      text: `Predictive compaction budget error: ${input.error?.name}${message ? `: ${message}` : ""}`,
+      time: {
+        start: Date.now(),
+        end: Date.now(),
+      },
+    } satisfies Message.TextPart)
+    await Session.updateMessage(input.processor.message)
+    Bus.publish(Session.Event.Error, {
+      sessionID: input.sessionID,
+      error: input.error,
+    })
+    return "stop" as const
   }
 
   /**
@@ -1280,43 +1304,28 @@ export namespace SessionLoop {
     // next iteration and the post-compaction continuation re-enters with a
     // shrunk history.
     //
-    // Threshold defaults to 0.90 of the model's reported input budget — late
-    // enough that the prompt-cache prefix stays stable for most of a session
-    // (compacting earlier rewrites the prefix and forces cache_write at 12.5×
-    // the cache_read rate, which dominates any token-count savings). Claude
-    // Code uses 0.95; we leave a touch more headroom for tool-call burst.
-    // Override via env for benchmarks. `lastFinished.summary === true` means
-    // the previous turn was already a compaction summary — skip the predictive
-    // trigger so we don't loop forever compacting an already-compact session.
-    // If neither model.limit.input nor model.limit.context is reported, skip
-    // predictive compaction entirely — reactive post-turn compaction still
-    // runs, and guessing a budget only hides an incomplete model catalog.
-    const usableBudget = input.model.limit.input || input.model.limit.context
-    if (!usableBudget) {
+    // Predictive and reactive compaction share ContextBudget so config flags
+    // (`auto`, `reserved`, `threshold`) cannot diverge between the preflight
+    // and post-turn gates.
+    const config = await Config.get()
+    const predictiveBudget = ContextBudget.predictiveLimit({ config, model: input.model })
+    if (!predictiveBudget) {
       log.warn("predictive-compaction-skipped-no-budget", {
         step: input.step,
         providerID: input.model.providerID,
         modelID: input.model.id,
       })
     } else {
-      const threshold = readEnvRatio(
-        "OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD",
-        PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT,
-      )
-      const toolSchemaBudgetRatio = readEnvRatio(
-        "OPENCORVUS_TOOL_SCHEMA_BUDGET_RATIO",
-        TOOL_SCHEMA_BUDGET_RATIO_DEFAULT,
-      )
-      const limit = Math.floor(usableBudget * threshold)
+      const ratio = toolSchemaBudgetRatio()
       const decision = predictiveCompactionDecision({
         totalTokensEst,
-        limit,
-        usableBudget,
+        limit: predictiveBudget.limit,
+        usableBudget: predictiveBudget.usableBudget,
         systemChars,
         toolSchemaChars,
         messagePayloadChars,
         mediaTokensEst,
-        toolSchemaBudgetRatio,
+        toolSchemaBudgetRatio: ratio,
         lastFinishedSummary: input.lastFinished?.summary === true,
       })
       const toolNames = Object.keys(tools).join(",")
@@ -1324,21 +1333,25 @@ export namespace SessionLoop {
         log.error("predictive-compaction-fail-tool-schema", {
           step: input.step,
           toolSchemaChars,
-          usableBudget,
-          ratio: toolSchemaBudgetRatio,
+          usableBudget: predictiveBudget.usableBudget,
+          ratio,
           toolNames,
         })
-        throw new Message.ToolSchemaBudgetError({
-          message:
-            `Tool schema payload (${toolSchemaChars} chars) exceeds ` +
-            `${Math.round(toolSchemaBudgetRatio * 100)}% of model input ` +
-            `budget (${usableBudget}). Compaction does not shrink tool ` +
-            `definitions; reduce the agent's tool surface or pick a model ` +
-            `with a larger context window.`,
-          toolSchemaChars,
-          usableBudget,
-          ratio: toolSchemaBudgetRatio,
-          toolNames,
+        return stopTurnWithPredictiveBudgetError({
+          processor,
+          sessionID: input.sessionID,
+          error: new Message.ToolSchemaBudgetError({
+            message:
+              `Tool schema payload (${toolSchemaChars} chars) exceeds ` +
+              `${Math.round(ratio * 100)}% of model input ` +
+              `budget (${predictiveBudget.usableBudget}). Compaction does not shrink tool ` +
+              `definitions; reduce the agent's tool surface or pick a model ` +
+              `with a larger context window.`,
+            toolSchemaChars,
+            usableBudget: predictiveBudget.usableBudget,
+            ratio,
+            toolNames,
+          }).toObject(),
         })
       }
       if (decision.kind === "fail-prompt-budget") {
@@ -1348,8 +1361,8 @@ export namespace SessionLoop {
           step: input.step,
           reason: decision.reason,
           totalTokensEst,
-          limit,
-          usableBudget,
+          limit: predictiveBudget.limit,
+          usableBudget: predictiveBudget.usableBudget,
           systemTokensEst,
           toolSchemaChars,
           messagePayloadChars,
@@ -1357,21 +1370,25 @@ export namespace SessionLoop {
           nonCompressiblePromptChars,
           toolNames,
         })
-        throw new Message.PromptBudgetOverflowError({
-          message:
-            `Predictive compaction cannot recover this turn ` +
-            `(reason=${decision.reason}). totalTokensEst=${totalTokensEst} ` +
-            `> limit=${limit}; system+tool schemas alone ` +
-            `=${nonCompressiblePromptChars} chars. Either drop tools or ` +
-            `pick a larger-context model.`,
-          systemTokensEst,
-          messagePayloadChars,
-          toolSchemaChars,
-          compressibleMessageChars: messagePayloadChars,
-          nonCompressiblePromptChars,
-          usableBudget,
-          limit,
-          toolNames,
+        return stopTurnWithPredictiveBudgetError({
+          processor,
+          sessionID: input.sessionID,
+          error: new Message.PromptBudgetOverflowError({
+            message:
+              `Predictive compaction cannot recover this turn ` +
+              `(reason=${decision.reason}). totalTokensEst=${totalTokensEst} ` +
+              `> limit=${predictiveBudget.limit}; system+tool schemas alone ` +
+              `=${nonCompressiblePromptChars} chars. Either drop tools or ` +
+              `pick a larger-context model.`,
+            systemTokensEst,
+            messagePayloadChars,
+            toolSchemaChars,
+            compressibleMessageChars: messagePayloadChars,
+            nonCompressiblePromptChars,
+            usableBudget: predictiveBudget.usableBudget,
+            limit: predictiveBudget.limit,
+            toolNames,
+          }).toObject(),
         })
       }
       if (decision.kind === "compact") {
@@ -1379,9 +1396,9 @@ export namespace SessionLoop {
         log.warn("predictive-compaction-triggered", {
           step: input.step,
           totalTokensEst,
-          limit,
-          threshold,
-          usableBudget,
+          limit: predictiveBudget.limit,
+          threshold: predictiveBudget.threshold,
+          usableBudget: predictiveBudget.usableBudget,
           messagePayloadChars,
           topPayloadParts,
         })
