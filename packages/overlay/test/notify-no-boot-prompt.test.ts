@@ -115,6 +115,16 @@ describe("notify: startup permission request and in-app fallback", () => {
     expect(notificationStore.items.some((item) => item.id === "task:tsk_test_001:completed")).toBe(true);
   });
 
+  test("notifyTaskLifecycle sends an OS notification when permission is granted", async () => {
+    fixture.setPermission("granted");
+    notifyTaskLifecycle("tsk_test_send_001", "task.completed");
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fixture.log.permissionRequests).toBe(0);
+    expect(fixture.log.sends).toBe(1);
+  });
+
   test("initApp never wires a startup permission request", () => {
     const source = readFileSync(join(import.meta.dir, "../src/services/init.ts"), "utf8");
     expect(source).not.toContain("ensureDesktopNotificationPermission");
