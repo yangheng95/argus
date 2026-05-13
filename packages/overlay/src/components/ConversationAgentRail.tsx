@@ -178,11 +178,12 @@ export function ConversationAgentRail() {
   const [height, setHeight] = createSignal(NARROW_HEIGHT)
   const [selectedReport, setSelectedReport] = createSignal<AgentWorkflowRecord | null>(null)
   const wide = createMemo(() => height() >= WIDE_THRESHOLD)
+  const shouldFetchTrace = createMemo(() => wide())
 
   const [trace] = createResource(
-    () => ({ taskID: taskID(), tick: refreshTick() }),
-    async ({ taskID }) => {
-      if (!taskID) return { ok: true as const, events: [], traceDir: "", enabled: true }
+    () => ({ taskID: taskID(), tick: refreshTick(), shouldFetchTrace: shouldFetchTrace() }),
+    async ({ taskID, shouldFetchTrace }) => {
+      if (!taskID || !shouldFetchTrace) return { ok: true as const, events: [], traceDir: "", enabled: true }
       return fetchTaskTrace(taskID, { force: refreshTick() > 0 })
     },
   )
@@ -204,7 +205,7 @@ export function ConversationAgentRail() {
   let timer: ReturnType<typeof setInterval> | undefined
   timer = setInterval(() => {
     const id = taskID()
-    if (!id || (typeof document !== "undefined" && document.hidden)) return
+    if (!id || !shouldFetchTrace() || trace.loading || (typeof document !== "undefined" && document.hidden)) return
     invalidateTraceCache({ taskID: id })
     setRefreshTick((tick) => tick + 1)
   }, 4_000)

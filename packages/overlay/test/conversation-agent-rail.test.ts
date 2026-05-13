@@ -48,6 +48,13 @@ test("ConversationAgentRail hides the bottom strip when there are no workflow la
   expect(css).toContain("display: none;")
 })
 
+test("ConversationAgentRail only polls task trace for the wide report surface", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
+  expect(source).toContain("const shouldFetchTrace = createMemo(() => wide())")
+  expect(source).toContain("if (!taskID || !shouldFetchTrace) return { ok: true as const, events: [], traceDir: \"\", enabled: true }")
+  expect(source).toContain("if (!id || !shouldFetchTrace() || trace.loading")
+})
+
 test("AgentReportDialog renders markdown report content through the central renderer", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/AgentReportDialog.tsx"), "utf8")
   expect(source).toContain("renderMarkdown")
