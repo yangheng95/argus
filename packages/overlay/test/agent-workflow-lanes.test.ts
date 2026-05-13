@@ -1,23 +1,14 @@
 import { expect, test } from "bun:test"
-import {
-  buildAgentWorkflowLanes,
-  compactAgentWorkflowLanesForNarrowRail,
-} from "../src/utils/agent-workflow-lanes"
+import { buildAgentWorkflowLanes } from "../src/utils/agent-workflow-lanes"
 import type { AgentWorkflowRecord } from "../src/utils/agent-workflow"
 
-function record(
-  id: string,
-  parentSessionID: string,
-  startedAt: number,
-  lastObservedAt: number,
-  agentName = "build",
-): AgentWorkflowRecord {
+function record(id: string, parentSessionID: string, startedAt: number, lastObservedAt: number): AgentWorkflowRecord {
   return {
     id,
     sessionID: id,
     parentSessionID,
-    agentName,
-    stage: agentName,
+    agentName: "build",
+    stage: "build",
     status: "running",
     startedAt,
     lastObservedAt,
@@ -50,24 +41,4 @@ test("zero-duration observations do not create a false parallel lane", () => {
   const lanes = buildAgentWorkflowLanes([record("a", "root", 100, 100), record("b", "root", 100, 100)])
 
   expect(lanes.map((lane) => lane.kind)).toEqual(["single", "single"])
-})
-
-test("narrow rail compacts sequential same-role singles without merging parallel lanes", () => {
-  const lanes = buildAgentWorkflowLanes([
-    record("build-a", "root-a", 100, 150),
-    record("build-b", "root-b", 200, 250),
-    record("spec-a", "root", 300, 500, "spec"),
-    record("requirements-a", "root", 350, 550, "requirements"),
-  ])
-  const compact = compactAgentWorkflowLanesForNarrowRail(lanes)
-
-  expect(compact).toHaveLength(2)
-  expect(compact.find((lane) => lane.id.startsWith("narrow:build:"))?.records.map((item) => item.sessionID)).toEqual([
-    "build-a",
-    "build-b",
-  ])
-  expect(compact.find((lane) => lane.kind === "parallel")?.records.map((item) => item.sessionID)).toEqual([
-    "spec-a",
-    "requirements-a",
-  ])
 })
