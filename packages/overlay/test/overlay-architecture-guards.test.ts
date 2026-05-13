@@ -2434,18 +2434,20 @@ describe("overlay architecture guards", () => {
     const railBody = soloRuleBody(surface, ".conversation-agent-rail")
     for (const declaration of [
       "position: relative",
-      "width: calc(var(--conversation-agent-rail-width, 42) * 1px * var(--ui-scale))",
-      "min-width: calc(42px * var(--ui-scale))",
-      "max-width: calc(320px * var(--ui-scale))",
+      "width: 100%",
+      "height: calc(var(--conversation-agent-rail-height, 42) * 1px * var(--ui-scale))",
+      "min-height: calc(42px * var(--ui-scale))",
+      "max-height: calc(220px * var(--ui-scale))",
       "display: flex",
-      "flex-direction: column",
+      "flex-direction: row",
       "overflow: hidden",
     ]) {
       expect(railBody).toContain(declaration)
     }
 
     const laneBody = soloRuleBody(surface, ".conversation-agent-rail__lanes")
-    expect(laneBody).toContain("overflow-y: auto")
+    expect(laneBody).toContain("overflow-x: auto")
+    expect(laneBody).toContain("overflow-y: hidden")
     expect(laneBody).toContain("display: flex")
 
     const rowBody = soloRuleBody(surface, ".conversation-agent-rail__row")

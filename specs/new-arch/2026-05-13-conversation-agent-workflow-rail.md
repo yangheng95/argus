@@ -2,6 +2,8 @@
 
 > 2026-05-13 / 用户要求：把 Workflow 搬到 Conversation 面板左侧，作为非常窄的独立 column，展示 agent 头像和必要细节；监控 agent 运行流；点击头像切换到对应 agent 消息卡片；可拉宽展示每个 agent 的 report；并行 agent 窄态使用头像 stack，宽态按行摊开；点击打开 markdown report 窗口。
 
+> 2026-05-13 修正：左侧竖 rail 在真实界面中过度抢占消息视觉主轴，用户明确要求“改到放到底部”。最终 owner surface 仍是 Conversation，但形态改为 chat-scroll 下方、composer 上方的底部横向 agent strip；默认窄态 42px 高，拖动上边缘增高后展示摘要和 report 操作。
+
 ## 现状证据
 
 - `packages/overlay/src/index.html` 仍保留右栏三 tab：`rightPanelWorkflow` / `rightPanelInspector` / `rightPanelPreview`，Workflow 挂载点是 `solidAgentWorkflowMount`。
@@ -13,7 +15,7 @@
 
 ## 设计原则
 
-1. Workflow 不再是右栏 tab。agent 运行流属于 Conversation 的导航和上下文层，应放在 Conversation 内部左侧。
+1. Workflow 不再是右栏 tab。agent 运行流属于 Conversation 的导航和上下文层，应放在 Conversation 内部底部，位于 chat-scroll 和 composer 之间。
 2. 不新增第二套 agent 状态源。运行流只从 `buildAgentWorkflow()` 读取投影结果；需要新增字段时扩展投影层，不在组件内重新推导。
 3. 不合成消息、不制造隐藏卡片。点击 agent 只能定位到真实存在的 `CardNode` DOM；若 agent session 被 phase card 吸收，就定位到承载它的 phase card。
 4. report 是 agent run 的交付细节，不塞进窄 rail；窄态只显示可扫描状态，宽态显示摘要，详情进入 markdown dialog。
@@ -24,16 +26,17 @@
 
 ### 布局
 
-Conversation 内部拆为两列：
+Conversation 内部拆为聊天滚动区 + 底部 agent strip：
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │ Conversation header                                           │
-├───────┬──────────────────────────────────────────────────────┤
-│ Agent │ chat-scroll                                           │
-│ Rail  │ ChatBubble / Card / Workspace stack                   │
-│ 40px  │                                                      │
-├───────┴──────────────────────────────────────────────────────┤
+├──────────────────────────────────────────────────────────────┤
+│ chat-scroll                                                   │
+│ ChatBubble / Card / Workspace stack                           │
+├──────────────────────────────────────────────────────────────┤
+│ Agent strip 42px; drag upward for summary/report rows         │
+├──────────────────────────────────────────────────────────────┤
 │ Composer                                                     │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -44,12 +47,12 @@ Conversation 内部拆为两列：
 <section class="chat" id="chatSection">
   <header class="chat-header">...</header>
   <div class="conversation-body" id="conversationBody">
-    <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
     <div class="conversation-scroll-shell">
       <div class="chat-goals-strip" id="chatGoalsStrip"></div>
       <div class="chat-scroll session-content" id="chatScroll"></div>
     </div>
   </div>
+  <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
   <div class="pane-resizer pane-resizer-workspace" id="workspaceResizer" ...></div>
   <div id="solidWorkspaceMount" class="workspace-mount" hidden></div>
   <div id="solidChatComposer"></div>
@@ -58,9 +61,9 @@ Conversation 内部拆为两列：
 
 `Conversation` 继续只渲染消息流并只绑定 `.chat-scroll` 的 `setupAutoScroll()`。`ConversationAgentRail` 是独立 mount，和 `Conversation` 共享 `cardTreeStore` / workflow projection，但不进入消息滚动流。workspace/composer/resizer 仍由 `.chat` surface 管，不被 rail 包裹。
 
-### 窄态 rail
+### 窄态 bottom strip
 
-默认宽度：`calc(42px * var(--ui-scale))`。
+默认高度：`calc(42px * var(--ui-scale))`。
 
 窄态只显示：
 
@@ -72,9 +75,9 @@ Conversation 内部拆为两列：
 
 不显示 agent 名称、summary、sessionID、长文本。hover tooltip 可以显示 agent label 与状态，但 tooltip 不能成为唯一信息源；宽态必须可见。
 
-### 宽态 rail
+### 宽态 bottom strip
 
-用户拖动 rail 右侧 handle，宽度进入 `calc(180px * var(--ui-scale))` 到 `calc(320px * var(--ui-scale))` 区间。
+用户拖动 strip 上侧 handle，高度进入 `calc(88px * var(--ui-scale))` 到 `calc(220px * var(--ui-scale))` 区间。
 
 宽态每个 agent run 一行：
 
@@ -189,7 +192,7 @@ Markdown 安全不能在 `AgentReportDialog` 内单独处理。当前 `renderMar
 新增：
 
 - `packages/overlay/src/components/ConversationAgentRail.tsx`
-  - Conversation 左侧 rail 主组件。
+  - Conversation 底部 agent strip 主组件。
   - 接收 `container` 或回调，用于定位消息卡片。
   - 读取 agent workflow projection。
 - `packages/overlay/src/components/AgentReportDialog.tsx`
@@ -248,7 +251,7 @@ type TraceFetchResult =
 ## 交互验收
 
 1. 右栏不再出现 Workflow tab。
-2. Conversation 左侧出现非常窄的 agent rail。
+2. Conversation 底部出现非常窄的 agent strip。
 3. agent running 时 rail 实时更新状态。
 4. 点击单 agent avatar 滚动到对应真实消息卡片，并有短暂高亮。
 5. 并行 agent 窄态显示 avatar stack。
@@ -258,7 +261,7 @@ type TraceFetchResult =
 9. trace fetch 失败显示错误态，不显示“空 workflow”。
 10. user message 不被 rail 误识别为 agent run。
 11. phase-absorbed agent 可定位到真实 phase card。
-12. 移动端 rail 不挤爆聊天区；小屏可自动折叠成顶部 horizontal strip 或隐藏到 explicit toggle，但不能丢失状态。
+12. 移动端 bottom strip 不挤爆聊天区；小屏保持 42px 横向 strip 或隐藏到 explicit toggle，但不能丢失状态。
 13. `card_output` 只能作为摘要来源，不能进入 report dialog。
 14. markdown report 不允许 raw HTML / script / javascript link 执行。
 
