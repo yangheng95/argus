@@ -65,51 +65,13 @@ export namespace Snapshot {
     process.env.OPENCORVUS_SNAPSHOT_CORE_AUTOCRLF || (process.platform === "win32" ? "input" : "false")
   const coreSymlinks =
     process.env.OPENCORVUS_SNAPSHOT_CORE_SYMLINKS || (process.platform === "win32" ? "false" : "true")
+  const pendingGitDirs = new Map<string, Promise<void>>()
 
   export async function track() {
     if (!Project.isGitRepo(Instance.directory) || Flag.OPENCORVUS_CLIENT === "acp") return
     const cfg = await Config.get()
     if (cfg.snapshot === false) return
     const git = gitdir()
-    if (await fs.mkdir(git, { recursive: true })) {
-      await gitText(
-        runGit(["init"], {
-          cwd: Instance.directory,
-          env: { GIT_DIR: git, GIT_WORK_TREE: Instance.worktree },
-          timeoutProfile: "default",
-        }),
-        "snapshot init",
-      )
-      await gitText(
-        runGit(["--git-dir", git, "config", "core.autocrlf", coreAutocrlf], {
-          cwd: Instance.directory,
-          timeoutProfile: "fast",
-        }),
-        "snapshot config core.autocrlf",
-      )
-      await gitText(
-        runGit(["--git-dir", git, "config", "core.longpaths", "true"], {
-          cwd: Instance.directory,
-          timeoutProfile: "fast",
-        }),
-        "snapshot config core.longpaths",
-      )
-      await gitText(
-        runGit(["--git-dir", git, "config", "core.symlinks", coreSymlinks], {
-          cwd: Instance.directory,
-          timeoutProfile: "fast",
-        }),
-        "snapshot config core.symlinks",
-      )
-      await gitText(
-        runGit(["--git-dir", git, "config", "core.fsmonitor", "false"], {
-          cwd: Instance.directory,
-          timeoutProfile: "fast",
-        }),
-        "snapshot config core.fsmonitor",
-      )
-      log.info("initialized")
-    }
     // Use per-call temporary index to prevent race conditions when multiple
     // worktrees call track() concurrently against the same snapshot git repo.
     // Without this, concurrent `git add .` from different work-trees overwrite
@@ -142,7 +104,7 @@ export namespace Snapshot {
       log.info("tracking", { hash, cwd: Instance.directory, git })
       return hash
     } finally {
-      await fs.unlink(indexFile).catch(() => {})
+      await cleanupIndexFile(indexFile)
     }
   }
 
@@ -203,7 +165,7 @@ export namespace Snapshot {
           .map((x) => path.join(Instance.worktree, x).replaceAll("\\", "/")),
       }
     } finally {
-      await fs.unlink(indexFile).catch(() => {})
+      await cleanupIndexFile(indexFile)
     }
   }
 
@@ -224,6 +186,7 @@ export namespace Snapshot {
   export async function revert(patches: Patch[]) {
     const seen = new Set<string>()
     const git = gitdir()
+    await ensureGitDir(git)
     for (const item of patches) {
       const batch: string[] = []
       for (const file of item.files) {
@@ -277,7 +240,7 @@ export namespace Snapshot {
         )
       ).trim()
     } finally {
-      await fs.unlink(indexFile).catch(() => {})
+      await cleanupIndexFile(indexFile)
     }
   }
 
@@ -286,6 +249,7 @@ export namespace Snapshot {
   export type FileDiff = _FileDiffType
   export async function diffFull(from: string, to: string): Promise<FileDiff[]> {
     const git = gitdir()
+    await ensureGitDir(git)
     const result: FileDiff[] = []
     const status = new Map<string, "added" | "deleted" | "modified">()
 
@@ -392,6 +356,76 @@ export namespace Snapshot {
       })
     }
     return result.text()
+  }
+
+  async function ensureGitDir(git: string) {
+    const pending = pendingGitDirs.get(git)
+    if (pending) {
+      await pending
+      return
+    }
+    const next = ensureGitDirInner(git).finally(() => {
+      pendingGitDirs.delete(git)
+    })
+    pendingGitDirs.set(git, next)
+    await next
+  }
+
+  async function ensureGitDirInner(git: string) {
+    await fs.mkdir(git, { recursive: true })
+    if (await isUsableGitDir(git)) return
+    await gitText(
+      runGit(["init"], {
+        cwd: Instance.directory,
+        env: { GIT_DIR: git, GIT_WORK_TREE: Instance.worktree },
+        timeoutProfile: "default",
+      }),
+      "snapshot init",
+    )
+    log.info("initialized", { cwd: Instance.directory, git })
+    await gitText(
+      runGit(["--git-dir", git, "config", "core.autocrlf", coreAutocrlf], {
+        cwd: Instance.directory,
+        timeoutProfile: "fast",
+      }),
+      "snapshot config core.autocrlf",
+    )
+    await gitText(
+      runGit(["--git-dir", git, "config", "core.longpaths", "true"], {
+        cwd: Instance.directory,
+        timeoutProfile: "fast",
+      }),
+      "snapshot config core.longpaths",
+    )
+    await gitText(
+      runGit(["--git-dir", git, "config", "core.symlinks", coreSymlinks], {
+        cwd: Instance.directory,
+        timeoutProfile: "fast",
+      }),
+      "snapshot config core.symlinks",
+    )
+    await gitText(
+      runGit(["--git-dir", git, "config", "core.fsmonitor", "false"], {
+        cwd: Instance.directory,
+        timeoutProfile: "fast",
+      }),
+      "snapshot config core.fsmonitor",
+    )
+  }
+
+  async function isUsableGitDir(git: string) {
+    const result = await runGit(
+      ["--git-dir", git, "--work-tree", Instance.worktree, "status", "--short", "--untracked-files=no"],
+      {
+        cwd: Instance.directory,
+        timeoutProfile: "fast",
+      },
+    )
+    return result.exitCode === 0
+  }
+
+  async function cleanupIndexFile(indexFile: string) {
+    await Promise.all([fs.unlink(indexFile).catch(() => {}), fs.unlink(`${indexFile}.lock`).catch(() => {})])
   }
 
   async function hasTrackableContent(git: string, indexFile: string) {
@@ -559,6 +593,7 @@ export namespace Snapshot {
   }
 
   async function add(git: string, indexFile?: string) {
+    await ensureGitDir(git)
     await syncExclude(git)
     const opts: GitOptions = {
       cwd: Instance.directory,

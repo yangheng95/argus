@@ -5,6 +5,7 @@ import path from "path"
 import { Snapshot } from "../../src/snapshot"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
+import { Global } from "../../src/global"
 import { tmpdir } from "../fixture/fixture"
 
 // Git always outputs /-separated paths internally. Snapshot.patch() joins them
@@ -42,6 +43,71 @@ test("tracks deleted files correctly", async () => {
       await $`rm ${tmp.path}/a.txt`.quiet()
 
       expect((await Snapshot.patch(before!)).files).toContain(fwd(tmp.path, "a.txt"))
+    },
+  })
+})
+
+test("track initializes a pre-existing non-git snapshot directory before add", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const gitDir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+      await fs.rm(gitDir, { recursive: true, force: true })
+      await fs.mkdir(gitDir, { recursive: true })
+      await Filesystem.write(path.join(gitDir, "stale-marker.txt"), "created before git init")
+
+      const hash = await Snapshot.track()
+
+      expect(hash).toBeTruthy()
+      expect(
+        await fs
+          .access(path.join(gitDir, "HEAD"))
+          .then(() => true)
+          .catch(() => false),
+      ).toBe(true)
+    },
+  })
+})
+
+test("concurrent first track calls share snapshot git initialization", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const gitDir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+      await fs.rm(gitDir, { recursive: true, force: true })
+
+      const hashes = await Promise.all(Array.from({ length: 8 }, () => Snapshot.track()))
+
+      expect(hashes.every(Boolean)).toBe(true)
+      expect(new Set(hashes).size).toBe(1)
+    },
+  })
+})
+
+test("patch repairs a partially initialized snapshot git directory before add", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      const gitDir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+      await fs.rm(path.join(gitDir, "HEAD"), { force: true })
+      await fs.rm(path.join(gitDir, "config"), { force: true })
+      await Filesystem.write(`${tmp.path}/a.txt`, "changed after partial snapshot repo damage")
+
+      const patch = await Snapshot.patch(before!)
+
+      expect(patch.files).toContain(fwd(tmp.path, "a.txt"))
+      expect(
+        await fs
+          .access(path.join(gitDir, "HEAD"))
+          .then(() => true)
+          .catch(() => false),
+      ).toBe(true)
     },
   })
 })
