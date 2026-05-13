@@ -43,6 +43,12 @@ Implication for OpenCorvus: compaction must produce a task handoff artifact, not
 | Thresholds | `packages/opencorvus/src/session/context-budget.ts`, `packages/opencorvus/src/session/loop.ts` | Post-turn threshold now `0.9`; predictive threshold already `0.9`. | Trigger timing is separate from summary fidelity. |
 | Predictive compaction placeholder | `packages/opencorvus/src/session/loop.ts` | `processTurn()` creates an assistant message before the predictive compaction gate. If the gate returns `compact`, the assistant has no parts and zero tokens. | DB timeline looks like compaction happened after an empty assistant response; it also pollutes history with a non-message. |
 | Handoff display format | `packages/opencorvus/src/session/compaction-handoff.ts` | Host renderer emits OpenCorvus-specific headings such as `Continuation Contract`. | The format is less familiar than Claude Code's compact summary and does not make "primary request / current work / next step" visually obvious. |
+| Predictive fail-fast placeholder | `packages/opencorvus/src/session/loop.ts` | `fail-tool-schema` and `fail-prompt-budget` throw after the assistant placeholder has been inserted. | Empty assistant rows can still be left behind outside the compact-success branch, and the error is not attached to the visible assistant message. |
+| Predictive/reactive budget source | `packages/opencorvus/src/session/loop.ts`, `packages/opencorvus/src/session/context-budget.ts` | Reactive compaction uses `ContextBudget.isUsageOverflow()`, but predictive compaction directly reads `model.limit.input || model.limit.context` plus env threshold. | `compaction.auto=false`, `compaction.reserved`, and configured `compaction.threshold` can be ignored by predictive compaction. |
+| Handoff quality gate | `packages/opencorvus/src/session/compaction-handoff.ts`, `packages/opencorvus/src/session/message.ts` | Structured handoff validates shape, but important arrays can be empty and are not checked against compacted history evidence. | A low-information but schema-valid handoff can become a compact boundary and hide older history. |
+| Tail split boundary | `packages/opencorvus/src/session/compaction.ts`, `packages/opencorvus/src/session/message.ts` | `splitTurn()` can set `tail_start_id` to an assistant or other non-user message. | After compaction, replay can start mid-turn without the corresponding user request. |
+| Plugin hook contract drift | `packages/plugin/src/index.ts`, `packages/opencorvus/src/session/compaction.ts` | Runtime only uses plugin `context`, but plugin type/docs still imply a `prompt` override can replace the compaction prompt. | Future maintainers can reintroduce prompt bypass and break the single handoff contract. |
+| Historical compaction residue | Local DB, `packages/opencorvus/script/repair-empty-snapshot-patch-evidence.ts` | Current repair script removes empty-tree patch evidence only. | Failed compaction assistant rows, empty placeholders, and legacy summaries can remain in old local DBs and still add noise. |
 
 ## Root Cause
 
@@ -70,6 +76,19 @@ For task `tsk_e1f9c2cd4001z5TZEezacMOY84`, the early compaction evidence is:
 - Preserve evidence, not vibes: exact file paths, commands, exit status, error strings, task IDs, goal IDs, acceptance criteria, and current blocker must be mandatory.
 - Keep structured state structured. TaskPlan/Scratchpad/Memory remain the canonical state sources; compaction may include their current rendered state as evidence but must not invent a parallel state store.
 - Code context condensation is separate from chat summary. Tool output projection should preserve command/file/error identities so the summary can cite them.
+- Budget decisions must have one source. Predictive and reactive compaction must use the same `ContextBudget` contract and config semantics.
+- Transcript rows must mean something. If no provider call or tool activity happened, do not leave an assistant message behind; if a budget failure happens, attach the typed error to the created assistant or remove the placeholder before surfacing the failure.
+
+## Revised Priority After Independent Review #2
+
+Review agent `019e1fee-e78e-7f63-99b5-7716afcd9709` found no P0, but rejected the claim that all hidden risks are solved. The remaining work must be ordered as:
+
+1. **P1-A: Single budget source**: predictive compaction must respect `compaction.auto`, `reserved`, `threshold`, and model input/context the same way reactive compaction does.
+2. **P1-B: Predictive fail-fast transcript hygiene**: all predictive branches that do not call the provider must either remove the assistant placeholder or persist a typed visible error on it. No empty assistant rows.
+3. **P1-C: Handoff quality gate**: schema validity alone is insufficient; the accepted handoff must contain minimum evidence for the actual compacted input.
+4. **P2-A: Tail boundary correctness**: retained tail must start at a user turn boundary, never an assistant-only suffix.
+5. **P2-B: Plugin/API contract sync**: remove the stale prompt override contract from plugin types/docs so context-only extension is the single surface.
+6. **P2-C: Historical residue handling**: provide explicit diagnostics/repair for old failed compaction rows and empty placeholders; do not silently rewrite old summaries into valid ones.
 
 ## Proposed Implementation
 
@@ -177,12 +196,22 @@ Change:
 - Do not retry blindly. A malformed summary is a failed compaction, not a reason to generate another weaker summary.
 - Expose one `SessionCompaction.validateHandoffSummary(text)` / parser contract and use it consistently in new summary acceptance, legacy boundary checks, and memory flush.
 - The validator is a shape/data-integrity gate only. It must not infer semantic truth through keyword matching.
+- Add deterministic minimum-evidence validation derived from the compaction input:
+  - If compacted history contains user text parts, `userMessages.length >= 1`.
+  - If runtime instruction paths are present, `durableInstructionSources.length >= 1`.
+  - If compacted history contains patch parts or session diff evidence, `files.length >= 1` or an explicit evidence item explains no file changes.
+  - If compacted history contains assistant/tool errors, `errorsAndBlockers.length >= 1` or an evidence item cites the error as resolved.
+  - If source user message or task plan contains acceptance language, `acceptanceCriteria.length >= 1`.
+- This validation must be computed from structured facts already available to host code, not keyword matching on rendered Markdown.
 
 Acceptance:
 - Test invalid summary text does not publish `Compacted` and does not call `MemoryFlush.flush`.
 - Test valid handoff summary does publish and flush.
 - Test renderer output is deterministic for the same handoff object.
 - Test invalid legacy `assistant.summary` messages are not accepted as `filterCompacted()` boundaries.
+- Test a schema-valid but empty `userMessages` handoff is rejected when compacted history contains user text.
+- Test a schema-valid but missing file evidence handoff is rejected when patch evidence exists.
+- Test a schema-valid handoff with explicit empty arrays is accepted only when the derived input facts prove those categories were absent.
 
 ### Phase D2: Preserve Plugin Extensibility Without Prompt Bypass
 
@@ -190,16 +219,18 @@ Files:
 - `packages/opencorvus/src/session/compaction.ts`
 - `packages/opencorvus/src/session/message.ts`
 - `packages/opencorvus/src/memory/flush.ts`
+- `packages/plugin/src/index.ts`
 
 Change:
 - Keep `experimental.session.compacting` for additional context only.
-- Remove or deprecate the ability to replace the whole prompt unless the replacement still produces the same `CompactionHandoff` schema.
-- Preferred implementation: plugin returns `{ context: string[] }`; OpenCorvus owns the prompt template.
+- Remove the documented `prompt` override from the public plugin contract. Do not deprecate while keeping it callable; that would preserve a second source. The hook returns `{ context: string[] }` only.
+- OpenCorvus owns the prompt template and schema. Plugin context is appended as evidence only.
 
 Acceptance:
 - Test a plugin-provided context string appears in the compaction prompt.
 - Test a plugin cannot cause a non-handoff summary to be accepted.
 - Test `MemoryFlush.flush` rejects errored, unfinished, and invalid summary messages even if called directly.
+- Typecheck proves plugin callers cannot provide a `prompt` replacement.
 
 ### Phase E: Manual Compact Focus Without Parallel Route
 
@@ -268,10 +299,79 @@ Files:
 
 Change:
 - When the predictive gate creates a compaction user message before any provider call, remove the pre-created assistant placeholder before returning.
+- For predictive fail-fast (`fail-tool-schema`, `fail-prompt-budget`), do not throw past the placeholder with no visible row. Either:
+  - attach the typed `ToolSchemaBudgetError` / `PromptBudgetOverflowError` to the pre-created assistant message, mark `finish="error"`, publish `Session.Event.Error`, and return `stop`; or
+  - remove the placeholder and surface the typed error through a single outer message path.
+- Preferred design: attach the typed error to the assistant message. This gives the UI and DB a visible failure row and avoids hidden orchestration errors.
 - This is not a fallback path; it preserves the transcript invariant that assistant rows represent actual assistant output, tool activity, or errors.
 
 Acceptance:
 - Predictive compaction no longer leaves a zero-token assistant row before the compaction user message.
+- Predictive `fail-tool-schema` creates one errored assistant message with `ToolSchemaBudgetError`, no empty assistant.
+- Predictive `fail-prompt-budget` creates one errored assistant message with `PromptBudgetOverflowError`, no empty assistant.
+- Tests assert the error row is visible to compaction projection when later history is summarized.
+
+### Phase I: Unify Predictive And Reactive Budget Semantics
+
+Files:
+- `packages/opencorvus/src/session/context-budget.ts`
+- `packages/opencorvus/src/session/loop.ts`
+- `packages/opencorvus/test/session/predictive-compaction-decision.test.ts`
+- `packages/opencorvus/test/session/compaction.test.ts`
+
+Change:
+- Move predictive budget calculation into `ContextBudget`, e.g. `ContextBudget.predictiveLimit({ config, model })`.
+- The predictive path must call `Config.get()` and respect:
+  - `compaction.auto === false`: skip predictive auto compaction entirely.
+  - `compaction.threshold`: same default and override semantics as reactive.
+  - `compaction.reserved`: same usable-budget calculation as reactive.
+  - `model.limit.input` vs `model.limit.context`: same `ContextBudget.usable()` source.
+- Remove direct `model.limit.input || model.limit.context` from `SessionLoop.processTurn`.
+- Keep env-only threshold overrides out of the production decision unless they are already part of `Config`. Environment-only budget behavior creates a hidden second config source.
+
+Acceptance:
+- Test `compaction.auto=false` prevents predictive compaction from creating a compaction message.
+- Test configured `threshold` changes predictive and reactive trigger points consistently.
+- Test configured `reserved` reduces predictive usable budget consistently with reactive.
+- `rg -n "model\\.limit\\.input \\|\\| model\\.limit\\.context|OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD" packages/opencorvus/src/session` finds no production predictive-budget source outside `ContextBudget`.
+
+### Phase J: Preserve Tail On User Turn Boundaries
+
+Files:
+- `packages/opencorvus/src/session/compaction.ts`
+- `packages/opencorvus/src/session/message.ts`
+- `packages/opencorvus/test/session/compaction.test.ts`
+- `packages/opencorvus/test/session/message.test.ts`
+
+Change:
+- `splitTurn()` must only return a `Tail` whose `id` belongs to a user message.
+- If a turn is too large and no user boundary inside it can fit, do not split into assistant suffix. Either keep the whole turn if budget allows or compact the whole turn into the handoff.
+- `tail_start_id` remains the single source for retained tail start. Do not add a second tail marker.
+
+Acceptance:
+- Test a huge turn does not produce `tail_start_id` for an assistant message.
+- Test `filterCompacted()` never returns a retained tail starting with assistant when the source history contains a user message boundary.
+- Test ordinary tail preservation still keeps recent complete turns.
+
+### Phase K: Historical Compaction Residue Diagnostics
+
+Files:
+- `packages/opencorvus/script/repair-empty-snapshot-patch-evidence.ts` or a renamed broader script if scope expands
+- Optional dedicated read-only diagnostic script under `packages/opencorvus/script/`
+
+Change:
+- Add a dry-run diagnostic for historical compaction residue:
+  - empty assistant messages adjacent to compaction messages,
+  - failed compaction assistant messages,
+  - legacy prose `assistant.summary` rows that no longer pass `CompactionHandoff.isValidSummaryMessage`,
+  - oversized patch/session diff artifacts.
+- Repair mode may delete invalid empty placeholders and failed compaction rows only when they match exact structural criteria. It must not rewrite old prose summaries into valid structured summaries.
+- Keep DB backup before any mutation.
+
+Acceptance:
+- Dry-run on `tsk_e1f9c2cd4001z5TZEezacMOY84` reports the known empty/failure residue separately from patch evidence.
+- Apply mode, if used, only removes structurally invalid rows and leaves valid patch parts intact.
+- Re-running dry-run after apply returns zero residue for the targeted task.
 
 ## Non-Goals
 
@@ -288,6 +388,7 @@ Targeted tests:
 - `bun test packages/opencorvus/test/session/compaction-continue-inherit.test.ts`
 - `bun test packages/opencorvus/test/session/instruction.test.ts`
 - `bun test packages/opencorvus/test/session/message.test.ts`
+- `bun test packages/opencorvus/test/session/predictive-compaction-decision.test.ts`
 - `bun test packages/opencorvus/test/server/session-routes.test.ts`
 - `bun test packages/opencorvus/test/memory/index.test.ts packages/opencorvus/test/memory/stages.test.ts`
 
@@ -296,6 +397,7 @@ Quality gates after implementation:
 - `bun run api:routes-check` if route schema changes
 - `bun run docs:check` if public docs are updated
 - `rg -n "SessionCompaction\\.create\\(|experimental\\.session\\.compacting|session\\.summarize|Defaults to 0\\.7" packages specs docs` before final review
+- `rg -n "model\\.limit\\.input \\|\\| model\\.limit\\.context|OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD|prompt\\?: string" packages/opencorvus/src packages/plugin/src` before final review
 
 ## Review Questions
 
@@ -317,3 +419,11 @@ Review agent `019e1f3e-2900-75d0-a763-ca1b109cfcce` identified and this revision
 - ACP/TUI/generated SDK summarize call sites.
 - Manual route success semantics.
 - Replacement of Markdown heading validation with structured Zod handoff validation.
+
+Second review agent `019e1fee-e78e-7f63-99b5-7716afcd9709` identified remaining gaps and this revision incorporates:
+- Predictive fail-fast branches still leaving empty assistant placeholders.
+- Predictive/reactive budget split and config bypass.
+- Schema-valid but low-quality handoffs becoming compact boundaries.
+- Repair script not covering legacy/failed compaction residue.
+- Plugin hook type still advertising prompt override.
+- `splitTurn()` possibly retaining assistant-only tail suffixes.
