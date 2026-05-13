@@ -1385,10 +1385,13 @@ export namespace SessionLoop {
           messagePayloadChars,
           topPayloadParts,
         })
+        await Session.removeMessage({
+          sessionID: input.sessionID,
+          messageID: processor.message.id,
+        })
         await SessionCompaction.create({
           sessionID: input.sessionID,
-          agent: input.lastUser.agent,
-          model: input.lastUser.model,
+          source: input.lastUser,
           auto: true,
           overflow: false,
         })
@@ -1471,8 +1474,7 @@ export namespace SessionLoop {
     if (result === "compact") {
       await SessionCompaction.create({
         sessionID: input.sessionID,
-        agent: input.lastUser.agent,
-        model: input.lastUser.model,
+        source: input.lastUser,
         auto: true,
         overflow: true,
       })
@@ -1641,8 +1643,7 @@ export namespace SessionLoop {
           ) {
             await SessionCompaction.create({
               sessionID,
-              agent: lastUser.agent,
-              model: lastUser.model,
+              source: lastUser,
               auto: true,
               overflow: false,
             })

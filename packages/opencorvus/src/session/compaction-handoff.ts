@@ -91,6 +91,7 @@ export namespace CompactionHandoff {
       files: z.array(File),
       testsAndCommands: z.array(TestOrCommand),
       errorsAndBlockers: z.array(ErrorOrBlocker),
+      userMessages: z.array(SpecificText),
       nextActions: z.array(SpecificText),
       openRisks: z.array(SpecificText),
     })
@@ -103,6 +104,7 @@ export namespace CompactionHandoff {
     "Do not wrap the JSON in Markdown fences.",
     "Do not output prose outside the JSON object.",
     "Every retained claim must be grounded in the supplied conversation, runtime state, or evidence context.",
+    "List all user-authored messages that appear in the compacted history in userMessages, preserving their intent and important wording.",
     "Use empty arrays only when no evidence exists for that field.",
     "Generic placeholders such as \"continue implementation\" are invalid.",
     "Do not treat assistant reasoning, tool-choice indecision, or checkpoint prompts as user requirements.",
@@ -131,6 +133,7 @@ export namespace CompactionHandoff {
   "files": [{"path": "exact path", "status": "read|modified|created|deleted|referenced", "detail": "specific relevance"}],
   "testsAndCommands": [{"command": "exact command", "result": "specific result", "evidence": "exit status or output excerpt"}],
   "errorsAndBlockers": [{"issue": "specific issue", "evidence": "exact evidence", "nextAction": "specific next action"}],
+  "userMessages": ["all user-authored messages from the compacted history, summarized only enough to remove repetition"],
   "nextActions": ["specific next action"],
   "openRisks": ["specific unresolved risk"]
 }`
@@ -172,60 +175,57 @@ export namespace CompactionHandoff {
   }
 
   function section<T>(values: T[], render: (value: T) => string) {
-    if (values.length === 0) return "- (none)"
+    if (values.length === 0) return "   - (none)"
     return values.map(render).join("\n")
   }
 
   export function renderMarkdown(handoff: Info) {
     const normalized = Schema.parse(handoff)
+    const source = normalized.currentState.sourceUserMessage
     return [
-      "## Continuation Contract",
-      "This is a validated compaction handoff, not a new user request. Continue the same task from the current state and do not summarize this handoff back to the user.",
+      "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.",
       "",
-      "## Objective",
-      normalized.objective,
+      "Summary:",
+      "1. Primary Request and Intent:",
+      `   - ${normalized.objective}`,
+      ...normalized.acceptanceCriteria.map((item) => `   - Acceptance: ${item}`),
       "",
-      "## Acceptance Criteria",
-      list(normalized.acceptanceCriteria),
+      "2. Key Technical Concepts:",
+      ...normalized.durableInstructionSources.map((item) => `   - ${item.path}: ${item.role}`),
+      `   - Source agent/model: ${source.agent} using ${source.model.providerID}/${source.model.modelID}`,
+      `   - Source format/system mode: ${source.formatType}; ${source.systemMode ?? "(none)"}`,
+      `   - Source tools: ${source.toolNames.join(", ") || "(none)"}`,
+      `   - Source variant: ${source.variant ?? "(none)"}`,
+      `   - Source extra keys: ${source.extraKeys.join(", ") || "(none)"}`,
       "",
-      "## Durable Instruction Sources",
-      section(normalized.durableInstructionSources, (item) => `- ${item.path}: ${item.role}`),
+      "3. Files and Code Sections:",
+      section(normalized.files, (item) => `   - [${item.status}] ${item.path}: ${item.detail}`),
       "",
-      "## Current State",
-      `- Phase: ${normalized.currentState.phase}`,
-      `- Active task: ${normalized.currentState.activeTask}`,
-      `- Source user message: ${normalized.currentState.sourceUserMessage.id}`,
-      `- Source agent: ${normalized.currentState.sourceUserMessage.agent}`,
-      `- Source model: ${normalized.currentState.sourceUserMessage.model.providerID}/${normalized.currentState.sourceUserMessage.model.modelID}`,
-      `- Source format: ${normalized.currentState.sourceUserMessage.formatType}`,
-      `- Source system mode: ${normalized.currentState.sourceUserMessage.systemMode ?? "(none)"}`,
-      `- Source tools: ${normalized.currentState.sourceUserMessage.toolNames.join(", ") || "(none)"}`,
-      `- Source variant: ${normalized.currentState.sourceUserMessage.variant ?? "(none)"}`,
-      `- Source extra keys: ${normalized.currentState.sourceUserMessage.extraKeys.join(", ") || "(none)"}`,
+      "4. Errors and fixes:",
+      section(normalized.errorsAndBlockers, (item) => `   - ${item.issue} Evidence: ${item.evidence} Next: ${item.nextAction}`),
       "",
-      "## Decisions",
+      "5. Problem Solving:",
       section(
         normalized.decisions,
-        (item) => `- ${item.decision} Rationale: ${item.rationale}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
+        (item) => `   - ${item.decision} Rationale: ${item.rationale}${item.evidence ? ` Evidence: ${item.evidence}` : ""}`,
       ),
+      ...normalized.evidence.map((item) => `   - [${item.kind}] ${item.value}: ${item.detail}`),
       "",
-      "## Evidence",
-      section(normalized.evidence, (item) => `- [${item.kind}] ${item.value}: ${item.detail}`),
+      "6. All user messages:",
+      section(normalized.userMessages, (item) => `   - ${item}`),
+      `   - Source user message id: ${source.id}`,
       "",
-      "## Files",
-      section(normalized.files, (item) => `- [${item.status}] ${item.path}: ${item.detail}`),
+      "7. Pending Tasks:",
+      list(normalized.nextActions).replaceAll("\n- ", "\n   - ").replace(/^- /, "   - "),
       "",
-      "## Tests And Commands",
-      section(normalized.testsAndCommands, (item) => `- ${item.command}: ${item.result} Evidence: ${item.evidence}`),
+      "8. Current Work:",
+      `   - Phase: ${normalized.currentState.phase}`,
+      `   - Active task: ${normalized.currentState.activeTask}`,
+      ...normalized.testsAndCommands.map((item) => `   - ${item.command}: ${item.result} Evidence: ${item.evidence}`),
       "",
-      "## Errors And Blockers",
-      section(normalized.errorsAndBlockers, (item) => `- ${item.issue} Evidence: ${item.evidence} Next: ${item.nextAction}`),
-      "",
-      "## Next Actions",
-      list(normalized.nextActions),
-      "",
-      "## Open Risks",
-      list(normalized.openRisks),
+      "9. Optional Next Step:",
+      normalized.nextActions[0] ? `   - ${normalized.nextActions[0]}` : "   - (none)",
+      ...normalized.openRisks.map((item) => `   - Risk: ${item}`),
     ].join("\n")
   }
 }

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import fs from "fs/promises"
 import "../../src/session/prompt"
 import { SessionLoop } from "../../src/session/loop"
 
@@ -130,6 +131,19 @@ describe("SessionLoop.predictiveCompactionDecision", () => {
       toolSchemaBudgetRatio: 0.5,
     })
     expect(out.kind).toBe("compact")
+  })
+})
+
+describe("SessionLoop predictive compaction transcript hygiene", () => {
+  test("removes the preflight assistant placeholder before creating compaction", async () => {
+    const source = await fs.readFile("packages/opencorvus/src/session/loop.ts", "utf8")
+    const trigger = source.indexOf('if (decision.kind === "compact")')
+    const create = source.indexOf("await SessionCompaction.create", trigger)
+    const remove = source.indexOf("await Session.removeMessage", trigger)
+
+    expect(trigger).toBeGreaterThan(0)
+    expect(remove).toBeGreaterThan(trigger)
+    expect(remove).toBeLessThan(create)
   })
 })
 
