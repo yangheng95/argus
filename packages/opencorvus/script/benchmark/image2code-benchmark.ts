@@ -24,7 +24,7 @@
 //   bun run image2code-benchmark.ts                              # default reference (ainvest.png)
 //   bun run image2code-benchmark.ts --reference-images=path.png  # custom reference
 //   bun run image2code-benchmark.ts --request-file=brief.txt     # custom prompt
-//   bun run image2code-benchmark.ts --report=out.json --no-keep  # all overlay-web-benchmark flags pass through
+//   bun run image2code-benchmark.ts --report=.scratch/benchmark-runs/out.json --no-keep  # all overlay-web-benchmark flags pass through
 
 import path from "node:path"
 import os from "node:os"

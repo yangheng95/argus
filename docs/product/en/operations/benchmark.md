@@ -17,8 +17,7 @@ ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
 bun run script/benchmark/overlay-web-benchmark.ts \
   "--request-file=/path/to/prd.txt" \
-  "--stall-timeout-ms=1200000" \
-  "--planning-stall-timeout-ms=7200000"
+  "--report=.scratch/benchmark-runs/report.json"
 ```
 
 **Note**: flags require `=`, not space separation (parser specifics).
@@ -87,7 +86,7 @@ Historical baseline:
     cd packages/opencorvus
     bun run script/benchmark/overlay-web-benchmark.ts \
       "--request-file=benchmarks/smoke.txt" \
-      "--report=report.json"
+      "--report=.scratch/benchmark-runs/report.json"
 ```
 
 ## E2E eval suite
