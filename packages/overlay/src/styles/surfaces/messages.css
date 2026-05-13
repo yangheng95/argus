@@ -785,14 +785,14 @@
 }
 
 .msg-tool-output {
-  max-height: none;
-  overflow-y: visible;
-  overscroll-behavior: auto;
+  max-height: calc(128px * var(--ui-scale));
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .msg-reasoning,
 .msg-patch {
-  max-height: none;
-  overflow: visible;
-  overscroll-behavior: auto;
+  max-height: calc(128px * var(--ui-scale));
+  overflow: auto;
+  overscroll-behavior: contain;
 }
