@@ -7,7 +7,8 @@ import { notifyWarning } from "../services/notify"
 import { buildAgentWorkflow, type AgentWorkflowRecord } from "../utils/agent-workflow"
 import { buildAgentWorkflowLanes, type AgentWorkflowLane } from "../utils/agent-workflow-lanes"
 import { orderedReachableCardIDs } from "../utils/card-tree"
-import { Avatar } from "./Avatar"
+import { stageAccent } from "../utils/card-color"
+import { Avatar, avatarRole } from "./Avatar"
 import { Icon } from "./Icon"
 import { AgentReportDialog } from "./AgentReportDialog"
 
@@ -117,7 +118,11 @@ function AgentRailRow(props: {
   onReport: (record: AgentWorkflowRecord) => void
 }) {
   return (
-    <div class="conversation-agent-rail__row" data-status={props.record.status}>
+    <div
+      class="conversation-agent-rail__row"
+      data-status={props.record.status}
+      style={{ "--card-stage": stageAccent(avatarRole(props.record.agentName)) }}
+    >
       <button
         type="button"
         class="conversation-agent-rail__avatar-button"

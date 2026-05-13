@@ -2452,7 +2452,8 @@ describe("overlay architecture guards", () => {
 
     const rowBody = soloRuleBody(surface, ".conversation-agent-rail__row")
     expect(rowBody).toContain("display: grid")
-    expect(rowBody).toContain("grid-template-columns: calc(30px * var(--ui-scale)) minmax(0, 1fr) calc(28px * var(--ui-scale))")
+    expect(rowBody).toContain("grid-template-columns: calc(26px * var(--ui-scale)) minmax(0, 1fr) calc(24px * var(--ui-scale))")
+    expect(rowBody).toContain("border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--accent)) 72%, transparent)")
 
     const runBody = soloRuleBody(surface, ".conversation-agent-rail__run")
     expect(runBody).toContain("background: transparent")
