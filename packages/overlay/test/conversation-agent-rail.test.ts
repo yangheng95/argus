@@ -24,10 +24,12 @@ test("ConversationAgentRail uses bottom-strip height resizing instead of left-co
   expect(source).toContain("--conversation-agent-rail-height")
   expect(source).toContain("startY - move.clientY")
   expect(source).not.toContain("--conversation-agent-rail-width")
-  expect(css).toContain("border-top: var(--oc-border-width) solid var(--border)")
+  expect(css).toContain("border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 82%, transparent)")
   expect(css).toContain("height: calc(var(--conversation-agent-rail-height, 42) * 1px * var(--ui-scale))")
   expect(css).toContain("flex-direction: row")
   expect(css).toContain("overflow-x: auto")
+  expect(css).toContain(".conversation-agent-rail .chat-avatar")
+  expect(css).toContain("border-left: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--accent)) 72%, transparent)")
   expect(html.indexOf('id="conversationBody"')).toBeLessThan(html.indexOf('id="solidConversationAgentRailMount"'))
 })
 
