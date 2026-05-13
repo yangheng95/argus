@@ -1,7 +1,34 @@
 import { describe, expect, test } from "bun:test"
 import fs from "fs/promises"
 import "../../src/session/prompt"
+import { ContextBudget } from "../../src/session/context-budget"
 import { SessionLoop } from "../../src/session/loop"
+import type { Config } from "../../src/config/config"
+import type { Provider } from "../../src/provider/provider"
+
+function model(input: Partial<Provider.Model["limit"]> = {}): Provider.Model {
+  return {
+    id: "test-model",
+    providerID: "test",
+    name: "Test",
+    limit: {
+      context: input.context ?? 100_000,
+      input: input.input,
+      output: input.output ?? 20_000,
+    },
+    cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+    capabilities: {
+      toolcall: true,
+      attachment: false,
+      reasoning: false,
+      temperature: true,
+      input: { text: true, image: false, audio: false, video: false },
+      output: { text: true, image: false, audio: false, video: false },
+    },
+    api: { npm: "@ai-sdk/anthropic" },
+    options: {},
+  } as Provider.Model
+}
 
 /**
  * Phase C of specs/new-arch/2026-04-28-structured-output-systemic-fix.md:
@@ -144,6 +171,54 @@ describe("SessionLoop predictive compaction transcript hygiene", () => {
     expect(trigger).toBeGreaterThan(0)
     expect(remove).toBeGreaterThan(trigger)
     expect(remove).toBeLessThan(create)
+  })
+
+  test("fail-fast branches persist visible assistant errors instead of throwing past the placeholder", async () => {
+    const source = await fs.readFile("packages/opencorvus/src/session/loop.ts", "utf8")
+
+    expect(source).not.toContain("throw new Message.ToolSchemaBudgetError")
+    expect(source).not.toContain("throw new Message.PromptBudgetOverflowError")
+    expect(source).toContain("stopTurnWithPredictiveBudgetError")
+    expect(source).toContain('processor.message.finish = "error"')
+    expect(source).toContain("Predictive compaction budget error:")
+    expect(source).toContain("await Session.updatePart")
+  })
+})
+
+describe("ContextBudget predictive limit", () => {
+  test("returns undefined when automatic compaction is disabled", () => {
+    const limit = ContextBudget.predictiveLimit({
+      config: { compaction: { auto: false } } as Config.Info,
+      model: model(),
+    })
+
+    expect(limit).toBeUndefined()
+  })
+
+  test("uses the configured threshold and reserved budget", () => {
+    const limit = ContextBudget.predictiveLimit({
+      config: { compaction: { threshold: 0.5, reserved: 10_000 } } as Config.Info,
+      model: model({ context: 100_000, input: 90_000, output: 20_000 }),
+    })
+
+    expect(limit).toEqual({
+      usableBudget: 80_000,
+      threshold: 0.5,
+      limit: 40_000,
+    })
+  })
+
+  test("applies reserved budget to context-only models", () => {
+    const limit = ContextBudget.predictiveLimit({
+      config: { compaction: { threshold: 0.5, reserved: 10_000 } } as Config.Info,
+      model: model({ context: 100_000, output: 20_000 }),
+    })
+
+    expect(limit).toEqual({
+      usableBudget: 90_000,
+      threshold: 0.5,
+      limit: 45_000,
+    })
   })
 })
 

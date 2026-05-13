@@ -1404,6 +1404,50 @@ describe("session.message.filterCompacted", () => {
     ])
   })
 
+  test("rejects compaction tail markers that point to an assistant-only suffix", async () => {
+    const compactionUser = "m-compaction-user"
+    const compactionSummary = "m-compaction-summary"
+    const retainedUser = "m-retained-user"
+    const retainedAssistant = "m-retained-assistant"
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: {
+          ...assistantInfo(compactionSummary, compactionUser),
+          summary: true,
+          finish: "stop",
+          structured: handoffFixture(),
+        },
+        parts: [{ ...basePart(compactionSummary, "p-summary"), type: "text", text: "summary" }],
+      },
+      {
+        info: userInfo(compactionUser),
+        parts: [
+          {
+            ...basePart(compactionUser, "p-compaction"),
+            type: "compaction",
+            auto: true,
+            tail_start_id: retainedAssistant,
+          },
+        ],
+      },
+      {
+        info: assistantInfo(retainedAssistant, retainedUser),
+        parts: [{ ...basePart(retainedAssistant, "p-retained-assistant"), type: "text", text: "assistant suffix" }],
+      },
+      {
+        info: userInfo(retainedUser),
+        parts: [{ ...basePart(retainedUser, "p-retained-user"), type: "text", text: "retained question" }],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([
+      compactionUser,
+      compactionSummary,
+    ])
+  })
+
   test("does not accept legacy prose summaries as compaction boundaries", async () => {
     const compactionUser = "m-compaction-user"
     const compactionSummary = "m-compaction-summary"

@@ -480,6 +480,8 @@ export namespace Message {
         Snapshot.SnapshotIntegrityError.Schema,
         Snapshot.SnapshotEmptyTreeError.Schema,
         ContextOverflowError.Schema,
+        PromptBudgetOverflowError.Schema,
+        ToolSchemaBudgetError.Schema,
         APIError.Schema,
       ])
       .optional(),
@@ -1093,24 +1095,32 @@ export namespace Message {
   export async function filterCompacted(stream: AsyncIterable<Message.WithParts>) {
     const result = [] as Message.WithParts[]
     const completed = new Set<string>()
-    let retain: string | undefined
+    let retain: { id: string; afterCompactionIndex: number } | undefined
     for await (const msg of stream) {
       result.push(msg)
       if (retain) {
-        if (msg.info.id === retain) break
+        if (msg.info.id === retain.id) {
+          if (msg.info.role !== "user") result.splice(retain.afterCompactionIndex)
+          retain = undefined
+          break
+        }
         continue
       }
       if (msg.info.role === "user" && completed.has(msg.info.id)) {
         const part = msg.parts.find((item): item is Message.CompactionPart => item.type === "compaction")
         if (!part) continue
         if (!part.tail_start_id) break
-        retain = part.tail_start_id
-        if (msg.info.id === retain) break
+        retain = {
+          id: part.tail_start_id,
+          afterCompactionIndex: result.length,
+        }
+        if (msg.info.id === retain.id) break
         continue
       }
       if (msg.info.role === "assistant" && CompactionHandoff.isValidSummaryMessage(msg.info))
         completed.add(msg.info.parentID)
     }
+    if (retain) result.splice(retain.afterCompactionIndex)
     result.reverse()
     return result
   }

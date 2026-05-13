@@ -124,6 +124,40 @@ export namespace SessionCompaction {
     return lines.length ? ["<patch-evidence>", ...lines, "</patch-evidence>"].join("\n") : undefined
   }
 
+  function selectedHeadEvidenceRequirements(input: {
+    messages: Message.WithParts[]
+    instructionPaths: string[]
+    sourceUserMessageID: string
+  }): CompactionHandoff.EvidenceRequirements {
+    let userMessages = false
+    const patchFiles = new Set<string>()
+    const errorNames = new Set<string>()
+    for (const msg of input.messages) {
+      if (msg.info.role === "user") {
+        userMessages ||= msg.parts.some((part) => part.type === "text" && part.text.trim().length > 0)
+      }
+      if (msg.info.role === "assistant" && msg.info.error) errorNames.add(msg.info.error.name)
+      for (const part of msg.parts) {
+        if (part.type === "patch") {
+          const summary = Snapshot.patchEvidenceSummary(part)
+          for (const file of summary.filesPreviewHead) patchFiles.add(file)
+          for (const file of summary.filesPreviewTail) patchFiles.add(file)
+        }
+        if (part.type === "tool" && part.state.status === "error") errorNames.add(`${part.tool} tool error`)
+      }
+    }
+    return {
+      sourceUserMessageID: input.sourceUserMessageID,
+      instructionPaths: input.instructionPaths,
+      patchFiles: [...patchFiles],
+      errorNames: [...errorNames],
+      userMessages,
+      fileEvidence: patchFiles.size > 0,
+      errorsAndBlockers: errorNames.size > 0,
+      acceptanceCriteria: userMessages,
+    }
+  }
+
   async function runtimeContext(input: {
     sessionID: string
     userMessage: Message.User
@@ -134,7 +168,7 @@ export namespace SessionCompaction {
     const taskPlan = TaskPlan.toMarkdown(input.sessionID)
     const scratchpad = Scratchpad.get(input.sessionID)
     const patches = patchEvidence(input.selectedHead)
-    return [
+    const text = [
       "<handoff-runtime-state>",
       "Authoritative instruction files. Do not copy their full contents into the handoff; list these paths in durableInstructionSources.",
       ...instructionPaths.map((p) => `- ${p}`),
@@ -151,6 +185,14 @@ export namespace SessionCompaction {
     ]
       .filter((item) => item.trim().length > 0)
       .join("\n")
+    return {
+      text,
+      evidenceRequirements: selectedHeadEvidenceRequirements({
+        messages: input.selectedHead,
+        instructionPaths,
+        sourceUserMessageID: input.userMessage.id,
+      }),
+    }
   }
 
   export function buildPrompt(input: { previousSummary?: string; context: string[]; runtime: string }) {
@@ -210,28 +252,6 @@ export namespace SessionCompaction {
     return Token.estimate(JSON.stringify(msgs))
   }
 
-  async function splitTurn(input: {
-    messages: Message.WithParts[]
-    turn: Turn
-    model: Provider.Model
-    budget: number
-  }) {
-    if (input.budget <= 0) return undefined
-    if (input.turn.end - input.turn.start <= 1) return undefined
-    for (let start = input.turn.start + 1; start < input.turn.end; start++) {
-      const size = await estimate({
-        messages: input.messages.slice(start, input.turn.end),
-        model: input.model,
-      })
-      if (size > input.budget) continue
-      return {
-        start,
-        id: input.messages[start]!.info.id,
-      } satisfies Tail
-    }
-    return undefined
-  }
-
   async function selectCompactionInput(input: {
     messages: Message.WithParts[]
     config: Config.Info
@@ -263,14 +283,7 @@ export namespace SessionCompaction {
         keep = { start: turn.start, id: turn.id }
         continue
       }
-      const split = await splitTurn({
-        messages: input.messages,
-        turn,
-        model: input.model,
-        budget: budget - total,
-      })
-      if (split) keep = split
-      else if (!keep) log.info("tail fallback", { budget, size, total })
+      if (!keep) log.info("tail fallback", { budget, size, total })
       break
     }
 
@@ -398,7 +411,7 @@ export namespace SessionCompaction {
       selectedHead: selected.head,
       focus: compactionPart?.focus,
     })
-    const promptText = buildPrompt({ previousSummary: prior.at(-1)?.summary, context: compacting.context, runtime })
+    const promptText = buildPrompt({ previousSummary: prior.at(-1)?.summary, context: compacting.context, runtime: runtime.text })
     const providerMessages: ModelMessage[] = [
       ...(await Message.toModelMessages(selected.head, model, COMPACTION_PROJECTION)),
       {
@@ -452,6 +465,16 @@ export namespace SessionCompaction {
       processor.message.error = new Message.StructuredOutputPayloadError({
         message: "Compaction handoff did not match the required structured contract.",
         reason: handoff.error instanceof Error ? handoff.error.message : String(handoff.error),
+      }).toObject()
+      processor.message.finish = "error"
+      await Session.updateMessage(processor.message)
+      return "stop"
+    }
+    const evidence = CompactionHandoff.validateMinimumEvidence(handoff.data, runtime.evidenceRequirements)
+    if (!evidence.success) {
+      processor.message.error = new Message.StructuredOutputPayloadError({
+        message: "Compaction handoff did not include the required evidence for the compacted input.",
+        reason: evidence.error,
       }).toObject()
       processor.message.finish = "error"
       await Session.updateMessage(processor.message)

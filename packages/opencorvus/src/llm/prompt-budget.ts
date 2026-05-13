@@ -36,7 +36,10 @@ export type PromptBudgetModel = {
 const DEFAULT_TRUNCATION_MARKER = "\n... (truncated by prompt budget; inspect stored artifacts or tool results for full detail)"
 
 export function modelInputCharLimit(model: PromptBudgetModel): number {
-  const limit = model.limit.input || model.limit.context
+  const limit =
+    typeof model.limit.input === "number" && model.limit.input > 0
+      ? model.limit.input
+      : model.limit.context
   if (!Number.isFinite(limit) || limit <= 0) {
     throw new MissingPromptInputLimitError({
       providerID: model.providerID,
