@@ -10,6 +10,7 @@ import { Icon } from "./Icon";
 import { useDisclosure } from "../solid/disclosure";
 import { useHotkey } from "../solid/hotkey";
 import {
+  changeGroupsRevisionKey,
   currentChangeGroups,
   resolveCurrentChangeGroups,
   resolveDiff,
@@ -67,7 +68,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
     const groups = fallbackGroups();
     return props.changes !== undefined
       ? `props:${groups[0]?.changes.length ?? 0}`
-      : `${boardStore.selectedTaskID}:${boardStore.snapshotVersion}:${groups.map((group) => group.id).join("|")}`;
+      : `${boardStore.selectedTaskID}:${boardStore.snapshotVersion}:${changeGroupsRevisionKey(groups)}`;
   });
 
   const [resolvedGroups] = createResource(requestKey, async () => {

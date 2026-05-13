@@ -31,6 +31,26 @@ export interface ChangeGroup {
 
 const diffCache = new Map<string, FileChange[]>();
 
+export function changeGroupsRevisionKey(groups: ChangeGroup[]): string {
+  return groups
+    .map((group) => [
+      group.id,
+      group.goalRunID ?? "",
+      group.runID ?? "",
+      group.additions,
+      group.deletions,
+      ...group.changes.map((change) => [
+        change.file,
+        change.status,
+        change.additions ?? 0,
+        change.deletions ?? 0,
+        change.before === undefined ? "no-before" : "has-before",
+        change.after === undefined ? "no-after" : "has-after",
+      ].join(",")),
+    ].join(":"))
+    .join("|");
+}
+
 function normalizeDeliveryDiffs(rawDiffs: unknown): FileChange[] {
   return normalizeDiffs(Array.isArray(rawDiffs) ? rawDiffs : []) as FileChange[];
 }
