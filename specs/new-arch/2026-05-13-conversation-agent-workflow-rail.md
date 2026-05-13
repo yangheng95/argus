@@ -6,7 +6,7 @@
 
 > 2026-05-13 修正：没有 agent workflow lane 时不显示底部 rail。空 rail 不应占用 42px 高度，也不应留下 host 边线；只有存在真实 agent workflow record 时才挂载 rail。
 
-> 2026-05-13 修正：窄态是运行概览，不是历史明细列表。并行 lane 继续显示 avatar stack；非并行的同 role 顺序历史 run 必须聚合成单个 role 图标 + 数量徽标，避免 build/build/build 这类重复图标刷屏。宽态仍按真实 run 展示明细。
+> 2026-05-13 修正：窄态不合并 agent run。不同职责 agent 不能因为时间关系或 role 归一化进入同一个窄态按钮；并行和顺序历史都按真实 run 单独显示，窄态只隐藏文字，不隐藏身份。
 
 ## 现状证据
 
@@ -76,8 +76,6 @@ Conversation 内部拆为聊天滚动区 + 底部 agent strip：
 - agent avatar
 - status ring / running pulse
 - active indicator
-- parallel stack badge
-- repeated role run count badge
 - error marker
 
 不显示 agent 名称、summary、sessionID、长文本。hover tooltip 可以显示 agent label 与状态，但 tooltip 不能成为唯一信息源；宽态必须可见。
