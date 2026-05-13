@@ -6,7 +6,7 @@ const SOURCE = readFileSync(join(import.meta.dir, "../src/components/settings/Ge
 
 test("GeneralPanel desktop notification toggle uses the shared notify permission entrypoint", () => {
   expect(SOURCE).toContain('import { ensureDesktopNotificationPermission } from "../../services/notify";');
-  expect(SOURCE).toContain('void ensureDesktopNotificationPermission("settings");');
+  expect(SOURCE).toContain("void ensureDesktopNotificationPermission();");
   expect(SOURCE).not.toContain("requestNotificationPermission");
   expect(SOURCE).not.toContain("notificationPermissionState");
   expect(SOURCE).not.toContain("nativeMessage");

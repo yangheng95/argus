@@ -111,7 +111,7 @@ export default function GeneralPanel() {
                   setSettingsStore("desktopNotifications", enabled);
                   saveSettings();
                   if (!enabled) return;
-                  void ensureDesktopNotificationPermission("settings");
+                  void ensureDesktopNotificationPermission();
                 }}
               />
             </label>

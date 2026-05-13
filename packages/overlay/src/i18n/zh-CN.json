@@ -106,7 +106,6 @@
   "notify.permission_blocked_body": "OpenCorvus 无法启用系统通知。请检查浏览器或系统通知设置；界面内通知仍会继续显示。",
   "notify.permission_request_failed_body": "OpenCorvus 无法申请通知权限：{{error}}。界面内通知仍会继续显示。",
   "notify.permission_granted_title": "桌面通知已启用",
-  "notify.permission_granted_startup_body": "任务更新现在可以显示在系统通知区域。",
   "notify.permission_granted_settings_body": "任务更新现在可以显示在系统通知区域。",
   "settings.desktop_notifications_label": "桌面通知",
   "settings.desktop_notifications_hint": "任务完成、失败、取消或等待响应时通知系统提醒。",
