@@ -28,7 +28,12 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_TSX).not.toContain("card__todo-progress")
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble[data-align="right"]')
   expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__identity")
+  expect(CHAT_BUBBLE_CSS).toContain(
+    ".chat-bubble__identity {\n  min-width: 0;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;",
+  )
+  expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__identity-copy")
   expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__title-line")
+  expect(CHAT_BUBBLE_CSS).toContain("min-height: calc(36px * var(--ui-scale));")
   expect(CHAT_BUBBLE_CSS).toContain("font-size: calc(15px * var(--ui-scale));")
   expect(CHAT_BUBBLE_CSS).toContain("font-weight: var(--ui-font-weight-strong);")
   expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__head[data-align=\"right\"] .chat-bubble__title-row")

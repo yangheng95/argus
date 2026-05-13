@@ -136,7 +136,7 @@
   min-width: 0;
   flex: 1 1 auto;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: calc(10px * var(--ui-scale));
 }
 
@@ -152,6 +152,9 @@
 .chat-bubble__identity-copy {
   min-width: 0;
   flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-height: calc(36px * var(--ui-scale));
 }
 
 .chat-bubble__title-line {
