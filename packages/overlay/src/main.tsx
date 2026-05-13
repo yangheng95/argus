@@ -182,6 +182,31 @@ function formatDebugTime(ms: unknown): string {
     .replace(/\.\d{3}Z$/, "Z")
 }
 
+function debugGoalBoardFiles(gw: any): string {
+  const steps = Array.isArray(gw?.steps) ? gw.steps : []
+  let changedFiles = 0
+  let changedFileDiffs = 0
+  let statFiles: number | undefined
+  let additions: number | undefined
+  let deletions: number | undefined
+  for (const step of steps) {
+    const payload = step?.payload
+    if (!payload || typeof payload !== "object") continue
+    if (Array.isArray(payload.changedFiles)) changedFiles += payload.changedFiles.length
+    if (Array.isArray(payload.changedFileDiffs)) changedFileDiffs += payload.changedFileDiffs.length
+    const stats = payload.diffStats
+    if (stats && typeof stats === "object") {
+      if (typeof stats.files === "number") statFiles = (statFiles ?? 0) + stats.files
+      if (typeof stats.additions === "number") additions = (additions ?? 0) + stats.additions
+      if (typeof stats.deletions === "number") deletions = (deletions ?? 0) + stats.deletions
+    }
+  }
+  const statText = statFiles === undefined
+    ? "—"
+    : `${statFiles} files, +${additions ?? 0}/-${deletions ?? 0}`
+  return `changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; diffStats=${statText}`
+}
+
 /**
  * Build a plain-text debug blob for the currently selected task board.
  * Contains everything an operator needs to triage a stuck / mis-merged task
@@ -222,6 +247,7 @@ function buildTaskDebugBlob(board: any): string {
         `      retry:     ${gw?.retryCount ?? 0}`,
         `      workspace: ${String(gw?.workspaceDir ?? "—")}`,
         `      branch:    ${String(gw?.workspaceBranch ?? "—")}`,
+        `      files:     ${debugGoalBoardFiles(gw)}`,
       )
     }
   }
@@ -230,6 +256,7 @@ function buildTaskDebugBlob(board: any): string {
     `Notes:`,
     `  - engine_goal stores the goal contract only. workspace_dir / workspace_branch / workspace_base_ref / retry_count / status / cascade_state were retired (2026-05-05); workspace + retry live on the latest engine_artifact[kind='goal_run_attempt'].payload row, goal status is derived live via engine/describe.ts::goalStatusByID from the goal_run chain.`,
     `  - engine_artifact is the append-only single source: run / goal_run_attempt / delivery / verification-evidence / architect_contract_graph / integrity_attempt / prosecutor_attempt / orchestrator-stream-error all live here. Latest-per-id wins by time_created desc.`,
+    `  - Right-side Files panel reads board.goalWorkflows[].steps[].payload.changedFiles / changedFileDiffs, which are projected from per-goal engine_artifact[kind='delivery']. If SQL shows delivery rows but the panel omits a goal, debug overlay refresh/resource keys before suspecting DB writes.`,
     `  - Empty engine_executor_session does NOT mean nothing is running — that table is only populated when the executor protocol formally registers a lease; in-process executors emit only via session.bridge.`,
     `  - LLM stream stalls bound through llm/activity.ts (withLLMActivity): first-byte gate, idle gate (default 180s = session_llm_idle_ms), total deadline (default 30 min). Exactly one terminal event per call — done | failed | aborted. Board "running" past the total deadline with no events ⇒ bug at withLLMActivity or its sink wiring, NOT a missing stalled-detection heuristic elsewhere.`,
     ``,
@@ -285,6 +312,59 @@ function buildTaskDebugBlob(board: any): string {
     `FROM engine_artifact`,
     `WHERE task_id = '${id}' AND kind='goal_run_attempt'`,
     `ORDER BY time_created;`,
+    ``,
+    `-- Per-goal delivery file projection (right-side Files panel backend source; latest delivered attempt per goal, not necessarily the live tip after retry/reset)`,
+    `WITH latest_goal_run AS (`,
+    `  SELECT goal_run_id, payload, time_created, id,`,
+    `         row_number() OVER (PARTITION BY goal_run_id ORDER BY time_created DESC, id DESC) AS rn`,
+    `  FROM engine_artifact`,
+    `  WHERE task_id = '${id}' AND kind='goal_run_attempt'`,
+    `), delivered AS (`,
+    `  SELECT json_extract(gr.payload, '$.goal_id') AS goal_id,`,
+    `         gr.goal_run_id,`,
+    `         json_extract(gr.payload, '$.retry_count') AS retry_count,`,
+    `         d.delivery_id, d.time_created AS delivery_time,`,
+    `         json_extract(d.payload, '$.result.changed_files') AS changed_files,`,
+    `         json_array_length(json_extract(d.payload, '$.result.changed_files')) AS changed_file_count,`,
+    `         json_array_length(json_extract(d.payload, '$.result.diffs')) AS diff_count,`,
+    `         json_extract(d.payload, '$.result.stats.additions') AS additions,`,
+    `         json_extract(d.payload, '$.result.stats.deletions') AS deletions,`,
+    `         row_number() OVER (PARTITION BY json_extract(gr.payload, '$.goal_id') ORDER BY d.time_created DESC, d.id DESC) AS delivery_rank`,
+    `  FROM latest_goal_run gr`,
+    `  JOIN engine_artifact d ON d.goal_run_id = gr.goal_run_id AND d.kind='delivery'`,
+    `  WHERE gr.rn = 1`,
+    `)`,
+    `SELECT g.order_index + 1 AS goal_number,`,
+    `       'G' || (g.order_index + 1) || 'V' || (coalesce(delivered.retry_count, 0) + 1) AS delivered_label,`,
+    `       g.id AS goal_id, g.title, delivered.goal_run_id, delivered.delivery_id,`,
+    `       delivered.changed_file_count, delivered.diff_count, delivered.additions, delivered.deletions,`,
+    `       delivered.changed_files, delivered.delivery_time`,
+    `FROM engine_goal g`,
+    `LEFT JOIN delivered ON delivered.goal_id = g.id AND delivered.delivery_rank = 1`,
+    `WHERE g.task_id = '${id}'`,
+    `ORDER BY g.order_index;`,
+    ``,
+    `-- Raw per-goal delivery artifacts (all delivered attempts, useful when a retry label differs from the delivered diff label)`,
+    `WITH latest_goal_run AS (`,
+    `  SELECT goal_run_id, payload, time_created, id,`,
+    `         row_number() OVER (PARTITION BY goal_run_id ORDER BY time_created DESC, id DESC) AS rn`,
+    `  FROM engine_artifact`,
+    `  WHERE task_id = '${id}' AND kind='goal_run_attempt'`,
+    `)`,
+    `SELECT d.delivery_id, d.goal_run_id,`,
+    `       json_extract(gr.payload, '$.goal_id') AS goal_id,`,
+    `       json_extract(gr.payload, '$.retry_count') AS retry_count,`,
+    `       json_extract(d.payload, '$.status') AS status,`,
+    `       json_array_length(json_extract(d.payload, '$.result.changed_files')) AS changed_file_count,`,
+    `       json_array_length(json_extract(d.payload, '$.result.diffs')) AS diff_count,`,
+    `       json_extract(d.payload, '$.result.stats.additions') AS additions,`,
+    `       json_extract(d.payload, '$.result.stats.deletions') AS deletions,`,
+    `       json_extract(d.payload, '$.result.changed_files') AS changed_files,`,
+    `       d.time_created, d.time_updated`,
+    `FROM engine_artifact d`,
+    `LEFT JOIN latest_goal_run gr ON gr.goal_run_id = d.goal_run_id AND gr.rn = 1`,
+    `WHERE d.task_id = '${id}' AND d.kind='delivery' AND d.goal_run_id IS NOT NULL`,
+    `ORDER BY d.time_created;`,
     ``,
     `-- Orchestrator fatal stream errors (rule-23 single source — empty result = no fatal so far)`,
     `SELECT id, run_id, goal_run_id, label,`,
