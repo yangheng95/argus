@@ -18,13 +18,7 @@
 import { z } from "zod"
 import { AcceptanceSpecSchema } from "@/acceptance/types"
 
-export const GOAL_KINDS = [
-  "bootstrap",
-  "feature",
-  "verification",
-  "integration",
-  "system",
-] as const
+export const GOAL_KINDS = ["bootstrap", "feature", "verification", "integration", "system"] as const
 
 export const GOAL_PRIORITIES = ["blocking", "advisory"] as const
 
@@ -34,10 +28,7 @@ export const GOAL_PRIORITIES = ["blocking", "advisory"] as const
  * further down.
  */
 export const GoalContractFieldsSchema = z.object({
-  id: z
-    .string()
-    .min(1)
-    .describe("Unique goal ID, e.g. goal_bootstrap, goal_api, goal_ui"),
+  id: z.string().min(1).describe("Unique goal ID, e.g. goal_bootstrap, goal_api, goal_ui"),
   title: z.string().min(1).describe("Short human-readable goal title"),
   objective: z
     .string()
@@ -49,8 +40,8 @@ export const GoalContractFieldsSchema = z.object({
         "Do NOT restate the user's request — the executor has the full user " +
         "intent bundle at .opencorvus/intent/ and can reference it. " +
         "Do NOT describe interface signatures or type definitions here — put " +
-        "those in the exports/imports fields (structured, not prose). " +
-        "Do NOT paraphrase what other goals do — dependents read exports, " +
+        "those in the Architect Contract Graph. " +
+        "Do NOT paraphrase what other goals do — dependents read graph contracts, " +
         "not your objective.",
     ),
   acceptance_specs: z
@@ -67,35 +58,10 @@ export const GoalContractFieldsSchema = z.object({
       "Primary responsibility paths for this goal. These guide collaboration and review; " +
         "they are not a file sandbox. Must be discovered via tool exploration — do not guess.",
     ),
-  depends_on: z
-    .array(z.string())
-    .default([])
-    .describe("Goal IDs this depends on (execution order)"),
-  exports: z
-    .array(z.string())
-    .default([])
-    .describe(
-      "Interfaces this goal PROVIDES — each entry is one actual signature or " +
-        "type definition (e.g. 'getStocks(): Stock[]', " +
-        "'type Stock = { id: string; name: string }'). " +
-        "Every cross-goal contract MUST appear here; do not describe interfaces " +
-        "in the objective field. Dependents read this list as their import surface.",
-    ),
-  imports: z
-    .array(z.string())
-    .default([])
-    .describe(
-      "Interfaces this goal CONSUMES from dependencies. Each entry names one " +
-        "signature/type from a dependency's exports. " +
-        "Do not paraphrase dependency behavior — the executor sees the " +
-        "dependency's declared exports directly.",
-    ),
+  depends_on: z.array(z.string()).default([]).describe("Goal IDs this depends on (execution order)"),
   priority: z.enum(GOAL_PRIORITIES).default("blocking"),
   kind: z.enum(GOAL_KINDS).default("feature"),
-  requirement_ids: z
-    .array(z.string())
-    .default([])
-    .describe("REQ-N references this goal covers"),
+  requirement_ids: z.array(z.string()).default([]).describe("REQ-N references this goal covers"),
 })
 
 /**
@@ -105,13 +71,9 @@ export const GoalContractFieldsSchema = z.object({
  */
 export type GoalContractFieldsParsed = z.infer<typeof GoalContractFieldsSchema>
 
-export function normalizeGoalContractFields(
-  input: z.input<typeof GoalContractFieldsSchema>,
-): GoalContractFieldsParsed {
+export function normalizeGoalContractFields(input: z.input<typeof GoalContractFieldsSchema>): GoalContractFieldsParsed {
   const withDefaults = { ...input }
   if (withDefaults.depends_on === undefined) withDefaults.depends_on = []
-  if (withDefaults.exports === undefined) withDefaults.exports = []
-  if (withDefaults.imports === undefined) withDefaults.imports = []
   if (withDefaults.priority === undefined) withDefaults.priority = "blocking"
   if (withDefaults.kind === undefined) withDefaults.kind = "feature"
   if (withDefaults.requirement_ids === undefined) withDefaults.requirement_ids = []
@@ -144,14 +106,6 @@ export const GoalContractUpdateSchema = z.object({
     .array(z.string())
     .describe("Goal IDs this depends on. Replaces the prior dependency list when present.")
     .optional(),
-  exports: z
-    .array(z.string())
-    .describe("Interfaces this goal provides. Replaces the prior export list when present.")
-    .optional(),
-  imports: z
-    .array(z.string())
-    .describe("Interfaces this goal consumes. Replaces the prior import list when present.")
-    .optional(),
   priority: z.enum(GOAL_PRIORITIES).describe("Goal priority.").optional(),
   kind: z.enum(GOAL_KINDS).describe("Goal kind.").optional(),
   requirement_ids: z
@@ -162,11 +116,7 @@ export const GoalContractUpdateSchema = z.object({
 
 export type GoalContractUpdate = z.infer<typeof GoalContractUpdateSchema>
 
-export function normalizeGoalContractUpdate(
-  input: z.input<typeof GoalContractUpdateSchema>,
-): GoalContractUpdate {
+export function normalizeGoalContractUpdate(input: z.input<typeof GoalContractUpdateSchema>): GoalContractUpdate {
   const parsed = GoalContractUpdateSchema.parse(input)
-  return Object.fromEntries(
-    Object.entries(parsed).filter(([, value]) => value !== undefined),
-  ) as GoalContractUpdate
+  return Object.fromEntries(Object.entries(parsed).filter(([, value]) => value !== undefined)) as GoalContractUpdate
 }

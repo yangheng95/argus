@@ -28,21 +28,51 @@ function mergePatch(target: unknown, patch: unknown): unknown {
   for (const [key, value] of Object.entries(patch)) {
     if (value === null) {
       delete base[key]
-    } else {
-      base[key] = mergePatch(base[key], value)
+      continue
     }
+    base[key] = mergePatch(base[key], value)
   }
   return base
 }
 
 test(
-  "agent model selects patch independent per-agent overrides",
+  "saving a hexin api key updates provider stats and agent model options in the same settings session",
   async () => {
     let config: Record<string, unknown> = {
       model: "openai/gpt-4o-mini",
-      agent: {},
     }
-    const patches: Record<string, unknown>[] = []
+    let hexinConnected = false
+    let hexinAuthKey = ""
+
+    const openaiProvider = {
+      id: "openai",
+      name: "OpenAI",
+      env: ["OPENAI_API_KEY"],
+      models: {
+        "gpt-4o-mini": { id: "gpt-4o-mini" },
+      },
+    }
+    const hexinProvider = {
+      id: "hexin",
+      name: "Hexin OpenAI Gateway",
+      env: ["HEXIN_API_KEY"],
+      models: {
+        "gpt-5.4-mini": { id: "gpt-5.4-mini" },
+        "gpt-5.4": { id: "gpt-5.4" },
+      },
+    }
+
+    function configuredProviders() {
+      const configured = [openaiProvider]
+      const overrideKey = (config.provider as Record<string, any> | undefined)?.hexin?.options?.apiKey
+      if ((typeof overrideKey === "string" && overrideKey.trim() !== "") || hexinAuthKey) {
+        configured.push({
+          ...hexinProvider,
+          ...(hexinAuthKey ? { key: hexinAuthKey } : {}),
+        })
+      }
+      return configured
+    }
 
     const server = Bun.serve({
       idleTimeout: 255,
@@ -59,7 +89,7 @@ test(
         if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
         if (path === "/session") return send([])
         if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
-        if (path === "/vcs")
+        if (path === "/vcs") {
           return send({
             branch: "dev",
             clean: true,
@@ -71,30 +101,39 @@ test(
             ahead: 0,
             behind: 0,
           })
-        if (path === "/provider") return send({ all: [], connected: [], default: {} })
-        if (path === "/provider/auth") return send({})
-        if (path === "/config/providers") {
+        }
+        if (path === "/provider") {
           return send({
-            providers: [
-              {
-                id: "anthropic",
-                name: "Anthropic",
-                models: {
-                  "claude-sonnet-4-6": { id: "claude-sonnet-4-6" },
-                },
-              },
-              {
-                id: "openai",
-                name: "OpenAI",
-                models: {
-                  "gpt-4.1": { id: "gpt-4.1" },
-                  "gpt-4o-mini": { id: "gpt-4o-mini" },
-                },
-              },
-            ],
+            all: [openaiProvider, hexinProvider],
+            connected: hexinConnected ? ["hexin"] : [],
             default: {
-              anthropic: "claude-sonnet-4-6",
               openai: "gpt-4o-mini",
+              hexin: "gpt-5.4-mini",
+            },
+          })
+        }
+        if (path === "/provider/auth") return send({})
+        if (path === "/auth/hexin" && req.method === "PUT") {
+          const body = (await req.json()) as { key?: string }
+          hexinAuthKey = typeof body.key === "string" ? body.key : ""
+          hexinConnected = hexinAuthKey.trim() !== ""
+          return send(true)
+        }
+        if (path === "/provider/hexin/refresh" && req.method === "POST") {
+          hexinConnected = true
+          return send({
+            ok: true,
+            count: Object.keys(hexinProvider.models).length,
+            ids: Object.keys(hexinProvider.models),
+          })
+        }
+        if (path === "/config/providers") {
+          const providers = configuredProviders()
+          return send({
+            providers,
+            default: {
+              openai: "gpt-4o-mini",
+              ...(providers.some((item) => item.id === "hexin") ? { hexin: "gpt-5.4-mini" } : {}),
             },
           })
         }
@@ -102,15 +141,11 @@ test(
         if (path === "/config" && req.method === "GET") return send(config)
         if (path === "/config" && req.method === "PATCH") {
           const body = (await req.json()) as Record<string, unknown>
-          patches.push(body)
           config = mergePatch(config, body) as Record<string, unknown>
           return send(config)
         }
         if (path === "/agent") {
-          return send([
-            { name: "build", description: "Build agent", mode: "primary", native: true, options: {} },
-            { name: "delivery", description: "Delivery agent", mode: "primary", native: true, options: {} },
-          ])
+          return send([{ name: "build", description: "Build agent", mode: "primary", native: true }])
         }
         if (path === "/channel") return send([])
         if (path === "/executor") return send([])
@@ -163,54 +198,55 @@ test(
       await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
       await page.waitForSelector('[data-menu-trigger="agent"]')
       await page.click('[data-menu-trigger="agent"]')
-      await page.waitForSelector('[data-testid="titlebar-open-agent-models"]')
-      await page.click('[data-testid="titlebar-open-agent-models"]')
+      await page.waitForSelector('[data-testid="titlebar-open-providers"]')
+      await page.click('[data-testid="titlebar-open-providers"]')
+      await page.waitForSelector('[data-testid="provider-api-key-input-hexin"]')
+
+      await page.type('[data-testid="provider-api-key-input-hexin"]', "sk-hexin-test")
+      await page.click('[data-testid="provider-api-key-save-hexin"]')
+      await page.waitForFunction(
+        () =>
+          (document.querySelector('[data-testid="provider-api-key-input-hexin"]') as HTMLInputElement | null)?.value ===
+          "",
+      )
+      await page.waitForFunction(() => {
+        const stats = Array.from(document.querySelectorAll(".provider-stat"))
+        return stats.some((node) => {
+          const label = node.querySelector(".provider-stat-label")?.textContent?.trim()
+          const value = node.querySelector(".provider-stat-value")?.textContent?.trim()
+          return label === "Configured" && value === "1"
+        })
+      })
+
+      await page.waitForSelector('[data-config-tab="agent-models"]')
+      await page.click('[data-config-tab="agent-models"]')
+      await page.waitForFunction(
+        () => document.querySelector('[data-config-panel="agent-models"]')?.classList.contains("active") === true,
+      )
       await page.waitForSelector('[data-testid="agent-model-select-build"]')
-      await page.waitForSelector('[data-testid="agent-model-select-delivery"]')
-
-      const initialOptionCount = await page.$$eval(".agent-model-select option", (nodes) => nodes.length)
-      expect(initialOptionCount).toBeLessThanOrEqual(6)
-
       await page.focus('[data-testid="agent-model-select-build"]')
       await page.waitForFunction(
         () =>
           !!(document.querySelector(
-            '[data-testid="agent-model-select-build"] option[value="anthropic/claude-sonnet-4-6"]',
+            '[data-testid="agent-model-select-build"] option[value="hexin/gpt-5.4-mini"]',
           ) as HTMLOptionElement | null),
       )
-      await page.select('[data-testid="agent-model-select-build"]', "anthropic/claude-sonnet-4-6")
-      await page.waitForFunction(
-        () =>
-          (document.querySelector('[data-testid="agent-model-select-build"]') as HTMLSelectElement | null)?.value ===
-          "anthropic/claude-sonnet-4-6",
-      )
 
-      await page.waitForSelector('[data-testid="agent-model-select-delivery"]')
-      await page.focus('[data-testid="agent-model-select-delivery"]')
-      await page.waitForFunction(
-        () =>
-          !!(document.querySelector(
-            '[data-testid="agent-model-select-delivery"] option[value="openai/gpt-4.1"]',
-          ) as HTMLOptionElement | null),
-      )
-      await page.select('[data-testid="agent-model-select-delivery"]', "openai/gpt-4.1")
-      await page.waitForFunction(
-        () =>
-          (document.querySelector('[data-testid="agent-model-select-delivery"]') as HTMLSelectElement | null)?.value ===
-          "openai/gpt-4.1",
-      )
-
-      const modelPatches = patches.filter((patch) => "agent" in patch)
-      expect(modelPatches).toEqual([
-        { agent: { build: { model: "anthropic/claude-sonnet-4-6" } } },
-        { agent: { delivery: { model: "openai/gpt-4.1" } } },
-      ])
-      expect(config).toMatchObject({
-        agent: {
-          build: { model: "anthropic/claude-sonnet-4-6" },
-          delivery: { model: "openai/gpt-4.1" },
-        },
+      const configuredValue = await page.evaluate(() => {
+        const stats = Array.from(document.querySelectorAll(".provider-stat"))
+        const configured = stats.find(
+          (node) => node.querySelector(".provider-stat-label")?.textContent?.trim() === "Configured",
+        )
+        return configured?.querySelector(".provider-stat-value")?.textContent?.trim() ?? ""
       })
+      expect(configuredValue).toBe("1")
+
+      const optionValues = await page.$$eval('[data-testid="agent-model-select-build"] option', (nodes) =>
+        nodes.map((node) => (node as HTMLOptionElement).value),
+      )
+      expect(optionValues).toContain("hexin/gpt-5.4-mini")
+      expect(optionValues).toContain("hexin/gpt-5.4")
+
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)

@@ -2,11 +2,48 @@ import z from "zod"
 import { Tool } from "./tool"
 import { EngineService } from "@/task-api"
 import { Session } from "@/session"
+import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema } from "@/panel/capability"
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
+
+async function resolveCreateTaskQueueDecision(input: {
+  queue?: boolean
+  ctx: Tool.Context
+}) {
+  if (typeof input.queue === "boolean") return input.queue
+  if (input.ctx.extra?.surface !== "panel") {
+    return false
+  }
+  const { answers } = await Question.askAndFormat({
+    sessionID: input.ctx.sessionID,
+    tool: input.ctx.callID ? { messageID: input.ctx.messageID, callID: input.ctx.callID } : undefined,
+    questions: [
+      {
+        header: "任务排队",
+        question: "这个新任务要排队等待，还是立即开始？",
+        options: [
+          {
+            label: "立即开始",
+            description: "新任务会马上运行，不等待同目录中正在进行的任务。",
+          },
+          {
+            label: "排队等待",
+            description: "新任务会等同目录中当前任务结束后再运行。",
+          },
+        ],
+        multiple: false,
+        custom: false,
+      },
+    ],
+  })
+  const selected = answers?.[0]?.[0]
+  if (selected === "立即开始") return false
+  if (selected === "排队等待") return true
+  throw new Error("Task creation cancelled before selecting a start mode.")
+}
 
 export const PanelTool = Tool.define("panel", {
   description: "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
@@ -115,10 +152,12 @@ export const PanelTool = Tool.define("panel", {
           }))
         const baseRequest = originalText || params.request
         const request = attachmentTexts ? baseRequest + attachmentTexts : baseRequest
+        const queue = await resolveCreateTaskQueueDecision({ queue: params.queue, ctx })
         const taskID = await EngineService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
           request,
           executor: params.executor,
+          queue,
           checks: params.checks,
           routing: params.routing,
           source: params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel"),
@@ -363,4 +402,3 @@ export const PanelTool = Tool.define("panel", {
     }
   },
 })
-

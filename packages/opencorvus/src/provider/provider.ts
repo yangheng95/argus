@@ -57,9 +57,10 @@ export namespace Provider {
 
   export function resolveFetchInactivityMs(providerID: string, configuredTimeout: unknown): number {
     const providerTimeout = PROVIDER_INACTIVITY_TIMEOUT_MS[providerID]
-    const selectedTimeout = configuredTimeout !== undefined && configuredTimeout !== null
-      ? configuredTimeout
-      : (providerTimeout ?? DEFAULT_INACTIVITY_TIMEOUT_MS)
+    const selectedTimeout =
+      configuredTimeout !== undefined && configuredTimeout !== null
+        ? configuredTimeout
+        : (providerTimeout ?? DEFAULT_INACTIVITY_TIMEOUT_MS)
 
     if (selectedTimeout === false || typeof selectedTimeout !== "number" || selectedTimeout <= 0) return 0
     if (providerTimeout !== undefined) return Math.min(selectedTimeout, providerTimeout)
@@ -128,6 +129,16 @@ export namespace Provider {
 
     if (now - first >= dashscopeTtlMs()) return
     return key
+  }
+
+  async function hexinApiKey(config: Config.Info) {
+    const configKey = config.provider?.hexin?.options?.apiKey
+    const auth = await Auth.get("hexin")
+    return (
+      Env.get("HEXIN_API_KEY")?.trim() ||
+      (typeof configKey === "string" ? configKey.trim() : "") ||
+      (auth?.type === "api" ? auth.key.trim() : "")
+    )
   }
 
   const BUNDLED_PROVIDERS: Record<string, (options: any) => LanguageModelProvider> = {
@@ -345,20 +356,15 @@ export namespace Provider {
 
     // Built-in: Hexin OpenAI Gateway — models discovered dynamically from /v1/models
     if (!database["hexin"] && !disabled.has("hexin")) {
-      try {
-        const models = await discoverHexinModels()
-        database["hexin"] = {
-          id: "hexin",
-          name: "Hexin OpenAI Gateway",
-          env: ["HEXIN_API_KEY"],
-          options: {},
-          source: "custom",
-          models,
-        }
-      } catch (err) {
-        log.error("hexin provider unavailable — /v1/models fetch failed and no cache present", {
-          error: err instanceof Error ? err.message : String(err),
-        })
+      const key = await hexinApiKey(config)
+      const models = key ? await discoverHexinModels({ force: true, apiKey: key }) : await discoverHexinModels()
+      database["hexin"] = {
+        id: "hexin",
+        name: "Hexin OpenAI Gateway",
+        env: ["HEXIN_API_KEY"],
+        options: {},
+        source: "custom",
+        models,
       }
     }
 
@@ -472,9 +478,7 @@ export namespace Provider {
       // DashScope detection: any model in this provider uses a dashscope API URL.
       // Previously checked provider.api?.includes("dashscope") but Provider.Info
       // has no top-level .api field — api.url lives per-model.
-      const isDashScope = Object.values(provider.models).some(
-        (m) => m.api?.url?.includes("dashscope"),
-      )
+      const isDashScope = Object.values(provider.models).some((m) => m.api?.url?.includes("dashscope"))
       // alibaba-cn has special embedded-key logic below
       if (providerID === "alibaba-cn" || providerID === "alibaba") continue
       const candidates = isDashScope ? [...provider.env, ...dashscopeCommonKeys] : provider.env
@@ -617,16 +621,15 @@ export namespace Provider {
     ;(state as any).reset()
   }
 
+  export function resetAll() {
+    ;(state as any).resetAll()
+  }
+
   /** Re-fetch the hexin /v1/models list bypassing cache, then reset provider state. */
   export async function refreshHexin(): Promise<string[]> {
     const { refreshHexinCache } = await import("./hexin-discovery")
     const cfg = await Config.get()
-    const configKey = cfg.provider?.hexin?.options?.apiKey
-    const auth = await Auth.get("hexin")
-    const apiKey =
-      Env.get("HEXIN_API_KEY")?.trim() ||
-      (auth?.type === "api" ? auth.key.trim() : "") ||
-      (typeof configKey === "string" ? configKey.trim() : "")
+    const apiKey = await hexinApiKey(cfg)
     const models = await refreshHexinCache(apiKey)
     reset()
     return Object.keys(models)
@@ -738,6 +741,12 @@ export namespace Provider {
           }
         }
 
+        if (model.api.npm.includes("@ai-sdk/openai-compatible") && opts.body && opts.method === "POST") {
+          const body = JSON.parse(opts.body as string)
+          const normalized = ProviderTransform.requestBody(model.providerID, body)
+          if (normalized !== body) opts.body = JSON.stringify(normalized)
+        }
+
         const response = await fetchFn(input, {
           ...opts,
           // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
@@ -787,12 +796,7 @@ export namespace Provider {
             }
           }
           // fetch accepts string | URL | Request; URL has .href, Request has .url
-          const url =
-            typeof input === "string"
-              ? input
-              : input instanceof URL
-                ? input.href
-                : input?.url ?? ""
+          const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input?.url ?? "")
           throw new APICallError({
             message: `Provider ${model.providerID} returned HTTP ${response.status}: ${detail || response.statusText}`,
             url,

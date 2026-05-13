@@ -26,10 +26,11 @@ export function renderIntegrityMarkdown(input: {
   for (const dim of verdict.dimensions) {
     const issues = dim.issues ?? []
     const corrections = dim.corrections ?? []
+    const graphCorrections = dim.graphCorrections ?? []
     const missingGoals = dim.missingGoals ?? []
     lines.push("")
     lines.push(`**${dim.id} = ${dim.verdict}**`)
-    if (issues.length === 0 && corrections.length === 0 && missingGoals.length === 0) {
+    if (issues.length === 0 && corrections.length === 0 && graphCorrections.length === 0 && missingGoals.length === 0) {
       lines.push("- (no findings)")
       continue
     }
@@ -52,6 +53,22 @@ export function renderIntegrityMarkdown(input: {
       for (const c of corrections) {
         const updates = c.updates ? ` updates=${JSON.stringify(c.updates)}` : ""
         lines.push(`  - ${c.action} goal=${c.goalID} — ${c.reason}${updates}`)
+      }
+    }
+    if (graphCorrections.length > 0) {
+      lines.push("- graph_corrections (proposed by integrity, NOT yet applied):")
+      for (const c of graphCorrections) {
+        if (c.kind === "contract") {
+          const contractID = c.contractID ?? c.contract?.id ?? "(new)"
+          lines.push(`  - ${c.action} contract=${contractID} — ${c.reason}`)
+        } else if (c.kind === "dependency") {
+          const fromGoalID = c.fromGoalID ?? c.dependency?.from_goal_id ?? "(new)"
+          const toGoalID = c.toGoalID ?? c.dependency?.to_goal_id ?? "(new)"
+          const nextReason = c.newReason ? ` new_reason=${c.newReason}` : ""
+          lines.push(`  - ${c.action} dependency=${fromGoalID}->${toGoalID}${nextReason} — ${c.reason}`)
+        } else {
+          lines.push(`  - attach contract_audit goal=${c.goalID} contracts=[${c.contractIDs.join(", ")}] — ${c.reason}`)
+        }
       }
     }
     if (missingGoals.length > 0) {

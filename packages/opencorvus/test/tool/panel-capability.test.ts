@@ -33,6 +33,9 @@ test("exposes local action metadata and input schemas", () => {
       routing: {
         type: "object",
       },
+      queue: {
+        type: "boolean",
+      },
     },
   })
   expect(screenshot?.schema).toMatchObject({

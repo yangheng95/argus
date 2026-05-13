@@ -176,8 +176,7 @@ body {
    warn / danger) where appropriate. */
 .card[data-depth="0"][data-kind="goal"],
 .card[data-depth="0"][data-kind="phase"],
-.card[data-depth="0"][data-kind="step"],
-.card[data-depth="0"][data-kind="tool"] {
+.card[data-depth="0"][data-kind="step"] {
   border-left: calc(3px * var(--ui-scale)) solid var(--card-stage, var(--card-stage-info));
   background: var(--card-bg-0);
 }
@@ -638,10 +637,10 @@ body {
 /* Nested step cards: use stage accent on the left rail */
 .card:not([data-depth="0"])[data-kind="step"][data-stage] { border-left-color: var(--card-stage); }
 
-/* Tool card: tools use the muted info accent (same as default
-   stage) — pre-iter51 they got their own grey #8f9b96 from
-   --card-stage-tool, which is now retired. */
-.card[data-kind="tool"] { border-left-color: var(--card-stage-info); }
+/* Tool cards rely on their status badge and title row, not a side rail. */
+.card:not([data-depth="0"])[data-kind="tool"] {
+  border-left: 0 solid transparent;
+}
 .card[data-kind="tool"] .card__title-row {
   flex-wrap: wrap;
   align-items: flex-start;

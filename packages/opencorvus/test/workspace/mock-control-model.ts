@@ -286,6 +286,7 @@ function action(prompt: LanguageModelV3Prompt) {
       metadata: object(input.metadata),
       source: text(input.source) ?? (input.surface === "panel" ? "panel" : `channel:${input.surface}`),
       allow_create: input.allow_create,
+      queue: false,
     }
   }
   return {

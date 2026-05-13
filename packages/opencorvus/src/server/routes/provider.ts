@@ -375,6 +375,8 @@ export const ProviderRoutes = lazy(() =>
         const providerID = c.req.valid("param").providerID
         const { method, inputs } = c.req.valid("json")
         await ProviderAuth.execute({ providerID, method, inputs })
+        Provider.resetAll()
+        Agent.resetAll()
         return c.json(true)
       },
     )
@@ -459,6 +461,8 @@ export const ProviderRoutes = lazy(() =>
           method,
           code,
         })
+        Provider.resetAll()
+        Agent.resetAll()
         return c.json(true)
       },
     ),

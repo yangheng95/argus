@@ -3,6 +3,7 @@ import { advanceQueue, dispatchTaskLoop, reorderQueuedTasksForCwd, taskCwd } fro
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
+import { EngineService } from "../../src/task-api"
 
 function taskStatus(id: string): string | undefined {
   const t = findTask(id)
@@ -55,6 +56,84 @@ describe("engine queue", () => {
           event: { note: "caller-supplied note" },
         })
         expect(taskStatus(taskID)).toBe("active")
+      },
+    })
+  })
+
+  test("createTask starts immediately by default even when the cwd already has an active task", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const activeID = `task_queue_existing_${now}`
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: activeID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "existing active task",
+            request: "already owns the old serial queue slot",
+            priority: "normal",
+            time_started: now,
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+
+        const taskID = await EngineService.createTask({
+          request: "start without waiting for the active cwd sibling",
+          title: "direct start task",
+          executor: "mirrorcode",
+        })
+        for (let i = 0; i < 50 && runTaskLoop.mock.calls.length === 0; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        }
+
+        expect(taskStatus(taskID)).toBe("active")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
+      },
+    })
+  })
+
+  test("createTask with queue=true waits behind an active task in the same cwd", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const activeID = `task_queue_existing_${now}`
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: activeID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "existing active task",
+            request: "holds the explicit queue slot",
+            priority: "normal",
+            time_started: now,
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+
+        const taskID = await EngineService.createTask({
+          request: "wait because the caller explicitly requested queueing",
+          title: "queued opt-in task",
+          executor: "mirrorcode",
+          queue: true,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(taskStatus(taskID)).toBe("queued")
+        expect(runTaskLoop).not.toHaveBeenCalled()
       },
     })
   })

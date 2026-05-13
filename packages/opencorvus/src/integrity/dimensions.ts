@@ -125,14 +125,13 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
     title: "Technical Feasibility",
     summary:
       "The chosen stack + goal contracts must be coherent and physically achievable. " +
-      "An imported symbol must be exported by some ancestor goal; owned paths must " +
+      "Graph contracts must be produced by dependency ancestors; owned paths must " +
       "support the implementation; the dependency graph must be acyclic.",
     checklist: [
-      "Walk every goal's `imports[]`. Every entry must appear in some ancestor (`depends_on`) " +
-        "goal's `exports[]`. A dangling import = `missing_capability` (the importer needs " +
-        "something nobody is producing). If the fix is an import/export/dependency mismatch, " +
-        "propose a `modify` correction that rewrites the relevant `imports`, `exports`, or " +
-        "`depends_on` arrays directly.",
+      "Walk the Architect Contract Graph. Every contract consumer must depend on its producer " +
+        "through `depends_on`, and every dependency reason must match the edge. A dangling " +
+        "contract = `missing_capability`. If the fix is a graph/dependency mismatch, propose " +
+        "a correction that rewrites `depends_on` and explicitly describes the needed graph change.",
       "Walk the `depends_on` graph. A cycle = `dependency_cycle`. Surface the cycle's " +
         "shortest path in `evidence` so the orchestrator can pick which edge to break.",
       "Look at the foundational `Decisions` block (runtime, framework, package_manager, " +
@@ -142,9 +141,9 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
         "but the goal needs persistence), that's `infeasible_stack`.",
       "Do not treat `owned_paths[]` overlap as a technical-feasibility failure. " +
         "`owned_paths` are responsibility hints, not a file sandbox. A true " +
-        "`contract_collision` is an incompatible dependency/export/runtime contract " +
+        "`contract_collision` is an incompatible dependency/graph/runtime contract " +
         "(for example two goals declare conflicting public APIs for the same module, " +
-        "or a consumer imports a capability whose producer contract explicitly forbids it).",
+        "or a consumer claims a capability whose producer contract explicitly forbids it).",
       "Merged-tree completeness. The union of all goals' `owned_paths` must materialise " +
         "every prerequisite the user's deliverable needs to be exercised end-to-end. " +
         "For visual / browser deliverables that includes the runnable entrypoint (root " +
@@ -159,13 +158,13 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
       "User-deliverable tier walk (system completion). For each user-visible REQ, derive its " +
         "implementation tier: a frontend page implies a backend API REQ + a data source; a CLI " +
         "tool implies a runtime entrypoint + storage; a webhook implies external reachability " +
-        "infra. For each implied tier, check the merged tree for a goal whose `exports` / " +
+        "infra. For each implied tier, check the merged tree for a goal whose graph contracts / " +
         "`owned_paths` actually produce that capability. A frontend page with no backing API goal, " +
         "an API goal with no data-store goal, a CLI tool with no runtime entrypoint goal — each " +
         "is `missing_capability` against an implicit infra goal. Cite the user phrase that " +
         "implies the missing tier in `evidence`. Propose a `missing_goals` entry that owns the " +
         "implied tier; if an existing goal is the natural owner, use a `modify` correction that " +
-        "widens its `owned_paths` / `exports` instead.",
+        "widens its `owned_paths` or graph ownership instead.",
     ],
     issueTypes: ["infeasible_stack", "missing_capability", "contract_collision", "dependency_cycle"],
     canProposeCorrections: true,
@@ -241,9 +240,9 @@ export function renderDimensionCatalogue(): string {
   sections.push("")
   sections.push(
     "Every check below produces a per-dimension verdict (`pass` / `concerns` / " +
-    "`needs_correction`). The aggregate verdict is the worst per-dimension verdict; " +
-    "the orchestrator routes recovery based on which dimensions failed and which " +
-    "executable corrections were proposed.",
+      "`needs_correction`). The aggregate verdict is the worst per-dimension verdict; " +
+      "the orchestrator routes recovery based on which dimensions failed and which " +
+      "executable corrections were proposed.",
   )
   for (const d of INTEGRITY_DIMENSIONS) {
     const correctionsNote = d.canProposeCorrections

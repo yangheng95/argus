@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { EngineService } from "@/task-api"
 import { listProjectTasks } from "../../src/engine/store"
+import * as TaskLoop from "../../src/orchestrator/loop"
 import { Question } from "../../src/question"
 import { ensureGatewaySession } from "../../src/gateway/session"
 import { createGatewayTools } from "../../src/gateway/tools"
@@ -16,6 +17,7 @@ Log.init({ print: false })
 // Phase 2 tool invariants:
 //  - enqueue_task creates a task with kind="workflow" (orchestrator itself decides
 //    whether to run the pipeline or route to its build tool)
+//  - queue is optional; omission starts immediately
 //  - it goes through EngineService.createTask + appears in listProjectTasks
 //  - forward_clarification unblocks an awaiting Question.ask
 //  - switch_cwd persists to gateway session metadata
@@ -41,8 +43,13 @@ async function withGatewayContext<T>(
 }
 
 describe("Gateway tools (Phase 2)", () => {
+  afterEach(() => {
+    mock.restore()
+  })
+
   test("enqueue_task creates a kind='workflow' task", async () => {
     await withGatewayContext(async ({ tools }) => {
+      const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
       const taskID = await tools.enqueue_task.execute(
         { request: "Build a counter", title: "counter", priority: "low" } as any,
         {} as any,
@@ -52,6 +59,8 @@ describe("Gateway tools (Phase 2)", () => {
       const row = tasks.find((t) => t.id === taskID)
       expect(row).toBeDefined()
       expect(row!.kind).toBe("workflow")
+      expect(typeof row!.time_started).toBe("number")
+      expect(runTaskLoop).toHaveBeenCalledTimes(1)
       await EngineService.cancelTask(taskID).catch(() => undefined)
       await EngineService.deleteTask(taskID).catch(() => undefined)
     })

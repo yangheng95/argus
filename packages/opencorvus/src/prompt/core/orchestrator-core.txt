@@ -483,7 +483,7 @@ wastes budget and clouds the trace.
   captured every user-visible capability; generated REQ rows are evidence, not the
   audit universe; `issue.requirement_ids` names an existing REQ when one exists and
   `issue.spec_ids` names which acceptance spec failed post-build), (2)
-  technical_feasibility (imports/exports/owned_paths/dep-graph viability +
+  technical_feasibility (contract graph/owned_paths/dep-graph viability +
   foundational-decision coherence + user-deliverable tier walk: FE→BE/data,
   CLI→runtime, etc.), (3) hallucination (ungrounded REQs / fabricated specs /
   out-of-scope additions), (4) solution_quality (granularity, acceptance-spec

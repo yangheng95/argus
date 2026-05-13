@@ -736,6 +736,7 @@ export namespace EngineService {
         requestID,
         source: input.source,
         priority: input.priority,
+        queue: input.queue,
         kind: input.kind,
         budget: input.budget,
         metadata,

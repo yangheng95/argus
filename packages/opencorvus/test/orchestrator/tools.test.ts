@@ -4,18 +4,40 @@ import path from "node:path"
 import { Database, and, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineArtifactTable, EngineGoalTable, EnginePlanNodeTable, EnginePlanVersionTable, EngineRequirementTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import {
+  EngineArtifactTable,
+  EngineGoalTable,
+  EnginePlanNodeTable,
+  EnginePlanVersionTable,
+  EngineRequirementTable,
+  EngineSpecSnapshotTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
 import { createDecisionLog } from "../../src/decision-log"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { goalStatusByID } from "../../src/engine/describe"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
-import { beginBuildAttempt, insertRequirements, recordIntegrityAttempt, startNewAttempt, updateGoalRun } from "../../src/engine/persist"
+import {
+  beginBuildAttempt,
+  insertRequirements,
+  recordIntegrityAttempt,
+  startNewAttempt,
+  updateGoalRun,
+} from "../../src/engine/persist"
 import { AttachmentStore } from "../../src/storage/attachment-store"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { findActivePlanForTask, findActiveSpecForTask, findGoal, findGoalLatestWorkspace, findLatestIntegrityAttemptArtifact, findRequirements, listGoalRunsByGoal } from "../../src/engine/store"
+import {
+  findActivePlanForTask,
+  findActiveSpecForTask,
+  findGoal,
+  findGoalLatestWorkspace,
+  findLatestIntegrityAttemptArtifact,
+  findRequirements,
+  listGoalRunsByGoal,
+} from "../../src/engine/store"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { Filesystem } from "../../src/util/filesystem"
 import { EngineService } from "../../src/task-api"
@@ -117,60 +139,69 @@ function insertWorkflowTaskWithGoal(input: {
 }) {
   const specID = input.specID ?? `spec_${input.goalID}`
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: input.projectID,
-      worktree: input.worktree,
-      name: input.projectName,
-      sandboxes: "[]",
-      time_created: input.now,
-      time_updated: input.now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: input.taskID,
-      project_id: input.projectID,
-      session_id: input.sessionID,
-      source: "test",
-      title: input.taskTitle,
-      request: input.request,
-      kind: "workflow",
-      priority: "normal",
-      time_created: input.now,
-      time_updated: input.now,
-      time_started: input.now,
-    }).run()
-    db.insert(EngineSpecSnapshotTable).values({
-      id: specID,
-      task_id: input.taskID,
-      version: 1,
-      status: "ready",
-      summary: `${input.goalTitle} spec`,
-      content: input.request,
-      scope: input.objective,
-      time_created: input.now,
-      time_updated: input.now,
-    }).run()
-    db.insert(EngineGoalTable).values({
-      id: input.goalID,
-      task_id: input.taskID,
-      spec_snapshot_id: specID,
-      title: input.goalTitle,
-      slug: input.goalSlug,
-      objective: input.objective,
-      acceptance_specs: [],
-      owned_paths: ["src/index.ts"],
-      depends_on: [],
-      exports: [],
-      imports: [],
-      kind: "feature",
-      requirement_ids: [],
-      priority: "blocking",
-      source: "test",
-      status: "pending",
-      order_index: 0,
-      time_created: input.now,
-      time_updated: input.now,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: input.projectID,
+        worktree: input.worktree,
+        name: input.projectName,
+        sandboxes: "[]",
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: input.taskID,
+        project_id: input.projectID,
+        session_id: input.sessionID,
+        source: "test",
+        title: input.taskTitle,
+        request: input.request,
+        kind: "workflow",
+        priority: "normal",
+        time_created: input.now,
+        time_updated: input.now,
+        time_started: input.now,
+      })
+      .run()
+    db.insert(EngineSpecSnapshotTable)
+      .values({
+        id: specID,
+        task_id: input.taskID,
+        version: 1,
+        status: "ready",
+        summary: `${input.goalTitle} spec`,
+        content: input.request,
+        scope: input.objective,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    db.insert(EngineGoalTable)
+      .values({
+        id: input.goalID,
+        task_id: input.taskID,
+        spec_snapshot_id: specID,
+        title: input.goalTitle,
+        slug: input.goalSlug,
+        objective: input.objective,
+        acceptance_specs: [],
+        owned_paths: ["src/index.ts"],
+        depends_on: [],
+        exports: [],
+        imports: [],
+        kind: "feature",
+        requirement_ids: [],
+        priority: "blocking",
+        source: "test",
+        status: "pending",
+        order_index: 0,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
   })
+  insertArchitectContractGraphArtifact({ taskID: input.taskID, now: input.now })
   // Phase H (2026-05-05): seed via the shared fixture helper instead of an
   // ad-hoc Drizzle insert (rule 9 — single abstraction for the same shape
   // also used in engine/writer.test.ts).
@@ -184,6 +215,32 @@ function insertWorkflowTaskWithGoal(input: {
       now: input.now,
     })
   }
+}
+
+function insertArchitectContractGraphArtifact(input: {
+  taskID: string
+  now: number
+  graph?: {
+    version: 1
+    contracts: any[]
+    dependency_contracts: any[]
+  }
+}) {
+  Database.use((db) => {
+    db.insert(EngineArtifactTable)
+      .values({
+        id: `artifact_contract_graph_${input.taskID}_${input.now}`,
+        task_id: input.taskID,
+        run_id: null,
+        goal_run_id: null,
+        kind: "architect_contract_graph",
+        label: "architect-contract-graph",
+        payload: input.graph ?? { version: 1, contracts: [], dependency_contracts: [] },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  })
 }
 
 describe("orchestrator tools", () => {
@@ -206,6 +263,7 @@ describe("orchestrator tools", () => {
       ],
       issues: [],
       corrections: [],
+      graphCorrections: [],
       missingGoals: [],
       sessionID: "ses_integrity_default",
     })
@@ -233,26 +291,30 @@ describe("orchestrator tools", () => {
     const workflowState = createWorkflowState(pipeline)
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Build workflow contract test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Build workflow contract task",
-        request: "Verify workflow task-level build can be selected directly",
-        kind: "workflow",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Build workflow contract test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Build workflow contract task",
+          request: "Verify workflow task-level build can be selected directly",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
     })
 
     buildAgentRunImpl = async (input: any) => {
@@ -286,11 +348,14 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await tools.build.execute({
-          request: "Implement the page directly.",
-          reason: "Scoped workflow task; direct build is enough.",
-          directBuildIntent: "modify_files",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            request: "Implement the page directly.",
+            reason: "Scoped workflow task; direct build is enough.",
+            directBuildIntent: "modify_files",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("Build agent finished")
         expect(result).toContain("Direct workflow build completed")
@@ -307,26 +372,30 @@ describe("orchestrator tools", () => {
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Build workflow intent test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Build workflow intent task",
-        request: "Verify workflow task-level build intent is explicit",
-        kind: "workflow",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Build workflow intent test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Build workflow intent task",
+          request: "Verify workflow task-level build intent is explicit",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
     })
 
     buildAgentRunImpl = async () => {
@@ -346,10 +415,13 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await tools.build.execute({
-          request: "Implement the page directly.",
-          reason: "Scoped workflow task; direct build is enough.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            request: "Implement the page directly.",
+            reason: "Scoped workflow task; direct build is enough.",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("rejected task-level workflow build")
         expect(result).toContain("directBuildIntent is required")
@@ -365,26 +437,30 @@ describe("orchestrator tools", () => {
     const pipeline = WorkflowRegistry.resolveSync("pipeline")!
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Build workflow inspect test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Build workflow inspect task",
-        request: "Verify inspect-only workflow direct build is blocked",
-        kind: "workflow",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Build workflow inspect test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Build workflow inspect task",
+          request: "Verify inspect-only workflow direct build is blocked",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
     })
 
     buildAgentRunImpl = async () => {
@@ -404,11 +480,14 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await tools.build.execute({
-          request: "Explore the component tree without changing files.",
-          reason: "Need read-only exploration before implementation.",
-          directBuildIntent: "inspect_only",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            request: "Explore the component tree without changing files.",
+            reason: "Need read-only exploration before implementation.",
+            directBuildIntent: "inspect_only",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("rejected inspect-only task-level workflow build")
         expect(result).toContain("stage-agent path")
@@ -425,27 +504,31 @@ describe("orchestrator tools", () => {
     const createSpy = spyOn(EngineService, "createTask").mockResolvedValue("tsk_created_followup")
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: tmp.path,
-        name: "propose task project",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        session_id: null,
-        source: "test",
-        title: "Parent task",
-        request: "Build the initial feature.",
-        kind: "workflow",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "propose task project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          session_id: null,
+          source: "test",
+          title: "Parent task",
+          request: "Build the initial feature.",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
     })
 
     await Instance.provide({
@@ -459,13 +542,16 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const proposal = tools.propose_task.execute({
-          title: "Harden generated component tests",
-          request: "Add focused tests for the component generated by the parent task.",
-          reason: "This is a separate quality-hardening follow-up after the current request.",
-          priority: "high",
-          kind: "workflow",
-        }, {} as any)
+        const proposal = tools.propose_task.execute(
+          {
+            title: "Harden generated component tests",
+            request: "Add focused tests for the component generated by the parent task.",
+            reason: "This is a separate quality-hardening follow-up after the current request.",
+            priority: "high",
+            kind: "workflow",
+          },
+          {} as any,
+        )
 
         let pending = await Question.list()
         for (let i = 0; pending.length === 0 && i < 20; i++) {
@@ -481,18 +567,20 @@ describe("orchestrator tools", () => {
         expect(result).toContain("Follow-up task created after user confirmation")
         expect(result).toContain("tsk_created_followup")
         expect(createSpy).toHaveBeenCalledTimes(1)
-        expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({
-          title: "Harden generated component tests",
-          request: "Add focused tests for the component generated by the parent task.",
-          priority: "high",
-          kind: "workflow",
-          source: "orchestrator:propose_task",
-          metadata: {
-            origin: "orchestrator_proposed_task",
-            parent_task_id: taskID,
-            proposal_reason: "This is a separate quality-hardening follow-up after the current request.",
-          },
-        }))
+        expect(createSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Harden generated component tests",
+            request: "Add focused tests for the component generated by the parent task.",
+            priority: "high",
+            kind: "workflow",
+            source: "orchestrator:propose_task",
+            metadata: {
+              origin: "orchestrator_proposed_task",
+              parent_task_id: taskID,
+              proposal_reason: "This is a separate quality-hardening follow-up after the current request.",
+            },
+          }),
+        )
       },
     })
   })
@@ -505,27 +593,31 @@ describe("orchestrator tools", () => {
     const createSpy = spyOn(EngineService, "createTask").mockResolvedValue("tsk_should_not_create")
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: tmp.path,
-        name: "decline task project",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        session_id: null,
-        source: "test",
-        title: "Parent task",
-        request: "Build the initial feature.",
-        kind: "workflow",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: tmp.path,
+          name: "decline task project",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          session_id: null,
+          source: "test",
+          title: "Parent task",
+          request: "Build the initial feature.",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
     })
 
     await Instance.provide({
@@ -539,13 +631,16 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const proposal = tools.propose_task.execute({
-          title: "Optional cleanup",
-          request: "Clean up optional polish items.",
-          reason: "This is optional and separate from the current task.",
-          priority: "normal",
-          kind: "build",
-        }, {} as any)
+        const proposal = tools.propose_task.execute(
+          {
+            title: "Optional cleanup",
+            request: "Clean up optional polish items.",
+            reason: "This is optional and separate from the current task.",
+            priority: "normal",
+            kind: "build",
+          },
+          {} as any,
+        )
 
         let pending = await Question.list()
         for (let i = 0; pending.length === 0 && i < 20; i++) {
@@ -621,10 +716,13 @@ describe("orchestrator tools", () => {
         expect(architectResult).toContain("blocked")
         expect(architectResult).toContain("design_analysis")
 
-        const buildResult = await tools.build.execute({
-          goalID,
-          reason: "Try to build visual goal",
-        }, {} as any)
+        const buildResult = await tools.build.execute(
+          {
+            goalID,
+            reason: "Try to build visual goal",
+          },
+          {} as any,
+        )
         expect(buildResult).toContain("blocked")
         expect(buildResult).toContain("design_analysis")
         expect(buildResult).toContain("evidence_source_manifest")
@@ -658,15 +756,17 @@ describe("orchestrator tools", () => {
     Database.use((db) => {
       db.update(EngineTaskTable)
         .set({
-          attachments: [{
-            sha: "sha-design-reference",
-            url: "attachment://design-reference.png",
-            mime: "image/png",
-            size: 42,
-            filename: "design-reference.png",
-            intent: "visual_reference",
-            source: "user-upload",
-          }],
+          attachments: [
+            {
+              sha: "sha-design-reference",
+              url: "attachment://design-reference.png",
+              mime: "image/png",
+              size: 42,
+              filename: "design-reference.png",
+              intent: "visual_reference",
+              source: "user-upload",
+            },
+          ],
         })
         .where(eq(EngineTaskTable.id, taskID))
         .run()
@@ -743,7 +843,13 @@ describe("orchestrator tools", () => {
     })
 
     mcpServerToolsImpl = async () => [
-      { key: "Figma_get_design_context", client: "Figma", name: "get_design_context", description: "", inputSchema: {} },
+      {
+        key: "Figma_get_design_context",
+        client: "Figma",
+        name: "get_design_context",
+        description: "",
+        inputSchema: {},
+      },
       { key: "Figma_get_screenshot", client: "Figma", name: "get_screenshot", description: "", inputSchema: {} },
       { key: "Figma_get_metadata", client: "Figma", name: "get_metadata", description: "", inputSchema: {} },
       { key: "Figma_get_variable_defs", client: "Figma", name: "get_variable_defs", description: "", inputSchema: {} },
@@ -753,25 +859,31 @@ describe("orchestrator tools", () => {
       calls.push(input)
       if (input.key === "Figma_get_screenshot") {
         return {
-          content: [{
-            type: "image",
-            data: Buffer.from("fake png bytes").toString("base64"),
-            mimeType: "image/png",
-          }],
+          content: [
+            {
+              type: "image",
+              data: Buffer.from("fake png bytes").toString("base64"),
+              mimeType: "image/png",
+            },
+          ],
         }
       }
       return {
-        content: [{
-          type: "text",
-          text: `${input.key} evidence for ${input.args.nodeId}`,
-        }],
+        content: [
+          {
+            type: "text",
+            text: `${input.key} evidence for ${input.args.nodeId}`,
+          },
+        ],
       }
     }
 
     designAnalyzeImpl = async (input) => {
       const attachments = input.attachments ?? []
       expect(attachments.some((item: any) => item.source === "figma-mcp" && item.mime === "image/png")).toBe(true)
-      expect(attachments.filter((item: any) => item.source === "figma-mcp" && item.mime === "text/markdown").length).toBe(3)
+      expect(
+        attachments.filter((item: any) => item.source === "figma-mcp" && item.mime === "text/markdown").length,
+      ).toBe(3)
       return {
         specs: [],
         designSystem: "Figma MCP design system",
@@ -800,17 +912,17 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await tools.design_analysis.execute({
-          reason: "Figma MCP visual reference requires PRD/SPEC",
-          figma_url: figmaUrl,
-        }, {} as any)
+        const result = await tools.design_analysis.execute(
+          {
+            reason: "Figma MCP visual reference requires PRD/SPEC",
+            figma_url: figmaUrl,
+          },
+          {} as any,
+        )
         expect(result).toContain("SUCCESS")
-        expect(calls.map((call) => call.key).sort()).toEqual([
-          "Figma_get_design_context",
-          "Figma_get_metadata",
-          "Figma_get_screenshot",
-          "Figma_get_variable_defs",
-        ].sort())
+        expect(calls.map((call) => call.key).sort()).toEqual(
+          ["Figma_get_design_context", "Figma_get_metadata", "Figma_get_screenshot", "Figma_get_variable_defs"].sort(),
+        )
         expect(calls.every((call) => call.args.nodeId === "1963:5219")).toBe(true)
 
         const task = Database.use((db) =>
@@ -847,27 +959,29 @@ describe("orchestrator tools", () => {
       specID,
     })
     Database.use((db) => {
-      db.insert(EngineGoalTable).values({
-        id: childGoalID,
-        task_id: taskID,
-        spec_snapshot_id: specID,
-        title: "Dependent feature",
-        slug: "dependent-feature",
-        objective: "Consume the shared contract.",
-        acceptance_specs: [],
-        owned_paths: ["src/feature.ts"],
-        depends_on: [parentGoalID],
-        exports: [],
-        imports: [],
-        kind: "feature",
-        requirement_ids: [],
-        priority: "blocking",
-        source: "test",
-        status: "pending",
-        order_index: 1,
-        time_created: now,
-        time_updated: now,
-      }).run()
+      db.insert(EngineGoalTable)
+        .values({
+          id: childGoalID,
+          task_id: taskID,
+          spec_snapshot_id: specID,
+          title: "Dependent feature",
+          slug: "dependent-feature",
+          objective: "Consume the shared contract.",
+          acceptance_specs: [],
+          owned_paths: ["src/feature.ts"],
+          depends_on: [parentGoalID],
+          exports: [],
+          imports: [],
+          kind: "feature",
+          requirement_ids: [],
+          priority: "blocking",
+          source: "test",
+          status: "pending",
+          order_index: 1,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
     })
     seedGoalRunAttemptWithWorkspace({
       taskID,
@@ -904,10 +1018,13 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID: childGoalID,
-          reason: "stale orchestrator view",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID: childGoalID,
+            reason: "stale orchestrator view",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("blocked by unfinished dependencies")
         expect(result).toContain(`${parentGoalID}=pending`)
@@ -924,26 +1041,30 @@ describe("orchestrator tools", () => {
     const taskID = `tsk_architect_requires_spec_${stamp}`
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Architect requirements preflight test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Architect requirements preflight task",
-        request: "Verify architect cannot run after requirements spec is cleared",
-        kind: "workflow",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Architect requirements preflight test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Architect requirements preflight task",
+          request: "Verify architect cannot run after requirements spec is cleared",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
     })
 
     await Instance.provide({
@@ -976,49 +1097,57 @@ describe("orchestrator tools", () => {
     const reqSpecID = `spec_requirements_${stamp}`
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Architect requirement copy test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Architect requirement copy task",
-        request: "Build a typed app shell",
-        kind: "workflow",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
-      db.insert(EngineSpecSnapshotTable).values({
-        id: reqSpecID,
-        task_id: taskID,
-        version: 1,
-        status: "ready",
-        summary: "Requirements parsed",
-        content: "# Requirements\n- REQ-1 typed app shell",
-        scope: "typed app shell",
-        time_created: now,
-        time_updated: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Architect requirement copy test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Architect requirement copy task",
+          request: "Build a typed app shell",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+      db.insert(EngineSpecSnapshotTable)
+        .values({
+          id: reqSpecID,
+          task_id: taskID,
+          version: 1,
+          status: "ready",
+          summary: "Requirements parsed",
+          content: "# Requirements\n- REQ-1 typed app shell",
+          scope: "typed app shell",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
       insertRequirements(db, {
         taskID,
         specSnapshotID: reqSpecID,
         now,
-        requirements: [{
-          id: "REQ-1",
-          title: "Typed app shell",
-          description: "The app shell renders and typechecks.",
-          acceptance: ["typecheck passes"],
-          evidence_refs: ["user request"],
-          priority: "blocking",
-        }],
+        requirements: [
+          {
+            id: "REQ-1",
+            title: "Typed app shell",
+            description: "The app shell renders and typechecks.",
+            acceptance: ["typecheck passes"],
+            evidence_refs: ["user request"],
+            priority: "blocking",
+          },
+        ],
       })
     })
 
@@ -1026,34 +1155,41 @@ describe("orchestrator tools", () => {
       expect(input.requirements.map((r: any) => r.id)).toEqual(["REQ-1"])
       return {
         summary: "One goal architecture.",
-        goals: [{
-          id: "goal_app_shell",
-          title: "App shell",
-          objective: "Implement a typed app shell.",
-          acceptance_specs: [{
-            id: "acc-app-shell",
-            source_requirement_id: "REQ-1",
-            goal_id: "goal_app_shell",
-            title: "typecheck passes",
-            scorers: [{
-              type: "llm_judge",
-              name: "typecheck evidence",
-              criteria: "The app shell typechecks.",
-            }],
-            severity: "essential",
-          }],
-          owned_paths: ["src/App.tsx"],
-          depends_on: [],
-          exports: ["AppShell"],
-          imports: [],
-          kind: "bootstrap",
-          requirement_ids: ["REQ-1"],
-          priority: "blocking",
-        }],
+        goals: [
+          {
+            id: "goal_app_shell",
+            title: "App shell",
+            objective: "Implement a typed app shell.",
+            acceptance_specs: [
+              {
+                id: "acc-app-shell",
+                source_requirement_id: "REQ-1",
+                goal_id: "goal_app_shell",
+                title: "typecheck passes",
+                scorers: [
+                  {
+                    type: "llm_judge",
+                    name: "typecheck evidence",
+                    criteria: "The app shell typechecks.",
+                  },
+                ],
+                severity: "essential",
+              },
+            ],
+            owned_paths: ["src/App.tsx"],
+            depends_on: [],
+            exports: ["AppShell"],
+            imports: [],
+            kind: "bootstrap",
+            requirement_ids: ["REQ-1"],
+            priority: "blocking",
+          },
+        ],
         removedGoalIDs: [],
         traceability: [{ requirementID: "REQ-1", goalIDs: ["goal_app_shell"] }],
         fidelity: { sourceCoverage: [], referenceCoverage: [], assemblyOwners: [] },
-        contracts: [],
+        contractGraph: { version: 1, contracts: [], dependency_contracts: [] },
+        validationFindings: [],
       }
     }
 
@@ -1138,6 +1274,7 @@ describe("orchestrator tools", () => {
             ],
             issues: [],
             corrections: [],
+            graphCorrections: [],
             missingGoals: [],
             sessionID: "ses_integrity_auto",
           }
@@ -1150,11 +1287,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Goal built successfully",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Changed scoped implementation file.",
-                reason: "Required by the mocked goal build.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed scoped implementation file.",
+                  reason: "Required by the mocked goal build.",
+                },
+              ],
               tests: [],
               commit_ref: "abc1234",
             },
@@ -1171,10 +1310,13 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         // Wave-level review (B-wave / spec architecture-rework-loosening
         // -plan-2026-05-06.md): build tool no longer triggers architecture
@@ -1245,6 +1387,7 @@ describe("orchestrator tools", () => {
             ],
             issues: [],
             corrections: [],
+            graphCorrections: [],
             missingGoals: [],
             sessionID: "ses_integrity_singleflight",
           }
@@ -1275,10 +1418,7 @@ describe("orchestrator tools", () => {
           db
             .select()
             .from(EngineArtifactTable)
-            .where(and(
-              eq(EngineArtifactTable.task_id, taskID),
-              eq(EngineArtifactTable.kind, "integrity_attempt"),
-            ))
+            .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "integrity_attempt")))
             .all(),
         )
         expect(attempts).toHaveLength(1)
@@ -1318,61 +1458,73 @@ describe("orchestrator tools", () => {
         })
 
         Database.use((db) => {
-          db.insert(EngineGoalTable).values({
-            id: siblingGoalID,
-            task_id: taskID,
-            spec_snapshot_id: `spec_${goalID}`,
-            title: "Shared shell",
-            slug: "shared-shell",
-            objective: "Provide the shared shell consumed by feature goals",
-            acceptance_specs: [{
-              id: `acc_shell_${stamp}`,
-              source_requirement_id: "REQ-1",
-              goal_id: siblingGoalID,
-              title: "shell exports AppShell",
-              scorers: [{
-                type: "llm_judge",
-                name: "shell contract",
-                criteria: "The shared shell renders and exports AppShell for feature goals.",
-              }],
-              severity: "essential",
-            }],
-            owned_paths: ["src/App.tsx", "src/main.tsx"],
-            depends_on: [],
-            exports: ["AppShell"],
-            imports: [],
-            kind: "bootstrap",
-            requirement_ids: [],
-            priority: "blocking",
-            source: "test",
-            status: "pending",
-            order_index: 1,
-            time_created: now,
-            time_updated: now,
-          }).run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: siblingGoalID,
+              task_id: taskID,
+              spec_snapshot_id: `spec_${goalID}`,
+              title: "Shared shell",
+              slug: "shared-shell",
+              objective: "Provide the shared shell consumed by feature goals",
+              acceptance_specs: [
+                {
+                  id: `acc_shell_${stamp}`,
+                  source_requirement_id: "REQ-1",
+                  goal_id: siblingGoalID,
+                  title: "shell exports AppShell",
+                  scorers: [
+                    {
+                      type: "llm_judge",
+                      name: "shell contract",
+                      criteria: "The shared shell renders and exports AppShell for feature goals.",
+                    },
+                  ],
+                  severity: "essential",
+                },
+              ],
+              owned_paths: ["src/App.tsx", "src/main.tsx"],
+              depends_on: [],
+              exports: ["AppShell"],
+              imports: [],
+              kind: "bootstrap",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              status: "pending",
+              order_index: 1,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
           db.update(EngineTaskTable)
             .set({
               metadata: {
                 architect_fidelity: {
-                  sourceCoverage: [{
-                    id: "sibling-source",
-                    paths: ["src/App.tsx"],
-                    goal_ids: [siblingGoalID],
-                    action: "modify",
-                    rationale: "The shell source must remain the shared integration surface.",
-                  }],
-                  referenceCoverage: [{
-                    id: "sibling-reference",
-                    surface: "shared shell",
-                    goal_ids: [siblingGoalID],
-                    visual_spec_ids: [],
-                    expectation: "The shell reference remains binding for every feature goal.",
-                  }],
-                  assemblyOwners: [{
-                    surface: "app",
-                    goal_id: siblingGoalID,
-                    rationale: "The shell owns final app assembly.",
-                  }],
+                  sourceCoverage: [
+                    {
+                      id: "sibling-source",
+                      paths: ["src/App.tsx"],
+                      goal_ids: [siblingGoalID],
+                      action: "modify",
+                      rationale: "The shell source must remain the shared integration surface.",
+                    },
+                  ],
+                  referenceCoverage: [
+                    {
+                      id: "sibling-reference",
+                      surface: "shared shell",
+                      goal_ids: [siblingGoalID],
+                      visual_spec_ids: [],
+                      expectation: "The shell reference remains binding for every feature goal.",
+                    },
+                  ],
+                  assemblyOwners: [
+                    {
+                      surface: "app",
+                      goal_id: siblingGoalID,
+                      rationale: "The shell owns final app assembly.",
+                    },
+                  ],
                 },
               },
               time_updated: now,
@@ -1380,15 +1532,31 @@ describe("orchestrator tools", () => {
             .where(eq(EngineTaskTable.id, taskID))
             .run()
         })
-
-        const { createDecisionLog } = await import("../../src/decision-log")
-        const decisionLog = createDecisionLog(taskID)
-        decisionLog.append({
-          phase: "architect",
-          goalID: siblingGoalID,
-          key: "shell_contract",
-          value: "## Shell exports\nShared shell owns AppShell and feature goals must preserve that export.",
-          reason: "Architect sibling contract",
+        insertArchitectContractGraphArtifact({
+          taskID,
+          now: now + 1,
+          graph: {
+            version: 1,
+            contracts: [
+              {
+                id: "contract_shell",
+                kind: "component",
+                name: "AppShell",
+                producer_goal_id: siblingGoalID,
+                consumer_goal_ids: [goalID],
+                summary: "Shared shell component consumed by feature goals.",
+                artifact_paths: ["src/App.tsx"],
+              },
+            ],
+            dependency_contracts: [
+              {
+                from_goal_id: siblingGoalID,
+                to_goal_id: goalID,
+                reason: "contract",
+                contract_ids: ["contract_shell"],
+              },
+            ],
+          },
         })
 
         buildAgentRunImpl = async (input: any) => {
@@ -1398,11 +1566,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Goal built with full architecture context",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Changed scoped implementation file.",
-                reason: "Required by the mocked goal build.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed scoped implementation file.",
+                  reason: "Required by the mocked goal build.",
+                },
+              ],
               tests: [],
               commit_ref: "abc1234",
             },
@@ -1419,20 +1589,27 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("status=passed")
-        expect(capturedContext?.architectContracts?.map((c: any) => c.goalIDs?.[0])).toContain(siblingGoalID)
-        expect(capturedContext?.collaborationGoals?.find((g: any) => g.id === siblingGoalID)?.objective).toContain("shared shell")
+        expect(capturedContext?.contractGraph?.contracts?.map((c: any) => c.producer_goal_id)).toContain(siblingGoalID)
+        expect(capturedContext?.contractGraph?.dependency_contracts?.map((c: any) => c.from_goal_id)).toContain(
+          siblingGoalID,
+        )
+        expect(capturedContext?.collaborationGoals?.find((g: any) => g.id === siblingGoalID)?.objective).toContain(
+          "shared shell",
+        )
         expect(
           capturedContext?.collaborationGoals
             ?.find((g: any) => g.id === siblingGoalID)
-            ?.acceptance_specs
-            ?.some((spec: string) => spec.includes("shell exports AppShell")),
+            ?.acceptance_specs?.some((spec: string) => spec.includes("shell exports AppShell")),
         ).toBe(true)
         expect(capturedContext?.fidelity?.sourceCoverage?.map((row: any) => row.id)).toContain("sibling-source")
         expect(capturedContext?.fidelity?.referenceCoverage?.map((row: any) => row.id)).toContain("sibling-reference")
@@ -1475,13 +1652,22 @@ describe("orchestrator tools", () => {
           verdict: "needs_correction",
           summary: "Goal graph must change",
           dimensions: [
-            { id: "requirement_fidelity", verdict: "needs_correction", issues: [{ description: "Split the goal", type: "coverage_gap" }] },
+            {
+              id: "requirement_fidelity",
+              verdict: "needs_correction",
+              issues: [{ description: "Split the goal", type: "coverage_gap" }],
+            },
             { id: "technical_feasibility", verdict: "pass", issues: [] },
             { id: "hallucination", verdict: "pass", issues: [] },
-            { id: "solution_quality", verdict: "needs_correction", issues: [{ description: "Current goal is too broad", type: "granularity" }] },
+            {
+              id: "solution_quality",
+              verdict: "needs_correction",
+              issues: [{ description: "Current goal is too broad", type: "granularity" }],
+            },
           ],
           issues: [{ description: "Split the goal", type: "coverage_gap" }],
           corrections: [{ type: "split_goal" }],
+          graphCorrections: [],
           missingGoals: [],
           sessionID: "ses_integrity_corrected",
         })
@@ -1492,11 +1678,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Goal built before architecture review feedback.",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Changed scoped implementation file.",
-                reason: "Required by the mocked goal build.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed scoped implementation file.",
+                  reason: "Required by the mocked goal build.",
+                },
+              ],
               tests: [],
               commit_ref: "abc1234",
             },
@@ -1513,11 +1701,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         // Post-fix (B-wave): build tool does NOT trigger architecture review
         // (it was per-goal and noisy). Orchestrator calls `integrity` itself
@@ -1581,6 +1772,7 @@ describe("orchestrator tools", () => {
           ],
           issues: [{ description: "Sibling handoff is ambiguous", type: "coverage_gap", goalIDs: [goalID] }],
           corrections: [],
+          graphCorrections: [],
           missingGoals: [],
           sessionID: "ses_integrity_concern",
         })
@@ -1590,11 +1782,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Goal built with an ambiguous handoff.",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Changed scoped implementation file.",
-                reason: "Required by the mocked goal build.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed scoped implementation file.",
+                  reason: "Required by the mocked goal build.",
+                },
+              ],
               tests: [],
               commit_ref: "def5678",
             },
@@ -1611,11 +1805,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         // Post-fix (B-wave): build tool no longer auto-runs architecture
         // review. Orchestrator drives integrity per wave. No supersede.
@@ -1660,48 +1857,59 @@ describe("orchestrator tools", () => {
           specID,
         })
         Database.use((db) =>
-          db.insert(EngineGoalTable).values({
-            id: siblingGoalID,
-            task_id: taskID,
-            spec_snapshot_id: specID,
-            title: "Feature goal",
-            slug: "feature-goal",
-            objective: "Build the feature goal",
-            acceptance_specs: [],
-            owned_paths: ["src/feature.ts"],
-            depends_on: [],
-            exports: [],
-            imports: [],
-            kind: "feature",
-            requirement_ids: [],
-            priority: "blocking",
-            source: "test",
-            status: "pending",
-            order_index: 1,
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineGoalTable)
+            .values({
+              id: siblingGoalID,
+              task_id: taskID,
+              spec_snapshot_id: specID,
+              title: "Feature goal",
+              slug: "feature-goal",
+              objective: "Build the feature goal",
+              acceptance_specs: [],
+              owned_paths: ["src/feature.ts"],
+              depends_on: [],
+              exports: [],
+              imports: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              status: "pending",
+              order_index: 1,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
         Database.use((db) =>
-          db.update(EngineTaskTable).set({
-            metadata: {
-              architect_fidelity: {
-                sourceCoverage: [{
-                  id: "src-test",
-                  paths: ["package.json"],
-                  goal_ids: [goalID],
-                  action: "modify",
-                  rationale: "test fixture source coverage",
-                }],
-                referenceCoverage: [],
-                assemblyOwners: [{
-                  surface: "test-app",
-                  goal_id: siblingGoalID,
-                  rationale: "test fixture assembly owner",
-                }],
+          db
+            .update(EngineTaskTable)
+            .set({
+              metadata: {
+                architect_fidelity: {
+                  sourceCoverage: [
+                    {
+                      id: "src-test",
+                      paths: ["package.json"],
+                      goal_ids: [goalID],
+                      action: "modify",
+                      rationale: "test fixture source coverage",
+                    },
+                  ],
+                  referenceCoverage: [],
+                  assemblyOwners: [
+                    {
+                      surface: "test-app",
+                      goal_id: siblingGoalID,
+                      rationale: "test fixture assembly owner",
+                    },
+                  ],
+                },
               },
-            },
-          }).where(eq(EngineTaskTable.id, taskID)).run(),
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
         )
 
         reviewIntegrityImpl = async () => ({
@@ -1718,19 +1926,24 @@ describe("orchestrator tools", () => {
             {
               id: "solution_quality",
               verdict: "concerns",
-              issues: [{
-                description: "Feature goal acceptance depends on bootstrap details",
-                type: "weak_acceptance",
-                goalIDs: [siblingGoalID],
-              }],
+              issues: [
+                {
+                  description: "Feature goal acceptance depends on bootstrap details",
+                  type: "weak_acceptance",
+                  goalIDs: [siblingGoalID],
+                },
+              ],
             },
           ],
-          issues: [{
-            description: "Feature goal acceptance depends on bootstrap details",
-            type: "weak_acceptance",
-            goalIDs: [siblingGoalID],
-          }],
+          issues: [
+            {
+              description: "Feature goal acceptance depends on bootstrap details",
+              type: "weak_acceptance",
+              goalIDs: [siblingGoalID],
+            },
+          ],
           corrections: [],
+          graphCorrections: [],
           missingGoals: [],
           sessionID: "ses_integrity_sibling",
         })
@@ -1740,11 +1953,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Bootstrap goal built successfully.",
-              files_changed: [{
-                path: "package.json",
-                summary: "Updated package scripts.",
-                reason: "Required by the bootstrap goal.",
-              }],
+              files_changed: [
+                {
+                  path: "package.json",
+                  summary: "Updated package scripts.",
+                  reason: "Required by the bootstrap goal.",
+                },
+              ],
               tests: [],
               commit_ref: "abc5678",
             },
@@ -1761,11 +1976,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the bootstrap goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the bootstrap goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         // Post-fix (B-wave): build tool no longer triggers review. The
         // build report carries no architecture_review section; orchestrator
@@ -1814,48 +2032,59 @@ describe("orchestrator tools", () => {
           specID,
         })
         Database.use((db) =>
-          db.insert(EngineGoalTable).values({
-            id: childGoalID,
-            task_id: taskID,
-            spec_snapshot_id: specID,
-            title: "Dependent goal",
-            slug: "dependent-goal",
-            objective: "Build on the foundation contract",
-            acceptance_specs: [],
-            owned_paths: ["src/dependent.ts"],
-            depends_on: [goalID],
-            exports: [],
-            imports: [],
-            kind: "feature",
-            requirement_ids: [],
-            priority: "blocking",
-            source: "test",
-            status: "pending",
-            order_index: 1,
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineGoalTable)
+            .values({
+              id: childGoalID,
+              task_id: taskID,
+              spec_snapshot_id: specID,
+              title: "Dependent goal",
+              slug: "dependent-goal",
+              objective: "Build on the foundation contract",
+              acceptance_specs: [],
+              owned_paths: ["src/dependent.ts"],
+              depends_on: [goalID],
+              exports: [],
+              imports: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              status: "pending",
+              order_index: 1,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
         Database.use((db) =>
-          db.update(EngineTaskTable).set({
-            metadata: {
-              architect_fidelity: {
-                sourceCoverage: [{
-                  id: "src-foundation",
-                  paths: ["src/index.ts"],
-                  goal_ids: [goalID],
-                  action: "modify",
-                  rationale: "test fixture source coverage",
-                }],
-                referenceCoverage: [],
-                assemblyOwners: [{
-                  surface: "test-app",
-                  goal_id: childGoalID,
-                  rationale: "test fixture assembly owner",
-                }],
+          db
+            .update(EngineTaskTable)
+            .set({
+              metadata: {
+                architect_fidelity: {
+                  sourceCoverage: [
+                    {
+                      id: "src-foundation",
+                      paths: ["src/index.ts"],
+                      goal_ids: [goalID],
+                      action: "modify",
+                      rationale: "test fixture source coverage",
+                    },
+                  ],
+                  referenceCoverage: [],
+                  assemblyOwners: [
+                    {
+                      surface: "test-app",
+                      goal_id: childGoalID,
+                      rationale: "test fixture assembly owner",
+                    },
+                  ],
+                },
               },
-            },
-          }).where(eq(EngineTaskTable.id, taskID)).run(),
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
         )
         const childRunID = beginBuildAttempt({
           taskID,
@@ -1871,22 +2100,27 @@ describe("orchestrator tools", () => {
             {
               id: "requirement_fidelity",
               verdict: "needs_correction",
-              issues: [{
-                description: "Foundation acceptance omitted a shared interface",
-                type: "coverage_gap",
-                goalIDs: [goalID],
-              }],
+              issues: [
+                {
+                  description: "Foundation acceptance omitted a shared interface",
+                  type: "coverage_gap",
+                  goalIDs: [goalID],
+                },
+              ],
             },
             { id: "technical_feasibility", verdict: "pass", issues: [] },
             { id: "hallucination", verdict: "pass", issues: [] },
             { id: "solution_quality", verdict: "pass", issues: [] },
           ],
-          issues: [{
-            description: "Foundation acceptance omitted a shared interface",
-            type: "coverage_gap",
-            goalIDs: [goalID],
-          }],
+          issues: [
+            {
+              description: "Foundation acceptance omitted a shared interface",
+              type: "coverage_gap",
+              goalIDs: [goalID],
+            },
+          ],
           corrections: [],
+          graphCorrections: [],
           missingGoals: [],
           sessionID: "ses_integrity_cascade",
         })
@@ -1896,11 +2130,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Foundation goal built successfully.",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Implemented the foundation contract.",
-                reason: "Required by the foundation goal.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Implemented the foundation contract.",
+                  reason: "Required by the foundation goal.",
+                },
+              ],
               tests: [],
               commit_ref: "cascade123",
             },
@@ -1917,11 +2153,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the foundation goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the foundation goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         // Post-fix (B-wave): build tool no longer triggers review at all,
         // so neither the just-built goal nor any dependent gets cascaded.
@@ -1977,11 +2216,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "This report arrived after invalidation.",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Late stale change.",
-                reason: "Should not finalize after invalidation.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Late stale change.",
+                  reason: "Should not finalize after invalidation.",
+                },
+              ],
               tests: [],
               commit_ref: "stale123",
             },
@@ -1998,11 +2239,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the single goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the single goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("build_result_ignored")
         // Post-fix (B-wave): no architecture_review section in build report.
@@ -2052,12 +2296,17 @@ describe("orchestrator tools", () => {
           summary: "Correction has no semantic effect",
           dimensions: [
             { id: "requirement_fidelity", verdict: "pass", issues: [] },
-            { id: "technical_feasibility", verdict: "needs_correction", issues: [{ description: "Dependency prose only", type: "missing_capability" }] },
+            {
+              id: "technical_feasibility",
+              verdict: "needs_correction",
+              issues: [{ description: "Dependency prose only", type: "missing_capability" }],
+            },
             { id: "hallucination", verdict: "pass", issues: [] },
             { id: "solution_quality", verdict: "concerns", issues: [] },
           ],
           issues: [{ description: "Dependency prose only", type: "missing_capability" }],
           corrections: [{ action: "modify", goalID, reason: "No actual updates", updates: {} }],
+          graphCorrections: [],
           missingGoals: [],
           sessionID: "ses_integrity_noop",
         })
@@ -2124,6 +2373,7 @@ describe("orchestrator tools", () => {
           ],
           issues: [{ description: "REQ-9 is not grounded in the user request.", type: "unsupported_claim" }],
           corrections: [],
+          graphCorrections: [],
           missingGoals: [],
           sessionID: "ses_integrity_upstream",
         })
@@ -2211,7 +2461,10 @@ describe("orchestrator tools", () => {
             { id: "solution_quality", verdict: "pass", issues: [] },
           ],
           issues: [{ description: "Goal still misses REQ-1.", type: "uncovered" }],
-          corrections: [{ action: "modify", goalID, reason: "Still missing REQ-1", updates: { objective: "cover REQ-1" } }],
+          corrections: [
+            { action: "modify", goalID, reason: "Still missing REQ-1", updates: { objective: "cover REQ-1" } },
+          ],
+          graphCorrections: [],
           missingGoals: [],
           sessionID: "ses_integrity_plan_restart",
         })
@@ -2314,7 +2567,10 @@ describe("orchestrator tools", () => {
             { description: "A goal references an invented artifact.", type: "invented_artifact" },
             { description: "Goal granularity remains unstable.", type: "granularity_off" },
           ],
-          corrections: [{ action: "modify", goalID, reason: "Still missing REQ-1", updates: { objective: "cover REQ-1" } }],
+          corrections: [
+            { action: "modify", goalID, reason: "Still missing REQ-1", updates: { objective: "cover REQ-1" } },
+          ],
+          graphCorrections: [],
           missingGoals: [{ title: "Missing integration goal", objective: "Close the integration gap" }],
           sessionID: "ses_integrity_mixed_restart",
         })
@@ -2331,7 +2587,8 @@ describe("orchestrator tools", () => {
         expect(result).not.toContain("Task restarted from requirements")
         expect(findGoal(goalID)).toBeTruthy()
         const spec = Database.use((db) =>
-          db.select({ status: EngineSpecSnapshotTable.status })
+          db
+            .select({ status: EngineSpecSnapshotTable.status })
             .from(EngineSpecSnapshotTable)
             .where(eq(EngineSpecSnapshotTable.id, specID))
             .get(),
@@ -2401,11 +2658,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Build handled the prior architecture feedback.",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Changed implementation after review feedback.",
-                reason: "Prior review feedback is context, not a dispatch gate.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed implementation after review feedback.",
+                  reason: "Prior review feedback is context, not a dispatch gate.",
+                },
+              ],
               tests: [],
               commit_ref: "abc1234",
             },
@@ -2422,11 +2681,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("status=passed")
         expect(buildCalls).toBe(1)
@@ -2474,11 +2736,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Build completed after early session binding.",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Confirmed session binding contract.",
-                reason: "The build milestone must be traceable while it is running.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Confirmed session binding contract.",
+                  reason: "The build milestone must be traceable while it is running.",
+                },
+              ],
               tests: [],
               commit_ref: "abc1234",
             },
@@ -2495,11 +2759,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("status=passed")
         expect(observedSessionID).toBe("ses_build_session_bind")
@@ -2564,11 +2831,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Build handled correction-bearing review history.",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Changed implementation after correction feedback.",
-                reason: "Review history is context, not a dispatch gate.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed implementation after correction feedback.",
+                  reason: "Review history is context, not a dispatch gate.",
+                },
+              ],
               tests: [],
               commit_ref: "abc1234",
             },
@@ -2585,11 +2854,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("status=passed")
         expect(buildCalls).toBe(1)
@@ -2598,7 +2870,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("deliver creates required integrity evidence before delivery verification", async () => {
+  test("deliver no longer runs integrity before delivery verification", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -2614,16 +2886,16 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "deliver integrity prerequisite test" })
+        const parent = await Session.create({ kind: "root", title: "deliver direct verification test" })
         insertWorkflowTaskWithGoal({
           projectID,
           taskID,
           goalID,
           sessionID: parent.id,
           worktree: tmp.path,
-          projectName: "Deliver integrity prerequisite project",
-          taskTitle: "Deliver integrity prerequisite task",
-          request: "Deliver must evaluate architecture integrity before final delivery verification",
+          projectName: "Deliver direct verification project",
+          taskTitle: "Deliver direct verification task",
+          request: "Deliver must verify directly without an internal integrity pass",
           goalTitle: "Deliverable goal",
           goalSlug: "deliverable-goal",
           objective: "Create a non-trivial blocking goal requiring integrity evidence",
@@ -2631,21 +2903,7 @@ describe("orchestrator tools", () => {
           specID,
         })
         reviewIntegrityImpl = async () => {
-          order.push("integrity")
-          return {
-            verdict: "pass",
-            summary: "Integrity pass before delivery",
-            dimensions: [
-              { id: "requirement_fidelity", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
-              { id: "technical_feasibility", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
-              { id: "hallucination", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
-              { id: "solution_quality", verdict: "pass", issues: [], corrections: [], missingGoals: [] },
-            ],
-            issues: [],
-            corrections: [],
-            missingGoals: [],
-            sessionID: `ses_integrity_deliver_${stamp}`,
-          }
+          throw new Error("deliver must not call integrity internally")
         }
         deliveryServiceVerifyImpl = async () => {
           order.push("verify")
@@ -2663,16 +2921,17 @@ describe("orchestrator tools", () => {
 
         expect(result).toContain("stop_after_delivery_service")
         expect(result).toContain("persisted as a structured rejection")
-        expect(order).toEqual(["integrity", "verify"])
-        expect(verifySawIntegrity).toBe(true)
+        expect(order).toEqual(["verify"])
+        expect(verifySawIntegrity).toBe(false)
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
-        expect(artifact?.label).toBe("verdict-pass")
+        expect(artifact).toBeUndefined()
         const throwArtifact = Database.use((db) =>
-          db.select().from(EngineArtifactTable)
-            .where(and(
-              eq(EngineArtifactTable.task_id, taskID),
-              eq(EngineArtifactTable.kind, "delivery_verification_threw"),
-            ))
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(
+              and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "delivery_verification_threw")),
+            )
             .get(),
         )
         expect(throwArtifact?.payload).toMatchObject({
@@ -2680,19 +2939,22 @@ describe("orchestrator tools", () => {
           verdict: "rejected",
         })
         const verdictArtifact = Database.use((db) =>
-          db.select().from(EngineArtifactTable)
-            .where(and(
-              eq(EngineArtifactTable.task_id, taskID),
-              eq(EngineArtifactTable.label, "delivery-agent-verdict"),
-            ))
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(
+              and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.label, "delivery-agent-verdict")),
+            )
             .get(),
         )
         expect(verdictArtifact?.payload).toMatchObject({
           verdict: "rejected",
-          rejection_details: [{
-            category: "runtime",
-            error: expect.stringContaining("stop_after_delivery_service"),
-          }],
+          rejection_details: [
+            {
+              category: "runtime",
+              error: expect.stringContaining("stop_after_delivery_service"),
+            },
+          ],
         })
       },
     })
@@ -2737,11 +2999,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Goal built successfully",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Changed scoped implementation file.",
-                reason: "Required by the mocked goal build.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed scoped implementation file.",
+                  reason: "Required by the mocked goal build.",
+                },
+              ],
               tests: [],
               commit_ref: "abc1234",
             },
@@ -2758,11 +3022,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("status=passed")
         expect(result).toContain("goal worktree cleaned after successful merge")
@@ -2832,11 +3099,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("status=failed")
         expect(result).not.toContain("goal worktree cleaned")
@@ -2882,11 +3152,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Goal built successfully",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Changed scoped implementation file.",
-                reason: "Required by the mocked goal build.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed scoped implementation file.",
+                  reason: "Required by the mocked goal build.",
+                },
+              ],
               tests: [],
               commit_ref: "abc1234",
             },
@@ -2903,11 +3175,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Implement the goal",
-          reason: "Per-goal pipeline execution.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("status=passed")
         expect(result).toContain("goal worktree cleanup failed")
@@ -2957,12 +3232,14 @@ describe("orchestrator tools", () => {
         Database.use((db) => {
           db.update(EngineTaskTable)
             .set({
-              system_artifacts: [{
-                ...rendered,
-                filename: rendered.filename,
-                intent: "rendered_output",
-                source: "runtime_capture",
-              }],
+              system_artifacts: [
+                {
+                  ...rendered,
+                  filename: rendered.filename,
+                  intent: "rendered_output",
+                  source: "runtime_capture",
+                },
+              ],
               time_updated: now,
             })
             .where(eq(EngineTaskTable.id, taskID))
@@ -2999,11 +3276,13 @@ describe("orchestrator tools", () => {
             result: {
               status: "passed",
               summary: "Goal built after retry screenshot",
-              files_changed: [{
-                path: "src/index.ts",
-                summary: "Updated visual implementation.",
-                reason: "Required by the mocked retry build.",
-              }],
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Updated visual implementation.",
+                  reason: "Required by the mocked retry build.",
+                },
+              ],
               tests: [],
               commit_ref: "abc1234",
             },
@@ -3020,11 +3299,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.build.execute({
-          goalID,
-          request: "Apply delivery visual feedback",
-          reason: "Retry after delivery rejection.",
-        }, {} as any)
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Apply delivery visual feedback",
+            reason: "Retry after delivery rejection.",
+          },
+          {} as any,
+        )
 
         expect(result).toContain("status=passed")
         expect(capturedContext?.retryAttachments).toHaveLength(1)
@@ -3053,7 +3335,9 @@ describe("orchestrator tools", () => {
     const priorPlanID = `pln_prior_${stamp}`
 
     insertWorkflowTaskWithGoal({
-      projectID, taskID, goalID,
+      projectID,
+      taskID,
+      goalID,
       sessionID: null,
       worktree: tmp.path,
       projectName: "Plan invariant project",
@@ -3065,35 +3349,36 @@ describe("orchestrator tools", () => {
       now,
     })
     Database.use((db) => {
-      db.insert(EnginePlanVersionTable).values({
-        id: priorPlanID,
-        task_id: taskID,
-        spec_snapshot_id: `spec_${goalID}`,
-        version: 1,
-        status: "active",
-        summary: "prior active plan",
-        prompt: "prior",
-        metadata: {},
-        time_created: now - 1000,
-        time_updated: now - 1000,
-      }).run()
-      db.update(EngineGoalTable)
-        .set({ plan_version_id: priorPlanID })
-        .where(eq(EngineGoalTable.id, goalID))
+      db.insert(EnginePlanVersionTable)
+        .values({
+          id: priorPlanID,
+          task_id: taskID,
+          spec_snapshot_id: `spec_${goalID}`,
+          version: 1,
+          status: "active",
+          summary: "prior active plan",
+          prompt: "prior",
+          metadata: {},
+          time_created: now - 1000,
+          time_updated: now - 1000,
+        })
         .run()
-      db.insert(EnginePlanNodeTable).values({
-        id: `pln_node_prior_${stamp}`,
-        task_id: taskID,
-        plan_version_id: priorPlanID,
-        kind: "goal",
-        goal_id: goalID,
-        title: "Single goal (prior)",
-        brief: "prior brief",
-        order_index: 0,
-        metadata: {},
-        time_created: now - 1000,
-        time_updated: now - 1000,
-      }).run()
+      db.update(EngineGoalTable).set({ plan_version_id: priorPlanID }).where(eq(EngineGoalTable.id, goalID)).run()
+      db.insert(EnginePlanNodeTable)
+        .values({
+          id: `pln_node_prior_${stamp}`,
+          task_id: taskID,
+          plan_version_id: priorPlanID,
+          kind: "goal",
+          goal_id: goalID,
+          title: "Single goal (prior)",
+          brief: "prior brief",
+          order_index: 0,
+          metadata: {},
+          time_created: now - 1000,
+          time_updated: now - 1000,
+        })
+        .run()
     })
 
     await Instance.provide({
@@ -3110,9 +3395,7 @@ describe("orchestrator tools", () => {
         expect(result).toContain("no delivery row to prosecute")
 
         const plans = Database.use((db) =>
-          db.select().from(EnginePlanVersionTable)
-            .where(eq(EnginePlanVersionTable.task_id, taskID))
-            .all(),
+          db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.task_id, taskID)).all(),
         )
         const active = plans.filter((p) => p.status === "active")
         const superseded = plans.filter((p) => p.status === "superseded")
@@ -3128,9 +3411,7 @@ describe("orchestrator tools", () => {
         expect(goal?.plan_version_id).toBe(active[0].id)
 
         const planNodes = Database.use((db) =>
-          db.select().from(EnginePlanNodeTable)
-            .where(eq(EnginePlanNodeTable.plan_version_id, active[0].id))
-            .all(),
+          db.select().from(EnginePlanNodeTable).where(eq(EnginePlanNodeTable.plan_version_id, active[0].id)).all(),
         )
         expect(planNodes).toHaveLength(1)
         expect(planNodes[0].goal_id).toBe(goalID)
@@ -3138,15 +3419,11 @@ describe("orchestrator tools", () => {
         // Prior plan's plan_node rows must be cleared so the board's per-goal
         // plan_node lookup (which only filters by goal_id) does not double-render.
         const priorNodes = Database.use((db) =>
-          db.select().from(EnginePlanNodeTable)
-            .where(eq(EnginePlanNodeTable.plan_version_id, priorPlanID))
-            .all(),
+          db.select().from(EnginePlanNodeTable).where(eq(EnginePlanNodeTable.plan_version_id, priorPlanID)).all(),
         )
         expect(priorNodes).toHaveLength(0)
         const allNodesForGoal = Database.use((db) =>
-          db.select().from(EnginePlanNodeTable)
-            .where(eq(EnginePlanNodeTable.goal_id, goalID))
-            .all(),
+          db.select().from(EnginePlanNodeTable).where(eq(EnginePlanNodeTable.goal_id, goalID)).all(),
         )
         expect(allNodesForGoal).toHaveLength(1)
       },
@@ -3163,7 +3440,9 @@ describe("orchestrator tools", () => {
     const newerPlanID = `pln_newer_${stamp}`
 
     insertWorkflowTaskWithGoal({
-      projectID, taskID, goalID,
+      projectID,
+      taskID,
+      goalID,
       sessionID: null,
       worktree: tmp.path,
       projectName: "Plan dirty regression",
@@ -3175,62 +3454,67 @@ describe("orchestrator tools", () => {
       now,
     })
     Database.use((db) => {
-      db.insert(EnginePlanVersionTable).values({
-        id: olderPlanID,
-        task_id: taskID,
-        spec_snapshot_id: `spec_${goalID}`,
-        version: 1,
-        status: "active",
-        summary: "older active plan",
-        prompt: "older",
-        metadata: {},
-        time_created: now - 2000,
-        time_updated: now - 2000,
-      }).run()
-      db.insert(EnginePlanVersionTable).values({
-        id: newerPlanID,
-        task_id: taskID,
-        spec_snapshot_id: `spec_${goalID}`,
-        version: 1,
-        status: "active",
-        summary: "newer active plan",
-        prompt: "newer",
-        metadata: {},
-        time_created: now - 1000,
-        time_updated: now - 1000,
-      }).run()
-      db.update(EngineGoalTable)
-        .set({ plan_version_id: newerPlanID })
-        .where(eq(EngineGoalTable.id, goalID))
+      db.insert(EnginePlanVersionTable)
+        .values({
+          id: olderPlanID,
+          task_id: taskID,
+          spec_snapshot_id: `spec_${goalID}`,
+          version: 1,
+          status: "active",
+          summary: "older active plan",
+          prompt: "older",
+          metadata: {},
+          time_created: now - 2000,
+          time_updated: now - 2000,
+        })
         .run()
+      db.insert(EnginePlanVersionTable)
+        .values({
+          id: newerPlanID,
+          task_id: taskID,
+          spec_snapshot_id: `spec_${goalID}`,
+          version: 1,
+          status: "active",
+          summary: "newer active plan",
+          prompt: "newer",
+          metadata: {},
+          time_created: now - 1000,
+          time_updated: now - 1000,
+        })
+        .run()
+      db.update(EngineGoalTable).set({ plan_version_id: newerPlanID }).where(eq(EngineGoalTable.id, goalID)).run()
       // Seed plan_node rows on BOTH dirty active plans so we can prove
       // every prior plan_node gets cleaned up, not just the most recent one.
-      db.insert(EnginePlanNodeTable).values({
-        id: `pln_node_older_${stamp}`,
-        task_id: taskID,
-        plan_version_id: olderPlanID,
-        kind: "goal",
-        goal_id: goalID,
-        title: "Single goal (older)",
-        brief: "older brief",
-        order_index: 0,
-        metadata: {},
-        time_created: now - 2000,
-        time_updated: now - 2000,
-      }).run()
-      db.insert(EnginePlanNodeTable).values({
-        id: `pln_node_newer_${stamp}`,
-        task_id: taskID,
-        plan_version_id: newerPlanID,
-        kind: "goal",
-        goal_id: goalID,
-        title: "Single goal (newer)",
-        brief: "newer brief",
-        order_index: 0,
-        metadata: {},
-        time_created: now - 1000,
-        time_updated: now - 1000,
-      }).run()
+      db.insert(EnginePlanNodeTable)
+        .values({
+          id: `pln_node_older_${stamp}`,
+          task_id: taskID,
+          plan_version_id: olderPlanID,
+          kind: "goal",
+          goal_id: goalID,
+          title: "Single goal (older)",
+          brief: "older brief",
+          order_index: 0,
+          metadata: {},
+          time_created: now - 2000,
+          time_updated: now - 2000,
+        })
+        .run()
+      db.insert(EnginePlanNodeTable)
+        .values({
+          id: `pln_node_newer_${stamp}`,
+          task_id: taskID,
+          plan_version_id: newerPlanID,
+          kind: "goal",
+          goal_id: goalID,
+          title: "Single goal (newer)",
+          brief: "newer brief",
+          order_index: 0,
+          metadata: {},
+          time_created: now - 1000,
+          time_updated: now - 1000,
+        })
+        .run()
     })
 
     await Instance.provide({
@@ -3246,12 +3530,13 @@ describe("orchestrator tools", () => {
         await tools.prosecute.execute({}, {} as any)
 
         const plans = Database.use((db) =>
-          db.select().from(EnginePlanVersionTable)
-            .where(eq(EnginePlanVersionTable.task_id, taskID))
-            .all(),
+          db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.task_id, taskID)).all(),
         )
         const active = plans.filter((p) => p.status === "active")
-        const supersededIDs = plans.filter((p) => p.status === "superseded").map((p) => p.id).sort()
+        const supersededIDs = plans
+          .filter((p) => p.status === "superseded")
+          .map((p) => p.id)
+          .sort()
         expect(active).toHaveLength(1)
         expect(active[0].id).not.toBe(olderPlanID)
         expect(active[0].id).not.toBe(newerPlanID)
@@ -3261,9 +3546,7 @@ describe("orchestrator tools", () => {
         // and the board's per-goal lookup must surface exactly one node
         // (the new plan's), reproducing the bug-fix scenario.
         const nodesByGoal = Database.use((db) =>
-          db.select().from(EnginePlanNodeTable)
-            .where(eq(EnginePlanNodeTable.goal_id, goalID))
-            .all(),
+          db.select().from(EnginePlanNodeTable).where(eq(EnginePlanNodeTable.goal_id, goalID)).all(),
         )
         expect(nodesByGoal).toHaveLength(1)
         expect(nodesByGoal[0].plan_version_id).toBe(active[0].id)
@@ -3281,7 +3564,9 @@ describe("orchestrator tools", () => {
     const newerPlanID = `pln_restart_newer_${stamp}`
 
     insertWorkflowTaskWithGoal({
-      projectID, taskID, goalID,
+      projectID,
+      taskID,
+      goalID,
       sessionID: null,
       worktree: tmp.path,
       projectName: "Restart plan stage project",
@@ -3293,56 +3578,64 @@ describe("orchestrator tools", () => {
       now,
     })
     Database.use((db) => {
-      db.insert(EnginePlanVersionTable).values({
-        id: olderPlanID,
-        task_id: taskID,
-        spec_snapshot_id: `spec_${goalID}`,
-        version: 1,
-        status: "active",
-        summary: "older active plan",
-        prompt: "older",
-        metadata: {},
-        time_created: now - 2000,
-        time_updated: now - 2000,
-      }).run()
-      db.insert(EnginePlanVersionTable).values({
-        id: newerPlanID,
-        task_id: taskID,
-        spec_snapshot_id: `spec_${goalID}`,
-        version: 1,
-        status: "active",
-        summary: "newer active plan",
-        prompt: "newer",
-        metadata: {},
-        time_created: now - 1000,
-        time_updated: now - 1000,
-      }).run()
-      db.insert(EnginePlanNodeTable).values({
-        id: `pln_node_restart_older_${stamp}`,
-        task_id: taskID,
-        plan_version_id: olderPlanID,
-        kind: "goal",
-        goal_id: goalID,
-        title: "Single goal (older)",
-        brief: "older brief",
-        order_index: 0,
-        metadata: {},
-        time_created: now - 2000,
-        time_updated: now - 2000,
-      }).run()
-      db.insert(EnginePlanNodeTable).values({
-        id: `pln_node_restart_newer_${stamp}`,
-        task_id: taskID,
-        plan_version_id: newerPlanID,
-        kind: "goal",
-        goal_id: goalID,
-        title: "Single goal (newer)",
-        brief: "newer brief",
-        order_index: 0,
-        metadata: {},
-        time_created: now - 1000,
-        time_updated: now - 1000,
-      }).run()
+      db.insert(EnginePlanVersionTable)
+        .values({
+          id: olderPlanID,
+          task_id: taskID,
+          spec_snapshot_id: `spec_${goalID}`,
+          version: 1,
+          status: "active",
+          summary: "older active plan",
+          prompt: "older",
+          metadata: {},
+          time_created: now - 2000,
+          time_updated: now - 2000,
+        })
+        .run()
+      db.insert(EnginePlanVersionTable)
+        .values({
+          id: newerPlanID,
+          task_id: taskID,
+          spec_snapshot_id: `spec_${goalID}`,
+          version: 1,
+          status: "active",
+          summary: "newer active plan",
+          prompt: "newer",
+          metadata: {},
+          time_created: now - 1000,
+          time_updated: now - 1000,
+        })
+        .run()
+      db.insert(EnginePlanNodeTable)
+        .values({
+          id: `pln_node_restart_older_${stamp}`,
+          task_id: taskID,
+          plan_version_id: olderPlanID,
+          kind: "goal",
+          goal_id: goalID,
+          title: "Single goal (older)",
+          brief: "older brief",
+          order_index: 0,
+          metadata: {},
+          time_created: now - 2000,
+          time_updated: now - 2000,
+        })
+        .run()
+      db.insert(EnginePlanNodeTable)
+        .values({
+          id: `pln_node_restart_newer_${stamp}`,
+          task_id: taskID,
+          plan_version_id: newerPlanID,
+          kind: "goal",
+          goal_id: goalID,
+          title: "Single goal (newer)",
+          brief: "newer brief",
+          order_index: 0,
+          metadata: {},
+          time_created: now - 1000,
+          time_updated: now - 1000,
+        })
+        .run()
     })
 
     await Instance.provide({
@@ -3355,28 +3648,24 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.restart_from_stage.execute(
-          { stage: "plan", reason: "regression test" },
-          {} as any,
-        )
+        const result = await tools.restart_from_stage.execute({ stage: "plan", reason: "regression test" }, {} as any)
         expect(typeof result).toBe("string")
 
         const plans = Database.use((db) =>
-          db.select().from(EnginePlanVersionTable)
-            .where(eq(EnginePlanVersionTable.task_id, taskID))
-            .all(),
+          db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.task_id, taskID)).all(),
         )
         const active = plans.filter((p) => p.status === "active")
-        const supersededIDs = plans.filter((p) => p.status === "superseded").map((p) => p.id).sort()
+        const supersededIDs = plans
+          .filter((p) => p.status === "superseded")
+          .map((p) => p.id)
+          .sort()
         expect(active).toHaveLength(0)
         expect(supersededIDs).toEqual([olderPlanID, newerPlanID].sort())
 
         // Both retired plans' plan_node rows must be gone — restart_from_stage
         // routes through the same supersede helper.
         const remaining = Database.use((db) =>
-          db.select().from(EnginePlanNodeTable)
-            .where(eq(EnginePlanNodeTable.task_id, taskID))
-            .all(),
+          db.select().from(EnginePlanNodeTable).where(eq(EnginePlanNodeTable.task_id, taskID)).all(),
         )
         expect(remaining).toHaveLength(0)
       },

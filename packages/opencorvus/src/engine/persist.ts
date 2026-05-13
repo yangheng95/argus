@@ -15,7 +15,13 @@ export interface Requirement {
   check_selector?: string[]
   metadata?: Record<string, unknown>
 }
-import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
+import {
+  protocolInfo,
+  type ProtocolCapabilitiesInfo,
+  type ProtocolRefsInfo,
+  type ProtocolSettingsInfo,
+  ProtocolTransport,
+} from "@/executor/protocol"
 import { writeEvaluationSnapshot } from "@/engine/docs"
 import { Database, and, desc, eq, inArray, isNull, lte, or } from "@/storage/db"
 import { Log } from "@/util/log"
@@ -27,6 +33,7 @@ import {
   EnginePlanNodeTable,
   EnginePlanVersionTable,
   EngineRequirementTable,
+  EngineSpecSnapshotTable,
   EngineTaskTable,
   type EngineDeliveryStatus,
   type EngineArtifactKind,
@@ -34,11 +41,30 @@ import {
 import { persistEvidence } from "@/verification/persist"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
-import { findGoal, findGoalLatestWorkspace, findGoalRun, findLatestTipGoalRun, findPlan, listGoalRunsByGoal, listGoals, listGoalsForPlan, listOrchestratorStreamErrorArtifacts, requireTask, type GoalRow, type RunRow, type TaskRow } from "./store"
+import {
+  findGoal,
+  findGoalLatestWorkspace,
+  findGoalRun,
+  findLatestTipGoalRun,
+  findPlan,
+  listGoalRunsByGoal,
+  listGoals,
+  listGoalsForPlan,
+  listOrchestratorStreamErrorArtifacts,
+  requireTask,
+  type GoalRow,
+  type RunRow,
+  type TaskRow,
+} from "./store"
 import { updateTask } from "./state"
 import { isTaskTerminal } from "./task-status"
 import { syncGoalStatus } from "./goal-status"
 import { createDecisionLog } from "@/decision-log"
+import {
+  ArchitectContractGraphSchema,
+  remapArchitectContractGraphGoalIDs,
+  type ArchitectContractGraph,
+} from "@/architect/contract-graph"
 
 const log = Log.create({ service: "engine-transition" })
 
@@ -47,7 +73,13 @@ const log = Log.create({ service: "engine-transition" })
  * remains the sole identity. Immutable once set.
  */
 export function goalSlug(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "goal"
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 40) || "goal"
+  )
 }
 
 interface GoalRowInput {
@@ -57,8 +89,6 @@ interface GoalRowInput {
   acceptance_specs: import("@/acceptance/types").AcceptanceSpec[]
   owned_paths?: string[]
   depends_on?: string[]
-  exports?: string[]
-  imports?: string[]
   kind?: string
   requirement_ids?: string[]
   priority?: "blocking" | "advisory"
@@ -80,9 +110,7 @@ export function insertGoalRows(
     const goalID = goal.goalID ?? Identifier.ascending("goal")
     const deps = goal.depends_on ?? []
     const metadata =
-      goal.metadata && typeof goal.metadata === "object" && !Array.isArray(goal.metadata)
-        ? goal.metadata
-        : undefined
+      goal.metadata && typeof goal.metadata === "object" && !Array.isArray(goal.metadata) ? goal.metadata : undefined
     db.insert(EngineGoalTable)
       .values({
         id: goalID,
@@ -95,8 +123,6 @@ export function insertGoalRows(
         acceptance_specs: goal.acceptance_specs,
         owned_paths: goal.owned_paths ?? [],
         depends_on: deps,
-        exports: goal.exports ?? [],
-        imports: goal.imports ?? [],
         kind: goal.kind ?? "feature",
         requirement_ids: goal.requirement_ids ?? [],
         metadata: {
@@ -156,10 +182,7 @@ export function upsertGoalsFromArchitect(
 } {
   const existing = listGoals(input.taskID)
   const existingByID = new Map(existing.map((g) => [g.id, g]))
-  const maxExistingOrderIndex = existing.reduce(
-    (max, goal) => Math.max(max, goal.order_index),
-    -1,
-  )
+  const maxExistingOrderIndex = existing.reduce((max, goal) => Math.max(max, goal.order_index), -1)
   let nextNewOrderIndex = maxExistingOrderIndex + 1
 
   // First pass: assign DB ids for every goal in the Architect output. Existing
@@ -190,18 +213,14 @@ export function upsertGoalsFromArchitect(
   const persisted: Array<{ id: string; title: string; llmID: string }> = []
   for (let index = 0; index < plan.length; index++) {
     const { llmID, dbID, isNew, goal } = plan[index]
-    const orderIndex = isNew
-      ? nextNewOrderIndex++
-      : existingByID.get(dbID)?.order_index ?? index
-    const deps = (goal.depends_on ?? []).flatMap((dep) => {
+    const orderIndex = isNew ? nextNewOrderIndex++ : (existingByID.get(dbID)?.order_index ?? index)
+    const deps = (goal.depends_on ?? []).map((dep) => {
       const mapped = llmToDBID.get(dep)
-      if (mapped) return [mapped]
-      if (existingByID.has(dep)) return [dep]
-      log.warn("upsertGoalsFromArchitect: depends_on references unknown id — dropping", {
-        goalID: dbID,
-        unknownDep: dep,
-      })
-      return []
+      if (mapped) return mapped
+      if (existingByID.has(dep)) return dep
+      throw new Error(
+        `upsertGoalsFromArchitect: goal ${dbID} depends_on references unknown id ${dep}`,
+      )
     })
     const priorMetadata =
       existingByID.get(dbID)?.metadata && typeof existingByID.get(dbID)!.metadata === "object"
@@ -227,8 +246,6 @@ export function upsertGoalsFromArchitect(
           acceptance_specs: goal.acceptance_specs,
           owned_paths: goal.owned_paths ?? [],
           depends_on: deps,
-          exports: goal.exports ?? [],
-          imports: goal.imports ?? [],
           kind: goal.kind ?? "feature",
           requirement_ids: goal.requirement_ids ?? [],
           metadata,
@@ -248,8 +265,6 @@ export function upsertGoalsFromArchitect(
           acceptance_specs: goal.acceptance_specs,
           owned_paths: goal.owned_paths ?? [],
           depends_on: deps,
-          exports: goal.exports ?? [],
-          imports: goal.imports ?? [],
           kind: goal.kind ?? "feature",
           requirement_ids: goal.requirement_ids ?? [],
           metadata,
@@ -264,6 +279,161 @@ export function upsertGoalsFromArchitect(
   }
 
   return { persisted, llmToDBID, deletedIDs }
+}
+
+export function persistArchitectContractGraph(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    graph: ArchitectContractGraph
+    now: number
+  },
+) {
+  const graph = ArchitectContractGraphSchema.parse(input.graph)
+  const id = Identifier.ascending("artifact")
+  db.insert(EngineArtifactTable)
+    .values({
+      id,
+      task_id: input.taskID,
+      run_id: null,
+      goal_run_id: null,
+      delivery_id: null,
+      kind: "architect_contract_graph",
+      label: "active",
+      payload: graph,
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+  return id
+}
+
+export function persistTaskArchitectContractGraph(input: {
+  taskID: string
+  graph: ArchitectContractGraph
+  now?: number
+}) {
+  return Database.use((db) =>
+    persistArchitectContractGraph(db, {
+      taskID: input.taskID,
+      graph: input.graph,
+      now: input.now ?? Date.now(),
+    }),
+  )
+}
+
+export type ImportedArchitectPlanGoal = {
+  oldID: string
+  title: string
+  objective: string
+  acceptanceSpecs: unknown[]
+  ownedPaths: string[]
+  dependsOn: string[]
+  kind: string
+  requirementIDs: string[]
+  priority: "advisory" | "blocking"
+  orderIndex: number
+  metadata: Record<string, unknown> | null
+}
+
+export function persistImportedArchitectPlan(input: {
+  taskID: string
+  plan: {
+    version: number
+    summary: string
+    prompt: string
+    metadata: Record<string, unknown> | null
+  }
+  snapshot: {
+    version: number
+    summary: string
+    content: string
+    scope: string
+    outOfScope: string | null
+    evidence: string[] | null
+    metadata: Record<string, unknown> | null
+  }
+  goals: ImportedArchitectPlanGoal[]
+  graph: ArchitectContractGraph
+  now?: number
+}) {
+  const now = input.now ?? Date.now()
+  const specID = Identifier.ascending("spec")
+  const planID = Identifier.ascending("plan")
+  const goalIDMap = new Map<string, string>()
+  for (const goal of input.goals) {
+    goalIDMap.set(goal.oldID, Identifier.ascending("goal"))
+  }
+  const mappedGraph = remapArchitectContractGraphGoalIDs(input.graph, (goalID) => goalIDMap.get(goalID))
+
+  Database.use((db) => {
+    db.insert(EngineSpecSnapshotTable)
+      .values({
+        id: specID,
+        task_id: input.taskID,
+        version: input.snapshot.version,
+        status: "ready",
+        summary: input.snapshot.summary,
+        content: input.snapshot.content,
+        scope: input.snapshot.scope,
+        out_of_scope: input.snapshot.outOfScope,
+        evidence: input.snapshot.evidence,
+        metadata: input.snapshot.metadata,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EnginePlanVersionTable)
+      .values({
+        id: planID,
+        task_id: input.taskID,
+        spec_snapshot_id: specID,
+        version: input.plan.version,
+        status: "active",
+        summary: input.plan.summary,
+        prompt: input.plan.prompt,
+        metadata: input.plan.metadata,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    for (const goal of input.goals) {
+      const newGoalID = goalIDMap.get(goal.oldID)!
+      db.insert(EngineGoalTable)
+        .values({
+          id: newGoalID,
+          task_id: input.taskID,
+          plan_version_id: planID,
+          spec_snapshot_id: specID,
+          title: goal.title,
+          slug: goalSlug(goal.title),
+          objective: goal.objective,
+          acceptance_specs: goal.acceptanceSpecs.map((spec) =>
+            spec && typeof spec === "object" ? { ...(spec as Record<string, unknown>), goal_id: newGoalID } : spec,
+          ) as any,
+          owned_paths: goal.ownedPaths,
+          depends_on: goal.dependsOn.map((goalID) => {
+            const mapped = goalIDMap.get(goalID)
+            if (!mapped) throw new Error(`Imported architect plan goal ${goal.oldID} depends on unknown goal ${goalID}.`)
+            return mapped
+          }),
+          kind: goal.kind,
+          requirement_ids: goal.requirementIDs,
+          priority: goal.priority,
+          source: "import",
+          order_index: goal.orderIndex,
+          metadata: goal.metadata,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    }
+    persistArchitectContractGraph(db, {
+      taskID: input.taskID,
+      graph: mappedGraph,
+      now,
+    })
+  })
 }
 
 export function insertRequirements(
@@ -287,7 +457,9 @@ export function insertRequirements(
         description: requirement.description,
         status: "pending",
         priority: requirement.priority === "advisory" ? "advisory" : "blocking",
-        acceptance: Array.isArray(requirement.acceptance) ? JSON.stringify(requirement.acceptance) : requirement.acceptance,
+        acceptance: Array.isArray(requirement.acceptance)
+          ? JSON.stringify(requirement.acceptance)
+          : requirement.acceptance,
         evidence_refs: requirement.evidence_refs.length > 0 ? requirement.evidence_refs : null,
         non_goals: requirement.non_goals && requirement.non_goals.length > 0 ? requirement.non_goals : null,
         metadata: {
@@ -303,7 +475,7 @@ export function insertRequirements(
       id: requirementID,
       sourceRequirementID: requestedID || requirementID,
       title: requirement.title,
-      priority: requirement.priority === "advisory" ? "advisory" as const : "blocking" as const,
+      priority: requirement.priority === "advisory" ? ("advisory" as const) : ("blocking" as const),
     }
   })
 }
@@ -318,7 +490,9 @@ export function copyRequirementsToSpecSnapshot(
   },
 ) {
   if (input.fromSpecSnapshotID === input.toSpecSnapshotID) {
-    throw new Error(`copyRequirementsToSpecSnapshot: source and target spec are identical (${input.fromSpecSnapshotID})`)
+    throw new Error(
+      `copyRequirementsToSpecSnapshot: source and target spec are identical (${input.fromSpecSnapshotID})`,
+    )
   }
 
   const existingTargetRows = db
@@ -336,10 +510,12 @@ export function copyRequirementsToSpecSnapshot(
   const sourceRows = db
     .select()
     .from(EngineRequirementTable)
-    .where(and(
-      eq(EngineRequirementTable.task_id, input.taskID),
-      eq(EngineRequirementTable.spec_snapshot_id, input.fromSpecSnapshotID),
-    ))
+    .where(
+      and(
+        eq(EngineRequirementTable.task_id, input.taskID),
+        eq(EngineRequirementTable.spec_snapshot_id, input.fromSpecSnapshotID),
+      ),
+    )
     .orderBy(EngineRequirementTable.order_index)
     .all()
 
@@ -406,10 +582,11 @@ export function createGoalRun(input: {
   // goal, plan_node) triple. Superseding a live row is invalid because the
   // executor behind it can still report and merge; ignoring it here creates
   // multiple live build sessions for one goal.
-  const liveTips = listGoalRunsByGoal(input.goalID).filter((r) =>
-    r.coordinator_run_id === input.coordinatorRunID &&
-    (input.planNodeID ? r.plan_node_id === input.planNodeID : r.plan_node_id === null) &&
-    (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status),
+  const liveTips = listGoalRunsByGoal(input.goalID).filter(
+    (r) =>
+      r.coordinator_run_id === input.coordinatorRunID &&
+      (input.planNodeID ? r.plan_node_id === input.planNodeID : r.plan_node_id === null) &&
+      (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status),
   )
   if (liveTips.length > 0) {
     return liveTips[0]!
@@ -533,8 +710,8 @@ export function updateGoalWorkspace(input: {
     // recoverable case.
     throw new Error(
       `updateGoalWorkspace: goal ${input.goalID} has no goal_run_attempt artifact; ` +
-      `workspace pointers ride the per-attempt payload — open an attempt via ` +
-      `beginBuildAttempt before recording the workspace.`,
+        `workspace pointers ride the per-attempt payload — open an attempt via ` +
+        `beginBuildAttempt before recording the workspace.`,
     )
   }
   const patch: Partial<import("./store").GoalRunRow> = {
@@ -547,7 +724,6 @@ export function updateGoalWorkspace(input: {
   updateGoalRun(tip.id, patch)
 }
 
-
 /**
  * Batch reset every goal in a task back to the "pending" projection by:
  *  1. clearing any explicit cascade_state marker
@@ -559,11 +735,7 @@ export function updateGoalWorkspace(input: {
  * goal_runs first via abortLiveExecutionForTask — this function only
  * handles the terminal-state remnants.
  */
-export function resetTaskGoalsToPending(input: {
-  taskID: string
-  reason: string
-  now?: number
-}) {
+export function resetTaskGoalsToPending(input: { taskID: string; reason: string; now?: number }) {
   const now = input.now ?? Date.now()
   const goals = listGoals(input.taskID)
   let supersededTips = 0
@@ -583,8 +755,10 @@ export function resetTaskGoalsToPending(input: {
     if (result.supersededTipID) supersededTips++
   }
   log.info("reset task goals to pending", {
-    taskID: input.taskID, reason: input.reason,
-    total: goals.length, supersededTips,
+    taskID: input.taskID,
+    reason: input.reason,
+    total: goals.length,
+    supersededTips,
   })
   return { total: goals.length, supersededTips }
 }
@@ -608,22 +782,15 @@ export function resetTaskGoalsToPending(input: {
  * Intended for use inside an existing Database.transaction so the
  * supersede + plan_node delete + new plan insert land as one unit.
  */
-export function supersedePriorActivePlansForTask(
-  db: Database.TxOrDb,
-  input: { taskID: string; now: number },
-): void {
-  const targets = db.select({ id: EnginePlanVersionTable.id })
+export function supersedePriorActivePlansForTask(db: Database.TxOrDb, input: { taskID: string; now: number }): void {
+  const targets = db
+    .select({ id: EnginePlanVersionTable.id })
     .from(EnginePlanVersionTable)
-    .where(and(
-      eq(EnginePlanVersionTable.task_id, input.taskID),
-      eq(EnginePlanVersionTable.status, "active"),
-    ))
+    .where(and(eq(EnginePlanVersionTable.task_id, input.taskID), eq(EnginePlanVersionTable.status, "active")))
     .all()
   if (targets.length === 0) return
   const ids = targets.map((t) => t.id)
-  db.delete(EnginePlanNodeTable)
-    .where(inArray(EnginePlanNodeTable.plan_version_id, ids))
-    .run()
+  db.delete(EnginePlanNodeTable).where(inArray(EnginePlanNodeTable.plan_version_id, ids)).run()
   db.update(EnginePlanVersionTable)
     .set({ status: "superseded", time_updated: input.now })
     .where(inArray(EnginePlanVersionTable.id, ids))
@@ -643,11 +810,7 @@ export function supersedePriorActivePlansForTask(
  * (history is immutable). deriveGoalStatus reads the column and projects
  * the goal back to `pending` so the dispatch loop can pick it up.
  */
-function supersedeGoalRun(input: {
-  oldGoalRunID: string
-  reason: string
-  now?: number
-}) {
+function supersedeGoalRun(input: { oldGoalRunID: string; reason: string; now?: number }) {
   const now = input.now ?? Date.now()
   const existing = findGoalRun(input.oldGoalRunID)
   if (!existing) {
@@ -817,11 +980,10 @@ export function startNewAttempt(input: {
   return { supersededTipID, resetWorkspace, retryCount }
 }
 
-function openGoalImplementationVersion(input: {
-  goal: GoalRow
-  reason: string
-  now: number
-}): { supersededTipID?: string; retryCount: number } {
+function openGoalImplementationVersion(input: { goal: GoalRow; reason: string; now: number }): {
+  supersededTipID?: string
+  retryCount: number
+} {
   const tip = findLatestTipGoalRun(input.goal.id)
   // Phase E (2026-05-05): retry_count is no longer a goal column; derive
   // from the artifact tip. The new attempt's payload carries the bumped
@@ -833,10 +995,7 @@ function openGoalImplementationVersion(input: {
   //   - no tip yet: retry_count starts at 0.
   //   - tip is non-terminal: there's nothing to supersede, the live attempt
   //     keeps its count.
-  if (
-    !tip ||
-    (tip.status !== "failed" && tip.status !== "aborted" && tip.status !== "completed")
-  ) {
+  if (!tip || (tip.status !== "failed" && tip.status !== "aborted" && tip.status !== "completed")) {
     return { retryCount: currentCount }
   }
 
@@ -860,10 +1019,7 @@ function openGoalImplementationVersion(input: {
 // `last_progress_at` column's only reader was the watchdog — no caller now.
 // The column stays until 6-d-3 table deletion cleans it up in one sweep.
 
-export function updateGoalRun(
-  goalRunID: string,
-  values: Partial<import("./store").GoalRunRow>,
-) {
+export function updateGoalRun(goalRunID: string, values: Partial<import("./store").GoalRunRow>) {
   const row = findGoalRun(goalRunID)
   if (!row) return undefined
   const nextStatus = values.status ?? row.status
@@ -875,10 +1031,13 @@ export function updateGoalRun(
   const patch: Partial<import("./store").GoalRunRow> = {
     ...values,
     ...(nextStatus !== "blocked" && values.blocking_reason === undefined ? { blocking_reason: null } : {}),
-    ...(!row.time_started && ["accepted", "planning", "running", "evaluating", "blocked", "completed"].includes(nextStatus) && values.time_started === undefined
+    ...(!row.time_started &&
+    ["accepted", "planning", "running", "evaluating", "blocked", "completed"].includes(nextStatus) &&
+    values.time_started === undefined
       ? { time_started: now }
       : {}),
-    ...((nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") && values.time_completed === undefined
+    ...((nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") &&
+    values.time_completed === undefined
       ? { time_completed: now }
       : {}),
   }
@@ -1074,7 +1233,11 @@ export function persistTaskDelivery(input: {
   Database.transaction((db) => {
     writeDeliveryRow(db, input)
     Database.effect(() =>
-      EngineProtocol.emit(Event.DeliveryReady, { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary }, { source: "persist.delivery" }),
+      EngineProtocol.emit(
+        Event.DeliveryReady,
+        { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary },
+        { source: "persist.delivery" },
+      ),
     )
   })
   persistEvidence({
@@ -1112,12 +1275,7 @@ export function updateEvaluationFromDeliveryVerdict(input: {
   now?: number
 }) {
   const now = input.now ?? Date.now()
-  const status =
-    input.verdict === "accepted"
-      ? "passed"
-      : input.verdict === "rejected"
-        ? "failed"
-        : "inconclusive"
+  const status = input.verdict === "accepted" ? "passed" : input.verdict === "rejected" ? "failed" : "inconclusive"
   const existing = Database.use((db) =>
     db
       .select()
@@ -1134,8 +1292,8 @@ export function updateEvaluationFromDeliveryVerdict(input: {
   if (!existing) {
     throw new Error(
       `updateEvaluationFromDeliveryVerdict: no evidence row found for delivery ${input.deliveryID}. ` +
-      `Either persistTaskDelivery() was bypassed, or the caller passed a per-goal delivery id ` +
-      `(per-goal deliveries have no evidence row — only task-level deliveries are 1:1 with evidence).`,
+        `Either persistTaskDelivery() was bypassed, or the caller passed a per-goal delivery id ` +
+        `(per-goal deliveries have no evidence row — only task-level deliveries are 1:1 with evidence).`,
     )
   }
   const existingPayload = (existing.payload ?? {}) as {
@@ -1288,11 +1446,7 @@ export function ensureExecutorSession(input: {
     )
     if (updated) return updated
     const blocked = Database.use((db) =>
-      db
-        .select()
-        .from(EngineExecutorSessionTable)
-        .where(eq(EngineExecutorSessionTable.id, existing.id))
-        .get(),
+      db.select().from(EngineExecutorSessionTable).where(eq(EngineExecutorSessionTable.id, existing.id)).get(),
     )
     throw new Error(`ensureExecutorSession: ${executorLeaseConflict(blocked, now)}`)
   }
@@ -1322,17 +1476,16 @@ export function ensureExecutorSession(input: {
       .run(),
   )
   const inserted = Database.use((db) =>
-    db
-      .select()
-      .from(EngineExecutorSessionTable)
-      .where(eq(EngineExecutorSessionTable.id, id))
-      .get(),
+    db.select().from(EngineExecutorSessionTable).where(eq(EngineExecutorSessionTable.id, id)).get(),
   )
   if (!inserted) throw new Error(`ensureExecutorSession: executor session ${id} not found after insert`)
   return inserted
 }
 
-export function updateExecutorSessionStatus(runID: string, status: typeof EngineExecutorSessionTable.$inferInsert.status) {
+export function updateExecutorSessionStatus(
+  runID: string,
+  status: typeof EngineExecutorSessionTable.$inferInsert.status,
+) {
   const row = Database.use((db) =>
     db
       .select()
@@ -1482,17 +1635,11 @@ function findLatestDeliveryArtifact(deliveryId: string) {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.delivery_id, deliveryId),
-          eq(EngineArtifactTable.kind, "delivery"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.delivery_id, deliveryId), eq(EngineArtifactTable.kind, "delivery")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
 }
-
 
 function mergeRefs(current?: ProtocolRefsInfo, next?: ProtocolRefsInfo) {
   if (!current && !next) return undefined
@@ -1526,9 +1673,7 @@ export function updateGoal(input: {
 }
 
 export function deleteGoal(goalID: string) {
-  return Database.use((db) =>
-    db.delete(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).run(),
-  )
+  return Database.use((db) => db.delete(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).run())
 }
 
 /**
@@ -1601,7 +1746,7 @@ export function beginBuildAttempt(input: {
   if (priorTip && (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(priorTip.status)) {
     throw new Error(
       `beginBuildAttempt: goal ${input.goalID} already has live goal_run ${priorTip.id} ` +
-      `with status=${priorTip.status}; refusing to open a second live build attempt.`,
+        `with status=${priorTip.status}; refusing to open a second live build attempt.`,
     )
   }
 
@@ -1630,12 +1775,12 @@ export function beginBuildAttempt(input: {
   // intentionally returns no supersededTipID for live rows; treating that as
   // "link to whatever tip exists" was the bug that let a retry supersede a
   // still-running executor and launch a duplicate build session.
-  const parentTipID = version.supersededTipID ?? (
-    priorTip?.superseded_reason &&
+  const parentTipID =
+    version.supersededTipID ??
+    (priorTip?.superseded_reason &&
     (priorTip.status === "failed" || priorTip.status === "aborted" || priorTip.status === "completed")
       ? priorTip.id
-      : undefined
-  )
+      : undefined)
   const payload = {
     goal_id: input.goalID,
     plan_node_id: null,
@@ -1657,8 +1802,7 @@ export function beginBuildAttempt(input: {
     time_completed: null,
   }
   Database.transaction((db) => {
-    db
-      .insert(EngineArtifactTable)
+    db.insert(EngineArtifactTable)
       .values({
         id,
         task_id: input.taskID,
@@ -1735,10 +1879,7 @@ export function finalizeBuildAttempt(input: {
   if (input.workspaceBaseRef !== undefined) patch.workspace_base_ref = input.workspaceBaseRef
   updateGoalRun(input.goalRunID, patch)
   const includeDelivery =
-    input.status === "completed" &&
-    !!input.commitRef &&
-    Array.isArray(input.diffs) &&
-    input.diffs.length > 0
+    input.status === "completed" && !!input.commitRef && Array.isArray(input.diffs) && input.diffs.length > 0
   if (!includeDelivery) return
   const stats = input.diffs!.reduce(
     (acc, d) => {
@@ -1751,8 +1892,7 @@ export function finalizeBuildAttempt(input: {
   const deliveryID = Identifier.ascending("delivery")
   const summary = input.summary?.trim() || `Goal ${input.goalID} build delivered ${input.diffs!.length} file change(s).`
   Database.transaction((db) => {
-    db
-      .insert(EngineArtifactTable)
+    db.insert(EngineArtifactTable)
       .values({
         id: deliveryID,
         task_id: input.taskID,
@@ -1835,6 +1975,7 @@ export function recordIntegrityAttempt(input: {
     reason: string
     updates?: Record<string, unknown>
   }>
+  graphCorrections?: unknown[]
   missingGoals?: Array<{
     title: string
     objective: string
@@ -1860,6 +2001,7 @@ export function recordIntegrityAttempt(input: {
     reason: input.reason ?? null,
     review_markdown: input.reviewMarkdown ?? null,
     corrections: input.corrections ?? null,
+    graph_corrections: input.graphCorrections ?? null,
     missing_goals: input.missingGoals ?? null,
     time_completed: now,
   }
@@ -1956,7 +2098,8 @@ export function recordOrchestratorStreamError(input: {
   now: number
 }) {
   return Database.use((db) =>
-    db.insert(EngineArtifactTable)
+    db
+      .insert(EngineArtifactTable)
       .values({
         id: Identifier.ascending("artifact"),
         task_id: input.taskID,

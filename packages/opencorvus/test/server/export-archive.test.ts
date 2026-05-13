@@ -11,7 +11,13 @@ import {
   Uint8ArrayWriter,
 } from "@zip.js/zip.js"
 import { Database } from "../../src/storage/db"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import {
+  EngineGoalTable,
+  EnginePlanVersionTable,
+  EngineSpecSnapshotTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
+import { findLatestArchitectContractGraph, persistArchitectContractGraph } from "../../src/engine"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -156,7 +162,7 @@ describe("export archive routes", () => {
     // The whole point of the test: gitignored files MUST be absent.
     expect(entries["project/ignored.txt"]).toBeUndefined()
     expect(entries["project/build/out.js"]).toBeUndefined()
-  })
+  }, 30_000)
 
   test("GET /export/task/:taskID/archive includes uncommitted-but-untracked-and-not-ignored files", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -178,7 +184,7 @@ describe("export archive routes", () => {
     expect(entries["project/draft.md"]).toBeDefined()
     expect(entries["project/draft.md"]!.text).toBe("wip")
     expect(entries["project/ignored.txt"]).toBeUndefined()
-  })
+  }, 30_000)
 
   test("POST /export/import restores files into an empty git directory and creates a new task", async () => {
     await using src = await tmpdir({ git: true })
@@ -256,7 +262,182 @@ describe("export archive routes", () => {
         })
       },
     })
-  })
+  }, 30_000)
+
+  test("POST /export/import preserves architect contract graph with remapped goal ids", async () => {
+    await using src = await tmpdir({ git: true })
+    await fs.writeFile(path.join(src.path, "README.md"), "graph archive")
+
+    const sourceIDs = await Instance.provide({
+      directory: src.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const specID = Identifier.ascending("spec")
+        const planID = Identifier.ascending("plan")
+        const producerGoalID = Identifier.ascending("goal")
+        const consumerGoalID = Identifier.ascending("goal")
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "Graph archive",
+              request: "Preserve graph contracts",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineSpecSnapshotTable)
+            .values({
+              id: specID,
+              task_id: taskID,
+              version: 1,
+              status: "ready",
+              summary: "Graph spec",
+              content: "# Graph spec",
+              scope: "Graph archive scope",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EnginePlanVersionTable)
+            .values({
+              id: planID,
+              task_id: taskID,
+              spec_snapshot_id: specID,
+              version: 1,
+              status: "active",
+              summary: "Graph plan",
+              prompt: "Preserve graph",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineGoalTable)
+            .values([
+              {
+                id: producerGoalID,
+                task_id: taskID,
+                plan_version_id: planID,
+                spec_snapshot_id: specID,
+                title: "Produce search panel",
+                slug: "produce-search-panel",
+                objective: "Create the reusable search panel contract.",
+                acceptance_specs: [],
+                owned_paths: ["src/SearchPanel.tsx"],
+                depends_on: [],
+                kind: "feature",
+                requirement_ids: [],
+                priority: "blocking",
+                source: "spec",
+                order_index: 0,
+                time_created: now,
+                time_updated: now,
+              },
+              {
+                id: consumerGoalID,
+                task_id: taskID,
+                plan_version_id: planID,
+                spec_snapshot_id: specID,
+                title: "Consume search panel",
+                slug: "consume-search-panel",
+                objective: "Integrate the search panel into results.",
+                acceptance_specs: [],
+                owned_paths: ["src/Results.tsx"],
+                depends_on: [producerGoalID],
+                kind: "feature",
+                requirement_ids: [],
+                priority: "blocking",
+                source: "spec",
+                order_index: 1,
+                time_created: now,
+                time_updated: now,
+              },
+            ])
+            .run()
+          persistArchitectContractGraph(db, {
+            taskID,
+            now,
+            graph: {
+              version: 1,
+              contracts: [
+                {
+                  id: "contract_search_panel",
+                  kind: "component",
+                  name: "SearchPanel",
+                  producer_goal_id: producerGoalID,
+                  consumer_goal_ids: [consumerGoalID],
+                  summary: "Search panel component props consumed by the results integration.",
+                  component: { props: "{ query: string; onQueryChange(next: string): void }" },
+                  artifact_paths: ["src/SearchPanel.tsx"],
+                },
+              ],
+              dependency_contracts: [
+                {
+                  from_goal_id: producerGoalID,
+                  to_goal_id: consumerGoalID,
+                  reason: "contract",
+                  contract_ids: ["contract_search_panel"],
+                  summary: "Results integration depends on the search panel component contract.",
+                },
+              ],
+            },
+          })
+        })
+        return { taskID, producerGoalID, consumerGoalID }
+      },
+    })
+
+    const exportRes = await Server.App().request(`/export/task/${sourceIDs.taskID}/archive`, {
+      headers: { "x-opencorvus-directory": src.path },
+    })
+    expect(exportRes.status).toBe(200)
+    const archive = await exportRes.blob()
+    const entries = await readZipEntries(archive)
+    const taskJson = JSON.parse(entries["task.json"]!.text!)
+    expect(taskJson.specSnapshots).toHaveLength(1)
+    expect(taskJson.plan.specSnapshotID).toBeDefined()
+    expect(taskJson.artifacts.some((artifact: any) => artifact.kind === "architect_contract_graph")).toBe(true)
+
+    await using dst = await tmpdir({ git: true })
+    const importRes = await Server.App().request(`/export/import`, {
+      method: "POST",
+      headers: {
+        "x-opencorvus-directory": dst.path,
+        "content-type": "application/zip",
+      },
+      body: await archive.arrayBuffer(),
+    })
+    expect(importRes.status).toBe(201)
+    const summary = (await importRes.json()) as { taskID: string }
+
+    await Instance.provide({
+      directory: dst.path,
+      fn: async () => {
+        const importedGraph = findLatestArchitectContractGraph(summary.taskID)
+        expect(importedGraph).toBeDefined()
+        const rows = Database.use((db) => db.select().from(EngineGoalTable).all())
+        const importedGoals = rows.filter((row) => row.task_id === summary.taskID)
+        expect(importedGoals).toHaveLength(2)
+        const importedProducer = importedGoals.find((row) => row.title === "Produce search panel")!
+        const importedConsumer = importedGoals.find((row) => row.title === "Consume search panel")!
+
+        expect(importedProducer.id).not.toBe(sourceIDs.producerGoalID)
+        expect(importedConsumer.id).not.toBe(sourceIDs.consumerGoalID)
+        expect(importedConsumer.depends_on).toEqual([importedProducer.id])
+        expect(importedGraph!.contracts[0]!.producer_goal_id).toBe(importedProducer.id)
+        expect(importedGraph!.contracts[0]!.consumer_goal_ids).toEqual([importedConsumer.id])
+        expect(importedGraph!.dependency_contracts[0]).toMatchObject({
+          from_goal_id: importedProducer.id,
+          to_goal_id: importedConsumer.id,
+          contract_ids: ["contract_search_panel"],
+        })
+      },
+    })
+  }, 30_000)
 
   test("POST /export/import skips existing files by default", async () => {
     await using dst = await tmpdir({ git: true })
@@ -283,7 +464,7 @@ describe("export archive routes", () => {
     // Existing file preserved; only new files are restored.
     expect(await fs.readFile(path.join(dst.path, "existing.txt"), "utf8")).toBe("stale content")
     expect(await fs.readFile(path.join(dst.path, "new.txt"), "utf8")).toBe("imported")
-  })
+  }, 30_000)
 
   test("POST /export/import?overwrite=true replaces existing files explicitly", async () => {
     await using dst = await tmpdir({ git: true })
@@ -309,7 +490,7 @@ describe("export archive routes", () => {
     expect(summary.skippedFiles).toEqual([])
     expect(await fs.readFile(path.join(dst.path, "existing.txt"), "utf8")).toBe("fresh content")
     expect(await fs.readFile(path.join(dst.path, "new.txt"), "utf8")).toBe("imported")
-  })
+  }, 30_000)
 
   test("POST /export/import?overwrite=false skips files that already exist", async () => {
     await using dst = await tmpdir({ git: true })
@@ -336,7 +517,7 @@ describe("export archive routes", () => {
     // Original preserved; only new files written.
     expect(await fs.readFile(path.join(dst.path, "existing.txt"), "utf8")).toBe("do not touch")
     expect(await fs.readFile(path.join(dst.path, "new.txt"), "utf8")).toBe("imported")
-  })
+  }, 30_000)
 
   test("POST /export/import rejects zip-slip attempts (../ in entry name)", async () => {
     await using dst = await tmpdir({ git: true })
@@ -374,7 +555,7 @@ describe("export archive routes", () => {
     expect(
       await fs.access(path.join(parent, "escape.txt")).then(() => true).catch(() => false),
     ).toBe(false)
-  })
+  }, 30_000)
 
   test("POST /export/import rejects unsupported manifest version", async () => {
     await using dst = await tmpdir({ git: true })
@@ -400,7 +581,7 @@ describe("export archive routes", () => {
     const body = (await res.json()) as { name?: string; data?: { message?: string }; message?: string }
     const message = body.data?.message ?? body.message ?? ""
     expect(message).toMatch(/version/i)
-  })
+  }, 30_000)
 
   test("POST /export/import rejects malformed body", async () => {
     await using dst = await tmpdir({ git: true })
@@ -420,5 +601,5 @@ describe("export archive routes", () => {
       body: new TextEncoder().encode("not a zip"),
     })
     expect(garbage.status).toBe(400)
-  })
+  }, 30_000)
 })

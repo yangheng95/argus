@@ -69,6 +69,7 @@ export interface CreateTaskOptions {
   text: string;
   attachments?: Attachment[];
   metadata?: Record<string, unknown>;
+  queue?: boolean;
   signal?: AbortSignal;
   budget?: {
     maxExecutorGroups?: number;
@@ -436,6 +437,33 @@ async function offerInitGitAndRetry(): Promise<boolean> {
   return await initGitCurrent({ notify: false });
 }
 
+async function resolveTaskQueueDecision(input: { queue?: boolean; signal?: AbortSignal }): Promise<boolean> {
+  if (typeof input.queue === "boolean") return input.queue;
+  if (input.signal?.aborted) {
+    throw input.signal.reason instanceof Error ? input.signal.reason : new DOMException("Task creation aborted", "AbortError");
+  }
+  const result = await showAppDialog({
+    title: t("task.queue_decision.title"),
+    message: t("task.queue_decision.message"),
+    select: true,
+    selectLabel: t("task.queue_decision.label"),
+    selectValue: "start",
+    selectOptions: [
+      { value: "start", label: t("task.queue_decision.start") },
+      { value: "queue", label: t("task.queue_decision.queue") },
+    ],
+    cancel: true,
+    okLabel: t("common.ok"),
+    cancelLabel: t("common.cancel"),
+  });
+  if (!result.confirmed) {
+    throw new DOMException("Task creation cancelled before queue decision", "AbortError");
+  }
+  if (result.value === "start") return false;
+  if (result.value === "queue") return true;
+  throw new Error(`Unknown task queue decision: ${String(result.value)}`);
+}
+
 /**
  * Create a new task via direct API. Returns the task_id immediately.
  * No LLM round-trip — the backend persists the task in ~10ms.
@@ -443,12 +471,14 @@ async function offerInitGitAndRetry(): Promise<boolean> {
 export async function createTask(options: CreateTaskOptions): Promise<string> {
   const { text, attachments = [], metadata = {}, signal, budget } = options;
   if (!text) throw new Error("createTask: text is required");
+  const queue = await resolveTaskQueueDecision({ queue: options.queue, signal });
   const requestID = crypto.randomUUID();
   const executor = sanitizeExecutor(settingsStore.executor);
   const body = JSON.stringify({
     request: text,
     executor,
     requestID,
+    queue,
     metadata,
     source: "panel",
     ...(budget ? { budget } : {}),

@@ -3,6 +3,7 @@ import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { PanelTool } from "../../src/tool/panel"
 import { EngineService } from "../../src/task-api"
+import { Question } from "../../src/question"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -53,6 +54,7 @@ describe("panel.create_task attachment forwarding", () => {
             action: "create_task",
             request: "Replicate the attached design.",
             allow_create: true,
+            queue: false,
           },
           {
             sessionID: Identifier.ascending("session"),
@@ -88,6 +90,51 @@ describe("panel.create_task attachment forwarding", () => {
     })
   })
 
+  test("asks the panel user for queue decision when create_task omits queue", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const stubTaskID = Identifier.ascending("task")
+        const createSpy = spyOn(EngineService, "createTask").mockResolvedValue(stubTaskID)
+
+        const tool = await PanelTool.init()
+        const sessionID = Identifier.ascending("session")
+        const pending = tool.execute(
+          {
+            action: "create_task",
+            request: "Build a focused task.",
+            allow_create: true,
+          },
+          {
+            sessionID,
+            messageID: Identifier.ascending("message"),
+            callID: "call_queue_prompt",
+            agent: "panel-test",
+            abort: new AbortController().signal,
+            messages: [],
+            metadata() {},
+            async ask() {},
+            extra: { surface: "panel" },
+          },
+        )
+
+        let questionID: string | undefined
+        for (let i = 0; i < 50 && !questionID; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+          questionID = (await Question.list()).find((item) => item.sessionID === sessionID)?.id
+        }
+        expect(questionID).toBeDefined()
+        await Question.reply({ requestID: questionID!, answers: [["排队等待"]] })
+        await pending
+
+        const args = createSpy.mock.calls[0]?.[0] as { queue?: boolean } | undefined
+        expect(args?.queue).toBe(true)
+      },
+    })
+  })
+
   test("inlines text attachments into request prose AND forwards binary attachments separately", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -110,6 +157,7 @@ describe("panel.create_task attachment forwarding", () => {
             action: "create_task",
             request: "See attachments.",
             allow_create: true,
+            queue: false,
           },
           {
             sessionID: Identifier.ascending("session"),
@@ -164,6 +212,7 @@ describe("panel.create_task attachment forwarding", () => {
               action: "create_task",
               request: "Build it.",
               allow_create: true,
+              queue: false,
             },
             {
               sessionID: Identifier.ascending("session"),
@@ -217,6 +266,7 @@ describe("panel.create_task attachment forwarding", () => {
             action: "create_task",
             request: "See attachment.",
             allow_create: true,
+            queue: false,
           },
           {
             sessionID: Identifier.ascending("session"),

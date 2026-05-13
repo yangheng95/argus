@@ -227,6 +227,18 @@ export namespace ProviderTransform {
     return undefined
   }
 
+  export function requestBody(providerID: string, body: unknown): unknown {
+    if (providerID !== "hexin") return body
+    if (!body || typeof body !== "object" || Array.isArray(body)) return body
+    const request = body as Record<string, unknown>
+    const modelID = typeof request.model === "string" ? request.model.toLowerCase() : ""
+    if (!/(^|\/)kimi-k2\.6$/.test(modelID)) return body
+    return {
+      ...request,
+      temperature: 1,
+    }
+  }
+
   export function topP(model: Provider.Model) {
     const id = model.id.toLowerCase()
     if (id.includes("qwen")) return 1
@@ -774,8 +786,7 @@ export namespace ProviderTransform {
       model.api.npm === "@ai-sdk/openai-compatible" ||
       model.api.npm === "@ai-sdk/openai" ||
       model.api.npm === "@ai-sdk/anthropic"
-    const key =
-      sdkKey(model.api.npm) ?? (usesDotSplitOptions ? model.providerID.split(".")[0] : model.providerID)
+    const key = sdkKey(model.api.npm) ?? (usesDotSplitOptions ? model.providerID.split(".")[0] : model.providerID)
     if (model.api.npm === "@ai-sdk/azure") {
       return { [key]: options, azure: options }
     }

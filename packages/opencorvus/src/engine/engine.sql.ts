@@ -17,12 +17,7 @@ export type DeliveryResult = {
   [key: string]: unknown
 }
 
-export type EngineTaskStatus =
-  | "queued"
-  | "active"
-  | "completed"
-  | "failed"
-  | "cancelled"
+export type EngineTaskStatus = "queued" | "active" | "completed" | "failed" | "cancelled"
 
 export type EngineTaskPriority = "critical" | "high" | "normal" | "low"
 export type EngineExecutor = "mirrorcode" | "codex" | "claude-code"
@@ -69,9 +64,7 @@ export const EngineSpecSnapshotTable = sqliteTable(
     metadata: text({ mode: "json" }).$type<EngineMetadata>(),
     ...Timestamps,
   },
-  (table) => [
-    index("engine_spec_snapshot_task_idx").on(table.task_id),
-  ],
+  (table) => [index("engine_spec_snapshot_task_idx").on(table.task_id)],
 )
 
 export const EngineSpecItemTable = sqliteTable(
@@ -117,6 +110,7 @@ export type EngineArtifactKind =
   | "integrity_attempt"
   | "prosecutor_attempt"
   | "run"
+  | "architect_contract_graph"
   | "orchestrator-stream-error"
 export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
@@ -201,7 +195,17 @@ export const EngineTaskTable = sqliteTable(
      *  hard-fail when a system-generated screenshot went missing.
      *  Base64 bytes are never stored here; the file lives on disk under the
      *  project's .opencorvus/attachments directory. */
-    attachments: text({ mode: "json" }).$type<Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>>(),
+    attachments: text({ mode: "json" }).$type<
+      Array<{
+        sha: string
+        url: string
+        mime: string
+        size: number
+        filename?: string
+        intent?: string
+        source?: string
+      }>
+    >(),
     /** SYSTEM-GENERATED artifacts. Same shape as `attachments` but covers
      *  things the orchestrator/agents created (or read off disk) on the
      *  user's behalf — never part of the user's contract:
@@ -212,7 +216,20 @@ export const EngineTaskTable = sqliteTable(
      *  fed to requirements/design-analyst as user intent. Losing one of these
      *  on disk is a soft failure: the consuming agent skips it; it does NOT
      *  kill the whole task the way a user-contract attachment loss would. */
-    system_artifacts: text({ mode: "json" }).$type<Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>>().notNull().default([]),
+    system_artifacts: text({ mode: "json" })
+      .$type<
+        Array<{
+          sha: string
+          url: string
+          mime: string
+          size: number
+          filename?: string
+          intent?: string
+          source?: string
+        }>
+      >()
+      .notNull()
+      .default([]),
     /** Design-analyst visual constraints (advisory only — delivery reads them as
      *  checklist guidance for its own visual review, they are NOT auto-scored
      *  and do NOT gate any phase). See `src/design-analyst/types.ts` for the
@@ -285,8 +302,7 @@ export const EnginePlanVersionTable = sqliteTable(
     task_id: text()
       .notNull()
       .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    spec_snapshot_id: text()
-      .references(() => EngineSpecSnapshotTable.id, { onDelete: "set null" }),
+    spec_snapshot_id: text().references(() => EngineSpecSnapshotTable.id, { onDelete: "set null" }),
     version: integer().notNull(),
     status: text().notNull().$type<EnginePlanStatus>().default("active"),
     summary: text().notNull(),
@@ -294,9 +310,7 @@ export const EnginePlanVersionTable = sqliteTable(
     metadata: text({ mode: "json" }).$type<EngineMetadata>(),
     ...Timestamps,
   },
-  (table) => [
-    index("engine_plan_task_idx").on(table.task_id),
-  ],
+  (table) => [index("engine_plan_task_idx").on(table.task_id)],
 )
 
 export const EngineMilestoneTable = sqliteTable(
@@ -329,10 +343,8 @@ export const EngineGoalTable = sqliteTable(
     task_id: text()
       .notNull()
       .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    plan_version_id: text()
-      .references(() => EnginePlanVersionTable.id, { onDelete: "cascade" }),
-    spec_snapshot_id: text()
-      .references(() => EngineSpecSnapshotTable.id, { onDelete: "cascade" }),
+    plan_version_id: text().references(() => EnginePlanVersionTable.id, { onDelete: "cascade" }),
+    spec_snapshot_id: text().references(() => EngineSpecSnapshotTable.id, { onDelete: "cascade" }),
     milestone_id: text().references(() => EngineMilestoneTable.id, { onDelete: "set null" }),
 
     // --- GoalContractFields: each field is an independent column (no compression) ---
@@ -348,15 +360,14 @@ export const EngineGoalTable = sqliteTable(
     /** Full objective statement — what this goal accomplishes. */
     objective: text().notNull(),
     /** Typed acceptance specs (AcceptanceSpec[] JSON). Eval source of truth. */
-    acceptance_specs: text({ mode: "json" }).$type<import("@/acceptance/types").AcceptanceSpec[]>().notNull().default([]),
+    acceptance_specs: text({ mode: "json" })
+      .$type<import("@/acceptance/types").AcceptanceSpec[]>()
+      .notNull()
+      .default([]),
     /** Files this goal owns exclusively. Executor hard write boundary. */
     owned_paths: text({ mode: "json" }).$type<string[]>().notNull().default([]),
     /** Goal IDs this depends on (must complete before this goal starts). */
     depends_on: text({ mode: "json" }).$type<string[]>().notNull().default([]),
-    /** Interfaces this goal EXPORTS for dependent goals. */
-    exports: text({ mode: "json" }).$type<string[]>().notNull().default([]),
-    /** Interfaces this goal IMPORTS from its dependencies. */
-    imports: text({ mode: "json" }).$type<string[]>().notNull().default([]),
     /** Goal category (e.g. bootstrap, feature, verification). */
     kind: text().notNull().default("feature"),
     /** Requirement IDs from user input that this goal covers (integrity tracing). */
@@ -401,7 +412,16 @@ export const EngineGoalTable = sqliteTable(
   ],
 )
 
-export type EngineGoalRunStatus = "queued" | "accepted" | "planning" | "running" | "evaluating" | "blocked" | "completed" | "failed" | "aborted"
+export type EngineGoalRunStatus =
+  | "queued"
+  | "accepted"
+  | "planning"
+  | "running"
+  | "evaluating"
+  | "blocked"
+  | "completed"
+  | "failed"
+  | "aborted"
 
 export const EngineRequirementTable = sqliteTable(
   "engine_requirement",
@@ -546,6 +566,7 @@ export const EngineArtifactTable = sqliteTable(
   (table) => [
     index("engine_artifact_run_idx").on(table.run_id),
     index("engine_artifact_delivery_idx").on(table.delivery_id),
+    index("engine_artifact_task_kind_latest_idx").on(table.task_id, table.kind, table.time_created, table.id),
   ],
 )
 
@@ -567,9 +588,7 @@ export const EngineProgressSnapshotTable = sqliteTable(
     payload: text({ mode: "json" }).$type<EngineMetadata>(),
     ...Timestamps,
   },
-  (table) => [
-    index("engine_progress_task_idx").on(table.task_id),
-  ],
+  (table) => [index("engine_progress_task_idx").on(table.task_id)],
 )
 
 export const EngineExecutorSessionTable = sqliteTable(

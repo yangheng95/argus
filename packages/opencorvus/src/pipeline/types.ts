@@ -38,15 +38,4 @@ export interface GoalContractFields {
   kind: string
   /** Requirement IDs from user input that this goal covers (for integrity tracing). */
   requirement_ids: string[]
-  /**
-   * Interfaces this goal EXPORTS for dependent goals.
-   * Declared at requirements time so dependents can code against them before this goal completes.
-   * Example: ["getStocks(): Stock[]", "type Stock = { id: string; name: string; price: number }"]
-   */
-  exports: string[]
-  /**
-   * Interfaces this goal IMPORTS from its dependencies.
-   * Must be a subset of the union of all depends_on goals' exports.
-   */
-  imports: string[]
 }

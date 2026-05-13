@@ -3130,6 +3130,20 @@ describe("overlay architecture guards", () => {
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
   })
 
+  test("chat bubbles do not add theme-colored side rails", () => {
+    const css = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/chat-bubble.css")))
+    expect(css).not.toMatch(/border-inline-(?:start|end)\s*:/)
+    expect(css).not.toContain("--card-system-rail")
+    expect(css).not.toContain("--card-stage-user) 84%")
+  })
+
+  test("tool cards do not add theme-colored side rails", () => {
+    const css = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
+    expect(css).not.toMatch(/\[data-kind="tool"\][^{]*\{[^}]*border-left:\s*calc\(/)
+    expect(css).not.toMatch(/\[data-kind="tool"\][^{]*\{[^}]*border-left-color:\s*var\(--card-stage-info\)/)
+    expect(css).toMatch(/\.card:not\(\[data-depth="0"\]\)\[data-kind="tool"\]\s*\{[^}]*border-left:\s*0 solid transparent/)
+  })
+
   test("ChatBubble.tsx does not introduce inline SVG", () => {
     const tsx = readText(join(OVERLAY_ROOT, "src/components/ChatBubble.tsx"))
     expect(tsx).not.toMatch(/<svg\b/i)

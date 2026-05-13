@@ -65,11 +65,11 @@ describe("orchestrator build feedback context", () => {
           ],
           reviewEvidence: [
             {
-              id: "review:integrity",
-              name: "Integrity review",
+              id: "review:contract_audit",
+              name: "Contract audit",
               status: "failed",
-              verdict: "needs_correction",
-              evidence: ["technical_feasibility=needs_correction"],
+              verdict: "failed",
+              evidence: ["missing exported contract consumed by the runtime surface"],
             },
           ],
           changedFiles: ["src/index.html"],
@@ -79,85 +79,93 @@ describe("orchestrator build feedback context", () => {
             failedCheckIds: [],
             failedCoverageIds: [],
             failedRuntimeFlowIds: ["runtime:web:."],
-            failedReviewIds: ["review:integrity"],
+            failedReviewIds: ["review:contract_audit"],
           },
           timeCreated: now,
         }
 
         Database.use((db) => {
-          db.insert(ProjectTable).values({
-            id: projectID,
-            worktree: tmp.path,
-            name: "Feedback context",
-            sandboxes: [],
-            time_created: now,
-            time_updated: now,
-          }).run()
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: projectID,
-            source: "test",
-            title: "Feedback context",
-            request: "fix rejected delivery",
-            kind: "workflow",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run()
-          db.insert(EngineArtifactTable).values({
-            id: manifestID,
-            task_id: taskID,
-            run_id: runID,
-            delivery_id: deliveryID,
-            kind: "delivery_evidence_manifest",
-            label: "delivery-evidence-manifest",
-            payload: manifest,
-            time_created: now,
-            time_updated: now,
-          }).run()
-          db.insert(EngineArtifactTable).values({
-            id: verdictID,
-            task_id: taskID,
-            run_id: runID,
-            delivery_id: deliveryID,
-            kind: "verdict",
-            label: "delivery-agent-verdict",
-            payload: {
-              verdict: "rejected",
-              summary: "Calculator render rejected by host gates.",
-              rejection_details: [
-                {
-                  goal_id: goalID,
-                  category: "runtime",
-                  error: "dom_too_thin: textLength=100 nodeCount=43",
-                  file: "src/index.html",
-                  suggestion: "Expose the exact DOM evidence to the executor.",
-                },
-                {
-                  category: "review",
-                  error: "integrity review needs correction",
-                  suggestion: "Route spec-level concerns into replanning evidence.",
-                },
-              ],
-            },
-            time_created: now + 1,
-            time_updated: now + 1,
-          }).run()
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Feedback context",
+              sandboxes: [],
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              source: "test",
+              title: "Feedback context",
+              request: "fix rejected delivery",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: manifestID,
+              task_id: taskID,
+              run_id: runID,
+              delivery_id: deliveryID,
+              kind: "delivery_evidence_manifest",
+              label: "delivery-evidence-manifest",
+              payload: manifest,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: verdictID,
+              task_id: taskID,
+              run_id: runID,
+              delivery_id: deliveryID,
+              kind: "verdict",
+              label: "delivery-agent-verdict",
+              payload: {
+                verdict: "rejected",
+                summary: "Calculator render rejected by host gates.",
+                rejection_details: [
+                  {
+                    goal_id: goalID,
+                    category: "runtime",
+                    error: "dom_too_thin: textLength=100 nodeCount=43",
+                    file: "src/index.html",
+                    suggestion: "Expose the exact DOM evidence to the executor.",
+                  },
+                  {
+                    category: "review",
+                    error: "contract audit found a missing exported surface",
+                    suggestion: "Route the delivery contract failure directly into build feedback.",
+                  },
+                ],
+              },
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
         })
 
         const taskScopeFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID })
         expect(taskScopeFeedback).toContain("Delivery agent rejected the integrated deliverable")
         expect(taskScopeFeedback).toContain("Canonical delivery feedback packet")
         expect(taskScopeFeedback).toContain("runtime:web:.")
-        expect(taskScopeFeedback).toContain("review:integrity")
+        expect(taskScopeFeedback).toContain("review:contract_audit")
         expect(taskScopeFeedback).toContain("dom_too_thin: textLength=100 nodeCount=43")
-        expect(taskScopeFeedback).toContain("all_rejection_detail_count\": 2")
+        expect(taskScopeFeedback).toContain('all_rejection_detail_count": 2')
 
         const goalScopeFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID, goalID })
         expect(goalScopeFeedback).toContain(`"goal_id": "${goalID}"`)
         expect(goalScopeFeedback).toContain("dom_too_thin: textLength=100 nodeCount=43")
-        expect(goalScopeFeedback).not.toContain("integrity review needs correction")
+        expect(goalScopeFeedback).not.toContain("contract audit found a missing exported surface")
         expect(goalScopeFeedback).toContain("runtime:web:.")
       },
     })

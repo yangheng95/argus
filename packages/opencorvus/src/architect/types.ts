@@ -9,20 +9,15 @@
  */
 import type { GoalContractFields } from "@/pipeline/types"
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
-import type {
-  AssemblyOwnerEntry,
-  ReferenceCoverageEntry,
-  SourceCoverageEntry,
-} from "./fidelity"
-import type { ContractCategory, ContractIR } from "./contract-ir"
+import type { AssemblyOwnerEntry, ReferenceCoverageEntry, SourceCoverageEntry } from "./fidelity"
+import type { ArchitectContractGraph, ArchitectValidationFinding } from "./contract-graph"
 
 // ---------------------------------------------------------------------------
 // Architect Decision Log key categories
 // ---------------------------------------------------------------------------
 
-/** The 6 key categories that Architect writes to the Decision Log. */
-export type ArchitectDecisionKey =
-  | ContractCategory
+/** Architect graph artifacts are persisted as task-scoped engine artifacts. */
+export type ArchitectDecisionKey = "architect_contract_graph"
 
 // ---------------------------------------------------------------------------
 // ArchitectContract — one cross-goal consensus entry
@@ -31,8 +26,7 @@ export type ArchitectDecisionKey =
 export interface ArchitectContract {
   category: ArchitectDecisionKey
   title: string
-  ir: ContractIR
-  goalIDs: string[]
+  contractGraph: ArchitectContractGraph
 }
 
 // ---------------------------------------------------------------------------
@@ -88,8 +82,9 @@ export interface ArchitectResult {
   removedGoalIDs: string[]
   traceability: TraceabilityEntry[]
   fidelity: ArchitectFidelityCoverage
-  /** Cross-goal interface contracts written to the Decision Log. */
-  contracts: ArchitectContract[]
+  /** Cross-goal interface contracts returned with temporary goal ids; orchestrator remaps before persistence. */
+  contractGraph: ArchitectContractGraph
+  validationFindings: ArchitectValidationFinding[]
   /** One-line summary of what was decomposed and coordinated. */
   summary: string
 }

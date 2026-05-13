@@ -1,7 +1,9 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
+import { Agent } from "@/agent/agent"
 import { Auth } from "@/auth"
+import { Provider } from "@/provider/provider"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -36,6 +38,8 @@ export const AuthRoutes = lazy(() =>
         const providerID = c.req.valid("param").providerID
         const info = c.req.valid("json")
         await Auth.set(providerID, info)
+        Provider.resetAll()
+        Agent.resetAll()
         return c.json(true)
       },
     )
@@ -66,6 +70,8 @@ export const AuthRoutes = lazy(() =>
       async (c) => {
         const providerID = c.req.valid("param").providerID
         await Auth.remove(providerID)
+        Provider.resetAll()
+        Agent.resetAll()
         return c.json(true)
       },
     ),

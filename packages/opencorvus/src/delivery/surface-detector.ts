@@ -58,13 +58,7 @@ const BACKEND_DEPS = [
   "@trpc/server",
 ]
 
-const CLIENT_DEPS = [
-  "@trpc/client",
-  "@apollo/client",
-  "graphql-request",
-  "openapi-fetch",
-  "axios",
-]
+const CLIENT_DEPS = ["@trpc/client", "@apollo/client", "graphql-request", "openapi-fetch", "axios"]
 
 const SECURITY_DEPS = [
   "next-auth",
@@ -103,8 +97,6 @@ export async function detectDeliverySurfaces(input: {
   goals?: Array<{
     acceptance_spec_count?: number
     acceptance_scenarios?: AcceptanceSpec[]
-    imports?: string[]
-    exports?: string[]
   }>
 }): Promise<DeliverySurfaceManifest> {
   const projectRoot = input.projectRoot
@@ -117,10 +109,7 @@ export async function detectDeliverySurfaces(input: {
   const changedFiles = (input.changedFiles ?? []).map((item) => item.replaceAll("\\", "/"))
   const allFileRefs = [...new Set([...files, ...changedFiles])]
 
-  const deps = new Set([
-    ...Object.keys(pkg?.dependencies ?? {}),
-    ...Object.keys(pkg?.devDependencies ?? {}),
-  ])
+  const deps = new Set([...Object.keys(pkg?.dependencies ?? {}), ...Object.keys(pkg?.devDependencies ?? {})])
   const scripts = pkg?.scripts ?? {}
   const scriptText = Object.values(scripts).join("\n")
 
@@ -131,37 +120,41 @@ export async function detectDeliverySurfaces(input: {
       ref: scriptText,
     })
   }
-  const frontendFiles = allFileRefs.filter((file) =>
-    /(^|\/)(src\/)?(app|pages|components)\//.test(file)
-    || /\.(tsx|jsx|vue|svelte|astro|css|scss)$/.test(file)
-    || /(^|\/)(index\.html|vite\.config\.|next\.config\.)/.test(file)
+  const frontendFiles = allFileRefs.filter(
+    (file) =>
+      /(^|\/)(src\/)?(app|pages|components)\//.test(file) ||
+      /\.(tsx|jsx|vue|svelte|astro|css|scss)$/.test(file) ||
+      /(^|\/)(index\.html|vite\.config\.|next\.config\.)/.test(file),
   )
   if (frontendFiles.length > 0) {
     addEvidence(evidence, surfaces, "frontend", "frontend source files detected", ...fileRefs(frontendFiles))
   }
 
   addDependencySurface({ evidence, surfaces, surface: "backend_api", deps, names: BACKEND_DEPS })
-  const routeFiles = allFileRefs.filter((file) =>
-    /(^|\/)(api|routes|server|controllers|handlers)\//.test(file)
-    || /(^|\/)app\/api\//.test(file)
-    || /(server|routes|api)\.[cm]?[jt]s$/.test(file)
+  const routeFiles = allFileRefs.filter(
+    (file) =>
+      /(^|\/)(api|routes|server|controllers|handlers)\//.test(file) ||
+      /(^|\/)app\/api\//.test(file) ||
+      /(server|routes|api)\.[cm]?[jt]s$/.test(file),
   )
   if (routeFiles.length > 0) {
     addEvidence(evidence, surfaces, "backend_api", "API route files detected", ...routeRefs(routeFiles))
   }
 
   addDependencySurface({ evidence, surfaces, surface: "client_contract", deps, names: CLIENT_DEPS })
-  const clientFiles = allFileRefs.filter((file) =>
-    /(^|\/)(sdk|client|clients|lib\/api|services\/api|generated)\//.test(file)
-    || /(openapi|graphql|fetch|api-client|client)\.[cm]?[jt]sx?$/.test(file)
+  const clientFiles = allFileRefs.filter(
+    (file) =>
+      /(^|\/)(sdk|client|clients|lib\/api|services\/api|generated)\//.test(file) ||
+      /(openapi|graphql|fetch|api-client|client)\.[cm]?[jt]sx?$/.test(file),
   )
   if (clientFiles.length > 0) {
     addEvidence(evidence, surfaces, "client_contract", "client/API contract files detected", ...fileRefs(clientFiles))
   }
-  const testFiles = allFileRefs.filter((file) =>
-    /(^|\/)(test|tests|e2e|integration|regression)\//.test(file)
-    || /\.(spec|test|e2e)\.[cm]?[jt]sx?$/.test(file)
-    || /^pytest\.ini$|^vitest\.config\.|^playwright\.config\./.test(file)
+  const testFiles = allFileRefs.filter(
+    (file) =>
+      /(^|\/)(test|tests|e2e|integration|regression)\//.test(file) ||
+      /\.(spec|test|e2e)\.[cm]?[jt]sx?$/.test(file) ||
+      /^pytest\.ini$|^vitest\.config\.|^playwright\.config\./.test(file),
   )
   if (testFiles.length > 0) {
     addEvidence(evidence, surfaces, "test_integration", "test files detected", ...fileRefs(testFiles))
@@ -174,11 +167,9 @@ export async function detectDeliverySurfaces(input: {
   }
   if (
     surfaces.has("frontend") &&
-    (
-      (input.goals ?? []).some((goal) => (goal.acceptance_scenarios?.length ?? 0) > 0)
-      || hasDesignSpecs(input.metadata)
-      || allFileRefs.some((file) => /\.(css|scss|tsx|jsx|vue|svelte|astro)$/.test(file))
-    )
+    ((input.goals ?? []).some((goal) => (goal.acceptance_scenarios?.length ?? 0) > 0) ||
+      hasDesignSpecs(input.metadata) ||
+      allFileRefs.some((file) => /\.(css|scss|tsx|jsx|vue|svelte|astro)$/.test(file)))
   ) {
     addEvidence(evidence, surfaces, "visual_runtime", "frontend runtime or design surface detected", {
       kind: "runtime_probe",
@@ -187,13 +178,20 @@ export async function detectDeliverySurfaces(input: {
   }
 
   addDependencySurface({ evidence, surfaces, surface: "security_data", deps, names: SECURITY_DEPS })
-  const securityFiles = allFileRefs.filter((file) =>
-    /(^|\/)(auth|middleware|upload|uploads|payment|payments|db|database|migrations|prisma)\//.test(file)
-    || /(auth|session|permission|upload|payment|stripe|schema|migration)\.[cm]?[jt]sx?$/.test(file)
-    || /^prisma\/schema\.prisma$/.test(file)
+  const securityFiles = allFileRefs.filter(
+    (file) =>
+      /(^|\/)(auth|middleware|upload|uploads|payment|payments|db|database|migrations|prisma)\//.test(file) ||
+      /(auth|session|permission|upload|payment|stripe|schema|migration)\.[cm]?[jt]sx?$/.test(file) ||
+      /^prisma\/schema\.prisma$/.test(file),
   )
   if (securityFiles.length > 0) {
-    addEvidence(evidence, surfaces, "security_data", "security or data access files detected", ...fileRefs(securityFiles))
+    addEvidence(
+      evidence,
+      surfaces,
+      "security_data",
+      "security or data access files detected",
+      ...fileRefs(securityFiles),
+    )
   }
 
   return {
@@ -207,11 +205,14 @@ export async function detectDeliverySurfaces(input: {
   }
 }
 
-async function readPackage(root: string): Promise<{
-  scripts?: Record<string, string>
-  dependencies?: Record<string, string>
-  devDependencies?: Record<string, string>
-} | undefined> {
+async function readPackage(root: string): Promise<
+  | {
+      scripts?: Record<string, string>
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+  | undefined
+> {
   const raw = await fs.readFile(path.join(root, "package.json"), "utf8").catch(() => undefined)
   if (!raw) return undefined
   return JSON.parse(raw)

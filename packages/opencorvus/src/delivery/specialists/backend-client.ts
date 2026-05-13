@@ -25,18 +25,23 @@ export async function runBackendApiReview(input: {
   if (!input.surfaceManifest.surfaces.includes("backend_api")) return undefined
   if (!input.taskID || !input.runID || !input.deliveryID) return undefined
 
-  const inventory = await buildRouteInventory(input.projectRoot ?? input.surfaceManifest.projectRoot, input.surfaceManifest)
+  const inventory = await buildRouteInventory(
+    input.projectRoot ?? input.surfaceManifest.projectRoot,
+    input.surfaceManifest,
+  )
   const findings: DeliveryReviewFinding[] = []
   if (inventory.routeFiles.length === 0 && inventory.backendPaths.length === 0) {
     findings.push({
       proposedSeverity: "blocking",
       category: "evidence_quality",
       claim: "Backend API surface was selected without route file or route literal evidence.",
-      evidence: [{
-        kind: "log",
-        ref: input.surfaceManifest.id,
-        excerpt: "backend_api selected but route inventory is empty",
-      }],
+      evidence: [
+        {
+          kind: "log",
+          ref: input.surfaceManifest.id,
+          excerpt: "backend_api selected but route inventory is empty",
+        },
+      ],
       affectedRequirementIDs: requirementIDs(input.goals),
     })
   }
@@ -47,9 +52,10 @@ export async function runBackendApiReview(input: {
     deliveryId: input.deliveryID,
     reviewer: "backend_api",
     executionStatus: "completed",
-    summary: findings.length === 0
-      ? `Backend API review passed with ${inventory.routeFiles.length} route file(s).`
-      : `Backend API review found ${findings.length} issue(s).`,
+    summary:
+      findings.length === 0
+        ? `Backend API review passed with ${inventory.routeFiles.length} route file(s).`
+        : `Backend API review found ${findings.length} issue(s).`,
     findings,
     evidenceRefs: evidenceRefs(input.surfaceManifest, "backend_api", inventory),
     reviewedSurfaces: ["backend_api"],
@@ -64,45 +70,31 @@ export async function runClientContractReview(input: {
   surfaceManifest: DeliverySurfaceManifest
   goals?: Array<{
     requirement_ids?: string[]
-    imports?: string[]
-    exports?: string[]
   }>
 }): Promise<DeliverySpecialistReview | undefined> {
   if (!input.surfaceManifest.surfaces.includes("client_contract")) return undefined
   if (!input.taskID || !input.runID || !input.deliveryID) return undefined
 
-  const inventory = await buildRouteInventory(input.projectRoot ?? input.surfaceManifest.projectRoot, input.surfaceManifest)
+  const inventory = await buildRouteInventory(
+    input.projectRoot ?? input.surfaceManifest.projectRoot,
+    input.surfaceManifest,
+  )
   const findings: DeliveryReviewFinding[] = []
   if (inventory.clientFiles.length === 0 && inventory.clientPaths.length === 0) {
     findings.push({
       proposedSeverity: "blocking",
       category: "evidence_quality",
       claim: "Client contract surface was selected without client file or endpoint evidence.",
-      evidence: [{
-        kind: "log",
-        ref: input.surfaceManifest.id,
-        excerpt: "client_contract selected but client inventory is empty",
-      }],
+      evidence: [
+        {
+          kind: "log",
+          ref: input.surfaceManifest.id,
+          excerpt: "client_contract selected but client inventory is empty",
+        },
+      ],
       affectedRequirementIDs: requirementIDs(input.goals),
     })
   }
-  if (
-    !input.surfaceManifest.surfaces.includes("backend_api")
-    && (input.goals ?? []).some((goal) => (goal.imports?.length ?? 0) > 0 || (goal.exports?.length ?? 0) > 0)
-  ) {
-    findings.push({
-      proposedSeverity: "major",
-      category: "contract",
-      claim: "Goal import/export contracts require a backend API surface or shared route evidence.",
-      evidence: [{
-        kind: "log",
-        ref: input.surfaceManifest.id,
-        excerpt: "client_contract selected from goal contracts without backend_api surface",
-      }],
-      affectedRequirementIDs: requirementIDs(input.goals),
-    })
-  }
-
   const backendPaths = new Set(inventory.backendPaths)
   const drift = inventory.clientPaths.filter((item) => !backendPaths.has(item))
   if (backendPaths.size > 0 && drift.length > 0) {
@@ -132,19 +124,17 @@ export async function runClientContractReview(input: {
     deliveryId: input.deliveryID,
     reviewer: "client_contract",
     executionStatus: "completed",
-    summary: findings.length === 0
-      ? `Client contract review passed with ${inventory.clientFiles.length} client file(s).`
-      : `Client contract review found ${findings.length} issue(s).`,
+    summary:
+      findings.length === 0
+        ? `Client contract review passed with ${inventory.clientFiles.length} client file(s).`
+        : `Client contract review found ${findings.length} issue(s).`,
     findings,
     evidenceRefs: evidenceRefs(input.surfaceManifest, "client_contract", inventory),
     reviewedSurfaces: ["client_contract"],
   })
 }
 
-async function buildRouteInventory(
-  projectRoot: string,
-  manifest: DeliverySurfaceManifest,
-): Promise<RouteInventory> {
+async function buildRouteInventory(projectRoot: string, manifest: DeliverySurfaceManifest): Promise<RouteInventory> {
   const routeFiles = refsFor(manifest, "backend_api", ["route", "file"])
   const clientFiles = refsFor(manifest, "client_contract", ["file"])
   const routeTexts = await readRefs(projectRoot, routeFiles)
@@ -162,14 +152,16 @@ function refsFor(
   surface: "backend_api" | "client_contract",
   kinds: Array<"file" | "route">,
 ) {
-  return [...new Set(
-    manifest.evidence
-      .filter((item) => item.surface === surface)
-      .flatMap((item) => item.refs)
-      .filter((ref) => kinds.includes(ref.kind as "file" | "route"))
-      .map((ref) => ref.ref)
-      .filter((ref): ref is string => typeof ref === "string" && ref.length > 0),
-  )].sort()
+  return [
+    ...new Set(
+      manifest.evidence
+        .filter((item) => item.surface === surface)
+        .flatMap((item) => item.refs)
+        .filter((ref) => kinds.includes(ref.kind as "file" | "route"))
+        .map((ref) => ref.ref)
+        .filter((ref): ref is string => typeof ref === "string" && ref.length > 0),
+    ),
+  ].sort()
 }
 
 function requirementIDs(goals?: Array<{ requirement_ids?: string[] }>) {
@@ -187,9 +179,7 @@ async function readRefs(root: string, refs: string[]) {
 
 function endpointLiterals(text: string) {
   const matches = text.matchAll(/["'`]((?:\/api)?\/[a-zA-Z0-9_./:-]+)["'`]/g)
-  return [...matches]
-    .map((match) => normalizeEndpoint(match[1] ?? ""))
-    .filter((item) => item.length > 1)
+  return [...matches].map((match) => normalizeEndpoint(match[1] ?? "")).filter((item) => item.length > 1)
 }
 
 function normalizeEndpoint(input: string) {

@@ -450,6 +450,7 @@ export type EventIntegrityReviewCompleted = {
       verdict: "pass" | "concerns" | "needs_correction"
       issueCount: number
       correctionCount: number
+      graphCorrectionCount?: number
       missingGoalCount: number
     }>
     issues: Array<{
@@ -464,6 +465,11 @@ export type EventIntegrityReviewCompleted = {
       reason: string
       updatesTitle?: string
       updatesObjective?: string
+    }>
+    graphCorrections?: Array<{
+      kind: string
+      action: string
+      reason: string
     }>
     missingGoals: Array<{
       title: string
@@ -629,11 +635,63 @@ export type TerminalToolMissingError = {
   }
 }
 
+export type SnapshotIntegrityError = {
+  name: "SnapshotIntegrityError"
+  data: {
+    message: string
+    operation: string
+    cwd: string
+    worktree: string
+    gitDir: string
+    exitCode?: number
+    stderr?: string
+    stdout?: string
+  }
+}
+
+export type SnapshotEmptyTreeError = {
+  name: "SnapshotEmptyTreeError"
+  data: {
+    message: string
+    operation: string
+    cwd: string
+    worktree: string
+    gitDir: string
+    fileCount?: number
+  }
+}
+
 export type ContextOverflowError = {
   name: "ContextOverflowError"
   data: {
     message: string
     responseBody?: string
+  }
+}
+
+export type PromptBudgetOverflowError = {
+  name: "PromptBudgetOverflowError"
+  data: {
+    message: string
+    systemTokensEst: number
+    messagePayloadChars: number
+    toolSchemaChars: number
+    compressibleMessageChars: number
+    nonCompressiblePromptChars: number
+    usableBudget: number
+    limit: number
+    toolNames: string
+  }
+}
+
+export type ToolSchemaBudgetError = {
+  name: "ToolSchemaBudgetError"
+  data: {
+    message: string
+    toolSchemaChars: number
+    usableBudget: number
+    ratio: number
+    toolNames: string
   }
 }
 
@@ -669,7 +727,11 @@ export type AssistantMessage = {
     | StructuredOutputError
     | StructuredOutputPayloadError
     | TerminalToolMissingError
+    | SnapshotIntegrityError
+    | SnapshotEmptyTreeError
     | ContextOverflowError
+    | PromptBudgetOverflowError
+    | ToolSchemaBudgetError
     | ApiError
   parentID: string
   modelID: string
@@ -1016,7 +1078,11 @@ export type EventSessionError = {
       | StructuredOutputError
       | StructuredOutputPayloadError
       | TerminalToolMissingError
+      | SnapshotIntegrityError
+      | SnapshotEmptyTreeError
       | ContextOverflowError
+      | PromptBudgetOverflowError
+      | ToolSchemaBudgetError
       | ApiError
   }
 }
@@ -6870,6 +6936,7 @@ export type GatewayControlActionData = {
         request: string
         request_id?: string
         executor?: "mirrorcode" | "codex" | "claude-code"
+        queue?: boolean
         checks?: {
           build?: Array<string> | false
           test?: Array<string> | false
@@ -7354,6 +7421,7 @@ export type TaskCreateData = {
       filename?: string
     }>
     priority?: "critical" | "high" | "normal" | "low"
+    queue?: boolean
     kind?: "workflow" | "build"
     budget?: {
       maxExecutorGroups?: number
@@ -7565,8 +7633,8 @@ export type TaskCreateData = {
               type: "contract_audit"
               name: string
               spec: {
-                kind: "contract_ir"
-                symbols?: Array<string>
+                kind: "contract_graph"
+                contract_ids: Array<string>
               }
               expect: {
                 status: "passed"
@@ -7692,8 +7760,8 @@ export type TaskCreateData = {
                 type: "contract_audit"
                 name: string
                 spec: {
-                  kind: "contract_ir"
-                  symbols?: Array<string>
+                  kind: "contract_graph"
+                  contract_ids: Array<string>
                 }
                 expect: {
                   status: "passed"
@@ -10320,6 +10388,7 @@ export type SessionTraceResponses = {
    * Session AgentTrace events
    */
   200: {
+    ok: true
     events: Array<{
       ts: number
       kind: string
@@ -10364,6 +10433,7 @@ export type TaskTraceResponses = {
    * Aggregated task AgentTrace events
    */
   200: {
+    ok: true
     events: Array<{
       ts: number
       kind: string
@@ -10717,8 +10787,8 @@ export type GoalUpdateData = {
             type: "contract_audit"
             name: string
             spec: {
-              kind: "contract_ir"
-              symbols?: Array<string>
+              kind: "contract_graph"
+              contract_ids: Array<string>
             }
             expect: {
               status: "passed"
@@ -10822,6 +10892,7 @@ export type ExportTaskResponses = {
     runs: Array<unknown>
     interactions: Array<unknown>
     snapshots: Array<unknown>
+    specSnapshots: Array<unknown>
     deliveries: Array<unknown>
     evaluations: Array<unknown>
     artifacts: Array<unknown>

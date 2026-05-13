@@ -2,27 +2,34 @@ import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-const CHAT_BUBBLE_TSX = readFileSync(
-  join(import.meta.dir, "..", "src", "components", "ChatBubble.tsx"),
-  "utf8",
-)
+const CHAT_BUBBLE_TSX = readFileSync(join(import.meta.dir, "..", "src", "components", "ChatBubble.tsx"), "utf8")
 const CHAT_BUBBLE_CSS = readFileSync(
   join(import.meta.dir, "..", "src", "styles", "surfaces", "chat-bubble.css"),
   "utf8",
 )
 
 test("ChatBubble uses one unified IM bubble for user and agent cards with restorable folding", () => {
-  expect(CHAT_BUBBLE_TSX).toContain('data-align={align()}')
+  expect(CHAT_BUBBLE_TSX).toContain("data-align={align()}")
   expect(CHAT_BUBBLE_TSX).toContain('import { cardExpanded, setCardExpanded } from "../store/conversation-ui"')
   expect(CHAT_BUBBLE_TSX).toContain("const defaultExpanded = () => defaultExpandedForNode(props.node)")
-  expect(CHAT_BUBBLE_TSX).toContain("const expanded = () => cardExpanded(props.node.id, props.node.status, defaultExpanded())")
+  expect(CHAT_BUBBLE_TSX).toContain(
+    "const expanded = () => cardExpanded(props.node.id, props.node.status, defaultExpanded())",
+  )
   expect(CHAT_BUBBLE_TSX).toContain("const canBubbleSurfaceToggle = (event: MouseEvent) =>")
   expect(CHAT_BUBBLE_TSX).toContain("onDblClick={(event) => {")
   expect(CHAT_BUBBLE_TSX).toContain("toggleExpanded()")
+  expect(CHAT_BUBBLE_TSX).toContain('role="button"')
+  expect(CHAT_BUBBLE_TSX).toContain("tabindex={0}")
+  expect(CHAT_BUBBLE_TSX).toContain("aria-expanded={expanded()}")
+  expect(CHAT_BUBBLE_TSX).toContain("onClick={toggleExpanded}")
+  expect(CHAT_BUBBLE_TSX).toContain("if (event.target !== event.currentTarget) return")
+  expect(CHAT_BUBBLE_TSX).toContain('if (event.key !== "Enter" && event.key !== " ") return')
   expect(CHAT_BUBBLE_TSX).toContain('<div class="chat-bubble__identity" data-align={align()}>')
-  expect(CHAT_BUBBLE_TSX).toContain('<Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />')
+  expect(CHAT_BUBBLE_TSX).toContain(
+    '<Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />',
+  )
   expect(CHAT_BUBBLE_TSX).not.toContain("chat-bubble__avatar-slot")
-  expect(CHAT_BUBBLE_TSX).toContain('<TracePanel sessionID={traceSessionID()!} onClose={() => setTraceOpen(false)} />')
+  expect(CHAT_BUBBLE_TSX).toContain("<TracePanel sessionID={traceSessionID()!} onClose={() => setTraceOpen(false)} />")
   expect(CHAT_BUBBLE_TSX).toContain("<AgentSessionReplyBox")
   expect(CHAT_BUBBLE_TSX).not.toContain("card__collapsed-preview")
   expect(CHAT_BUBBLE_TSX).not.toContain("card__todo-progress")
@@ -36,9 +43,11 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_CSS).toContain("min-height: calc(36px * var(--ui-scale));")
   expect(CHAT_BUBBLE_CSS).toContain("font-size: calc(15px * var(--ui-scale));")
   expect(CHAT_BUBBLE_CSS).toContain("font-weight: var(--ui-font-weight-strong);")
-  expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__head[data-align=\"right\"] .chat-bubble__title-row")
+  expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble__head[data-align="right"] .chat-bubble__title-row')
   expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble--collapsed")
-  expect(CHAT_BUBBLE_CSS).toContain("border-inline-start: calc(3px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--card-stage-info)) 84%, transparent);")
-  expect(CHAT_BUBBLE_CSS).toContain("border-inline-end: calc(3px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage-user) 84%, transparent);")
+  expect(CHAT_BUBBLE_CSS).toContain("cursor: pointer;")
+  expect(CHAT_BUBBLE_CSS).toContain("user-select: none;")
+  expect(CHAT_BUBBLE_CSS).not.toMatch(/border-inline-(?:start|end)/)
+  expect(CHAT_BUBBLE_CSS).not.toContain("var(--card-system-rail)")
   expect(CHAT_BUBBLE_CSS).toContain(".chat-avatar")
 })

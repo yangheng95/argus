@@ -16,46 +16,48 @@
 // removed because they silently switched provider/model between goal retries
 // and collapsed prompt cache.
 
-import { createSignal, createMemo, createResource, For, Show } from "solid-js";
-import { patchConfig } from "../../services/config";
-import { appStore } from "../../store/app";
-import { settingsStore } from "../../store/settings";
-import { t } from "../../utils/i18n";
-import {
-  loadAgentModelsData,
-  type AgentInfo,
-  type ProvidersPayload,
-} from "./agent-models-data";
-import { Button } from "../ui/Button";
-import { SurfaceHeader } from "../ui/SurfaceHeader";
+import { createSignal, createMemo, createResource, For, Show } from "solid-js"
+import { patchConfig } from "../../services/config"
+import { appStore } from "../../store/app"
+import { settingsStore } from "../../store/settings"
+import { t } from "../../utils/i18n"
+import { loadAgentModelsData, type AgentInfo, type ProvidersPayload } from "./agent-models-data"
+import { Button } from "../ui/Button"
+import { SurfaceHeader } from "../ui/SurfaceHeader"
 
 // Tier groupings are display-only: they organize the UI list but no longer
 // affect default model resolution (all agents inherit the project default).
-const CORE_AGENTS = ["orchestrator", "build", "delivery", "general"];
-const INTERNAL_AGENTS = ["compaction", "title", "summary"];
+const CORE_AGENTS = ["orchestrator", "build", "delivery", "general"]
+const INTERNAL_AGENTS = ["compaction", "title", "summary"]
 
 function tierOf(name: string): "core" | "internal" | "lightweight" {
-  if (CORE_AGENTS.includes(name)) return "core";
-  if (INTERNAL_AGENTS.includes(name)) return "internal";
-  return "lightweight";
+  if (CORE_AGENTS.includes(name)) return "core"
+  if (INTERNAL_AGENTS.includes(name)) return "internal"
+  return "lightweight"
 }
 
-const TIER_ORDER: Array<"core" | "lightweight" | "internal"> = [
-  "core",
-  "lightweight",
-  "internal",
-];
+const TIER_ORDER: Array<"core" | "lightweight" | "internal"> = ["core", "lightweight", "internal"]
 
 const TIER_LABEL: Record<string, string> = {
   core: "Core — main coding agents",
   lightweight: "Lightweight — spec/plan/explore/etc.",
   internal: "Internal — background tasks",
-};
+}
 
 export default function AgentModelsPanel() {
-  const [savingAgents, setSavingAgents] = createSignal<Set<string>>(new Set());
-  const [savingDefault, setSavingDefault] = createSignal(false);
-  const [activeSelect, setActiveSelect] = createSignal<string>("");
+  const [savingAgents, setSavingAgents] = createSignal<Set<string>>(new Set())
+  const [savingDefault, setSavingDefault] = createSignal(false)
+  const [activeSelect, setActiveSelect] = createSignal<string>("")
+  const providerConfigVersion = createMemo(() => JSON.stringify(appStore.config?.provider ?? null))
+  const providerCatalogVersion = createMemo(() =>
+    JSON.stringify({
+      connected: [...(appStore.providerCatalog?.connected ?? [])].sort(),
+      all: (appStore.providerCatalog?.all ?? []).map((provider: any) => ({
+        id: provider?.id ?? "",
+        models: Object.keys(provider?.models ?? {}).sort(),
+      })),
+    }),
+  )
 
   // Agents + providers change rarely and are fetched via createResource with a
   // refreshToken knob. The project default `model` is deliberately NOT fetched
@@ -65,102 +67,98 @@ export default function AgentModelsPanel() {
   // was the original bug: after a save we set one and not the other, the UI
   // briefly flashed the new value, then the SSE-driven appStore refresh (or a
   // subsequent re-render reading stale createResource data) snapped it back.
-  const [refreshToken, setRefreshToken] = createSignal(0);
+  const [refreshToken, setRefreshToken] = createSignal(0)
 
   const [data] = createResource(
-    () => `${refreshToken()}:${settingsStore.directory.trim()}`,
+    () => `${refreshToken()}:${settingsStore.directory.trim()}:${providerConfigVersion()}:${providerCatalogVersion()}`,
     () => loadAgentModelsData(),
-  );
+  )
   const readyData = createMemo(() => {
-    if (data.loading || data.error) return undefined;
-    return data();
-  });
+    if (data.loading || data.error) return undefined
+    return data()
+  })
 
   // Single source of truth for the currently-persisted project default model.
   // Reads directly from appStore.config.model — the same value SSE
   // `config.changed` refreshes via loadConfigInfo(). Any write path below must
   // update appStore.config so this memo reflects reality without a re-fetch.
   const projectModel = createMemo<string>(() => {
-    const m = (appStore.config as { model?: unknown } | null | undefined)?.model;
-    return typeof m === "string" ? m : "";
-  });
+    const m = (appStore.config as { model?: unknown } | null | undefined)?.model
+    return typeof m === "string" ? m : ""
+  })
 
   async function onSelectProjectDefault(value: string) {
-    setSavingDefault(true);
+    setSavingDefault(true)
     try {
       // patchConfig sends only the diff (RFC 7396) and writes the returned
       // config to appStore.config. projectModel() is a memo over
       // appStore.config.model, so the UI reflects the new value the moment
       // the PATCH returns — no re-fetch window, no two-source drift.
-      await patchConfig({ model: value ? value : null });
+      await patchConfig({ model: value ? value : null })
     } catch (e) {
-      console.error("[project-default-model] save failed", e);
+      console.error("[project-default-model] save failed", e)
     } finally {
-      setSavingDefault(false);
+      setSavingDefault(false)
     }
   }
 
   function configAgentEntry(agentName: string): Record<string, any> | null {
-    const agents = (appStore.config as { agent?: unknown } | null | undefined)?.agent;
-    if (!agents || typeof agents !== "object" || Array.isArray(agents)) return null;
-    const entry = (agents as Record<string, unknown>)[agentName];
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
-    return entry as Record<string, any>;
+    const agents = (appStore.config as { agent?: unknown } | null | undefined)?.agent
+    if (!agents || typeof agents !== "object" || Array.isArray(agents)) return null
+    const entry = (agents as Record<string, unknown>)[agentName]
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null
+    return entry as Record<string, any>
   }
 
   function configAgentModel(agentName: string): string {
-    const model = configAgentEntry(agentName)?.model;
-    return typeof model === "string" ? model : "";
+    const model = configAgentEntry(agentName)?.model
+    return typeof model === "string" ? model : ""
   }
 
   function configAgentHasNonModelFields(agentName: string): boolean {
-    const entry = configAgentEntry(agentName);
-    if (!entry) return false;
-    return Object.keys(entry).some((key) => key !== "model");
+    const entry = configAgentEntry(agentName)
+    if (!entry) return false
+    return Object.keys(entry).some((key) => key !== "model")
   }
 
   function setAgentSaving(agentName: string, saving: boolean): void {
     setSavingAgents((prev) => {
-      const next = new Set(prev);
-      if (saving) next.add(agentName);
-      else next.delete(agentName);
-      return next;
-    });
+      const next = new Set(prev)
+      if (saving) next.add(agentName)
+      else next.delete(agentName)
+      return next
+    })
   }
 
   async function onSelect(agentName: string, value: string) {
-    setAgentSaving(agentName, true);
+    setAgentSaving(agentName, true)
     try {
       await patchConfig({
         agent: {
-          [agentName]: value
-            ? { model: value }
-            : configAgentHasNonModelFields(agentName)
-              ? { model: null }
-              : null,
+          [agentName]: value ? { model: value } : configAgentHasNonModelFields(agentName) ? { model: null } : null,
         },
-      });
-      setRefreshToken((x) => x + 1);
+      })
+      setRefreshToken((x) => x + 1)
     } catch (e) {
-      console.error("[agent-models] save failed", e);
+      console.error("[agent-models] save failed", e)
     } finally {
-      setAgentSaving(agentName, false);
+      setAgentSaving(agentName, false)
     }
   }
 
   interface ProviderGroup {
-    id: string;
-    name: string;
-    models: Array<{ value: string; label: string }>;
+    id: string
+    name: string
+    models: Array<{ value: string; label: string }>
   }
 
   function providerGroups(payload: ProvidersPayload | undefined): ProviderGroup[] {
-    if (!payload) return [];
-    const groups: ProviderGroup[] = [];
-    const sortedProviders = [...payload.providers].sort((a, b) => a.name.localeCompare(b.name));
+    if (!payload) return []
+    const groups: ProviderGroup[] = []
+    const sortedProviders = [...payload.providers].sort((a, b) => a.name.localeCompare(b.name))
     for (const p of sortedProviders) {
-      const modelIDs = Object.keys(p.models).sort();
-      if (modelIDs.length === 0) continue;
+      const modelIDs = Object.keys(p.models).sort()
+      if (modelIDs.length === 0) continue
       groups.push({
         id: p.id,
         name: p.name || p.id,
@@ -168,49 +166,49 @@ export default function AgentModelsPanel() {
           value: `${p.id}/${modelID}`,
           label: modelID,
         })),
-      });
+      })
     }
-    return groups;
+    return groups
   }
 
   function allModelValues(groups: ProviderGroup[]): Set<string> {
-    const out = new Set<string>();
-    for (const g of groups) for (const m of g.models) out.add(m.value);
-    return out;
+    const out = new Set<string>()
+    for (const g of groups) for (const m of g.models) out.add(m.value)
+    return out
   }
 
   function groupedAgents(agents: AgentInfo[]) {
-    const byTier: Record<string, AgentInfo[]> = { core: [], lightweight: [], internal: [] };
-    for (const a of agents) byTier[tierOf(a.name)].push(a);
+    const byTier: Record<string, AgentInfo[]> = { core: [], lightweight: [], internal: [] }
+    for (const a of agents) byTier[tierOf(a.name)].push(a)
     for (const tier of Object.keys(byTier)) {
-      byTier[tier].sort((x, y) => x.name.localeCompare(y.name));
+      byTier[tier].sort((x, y) => x.name.localeCompare(y.name))
     }
-    return byTier;
+    return byTier
   }
 
   function optionLabel(value: string, groups: ProviderGroup[]): string {
     for (const group of groups) {
-      const found = group.models.find((model) => model.value === value);
-      if (found) return found.label;
+      const found = group.models.find((model) => model.value === value)
+      if (found) return found.label
     }
-    return value;
+    return value
   }
 
   function ModelSelect(props: {
-    id: string;
-    testid: string;
-    value: string;
-    groups: ProviderGroup[];
-    unavailable: boolean;
-    disabled: boolean;
-    emptyLabel: string;
-    unavailableLabel: string;
-    onSelect: (value: string) => void;
+    id: string
+    testid: string
+    value: string
+    groups: ProviderGroup[]
+    unavailable: boolean
+    disabled: boolean
+    emptyLabel: string
+    unavailableLabel: string
+    onSelect: (value: string) => void
   }) {
-    const expanded = () => activeSelect() === props.id;
-    const selected = () => props.value;
+    const expanded = () => activeSelect() === props.id
+    const selected = () => props.value
     const selectedAvailable = () =>
-      !!selected() && props.groups.some((group) => group.models.some((model) => model.value === selected()));
+      !!selected() && props.groups.some((group) => group.models.some((model) => model.value === selected()))
     return (
       <select
         class="field-input agent-model-select"
@@ -231,29 +229,20 @@ export default function AgentModelsPanel() {
           <For each={props.groups}>
             {(g) => (
               <optgroup label={g.name}>
-                <For each={g.models}>
-                  {(opt) => (
-                    <option value={opt.value}>{opt.label}</option>
-                  )}
-                </For>
+                <For each={g.models}>{(opt) => <option value={opt.value}>{opt.label}</option>}</For>
               </optgroup>
             )}
           </For>
         </Show>
       </select>
-    );
+    )
   }
 
   return (
     <div class="general-panel">
       <div class="config-panel-group">
-        <SurfaceHeader
-          variant="settings-group"
-          title="Agent Models"
-        />
-        <p class="agent-models-info">
-          {t("agent_models.intro")}
-        </p>
+        <SurfaceHeader variant="settings-group" title="Agent Models" />
+        <p class="agent-models-info">{t("agent_models.intro")}</p>
 
         <Show when={data.loading}>
           <div class="agent-models-loading" role="status" aria-live="polite">
@@ -282,17 +271,17 @@ export default function AgentModelsPanel() {
 
         <Show when={readyData()} keyed>
           {(payload) => {
-            const groups = providerGroups(payload.providers);
-            const available = allModelValues(groups);
-            const grouped = groupedAgents(payload.agents);
+            const groups = providerGroups(payload.providers)
+            const available = allModelValues(groups)
+            const grouped = groupedAgents(payload.agents)
             // projectModel() is a memo over appStore.config.model — re-reads
             // each render, so UI stays in sync with the canonical store.
-            const currentProjectModel = () => projectModel();
-            const projectModelMissing = () => !currentProjectModel();
+            const currentProjectModel = () => projectModel()
+            const projectModelMissing = () => !currentProjectModel()
             const projectModelUnavailable = () => {
-              const current = currentProjectModel();
-              return !!current && !available.has(current);
-            };
+              const current = currentProjectModel()
+              return !!current && !available.has(current)
+            }
             return (
               <>
                 <div class="agent-model-project-default">
@@ -328,11 +317,11 @@ export default function AgentModelsPanel() {
                         <div class="agent-model-tier-label">{TIER_LABEL[tier]}</div>
                         <For each={grouped[tier]}>
                           {(agent) => {
-                            const current = () => configAgentModel(agent.name);
+                            const current = () => configAgentModel(agent.name)
                             const missing = () => {
-                              const selected = current();
-                              return selected !== "" && !available.has(selected);
-                            };
+                              const selected = current()
+                              return selected !== "" && !available.has(selected)
+                            }
                             return (
                               <div class="agent-model-row" title={agent.description || ""}>
                                 <span class="agent-model-name">{agent.name}</span>
@@ -351,7 +340,7 @@ export default function AgentModelsPanel() {
                                   <Show when={savingAgents().has(agent.name)}>saving…</Show>
                                 </span>
                               </div>
-                            );
+                            )
                           }}
                         </For>
                       </Show>
@@ -359,10 +348,10 @@ export default function AgentModelsPanel() {
                   </For>
                 </div>
               </>
-            );
+            )
           }}
         </Show>
       </div>
     </div>
-  );
+  )
 }

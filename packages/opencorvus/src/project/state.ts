@@ -25,11 +25,14 @@ export namespace State {
         dispose,
       })
       return state
-    }) as (() => S) & { reset(): void }
+    }) as (() => S) & { reset(): void; resetAll(): void }
     fn.reset = () => {
       const key = root()
       const entries = recordsByKey.get(key)
       if (entries) entries.delete(init)
+    }
+    fn.resetAll = () => {
+      for (const entries of recordsByKey.values()) entries.delete(init)
     }
     return fn
   }

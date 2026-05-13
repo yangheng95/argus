@@ -21,15 +21,19 @@ import { Filesystem } from "@/util/filesystem"
 import { EngineService } from "@/task-api"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { parseArchitectContractGraph, type ArchitectContractGraph } from "@/architect/contract-graph"
 import {
   findActivePlanForTask,
   findDeliveryByRun,
   findEvaluationByRun,
   findRuns,
+  findLatestArchitectContractGraphArtifact,
   listGoalsByPlan,
   listInteractions,
   listMilestones,
+  listSpecSnapshotsForTask,
   listSnapshots,
+  persistImportedArchitectPlan,
   requireTask,
   viewDelivery,
   viewEvaluation,
@@ -39,6 +43,7 @@ import {
   viewPlan,
   viewRun,
   viewSnapshot,
+  viewSpecSnapshot,
   viewTask,
   findArtifacts,
   viewArtifact,
@@ -77,6 +82,7 @@ function buildTaskExport(taskID: string) {
   const runs = findRuns(taskID)
   const interactions = listInteractions(taskID)
   const snapshots = listSnapshots(taskID)
+  const specSnapshots = listSpecSnapshotsForTask(taskID)
 
   const deliveries: ReturnType<typeof viewDelivery>[] = []
   const evaluations: ReturnType<typeof viewEvaluation>[] = []
@@ -88,6 +94,8 @@ function buildTaskExport(taskID: string) {
     if (evaluation) evaluations.push(viewEvaluation(evaluation))
     artifacts.push(...findArtifacts(run.id).map(viewArtifact))
   }
+  const graphArtifact = findLatestArchitectContractGraphArtifact(taskID)
+  if (graphArtifact) artifacts.push(viewArtifact(graphArtifact))
 
   return {
     task: viewTask(task),
@@ -97,6 +105,7 @@ function buildTaskExport(taskID: string) {
     runs: runs.map(viewRun),
     interactions: interactions.map(viewInteraction),
     snapshots: snapshots.map(viewSnapshot),
+    specSnapshots: specSnapshots.map(viewSpecSnapshot),
     deliveries,
     evaluations,
     artifacts,
@@ -122,10 +131,7 @@ async function listProjectFiles(directory: string): Promise<string[]> {
       `Project archive requires a git repository at ${directory}; init the repo first.`,
     )
   }
-  const result = await $`git ls-files --cached --others --exclude-standard -z`
-    .cwd(directory)
-    .quiet()
-    .nothrow()
+  const result = await $`git ls-files --cached --others --exclude-standard -z`.cwd(directory).quiet().nothrow()
   if (result.exitCode !== 0) {
     throw archiveError(
       500,
@@ -133,7 +139,10 @@ async function listProjectFiles(directory: string): Promise<string[]> {
       `git ls-files failed in ${directory}: ${result.stderr.toString("utf8").trim()}`,
     )
   }
-  return result.stdout.toString("utf8").split("\0").filter((rel) => rel.length > 0)
+  return result.stdout
+    .toString("utf8")
+    .split("\0")
+    .filter((rel) => rel.length > 0)
 }
 
 async function buildArchive(taskID: string, directory: string): Promise<Blob> {
@@ -216,28 +225,16 @@ function safeJoin(targetRoot: string, entryName: string): string {
   const segments = entryName.split("/")
   for (const seg of segments) {
     if (seg === "" || seg === "." || seg === "..") {
-      throw archiveError(
-        400,
-        "InvalidArchiveEntryError",
-        `Archive entry has unsafe path segment: ${entryName}`,
-      )
+      throw archiveError(400, "InvalidArchiveEntryError", `Archive entry has unsafe path segment: ${entryName}`)
     }
     if (/^[A-Za-z]:$/.test(seg)) {
-      throw archiveError(
-        400,
-        "InvalidArchiveEntryError",
-        `Archive entry has drive-letter segment: ${entryName}`,
-      )
+      throw archiveError(400, "InvalidArchiveEntryError", `Archive entry has drive-letter segment: ${entryName}`)
     }
   }
   const resolved = path.resolve(targetRoot, ...segments)
   const rootWithSep = targetRoot.endsWith(path.sep) ? targetRoot : targetRoot + path.sep
   if (resolved !== targetRoot && !resolved.startsWith(rootWithSep)) {
-    throw archiveError(
-      400,
-      "InvalidArchiveEntryError",
-      `Archive entry escapes target directory: ${entryName}`,
-    )
+    throw archiveError(400, "InvalidArchiveEntryError", `Archive entry escapes target directory: ${entryName}`)
   }
   return resolved
 }
@@ -287,9 +284,10 @@ async function restoreArchive(input: { archive: Blob; overwrite: boolean }): Pro
       taskJsonText = await entry.getData!(new TextWriter())
     } else if (entry.filename.startsWith(PROJECT_PREFIX)) {
       fileEntries.push(entry)
+    } else {
+      await reader.close().catch(() => undefined)
+      throw archiveError(400, "InvalidArchiveEntryError", `Archive entry is outside the declared layout: ${entry.filename}`)
     }
-    // Unknown top-level entries are ignored (forward compat for additive
-    // metadata; rule 7 still requires manifest.format/version match below).
   }
 
   if (!manifestText) {
@@ -317,7 +315,14 @@ async function restoreArchive(input: { archive: Blob; overwrite: boolean }): Pro
     )
   }
 
-  let taskJson: { task: { id: string; title?: string; request: string; source?: string; metadata?: Record<string, unknown> } }
+  let taskJson: {
+    task: { id: string; title?: string; request: string; source?: string; metadata?: Record<string, unknown> }
+    plan?: Record<string, unknown>
+    goals?: Array<Record<string, unknown>>
+    snapshots?: Array<Record<string, unknown>>
+    specSnapshots?: Array<Record<string, unknown>>
+    artifacts?: Array<{ kind?: string; payload?: unknown }>
+  }
   try {
     taskJson = JSON.parse(taskJsonText)
   } catch (err) {
@@ -331,7 +336,7 @@ async function restoreArchive(input: { archive: Blob; overwrite: boolean }): Pro
 
   // Pre-resolve every entry's relative path and verify safety before
   // touching disk — partial extraction on a zip-slip would leave debris.
-  const plan: Array<{ rel: string; dest: string; entry: typeof fileEntries[number] }> = []
+  const plan: Array<{ rel: string; dest: string; entry: (typeof fileEntries)[number] }> = []
   for (const entry of fileEntries) {
     const rel = entry.filename.slice(PROJECT_PREFIX.length)
     if (rel.length === 0) continue
@@ -348,7 +353,12 @@ async function restoreArchive(input: { archive: Blob; overwrite: boolean }): Pro
   const skipExisting = input.overwrite === false
   const skipped: string[] = []
   if (skipExisting) {
-    const collisions = new Set(await findColliding(targetDirectory, plan.map((p) => p.rel)))
+    const collisions = new Set(
+      await findColliding(
+        targetDirectory,
+        plan.map((p) => p.rel),
+      ),
+    )
     for (const rel of collisions) skipped.push(rel)
     for (let i = plan.length - 1; i >= 0; i--) {
       if (collisions.has(plan[i]!.rel)) plan.splice(i, 1)
@@ -372,6 +382,7 @@ async function restoreArchive(input: { archive: Blob; overwrite: boolean }): Pro
   const newTaskID = await EngineService.createTask({
     request: taskJson.task.request,
     title: taskJson.task.title,
+    queue: false,
     source: "import",
     metadata: {
       imported_from: {
@@ -382,7 +393,133 @@ async function restoreArchive(input: { archive: Blob; overwrite: boolean }): Pro
     },
   })
 
+  const importedGraph = Array.isArray(taskJson.artifacts)
+    ? taskJson.artifacts.find((artifact: any) => artifact?.kind === "architect_contract_graph")?.payload
+    : undefined
+  if (importedGraph) {
+    restoreImportedArchitectPlan({
+      taskID: newTaskID,
+      plan: taskJson.plan,
+      goals: taskJson.goals,
+      specSnapshots: taskJson.specSnapshots,
+      graph: parseArchitectContractGraph(importedGraph),
+    })
+  }
+
   return { taskID: newTaskID, importedFromTaskID, restoredFiles: restored, skippedFiles: skipped }
+}
+
+function restoreImportedArchitectPlan(input: {
+  taskID: string
+  plan?: Record<string, unknown>
+  goals?: Array<Record<string, unknown>>
+  specSnapshots?: Array<Record<string, unknown>>
+  graph: ArchitectContractGraph
+}) {
+  if (!input.plan) {
+    throw archiveError(400, "InvalidArchiveError", "Archive graph import requires task.json plan.")
+  }
+  if (!Array.isArray(input.goals) || input.goals.length === 0) {
+    throw archiveError(400, "InvalidArchiveError", "Archive graph import requires task.json goals.")
+  }
+  if (!Array.isArray(input.specSnapshots) || input.specSnapshots.length === 0) {
+    throw archiveError(400, "InvalidArchiveError", "Archive graph import requires task.json specSnapshots.")
+  }
+
+  const originalSpecID = requiredString(input.plan.specSnapshotID, "plan.specSnapshotID")
+  const snapshot = input.specSnapshots.find((row) => row.id === originalSpecID)
+  if (!snapshot) {
+    throw archiveError(400, "InvalidArchiveError", `Archive missing active spec snapshot ${originalSpecID}.`)
+  }
+
+  const goalIDMap = new Map<string, string>()
+  for (const goal of input.goals) {
+    goalIDMap.set(requiredString(goal.id, "goal.id"), "")
+  }
+  persistImportedArchitectPlan({
+    taskID: input.taskID,
+    plan: {
+      version: requiredInteger(input.plan.version, "plan.version"),
+      summary: requiredString(input.plan.summary, "plan.summary"),
+      prompt: requiredString(input.plan.prompt, "plan.prompt"),
+      metadata: objectOrNull(input.plan.metadata),
+    },
+    snapshot: {
+      version: requiredInteger(snapshot.version, "snapshot.version"),
+      summary: requiredString(snapshot.summary, "snapshot.summary"),
+      content: requiredString(snapshot.content, "snapshot.content"),
+      scope: requiredString(snapshot.scope, "snapshot.scope"),
+      outOfScope: typeof snapshot.outOfScope === "string" ? snapshot.outOfScope : null,
+      evidence: Array.isArray(snapshot.evidence) ? (snapshot.evidence as string[]) : null,
+      metadata: objectOrNull(snapshot.metadata),
+    },
+    goals: input.goals.map((goal) => {
+      const oldGoalID = requiredString(goal.id, "goal.id")
+      const dependsOn = stringArray(goal.depends_on, "goal.depends_on")
+      for (const goalID of dependsOn) {
+        if (!goalIDMap.has(goalID)) {
+          throw archiveError(400, "InvalidArchiveError", `Goal ${oldGoalID} depends on unknown goal ${goalID}.`)
+        }
+      }
+      return {
+        oldID: oldGoalID,
+        title: requiredString(goal.title, "goal.title"),
+        objective: requiredString(goal.objective, "goal.objective"),
+        acceptanceSpecs: unknownArray(goal.acceptance_specs, "goal.acceptance_specs"),
+        ownedPaths: stringArray(goal.owned_paths, "goal.owned_paths"),
+        dependsOn,
+        kind: requiredString(goal.kind, "goal.kind"),
+        requirementIDs: stringArray(goal.requirement_ids, "goal.requirement_ids"),
+        priority: requiredPriority(goal.priority, "goal.priority"),
+        orderIndex: requiredInteger(goal.orderIndex, "goal.orderIndex"),
+        metadata: objectOrNull(goal.metadata),
+      }
+    }),
+    graph: input.graph,
+  })
+}
+
+function requiredString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw archiveError(400, "InvalidArchiveError", `Archive missing ${field}.`)
+  }
+  return value
+}
+
+function stringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) {
+    throw archiveError(400, "InvalidArchiveError", `Archive field ${field} must be an array.`)
+  }
+  const out = value.filter((item): item is string => typeof item === "string")
+  if (out.length !== value.length) {
+    throw archiveError(400, "InvalidArchiveError", `Archive field ${field} must contain only strings.`)
+  }
+  return out
+}
+
+function unknownArray(value: unknown, field: string): unknown[] {
+  if (!Array.isArray(value)) {
+    throw archiveError(400, "InvalidArchiveError", `Archive field ${field} must be an array.`)
+  }
+  return value
+}
+
+function requiredInteger(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw archiveError(400, "InvalidArchiveError", `Archive field ${field} must be an integer.`)
+  }
+  return value
+}
+
+function requiredPriority(value: unknown, field: string): "advisory" | "blocking" {
+  if (value !== "advisory" && value !== "blocking") {
+    throw archiveError(400, "InvalidArchiveError", `Archive field ${field} must be advisory or blocking.`)
+  }
+  return value
+}
+
+function objectOrNull(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null
 }
 
 /**
@@ -400,21 +537,25 @@ export const ExportRoutes = lazy(() =>
         operationId: "export.task",
         responses: {
           200: {
-            description: "Complete task export including plan, runs, evaluations, goals, milestones, interactions, snapshots, and artifacts",
+            description:
+              "Complete task export including plan, runs, evaluations, goals, milestones, interactions, snapshots, and artifacts",
             content: {
               "application/json": {
-                schema: resolver(z.object({
-                  task: z.unknown(),
-                  plan: z.unknown().optional(),
-                  goals: z.unknown().array(),
-                  milestones: z.unknown().array(),
-                  runs: z.unknown().array(),
-                  interactions: z.unknown().array(),
-                  snapshots: z.unknown().array(),
-                  deliveries: z.unknown().array(),
-                  evaluations: z.unknown().array(),
-                  artifacts: z.unknown().array(),
-                })),
+                schema: resolver(
+                  z.object({
+                    task: z.unknown(),
+                    plan: z.unknown().optional(),
+                    goals: z.unknown().array(),
+                    milestones: z.unknown().array(),
+                    runs: z.unknown().array(),
+                    interactions: z.unknown().array(),
+                    snapshots: z.unknown().array(),
+                    specSnapshots: z.unknown().array(),
+                    deliveries: z.unknown().array(),
+                    evaluations: z.unknown().array(),
+                    artifacts: z.unknown().array(),
+                  }),
+                ),
               },
             },
           },
@@ -492,11 +633,7 @@ export const ExportRoutes = lazy(() =>
         const overwrite = c.req.valid("query").overwrite
         const contentType = c.req.header("content-type") || ""
         if (!contentType.includes("application/zip") && !contentType.includes("application/octet-stream")) {
-          throw archiveError(
-            400,
-            "InvalidArchiveError",
-            `Expected Content-Type application/zip; got "${contentType}"`,
-          )
+          throw archiveError(400, "InvalidArchiveError", `Expected Content-Type application/zip; got "${contentType}"`)
         }
         const buffer = await c.req.arrayBuffer()
         if (buffer.byteLength === 0) {
@@ -526,10 +663,12 @@ export const ExportRoutes = lazy(() =>
             description: "Session metadata and messages",
             content: {
               "application/json": {
-                schema: resolver(z.object({
-                  session: z.unknown(),
-                  messages: z.unknown().array(),
-                })),
+                schema: resolver(
+                  z.object({
+                    session: z.unknown(),
+                    messages: z.unknown().array(),
+                  }),
+                ),
               },
             },
           },

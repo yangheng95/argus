@@ -12,12 +12,12 @@ Architect validation currently conflates three different concerns:
 The live task `tsk_e1ffd2773001fiy3pRAnxKCW5h` exposed the failure mode. Across the
 latest local DB sample of failed `submit_architect` calls:
 
-| Category | Count | Root Cause |
-|---|---:|---|
-| `linker_undeclared_export` | 28 | `exports[]` prose tokenized into fake symbols (`type`, `const`, `GET`, `latest`) |
-| `linker_unresolved_symbol` | 10 | `imports[]` prose tokenized into fake required ContractIR names |
-| `function_vs_type_name_heuristic` | 6 | suffix-only name heuristic mistook hook functions for data shapes |
-| `contract_audit_required` | 4 | advisory contract-audit policy hard-blocked graph finalization |
+| Category                          | Count | Root Cause                                                                       |
+| --------------------------------- | ----: | -------------------------------------------------------------------------------- |
+| `linker_undeclared_export`        |    28 | `exports[]` prose tokenized into fake symbols (`type`, `const`, `GET`, `latest`) |
+| `linker_unresolved_symbol`        |    10 | `imports[]` prose tokenized into fake required ContractIR names                  |
+| `function_vs_type_name_heuristic` |     6 | suffix-only name heuristic mistook hook functions for data shapes                |
+| `contract_audit_required`         |     4 | advisory contract-audit policy hard-blocked graph finalization                   |
 
 The isolated hook-name patch fixes one false positive, but not the mechanism.
 
@@ -70,8 +70,8 @@ interface ArchitectContractRef {
   producer_goal_id: string
   consumer_goal_ids: string[]
   summary: string
-  ir?: ContractIR              // present only for type/function/enum
-  route?: RouteContract        // present only for route
+  ir?: ContractIR // present only for type/function/enum
+  route?: RouteContract // present only for route
   component?: ComponentContract
   artifact_paths?: string[]
 }
@@ -90,13 +90,13 @@ the reason is persisted, never inferred from goal kind, title, or an empty list.
 
 ### Field Fate
 
-| Current Field | New Role |
-|---|---|
-| `goal.exports: string[]` | removed from validation source; eventually removed from DB schema after reset |
-| `goal.imports: string[]` | removed from validation source; eventually removed from DB schema after reset |
-| Decision-log `type_contract/function_contract/enum_contract` | replaced by `architect_contract_graph` entries |
-| `ContractIR` | kept only as typed payload for `type/function/enum` contracts |
-| `contract_audit` | consumes graph contracts with `ir`, not linker output |
+| Current Field                                                | New Role                                                                      |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `goal.exports: string[]`                                     | removed from validation source; eventually removed from DB schema after reset |
+| `goal.imports: string[]`                                     | removed from validation source; eventually removed from DB schema after reset |
+| Decision-log `type_contract/function_contract/enum_contract` | replaced by `architect_contract_graph` entries                                |
+| `ContractIR`                                                 | kept only as typed payload for `type/function/enum` contracts                 |
+| `contract_audit`                                             | consumes graph contracts with `ir`, not linker output                         |
 
 No fallback compatibility path. During implementation we replace all consumers in one
 branch and reset local DB as required by project rules.
@@ -139,6 +139,24 @@ Rules:
   `producer_goal_id === from_goal_id` and whose `consumer_goal_ids` contains
   `to_goal_id`.
 
+### LLM Tool Validation Mode
+
+Architect and orchestrator goal-contract tools follow a strong-input /
+weak-output pattern:
+
+- prompts and tool descriptions state the exact contract shapes, legal
+  discriminators, and examples;
+- model-facing tool input schemas must be permissive enough to let malformed
+  but understandable output reach `execute`;
+- `execute` validates against the canonical schema and returns actionable
+  diagnostics without mutating the collector or database when validation fails;
+- no coercion is allowed. For example, `type: "shell"` must not be converted to
+  `type: "heuristic"`; the tool must reject it and tell the model to resubmit
+  `type: "heuristic"` with `spec.kind: "shell"`;
+- `submit_architect` blocks only invalid execution graph structure. Completion,
+  fidelity, traceability, and contract quality remain visible findings for
+  downstream orchestrator / integrity / delivery decisions.
+
 ## Validator Redesign
 
 Split validator output into structured findings:
@@ -153,26 +171,28 @@ interface ArchitectValidationFinding {
 }
 ```
 
-`submit_architect` hard-blocks only `severity="blocker"`.
+`submit_architect` hard-blocks only invalid execution graph structure.
+Everything else is a concern. Architect must not be trapped into retrying until
+it produces perfect delivery evidence before Build has run.
 
 ### Blockers
 
 - no goals
-- unknown goal ids in dependencies / traceability / coverage / contracts
+- unknown goal ids in `depends_on`
 - dependency cycles
 - acceptance spec `goal_id` mismatch
-- missing traceability for claimed `requirement_ids`
-- reference-driven task missing reference coverage
+
+### Concerns
+
+- missing or incomplete traceability for claimed `requirement_ids`
+- source/reference coverage gaps
 - reference-driven task missing final delivery visual acceptance
 - multi-goal graph missing assembly owner
-- contract graph references unknown contract ids
+- contract graph references unknown goals or contract ids
 - contract edge names a producer that is not in dependency ancestry
 - dependency edge contract id does not belong to the edge producer/consumer pair
 - `reason="contract"` edge has no `contract_ids`
 - non-contract edge lacks explicit reason / ordering summary
-
-### Concerns
-
 - contract graph has weak summaries
 - dependency edge has no contract but is bootstrap/scaffold-only
 - a consumer imports a broad rendered surface that may be too coupled
@@ -329,32 +349,32 @@ are switched.
 
 ### Source
 
-| Area | Current Use | Redesign |
-|---|---|---|
-| `pipeline/goal-contract.schema.ts` | defines `exports/imports: string[]` | remove fields |
-| `pipeline/types.ts` | goal contract fields | remove fields |
-| `build/types.ts` | BuildGoalInput carries `exports/imports` | remove fields; add graph context types |
-| `engine/persist.ts` | stores goal exports/imports | remove persistence |
-| `engine/store.ts` | reads goal exports/imports | remove projection |
-| `engine/engine.sql.ts` / `storage/ddl.ts` | engine_goal columns and artifact kind/index | remove columns; add graph artifact kind/index |
-| `engine/describe.ts` | read-context renders exports/imports | render contract graph summary |
-| `engine/model.ts` | task board goal contract schema | remove exports/imports or replace with graph summary |
-| `architect/output-tools.ts` | validates via linker and ContractIR tools | replace with contract graph tools |
-| `architect/linker.ts` | parses string symbols | delete or narrow to TS extraction helper only |
-| `architect/agent.ts` | maps collector goals and logs ContractIR | persist graph artifact |
-| `orchestrator/tools.ts` | linkContracts for contract_audit and build context | load graph artifact |
-| `build/agent.ts` | renders `exports/imports` and `architectContracts` | render graph sections |
-| `integrity/agent.ts` / `dimensions.ts` | prompt and schema mention exports/imports | switch to graph |
-| `acceptance/types.ts` | contract audit scorer uses symbols | replace with graph contract ids |
-| `acceptance/contract-audit.ts` | derives boundary from imports/exports | resolve graph contract ids |
-| `delivery/checks/types.ts` | GoalInfo carries imports/exports | remove fields; add graph refs |
-| `delivery/checks/contract-audit-review.ts` | boundary detection uses imports/exports | use graph audit criteria |
-| `delivery/specialists/backend-client.ts` | client contract gate uses imports/exports | use route/static graph contracts |
-| `delivery/tools.ts` | renders imports/exports in goal detail | render graph contracts |
-| `prompt/upstream-context.ts` | delivery catalog says exports/imports are gating | render graph catalog |
-| `prompt/core/build-core.txt` / `delivery-core.txt` / `orchestrator-core.txt` | system prompts name imports/exports | switch to graph vocabulary |
-| `overlay/src/main.tsx` | debug SQL template selects exports/imports | select graph artifact |
-| `prompt/core/architect-core.txt` | asks for exports/imports and per-kind tools | rewrite around graph tools |
+| Area                                                                         | Current Use                                        | Redesign                                             |
+| ---------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
+| `pipeline/goal-contract.schema.ts`                                           | defines `exports/imports: string[]`                | remove fields                                        |
+| `pipeline/types.ts`                                                          | goal contract fields                               | remove fields                                        |
+| `build/types.ts`                                                             | BuildGoalInput carries `exports/imports`           | remove fields; add graph context types               |
+| `engine/persist.ts`                                                          | stores goal exports/imports                        | remove persistence                                   |
+| `engine/store.ts`                                                            | reads goal exports/imports                         | remove projection                                    |
+| `engine/engine.sql.ts` / `storage/ddl.ts`                                    | engine_goal columns and artifact kind/index        | remove columns; add graph artifact kind/index        |
+| `engine/describe.ts`                                                         | read-context renders exports/imports               | render contract graph summary                        |
+| `engine/model.ts`                                                            | task board goal contract schema                    | remove exports/imports or replace with graph summary |
+| `architect/output-tools.ts`                                                  | validates via linker and ContractIR tools          | replace with contract graph tools                    |
+| `architect/linker.ts`                                                        | parses string symbols                              | delete or narrow to TS extraction helper only        |
+| `architect/agent.ts`                                                         | maps collector goals and logs ContractIR           | persist graph artifact                               |
+| `orchestrator/tools.ts`                                                      | linkContracts for contract_audit and build context | load graph artifact                                  |
+| `build/agent.ts`                                                             | renders `exports/imports` and `architectContracts` | render graph sections                                |
+| `integrity/agent.ts` / `dimensions.ts`                                       | prompt and schema mention exports/imports          | switch to graph                                      |
+| `acceptance/types.ts`                                                        | contract audit scorer uses symbols                 | replace with graph contract ids                      |
+| `acceptance/contract-audit.ts`                                               | derives boundary from imports/exports              | resolve graph contract ids                           |
+| `delivery/checks/types.ts`                                                   | GoalInfo carries imports/exports                   | remove fields; add graph refs                        |
+| `delivery/checks/contract-audit-review.ts`                                   | boundary detection uses imports/exports            | use graph audit criteria                             |
+| `delivery/specialists/backend-client.ts`                                     | client contract gate uses imports/exports          | use route/static graph contracts                     |
+| `delivery/tools.ts`                                                          | renders imports/exports in goal detail             | render graph contracts                               |
+| `prompt/upstream-context.ts`                                                 | delivery catalog says exports/imports are gating   | render graph catalog                                 |
+| `prompt/core/build-core.txt` / `delivery-core.txt` / `orchestrator-core.txt` | system prompts name imports/exports                | switch to graph vocabulary                           |
+| `overlay/src/main.tsx`                                                       | debug SQL template selects exports/imports         | select graph artifact                                |
+| `prompt/core/architect-core.txt`                                             | asks for exports/imports and per-kind tools        | rewrite around graph tools                           |
 
 ### Tests
 

@@ -13,7 +13,8 @@ import type {
 // any other failure (or a declined prompt) must propagate unchanged.
 
 let dialogResponse: { confirmed: boolean } = { confirmed: true }
-const dialogCalls: Array<{ title?: string; message?: string }> = []
+let queueDialogResponse: { confirmed: boolean; value: string | null } = { confirmed: true, value: "queue" }
+const dialogCalls: Array<{ title?: string; message?: string; select?: boolean }> = []
 const initCalls: number[] = []
 let initResult = true
 
@@ -25,7 +26,8 @@ const realGit = await import("../src/utils/git")
 mock.module("../src/services/app-dialog", () => ({
   ...realAppDialog,
   showAppDialog: async (options: any) => {
-    dialogCalls.push({ title: options?.title, message: options?.message })
+    dialogCalls.push({ title: options?.title, message: options?.message, select: options?.select === true })
+    if (options?.select === true) return queueDialogResponse
     return { confirmed: dialogResponse.confirmed, value: null }
   },
 }))
@@ -64,6 +66,7 @@ beforeEach(() => {
   dialogCalls.length = 0
   initCalls.length = 0
   dialogResponse = { confirmed: true }
+  queueDialogResponse = { confirmed: true, value: "queue" }
   initResult = true
 })
 
@@ -90,7 +93,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
       }),
     )
 
-    const taskID = await createTask({ text: "hello" })
+    const taskID = await createTask({ text: "hello", queue: false })
     expect(taskID).toBe("tsk_abc123")
     expect(attempts).toBe(2)
     expect(dialogCalls.length).toBe(1)
@@ -113,7 +116,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
 
     let caught: unknown
     try {
-      await createTask({ text: "hello" })
+      await createTask({ text: "hello", queue: false })
     } catch (e) {
       caught = e
     }
@@ -135,7 +138,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
 
     let caught: unknown
     try {
-      await createTask({ text: "hello" })
+      await createTask({ text: "hello", queue: false })
     } catch (e) {
       caught = e
     }
@@ -156,7 +159,7 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
 
     let caught: unknown
     try {
-      await createTask({ text: "hello" })
+      await createTask({ text: "hello", queue: false })
     } catch (e) {
       caught = e
     }
@@ -164,5 +167,21 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     expect((caught as InstanceType<typeof ApiError>).status).toBe(500)
     expect(dialogCalls.length).toBe(0)
     expect(initCalls.length).toBe(0)
+  })
+
+  test("missing queue decision opens a selection dialog and posts the chosen queue value", async () => {
+    let posted: any
+    __setHostTransportForTest(
+      fakeTransport((req) => {
+        posted = req.body?.kind === "json" ? req.body.value : JSON.parse(String(req.body))
+        return { status: 200, ok: true, headers: {}, body: { task_id: "tsk_queue_choice" } }
+      }),
+    )
+
+    const taskID = await createTask({ text: "hello" })
+
+    expect(taskID).toBe("tsk_queue_choice")
+    expect(dialogCalls.some((item) => item.select === true)).toBe(true)
+    expect(posted.queue).toBe(true)
   })
 })

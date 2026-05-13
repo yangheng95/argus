@@ -264,4 +264,18 @@ describe("provider request-body contract", () => {
     expect(ProviderTransform.temperature(kimi)).toBeUndefined()
     expect(ProviderTransform.topP(kimi)).toBeUndefined()
   })
+
+  test("Hexin Kimi K2.6 request body uses the Moonshot fixed temperature", () => {
+    const body = ProviderTransform.requestBody("hexin", {
+      model: "kimi-k2.6",
+      temperature: 0,
+      stream: true,
+    })
+
+    expect(body).toMatchObject({
+      model: "kimi-k2.6",
+      temperature: 1,
+      stream: true,
+    })
+  })
 })

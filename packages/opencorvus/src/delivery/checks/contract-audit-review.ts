@@ -8,8 +8,6 @@ export function buildContractAuditReviewEvidence(input: {
   goals: Array<{
     id?: string
     latest_goal_run_id?: string
-    imports?: string[]
-    exports?: string[]
     acceptance_specs?: AcceptanceSpec[]
   }>
   criteriaResults: Array<{
@@ -29,8 +27,6 @@ export function buildContractAuditReviewEvidence(input: {
   const skips: string[] = []
 
   for (const goal of input.goals) {
-    const hasBoundary = (goal.imports?.length ?? 0) > 0 || (goal.exports?.length ?? 0) > 0
-    if (!hasBoundary) continue
     for (const spec of goal.acceptance_specs ?? []) {
       for (const scorer of spec.scorers) {
         if (scorer.type !== "contract_audit" || !contractAuditRequired(spec, scorer)) continue
@@ -56,18 +52,21 @@ export function buildContractAuditReviewEvidence(input: {
   }
 
   if (required.length === 0) return []
-  return [{
-    id: "review:contract_audit",
-    name: "Contract Audit",
-    status: failures.length === 0 ? "passed" : "failed",
-    evidence: failures.length > 0
-      ? failures
-      : [
-          `passed=${passes.length}`,
-          inconclusive.length > 0 ? `inconclusive=${inconclusive.join(" | ")}` : undefined,
-          skips.length > 0 ? `skipped=${skips.join(" | ")}` : undefined,
-        ].filter((item): item is string => Boolean(item)),
-  }]
+  return [
+    {
+      id: "review:contract_audit",
+      name: "Contract Audit",
+      status: failures.length === 0 ? "passed" : "failed",
+      evidence:
+        failures.length > 0
+          ? failures
+          : [
+              `passed=${passes.length}`,
+              inconclusive.length > 0 ? `inconclusive=${inconclusive.join(" | ")}` : undefined,
+              skips.length > 0 ? `skipped=${skips.join(" | ")}` : undefined,
+            ].filter((item): item is string => Boolean(item)),
+    },
+  ]
 }
 
 function latestCriteriaForGoal(

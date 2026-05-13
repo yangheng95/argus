@@ -34,12 +34,12 @@ const baseGoal: GoalContractFields = {
   acceptance_specs: [],
   owned_paths: ["src/App.tsx"],
   depends_on: [],
-  exports: [],
-  imports: [],
   priority: "blocking",
   kind: "feature",
   requirement_ids: ["REQ-1"],
 }
+
+const baseGraph = { version: 1 as const, contracts: [], dependency_contracts: [] }
 
 afterEach(() => {
   runnerImpl = undefined
@@ -74,6 +74,7 @@ test("integrity uses dimension collectors plus submit_integrity_review terminato
     userRequest: "Build UI",
     taskTitle: "Test",
     goals: [baseGoal],
+    contractGraph: baseGraph,
   })).rejects.toThrow("missingDimensions=requirement_fidelity,technical_feasibility,hallucination,solution_quality")
 })
 
@@ -102,6 +103,7 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
     userRequest: "Build UI",
     taskTitle: "Test",
     goals: [baseGoal],
+    contractGraph: baseGraph,
   })
 
   expect(result.sessionID).toBe("ses_integrity_complete")
@@ -163,6 +165,7 @@ test("integrity preserves correction-bearing concerns verdict (no host reconcili
     userRequest: "Build UI",
     taskTitle: "Test",
     goals: [baseGoal],
+    contractGraph: baseGraph,
   })
 
   // B11 (spec architecture-rework-loosening-plan-2026-05-06.md): the host
@@ -231,6 +234,7 @@ test("hallucination findings can propose executable requirement-id repairs", asy
     userRequest: "Build UI from REQ-1",
     taskTitle: "Test",
     goals: [{ ...baseGoal, requirement_ids: ["REQ-1", "REQ-18"] }],
+    contractGraph: baseGraph,
   })
 
   expect(result.verdict).toBe("needs_correction")
@@ -284,6 +288,7 @@ test("requirement_fidelity issue carries requirement_ids and spec_ids through to
     userRequest: "Show stock dashboard",
     taskTitle: "post-build issue surfaces spec_ids",
     goals: [baseGoal],
+    contractGraph: baseGraph,
   })
 
   const fidelity = result.dimensions.find((d) => d.id === "requirement_fidelity")
@@ -322,6 +327,7 @@ test("buildIntegrityPrompt omits the Requirement Status Snapshot section when th
     userRequest: "Build something",
     taskTitle: "pre-build prompt elision",
     goals: [baseGoal],
+    contractGraph: baseGraph,
     requirements: [{ id: "REQ-1", type: "explicit", description: "Build it" }],
     requirementStatus: [],
   })
@@ -425,6 +431,7 @@ test("when every claiming goal's essential spec fails, the LLM-driven verdict ro
         scorers: [{ type: "heuristic", name: "fe", spec: { kind: "shell", cmd: "true" } }],
       }],
     }],
+    contractGraph: baseGraph,
     requirements: [{ id: "REQ-1", type: "explicit", description: "Show dashboard" }],
     requirementStatus: [{
       reqID: "REQ-1",
@@ -493,6 +500,7 @@ test("buildIntegrityPrompt renders the snapshot table and foregrounds REQ → go
         scorers: [{ type: "heuristic", name: "smoke", spec: { kind: "shell", cmd: "true" } }],
       }],
     }],
+    contractGraph: baseGraph,
     requirements: [{ id: "REQ-1", type: "explicit", description: "Show dashboard" }],
     requirementStatus: [{
       reqID: "REQ-1",

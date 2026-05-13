@@ -33,7 +33,8 @@
   border: var(--oc-border-width) solid color-mix(in srgb, var(--card-stage, var(--accent)) 26%, transparent);
   color: var(--card-stage, var(--accent));
   box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, var(--text-strong) 6%, transparent);
-  animation: chat-bubble-avatar-enter var(--ui-duration-base) var(--ui-timing-standard) var(--ui-duration-fast) backwards;
+  animation: chat-bubble-avatar-enter var(--ui-duration-base) var(--ui-timing-standard) var(--ui-duration-fast)
+    backwards;
 }
 
 .chat-avatar::after {
@@ -64,35 +65,27 @@
   max-width: 100%;
   border-radius: var(--oc-radius-large);
   padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--surface-elevated, var(--surface)) 96%, transparent),
-      color-mix(in srgb, var(--surface) 92%, transparent)
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-elevated, var(--surface)) 96%, transparent),
+    color-mix(in srgb, var(--surface) 92%, transparent)
+  );
   border: var(--oc-border-width) solid color-mix(in srgb, var(--text) 10%, transparent);
-  border-inline-start: calc(3px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--card-stage-info)) 84%, transparent);
   box-shadow:
     inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, var(--text-strong) 6%, transparent),
-    0 calc(6px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, var(--shadow, var(--text)) 12%, transparent);
+    0 calc(6px * var(--ui-scale)) calc(18px * var(--ui-scale))
+      color-mix(in srgb, var(--shadow, var(--text)) 12%, transparent);
   box-sizing: border-box;
   animation: chat-bubble-enter var(--ui-duration-base) var(--ui-timing-standard) backwards;
   transition: transform var(--ui-duration-fast) var(--ui-timing-standard);
 }
 
 .chat-bubble[data-align="right"] {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 12%, var(--surface-elevated, var(--surface)) 88%),
-      color-mix(in srgb, var(--accent) 8%, var(--surface) 92%)
-    );
-  border-inline-start-color: color-mix(in srgb, var(--text) 10%, transparent);
-  border-inline-end: calc(3px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage-user) 84%, transparent);
-}
-
-.chat-bubble[data-stage="system"] {
-  border-inline-start-color: var(--card-system-rail);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 12%, var(--surface-elevated, var(--surface)) 88%),
+    color-mix(in srgb, var(--accent) 8%, var(--surface) 92%)
+  );
 }
 
 .chat-bubble--collapsed {
@@ -117,8 +110,8 @@
   gap: calc(4px * var(--ui-scale));
   padding-bottom: calc(8px * var(--ui-scale));
   border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--text) 8%, transparent);
-  cursor: default;
-  user-select: text;
+  cursor: pointer;
+  user-select: none;
 }
 
 .chat-bubble__title-row {
@@ -526,7 +519,8 @@
 }
 
 @keyframes chat-bubble-running-halo {
-  0%, 100% {
+  0%,
+  100% {
     opacity: var(--ui-opacity-hidden);
   }
   50% {

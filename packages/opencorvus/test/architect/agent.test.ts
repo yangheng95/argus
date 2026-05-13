@@ -5,6 +5,8 @@ import { tmpdir } from "../fixture/fixture"
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
 mock.module("@/agent/runner", () => ({
+  extractInformationMissingBlock: () => undefined,
+  messageHasInformationMissing: () => false,
   runAgentSession: (input: any) => {
     if (!runnerImpl) throw new Error("runAgentSession mock not configured")
     return runnerImpl(input)
@@ -56,8 +58,6 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           ],
           owned_paths: ["src/index.ts"],
           depends_on: [],
-          exports: ["runMain(): void"],
-          imports: [],
           priority: "blocking",
           kind: "feature",
           requirement_ids: ["REQ-1"],
@@ -84,8 +84,6 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           ],
           owned_paths: ["tests/integration/main.test.ts"],
           depends_on: ["goal_main"],
-          exports: [],
-          imports: ["runMain(): void from goal_main"],
           priority: "blocking",
           kind: "verification",
           requirement_ids: ["REQ-1"],
@@ -95,11 +93,20 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           requirementID: "REQ-1",
           goalIDs: ["goal_main", "goal_tests"],
         })
-        collector.contracts.push({
-          category: "interface_contract",
-          title: "Main contract",
-          spec: "```ts\nexport function runMain(): void\n```",
-          goalIDs: ["goal_main", "goal_tests"],
+        collector.contract_graph.contracts.push({
+          id: "contract_main_entry",
+          kind: "component",
+          name: "runMain integration surface",
+          producer_goal_id: "goal_main",
+          consumer_goal_ids: ["goal_tests"],
+          summary: "Main implementation surface consumed by the integration tests.",
+          artifact_paths: ["src/index.ts"],
+        })
+        collector.contract_graph.dependency_contracts.push({
+          from_goal_id: "goal_main",
+          to_goal_id: "goal_tests",
+          reason: "contract",
+          contract_ids: ["contract_main_entry"],
         })
         collector.assembly_owners.push({
           surface: "final-deliverable",

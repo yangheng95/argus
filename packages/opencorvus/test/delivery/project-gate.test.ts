@@ -13,7 +13,7 @@ import {
 } from "../../src/delivery/checks/runtime-readiness"
 import { runtimeInteractionViolations } from "../../src/delivery/checks/runtime-evidence"
 import { stopAllManagedPreviewSessions } from "../../src/preview/session"
-import { EngineTaskTable, EngineArtifactTable, EngineGoalTable, EngineSpecSnapshotTable } from "../../src/engine/engine.sql"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { recordIntegrityAttempt } from "../../src/engine/persist"
 import { Database } from "../../src/storage/db"
 import {
@@ -44,8 +44,9 @@ describe("delivery project evidence gate", () => {
 
     expect(readiness.status).toBe("failed")
     expect(readiness.failedReadinessIds).toEqual(["runtime-readiness:package-manager"])
-    expect(readiness.checks.find((item) => item.id === "runtime-readiness:package-manager")?.evidence[0])
-      .toContain("package.json must declare packageManager")
+    expect(readiness.checks.find((item) => item.id === "runtime-readiness:package-manager")?.evidence[0]).toContain(
+      "package.json must declare packageManager",
+    )
   })
 
   test("runtime readiness rejects invalid packageManager values", async () => {
@@ -77,8 +78,10 @@ describe("delivery project evidence gate", () => {
 
     expect(readiness.status).toBe("failed")
     expect(readiness.failedReadinessIds).toEqual(["runtime-readiness:lockfile"])
-    expect(readiness.checks.find((item) => item.id === "runtime-readiness:lockfile")?.evidence)
-      .toEqual(["missing_lockfile=package-lock.json", "conflicting_lockfiles=bun.lock"])
+    expect(readiness.checks.find((item) => item.id === "runtime-readiness:lockfile")?.evidence).toEqual([
+      "missing_lockfile=package-lock.json",
+      "conflicting_lockfiles=bun.lock",
+    ])
   })
 
   test("runtime readiness rejects conflicting lockfiles", async () => {
@@ -98,8 +101,9 @@ describe("delivery project evidence gate", () => {
 
     expect(readiness.status).toBe("failed")
     expect(readiness.failedReadinessIds).toEqual(["runtime-readiness:lockfile"])
-    expect(readiness.checks.find((item) => item.id === "runtime-readiness:lockfile")?.evidence)
-      .toContain("conflicting_lockfiles=package-lock.json")
+    expect(readiness.checks.find((item) => item.id === "runtime-readiness:lockfile")?.evidence).toContain(
+      "conflicting_lockfiles=package-lock.json",
+    )
   })
 
   test("runtime readiness selects frozen install commands", () => {
@@ -137,12 +141,13 @@ describe("delivery project evidence gate", () => {
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_readiness_primary",
-        runID: "run_readiness_primary",
-        deliveryID: "dlv_readiness_primary",
-        changedFiles: ["src/app.ts"],
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_readiness_primary",
+          runID: "run_readiness_primary",
+          deliveryID: "dlv_readiness_primary",
+          changedFiles: ["src/app.ts"],
+        }),
     })
 
     expect(manifest.runtimeReadiness?.failedReadinessIds).toEqual(["runtime-readiness:package-manager"])
@@ -162,8 +167,8 @@ describe("delivery project evidence gate", () => {
         packageManager: "bun@1.3.13",
         scripts: {
           build: "bun -e \"console.log('build')\"",
-          test: "bun -e \"process.exit(1)\"",
-          typecheck: "bun -e \"process.exit(1)\"",
+          test: 'bun -e "process.exit(1)"',
+          typecheck: 'bun -e "process.exit(1)"',
         },
       },
       files: {
@@ -174,12 +179,13 @@ describe("delivery project evidence gate", () => {
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_readiness_required_aux",
-        runID: "run_readiness_required_aux",
-        deliveryID: "dlv_readiness_required_aux",
-        changedFiles: ["src/app.ts"],
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_readiness_required_aux",
+          runID: "run_readiness_required_aux",
+          deliveryID: "dlv_readiness_required_aux",
+          changedFiles: ["src/app.ts"],
+        }),
     })
 
     expect(manifest.requiredChecks.map((item) => item.name)).toEqual(["build", "test", "typecheck"])
@@ -194,18 +200,19 @@ describe("delivery project evidence gate", () => {
     const dir = await packageFixture({
       build: "bun -e \"console.log('build ok')\"",
       test: "bun -e \"console.log('test ok')\"",
-      lint: "bun -e \"process.exit(1)\"",
+      lint: 'bun -e "process.exit(1)"',
     })
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_gate",
-        runID: "run_gate",
-        deliveryID: "dlv_gate",
-        changedFiles: ["src/app.ts"],
-        metadata: { checks: { lint: ["bun run lint"] } },
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_gate",
+          runID: "run_gate",
+          deliveryID: "dlv_gate",
+          changedFiles: ["src/app.ts"],
+          metadata: { checks: { lint: ["bun run lint"] } },
+        }),
     })
 
     expect(manifest.requiredChecks.map((item) => item.name)).toEqual(["build", "test", "lint"])
@@ -230,17 +237,18 @@ describe("delivery project evidence gate", () => {
     const dir = await packageFixture({
       build: "bun -e \"console.log('build ok')\"",
       test: "bun -e \"console.log('test ok')\"",
-      lint: "bun -e \"process.exit(1)\"",
+      lint: 'bun -e "process.exit(1)"',
     })
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_default_skip_lint",
-        runID: "run_default_skip_lint",
-        deliveryID: "dlv_default_skip_lint",
-        changedFiles: ["src/app.ts"],
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_default_skip_lint",
+          runID: "run_default_skip_lint",
+          deliveryID: "dlv_default_skip_lint",
+          changedFiles: ["src/app.ts"],
+        }),
     })
 
     expect(manifest.requiredChecks.map((item) => item.name)).toEqual(["build", "test"])
@@ -250,18 +258,19 @@ describe("delivery project evidence gate", () => {
 
   test("rejects package scripts that coerce shell failure into success", async () => {
     const dir = await packageFixture({
-      lint: "bun -e \"process.exit(1)\" || exit 0",
+      lint: 'bun -e "process.exit(1)" || exit 0',
     })
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_forbidden",
-        runID: "run_forbidden",
-        deliveryID: "dlv_forbidden",
-        changedFiles: ["src/app.ts"],
-        metadata: { checks: { lint: ["bun run lint"] } },
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_forbidden",
+          runID: "run_forbidden",
+          deliveryID: "dlv_forbidden",
+          changedFiles: ["src/app.ts"],
+          metadata: { checks: { lint: ["bun run lint"] } },
+        }),
     })
 
     const lint = manifest.checkResults.find((item) => item.name === "lint")
@@ -284,7 +293,9 @@ describe("delivery project evidence gate", () => {
       "throw new Error('generated worktree output must not be linted')\n",
     )
     await fs.mkdir(path.join(dir, "scripts"), { recursive: true })
-    await fs.writeFile(path.join(dir, "scripts", "check-lint-scope.mjs"), `
+    await fs.writeFile(
+      path.join(dir, "scripts", "check-lint-scope.mjs"),
+      `
 import { existsSync } from "node:fs"
 import { cwd } from "node:process"
 
@@ -293,17 +304,19 @@ if (existsSync(".opencorvus/worktrees/goal-demo/.next/generated-bad.js")) {
   process.exit(1)
 }
 console.log("lint scope ok", cwd())
-`)
+`,
+    )
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_isolated_check",
-        runID: "run_isolated_check",
-        deliveryID: "dlv_isolated_check",
-        changedFiles: ["src/app.ts"],
-        metadata: { checks: { lint: ["bun run lint"] } },
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_isolated_check",
+          runID: "run_isolated_check",
+          deliveryID: "dlv_isolated_check",
+          changedFiles: ["src/app.ts"],
+          metadata: { checks: { lint: ["bun run lint"] } },
+        }),
     })
 
     const lint = manifest.checkResults.find((item) => item.name === "lint")
@@ -321,14 +334,16 @@ console.log("lint scope ok", cwd())
       runId: "run_missing",
       deliveryId: "dlv_missing",
       iteration: 0,
-      requiredChecks: [{
-        id: "lint#1",
-        name: "lint",
-        family: "lint",
-        command: "bun run lint",
-        cwd: "/tmp/project",
-        commandDigest: "digest-a",
-      }],
+      requiredChecks: [
+        {
+          id: "lint#1",
+          name: "lint",
+          family: "lint",
+          command: "bun run lint",
+          cwd: "/tmp/project",
+          commandDigest: "digest-a",
+        },
+      ],
       checkResults: [],
       goalCoverage: [],
       requirementCoverage: [],
@@ -364,82 +379,81 @@ console.log("lint scope ok", cwd())
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => {
-        recordPassingIntegrity("tsk_coverage", "spec_coverage")
-        return buildDeliveryEvidenceManifest({
+      fn: () =>
+        buildDeliveryEvidenceManifest({
           taskID: "tsk_coverage",
           runID: "run_coverage",
           deliveryID: "dlv_coverage",
           specSnapshotID: "spec_coverage",
           changedFiles: ["src/app.ts"],
-          goals: [{
-            id: "gol_missing_acceptance",
-            title: "Missing acceptance specs",
-            priority: "blocking",
-            requirement_ids: ["REQ-1"],
-            acceptance_spec_count: 0,
-          }],
-        })
-      },
+          goals: [
+            {
+              id: "gol_missing_acceptance",
+              title: "Missing acceptance specs",
+              priority: "blocking",
+              requirement_ids: ["REQ-1"],
+              acceptance_spec_count: 0,
+            },
+          ],
+        }),
     })
 
-    expect(manifest.goalCoverage).toEqual([{
-      goalId: "gol_missing_acceptance",
-      title: "Missing acceptance specs",
-      priority: "blocking",
-      status: "uncovered",
-      acceptanceSpecCount: 0,
-      evidence: ["blocking goal has no structured acceptance_specs"],
-    }])
+    expect(manifest.goalCoverage).toEqual([
+      {
+        goalId: "gol_missing_acceptance",
+        title: "Missing acceptance specs",
+        priority: "blocking",
+        status: "uncovered",
+        acceptanceSpecCount: 0,
+        evidence: ["blocking goal has no structured acceptance_specs"],
+      },
+    ])
     expect(manifest.requirementCoverage[0]?.status).toBe("uncovered")
     expect(manifest.finalGate.status).toBe("failed")
-    expect(manifest.finalGate.failedCoverageIds).toEqual([
-      "goal:gol_missing_acceptance",
-      "requirement:REQ-1",
-    ])
+    expect(manifest.finalGate.failedCoverageIds).toEqual(["goal:gol_missing_acceptance", "requirement:REQ-1"])
     expect(manifest.functionalAssessment).toMatchObject({
       status: "incomplete",
-      primaryFailureIds: [
-        "goal:gol_missing_acceptance",
-        "requirement:REQ-1",
-      ],
+      primaryFailureIds: ["goal:gol_missing_acceptance", "requirement:REQ-1"],
     })
     expect(manifest.finalGate.summary).toContain("Functional completion failed")
   })
 
   test("skips auxiliary programmatic checks when functional completion already failed", async () => {
     const dir = await packageFixture({
-      lint: "bun -e \"process.exit(1)\"",
+      lint: 'bun -e "process.exit(1)"',
     })
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => {
-        recordPassingIntegrity("tsk_completion_first", "spec_completion_first")
-        return buildDeliveryEvidenceManifest({
+      fn: () =>
+        buildDeliveryEvidenceManifest({
           taskID: "tsk_completion_first",
           runID: "run_completion_first",
           deliveryID: "dlv_completion_first",
           specSnapshotID: "spec_completion_first",
           changedFiles: ["src/app.ts"],
           metadata: { checks: { lint: ["bun run lint"] } },
-          goals: [{
-            id: "gol_missing_acceptance",
-            title: "Missing acceptance specs",
-            priority: "blocking",
-            requirement_ids: [],
-            acceptance_spec_count: 0,
-          }],
-        })
-      },
+          goals: [
+            {
+              id: "gol_missing_acceptance",
+              title: "Missing acceptance specs",
+              priority: "blocking",
+              requirement_ids: [],
+              acceptance_spec_count: 0,
+            },
+          ],
+        }),
     })
 
     expect(manifest.requiredChecks.map((item) => item.id)).toEqual(["lint#1"])
-    expect(manifest.checkResults).toMatchObject([{
-      id: "lint#1",
-      status: "skipped",
-      outputExcerpt: "Skipped because delivery completion or runtime readiness evidence failed before auxiliary programmatic checks.",
-    }])
+    expect(manifest.checkResults).toMatchObject([
+      {
+        id: "lint#1",
+        status: "skipped",
+        outputExcerpt:
+          "Skipped because delivery completion or runtime readiness evidence failed before auxiliary programmatic checks.",
+      },
+    ])
     expect(manifest.finalGate.failedCoverageIds).toEqual(["goal:gol_missing_acceptance"])
     expect(manifest.finalGate.failedCheckIds).toEqual([])
     expect(manifest.functionalAssessment).toMatchObject({
@@ -463,10 +477,7 @@ console.log("lint scope ok", cwd())
 
     expect(repeatedDeliveryFailureSignatures({ current, previous })).toEqual({
       repeated: true,
-      signatures: [
-        "check:lint#1:digest-a:exit_code=<number>",
-        "coverage:goal:gol_a",
-      ],
+      signatures: ["check:lint#1:digest-a:exit_code=<number>", "coverage:goal:gol_a"],
     })
   })
 
@@ -502,15 +513,14 @@ console.log("lint scope ok", cwd())
       failedCoverageIds: ["goal:gol_a"],
     })
 
-    expect(repeatedDeliveryFailureSignatures({
-      current,
-      history: [adjacentDifferent, olderMatch],
-    })).toEqual({
+    expect(
+      repeatedDeliveryFailureSignatures({
+        current,
+        history: [adjacentDifferent, olderMatch],
+      }),
+    ).toEqual({
       repeated: true,
-      signatures: [
-        "check:lint#1:digest-a:same old failure",
-        "coverage:goal:gol_a",
-      ],
+      signatures: ["check:lint#1:digest-a:same old failure", "coverage:goal:gol_a"],
     })
   })
 
@@ -521,12 +531,13 @@ console.log("lint scope ok", cwd())
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_no_runtime",
-        runID: "run_no_runtime",
-        deliveryID: "dlv_no_runtime",
-        changedFiles: ["src/app.ts"],
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_no_runtime",
+          runID: "run_no_runtime",
+          deliveryID: "dlv_no_runtime",
+          changedFiles: ["src/app.ts"],
+        }),
     })
 
     expect(manifest.runtimeFlows).toEqual([])
@@ -560,21 +571,24 @@ await new Promise(() => {});
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_runtime_managed_preview",
-        runID: "run_runtime_managed_preview",
-        deliveryID: "dlv_runtime_managed_preview",
-        changedFiles: ["src/App.tsx"],
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_runtime_managed_preview",
+          runID: "run_runtime_managed_preview",
+          deliveryID: "dlv_runtime_managed_preview",
+          changedFiles: ["src/App.tsx"],
+        }),
     })
 
     expect(manifest.surfaceManifest?.surfaces).toContain("frontend")
     expect(manifest.surfaceManifest?.surfaces).toContain("visual_runtime")
-    expect(manifest.runtimeFlows).toMatchObject([{
-      id: "runtime:web:.",
-      name: "Web Runtime Render",
-      status: "passed",
-    }])
+    expect(manifest.runtimeFlows).toMatchObject([
+      {
+        id: "runtime:web:.",
+        name: "Web Runtime Render",
+        status: "passed",
+      },
+    ])
     expect(manifest.runtimeFlows[0]?.evidence.join("\n")).toContain("managed_preview_command=bun run dev")
     expect(manifest.runtimeFlows[0]?.previewUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//)
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual([])
@@ -583,7 +597,7 @@ await new Promise(() => {});
 
   test("attaches surface manifest and fails frontend runtime classification when no dev script exists", async () => {
     const dir = await packageFixture(
-      { build: "bun -e \"process.exit(1)\"" },
+      { build: 'bun -e "process.exit(1)"' },
       {
         dependencies: { react: "latest" },
         files: {
@@ -594,20 +608,23 @@ await new Promise(() => {});
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_surface_runtime",
-        runID: "run_surface_runtime",
-        deliveryID: "dlv_surface_runtime",
-        changedFiles: ["src/App.tsx"],
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_surface_runtime",
+          runID: "run_surface_runtime",
+          deliveryID: "dlv_surface_runtime",
+          changedFiles: ["src/App.tsx"],
+        }),
     })
 
     expect(manifest.surfaceManifest?.surfaces).toEqual(["frontend", "visual_runtime"])
-    expect(manifest.runtimeFlows).toMatchObject([{
-      id: "runtime:web:.",
-      name: "Web Runtime Render",
-      status: "failed",
-    }])
+    expect(manifest.runtimeFlows).toMatchObject([
+      {
+        id: "runtime:web:.",
+        name: "Web Runtime Render",
+        status: "failed",
+      },
+    ])
     expect(manifest.runtimeFlows[0]?.evidence[0]).toContain("no_preview_start_script")
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual(["runtime:web:."])
     expect(manifest.finalGate.status).toBe("failed")
@@ -625,12 +642,13 @@ await new Promise(() => {});
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_security_gate",
-        runID: "run_security_gate",
-        deliveryID: "dlv_security_gate",
-        changedFiles: ["src/auth/session.ts"],
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_security_gate",
+          runID: "run_security_gate",
+          deliveryID: "dlv_security_gate",
+          changedFiles: ["src/auth/session.ts"],
+        }),
     })
 
     expect(manifest.surfaceManifest?.surfaces).toContain("security_data")
@@ -649,78 +667,7 @@ await new Promise(() => {});
     expect(manifest.finalGate.status).toBe("passed")
   })
 
-  test("fails non-trivial goal graph when integrity review evidence is missing", async () => {
-    const dir = await packageFixture({
-      build: "bun -e \"console.log('build ok')\"",
-    })
-
-    const manifest = await Instance.provide({
-      directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        runID: "run_review",
-        deliveryID: "dlv_review",
-        specSnapshotID: "spec_review",
-        changedFiles: ["src/app.ts"],
-        goals: [
-          goalInput("gol_one"),
-          goalInput("gol_two"),
-          goalInput("gol_three"),
-        ],
-      }),
-    })
-
-    expect(manifest.reviewEvidence).toEqual([{
-      id: "review:integrity",
-      name: "Integrity Review",
-      status: "failed",
-      evidence: ["non-trivial goal graph requires integrity review, but task or spec snapshot identity is missing"],
-      specSnapshotId: "spec_review",
-    }])
-    expect(manifest.finalGate.failedReviewIds).toEqual(["review:integrity"])
-    expect(manifest.finalGate.status).toBe("failed")
-    expect(manifest.functionalAssessment?.primaryFailureIds).toContain("review:integrity")
-    expect(manifest.functionalAssessment?.auxiliaryFailureIds).not.toContain("review:integrity")
-  })
-
-  test("treats correction-free integrity concerns as advisory completion evidence", async () => {
-    const dir = await packageFixture({})
-
-    const manifest = await Instance.provide({
-      directory: dir,
-      fn: () => {
-        recordIntegrity("tsk_integrity_concerns", "spec_integrity_concerns", {
-          verdict: "concerns",
-          issuesCount: 4,
-          correctionsCount: 0,
-          missingCount: 0,
-        })
-        return buildDeliveryEvidenceManifest({
-          taskID: "tsk_integrity_concerns",
-          runID: "run_integrity_concerns",
-          deliveryID: "dlv_integrity_concerns",
-          specSnapshotID: "spec_integrity_concerns",
-          changedFiles: ["src/app.ts"],
-          goals: [
-            goalInput("gol_one"),
-            goalInput("gol_two"),
-            goalInput("gol_three"),
-          ],
-        })
-      },
-    })
-
-    const integrity = manifest.reviewEvidence.find((item) => item.id === "review:integrity")
-    expect(integrity).toMatchObject({
-      status: "passed",
-      verdict: "concerns",
-    })
-    expect(integrity?.evidence).toContain("concerns_without_corrections_are_advisory")
-    expect(manifest.finalGate.failedReviewIds).not.toContain("review:integrity")
-    expect(manifest.functionalAssessment?.primaryFailureIds).not.toContain("review:integrity")
-    expect(manifest.finalGate.status).toBe("passed")
-  })
-
-  test("keeps correction-bearing integrity attempts as delivery blockers", async () => {
+  test("does not consume integrity attempts as delivery review evidence", async () => {
     const dir = await packageFixture({})
 
     const manifest = await Instance.provide({
@@ -738,19 +685,15 @@ await new Promise(() => {});
           deliveryID: "dlv_integrity_corrections",
           specSnapshotID: "spec_integrity_corrections",
           changedFiles: ["src/app.ts"],
-          goals: [
-            goalInput("gol_one"),
-            goalInput("gol_two"),
-            goalInput("gol_three"),
-          ],
+          goals: [goalInput("gol_one"), goalInput("gol_two"), goalInput("gol_three")],
         })
       },
     })
 
-    expect(manifest.reviewEvidence.find((item) => item.id === "review:integrity")?.status).toBe("failed")
-    expect(manifest.finalGate.failedReviewIds).toContain("review:integrity")
-    expect(manifest.functionalAssessment?.primaryFailureIds).toContain("review:integrity")
-    expect(manifest.finalGate.status).toBe("failed")
+    expect(manifest.reviewEvidence.find((item) => item.id === "review:integrity")).toBeUndefined()
+    expect(manifest.finalGate.failedReviewIds).not.toContain("review:integrity")
+    expect(manifest.functionalAssessment?.primaryFailureIds).not.toContain("review:integrity")
+    expect(manifest.finalGate.status).toBe("passed")
   })
 
   test("fails delivery when declared changed files are absent from workspace export diff", async () => {
@@ -762,13 +705,14 @@ await new Promise(() => {});
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_workspace_export",
-        runID: "run_workspace_export",
-        deliveryID: "dlv_workspace_export",
-        changedFiles: ["src/app.ts"],
-        metadata: { git: { baseline: { commit: baseline } } },
-      }),
+      fn: () =>
+        buildDeliveryEvidenceManifest({
+          taskID: "tsk_workspace_export",
+          runID: "run_workspace_export",
+          deliveryID: "dlv_workspace_export",
+          changedFiles: ["src/app.ts"],
+          metadata: { git: { baseline: { commit: baseline } } },
+        }),
     })
 
     // workspace_export is an artifact-shape review (not architect-level);
@@ -776,34 +720,39 @@ await new Promise(() => {});
     // the LLM agent can read it, but the gate is `passed`.
     expect(manifest.finalGate.status).toBe("passed")
     expect(manifest.finalGate.failedReviewIds).toContain("review:workspace_export")
-    expect(manifest.reviewEvidence.find((item) => item.id === "review:workspace_export")?.evidence.join("\n"))
-      .toContain("missing_declared_files=src/app.ts")
+    expect(
+      manifest.reviewEvidence.find((item) => item.id === "review:workspace_export")?.evidence.join("\n"),
+    ).toContain("missing_declared_files=src/app.ts")
   })
 
   test("requires observable browser interaction for structured runtime scenarios", () => {
     expect(runtimeInteractionViolations(undefined).map((item) => item.kind)).toEqual([
       "interaction_required_but_missing",
     ])
-    expect(runtimeInteractionViolations({
-      visibleControlCount: 2,
-      textInputCount: 1,
-      fileInputCount: 0,
-      attemptedInteractionCount: 2,
-      textChanged: false,
-      htmlChanged: false,
-      errorCount: 0,
-      errors: [],
-    }).map((item) => item.kind)).toEqual(["interaction_probe_failed"])
-    expect(runtimeInteractionViolations({
-      visibleControlCount: 2,
-      textInputCount: 1,
-      fileInputCount: 0,
-      attemptedInteractionCount: 2,
-      textChanged: true,
-      htmlChanged: false,
-      errorCount: 0,
-      errors: [],
-    })).toEqual([])
+    expect(
+      runtimeInteractionViolations({
+        visibleControlCount: 2,
+        textInputCount: 1,
+        fileInputCount: 0,
+        attemptedInteractionCount: 2,
+        textChanged: false,
+        htmlChanged: false,
+        errorCount: 0,
+        errors: [],
+      }).map((item) => item.kind),
+    ).toEqual(["interaction_probe_failed"])
+    expect(
+      runtimeInteractionViolations({
+        visibleControlCount: 2,
+        textInputCount: 1,
+        fileInputCount: 0,
+        attemptedInteractionCount: 2,
+        textChanged: true,
+        htmlChanged: false,
+        errorCount: 0,
+        errors: [],
+      }),
+    ).toEqual([])
   })
 })
 
@@ -819,18 +768,22 @@ async function packageFixture(
   tempDirs.push(dir)
   await fs.mkdir(path.join(dir, "src"), { recursive: true })
   await fs.writeFile(path.join(dir, "src", "app.ts"), "export const ok = true\n")
-  await fs.writeFile(path.join(dir, "package.json"), JSON.stringify({
-    type: "module",
-    packageManager: "bun@1.3.13",
-    scripts,
-    dependencies: options?.dependencies ?? {},
-    devDependencies: options?.devDependencies ?? {},
-  }, null, 2))
+  await fs.writeFile(
+    path.join(dir, "package.json"),
+    JSON.stringify(
+      {
+        type: "module",
+        packageManager: "bun@1.3.13",
+        scripts,
+        dependencies: options?.dependencies ?? {},
+        devDependencies: options?.devDependencies ?? {},
+      },
+      null,
+      2,
+    ),
+  )
   await fs.writeFile(path.join(dir, "bun.lock"), "# test lockfile\n")
-  if (
-    Object.keys(options?.dependencies ?? {}).length > 0 ||
-    Object.keys(options?.devDependencies ?? {}).length > 0
-  ) {
+  if (Object.keys(options?.dependencies ?? {}).length > 0 || Object.keys(options?.devDependencies ?? {}).length > 0) {
     await fs.mkdir(path.join(dir, "node_modules"), { recursive: true })
   }
   for (const [file, text] of Object.entries(options?.files ?? {})) {
@@ -841,10 +794,7 @@ async function packageFixture(
   return dir
 }
 
-async function runtimePackageFixture(input: {
-  packageJson: Record<string, unknown>
-  files?: Record<string, string>
-}) {
+async function runtimePackageFixture(input: { packageJson: Record<string, unknown>; files?: Record<string, string> }) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "oc-runtime-readiness-"))
   tempDirs.push(dir)
   await fs.mkdir(path.join(dir, "src"), { recursive: true })
@@ -868,34 +818,38 @@ function manifestWithFailures(input: {
     runId: "run_repeat",
     deliveryId: `dlv_${input.id}`,
     iteration: 0,
-    requiredChecks: [{
-      id: "lint#1",
-      name: "lint",
-      family: "lint",
-      command: "bun run lint",
-      cwd: "/tmp/project",
-      commandDigest: "digest-a",
-    }],
-    checkResults: [{
-      id: "lint#1",
-      name: "lint",
-      family: "lint",
-      command: "bun run lint",
-      cwd: "/tmp/project",
-      commandDigest: "digest-a",
-      status: "failed",
-      exitCode: 1,
-      outputExcerpt: input.normalizedError,
-      startedAt: 1,
-      completedAt: 2,
-      failureReason: "exit_code=1",
-      failureSignature: {
-        checkId: "lint#1",
+    requiredChecks: [
+      {
+        id: "lint#1",
+        name: "lint",
+        family: "lint",
+        command: "bun run lint",
+        cwd: "/tmp/project",
         commandDigest: "digest-a",
-        normalizedError: input.normalizedError,
-        affectedFiles: [],
       },
-    }],
+    ],
+    checkResults: [
+      {
+        id: "lint#1",
+        name: "lint",
+        family: "lint",
+        command: "bun run lint",
+        cwd: "/tmp/project",
+        commandDigest: "digest-a",
+        status: "failed",
+        exitCode: 1,
+        outputExcerpt: input.normalizedError,
+        startedAt: 1,
+        completedAt: 2,
+        failureReason: "exit_code=1",
+        failureSignature: {
+          checkId: "lint#1",
+          commandDigest: "digest-a",
+          normalizedError: input.normalizedError,
+          affectedFiles: [],
+        },
+      },
+    ],
     goalCoverage: [],
     requirementCoverage: [],
     runtimeFlows: [],
@@ -916,195 +870,18 @@ function manifestWithFailures(input: {
 describe("delivery repeated failure tracking", () => {
   test("countPriorRepeatedDeliveryFailureSignals counts only matching keys", () => {
     expect(countPriorRepeatedDeliveryFailureSignals([])).toBe(0)
-    expect(countPriorRepeatedDeliveryFailureSignals([
-      { key: "delivery_repeated_failure_signature_1" },
-      { key: "delivery_other" },
-      { key: "delivery_repeated_failure_signature_2" },
-      { key: "delivery_other_budget_signal_3" },
-    ])).toBe(2)
-  })
-
-  test("delivery freshness gate rejects pre_build integrity attempts and accepts post_build attempts", async () => {
-    const dir = await packageFixture({
-      build: "bun -e \"console.log('build ok')\"",
-    })
-
-    // Pre-build integrity attempt only — gate must fail.
-    const manifestPre = await Instance.provide({
-      directory: dir,
-      fn: () => {
-        recordIntegrity("tsk_phase_pre", "spec_phase_pre", {
-          verdict: "pass",
-          issuesCount: 0,
-          correctionsCount: 0,
-          missingCount: 0,
-          phase: "pre_build",
-        })
-        return buildDeliveryEvidenceManifest({
-          taskID: "tsk_phase_pre",
-          runID: "run_phase_pre",
-          deliveryID: "dlv_phase_pre",
-          specSnapshotID: "spec_phase_pre",
-          changedFiles: ["src/app.ts"],
-          goals: [{ ...goalInput("gol_phase"), acceptance_spec_count: 1 }],
-        })
-      },
-    })
-
-    const integrityCheckPre = manifestPre.reviewEvidence.find((r) => r.id === "review:integrity")
-    expect(integrityCheckPre?.status).toBe("failed")
-    const evidencePre = (integrityCheckPre?.evidence ?? []).join("\n")
-    expect(evidencePre).toContain("post-build")
-
-    // Same task with a post-build attempt — gate accepts.
-    const manifestPost = await Instance.provide({
-      directory: dir,
-      fn: () => {
-        recordIntegrity("tsk_phase_post", "spec_phase_post", {
-          verdict: "pass",
-          issuesCount: 0,
-          correctionsCount: 0,
-          missingCount: 0,
-          phase: "post_build",
-        })
-        return buildDeliveryEvidenceManifest({
-          taskID: "tsk_phase_post",
-          runID: "run_phase_post",
-          deliveryID: "dlv_phase_post",
-          specSnapshotID: "spec_phase_post",
-          changedFiles: ["src/app.ts"],
-          goals: [{ ...goalInput("gol_phase"), acceptance_spec_count: 1 }],
-        })
-      },
-    })
-    const integrityCheckPost = manifestPost.reviewEvidence.find((r) => r.id === "review:integrity")
-    expect(integrityCheckPost?.status).toBe("passed")
-    expect((integrityCheckPost?.evidence ?? []).join("\n")).toContain("phase=post_build")
-  })
-
-  test("delivery freshness gate rejects a post_build integrity attempt that is older than a newer terminal goal_run on the same spec snapshot", async () => {
-    const dir = await packageFixture({
-      build: "bun -e \"console.log('build ok')\"",
-    })
-
-    const taskID = "tsk_phase_stale"
-    const specSnapshotID = "spec_phase_stale"
-
-    const manifest = await Instance.provide({
-      directory: dir,
-      fn: () => {
-        const baseTime = Date.now()
-        recordIntegrity(taskID, specSnapshotID, {
-          verdict: "pass",
-          issuesCount: 0,
-          correctionsCount: 0,
-          missingCount: 0,
-          phase: "post_build",
-          now: baseTime,
-        })
-        seedGoalForSnapshot({ taskID, specSnapshotID, goalID: "gol_phase", now: baseTime })
-        // Then write a terminal goal_run_attempt artifact AFTER the
-        // integrity attempt — simulating a fresh goal completion since the
-        // last review.
-        Database.use((db) =>
-          db.insert(EngineArtifactTable).values({
-            id: "art_goalrun_after_integrity",
-            task_id: taskID,
-            run_id: null,
-            goal_run_id: "run_phase_stale",
-            kind: "goal_run_attempt",
-            label: "completed",
-            payload: {
-              goal_id: "gol_phase",
-              status: "completed",
-              retry_count: 0,
-            },
-            time_created: baseTime + 1000,
-            time_updated: baseTime + 1000,
-          }).run(),
-        )
-        return buildDeliveryEvidenceManifest({
-          taskID,
-          runID: "run_phase_stale_dlv",
-          deliveryID: "dlv_phase_stale",
-          specSnapshotID,
-          changedFiles: ["src/app.ts"],
-          goals: [{ ...goalInput("gol_phase"), acceptance_spec_count: 1 }],
-        })
-      },
-    })
-
-    const integrityCheck = manifest.reviewEvidence.find((r) => r.id === "review:integrity")
-    expect(integrityCheck?.status).toBe("failed")
-    const evidenceJoined = (integrityCheck?.evidence ?? []).join("\n")
-    expect(evidenceJoined).toContain("stale post-build integrity attempt")
-  })
-
-  test("delivery freshness gate ignores newer goal_runs from a stale (superseded) spec snapshot", async () => {
-    const dir = await packageFixture({
-      build: "bun -e \"console.log('build ok')\"",
-    })
-
-    const taskID = "tsk_phase_snapshot_scope"
-    const activeSpec = "spec_active"
-    const staleSpec = "spec_stale"
-
-    const manifest = await Instance.provide({
-      directory: dir,
-      fn: () => {
-        const baseTime = Date.now()
-        // Active-snapshot integrity attempt at baseTime.
-        recordIntegrity(taskID, activeSpec, {
-          verdict: "pass",
-          issuesCount: 0,
-          correctionsCount: 0,
-          missingCount: 0,
-          phase: "post_build",
-          now: baseTime,
-        })
-        // Active-snapshot goal — its run row will be older than the attempt.
-        seedGoalForSnapshot({ taskID, specSnapshotID: activeSpec, goalID: "gol_active", now: baseTime })
-        // Stale-snapshot goal — its run row will be NEWER than the attempt,
-        // but on a snapshot the architect already replaced. Must not stale-
-        // reject the active snapshot's review.
-        seedGoalForSnapshot({ taskID, specSnapshotID: staleSpec, goalID: "gol_stale", now: baseTime })
-        Database.use((db) =>
-          db.insert(EngineArtifactTable).values({
-            id: "art_goalrun_stale_snapshot",
-            task_id: taskID,
-            run_id: null,
-            goal_run_id: "run_stale_snapshot",
-            kind: "goal_run_attempt",
-            label: "completed",
-            payload: {
-              goal_id: "gol_stale",
-              status: "completed",
-              retry_count: 0,
-            },
-            time_created: baseTime + 1000,
-            time_updated: baseTime + 1000,
-          }).run(),
-        )
-        return buildDeliveryEvidenceManifest({
-          taskID,
-          runID: "run_phase_snapshot_scope_dlv",
-          deliveryID: "dlv_phase_snapshot_scope",
-          specSnapshotID: activeSpec,
-          changedFiles: ["src/app.ts"],
-          goals: [{ ...goalInput("gol_active"), acceptance_spec_count: 1 }],
-        })
-      },
-    })
-
-    const integrityCheck = manifest.reviewEvidence.find((r) => r.id === "review:integrity")
-    expect(integrityCheck?.status).toBe("passed")
+    expect(
+      countPriorRepeatedDeliveryFailureSignals([
+        { key: "delivery_repeated_failure_signature_1" },
+        { key: "delivery_other" },
+        { key: "delivery_repeated_failure_signature_2" },
+        { key: "delivery_other_budget_signal_3" },
+      ]),
+    ).toBe(2)
   })
 
   test("delivery refusal guards remain non-terminal strategy feedback", async () => {
-    const orchestratorTools = await fs.readFile(
-      path.join(import.meta.dir, "../../src/orchestrator/tools.ts"),
-      "utf8",
-    )
+    const orchestratorTools = await fs.readFile(path.join(import.meta.dir, "../../src/orchestrator/tools.ts"), "utf8")
 
     expect(orchestratorTools).toContain("delivery_repeated_failure_signature_")
     expect(orchestratorTools).not.toContain(["delivery", "budget", "exhausted_"].join("_"))
@@ -1113,13 +890,13 @@ describe("delivery repeated failure tracking", () => {
     expect(orchestratorTools).not.toContain("Task hard-failed")
     expect(orchestratorTools).not.toContain("shouldHardFailRepeatedDelivery")
     expect(orchestratorTools).not.toContain("countPriorRepeatedDeliveryFailureEscalates")
-    expect(orchestratorTools).not.toContain("requestStopAfterCurrentStep(\"delivery_repeated_failure_signature\")")
-    expect(orchestratorTools).not.toContain("requestStopAfterCurrentStep(\"delivery_threw\")")
+    expect(orchestratorTools).not.toContain('requestStopAfterCurrentStep("delivery_repeated_failure_signature")')
+    expect(orchestratorTools).not.toContain('requestStopAfterCurrentStep("delivery_threw")')
     expect(orchestratorTools).not.toContain("forced plan restart")
     expect(orchestratorTools).not.toContain("Task was automatically restarted from plan")
     expect(orchestratorTools).not.toContain("call fail_task with a final summary")
     expect(orchestratorTools).not.toContain("fail_task if the failure is fundamental")
-    expect(orchestratorTools).not.toContain("status: \"failed\", error: hardFailReason")
+    expect(orchestratorTools).not.toContain('status: "failed", error: hardFailReason')
   })
 })
 
@@ -1131,56 +908,6 @@ function goalInput(id: string) {
     requirement_ids: [id.replace("gol", "REQ")],
     acceptance_spec_count: 1,
   }
-}
-
-function recordPassingIntegrity(taskID: string, specSnapshotID: string) {
-  recordIntegrity(taskID, specSnapshotID, {
-    verdict: "pass",
-    issuesCount: 0,
-    correctionsCount: 0,
-    missingCount: 0,
-  })
-}
-
-function seedGoalForSnapshot(input: {
-  taskID: string
-  specSnapshotID: string
-  goalID: string
-  now: number
-}) {
-  Database.use((db) => {
-    db.insert(EngineSpecSnapshotTable).values({
-      id: input.specSnapshotID,
-      task_id: input.taskID,
-      version: 1,
-      status: "ready",
-      summary: input.specSnapshotID,
-      content: input.specSnapshotID,
-      scope: "scope",
-      time_created: input.now,
-      time_updated: input.now,
-    }).onConflictDoNothing().run()
-    db.insert(EngineGoalTable).values({
-      id: input.goalID,
-      task_id: input.taskID,
-      spec_snapshot_id: input.specSnapshotID,
-      title: input.goalID,
-      slug: input.goalID,
-      objective: `objective for ${input.goalID}`,
-      acceptance_specs: [],
-      owned_paths: [],
-      depends_on: [],
-      exports: [],
-      imports: [],
-      kind: "feature",
-      requirement_ids: [],
-      priority: "blocking",
-      source: "spec",
-      order_index: 0,
-      time_created: input.now,
-      time_updated: input.now,
-    }).onConflictDoNothing().run()
-  })
 }
 
 function recordIntegrity(
@@ -1202,31 +929,37 @@ function recordIntegrity(
 ) {
   const now = input.now ?? Date.now()
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: `project_${taskID}`,
-      worktree: Instance.directory,
-      name: `Project ${taskID}`,
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).onConflictDoNothing().run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: `project_${taskID}`,
-      source: "test",
-      title: `Task ${taskID}`,
-      request: "Test delivery manifest",
-      kind: "workflow",
-      priority: "normal",
-      status: "active",
-      attachments: [],
-      system_artifacts: [],
-      design_specs: [],
-      metadata: {},
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).onConflictDoNothing().run()
+    db.insert(ProjectTable)
+      .values({
+        id: `project_${taskID}`,
+        worktree: Instance.directory,
+        name: `Project ${taskID}`,
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .onConflictDoNothing()
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: `project_${taskID}`,
+        source: "test",
+        title: `Task ${taskID}`,
+        request: "Test delivery manifest",
+        kind: "workflow",
+        priority: "normal",
+        status: "active",
+        attachments: [],
+        system_artifacts: [],
+        design_specs: [],
+        metadata: {},
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .onConflictDoNothing()
+      .run()
   })
   recordIntegrityAttempt({
     taskID,

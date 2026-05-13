@@ -21,9 +21,8 @@ import {
   GoalContractFieldsSchema,
   GoalContractUpdateSchema,
   normalizeGoalContractFields,
-  normalizeGoalContractUpdate,
 } from "@/pipeline/goal-contract.schema"
-import { resolveTrigger, type AcceptanceSpec } from "@/acceptance/types"
+import type { AcceptanceSpec } from "@/acceptance/types"
 import type { VisualSpec } from "@/design-analyst/types"
 import type { TraceabilityEntry } from "./types"
 import {
@@ -33,15 +32,13 @@ import {
   ReferenceCoverageEntrySchema,
 } from "./fidelity"
 import {
-  ContractIRSchema,
-  FieldSpecSchema,
-  TypeSpecSchema,
-  auditEligibleSymbols,
-  contractCategory,
-  renderContractIR,
-  type ContractIR,
-} from "./contract-ir"
-import { linkContracts, parseContractSymbols } from "./linker"
+  ArchitectContractRefSchema,
+  GoalDependencyContractSchema,
+  emptyArchitectContractGraph,
+  validateArchitectContractGraph,
+  type ArchitectContractGraph,
+  type ArchitectValidationFinding,
+} from "./contract-graph"
 
 // ---------------------------------------------------------------------------
 // Collector — single buffer for the full Architect output
@@ -54,16 +51,9 @@ export interface RegisteredGoal {
   acceptance_specs: AcceptanceSpec[]
   owned_paths: string[]
   depends_on: string[]
-  exports: string[]
-  imports: string[]
   priority: "blocking" | "advisory"
   kind: "bootstrap" | "feature" | "verification" | "integration" | "system"
   requirement_ids: string[]
-}
-
-export interface RegisteredContract {
-  ir: ContractIR
-  goalIDs: string[]
 }
 
 export interface ArchitectCollector {
@@ -72,7 +62,8 @@ export interface ArchitectCollector {
   source_coverage: Array<z.infer<typeof SourceCoverageEntrySchema>>
   reference_coverage: Array<z.infer<typeof ReferenceCoverageEntrySchema>>
   assembly_owners: Array<z.infer<typeof AssemblyOwnerEntrySchema>>
-  contracts: RegisteredContract[]
+  contract_graph: ArchitectContractGraph
+  validation_findings: ArchitectValidationFinding[]
   /** Goal IDs the agent has explicitly removed during a re-run session. */
   removed_goal_ids: string[]
   summary: string
@@ -87,13 +78,138 @@ type ArchitectValidationInput = {
 }
 
 function toRegisteredGoal(input: unknown): RegisteredGoal {
-  const parsed = normalizeGoalContractFields(
-    input as Parameters<typeof normalizeGoalContractFields>[0],
-  )
+  const parsed = normalizeGoalContractFields(input as Parameters<typeof normalizeGoalContractFields>[0])
   return {
     ...parsed,
     kind: parsed.kind,
   }
+}
+
+const ACCEPTANCE_SCORER_TYPES = ["heuristic", "llm_judge", "prebuilt", "contract_audit"] as const
+
+const acceptanceScorerGuidance = [
+  'Legal scorer type values are "heuristic", "llm_judge", "prebuilt", and "contract_audit".',
+  'Shell checks are heuristic scorers: { "type": "heuristic", "name": "...", "spec": { "kind": "shell", "cmd": "..." }, "expect": { "exit_code": 0 } }.',
+  'Script checks are also heuristic scorers with spec.kind="script_ref".',
+  'Do not use scorer type "shell" or "script_ref"; those are spec.kind values under type="heuristic".',
+  'Contract audits use { "type": "contract_audit", "spec": { "kind": "contract_graph", "contract_ids": [...] }, "expect": { "status": "passed" } }.',
+].join(" ")
+
+const ArchitectGoalRegistrationInputSchema = z
+  .object({
+    id: z.unknown().describe("Required string. Unique goal ID, e.g. goal_bootstrap, goal_api, goal_ui."),
+    title: z.unknown().describe("Required string. Short human-readable goal title."),
+    objective: z
+      .unknown()
+      .describe("Required string, at least 50 characters. Execution directive for this goal only."),
+    acceptance_specs: z
+      .unknown()
+      .describe(`Required non-empty array of typed acceptance specs. ${acceptanceScorerGuidance}`),
+    owned_paths: z
+      .unknown()
+      .describe("Required non-empty string array. Responsibility paths grounded in repository exploration."),
+    depends_on: z.unknown().describe("Optional string array of prerequisite goal IDs. Defaults to []."),
+    priority: z.unknown().describe('Optional "blocking" or "advisory". Defaults to "blocking".'),
+    kind: z
+      .unknown()
+      .describe('Optional "bootstrap", "feature", "verification", "integration", or "system". Defaults to "feature".'),
+    requirement_ids: z.unknown().describe("Optional string array of REQ-N references. Defaults to []."),
+  })
+  .passthrough()
+
+const ArchitectGoalModificationInputSchema = z
+  .object({
+    id: z.unknown().describe("Required string. Existing goal id to modify."),
+    updates: z.unknown().describe(`Required object containing only fields to overwrite. ${acceptanceScorerGuidance}`),
+  })
+  .passthrough()
+
+function parseRegisteredGoalForTool(toolName: "register_goal" | "modify_goal", input: unknown):
+  | { ok: true; goal: RegisteredGoal }
+  | { ok: false; message: string } {
+  const parsed = GoalContractFieldsSchema.safeParse(withGoalContractDefaults(input))
+  if (parsed.success) {
+    return { ok: true, goal: { ...parsed.data, kind: parsed.data.kind } }
+  }
+  return {
+    ok: false,
+    message: formatGoalContractError(toolName, parsed.error, input),
+  }
+}
+
+function parseGoalUpdatesForTool(input: unknown): { ok: true; updates: z.infer<typeof GoalContractUpdateSchema> } | {
+  ok: false
+  message: string
+} {
+  const parsed = GoalContractUpdateSchema.safeParse(input)
+  if (parsed.success) {
+    return {
+      ok: true,
+      updates: Object.fromEntries(Object.entries(parsed.data).filter(([, value]) => value !== undefined)),
+    }
+  }
+  return {
+    ok: false,
+    message: formatGoalContractError("modify_goal", parsed.error, { updates: input }),
+  }
+}
+
+function withGoalContractDefaults(input: unknown): unknown {
+  if (!isRecord(input)) return input
+  return {
+    ...input,
+    depends_on: input.depends_on === undefined ? [] : input.depends_on,
+    priority: input.priority === undefined ? "blocking" : input.priority,
+    kind: input.kind === undefined ? "feature" : input.kind,
+    requirement_ids: input.requirement_ids === undefined ? [] : input.requirement_ids,
+  }
+}
+
+function formatGoalContractError(toolName: string, error: z.ZodError, input: unknown): string {
+  const hints = acceptanceScorerHints(input)
+  const issueLines = error.issues.slice(0, 8).map((issue) => {
+    const pathLabel = issue.path.length > 0 ? issue.path.join(".") : "(root)"
+    return `- ${pathLabel}: ${issue.message}`
+  })
+  return [
+    `Error: ${toolName} output did not match the goal contract; collector unchanged.`,
+    ...issueLines,
+    ...hints.map((hint) => `- ${hint}`),
+    `Resubmit the same ${toolName} call with the corrected shape. ${acceptanceScorerGuidance}`,
+  ].join("\n")
+}
+
+function acceptanceScorerHints(input: unknown): string[] {
+  const hints: string[] = []
+  const specsSource = isRecord(input) && Array.isArray(input.acceptance_specs)
+    ? input.acceptance_specs
+    : isRecord(input) && isRecord(input.updates) && Array.isArray(input.updates.acceptance_specs)
+      ? input.updates.acceptance_specs
+      : []
+  for (const [specIndex, spec] of specsSource.entries()) {
+    if (!isRecord(spec) || !Array.isArray(spec.scorers)) continue
+    for (const [scorerIndex, scorer] of spec.scorers.entries()) {
+      if (!isRecord(scorer)) continue
+      const rawType = scorer.type
+      if (typeof rawType !== "string") continue
+      if ((ACCEPTANCE_SCORER_TYPES as readonly string[]).includes(rawType)) continue
+      const pathLabel = `acceptance_specs.${specIndex}.scorers.${scorerIndex}.type`
+      if (rawType === "shell") {
+        hints.push(`${pathLabel}: "shell" is not a scorer type. Use type="heuristic" with spec.kind="shell".`)
+      } else if (rawType === "script_ref") {
+        hints.push(
+          `${pathLabel}: "script_ref" is not a scorer type. Use type="heuristic" with spec.kind="script_ref".`,
+        )
+      } else {
+        hints.push(`${pathLabel}: "${rawType}" is not a scorer type. Legal values: ${ACCEPTANCE_SCORER_TYPES.join(", ")}.`)
+      }
+    }
+  }
+  return [...new Set(hints)]
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 function emptyCollector(): ArchitectCollector {
@@ -103,29 +219,44 @@ function emptyCollector(): ArchitectCollector {
     source_coverage: [],
     reference_coverage: [],
     assembly_owners: [],
-    contracts: [],
+    contract_graph: emptyArchitectContractGraph(),
+    validation_findings: [],
     removed_goal_ids: [],
     summary: "",
     finalized: false,
   }
 }
 
-export function architectValidationIssues(
+export function architectValidationFindings(
   collector: ArchitectCollector,
   input?: ArchitectValidationInput,
-): string[] {
-  const issues: string[] = []
+): ArchitectValidationFinding[] {
+  const findings: ArchitectValidationFinding[] = []
+  const blocker = (
+    code: string,
+    message: string,
+    scope: ArchitectValidationFinding["scope"] = {},
+    repairTools: string[] = [],
+  ) => findings.push({ code, severity: "blocker", scope, message, repair_tools: repairTools })
+  const concern = (
+    code: string,
+    message: string,
+    scope: ArchitectValidationFinding["scope"] = {},
+    repairTools: string[] = [],
+  ) => findings.push({ code, severity: "concern", scope, message, repair_tools: repairTools })
 
   if (collector.goals.length === 0) {
-    issues.push("No goals registered - Architect must produce at least one goal")
+    blocker("no_goals", "No goals registered - Architect must produce at least one goal", {}, ["register_goal"])
   }
   const knownGoalIDs = new Set(collector.goals.map((g) => g.id))
-  const contractIndex = new Map(collector.contracts.map((contract) => [contract.ir.name, contract.ir]))
   const requiredTraceability = new Map<string, Set<string>>()
   const bootstrapGoals = collector.goals.filter((g) => g.kind === "bootstrap")
   if (bootstrapGoals.length > 1) {
-    issues.push(
-      `Exactly one bootstrap goal is allowed in an active goal graph; found ${bootstrapGoals.length}`,
+      concern(
+        "multiple_bootstrap_goals",
+        `Exactly one bootstrap goal is allowed in an active goal graph; found ${bootstrapGoals.length}`,
+        { goal_ids: bootstrapGoals.map((goal) => goal.id) },
+      ["modify_goal", "remove_goal"],
     )
   } else if (bootstrapGoals.length === 1) {
     const bootstrapGoal = bootstrapGoals[0]
@@ -134,8 +265,11 @@ export function architectValidationIssues(
       .filter((g) => !g.depends_on.includes(bootstrapGoal.id))
       .map((g) => g.id)
     if (missingBootstrapDeps.length > 0) {
-      issues.push(
+      concern(
+        "bootstrap_not_listed_as_dependency",
         `Bootstrap goal ${bootstrapGoal.id}: every non-bootstrap goal must list it in depends_on; missing ${missingBootstrapDeps.join(", ")}`,
+        { goal_ids: [bootstrapGoal.id, ...missingBootstrapDeps] },
+        ["register_goal", "modify_goal"],
       )
     }
   }
@@ -144,28 +278,23 @@ export function architectValidationIssues(
     if (g.kind === "verification") {
       const featureSourcePaths = g.owned_paths.filter((ownedPath) => !isVerificationOwnedPath(ownedPath))
       if (featureSourcePaths.length > 0) {
-        issues.push(
+        concern(
+          "verification_owns_feature_paths",
           `Goal ${g.id}: verification owned_paths may only cover tests, integration, benchmark, or spec evidence paths; move feature source ownership to a feature goal: ${featureSourcePaths.join(", ")}`,
+          { goal_ids: [g.id] },
+          ["register_goal", "modify_goal"],
         )
       }
     }
     for (const spec of g.acceptance_specs) {
       if (spec.goal_id !== g.id) {
-        issues.push(`Goal ${g.id}: acceptance spec ${spec.id} has mismatched goal_id "${spec.goal_id}"`)
+        blocker(
+          "acceptance_goal_mismatch",
+          `Goal ${g.id}: acceptance spec ${spec.id} has mismatched goal_id "${spec.goal_id}"`,
+          { goal_ids: [g.id, spec.goal_id] },
+          ["register_goal", "modify_goal"],
+        )
       }
-    }
-    const auditEligibleImports = auditEligibleSymbols({
-      index: contractIndex,
-      symbols: parseContractSymbols(g.imports),
-    })
-    const hasEssentialContractAudit = g.acceptance_specs.some((spec) =>
-      spec.severity === "essential" &&
-      spec.scorers.some((scorer) => scorer.type === "contract_audit" && resolveTrigger(spec, scorer) === "on_goal")
-    )
-    if (g.kind !== "bootstrap" && auditEligibleImports.length > 0 && !hasEssentialContractAudit) {
-      issues.push(
-        `Goal ${g.id}: audit-eligible imports require at least one essential on_goal contract_audit acceptance scorer.`,
-      )
     }
     for (const requirementID of g.requirement_ids) {
       if (!requiredTraceability.has(requirementID)) {
@@ -175,20 +304,13 @@ export function architectValidationIssues(
     }
     for (const dep of g.depends_on) {
       if (!collector.goals.some((gl) => gl.id === dep)) {
-        issues.push(`Goal ${g.id}: depends_on "${dep}" not registered`)
+        blocker(
+          "unknown_dependency_goal",
+          `Goal ${g.id}: depends_on "${dep}" not registered`,
+          { goal_ids: [g.id, dep] },
+          ["register_goal", "modify_goal"],
+        )
       }
-    }
-  }
-
-  for (const contract of collector.contracts) {
-    if (contract.ir.kind === "function" && isTypeShapeContractName(contract.ir.name)) {
-      issues.push(
-        `Contract "${contract.ir.name}": props/data shape contracts must be registered as type_contract; function_contract is only for callable APIs.`,
-      )
-    }
-    const unknownGoalIDs = contract.goalIDs.filter((goalID) => !knownGoalIDs.has(goalID))
-    if (unknownGoalIDs.length > 0) {
-      issues.push(`Contract "${contract.ir.name}": references unknown goals ${unknownGoalIDs.join(", ")}`)
     }
   }
 
@@ -197,7 +319,12 @@ export function architectValidationIssues(
     const mappedGoalIDs = traceabilityByRequirement.get(row.requirementID) ?? new Set<string>()
     for (const goalID of row.goalIDs) {
       if (!knownGoalIDs.has(goalID)) {
-        issues.push(`Traceability ${row.requirementID}: references unknown goal "${goalID}"`)
+        concern(
+          "traceability_unknown_goal",
+          `Traceability ${row.requirementID}: references unknown goal "${goalID}"`,
+          { goal_ids: [goalID] },
+          ["register_traceability"],
+        )
       }
       mappedGoalIDs.add(goalID)
     }
@@ -206,39 +333,37 @@ export function architectValidationIssues(
   for (const [requirementID, goalIDs] of requiredTraceability) {
     const mappedGoalIDs = traceabilityByRequirement.get(requirementID)
     if (!mappedGoalIDs) {
-      issues.push(
+      concern(
+        "missing_traceability",
         `Missing traceability for ${requirementID}: call register_traceability with goals ${[...goalIDs].join(", ")}`,
+        { goal_ids: [...goalIDs] },
+        ["register_traceability"],
       )
       continue
     }
     const missingGoalIDs = [...goalIDs].filter((goalID) => !mappedGoalIDs.has(goalID))
     if (missingGoalIDs.length > 0) {
-      issues.push(
+      concern(
+        "traceability_missing_goal_mapping",
         `Traceability ${requirementID}: missing goal mappings ${missingGoalIDs.join(", ")}`,
+        { goal_ids: missingGoalIDs },
+        ["register_traceability"],
       )
     }
   }
 
-  if (collector.goals.length >= 2) {
-    if (collector.contracts.length === 0) {
-      issues.push(
-        "No ContractIR registered - cross-goal imports/exports will be undefined",
-      )
-    }
-  }
+  findings.push(
+    ...validateArchitectContractGraph({
+      goals: collector.goals.map((goal) => ({
+        id: goal.id,
+        depends_on: goal.depends_on,
+        acceptance_specs: goal.acceptance_specs,
+      })),
+      graph: collector.contract_graph,
+    }),
+  )
 
-  const linked = linkContracts({
-    goals: collector.goals,
-    contracts: collector.contracts,
-    sourceCoverage: collector.source_coverage,
-    workDir: input?.workDir ?? Instance.directory,
-  })
-  for (const issue of linked.issues) {
-    const scope = issue.goalID ? `Goal ${issue.goalID}: ` : ""
-    issues.push(`Linker ${issue.kind}: ${scope}${issue.detail}`)
-  }
-
-  issues.push(
+  findings.push(
     ...architectFidelityIssues({
       goals: collector.goals.map((goal) => ({ id: goal.id, owned_paths: goal.owned_paths })),
       fidelity: {
@@ -249,28 +374,45 @@ export function architectValidationIssues(
       designSpecs: input?.designSpecs,
       workDir: input?.workDir,
       requireReferenceCoverage: input?.requireReferenceCoverage,
-    }),
+    }).map((message) => ({
+      code: "fidelity_validation",
+      severity: "concern" as const,
+      scope: {},
+      message,
+      repair_tools: ["register_source_coverage", "register_reference_coverage", "register_assembly_owner"],
+    })),
   )
 
   if (input?.requireReferenceCoverage) {
-    const visualAcceptanceOwners = collector.goals.filter((goal) =>
-      goal.priority === "blocking" &&
-      (goal.kind === "verification" || goal.kind === "integration") &&
-      goal.acceptance_specs.some(isEssentialDeliveryJudgeSpec),
+    const visualAcceptanceOwners = collector.goals.filter(
+      (goal) =>
+        goal.priority === "blocking" &&
+        (goal.kind === "verification" || goal.kind === "integration") &&
+        goal.acceptance_specs.some(isEssentialDeliveryJudgeSpec),
     )
     if (visualAcceptanceOwners.length === 0) {
-      issues.push(
+      concern(
+        "missing_final_visual_acceptance",
         [
           "Missing essential delivery visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_delivery llm_judge acceptance spec for final rendered-vs-reference fidelity.",
           `Reference coverage requirement: ${formatReferenceCoverageReason(input)}`,
           "Required shape: priority=blocking kind=verification|integration acceptance_specs includes severity=essential trigger=on_delivery scorer=llm_judge.",
           `Goal candidates: ${formatGoalCandidateList(collector.goals)}`,
         ].join(" "),
+        { goal_ids: collector.goals.map((goal) => goal.id) },
+        ["register_goal", "modify_goal"],
       )
     }
   }
 
-  return issues
+  collector.validation_findings = findings
+  return findings
+}
+
+export function architectValidationIssues(collector: ArchitectCollector, input?: ArchitectValidationInput): string[] {
+  return architectValidationFindings(collector, input)
+    .filter((finding) => finding.severity === "blocker")
+    .map((finding) => finding.message)
 }
 
 function formatReferenceCoverageReason(input?: ArchitectValidationInput): string {
@@ -286,15 +428,15 @@ function formatGoalCandidateList(goals: RegisteredGoal[]): string {
 }
 
 function formatGoalSnapshot(goal: RegisteredGoal): string {
-  const specs = goal.acceptance_specs.length > 0
-    ? goal.acceptance_specs.map(formatAcceptanceSpecSnapshot).join(", ")
-    : "(none)"
+  const specs =
+    goal.acceptance_specs.length > 0 ? goal.acceptance_specs.map(formatAcceptanceSpecSnapshot).join(", ") : "(none)"
   const deps = goal.depends_on.length > 0 ? goal.depends_on.join(",") : "(none)"
-  const finalReferenceAcceptance = goal.priority === "blocking" &&
+  const finalReferenceAcceptance =
+    goal.priority === "blocking" &&
     (goal.kind === "verification" || goal.kind === "integration") &&
     goal.acceptance_specs.some(isEssentialDeliveryJudgeSpec)
-    ? "yes"
-    : "no"
+      ? "yes"
+      : "no"
   return `${goal.id} kind=${goal.kind} priority=${goal.priority} depends_on=[${deps}] acceptance_specs=[${specs}] final_reference_acceptance=${finalReferenceAcceptance}`
 }
 
@@ -311,10 +453,6 @@ function isEssentialDeliveryJudgeSpec(spec: AcceptanceSpec): boolean {
   )
 }
 
-function isTypeShapeContractName(name: string): boolean {
-  return /^[A-Z]/.test(name) && /(Props|State|Config|Options|Payload|Data|Model|DTO)$/.test(name)
-}
-
 function isVerificationOwnedPath(ownedPath: string): boolean {
   const normalized = ownedPath.replaceAll("\\", "/").replace(/^\.\//, "")
   return (
@@ -327,10 +465,7 @@ function isVerificationOwnedPath(ownedPath: string): boolean {
   )
 }
 
-export function isArchitectReadyToFinalize(
-  collector: ArchitectCollector,
-  input?: ArchitectValidationInput,
-): boolean {
+export function isArchitectReadyToFinalize(collector: ArchitectCollector, input?: ArchitectValidationInput): boolean {
   return architectValidationIssues(collector, input).length === 0
 }
 
@@ -373,12 +508,13 @@ export function createArchitectOutputTools(input: {
   // otherwise the predicate may say "done, expose only submit_architect" while
   // the tool still sees fidelity issues that depend on workDir, trapping the
   // model in a tight retry loop (rule 8: single source).
-  const validate = () => architectValidationIssues(collector, {
-    workDir: dir,
-    designSpecs: input.designSpecs,
-    requireReferenceCoverage: input.requireReferenceCoverage,
-    referenceCoverageReasons: input.referenceCoverageReasons,
-  })
+  const validate = () =>
+    architectValidationIssues(collector, {
+      workDir: dir,
+      designSpecs: input.designSpecs,
+      requireReferenceCoverage: input.requireReferenceCoverage,
+      referenceCoverageReasons: input.referenceCoverageReasons,
+    })
 
   // Seed the collector with existing goals so modify_goal / remove_goal work
   // without the LLM having to re-register them first. register_goal still
@@ -397,9 +533,11 @@ export function createArchitectOutputTools(input: {
         "the same logical goal; use a new id only for a genuinely new goal. " +
         "Persistence preserves existing G numbers and assigns new goals the " +
         "next unused G number.",
-      inputSchema: GoalContractFieldsSchema,
+      inputSchema: ArchitectGoalRegistrationInputSchema,
       execute: async (input) => {
-        const goal = toRegisteredGoal(input)
+        const parsedGoal = parseRegisteredGoalForTool("register_goal", input)
+        if (!parsedGoal.ok) return parsedGoal.message
+        const goal = parsedGoal.goal
         const warnings: string[] = []
         for (const p of goal.owned_paths) {
           try {
@@ -407,7 +545,9 @@ export function createArchitectOutputTools(input: {
             if (!fs.existsSync(abs) && !fs.existsSync(path.dirname(abs))) {
               warnings.push(p)
             }
-          } catch { /* cross-platform path issues — skip */ }
+          } catch {
+            /* cross-platform path issues — skip */
+          }
         }
 
         const existingIdx = collector.goals.findIndex((g) => g.id === goal.id)
@@ -420,9 +560,7 @@ export function createArchitectOutputTools(input: {
           msg = `OK: goal "${goal.id}" registered (${collector.goals.length} total)`
         }
         // A newly registered/updated id cannot also be in the removal list.
-        collector.removed_goal_ids = collector.removed_goal_ids.filter(
-          (id) => id !== goal.id,
-        )
+        collector.removed_goal_ids = collector.removed_goal_ids.filter((id) => id !== goal.id)
         if (warnings.length > 0) {
           msg += `\nWarning: paths without an existing parent directory: ${warnings.join(", ")}. Verify these are intentional.`
         }
@@ -437,22 +575,24 @@ export function createArchitectOutputTools(input: {
         "ids are rejected — use register_goal if you intend a brand-new goal. " +
         "A modified goal keeps its stable G number; the next implementation " +
         "attempt increments V.",
-      inputSchema: z.object({
-        id: z.string().min(1).describe("Existing goal id to modify"),
-        updates: GoalContractUpdateSchema.describe(
-          "Subset of contract fields to overwrite (id is not modifiable).",
-        ),
-      }),
-      execute: async ({ id, updates }) => {
+      inputSchema: ArchitectGoalModificationInputSchema,
+      execute: async (input) => {
+        if (!isRecord(input) || typeof input.id !== "string" || input.id.trim().length === 0) {
+          return 'Error: modify_goal requires a non-empty string "id"; collector unchanged.'
+        }
+        const id = input.id
+        const updates = input.updates
         const idx = collector.goals.findIndex((g) => g.id === id)
         if (idx < 0) {
           return `Error: goal "${id}" not registered. Use register_goal to add new goals.`
         }
         const prior = collector.goals[idx]
-        const normalizedUpdates = normalizeGoalContractUpdate(
-          updates as Parameters<typeof normalizeGoalContractUpdate>[0],
-        )
-        const next = toRegisteredGoal({ ...prior, ...normalizedUpdates })
+        const parsedUpdates = parseGoalUpdatesForTool(updates)
+        if (!parsedUpdates.ok) return parsedUpdates.message
+        const normalizedUpdates = parsedUpdates.updates
+        const parsedNext = parseRegisteredGoalForTool("modify_goal", { ...prior, ...normalizedUpdates })
+        if (!parsedNext.ok) return parsedNext.message
+        const next = parsedNext.goal
         collector.goals[idx] = next
         return `OK: goal "${id}" fields updated (${Object.keys(normalizedUpdates).length} change(s))\nCurrent: ${formatGoalSnapshot(next)}`
       },
@@ -469,10 +609,7 @@ export function createArchitectOutputTools(input: {
         "truth for these dependents — there is no orphan recovery path.",
       inputSchema: z.object({
         id: z.string().min(1).describe("Goal id to remove"),
-        reason: z
-          .string()
-          .min(5)
-          .describe("Why this goal is being removed (recorded for audit)"),
+        reason: z.string().min(5).describe("Why this goal is being removed (recorded for audit)"),
       }),
       execute: async ({ id, reason }) => {
         const idx = collector.goals.findIndex((g) => g.id === id)
@@ -493,7 +630,7 @@ export function createArchitectOutputTools(input: {
           reference_coverage_refs: 0,
           assembly_owners: 0,
           contracts: 0,
-          contract_refs: 0,
+          dependency_contracts: 0,
         }
 
         const traceNext: TraceabilityEntry[] = []
@@ -548,21 +685,19 @@ export function createArchitectOutputTools(input: {
         collector.assembly_owners = collector.assembly_owners.filter((row) => row.goal_id !== id)
         cascade.assembly_owners = beforeAssemblyOwners - collector.assembly_owners.length
 
-        const contractNext: RegisteredContract[] = []
-        for (const c of collector.contracts) {
-          if (!c.goalIDs.includes(id)) {
-            contractNext.push(c)
-            continue
-          }
-          const filtered = c.goalIDs.filter((g) => g !== id)
-          cascade.contract_refs++
-          if (filtered.length === 0) {
-            cascade.contracts++
-            continue
-          }
-          contractNext.push({ ...c, goalIDs: filtered })
-        }
-        collector.contracts = contractNext
+        const beforeContracts = collector.contract_graph.contracts.length
+        collector.contract_graph.contracts = collector.contract_graph.contracts
+          .map((contract) => ({
+            ...contract,
+            consumer_goal_ids: contract.consumer_goal_ids.filter((goalID) => goalID !== id),
+          }))
+          .filter((contract) => contract.producer_goal_id !== id)
+        cascade.contracts = beforeContracts - collector.contract_graph.contracts.length
+        const beforeEdges = collector.contract_graph.dependency_contracts.length
+        collector.contract_graph.dependency_contracts = collector.contract_graph.dependency_contracts.filter(
+          (edge) => edge.from_goal_id !== id && edge.to_goal_id !== id,
+        )
+        cascade.dependency_contracts = beforeEdges - collector.contract_graph.dependency_contracts.length
 
         const cascadeBits: string[] = []
         if (cascade.traceability_rows || cascade.traceability_refs) {
@@ -581,32 +716,23 @@ export function createArchitectOutputTools(input: {
           )
         }
         if (cascade.assembly_owners) cascadeBits.push(`${cascade.assembly_owners} assembly owner row(s)`)
-        if (cascade.contracts || cascade.contract_refs) {
-          cascadeBits.push(
-            `${cascade.contract_refs} contract ref(s) (${cascade.contracts} contract(s) dropped)`,
-          )
-        }
+        if (cascade.contracts) cascadeBits.push(`${cascade.contracts} contract(s) dropped`)
+        if (cascade.dependency_contracts)
+          cascadeBits.push(`${cascade.dependency_contracts} dependency contract edge(s) dropped`)
         const cascadeMsg = cascadeBits.length > 0 ? ` Cascaded: ${cascadeBits.join(", ")}.` : ""
         return `OK: goal "${id}" removed. Reason: ${reason}. (${collector.goals.length} remaining)${cascadeMsg}`
       },
     }),
 
     register_traceability: tool({
-      description:
-        "Map a requirement to the goals that cover it. Call once per " +
-        "requirement you intend to trace.",
+      description: "Map a requirement to the goals that cover it. Call once per " + "requirement you intend to trace.",
       inputSchema: z.object({
         requirement_id: z.string().describe("REQ-N format"),
-        goal_ids: z
-          .array(z.string().min(1))
-          .min(1)
-          .describe("Goal IDs that implement this requirement"),
+        goal_ids: z.array(z.string().min(1)).min(1).describe("Goal IDs that implement this requirement"),
       }),
       execute: async ({ requirement_id, goal_ids }) => {
         const warnings: string[] = []
-        const missing = goal_ids.filter(
-          (g) => !collector.goals.some((gl) => gl.id === g),
-        )
+        const missing = goal_ids.filter((g) => !collector.goals.some((gl) => gl.id === g))
         if (missing.length > 0) warnings.push(`goals not registered: ${missing.join(", ")}`)
         collector.traceability.push({ requirementID: requirement_id, goalIDs: goal_ids })
         let msg = `OK: ${requirement_id} → ${goal_ids.join(", ")}`
@@ -633,7 +759,7 @@ export function createArchitectOutputTools(input: {
 
     register_reference_coverage: tool({
       description:
-        "Register which authoritative reference surface or visual spec ids each goal must restore. Required for reference-driven work.",
+        "Register which authoritative reference surface or visual spec ids each goal must restore when this evidence is already clear.",
       inputSchema: ReferenceCoverageEntrySchema,
       execute: async (input) => {
         const parsed = ReferenceCoverageEntrySchema.parse(input)
@@ -663,90 +789,79 @@ export function createArchitectOutputTools(input: {
       },
     }),
 
-    register_type_contract: tool({
+    register_contract: tool({
       description:
-        "Register a typed cross-goal data contract. Every field must declare a valueDomain; use ref/literal_union/enum for enum-like strings and open only for truly unbounded values with a concrete reason.",
-      inputSchema: z.object({
-        name: z.string().min(1),
-        fields: z.array(FieldSpecSchema).min(1),
-        goal_ids: z.array(z.string().min(1)).min(1),
-      }),
-      execute: async ({ name, fields, goal_ids }) =>
-        registerIRContract({ kind: "type", name, fields }, goal_ids),
+        "Register one Architect Contract Graph contract. Use type/function/enum with ir for typed contracts; use route/component/static_data/render_surface/behavior_inventory for non-IR surfaces.",
+      inputSchema: ArchitectContractRefSchema,
+      execute: async (input) => {
+        const contract = ArchitectContractRefSchema.parse(input)
+        const existingIdx = collector.contract_graph.contracts.findIndex((row) => row.id === contract.id)
+        if (existingIdx >= 0) {
+          collector.contract_graph.contracts[existingIdx] = contract
+          return `OK: contract "${contract.id}" overwritten (${collector.contract_graph.contracts.length} contracts total)`
+        }
+        collector.contract_graph.contracts.push(contract)
+        return `OK: contract "${contract.id}" registered (${collector.contract_graph.contracts.length} contracts total)`
+      },
     }),
 
-    register_function_contract: tool({
+    register_dependency_contract: tool({
       description:
-        "Register a typed cross-goal function contract. Parameters and return value must declare valueDomain.",
-      inputSchema: z.object({
-        name: z.string().min(1),
-        params: z.array(FieldSpecSchema),
-        returns: TypeSpecSchema,
-        goal_ids: z.array(z.string().min(1)).min(1),
-      }),
-      execute: async ({ name, params, returns, goal_ids }) =>
-        registerIRContract({ kind: "function", name, params, returns }, goal_ids),
-    }),
-
-    register_enum_contract: tool({
-      description:
-        "Register a closed cross-goal enum/literal contract. Consumers should reference this by name through valueDomain kind=ref.",
-      inputSchema: z.object({
-        name: z.string().min(1),
-        variants: z.array(z.object({
-          value: z.string().min(1),
-          meaning: z.string().min(1),
-        })).min(1),
-        goal_ids: z.array(z.string().min(1)).min(1),
-      }),
-      execute: async ({ name, variants, goal_ids }) =>
-        registerIRContract({ kind: "enum", name, variants }, goal_ids),
+        "Register why a depends_on edge exists. reason=contract must name contract_ids; bootstrap_scaffold/integration_order may have no contract_ids but require summary.",
+      inputSchema: GoalDependencyContractSchema,
+      execute: async (input) => {
+        const edge = GoalDependencyContractSchema.parse(input)
+        const existingIdx = collector.contract_graph.dependency_contracts.findIndex(
+          (row) => row.from_goal_id === edge.from_goal_id && row.to_goal_id === edge.to_goal_id,
+        )
+        if (existingIdx >= 0) {
+          collector.contract_graph.dependency_contracts[existingIdx] = edge
+          return `OK: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} overwritten`
+        }
+        collector.contract_graph.dependency_contracts.push(edge)
+        return `OK: dependency contract ${edge.from_goal_id} -> ${edge.to_goal_id} registered`
+      },
     }),
 
     submit_architect: tool({
       description:
-        "Validate the full Architect output (goals + traceability + fidelity coverage + contracts) and finalize. Call AFTER every register/modify tool. Returns a list of issues if any — fix them and call again.",
+        "Finalize the executable Architect goal graph. Blocks only invalid execution graph structure; reports traceability, fidelity, and contract concerns without requiring a retry.",
       inputSchema: z.object({
-        summary: z
-          .string()
-          .min(5)
-          .describe("One-line summary of what was decomposed and coordinated"),
+        summary: z.string().min(5).describe("One-line summary of what was decomposed and coordinated"),
       }),
       execute: async ({ summary }) => {
         collector.summary = summary
-        const issues = validate()
-        const categories = new Set(collector.contracts.map((c) => contractCategory(c.ir)))
+        const findings = architectValidationFindings(collector, {
+          workDir: dir,
+          designSpecs: input.designSpecs,
+          requireReferenceCoverage: input.requireReferenceCoverage,
+          referenceCoverageReasons: input.referenceCoverageReasons,
+        })
+        const blockers = findings.filter((finding) => finding.severity === "blocker")
+        const concerns = findings.filter((finding) => finding.severity === "concern")
 
-        if (issues.length === 0) {
+        if (blockers.length === 0) {
           collector.finalized = true
           return [
             "PASS: Architect output finalized.",
             `  ${collector.goals.length} goals (${collector.removed_goal_ids.length} removed),`,
             `  ${collector.traceability.length} traceability mappings,`,
             `  ${collector.source_coverage.length} source coverage rows, ${collector.reference_coverage.length} reference coverage rows, ${collector.assembly_owners.length} assembly owners,`,
-            `  ${collector.contracts.length} cross-goal contracts across ${categories.size} categories.`,
+            `  ${collector.contract_graph.contracts.length} graph contracts, ${collector.contract_graph.dependency_contracts.length} dependency reasons.`,
+            concerns.length > 0
+              ? `  Concerns: ${concerns.map((finding) => `${finding.code}: ${finding.message}`).join(" | ")}`
+              : "",
           ].join("\n")
         }
 
-        return `ISSUES (${issues.length}):\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}\n\nFix and call submit_architect again.`
+        const blockerText = blockers.map((finding, n) => `${n + 1}. [${finding.code}] ${finding.message}`).join("\n")
+        const concernText =
+          concerns.length > 0
+            ? `\n\nCONCERNS (${concerns.length}):\n${concerns.map((finding, n) => `${n + 1}. [${finding.code}] ${finding.message}`).join("\n")}`
+            : ""
+        return `BLOCKERS (${blockers.length}):\n${blockerText}${concernText}\n\nFix only these blockers and call submit_architect again. Do not loop on concerns.`
       },
     }),
-  }
-
-  function registerIRContract(irInput: ContractIR, goalIDs: string[]): string {
-    const ir = ContractIRSchema.parse(irInput)
-    const knownGoals = new Set(collector.goals.map((g) => g.id))
-    const unknown = goalIDs.filter((g) => !knownGoals.has(g))
-    if (unknown.length > 0) {
-      return `Error: goal IDs not found: ${unknown.join(", ")}. Register the goals first.`
-    }
-    const existingIdx = collector.contracts.findIndex((contract) => contract.ir.name === ir.name)
-    if (existingIdx >= 0) {
-      collector.contracts[existingIdx] = { ir, goalIDs }
-      return `OK: ${contractCategory(ir)} "${ir.name}" overwritten (${collector.contracts.length} contracts total)\n${renderContractIR(ir)}`
-    }
-    collector.contracts.push({ ir, goalIDs })
-    return `OK: ${contractCategory(ir)} "${ir.name}" registered (${collector.contracts.length} contracts total)\n${renderContractIR(ir)}`
   }
 
   return {

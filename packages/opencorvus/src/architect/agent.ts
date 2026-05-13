@@ -34,15 +34,8 @@ import { renderVisualContractPromptSection } from "@/design-analyst/prompt-secti
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
-import type {
-  ArchitectContract,
-  ArchitectResult,
-  ArchitectRetryContext,
-  ParsedRequirement,
-  RequirementsDecision,
-} from "./types"
+import type { ArchitectResult, ArchitectRetryContext, ParsedRequirement, RequirementsDecision } from "./types"
 import { createArchitectOutputTools, type RegisteredGoal } from "./output-tools"
-import { contractCategory } from "./contract-ir"
 import { AttachmentStore } from "@/storage/attachment-store"
 
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
@@ -99,8 +92,6 @@ export namespace ArchitectAgent {
       acceptance_specs: g.acceptance_specs,
       owned_paths: g.owned_paths,
       depends_on: g.depends_on,
-      exports: g.exports,
-      imports: g.imports,
       priority: g.priority,
       kind: (g.kind as RegisteredGoal["kind"]) ?? "feature",
       requirement_ids: g.requirement_ids,
@@ -133,7 +124,9 @@ export namespace ArchitectAgent {
       signal: input.signal,
       onStatus: input.onStatus ?? (() => {}),
       onSessionCreated: input.onSessionCreated
-        ? (session) => { input.onSessionCreated!(session.id) }
+        ? (session) => {
+            input.onSessionCreated!(session.id)
+          }
         : undefined,
       toolKit: {
         tools: { ...contextTools, ...outputToolKit.tools },
@@ -178,16 +171,14 @@ export namespace ArchitectAgent {
       })
       throw new Error(
         "Architect agent did not call submit_architect. " +
-        "The model must register goals, traceability, and " +
-        "contracts via tools, then call submit_architect to validate. " +
-        "Check the prompt and model behaviour.",
+          "The model must register goals, traceability, and " +
+          "contract graph via tools, then call submit_architect to validate. " +
+          "Check the prompt and model behaviour.",
       )
     }
 
     if (collector.goals.length === 0) {
-      throw new Error(
-        "Architect finalized with zero goals — a task must have at least one goal.",
-      )
+      throw new Error("Architect finalized with zero goals — a task must have at least one goal.")
     }
 
     // Architect produces the goal set as facts. Integrity (multi-dimension
@@ -200,33 +191,10 @@ export namespace ArchitectAgent {
       acceptance_specs: g.acceptance_specs,
       owned_paths: g.owned_paths,
       depends_on: g.depends_on,
-      exports: g.exports,
-      imports: g.imports,
       priority: g.priority,
       kind: g.kind,
       requirement_ids: g.requirement_ids,
     }))
-
-    // Decision Log seed — one entry per contract, tagged with goal scope.
-    const contracts: ArchitectContract[] = collector.contracts.map((c) => ({
-      category: contractCategory(c.ir),
-      title: c.ir.name,
-      ir: c.ir,
-      goalIDs: c.goalIDs,
-    }))
-    for (const contract of contracts) {
-      // Single-goal contracts tag the owning goal so the per-goal prompt
-      // section renders it; multi-goal contracts tag as task-scoped
-      // (goalID=undefined) so every goal's prompt reads it.
-      const tagAsGoalID = contract.goalIDs.length === 1 ? contract.goalIDs[0] : undefined
-      input.decisionLog.append({
-        goalID: tagAsGoalID,
-        phase: "architect",
-        key: contract.category,
-        value: JSON.stringify(contract.ir),
-        reason: `Architect consensus for goals: ${contract.goalIDs.join(", ") || "(task-wide)"}`,
-      })
-    }
 
     log.info("architect agent output", {
       goals: goals.length,
@@ -235,7 +203,8 @@ export namespace ArchitectAgent {
       sourceCoverage: collector.source_coverage.length,
       referenceCoverage: collector.reference_coverage.length,
       assemblyOwners: collector.assembly_owners.length,
-      contracts: contracts.length,
+      contracts: collector.contract_graph.contracts.length,
+      dependencyContracts: collector.contract_graph.dependency_contracts.length,
     })
 
     return {
@@ -247,7 +216,8 @@ export namespace ArchitectAgent {
         referenceCoverage: collector.reference_coverage,
         assemblyOwners: collector.assembly_owners,
       },
-      contracts,
+      contractGraph: collector.contract_graph,
+      validationFindings: collector.validation_findings,
       summary: collector.summary || "Architect decomposition",
       sessionID: out.session.id,
     }
@@ -275,13 +245,15 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
   )
 
   if (input.designSpecs && input.designSpecs.length > 0) {
-    sections.push(renderVisualContractPromptSection({
-      specs: input.designSpecs,
-      instructions: [
-        "The following visual constraints came from design_analysis and are authoritative for the referenced surface.",
-        "Use them when decomposing frontend goals, source/reference coverage, owned paths, interaction work, and integrity coverage.",
-      ],
-    }))
+    sections.push(
+      renderVisualContractPromptSection({
+        specs: input.designSpecs,
+        instructions: [
+          "The following visual constraints came from design_analysis and are authoritative for the referenced surface.",
+          "Use them when decomposing frontend goals, source/reference coverage, owned paths, interaction work, and integrity coverage.",
+        ],
+      }),
+    )
   }
 
   if (input.designAnalysis && input.designAnalysis.trim().length > 0) {
@@ -289,16 +261,12 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
   }
 
   if (input.requirements && input.requirements.length > 0) {
-    const reqText = input.requirements
-      .map((r) => `- **${r.id}** (${r.type}): ${r.description}`)
-      .join("\n")
+    const reqText = input.requirements.map((r) => `- **${r.id}** (${r.type}): ${r.description}`).join("\n")
     sections.push(`# Requirements (${input.requirements.length})\n\n${reqText}`)
   }
 
   if (input.requirementDecisions && input.requirementDecisions.length > 0) {
-    const decText = input.requirementDecisions
-      .map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
-      .join("\n")
+    const decText = input.requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`).join("\n")
     sections.push(`# Foundational Decisions\n\n${decText}`)
   }
 
@@ -322,32 +290,32 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
         ...ctx.failureAnalysis.avoidApproaches.map((a) => `- ${a}`),
         "",
         "## Previous Goals",
-        ...ctx.previousGoals.map(
-          (g) => `- **${g.id}** (${g.title}): ${g.status} — ${g.evidence}`,
-        ),
+        ...ctx.previousGoals.map((g) => `- **${g.id}** (${g.title}): ${g.status} — ${g.evidence}`),
       ].join("\n"),
     )
   }
 
   if (input.goals.length > 0) {
     const ARCHITECT_SPECS_CAP = 600
-    const goalsText = input.goals.map((g) => {
-      const specs = g.acceptance_specs ?? []
-      const specsRaw = renderSpecsAsText(specs)
-      const specsTrim = specsRaw.length > ARCHITECT_SPECS_CAP
-        ? specsRaw.slice(0, ARCHITECT_SPECS_CAP) + `… (truncated; ${specs.length} specs total, full bodies in spec snapshot)`
-        : specsRaw
-      return [
-        `## #G${(g.order_index ?? 0) + 1}V${(g.retry_count ?? 0) + 1} ${g.id}: ${g.title}`,
-        `objective: ${g.objective}`,
-        `acceptance_specs (${specs.length}):\n${specsTrim}`,
-        `owned_paths: ${g.owned_paths.join(", ") || "(none)"}`,
-        `exports: ${g.exports.join("; ") || "(none)"}`,
-        `imports: ${g.imports.join("; ") || "(none)"}`,
-        `depends_on: ${g.depends_on.join(", ") || "(none)"}`,
-        `kind: ${g.kind}`,
-      ].join("\n")
-    }).join("\n\n")
+    const goalsText = input.goals
+      .map((g) => {
+        const specs = g.acceptance_specs ?? []
+        const specsRaw = renderSpecsAsText(specs)
+        const specsTrim =
+          specsRaw.length > ARCHITECT_SPECS_CAP
+            ? specsRaw.slice(0, ARCHITECT_SPECS_CAP) +
+              `… (truncated; ${specs.length} specs total, full bodies in spec snapshot)`
+            : specsRaw
+        return [
+          `## #G${(g.order_index ?? 0) + 1}V${(g.retry_count ?? 0) + 1} ${g.id}: ${g.title}`,
+          `objective: ${g.objective}`,
+          `acceptance_specs (${specs.length}):\n${specsTrim}`,
+          `owned_paths: ${g.owned_paths.join(", ") || "(none)"}`,
+          `depends_on: ${g.depends_on.join(", ") || "(none)"}`,
+          `kind: ${g.kind}`,
+        ].join("\n")
+      })
+      .join("\n\n")
     sections.push(`# Existing Goals (${input.goals.length})\n\n${goalsText}`)
   }
 
@@ -356,9 +324,9 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
 
   sections.push(
     "Explore the codebase, then register (or refine) the final goal set — " +
-    "including optional diagnostics, traceability, and cross-goal " +
-    "contracts. Call submit_architect when done; the validator will list " +
-    "anything still missing.",
+      "including optional diagnostics, traceability, and the Architect Contract Graph. " +
+      "Call submit_architect when done; the validator will list " +
+      "anything still missing.",
   )
 
   return sections.join("\n\n")

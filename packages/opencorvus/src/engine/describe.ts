@@ -31,11 +31,7 @@ import { deriveTaskStatus } from "./task-status"
  *  The column it used to shadow (engine_goal.status) is gone; this is
  *  the function-return type for the live derivation. */
 export type EngineGoalStatus = "pending" | "running" | "passed" | "failed"
-import {
-  effectiveMaxExecutorGroups,
-  clarificationTranscriptSection,
-  operatorNotesSection,
-} from "./helpers"
+import { effectiveMaxExecutorGroups, clarificationTranscriptSection, operatorNotesSection } from "./helpers"
 import {
   findActivePlanForTask,
   findActiveRunForTask,
@@ -94,8 +90,6 @@ export interface GoalDesc {
   acceptance_summary: string
   owned_paths: string[]
   depends_on: string[]
-  exports: string[]
-  imports: string[]
   /** All historical goal_runs in chronological order (oldest → newest). */
   attempts: GoalAttemptSummary[]
   attempt_count: number
@@ -214,9 +208,7 @@ export interface CollaborationClosureDesc {
 // ---------------------------------------------------------------------------
 
 function describeAttempt(row: GoalRunRow): GoalAttemptSummary {
-  const durationMs = row.time_started && row.time_completed
-    ? row.time_completed - row.time_started
-    : undefined
+  const durationMs = row.time_started && row.time_completed ? row.time_completed - row.time_started : undefined
   return {
     goal_run_id: row.id,
     outcome: row.status,
@@ -234,9 +226,7 @@ function describeAttempt(row: GoalRunRow): GoalAttemptSummary {
 
 function tipFromChain(rows: GoalRunRow[]): GoalRunRow | undefined {
   if (rows.length === 0) return undefined
-  const supersededIDs = new Set(
-    rows.map((r) => r.supersede_of).filter((x): x is string => !!x),
-  )
+  const supersededIDs = new Set(rows.map((r) => r.supersede_of).filter((x): x is string => !!x))
   // Rows are ordered desc by time_created — the first tip is the newest.
   return rows.find((r) => !supersededIDs.has(r.id))
 }
@@ -270,8 +260,6 @@ export function describeGoal(goal: GoalRow, rewindCursor?: number | null): GoalD
     acceptance_summary: renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 300),
     owned_paths: (goal.owned_paths ?? []) as string[],
     depends_on: (goal.depends_on ?? []) as string[],
-    exports: (goal.exports ?? []) as string[],
-    imports: (goal.imports ?? []) as string[],
     attempts,
     attempt_count: attempts.length,
     latest_attempt: latest,
@@ -354,9 +342,7 @@ function describeVerdict(taskID: string): DeliveryVerdictDesc | undefined {
   const details = Array.isArray(payload.rejection_details)
     ? (payload.rejection_details as DeliveryVerdictDesc["details"])
     : []
-  const issues = details
-    .map((d) => (typeof d.error === "string" ? d.error : ""))
-    .filter((s) => s.length > 0)
+  const issues = details.map((d) => (typeof d.error === "string" ? d.error : "")).filter((s) => s.length > 0)
   return {
     iteration: lastIter?.iteration ?? 0,
     verdict: typeof payload.verdict === "string" ? payload.verdict : "unknown",
@@ -424,11 +410,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   // restart must not auto-wake active tasks: the overlay restores the task
   // view and waits for a real operator message.
   const streamErrorFloor = task.time_started ?? task.time_created
-  const streamErrorRows = listOrchestratorStreamErrorArtifacts(
-    task.id,
-    streamErrorFloor,
-    STREAM_FAILURE_PROMPT_CAP,
-  )
+  const streamErrorRows = listOrchestratorStreamErrorArtifacts(task.id, streamErrorFloor, STREAM_FAILURE_PROMPT_CAP)
   const recentStreamFailures: StreamFailureDesc[] = streamErrorRows.map((row) => {
     const payload = (row.payload ?? {}) as {
       reason?: string
@@ -460,9 +442,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
 
   // Bootstrap-first signal. Single source — derived from goal status and
   // surfaced as collaboration context. This is not a dispatch gate.
-  const activeBootstrap = goalRows.find(
-    (g) => g.kind === "bootstrap" && goalStatusByID(g.id) !== "passed",
-  )
+  const activeBootstrap = goalRows.find((g) => g.kind === "bootstrap" && goalStatusByID(g.id) !== "passed")
   const collaborationClosure = buildCollaborationClosure(goals)
 
   return {
@@ -515,8 +495,6 @@ function renderGoal(g: GoalDesc): string[] {
   lines.push(`Objective: ${g.objective}`)
   if (g.owned_paths.length > 0) lines.push(`Responsibility paths: ${g.owned_paths.join(", ")}`)
   if (g.depends_on.length > 0) lines.push(`Depends on: ${g.depends_on.join(", ")}`)
-  if (g.exports.length > 0) lines.push(`Exports: ${g.exports.join(", ")}`)
-  if (g.imports.length > 0) lines.push(`Imports: ${g.imports.join(", ")}`)
   if (g.acceptance_summary) lines.push(`Acceptance (first 300): ${g.acceptance_summary}`)
   lines.push(`State: ${describeDerivedState(g)}`)
 
@@ -570,7 +548,9 @@ export function renderCollaborationClosure(desc: CollaborationClosureDesc | unde
   }
 
   if (desc.passed_goal_ids.length > 0) {
-    lines.push(`Passed goals: ${desc.passed_goal_ids.map((id) => `${id} (${titleByID.get(id) ?? "untitled"})`).join(", ")}`)
+    lines.push(
+      `Passed goals: ${desc.passed_goal_ids.map((id) => `${id} (${titleByID.get(id) ?? "untitled"})`).join(", ")}`,
+    )
   }
 
   if (desc.failed_goal_ids.length > 0) {
@@ -616,7 +596,9 @@ export function renderTaskDescription(desc: TaskDesc): string {
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
   if (desc.active_run_id) {
     const orphanTag = desc.run_orphan ? " ORPHAN" : ""
-    lines.push(`Active run: ${desc.active_run_id}${desc.active_run_status ? ` (${desc.active_run_status})` : ""}${orphanTag}`)
+    lines.push(
+      `Active run: ${desc.active_run_id}${desc.active_run_status ? ` (${desc.active_run_status})` : ""}${orphanTag}`,
+    )
     if (desc.run_orphan) {
       lines.push(
         `Note: this run has no live executor — the owner process was restarted. ` +
@@ -662,14 +644,14 @@ export function renderTaskDescription(desc: TaskDesc): string {
       lines.push("")
       lines.push(
         `**Bootstrap-first dispatch order**: goal \`${desc.active_bootstrap_goal_id}\` ` +
-        `(\`kind=bootstrap\`) is not yet \`passed\`. Bootstrap goals own ` +
-        `scaffold-level files (\`package.json\`, \`vite.config.ts\`/\`bunfig.toml\`, ` +
-        `\`tsconfig.json\`, \`src/main.*\`, \`src/App.*\`); every other goal ` +
-        `would inevitably touch those files on its worktree, producing ` +
-        `coordination risk at merge and delivery time. Plan deliberately: ` +
-        `dispatch the bootstrap goal first when the scaffold is not yet real, ` +
-        `or dispatch another goal only when its prompt and files_changed[] ` +
-        `can explain how it cooperates with the shared scaffold milestone.`,
+          `(\`kind=bootstrap\`) is not yet \`passed\`. Bootstrap goals own ` +
+          `scaffold-level files (\`package.json\`, \`vite.config.ts\`/\`bunfig.toml\`, ` +
+          `\`tsconfig.json\`, \`src/main.*\`, \`src/App.*\`); every other goal ` +
+          `would inevitably touch those files on its worktree, producing ` +
+          `coordination risk at merge and delivery time. Plan deliberately: ` +
+          `dispatch the bootstrap goal first when the scaffold is not yet real, ` +
+          `or dispatch another goal only when its prompt and files_changed[] ` +
+          `can explain how it cooperates with the shared scaffold milestone.`,
       )
     }
     for (const g of desc.goals) {
