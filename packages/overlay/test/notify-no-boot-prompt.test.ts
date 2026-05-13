@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 /**
@@ -10,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
  * the underlying API is now `host.native({ kind: "notification.*" })`,
  * but the contract is identical: module load and SSE handlers MUST NOT
  * trigger a permission prompt; only `ensureDesktopNotificationPermission`
- * (called from a user gesture or explicit startup hook) is allowed to.
+ * called from the Settings toggle user gesture is allowed to.
  */
 
 import {
@@ -113,8 +115,14 @@ describe("notify: startup permission request and in-app fallback", () => {
     expect(notificationStore.items.some((item) => item.id === "task:tsk_test_001:completed")).toBe(true);
   });
 
-  test("startup permission path requests permission once and surfaces blocked state in-app", async () => {
-    const result = await ensureDesktopNotificationPermission("startup");
+  test("initApp never wires a startup permission request", () => {
+    const source = readFileSync(join(import.meta.dir, "../src/services/init.ts"), "utf8");
+    expect(source).not.toContain("ensureDesktopNotificationPermission");
+    expect(source).not.toContain("notification.requestPermission");
+  });
+
+  test("settings permission path requests permission once and surfaces blocked state in-app", async () => {
+    const result = await ensureDesktopNotificationPermission();
     expect(fixture.log.permissionRequests).toBe(1);
     expect(result).toBe("default");
     expect(notificationStore.items.some((item) => item.id === "system:notification-permission")).toBe(true);

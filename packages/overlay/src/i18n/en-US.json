@@ -106,7 +106,6 @@
   "notify.permission_blocked_body": "OpenCorvus could not enable OS notifications. Check your browser or system notification settings; in-app notifications remain active.",
   "notify.permission_request_failed_body": "OpenCorvus could not request notification permission: {{error}}. In-app notifications remain active.",
   "notify.permission_granted_title": "Desktop notifications enabled",
-  "notify.permission_granted_startup_body": "Task updates can now appear in the system notification area.",
   "notify.permission_granted_settings_body": "Task updates can now appear in the system notification area.",
   "settings.desktop_notifications_label": "Desktop notifications",
   "settings.desktop_notifications_hint": "Ring the OS shell when a task completes, fails, is cancelled, or is waiting on you.",

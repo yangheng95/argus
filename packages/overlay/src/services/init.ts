@@ -36,7 +36,6 @@ import { ensureWorkspaceDirectory } from "./workspace";
 import { ensureDefaultDirectory } from "./workspace";
 import { workspaceRestoreDirectory } from "../store/settings";
 import { selectTask } from "./task";
-import { ensureDesktopNotificationPermission } from "./notify";
 import { installHostThemeHandshakeSubscription } from "./host-theme-handshake";
 
 // ── Types ──
@@ -153,12 +152,6 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
 
  // 4. Apply locale from settings
   await setLocale(settingsStore.locale);
-
- // 4a. Request desktop notification permission on startup. The in-app
- // notification center is always available; this only enables the OS shell
- // channel and surfaces any denial/blocker through that same notification
- // center instead of hiding it in console output.
-  void ensureDesktopNotificationPermission("startup");
 
  // 5. Check connection
   const connected = await checkServerConnection();

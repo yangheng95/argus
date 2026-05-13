@@ -14,9 +14,10 @@
 //     task that just changed — the operator is already looking at it.
 //   * Skip if the host reports the notification surface as unsupported.
 //
-// Permission is requested lazily on the first event the operator opted
-// into. Denial sticks for the session and we degrade to a single console
-// warning, so we don't keep prompting on every notification.
+// Permission is requested only from the Settings toggle, which is a real
+// user gesture in every host. Task lifecycle events keep the permission
+// path read-only, so WebKit/Tauri cannot pin the app into a denied state
+// during startup or background SSE dispatch.
 
 import { settingsStore } from "../store/settings";
 import { boardStore } from "../store/board";
@@ -162,9 +163,7 @@ export async function requestNotificationPermission(): Promise<HostPermission> {
   }
 }
 
-export async function ensureDesktopNotificationPermission(
-  source: "startup" | "settings" = "settings",
-): Promise<HostPermission> {
+export async function ensureDesktopNotificationPermission(): Promise<HostPermission> {
   if (!settingsStore.desktopNotifications) return "denied";
   const state = await readHostPermission();
   if (state === "unsupported") {
@@ -190,9 +189,7 @@ export async function ensureDesktopNotificationPermission(
       notifySuccess({
         id: "system:notification-permission",
         title: t("notify.permission_granted_title"),
-        message: source === "startup"
-          ? t("notify.permission_granted_startup_body")
-          : t("notify.permission_granted_settings_body"),
+        message: t("notify.permission_granted_settings_body"),
       });
       return result;
     }
@@ -306,10 +303,9 @@ export function clearTaskNotificationState(taskID?: string): void {
 }
 
 // W2-V34: primeNotificationPermission() removed. Permission prompting now
-// goes through ensureDesktopNotificationPermission(), which is shared by
-// startup and the settings toggle and always surfaces blockers through the
-// in-app notification center. Lifecycle event handlers keep using the
-// read-only permission path so task events do not repeatedly prompt.
+// only goes through ensureDesktopNotificationPermission() from the Settings
+// toggle. Lifecycle event handlers keep using the read-only permission path
+// so startup and task events do not prompt.
 
 // Touch a store reference so eslint / tree-shake knows we depend on it
 // (the import is here for createEffect-driven future enhancements).
