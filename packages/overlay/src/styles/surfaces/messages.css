@@ -665,10 +665,15 @@
 }
 
 .reasoning-label {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
   margin: 0;
   align-self: flex-start;
   min-height: calc(20px * var(--ui-scale));
   padding: calc(1px * var(--ui-scale)) calc(7px * var(--ui-scale));
+  border: 0;
   border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
@@ -678,6 +683,13 @@
   line-height: 1.5;
   white-space: nowrap;
   text-transform: uppercase;
+  cursor: pointer;
+}
+
+.reasoning-label:hover,
+.reasoning-label:focus-visible {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  outline: none;
 }
 
 .reasoning-text {
@@ -795,4 +807,10 @@
   max-height: calc(128px * var(--ui-scale));
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+.msg-reasoning[data-expanded="true"] {
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: auto;
 }

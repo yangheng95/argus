@@ -15,6 +15,7 @@ function lastRuleBody(selector: string): string {
 test("dense agent message blocks keep their own scroll container", () => {
   const toolOutput = lastRuleBody(".msg-tool-output")
   const reasoningAndPatch = lastRuleBody(".msg-reasoning,\n.msg-patch")
+  const expandedReasoning = lastRuleBody('.msg-reasoning[data-expanded="true"]')
 
   expect(toolOutput).toContain("max-height: calc(128px * var(--ui-scale));")
   expect(toolOutput).toContain("overflow: auto;")
@@ -22,5 +23,7 @@ test("dense agent message blocks keep their own scroll container", () => {
   expect(reasoningAndPatch).toContain("max-height: calc(128px * var(--ui-scale));")
   expect(reasoningAndPatch).toContain("overflow: auto;")
   expect(reasoningAndPatch).toContain("overscroll-behavior: contain;")
+  expect(expandedReasoning).toContain("max-height: none;")
+  expect(expandedReasoning).toContain("overflow: visible;")
   expect(MESSAGES_CSS).not.toContain("overflow-y: visible;")
 })

@@ -10,7 +10,7 @@ export function isEmptyReasoning(s: string): boolean {
 }
 
 export function ReasoningPart(props: { part: any }) {
-  const [expanded, setExpanded] = createSignal(true);
+  const [expanded, setExpanded] = createSignal(false);
   const text = () => String(props.part?.text || "");
   const hidden = createMemo(() => {
     reasoningRevision();
@@ -21,13 +21,19 @@ export function ReasoningPart(props: { part: any }) {
 
   return (
     <Show when={text().trim() && !isEmptyReasoning(text()) && !hidden()}>
-      <div class="msg-reasoning">
-        <div class="reasoning-label" onClick={() => setExpanded(!expanded())}>
+      <div class="msg-reasoning" data-expanded={expanded() ? "true" : "false"}>
+        <button
+          type="button"
+          class="reasoning-label"
+          aria-expanded={expanded()}
+          onClick={(event) => {
+            event.stopPropagation();
+            setExpanded(!expanded());
+          }}
+        >
           {label()} <Icon name={expanded() ? "caret-down" : "chevron"} />
-        </div>
-        <Show when={expanded()}>
-          <div class="reasoning-text md-content" innerHTML={renderMarkdown(text())} />
-        </Show>
+        </button>
+        <div class="reasoning-text md-content" innerHTML={renderMarkdown(text())} />
       </div>
     </Show>
   );
