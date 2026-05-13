@@ -5,7 +5,11 @@ import { setCardExpanded } from "../store/conversation-ui"
 import { fetchTaskTrace, invalidateTraceCache } from "../services/trace"
 import { notifyWarning } from "../services/notify"
 import { buildAgentWorkflow, type AgentWorkflowRecord } from "../utils/agent-workflow"
-import { buildAgentWorkflowLanes, type AgentWorkflowLane } from "../utils/agent-workflow-lanes"
+import {
+  buildAgentWorkflowLanes,
+  compactAgentWorkflowLanesForNarrowRail,
+  type AgentWorkflowLane,
+} from "../utils/agent-workflow-lanes"
 import { orderedReachableCardIDs } from "../utils/card-tree"
 import { stageAccent } from "../utils/card-color"
 import { Avatar, avatarRole } from "./Avatar"
@@ -103,8 +107,15 @@ function locateRecord(record: AgentWorkflowRecord): void {
 }
 
 function LaneAvatarStack(props: { lane: AgentWorkflowLane; onLocate: (record: AgentWorkflowRecord) => void }) {
-  const visible = () => props.lane.records.slice(0, 3)
-  const primary = () => props.lane.records[0]
+  const primary = () =>
+    props.lane.records
+      .slice()
+      .sort((left, right) => (right.lastObservedAt || right.startedAt) - (left.lastObservedAt || left.startedAt))[0]
+  const singleRole = () => new Set(props.lane.records.map((record) => avatarRole(record.agentName))).size === 1
+  const visible = () =>
+    singleRole()
+      ? [primary()].filter((record): record is AgentWorkflowRecord => !!record)
+      : props.lane.records.slice(0, 3)
   return (
     <button
       type="button"
@@ -196,6 +207,7 @@ export function ConversationAgentRail() {
     }),
   )
   const lanes = createMemo(() => buildAgentWorkflowLanes(projection().records))
+  const renderedLanes = createMemo(() => (wide() ? lanes() : compactAgentWorkflowLanesForNarrowRail(lanes())))
   const hasLanes = createMemo(() => lanes().length > 0)
   const traceError = createMemo(() => {
     const result = trace()
@@ -243,7 +255,7 @@ export function ConversationAgentRail() {
         </div>
       </Show>
       <div class="conversation-agent-rail__lanes" role="list">
-        <For each={lanes()}>
+        <For each={renderedLanes()}>
           {(lane) => (
             <div class="conversation-agent-rail__lane" data-kind={lane.kind} role="listitem">
               <Show when={wide()} fallback={<LaneAvatarStack lane={lane} onLocate={locateRecord} />}>

@@ -1,4 +1,5 @@
 import type { AgentWorkflowRecord } from "./agent-workflow"
+import { normalizeAgentRole } from "./message"
 
 export interface AgentWorkflowLane {
   id: string
@@ -42,6 +43,16 @@ function makeLane(records: AgentWorkflowRecord[]): AgentWorkflowLane {
   }
 }
 
+function compactLane(records: AgentWorkflowRecord[], role: string): AgentWorkflowLane {
+  const sorted = records.slice().sort((left, right) => left.startedAt - right.startedAt)
+  return {
+    ...makeLane(sorted),
+    id: `narrow:${role}:${laneID(sorted)}`,
+    kind: "single",
+    parentSessionID: "",
+  }
+}
+
 export function buildAgentWorkflowLanes(records: AgentWorkflowRecord[]): AgentWorkflowLane[] {
   const byParent = new Map<string, AgentWorkflowRecord[]>()
   for (const record of records) {
@@ -67,4 +78,23 @@ export function buildAgentWorkflowLanes(records: AgentWorkflowRecord[]): AgentWo
     }
   }
   return lanes.sort((left, right) => left.startedAt - right.startedAt)
+}
+
+export function compactAgentWorkflowLanesForNarrowRail(lanes: AgentWorkflowLane[]): AgentWorkflowLane[] {
+  const compact: AgentWorkflowLane[] = []
+  const sequentialByRole = new Map<string, AgentWorkflowRecord[]>()
+  for (const lane of lanes) {
+    if (lane.kind === "parallel") {
+      compact.push(lane)
+      continue
+    }
+    const record = lane.records[0]
+    if (!record) continue
+    const role = normalizeAgentRole(record.agentName || record.stage || "")
+    sequentialByRole.set(role, [...(sequentialByRole.get(role) || []), ...lane.records])
+  }
+  for (const [role, records] of sequentialByRole.entries()) {
+    compact.push(compactLane(records, role))
+  }
+  return compact.sort((left, right) => left.startedAt - right.startedAt)
 }

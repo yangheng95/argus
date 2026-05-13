@@ -6,6 +6,8 @@ test("ConversationAgentRail reads workflow through the projection and lane helpe
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   expect(source).toContain("buildAgentWorkflow(")
   expect(source).toContain("buildAgentWorkflowLanes")
+  expect(source).toContain("compactAgentWorkflowLanesForNarrowRail")
+  expect(source).toContain("wide() ? lanes() : compactAgentWorkflowLanesForNarrowRail(lanes())")
   expect(source).not.toContain("payload.report")
   expect(source).not.toContain("event.kind")
 })
