@@ -20,23 +20,31 @@ bun run script/benchmark/overlay-web-benchmark.ts \
   "--report=.scratch/benchmark-runs/report.json"
 ```
 
-**Note**: flags require `=`, not space separation (parser specifics).
+**Note**: flags support either `--name=value` or `--name value`. Unknown flags exit with code 2.
 
 ## Key flags
 
 | flag | purpose |
 |---|---|
 | `--request-file=PATH` | task description file (PRD) |
-| `--model=MODEL` | model (auto-detect default) |
+| `--request-attachment=PATH` | attach a file instead of using `--request-file`; the two are mutually exclusive |
+| `--reference-images=PATH` | visual comparison reference image |
+| `--figma-url=URL` | Figma design URL |
+| `--model` | **not accepted**; use environment/config model selection instead |
 | `--executor=mirrorcode\|codex\|claude-code` | executor: MirrorCode / Codex / Claude Code |
 | `--title=TITLE` | task title |
 | `--report=PATH` | output JSON report |
 | `--max-runs=N` | maximum runs |
-| `--stall-timeout-ms=MS` | execution/evaluation **inactivity timeout** |
-| `--planning-stall-timeout-ms=MS` | planning **inactivity timeout** (planning agents may go quiet for long) |
-| `--tool-timeout-ms=MS` | per tool-call **inactivity timeout** |
+| `--max-fix-runs=N` | maximum repair runs |
+| `--max-executor-groups=N` | maximum parallel executor groups |
+| `--max-auto-resumes=N` | automatic resume attempts after failed/cancelled terminal status |
+| `--delivery-verify-cmd=CMD` | custom delivery verification command |
+| `--resume-task-id=TID` / `--resume-home-dir=DIR` / `--resume-message=TEXT` | resume mode |
 | `--no-keep` | delete tmp directory on finish |
 | `--skip-local-verify` | skip local re-verification |
+| `--no-browser` | **do not use** for visual benchmark runs; it bypasses overlay UI rendering |
+
+> ~~`--stall-timeout-ms`~~ / ~~`--planning-stall-timeout-ms`~~ / ~~`--tool-timeout-ms`~~ are no longer accepted. The engine stream-activity watchdog owns inactivity aborts.
 
 ## Env injection upfront
 

@@ -8,7 +8,7 @@
 //   --viewport <WxH>              puppeteer viewport (default: reference image size)
 //   --threshold <0..1>            mean SSIM floor (default 0.85)
 //   --worst-threshold <0..1>      worst-5% window SSIM floor (default 0.55)
-//   --out <dir>                   write rendered.png + diff.json here (default ./visual-diff-out)
+//   --out <dir>                   write rendered.png + diff.json here (default repo .scratch/benchmark-runs/visual-diff-out)
 //
 // Exit code: 0 = passed, 1 = failed, 2 = input/config error.
 //
@@ -58,7 +58,8 @@ async function main() {
   const reference = required("--reference")
   const threshold = Number(flag("--threshold") ?? "0.85")
   const worstThreshold = Number(flag("--worst-threshold") ?? "0.55")
-  const outDir = path.resolve(flag("--out") ?? "visual-diff-out")
+  const defaultOutDir = path.resolve(import.meta.dir, "../../../..", ".scratch", "benchmark-runs", "visual-diff-out")
+  const outDir = path.resolve(flag("--out") ?? defaultOutDir)
   const viewportFlag = flag("--viewport")
   const viewport = viewportFlag ? parseViewport(viewportFlag) : undefined
 
