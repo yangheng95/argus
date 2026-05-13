@@ -424,6 +424,11 @@
     "one": "{{count}} 个文件",
     "other": "{{count}} 个文件"
   },
+  "agent_file_changes.collapse": "收起文件列表",
+  "agent_file_changes.diff_preview": "Diff 预览",
+  "agent_file_changes.expand": "展开剩余 {{count}} 个文件",
+  "agent_file_changes.no_diff_payload": "未携带 diff 内容",
+  "agent_file_changes.path_records": "路径记录",
   "files.select_target": "选择任务查看文件变更",
   "files.status.added": "新增",
   "files.status.deleted": "已删除",

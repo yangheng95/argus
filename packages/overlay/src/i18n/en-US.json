@@ -424,6 +424,11 @@
     "one": "{{count}} file",
     "other": "{{count}} files"
   },
+  "agent_file_changes.collapse": "Collapse file list",
+  "agent_file_changes.diff_preview": "Diff preview",
+  "agent_file_changes.expand": "Show {{count}} more files",
+  "agent_file_changes.no_diff_payload": "No diff payload",
+  "agent_file_changes.path_records": "Path records",
   "files.select_target": "Select a task to view file changes",
   "files.status.added": "Added",
   "files.status.deleted": "Deleted",
