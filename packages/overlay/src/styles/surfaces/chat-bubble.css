@@ -213,11 +213,11 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: calc(7px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--good) 20%, transparent);
-  background: color-mix(in srgb, var(--good-dim) 62%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 14%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 64%, transparent);
 }
 
 .agent-file-changes__summary {
@@ -230,10 +230,26 @@
   font-size: var(--ui-font-control);
 }
 
+.agent-file-changes__summary-copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: calc(8px * var(--ui-scale));
+}
+
 .agent-file-changes__count {
   min-width: 0;
   color: var(--text-strong);
   font-weight: var(--ui-font-weight-strong);
+}
+
+.agent-file-changes__status-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
 }
 
 .agent-file-changes__stats {
@@ -248,7 +264,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: calc(7px * var(--ui-scale));
+  gap: calc(6px * var(--ui-scale));
 }
 
 .agent-file-change-diff {
@@ -344,6 +360,121 @@
   min-width: 0;
   max-height: calc(164px * var(--ui-scale));
   overflow: auto;
+}
+
+.agent-file-changes__paths {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(5px * var(--ui-scale));
+}
+
+.agent-file-changes__paths-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+}
+
+.agent-file-changes__paths-head span:first-child {
+  color: var(--text-soft);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.agent-file-changes__path-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(260px * var(--ui-scale)), 1fr));
+  gap: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+}
+
+.agent-file-change-path {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  min-height: calc(24px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  color: var(--text);
+}
+
+.agent-file-change-path:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.agent-file-change-path__mark,
+.agent-file-change-path__path,
+.agent-file-change-path__stats {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-file-change-path__mark {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.agent-file-change-path[data-status="added"] .agent-file-change-path__mark {
+  color: var(--good);
+}
+
+.agent-file-change-path[data-status="deleted"] .agent-file-change-path__mark {
+  color: var(--bad);
+}
+
+.agent-file-change-path__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+}
+
+.agent-file-change-path__status {
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+}
+
+.agent-file-change-path__stats {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+}
+
+.agent-file-change-path__stats [data-tone="add"] {
+  color: var(--good);
+}
+
+.agent-file-change-path__stats [data-tone="del"] {
+  color: var(--bad);
+}
+
+.agent-file-changes__toggle {
+  align-self: flex-start;
+  padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 18%, transparent);
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--surface) 64%, transparent);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: var(--ui-font-small);
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.agent-file-changes__toggle:hover {
+  color: var(--text-strong);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: color-mix(in srgb, var(--accent-dim) 34%, var(--surface));
 }
 
 .chat-bubble__foot {
