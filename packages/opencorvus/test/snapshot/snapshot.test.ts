@@ -260,10 +260,17 @@ test("patch with invalid hash", async () => {
       // Create a change
       await Filesystem.write(`${tmp.path}/test.txt`, "TEST")
 
-      // Try to patch with invalid hash - should handle gracefully
-      const patch = await Snapshot.patch("invalid-hash-12345")
-      expect(patch.files).toEqual([])
-      expect(patch.hash).toBe("invalid-hash-12345")
+      // Invalid snapshot baselines must fail loudly instead of producing a false empty patch.
+      try {
+        await Snapshot.patch("invalid-hash-12345")
+        throw new Error("Snapshot.patch should reject invalid hashes")
+      } catch (err) {
+        expect(Snapshot.SnapshotIntegrityError.isInstance(err)).toBe(true)
+        if (Snapshot.SnapshotIntegrityError.isInstance(err)) {
+          expect(err.data.operation).toBe("snapshot patch diff")
+          expect(err.data.stderr).toContain("bad revision")
+        }
+      }
     },
   })
 })

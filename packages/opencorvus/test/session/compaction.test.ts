@@ -9,6 +9,7 @@ import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
 import type { Provider } from "../../src/provider/provider"
+import type { Config } from "../../src/config/config"
 
 Log.init({ print: false })
 
@@ -97,6 +98,25 @@ describe("CompactionHandoff", () => {
     expect(prompt).toContain("CompactionHandoff schema")
     expect(prompt).toContain("\"durableInstructionSources\"")
     expect(prompt).toContain("plugin context")
+  })
+
+  test("request budget preflight catches oversize compaction payloads", () => {
+    const model = createModel({ context: 100, output: 10 })
+    const config = {} as Config.Info
+
+    const oversized = SessionCompaction.requestBudget({
+      messages: [{ role: "user", content: "x".repeat(1_000) }],
+      config,
+      model,
+    })
+    const normal = SessionCompaction.requestBudget({
+      messages: [{ role: "user", content: "short" }],
+      config,
+      model,
+    })
+
+    expect(oversized.exceeds).toBe(true)
+    expect(normal.exceeds).toBe(false)
   })
 })
 

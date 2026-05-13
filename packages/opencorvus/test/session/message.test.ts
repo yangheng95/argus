@@ -234,6 +234,44 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
+  test("projects patch evidence with bounded text while preserving stored file list", async () => {
+    const userID = "m-user"
+    const assistantID = "m-assistant"
+    const files = Array.from({ length: 4_000 }, (_, i) => `/repo/file-${i.toString().padStart(4, "0")}.ts`)
+
+    const patchPart: Message.PatchPart = {
+      ...basePart(assistantID, "patch-1"),
+      type: "patch",
+      hash: "snapshot-hash",
+      files,
+    }
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [
+          {
+            ...basePart(userID, "p1"),
+            type: "text",
+            text: "hello",
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [patchPart],
+      },
+    ]
+
+    const output = await Message.toModelMessages(input, model)
+    const assistant = output.at(-1)
+    expect(patchPart.files.length).toBe(4_000)
+    expect(JSON.stringify(assistant)).toContain("Patch evidence truncated: 4000 files total, 3960 omitted")
+    expect(JSON.stringify(assistant)).toContain("/repo/file-0000.ts")
+    expect(JSON.stringify(assistant)).toContain("/repo/file-3999.ts")
+    expect(JSON.stringify(assistant)).not.toContain("/repo/file-1000.ts")
+    expect(JSON.stringify(assistant).length).toBeLessThan(3_000)
+  })
+
   test("converts user text/file parts and injects compaction/subtask prompts", async () => {
     const messageID = "m-user"
 
