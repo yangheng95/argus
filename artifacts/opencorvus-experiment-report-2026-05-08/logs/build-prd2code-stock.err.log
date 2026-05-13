@@ -1,2 +1,0 @@
-$ cd web && bun run build
-$ vite build
