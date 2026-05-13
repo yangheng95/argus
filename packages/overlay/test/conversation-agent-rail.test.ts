@@ -15,6 +15,11 @@ test("ConversationAgentRail locates cards through renderedCardID and CSS.escape"
   expect(source).toContain("record.renderedCardID")
   expect(source).toContain("CSS.escape(record.renderedCardID")
   expect(source).toContain("setCardExpanded(parentID, true")
+  expect(source).toContain("renderedCardHead(target)")
+  expect(source).toContain("chat-bubble__head")
+  expect(source).toContain("card__head")
+  expect(source).toContain('scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" })')
+  expect(source).not.toContain('scrollIntoView({ block: "center"')
 })
 
 test("ConversationAgentRail uses bottom-strip height resizing instead of left-column width", () => {

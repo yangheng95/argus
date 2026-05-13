@@ -229,6 +229,7 @@ body {
   display: flex;
   align-items: center;
   gap: calc(8px * var(--ui-scale, 1));
+  scroll-margin-block-start: calc(12px * var(--ui-scale));
   padding: var(--card-pad-y) var(--card-pad-x);
   background: transparent;
   border-bottom: var(--oc-border-width) solid transparent;

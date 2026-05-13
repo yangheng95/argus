@@ -59,6 +59,12 @@ function highlightCard(target: HTMLElement): void {
   window.setTimeout(() => target.classList.remove("conversation-agent-target--pulse"), 1400)
 }
 
+function renderedCardHead(target: HTMLElement): HTMLElement | null {
+  return target.querySelector<HTMLElement>(
+    ":scope > .chat-bubble-shell > .chat-bubble > .chat-bubble__head, :scope > .card__head",
+  )
+}
+
 function locateRecord(record: AgentWorkflowRecord): void {
   if (!record.renderedCardID) {
     notifyWarning({
@@ -72,17 +78,27 @@ function locateRecord(record: AgentWorkflowRecord): void {
     setCardExpanded(parentID, true, parent?.status)
   }
   window.requestAnimationFrame(() => {
-    const selector = `[data-card-id="${CSS.escape(record.renderedCardID!)}"]`
-    const target = document.querySelector<HTMLElement>(selector)
-    if (!target) {
-      notifyWarning({
-        title: "Agent card unavailable",
-        message: `Rendered card ${record.renderedCardID} is not mounted in the conversation.`,
-      })
-      return
-    }
-    target.scrollIntoView({ block: "center", behavior: "smooth" })
-    highlightCard(target)
+    window.requestAnimationFrame(() => {
+      const selector = `[data-card-id="${CSS.escape(record.renderedCardID!)}"]`
+      const target = document.querySelector<HTMLElement>(selector)
+      if (!target) {
+        notifyWarning({
+          title: "Agent card unavailable",
+          message: `Rendered card ${record.renderedCardID} is not mounted in the conversation.`,
+        })
+        return
+      }
+      const head = renderedCardHead(target)
+      if (!head) {
+        notifyWarning({
+          title: "Agent card unavailable",
+          message: `Rendered card ${record.renderedCardID} has no mounted header target.`,
+        })
+        return
+      }
+      head.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" })
+      highlightCard(target)
+    })
   })
 }
 
