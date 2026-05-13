@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Visual+functional audit for the web-calculator deliverable.
 // Walks the 16 spec requirements, builds the project, drives it with puppeteer,
-// and writes screenshots + a JSON verdict to <project>/audit-report/.
+// and writes screenshots + a JSON verdict to <project>/.scratch/audit-report/.
 
 import { spawn, type ChildProcess } from "node:child_process"
 import fs from "node:fs/promises"
@@ -14,7 +14,7 @@ if (!PROJECT_DIR) {
   process.exit(2)
 }
 const ROOT = path.resolve(PROJECT_DIR)
-const REPORT_DIR = path.join(ROOT, "audit-report")
+const REPORT_DIR = path.join(ROOT, ".scratch", "audit-report")
 await fs.mkdir(REPORT_DIR, { recursive: true })
 
 function chromePath(): string {
@@ -43,7 +43,7 @@ const indexHtml = await readSafe(path.join(ROOT, "index.html"))
 async function listSrc(dir: string, out: string[] = []): Promise<string[]> {
   const ents = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
   for (const e of ents) {
-    if (e.name === "node_modules" || e.name === ".git" || e.name === "dist" || e.name === "audit-report") continue
+    if (e.name === "node_modules" || e.name === ".git" || e.name === "dist" || e.name === ".scratch") continue
     const p = path.join(dir, e.name)
     if (e.isDirectory()) await listSrc(p, out)
     else if (/\.(ts|tsx|js|jsx|html|css|md|json)$/i.test(e.name)) out.push(p)

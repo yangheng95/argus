@@ -133,7 +133,7 @@ bun install && bun run build && bun run start
     bun run script/benchmark/overlay-web-benchmark.ts \
       --executor=mirrorcode \
       "--request-file=benchmarks/smoke.txt" \
-      "--report=report.json"
+      "--report=.scratch/benchmark-runs/report.json"
 ```
 
 ## Baseline 参考

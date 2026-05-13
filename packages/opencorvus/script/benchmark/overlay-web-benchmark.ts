@@ -524,7 +524,9 @@ const marks = {
   completedAt: 0,
 }
 let taskID = ""
-const reportFile = report ? path.resolve(report) : path.join(process.cwd(), `overlay-web-benchmark-report-${Date.now()}.json`)
+const defaultReportDir = path.resolve(import.meta.dir, "../../../..", ".scratch", "benchmark-runs")
+const reportFile = report ? path.resolve(report) : path.join(defaultReportDir, `overlay-web-benchmark-report-${Date.now()}.json`)
+await fs.mkdir(path.dirname(reportFile), { recursive: true })
 
 // Now that temp.dir and reportFile are known, resolve DELIVERY_VERIFY_CMD.
 {
