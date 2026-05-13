@@ -16,6 +16,10 @@ import { Config } from "@/config/config"
 import { MemoryFlush } from "@/memory/flush"
 import { resolveModelRef } from "@/agent/model"
 import { ContextBudget } from "./context-budget"
+import { CompactionHandoff } from "./compaction-handoff"
+import { InstructionPrompt } from "./instruction"
+import { TaskPlan } from "@/memory/task-plan"
+import { Scratchpad } from "@/memory/scratchpad"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -30,43 +34,12 @@ export namespace SessionCompaction {
   }
 
   const COMPACTION_TOOL_OUTPUT_MAX_CHARS = 2_000
-  const SUMMARY_TEMPLATE = `Output exactly the Markdown structure shown inside <template> and keep the section order unchanged. Do not include the <template> tags in your response.
-<template>
-## Goal
-- [single-sentence task summary]
-
-## Constraints & Preferences
-- [user constraints, preferences, specs, or "(none)"]
-
-## Progress
-### Done
-- [completed work or "(none)"]
-
-### In Progress
-- [current work or "(none)"]
-
-### Blocked
-- [blockers or "(none)"]
-
-## Key Decisions
-- [decision and why, or "(none)"]
-
-## Next Steps
-- [ordered next actions or "(none)"]
-
-## Critical Context
-- [important technical facts, errors, open questions, or "(none)"]
-
-## Relevant Files
-- [file or directory path: why it matters, or "(none)"]
-</template>
-
-Rules:
-- Keep every section, even when empty.
-- Use terse bullets, not prose paragraphs.
-- Preserve exact file paths, commands, error strings, and identifiers when known.
-- Do not mention the summary process or that context was compacted.`
-
+  const COMPACTION_PROJECTION = {
+    stripMedia: true,
+    toolOutputMaxChars: COMPACTION_TOOL_OUTPUT_MAX_CHARS,
+    preserveAssistantErrors: true,
+    omitAssistantReasoning: true,
+  } satisfies Message.ToModelMessagesOptions
   type Turn = {
     start: number
     end: number
@@ -115,14 +88,70 @@ Rules:
 
     return messages.flatMap((msg, assistantIndex): CompletedCompaction[] => {
       if (msg.info.role !== "assistant") return []
-      if (!msg.info.summary || !msg.info.finish || msg.info.error) return []
+      if (!CompactionHandoff.isValidSummaryMessage(msg.info)) return []
       const userIndex = users.get(msg.info.parentID)
       if (userIndex === undefined) return []
       return [{ userIndex, assistantIndex, summary: summaryText(msg) }]
     })
   }
 
-  function buildPrompt(input: { previousSummary?: string; context: string[] }) {
+  function sourceUserMessage(userMessage: Message.User): CompactionHandoff.Info["currentState"]["sourceUserMessage"] {
+    return {
+      id: userMessage.id,
+      agent: userMessage.agent,
+      model: userMessage.model,
+      formatType: userMessage.format?.type ?? "text",
+      systemMode: userMessage.systemMode ?? null,
+      toolNames: Object.entries(userMessage.tools ?? {})
+        .filter(([, enabled]) => enabled)
+        .map(([name]) => name)
+        .sort(),
+      variant: userMessage.variant ?? null,
+      extraKeys: Object.keys(userMessage.extra ?? {}).sort(),
+    }
+  }
+
+  function patchEvidence(messages: Message.WithParts[]) {
+    const lines: string[] = []
+    for (const msg of messages) {
+      for (const part of msg.parts) {
+        if (part.type !== "patch") continue
+        lines.push(`- ${part.hash}: ${part.files.join(", ") || "(no files)"}`)
+      }
+    }
+    return lines.length ? ["<patch-evidence>", ...lines, "</patch-evidence>"].join("\n") : undefined
+  }
+
+  async function runtimeContext(input: {
+    sessionID: string
+    userMessage: Message.User
+    selectedHead: Message.WithParts[]
+    focus?: string
+  }) {
+    const instructionPaths = Array.from(await InstructionPrompt.systemPaths())
+    const taskPlan = TaskPlan.toMarkdown(input.sessionID)
+    const scratchpad = Scratchpad.get(input.sessionID)
+    const patches = patchEvidence(input.selectedHead)
+    return [
+      "<handoff-runtime-state>",
+      "Authoritative instruction files. Do not copy their full contents into the handoff; list these paths in durableInstructionSources.",
+      ...instructionPaths.map((p) => `- ${p}`),
+      "",
+      "Source user message contract:",
+      JSON.stringify(sourceUserMessage(input.userMessage), null, 2),
+      input.focus ? ["", "Manual compaction focus:", input.focus].join("\n") : "",
+      taskPlan ? ["", "Current task plan:", taskPlan].join("\n") : "",
+      scratchpad.trim()
+        ? ["", `Scratchpad is present with ${scratchpad.length} characters. Record scratchpad-present evidence; do not copy the scratchpad content.`].join("\n")
+        : "",
+      patches ? ["", patches].join("\n") : "",
+      "</handoff-runtime-state>",
+    ]
+      .filter((item) => item.trim().length > 0)
+      .join("\n")
+  }
+
+  export function buildPrompt(input: { previousSummary?: string; context: string[]; runtime: string }) {
     const anchor = input.previousSummary
       ? [
           "Update the anchored summary below using the conversation history above.",
@@ -132,7 +161,14 @@ Rules:
           "</previous-summary>",
         ].join("\n")
       : "Create a new anchored summary from the conversation history above."
-    return [anchor, SUMMARY_TEMPLATE, ...input.context].join("\n\n")
+    return [
+      anchor,
+      CompactionHandoff.MODEL_OUTPUT_INSTRUCTIONS,
+      "CompactionHandoff schema:",
+      CompactionHandoff.JSON_SCHEMA_DESCRIPTION,
+      input.runtime,
+      ...input.context,
+    ].join("\n\n")
   }
 
   function turns(messages: Message.WithParts[]) {
@@ -154,10 +190,7 @@ Rules:
   }
 
   async function estimate(input: { messages: Message.WithParts[]; model: Provider.Model }) {
-    const msgs = await Message.toModelMessages(input.messages, input.model, {
-      stripMedia: true,
-      toolOutputMaxChars: COMPACTION_TOOL_OUTPUT_MAX_CHARS,
-    })
+    const msgs = await Message.toModelMessages(input.messages, input.model, COMPACTION_PROJECTION)
     return Token.estimate(JSON.stringify(msgs))
   }
 
@@ -337,14 +370,19 @@ Rules:
       model,
       abort: input.abort,
     })
-    // Allow plugins to inject context or replace compaction prompt
+    // Plugins may inject extra evidence context; OpenCorvus owns the handoff schema and prompt contract.
     const compacting = await Plugin.trigger(
       "experimental.session.compacting",
       { sessionID: input.sessionID },
-      { context: [], prompt: undefined },
+      { context: [] as string[] },
     )
-    const promptText =
-      compacting.prompt ?? buildPrompt({ previousSummary: prior.at(-1)?.summary, context: compacting.context })
+    const runtime = await runtimeContext({
+      sessionID: input.sessionID,
+      userMessage,
+      selectedHead: selected.head,
+      focus: compactionPart?.focus,
+    })
+    const promptText = buildPrompt({ previousSummary: prior.at(-1)?.summary, context: compacting.context, runtime })
     const result = await processor.process({
       user: userMessage,
       agent,
@@ -353,10 +391,7 @@ Rules:
       tools: {},
       system: [],
       messages: [
-        ...(await Message.toModelMessages(selected.head, model, {
-          stripMedia: true,
-          toolOutputMaxChars: COMPACTION_TOOL_OUTPUT_MAX_CHARS,
-        })),
+        ...(await Message.toModelMessages(selected.head, model, COMPACTION_PROJECTION)),
         {
           role: "user",
           content: [
@@ -380,6 +415,37 @@ Rules:
       return "stop"
     }
 
+    if (processor.message.error) return "stop"
+
+    const textParts = (await Message.parts(processor.message.id)).filter(
+      (part): part is Message.TextPart => part.type === "text",
+    )
+    const rawText = textParts.map((part) => part.text).join("\n\n")
+    const handoff = CompactionHandoff.safeParseModelOutput(rawText)
+    if (!handoff.success) {
+      processor.message.error = new Message.StructuredOutputPayloadError({
+        message: "Compaction handoff did not match the required structured contract.",
+        reason: handoff.error instanceof Error ? handoff.error.message : String(handoff.error),
+      }).toObject()
+      processor.message.finish = "error"
+      await Session.updateMessage(processor.message)
+      return "stop"
+    }
+
+    const rendered = CompactionHandoff.renderMarkdown(handoff.data)
+    processor.message.structured = handoff.data
+    await Session.updateMessage(processor.message)
+    if (textParts[0]) {
+      await Session.updatePart({ ...textParts[0], text: rendered })
+      for (const extra of textParts.slice(1)) {
+        await Session.removePart({
+          sessionID: extra.sessionID,
+          messageID: extra.messageID,
+          partID: extra.id,
+        })
+      }
+    }
+
     if (compactionPart && selected.tail_start_id && compactionPart.tail_start_id !== selected.tail_start_id) {
       await Session.updatePart({
         ...compactionPart,
@@ -387,11 +453,10 @@ Rules:
       })
     }
 
-    if (processor.message.error) return "stop"
     Bus.publish(Event.Compacted, { sessionID: input.sessionID })
 
     // Flush compaction summary to persistent memory (async, non-blocking)
-    MemoryFlush.flush(input.sessionID).catch((err) =>
+    MemoryFlush.flush({ sessionID: input.sessionID, messageID: processor.message.id }).catch((err) =>
       log.warn("memory flush after compaction failed", { sessionID: input.sessionID, err }),
     )
 
@@ -401,21 +466,35 @@ Rules:
   export const create = fn(
     z.object({
       sessionID: Identifier.schema("session"),
-      agent: z.string(),
-      model: z.object({
-        providerID: z.string(),
-        modelID: z.string(),
-      }),
+      source: Message.User,
+      model: z
+        .object({
+          providerID: z.string(),
+          modelID: z.string(),
+        })
+        .optional(),
       auto: z.boolean(),
       overflow: z.boolean().optional(),
+      focus: z.string().optional(),
     }),
     async (input) => {
+      if (input.source.sessionID !== input.sessionID) {
+        throw new Error(
+          `Compaction source message ${input.source.id} belongs to session ${input.source.sessionID}, not ${input.sessionID}`,
+        )
+      }
       const msg = await Session.updateMessage({
         id: Identifier.ascending("message"),
         role: "user",
-        model: input.model,
+        model: input.model ?? input.source.model,
         sessionID: input.sessionID,
-        agent: input.agent,
+        agent: input.source.agent,
+        format: input.source.format,
+        system: input.source.system,
+        systemMode: input.source.systemMode,
+        tools: input.source.tools,
+        variant: input.source.variant,
+        extra: input.source.extra,
         time: {
           created: Date.now(),
         },
@@ -427,6 +506,7 @@ Rules:
         type: "compaction",
         auto: input.auto,
         overflow: input.overflow,
+        focus: input.focus,
       })
     },
   )

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { SessionCompaction } from "../../src/session/compaction"
+import { CompactionHandoff } from "../../src/session/compaction-handoff"
 import { Token } from "../../src/util/token"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
@@ -10,6 +11,94 @@ import { Session } from "../../src/session"
 import type { Provider } from "../../src/provider/provider"
 
 Log.init({ print: false })
+
+function handoffFixture(): CompactionHandoff.Info {
+  return {
+    objective: "Harden compaction handoff so session continuation keeps requirements intact",
+    acceptanceCriteria: ["The handoff must preserve exact acceptance criteria and command evidence"],
+    durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
+    currentState: {
+      phase: "implementing structured handoff validation",
+      activeTask: "replace generic Markdown summary with host-rendered handoff",
+      sourceUserMessage: {
+        id: "m-user",
+        agent: "build",
+        model: { providerID: "test", modelID: "test-model" },
+        formatType: "text",
+        systemMode: null,
+        toolNames: ["shell"],
+        variant: null,
+        extraKeys: ["task"],
+      },
+    },
+    decisions: [
+      {
+        decision: "Store validated handoff data in assistant.structured",
+        rationale: "Boundary checks need a machine-validated source",
+        evidence: "packages/opencorvus/src/session/compaction.ts",
+      },
+    ],
+    evidence: [
+      {
+        kind: "command",
+        value: "bun test packages/opencorvus/test/session/compaction.test.ts",
+        detail: "targeted compaction contract test command",
+      },
+    ],
+    files: [
+      {
+        path: "packages/opencorvus/src/session/compaction-handoff.ts",
+        status: "created",
+        detail: "single handoff schema and renderer",
+      },
+    ],
+    testsAndCommands: [
+      {
+        command: "bun test packages/opencorvus/test/session/compaction.test.ts",
+        result: "pending local verification",
+        evidence: "test command captured before final gate",
+      },
+    ],
+    errorsAndBlockers: [],
+    nextActions: ["run the targeted compaction contract test"],
+    openRisks: ["full typecheck may expose unrelated dirty workspace issues"],
+  }
+}
+
+describe("CompactionHandoff", () => {
+  test("rejects generic placeholder actions", () => {
+    const invalid = {
+      ...handoffFixture(),
+      nextActions: ["continue implementation"],
+    }
+
+    expect(CompactionHandoff.Schema.safeParse(invalid).success).toBe(false)
+  })
+
+  test("parses model JSON and renders deterministic Markdown", () => {
+    const handoff = handoffFixture()
+    const parsed = CompactionHandoff.parseModelOutput(JSON.stringify(handoff))
+    const first = CompactionHandoff.renderMarkdown(parsed)
+    const second = CompactionHandoff.renderMarkdown(parsed)
+
+    expect(first).toBe(second)
+    expect(first).toContain("## Acceptance Criteria")
+    expect(first).toContain("bun test packages/opencorvus/test/session/compaction.test.ts")
+    expect(first).toContain("packages/opencorvus/src/session/compaction-handoff.ts")
+  })
+
+  test("host prompt always includes the structured handoff schema", () => {
+    const prompt = SessionCompaction.buildPrompt({
+      previousSummary: undefined,
+      runtime: "<handoff-runtime-state></handoff-runtime-state>",
+      context: ["plugin context"],
+    })
+
+    expect(prompt).toContain("CompactionHandoff schema")
+    expect(prompt).toContain("\"durableInstructionSources\"")
+    expect(prompt).toContain("plugin context")
+  })
+})
 
 function createModel(opts: {
   context: number
@@ -97,6 +186,18 @@ describe("session.compaction.isOverflow", () => {
       fn: async () => {
         const model = createModel({ context: 400_000, input: 272_000, output: 128_000 })
         const tokens = { input: 120_000, output: 20_000, reasoning: 0, cache: { read: 10_000, write: 0 } }
+        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
+      },
+    })
+  })
+
+  test("default auto-compaction threshold is ninety percent of usable input budget", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = createModel({ context: 100_000, output: 20_000 })
+        const tokens = { input: 64_000, output: 1_000, reasoning: 0, cache: { read: 0, write: 0 } }
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
       },
     })

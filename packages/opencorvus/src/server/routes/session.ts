@@ -6,12 +6,12 @@ import { SessionStatus } from "@/session"
 import { SessionPrompt } from "../../session/prompt"
 import { clearRewindCursorForSession } from "@/engine/rewind"
 import { SessionCompaction } from "../../session/compaction"
+import { CompactionHandoff } from "@/session/compaction-handoff"
 import { SessionSummary } from "@/session/summary"
 import { Message } from "../../session/message"
 import { Todo } from "../../session/todo"
 import { EngineService } from "@/task-api"
 import { Snapshot } from "@/snapshot"
-import { Agent } from "../../agent/agent"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { Log } from "../../util/log"
 import { errors } from "../error"
@@ -454,6 +454,7 @@ export const SessionRoutes = lazy(() =>
           providerID: z.string(),
           modelID: z.string(),
           auto: z.boolean().optional().default(false),
+          focus: z.string().optional(),
         }),
       ),
       async (c) => {
@@ -461,25 +462,30 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         await clearRewindCursorForSession(sessionID)
         const msgs = await Session.messages({ sessionID })
-        let currentAgent = await Agent.defaultAgent()
+        let source: Message.User | undefined
         for (let i = msgs.length - 1; i >= 0; i--) {
-          const info = msgs[i].info
-          if (info.role === "user") {
-            currentAgent = info.agent || (await Agent.defaultAgent())
+          const msg = msgs[i]
+          const info = msg.info
+          if (info.role === "user" && !msg.parts.some((part) => part.type === "compaction")) {
+            source = info
             break
           }
         }
+        if (!source) {
+          throw new Error(`Cannot compact session ${sessionID}: no real user message found`)
+        }
         await SessionCompaction.create({
           sessionID,
-          agent: currentAgent,
+          source,
           model: {
             providerID: body.providerID,
             modelID: body.modelID,
           },
           auto: body.auto,
+          focus: body.focus,
         })
-        await SessionPrompt.loop({ sessionID })
-        return c.json(true)
+        const result = await SessionPrompt.loop({ sessionID })
+        return c.json(result.info.role === "assistant" && CompactionHandoff.isValidSummaryMessage(result.info))
       },
     )
     // === message read / delete / patch ===

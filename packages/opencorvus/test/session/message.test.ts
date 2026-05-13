@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { APICallError } from "ai"
 import { Message } from "../../src/session/message"
+import { CompactionHandoff } from "../../src/session/compaction-handoff"
 import type { Provider } from "../../src/provider/provider"
 
 const sessionID = "session"
@@ -100,6 +101,35 @@ function basePart(messageID: string, id: string) {
     id,
     sessionID,
     messageID,
+  }
+}
+
+function handoffFixture(): CompactionHandoff.Info {
+  return {
+    objective: "Harden compaction handoff so sessions resume with requirements intact",
+    acceptanceCriteria: ["Legacy prose summaries must not compact away older turns"],
+    durableInstructionSources: [{ path: "/repo/AGENTS.md", role: "project rules" }],
+    currentState: {
+      phase: "validating compaction boundary behavior",
+      activeTask: "update filterCompacted summary boundary validation",
+      sourceUserMessage: {
+        id: "m-source",
+        agent: "build",
+        model: { providerID: "test", modelID: "test" },
+        formatType: "text",
+        systemMode: null,
+        toolNames: [],
+        variant: null,
+        extraKeys: [],
+      },
+    },
+    decisions: [],
+    evidence: [{ kind: "file", value: "packages/opencorvus/src/session/message.ts", detail: "boundary check uses structured handoff validation" }],
+    files: [{ path: "packages/opencorvus/src/session/message.ts", status: "modified", detail: "compaction boundary validation" }],
+    testsAndCommands: [],
+    errorsAndBlockers: [],
+    nextActions: ["run targeted message tests for compaction boundary validation"],
+    openRisks: [],
   }
 }
 
@@ -270,7 +300,11 @@ describe("session.message.toModelMessage", () => {
             filename: "img.png",
             data: "https://example.com/img.png",
           },
-          { type: "text", text: "What did we do so far?" },
+          {
+            type: "text",
+            text:
+              "Context compaction checkpoint. This is not a new user request; continue the same task from the validated handoff summary that follows.",
+          },
           { type: "text", text: "The following tool was executed by the user" },
         ],
       },
@@ -742,6 +776,26 @@ describe("session.message.toModelMessage", () => {
     expect(await Message.toModelMessages(input, model)).toStrictEqual([])
   })
 
+  test("preserves assistant-level errors in compaction projection", async () => {
+    const assistantID = "m-assistant"
+    const input: Message.WithParts[] = [
+      {
+        info: assistantInfo(
+          assistantID,
+          "m-parent",
+          new Message.ContextOverflowError({ message: "context too large" }).toObject(),
+        ),
+        parts: [{ ...basePart(assistantID, "a1"), type: "text", text: "partial diagnostic" }] as Message.Part[],
+      },
+    ]
+
+    const result = await Message.toModelMessages(input, model, { preserveAssistantErrors: true })
+
+    expect(JSON.stringify(result)).toContain("ContextOverflowError")
+    expect(JSON.stringify(result)).toContain("context too large")
+    expect(JSON.stringify(result)).toContain("partial diagnostic")
+  })
+
   test("includes aborted assistant messages only when they have non-step-start/reasoning content", async () => {
     const assistantID1 = "m-assistant-1"
     const assistantID2 = "m-assistant-2"
@@ -1157,6 +1211,38 @@ describe("session.message.toModelMessage", () => {
     }
     expect(reasoningTexts).toStrictEqual(["thought-1", "thought-2", "thought-3"])
   })
+
+  test("omits assistant reasoning only for compaction projection", async () => {
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo("u-compaction-reasoning"),
+        parts: [{ ...basePart("u-compaction-reasoning", "up"), type: "text", text: "continue rewrite" }] as Message.Part[],
+      },
+      {
+        info: assistantInfo("a-compaction-reasoning", "u-compaction-reasoning"),
+        parts: [
+          {
+            ...basePart("a-compaction-reasoning", "ar"),
+            type: "reasoning",
+            text: 'The user is asking me to select a tool for the current issue.',
+            time: { start: 0 },
+          },
+          {
+            ...basePart("a-compaction-reasoning", "at"),
+            type: "text",
+            text: "Read KeyStatisticsMT.cs and started the TS rewrite.",
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const out = await Message.toModelMessages(input, model, { omitAssistantReasoning: true })
+    const wire = JSON.stringify(out)
+
+    expect(wire).toContain("Read KeyStatisticsMT.cs")
+    expect(wire).not.toContain("select a tool")
+    expect(wire).not.toContain("reasoning")
+  })
 })
 
 describe("session.message.filterCompacted", () => {
@@ -1184,6 +1270,7 @@ describe("session.message.filterCompacted", () => {
           ...assistantInfo(compactionSummary, compactionUser),
           summary: true,
           finish: "stop",
+          structured: handoffFixture(),
         },
         parts: [{ ...basePart(compactionSummary, "p-summary"), type: "text", text: "summary" }],
       },
@@ -1233,6 +1320,7 @@ describe("session.message.filterCompacted", () => {
           ...assistantInfo(compactionSummary, compactionUser),
           summary: true,
           finish: "stop",
+          structured: handoffFixture(),
         },
         parts: [{ ...basePart(compactionSummary, "p-summary"), type: "text", text: "summary" }],
       },
@@ -1274,6 +1362,42 @@ describe("session.message.filterCompacted", () => {
       compactionSummary,
       recentUser,
       recentAssistant,
+    ])
+  })
+
+  test("does not accept legacy prose summaries as compaction boundaries", async () => {
+    const compactionUser = "m-compaction-user"
+    const compactionSummary = "m-compaction-summary"
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: {
+          ...assistantInfo(compactionSummary, compactionUser),
+          summary: true,
+          finish: "stop",
+        },
+        parts: [{ ...basePart(compactionSummary, "p-summary"), type: "text", text: "legacy prose summary" }],
+      },
+      {
+        info: userInfo(compactionUser),
+        parts: [{ ...basePart(compactionUser, "p-compaction"), type: "compaction", auto: true }],
+      },
+      {
+        info: assistantInfo("m-old-assistant", "m-old-user"),
+        parts: [{ ...basePart("m-old-assistant", "p-old-assistant"), type: "text", text: "old answer" }],
+      },
+      {
+        info: userInfo("m-old-user"),
+        parts: [{ ...basePart("m-old-user", "p-old-user"), type: "text", text: "old question" }],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([
+      "m-old-user",
+      "m-old-assistant",
+      compactionUser,
+      compactionSummary,
     ])
   })
 })
