@@ -128,6 +128,7 @@ function handoffFixture(): CompactionHandoff.Info {
     files: [{ path: "packages/opencorvus/src/session/message.ts", status: "modified", detail: "compaction boundary validation" }],
     testsAndCommands: [],
     errorsAndBlockers: [],
+    userMessages: ["Preserve compaction boundaries only when the handoff is structured."],
     nextActions: ["run targeted message tests for compaction boundary validation"],
     openRisks: [],
   }

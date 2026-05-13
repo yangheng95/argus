@@ -61,6 +61,7 @@ function handoffFixture(): CompactionHandoff.Info {
       },
     ],
     errorsAndBlockers: [],
+    userMessages: ["Fix compaction so it preserves resumable task state."],
     nextActions: ["run the targeted compaction contract test"],
     openRisks: ["full typecheck may expose unrelated dirty workspace issues"],
   }
@@ -83,7 +84,13 @@ describe("CompactionHandoff", () => {
     const second = CompactionHandoff.renderMarkdown(parsed)
 
     expect(first).toBe(second)
-    expect(first).toContain("## Acceptance Criteria")
+    expect(first.startsWith("This session is being continued from a previous conversation that ran out of context.")).toBe(true)
+    expect(first).toContain("Summary:")
+    expect(first).toContain("1. Primary Request and Intent:")
+    expect(first).toContain("8. Current Work:")
+    expect(first).toContain("9. Optional Next Step:")
+    expect(first).toContain("Acceptance: The handoff must preserve exact acceptance criteria and command evidence")
+    expect(first).toContain("Fix compaction so it preserves resumable task state.")
     expect(first).toContain("bun test packages/opencorvus/test/session/compaction.test.ts")
     expect(first).toContain("packages/opencorvus/src/session/compaction-handoff.ts")
   })
@@ -97,6 +104,7 @@ describe("CompactionHandoff", () => {
 
     expect(prompt).toContain("CompactionHandoff schema")
     expect(prompt).toContain("\"durableInstructionSources\"")
+    expect(prompt).toContain("\"userMessages\"")
     expect(prompt).toContain("plugin context")
   })
 

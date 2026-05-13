@@ -41,6 +41,8 @@ Implication for OpenCorvus: compaction must produce a task handoff artifact, not
 | Assistant-level errors | `packages/opencorvus/src/session/message.ts` | `toModelMessages()` skips assistant messages with most `msg.info.error` values. | Provider/structured-output/context errors can disappear from compaction evidence. |
 | Patch/file evidence | `packages/opencorvus/src/session/message.ts`, `packages/opencorvus/src/session/processor.ts`, `packages/opencorvus/src/session/summary.ts` | Patch parts and session diff are not projected as ordinary model messages. | File-change evidence may be missing from the handoff unless explicitly injected. |
 | Thresholds | `packages/opencorvus/src/session/context-budget.ts`, `packages/opencorvus/src/session/loop.ts` | Post-turn threshold now `0.9`; predictive threshold already `0.9`. | Trigger timing is separate from summary fidelity. |
+| Predictive compaction placeholder | `packages/opencorvus/src/session/loop.ts` | `processTurn()` creates an assistant message before the predictive compaction gate. If the gate returns `compact`, the assistant has no parts and zero tokens. | DB timeline looks like compaction happened after an empty assistant response; it also pollutes history with a non-message. |
+| Handoff display format | `packages/opencorvus/src/session/compaction-handoff.ts` | Host renderer emits OpenCorvus-specific headings such as `Continuation Contract`. | The format is less familiar than Claude Code's compact summary and does not make "primary request / current work / next step" visually obvious. |
 
 ## Root Cause
 
@@ -53,6 +55,13 @@ OpenCorvus currently conflates three different context surfaces:
 The compactor only produces a prose summary for surface 3, but the prompt does not clearly tell it that surfaces 1 and 2 must be referenced by source path/state and not paraphrased as the sole truth. This makes it easy for system prompt, project rules, task requirements, and acceptance criteria to appear "lost" after compaction.
 
 There is also a pre-existing rule-loading bug: project `AGENTS.md` and `CLAUDE.md` are treated as alternatives rather than both authoritative sources. That must be fixed before judging compaction quality, otherwise the system can still lose `CLAUDE.md` rules even with perfect summaries.
+
+For task `tsk_e1f9c2cd4001z5TZEezacMOY84`, the early compaction evidence is:
+
+- `msg_e1fc7e13c001UHdj4er2tQoSjS` and `msg_e1fcd3557001HIzX3TYwQeNbKC` are auto compaction user messages.
+- Each is immediately preceded by an empty build assistant message with `tokens.input=0`, `tokens.output=0`, and no parts.
+- This does not mean post-turn usage crossed the threshold. It means the predictive gate fired after `processTurn()` had already inserted the assistant placeholder.
+- The predictive input was inflated by the invalid empty-tree patch evidence investigated in `2026-05-13-build-context-spike-empty-snapshot-plan.md`.
 
 ## Design Principles
 
@@ -100,6 +109,7 @@ Change:
   - `files: { path: string; status: "read" | "modified" | "created" | "deleted" | "referenced"; detail: string }[]`
   - `testsAndCommands: { command: string; result: string; evidence: string }[]`
   - `errorsAndBlockers: { issue: string; evidence: string; nextAction: string }[]`
+  - `userMessages: string[]`
   - `nextActions: string[]`
   - `openRisks: string[]`
 - Update compaction agent prompt to act as a "state handoff writer" whose output must be resume-safe and machine-scannable.
@@ -232,6 +242,36 @@ Change:
 
 Acceptance:
 - `rg -n "Defaults to 0\\.7|70%.*compaction|compaction.*0\\.7" packages docs` returns no stale generated/public default references.
+
+### Phase G: Claude-Style Compact Summary Rendering
+
+Files:
+- `packages/opencorvus/src/session/compaction-handoff.ts`
+- `packages/opencorvus/test/session/compaction.test.ts`
+
+Change:
+- Keep `CompactionHandoff` as the single structured source.
+- Render accepted handoffs into a Claude Code-like Markdown shape:
+  - opening continuation sentence,
+  - `Summary:`,
+  - numbered sections for primary request, technical concepts, files, errors/fixes, problem solving, user messages/source contract, pending tasks, current work, and optional next step.
+- Do not ask the model for Markdown. The model still returns JSON; host rendering owns the display format.
+
+Acceptance:
+- Renderer output starts with the continuation sentence and includes numbered sections.
+- Existing structured validation remains the boundary check.
+
+### Phase H: Remove Empty Assistant Placeholder On Predictive Compact
+
+Files:
+- `packages/opencorvus/src/session/loop.ts`
+
+Change:
+- When the predictive gate creates a compaction user message before any provider call, remove the pre-created assistant placeholder before returning.
+- This is not a fallback path; it preserves the transcript invariant that assistant rows represent actual assistant output, tool activity, or errors.
+
+Acceptance:
+- Predictive compaction no longer leaves a zero-token assistant row before the compaction user message.
 
 ## Non-Goals
 
