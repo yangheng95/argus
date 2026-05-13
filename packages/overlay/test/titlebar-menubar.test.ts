@@ -558,6 +558,140 @@ test(
 )
 
 test(
+  "project menu close clears the current project and opens onboarding",
+  async () => {
+    const server = Bun.serve({
+      idleTimeout: 255,
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url)
+        const path = route(url)
+        if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+        if (path === "/" || path === "/ui" || path === "/ui/")
+          return Response.redirect(`${url.origin}/ui/index.html`, 302)
+        const staticResponse = await overlayStaticResponse(path)
+        if (staticResponse) return staticResponse
+        if (path === "/global/health") return send({ version: "1.2.3" })
+        if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+        if (path === "/session") return send([])
+        if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+        if (path === "/vcs")
+          return send({
+            branch: "dev",
+            clean: true,
+            dirty: false,
+            staged: 0,
+            modified: 0,
+            untracked: 0,
+            conflicts: 0,
+            ahead: 0,
+            behind: 0,
+          })
+        if (path === "/provider") return send({ all: [], connected: [], default: {} })
+        if (path === "/provider/auth") return send({})
+        if (path === "/config/providers") return send({ providers: [], default: {} })
+        if (path === "/config/prompt") return send([])
+        if (path === "/config") return send({ model: "openai/test" })
+        if (path === "/agent") return send([{ id: "codex", selectable: true }])
+        if (path === "/channel") return send([])
+        if (path === "/executor") return send([{ id: "codex", selectable: true }])
+        if (path === "/skill/installed" || path === "/skill") return send([])
+        if (path === "/mcp") return send({})
+        if (path === "/panel/knowledge/memory") return send([])
+        if (path === "/panel/knowledge/preference") return send([])
+        if (path === "/log" && req.method === "POST") return send({ ok: true })
+        return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+      },
+    })
+
+    const browser = await launchBrowser(["--disable-dev-shm-usage"])
+    try {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 960, height: 720 })
+      await page.evaluateOnNewDocument((portValue) => {
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_recent_directories", JSON.stringify(["D:/overlay/workspace/app"]))
+        ;(window as any).__savedSettings = []
+        window.__TAURI__ = {
+          core: {
+            invoke: async (command: string, args?: any) => {
+              if (command === "overlay_settings_load") {
+                return {
+                  serverUrl: `http://127.0.0.1:${portValue}`,
+                  autoServer: false,
+                  locale: "en-US",
+                  directory: "D:/overlay/workspace/app",
+                }
+              }
+              if (command === "overlay_settings_save") {
+                ;(window as any).__savedSettings.push(args?.settings ?? null)
+                return true
+              }
+              if (command === "overlay_server_info") {
+                return { url: `http://127.0.0.1:${portValue}`, pid: 12345 }
+              }
+              return null
+            },
+          },
+          window: {
+            getCurrentWindow() {
+              return {
+                close: async () => undefined,
+                hide: async () => undefined,
+                minimize: async () => undefined,
+                startDragging: async () => undefined,
+                isMaximized: async () => false,
+                onResized: async () => ({ unlisten: async () => undefined }),
+              }
+            },
+          },
+        }
+      }, server.port)
+
+      await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
+      await page.waitForSelector('[data-menu-trigger="workspace"]', { visible: true })
+      await page.click('[data-menu-trigger="workspace"]')
+      await page.waitForSelector('[data-testid="titlebar-close-project"]', { visible: true })
+      await page.click('[data-testid="titlebar-close-project"]')
+      await page.waitForSelector('[data-testid="workspace-onboarding-dialog"]', { visible: true })
+
+      const state = await page.evaluate(() => {
+        const saved = ((window as any).__savedSettings || []) as any[]
+        const latest = saved.at(-1) || {}
+        return {
+          directory: (window as any).settingsStore.directory,
+          savedDirectory: (window as any).settingsStore.savedDirectory,
+          selectedTaskID: (window as any).boardStore.selectedTaskID,
+          tasks: (window as any).boardStore.tasks.length,
+          pendingTasks: (window as any).boardStore.pendingTasks.length,
+          path: (window as any).boardStore.path,
+          vcs: (window as any).boardStore.vcs,
+          config: (window as any).appStore?.config ?? null,
+          recent: document.querySelector('[data-testid="workspace-onboarding-recent-0"]')?.textContent || "",
+          persistedDirectory: latest.directory,
+        }
+      })
+
+      expect(state.directory).toBe("")
+      expect(state.savedDirectory).toBe("")
+      expect(state.selectedTaskID).toBe("")
+      expect(state.tasks).toBe(0)
+      expect(state.pendingTasks).toBe(0)
+      expect(state.path).toBeNull()
+      expect(state.vcs).toBeNull()
+      expect(state.config).toBeNull()
+      expect(state.recent).toContain("D:/overlay/workspace/app")
+      expect(state.persistedDirectory).toBeUndefined()
+      await page.close()
+    } finally {
+      await browser.close().catch(() => undefined)
+      server.stop(true)
+    }
+  },
+  { timeout: 60_000 },
+)
+
+test(
   "column resizers allow broad widths without wide visual dividers",
   async () => {
     const server = Bun.serve({

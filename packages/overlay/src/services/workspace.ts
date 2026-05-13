@@ -10,7 +10,7 @@
 // This module operates on Solid stores (settingsStore, boardStore) and
 // delegates timers / loading to callers via callbacks.
 
-import { settingsStore, setSettingsStore } from "../store/settings";
+import { saveSettings, settingsStore, setSettingsStore } from "../store/settings";
 import { applyTasks, boardStore, setBoardStore } from "../store/board";
 import { clearMessages } from "../store/messages";
 import { setAppStore } from "../store/app";
@@ -263,9 +263,59 @@ export function clearWorkspaceRuntime(
  * fields are owned by for now.
  */
 export function clearProjectScopeData(): void {
-  applyTasks([]);
- // path, vcs, memoryFiles, memorySearchMode remain
- // state and are not yet migrated to a Solid store.
+  applyTasks([], []);
+  setBoardStore({
+    path: null,
+    vcs: null,
+    changes: [],
+    planPreview: "",
+    specPreview: "",
+    taskSequence: 0,
+    boardEtag: "",
+    boardSyncPending: false,
+    boardQueued: false,
+    boardUpdatedAt: 0,
+    snapshotVersion: "",
+    tasksError: "",
+    tasksLoaded: true,
+  });
+  setAppStore({
+    config: null,
+    executors: [],
+    providerCatalog: null,
+    providerAuth: null,
+    configLoadErrors: {},
+    providerTest: null,
+    channels: [],
+    skills: [],
+    skillMarket: [],
+    mcp: {},
+    memoryFiles: [],
+    memorySearchMode: false,
+    promptEntries: [],
+    promptDrafts: {},
+    criteriaSpecs: [],
+  });
+}
+
+// ── closeProject ──
+
+/**
+ * Close the current project selection without deleting project data.
+ * This is the single lifecycle path for Project -> Close Project.
+ */
+export function closeProject(): void {
+  setSettingsStore("directoryEpoch", (n: number) => n + 1);
+  setSettingsStore({
+    directory: "",
+    savedDirectory: "",
+    workspaceTaskID: "",
+    workspaceDirectory: "",
+  });
+  configureApi({ directory: "" });
+  enterEmptyWorkspace({ restoreDirectory: false });
+  clearProjectScopeData();
+  saveSettings();
 }
 
 // ── enterEmptyWorkspace ──

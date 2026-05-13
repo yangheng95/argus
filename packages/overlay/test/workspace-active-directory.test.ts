@@ -1,12 +1,42 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { setBoardStore } from "../src/store/board";
+import { boardStore, setBoardStore } from "../src/store/board";
 import { setSettingsStore } from "../src/store/settings";
-import { activeDirectory } from "../src/services/workspace";
+import { appStore, setAppStore } from "../src/store/app";
+import { apiUrl } from "../src/services/api";
+import { activeDirectory, closeProject } from "../src/services/workspace";
+import { __setHostTransportForTest, type HostTransport } from "../src/services/host-transport";
 
 describe("workspace active directory", () => {
   afterEach(() => {
-    setBoardStore("board", null);
-    setSettingsStore("directory", "");
+    __setHostTransportForTest(undefined);
+    setBoardStore({
+      board: null,
+      tasks: [],
+      selectedTaskID: "",
+      pendingTasks: [],
+      path: null,
+      vcs: null,
+      changes: [],
+      boardEtag: "",
+      snapshotVersion: "",
+    });
+    setSettingsStore({
+      directory: "",
+      savedDirectory: "",
+      workspaceTaskID: "",
+      workspaceDirectory: "",
+    });
+    setAppStore({
+      config: null,
+      executors: [],
+      providerCatalog: null,
+      providerAuth: null,
+      channels: [],
+      skills: [],
+      mcp: {},
+      memoryFiles: [],
+      promptEntries: [],
+    });
   });
 
   test("uses selected task directory when settings directory is empty", () => {
@@ -31,5 +61,75 @@ describe("workspace active directory", () => {
     });
 
     expect(activeDirectory()).toBe("D:/repo/from-task");
+  });
+
+  test("closeProject clears selected directory and project-scoped projections", () => {
+    const nativeCommands: unknown[] = [];
+    __setHostTransportForTest({
+      kind: "browser",
+      request: async () => ({ status: 200, ok: true, headers: {}, body: null }),
+      openStream: () => ({ close: () => undefined }),
+      native: async (command) => {
+        nativeCommands.push(command);
+        return true;
+      },
+      subscribeUiCommand: () => ({ unsubscribe: () => undefined }),
+    } satisfies HostTransport);
+
+    setSettingsStore({
+      directory: "D:/repo/current",
+      savedDirectory: "D:/repo/current",
+      workspaceTaskID: "task_1",
+      workspaceDirectory: "D:/repo/current",
+    });
+    setBoardStore({
+      selectedTaskID: "task_1",
+      board: { task: { id: "task_1", directory: "D:/repo/current" } },
+      tasks: [{ task: { id: "task_1" } }],
+      pendingTasks: [{ id: "pending_1" }],
+      path: { directory: "D:/repo/current" },
+      vcs: { branch: "main" },
+      changes: [{ file: "src/app.ts" }],
+      boardEtag: "etag-current",
+      snapshotVersion: "snapshot-current",
+    });
+    setAppStore({
+      config: { model: "provider/model" },
+      executors: [{ id: "codex" }],
+      providerCatalog: { all: [] },
+      providerAuth: { openai: true },
+      channels: [{ id: "slack" }],
+      skills: [{ name: "skill" }],
+      mcp: { local: {} },
+      memoryFiles: [{ path: "memory.md" }],
+      promptEntries: [{ key: "core" }],
+    });
+
+    closeProject();
+
+    expect(activeDirectory()).toBe("");
+    expect(boardStore.selectedTaskID).toBe("");
+    expect(boardStore.board).toBeNull();
+    expect(boardStore.tasks).toEqual([]);
+    expect(boardStore.pendingTasks).toEqual([]);
+    expect(boardStore.path).toBeNull();
+    expect(boardStore.vcs).toBeNull();
+    expect(boardStore.changes).toEqual([]);
+    expect(boardStore.boardEtag).toBe("");
+    expect(boardStore.snapshotVersion).toBe("");
+    expect(appStore.config).toBeNull();
+    expect(appStore.executors).toEqual([]);
+    expect(appStore.providerCatalog).toBeNull();
+    expect(appStore.providerAuth).toBeNull();
+    expect(appStore.channels).toEqual([]);
+    expect(appStore.skills).toEqual([]);
+    expect(appStore.mcp).toEqual({});
+    expect(appStore.memoryFiles).toEqual([]);
+    expect(appStore.promptEntries).toEqual([]);
+    expect(new URL(apiUrl("tasks")).searchParams.has("directory")).toBe(false);
+    expect(nativeCommands).toContainEqual({
+      kind: "settings.save",
+      payload: expect.objectContaining({ directory: undefined }),
+    });
   });
 });

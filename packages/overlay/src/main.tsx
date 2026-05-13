@@ -476,6 +476,7 @@ function installGlobalBridges(): void {
   (window as any).cardTree = cardTreeStore;
   // Benchmark hook: expose named stores so external probes do not depend on
   // the legacy aggregate `state` bridge.
+  (window as any).appStore = appStore;
   (window as any).boardStore = boardStore;
   (window as any).settingsStore = settingsStore;
   (window as any).applyDirectory = applyDirectory;
