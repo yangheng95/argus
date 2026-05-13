@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { architectValidationIssues, type ArchitectCollector } from "../../src/architect/output-tools"
+import { architectValidationFindings, architectValidationIssues, type ArchitectCollector } from "../../src/architect/output-tools"
 import { validatePersistedArchitectFidelity } from "../../src/orchestrator/tools"
 import type { AcceptanceSpec } from "../../src/acceptance/types"
 
@@ -26,8 +26,6 @@ function collectorForReferenceTask(specs: AcceptanceSpec[]): ArchitectCollector 
       acceptance_specs: specs,
       owned_paths: ["tests/e2e/visual.test.ts"],
       depends_on: [],
-      exports: [],
-      imports: [],
       priority: "blocking",
       kind: "verification",
       requirement_ids: ["REQ-visual"],
@@ -42,15 +40,16 @@ function collectorForReferenceTask(specs: AcceptanceSpec[]): ArchitectCollector 
       expectation: "Restore the authoritative reference page 1:1.",
     }],
     assembly_owners: [],
-    contracts: [],
+    contract_graph: { version: 1, contracts: [], dependency_contracts: [] },
+    validation_findings: [],
     removed_goal_ids: [],
     summary: "",
     finalized: false,
   }
 }
 
-describe("orchestrator architect fidelity gate", () => {
-  test("rejects build dispatch when persisted fidelity coverage is incomplete", () => {
+describe("orchestrator architect fidelity diagnostics", () => {
+  test("reports persisted fidelity coverage gaps without making them dispatch blockers", () => {
     const workDir = process.cwd()
     const issues = validatePersistedArchitectFidelity({
       task: {
@@ -82,7 +81,7 @@ describe("orchestrator architect fidelity gate", () => {
     expect(issues).toContain("Missing assembly ownership: multi-goal tasks must register at least one assembly owner")
   })
 
-  test("allows build dispatch when persisted fidelity coverage is complete", () => {
+  test("reports no persisted fidelity diagnostics when coverage is complete", () => {
     const workDir = process.cwd()
     const issues = validatePersistedArchitectFidelity({
       task: {
@@ -128,7 +127,7 @@ describe("orchestrator architect fidelity gate", () => {
     expect(issues).toEqual([])
   })
 
-  test("does not block execution-stage build on source coverage for files created by earlier goals", () => {
+  test("does not report execution-stage source coverage for files created by earlier goals", () => {
     const workDir = process.cwd()
     const issues = validatePersistedArchitectFidelity({
       task: {
@@ -151,7 +150,7 @@ describe("orchestrator architect fidelity gate", () => {
     expect(issues).toEqual([])
   })
 
-  test("still blocks execution-stage build when reference coverage is missing", () => {
+  test("still reports execution-stage reference coverage when it is missing", () => {
     const workDir = process.cwd()
     const issues = validatePersistedArchitectFidelity({
       task: {
@@ -182,18 +181,22 @@ describe("orchestrator architect fidelity gate", () => {
     expect(issues).toContain("Missing reference coverage for visual specs: vis-hero")
   })
 
-  test("rejects reference-driven architecture without essential delivery visual acceptance", () => {
+  test("reports reference-driven architecture without essential delivery visual acceptance as concern", () => {
     const weakVisualSpec: AcceptanceSpec = {
       ...essentialDeliveryVisualSpec,
       severity: "important",
     }
-    const issues = architectValidationIssues(collectorForReferenceTask([weakVisualSpec]), {
+    const findings = architectValidationFindings(collectorForReferenceTask([weakVisualSpec]), {
       requireReferenceCoverage: true,
     })
 
-    expect(issues).toContain(
-      "Missing essential delivery visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_delivery llm_judge acceptance spec for final rendered-vs-reference fidelity.",
-    )
+    expect(
+      findings.some((finding) =>
+        finding.severity === "concern" && finding.message.includes(
+          "Missing essential delivery visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_delivery llm_judge acceptance spec for final rendered-vs-reference fidelity.",
+        ),
+      ),
+    ).toBe(true)
   })
 
   test("allows reference-driven architecture with essential delivery visual acceptance", () => {

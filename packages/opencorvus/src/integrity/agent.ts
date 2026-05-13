@@ -44,6 +44,15 @@ import { Event as EngineEvent } from "@/engine/model"
 import type { GoalContractFields } from "@/pipeline/types"
 import { renderSpecsAsText } from "@/acceptance/types"
 import type { AcceptanceSpec } from "@/acceptance/types"
+import {
+  ArchitectContractRefSchema,
+  GoalDependencyContractSchema,
+  renderContractGraphForPrompt,
+  type ArchitectContractGraph,
+  type ArchitectContractRef,
+  type GoalDependencyContract,
+  type GoalDependencyReason,
+} from "@/architect/contract-graph"
 import { Instance } from "@/project/instance"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
@@ -90,11 +99,12 @@ export interface GoalCorrection {
   /** Corrections may rewrite goal topology fields that integrity itself audits.
    *  acceptance_specs are intentionally NOT mutable here — see the wire-schema
    *  comment near GoalCorrectionUpdates. */
-  updates?: Partial<Pick<
-    GoalContractFields,
-    "title" | "objective" | "owned_paths" | "depends_on" | "exports" | "imports" | "kind" | "priority"
-    | "requirement_ids"
-  >>
+  updates?: Partial<
+    Pick<
+      GoalContractFields,
+      "title" | "objective" | "owned_paths" | "depends_on" | "kind" | "priority" | "requirement_ids"
+    >
+  >
 }
 
 export interface MissingGoal {
@@ -110,11 +120,39 @@ export interface MissingGoal {
   reason: string
 }
 
+export type IntegrityGraphCorrection =
+  | {
+      kind: "contract"
+      action: "add" | "modify" | "remove"
+      reason: string
+      contractID?: string
+      contract?: ArchitectContractRef
+    }
+  | {
+      kind: "dependency"
+      action: "add" | "modify" | "remove" | "reclassify"
+      reason: string
+      fromGoalID?: string
+      toGoalID?: string
+      dependency?: GoalDependencyContract
+      newReason?: GoalDependencyReason
+      contractIDs?: string[]
+      summary?: string
+    }
+  | {
+      kind: "audit_criterion"
+      action: "attach"
+      reason: string
+      goalID: string
+      contractIDs: string[]
+    }
+
 export interface IntegrityDimensionResult {
   id: IntegrityDimension["id"]
   verdict: IntegrityVerdict
   issues: IntegrityIssue[]
   corrections: GoalCorrection[]
+  graphCorrections: IntegrityGraphCorrection[]
   missingGoals: MissingGoal[]
 }
 
@@ -130,6 +168,8 @@ export interface IntegrityResult {
   issues: IntegrityIssue[]
   /** Cross-dimension union of goal-layer corrections. */
   corrections: GoalCorrection[]
+  /** Cross-dimension union of Architect Contract Graph corrections. */
+  graphCorrections: IntegrityGraphCorrection[]
   /** Cross-dimension union of proposed missing goals. */
   missingGoals: MissingGoal[]
 }
@@ -149,7 +189,7 @@ const VerdictEnum = z.enum(["pass", "concerns", "needs_correction"])
 // tree, Gherkin scenario, rubric levels, etc.) is so deep that JSON-Schema
 // inlines it for every dimension tool, pushing toolSchemaChars past 990k.
 // Corrections may rewrite the same lightweight topology fields integrity audits:
-// goal identity text, ownership, dependencies, and import/export contracts.
+// goal identity text, ownership, and dependencies.
 // AcceptanceSpec is intentionally excluded. The full AcceptanceSpec schema
 // (with its discriminated-union Scorer tree, Gherkin scenario, rubric levels,
 // etc.) is so deep that JSON-Schema inlines it for every dimension tool,
@@ -161,8 +201,6 @@ const GoalCorrectionUpdates = z.object({
   objective: z.string().optional(),
   owned_paths: z.array(z.string()).optional(),
   depends_on: z.array(z.string()).optional(),
-  exports: z.array(z.string()).optional(),
-  imports: z.array(z.string()).optional(),
   kind: z.enum(["bootstrap", "feature", "verification", "integration", "system"]).optional(),
   priority: z.enum(["blocking", "advisory"]).optional(),
   requirement_ids: z.array(z.string()).optional(),
@@ -192,6 +230,65 @@ const MissingGoalInput = z.object({
   reason: z.string().min(1),
 })
 
+const GraphContractCorrectionInput = z
+  .object({
+    kind: z.literal("contract"),
+    action: z.enum(["add", "modify", "remove"]),
+    reason: z.string().min(1),
+    contract_id: z.string().min(1).optional(),
+    contract: ArchitectContractRefSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.action === "remove" && !value.contract_id) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contract_id"], message: "remove requires contract_id" })
+    }
+    if ((value.action === "add" || value.action === "modify") && !value.contract) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contract"], message: `${value.action} requires contract` })
+    }
+  })
+
+const GraphDependencyCorrectionInput = z
+  .object({
+    kind: z.literal("dependency"),
+    action: z.enum(["add", "modify", "remove", "reclassify"]),
+    reason: z.string().min(1),
+    from_goal_id: z.string().min(1).optional(),
+    to_goal_id: z.string().min(1).optional(),
+    dependency: GoalDependencyContractSchema.optional(),
+    new_reason: z.enum(["contract", "bootstrap_scaffold", "integration_order"]).optional(),
+    contract_ids: z.array(z.string().min(1)).optional(),
+    summary: z.string().min(1).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.action === "add" || value.action === "modify") && !value.dependency) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["dependency"], message: `${value.action} requires dependency` })
+    }
+    if ((value.action === "remove" || value.action === "reclassify") && (!value.from_goal_id || !value.to_goal_id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["from_goal_id"],
+        message: `${value.action} requires from_goal_id and to_goal_id`,
+      })
+    }
+    if (value.action === "reclassify" && !value.new_reason) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["new_reason"], message: "reclassify requires new_reason" })
+    }
+  })
+
+const GraphAuditCriterionCorrectionInput = z.object({
+  kind: z.literal("audit_criterion"),
+  action: z.literal("attach"),
+  reason: z.string().min(1),
+  goal_id: z.string().min(1),
+  contract_ids: z.array(z.string().min(1)).min(1),
+})
+
+const GraphCorrectionInput = z.discriminatedUnion("kind", [
+  GraphContractCorrectionInput,
+  GraphDependencyCorrectionInput,
+  GraphAuditCriterionCorrectionInput,
+])
+
 function buildIssueInput(d: IntegrityDimension) {
   // Per-dimension issue enum — schema-level guard against cross-dimension
   // issue-type smuggling.
@@ -218,6 +315,7 @@ function buildDimensionInput(d: IntegrityDimension) {
       verdict: VerdictEnum,
       issues: z.array(issue),
       corrections: z.array(GoalCorrectionInput),
+      graph_corrections: z.array(GraphCorrectionInput).optional(),
       missing_goals: z.array(MissingGoalInput),
     })
   }
@@ -267,6 +365,7 @@ export async function reviewIntegrity(input: {
   requirements?: ParsedRequirement[]
   requirementDecisions?: RequirementsDecision[]
   designSpecs?: VisualSpec[]
+  contractGraph?: ArchitectContractGraph
   decisionLog?: DecisionLog
   /** Post-build REQ status snapshot — pure projection of (REQ-N → claiming
    *  goals → tip goal_run + per-spec evidence). Empty array (or undefined)
@@ -307,6 +406,7 @@ export async function reviewIntegrity(input: {
       verdict: "needs_correction",
       issues: [{ type: "uncovered", description: "No goals produced" }],
       corrections: [],
+      graphCorrections: [],
       missingGoals: [],
     }
     const result = synthesizeResult([dim], "No goals produced — architect must rerun.")
@@ -314,6 +414,13 @@ export async function reviewIntegrity(input: {
     if (softSessionID) input.onSessionCreated?.(softSessionID)
     return { ...result, sessionID: softSessionID ?? "" }
   }
+  if (!input.contractGraph) {
+    throw new Error(
+      `reviewIntegrity requires architect_contract_graph when reviewing ${goals.length} goal(s). ` +
+        `Run Architect again so graph contracts and dependency reasons are available.`,
+    )
+  }
+  const promptInput = { ...input, contractGraph: input.contractGraph }
 
   const goalIDs = new Set(goals.map((g) => g.id))
   type IntegrityCollector = {
@@ -330,14 +437,13 @@ export async function reviewIntegrity(input: {
   }
 
   function buildIntegrityReport(collector: IntegrityCollector) {
-    const dimensions = INTEGRITY_DIMENSIONS
-      .map((d) => collector.dimensions.get(d.id))
-      .filter((item): item is IntegrityDimensionResult => Boolean(item))
+    const dimensions = INTEGRITY_DIMENSIONS.map((d) => collector.dimensions.get(d.id)).filter(
+      (item): item is IntegrityDimensionResult => Boolean(item),
+    )
     const verdict = dimensions.length > 0 ? aggregateVerdict(dimensions) : "needs_correction"
     const lines = dimensions.map((dimension) => {
-      const issues = dimension.issues.length > 0
-        ? `; issues: ${dimension.issues.map((issue) => issue.description).join(" | ")}`
-        : ""
+      const issues =
+        dimension.issues.length > 0 ? `; issues: ${dimension.issues.map((issue) => issue.description).join(" | ")}` : ""
       return `${dimension.id}: ${dimension.verdict}${issues}`
     })
     const summary = `Integrity review ${verdict} across ${dimensions.length} dimension(s).`
@@ -362,6 +468,7 @@ export async function reviewIntegrity(input: {
       execute: async (raw) => {
         const sub = raw as z.infer<ReturnType<typeof buildDimensionInput>> & {
           corrections?: z.infer<typeof GoalCorrectionInput>[]
+          graph_corrections?: z.infer<typeof GraphCorrectionInput>[]
           missing_goals?: z.infer<typeof MissingGoalInput>[]
         }
 
@@ -375,6 +482,7 @@ export async function reviewIntegrity(input: {
         }))
 
         let corrections: GoalCorrection[] = []
+        let graphCorrections: IntegrityGraphCorrection[] = []
         let missingGoals: MissingGoal[] = []
         if (d.canProposeCorrections) {
           for (const c of sub.corrections ?? []) {
@@ -389,6 +497,37 @@ export async function reviewIntegrity(input: {
               updates: c.updates,
             })
           }
+          graphCorrections = (sub.graph_corrections ?? []).map((c) => {
+            if (c.kind === "contract") {
+              return {
+                kind: "contract",
+                action: c.action,
+                reason: c.reason,
+                contractID: c.contract_id,
+                contract: c.contract,
+              } satisfies IntegrityGraphCorrection
+            }
+            if (c.kind === "dependency") {
+              return {
+                kind: "dependency",
+                action: c.action,
+                reason: c.reason,
+                fromGoalID: c.from_goal_id,
+                toGoalID: c.to_goal_id,
+                dependency: c.dependency,
+                newReason: c.new_reason,
+                contractIDs: c.contract_ids,
+                summary: c.summary,
+              } satisfies IntegrityGraphCorrection
+            }
+            return {
+              kind: "audit_criterion",
+              action: "attach",
+              reason: c.reason,
+              goalID: c.goal_id,
+              contractIDs: c.contract_ids,
+            } satisfies IntegrityGraphCorrection
+          })
           missingGoals = (sub.missing_goals ?? []).map((m) => ({
             title: m.title,
             objective: m.objective,
@@ -410,8 +549,8 @@ export async function reviewIntegrity(input: {
         // decides next steps itself. CLAUDE.md rule 13.
         const verdict = sub.verdict as IntegrityVerdict
 
-        collector.dimensions.set(d.id, { id: d.id, verdict, issues, corrections, missingGoals })
-        return `OK: ${d.id}=${verdict} recorded (${issues.length} issue(s), ${corrections.length} correction(s), ${missingGoals.length} missing_goal(s)).`
+        collector.dimensions.set(d.id, { id: d.id, verdict, issues, corrections, graphCorrections, missingGoals })
+        return `OK: ${d.id}=${verdict} recorded (${issues.length} issue(s), ${corrections.length} goal correction(s), ${graphCorrections.length} graph correction(s), ${missingGoals.length} missing_goal(s)).`
       },
     })
   }
@@ -423,9 +562,7 @@ export async function reviewIntegrity(input: {
         "Call this with final=true.",
       inputSchema: IntegritySubmitSchema,
       execute: async () => {
-        const missing = INTEGRITY_DIMENSIONS
-          .filter((d) => !collector.dimensions.has(d.id))
-          .map((d) => d.id)
+        const missing = INTEGRITY_DIMENSIONS.filter((d) => !collector.dimensions.has(d.id)).map((d) => d.id)
         if (missing.length > 0) {
           return `Error: missing dimension verdicts: ${missing.join(", ")}. Submit each missing dimension before submit_integrity_review.`
         }
@@ -446,27 +583,26 @@ export async function reviewIntegrity(input: {
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
     signal: input.signal,
-      toolKit: {
-        tools: {
+    toolKit: {
+      tools: {
         ...Object.fromEntries(
-          INTEGRITY_DIMENSIONS.map(
-            (d) => [`submit_${d.id}_verdict`, buildDimensionTool(collector, d)] as const,
-          ),
+          INTEGRITY_DIMENSIONS.map((d) => [`submit_${d.id}_verdict`, buildDimensionTool(collector, d)] as const),
         ),
         submit_integrity_review: buildSubmitIntegrityTool(collector),
-        },
-        getCollector: () => collector,
-        buildReport: () => buildIntegrityReport(collector),
       },
-    buildUserPrompt: () => buildIntegrityPrompt(input),
-    buildUserParts: (input.attachments && input.attachments.length > 0)
-      ? async () => {
-          const text = buildIntegrityPrompt(input)
-          const inline = await AttachmentStore.inlineFileParts(input.attachments!)
-          const enrichedText = text + AttachmentStore.renderAttachmentInventory(input.attachments)
-          return [{ type: "text" as const, text: enrichedText }, ...inline]
-        }
-      : undefined,
+      getCollector: () => collector,
+      buildReport: () => buildIntegrityReport(collector),
+    },
+    buildUserPrompt: () => buildIntegrityPrompt(promptInput),
+    buildUserParts:
+      input.attachments && input.attachments.length > 0
+        ? async () => {
+            const text = buildIntegrityPrompt(promptInput)
+            const inline = await AttachmentStore.inlineFileParts(input.attachments!)
+            const enrichedText = text + AttachmentStore.renderAttachmentInventory(input.attachments)
+            return [{ type: "text" as const, text: enrichedText }, ...inline]
+          }
+        : undefined,
     terminalTool: {
       toolName: "submit_integrity_review",
       isSatisfied: (collector) => collector.finalized,
@@ -478,23 +614,19 @@ export async function reviewIntegrity(input: {
       emitIntegrityLifecycle("started", input.taskID, session.id, 0, 0)
       const ticker = input.taskID
         ? setInterval(() => {
-            emitIntegrityLifecycle(
-              "progress",
-              input.taskID,
-              session.id,
-              0,
-              Date.now() - startedAt,
-            )
+            emitIntegrityLifecycle("progress", input.taskID, session.id, 0, Date.now() - startedAt)
           }, 20_000)
         : null
-      return { dispose: () => { if (ticker) clearInterval(ticker) } }
+      return {
+        dispose: () => {
+          if (ticker) clearInterval(ticker)
+        },
+      }
     },
   })
 
   const finalCollector = out.collector
-  const missing = INTEGRITY_DIMENSIONS
-    .filter((d) => !finalCollector.dimensions.has(d.id))
-    .map((d) => d.id)
+  const missing = INTEGRITY_DIMENSIONS.filter((d) => !finalCollector.dimensions.has(d.id)).map((d) => d.id)
   if (missing.length > 0) {
     throw new Error(
       `integrity reviewer skipped dimension verdict tools — ` +
@@ -531,16 +663,14 @@ export async function reviewIntegrity(input: {
 // Result synthesis — fold per-dimension results into the public IntegrityResult
 // ---------------------------------------------------------------------------
 
-function synthesizeResult(
-  dimensions: readonly IntegrityDimensionResult[],
-  summary: string,
-): IntegrityResult {
+function synthesizeResult(dimensions: readonly IntegrityDimensionResult[], summary: string): IntegrityResult {
   return {
     verdict: aggregateVerdict(dimensions),
     summary,
     dimensions: [...dimensions],
     issues: dimensions.flatMap((d) => d.issues),
     corrections: dimensions.flatMap((d) => d.corrections),
+    graphCorrections: dimensions.flatMap((d) => d.graphCorrections),
     missingGoals: dimensions.flatMap((d) => d.missingGoals),
   }
 }
@@ -548,7 +678,10 @@ function synthesizeResult(
 function summarizeIntegrity(dimensions: readonly IntegrityDimensionResult[]): string {
   const verdict = aggregateVerdict(dimensions)
   const issueCount = dimensions.reduce((sum, d) => sum + d.issues.length, 0)
-  const correctionCount = dimensions.reduce((sum, d) => sum + d.corrections.length + d.missingGoals.length, 0)
+  const correctionCount = dimensions.reduce(
+    (sum, d) => sum + d.corrections.length + d.graphCorrections.length + d.missingGoals.length,
+    0,
+  )
   return `Integrity ${verdict}: ${issueCount} issue(s), ${correctionCount} correction action(s).`
 }
 
@@ -596,6 +729,7 @@ function emitIntegrityEvent(
       verdict: d.verdict,
       issueCount: d.issues.length,
       correctionCount: d.corrections.length,
+      graphCorrectionCount: d.graphCorrections.length,
       missingGoalCount: d.missingGoals.length,
     })),
     issues: result.issues.map((i) => ({
@@ -610,6 +744,11 @@ function emitIntegrityEvent(
       reason: c.reason,
       updatesTitle: c.updates?.title,
       updatesObjective: c.updates?.objective,
+    })),
+    graphCorrections: result.graphCorrections.map((c) => ({
+      kind: c.kind,
+      action: c.action,
+      reason: c.reason,
     })),
     missingGoals: result.missingGoals.map((g) => ({
       title: g.title,
@@ -637,21 +776,16 @@ function emitIntegrityLifecycle(
     return
   }
   const def = phase === "started" ? EngineEvent.IntegrityReviewStarted : EngineEvent.IntegrityReviewProgress
-  const properties =
-    phase === "started"
-      ? { taskID, sessionID }
-      : { taskID, sessionID, attempt, elapsedMs }
+  const properties = phase === "started" ? { taskID, sessionID } : { taskID, sessionID, attempt, elapsedMs }
   log.info("integrity lifecycle emit", { phase, taskID, sessionID, attempt, elapsedMs })
-  EngineProtocol.emit(def as any, properties as any, { source: "architect.integrity" }).catch(
-    (err) => {
-      log.error("integrity lifecycle emit failed", {
-        phase,
-        taskID,
-        sessionID,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    },
-  )
+  EngineProtocol.emit(def as any, properties as any, { source: "architect.integrity" }).catch((err) => {
+    log.error("integrity lifecycle emit failed", {
+      phase,
+      taskID,
+      sessionID,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -663,10 +797,7 @@ function emitIntegrityLifecycle(
  * Only acts when aggregate verdict is `needs_correction` AND the contributing
  * dimensions actually proposed goal-layer corrections.
  */
-export function applyIntegrityCorrections(
-  goals: GoalContractFields[],
-  result: IntegrityResult,
-): GoalContractFields[] {
+export function applyIntegrityCorrections(goals: GoalContractFields[], result: IntegrityResult): GoalContractFields[] {
   if (result.verdict !== "needs_correction") return goals
   if (result.corrections.length === 0 && result.missingGoals.length === 0) return goals
 
@@ -674,11 +805,7 @@ export function applyIntegrityCorrections(
 
   for (const correction of result.corrections) {
     if (correction.action === "modify" && correction.updates) {
-      corrected = corrected.map((g) =>
-        g.id === correction.goalID
-          ? { ...g, ...correction.updates }
-          : g,
-      )
+      corrected = corrected.map((g) => (g.id === correction.goalID ? { ...g, ...correction.updates } : g))
     } else if (correction.action === "remove") {
       corrected = corrected.filter((g) => g.id !== correction.goalID)
     }
@@ -716,8 +843,6 @@ export function applyIntegrityCorrections(
       acceptance_specs,
       owned_paths: missing.owned_paths,
       depends_on: [],
-      exports: [],
-      imports: [],
       priority: missing.priority,
       kind: missing.kind,
       requirement_ids: [],
@@ -739,18 +864,19 @@ function buildIntegrityPrompt(input: {
   requirementDecisions?: RequirementsDecision[]
   requirementStatus?: RequirementStatusRow[]
   designSpecs?: VisualSpec[]
+  contractGraph: ArchitectContractGraph
   decisionLog?: DecisionLog
 }): string {
   const sections: string[] = []
 
   sections.push(renderDimensionCatalogue())
 
-  sections.push(`# User Request (ORIGINAL — this is the ground truth)\n\nTitle: ${input.taskTitle}\n\n${input.userRequest}`)
+  sections.push(
+    `# User Request (ORIGINAL — this is the ground truth)\n\nTitle: ${input.taskTitle}\n\n${input.userRequest}`,
+  )
 
   if (input.requirements && input.requirements.length > 0) {
-    const reqText = input.requirements
-      .map((r) => `- **${r.id}** (${r.type}): ${r.description}`)
-      .join("\n")
+    const reqText = input.requirements.map((r) => `- **${r.id}** (${r.type}): ${r.description}`).join("\n")
     sections.push(
       `# Requirements (${input.requirements.length}) — generated REQ rows are coverage evidence\n\n` +
         `Start from the original user request above, then use these REQ-N rows to judge whether ` +
@@ -815,52 +941,56 @@ function buildIntegrityPrompt(input: {
   }
 
   if (input.requirementDecisions && input.requirementDecisions.length > 0) {
-    const decText = input.requirementDecisions
-      .map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
-      .join("\n")
+    const decText = input.requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`).join("\n")
     sections.push(`# Foundational Decisions\n\n${decText}`)
   }
 
   if (input.designSpecs && input.designSpecs.length > 0) {
-    sections.push(renderVisualContractPromptSection({
-      specs: input.designSpecs,
-      instructions: [
-        "The following advisory visual constraints came from design_analysis.",
-        "Use them under `requirement_fidelity` (uncovered visual specs the user requested) and " +
-          "`hallucination` (specs the design-analyst could not have read off the reference image, " +
-          "e.g. exact hex codes when the image was not actually attached).",
-      ],
-    }))
+    sections.push(
+      renderVisualContractPromptSection({
+        specs: input.designSpecs,
+        instructions: [
+          "The following advisory visual constraints came from design_analysis.",
+          "Use them under `requirement_fidelity` (uncovered visual specs the user requested) and " +
+            "`hallucination` (specs the design-analyst could not have read off the reference image, " +
+            "e.g. exact hex codes when the image was not actually attached).",
+        ],
+      }),
+    )
   }
 
   sections.push(`# Goal Contracts (${input.goals.length} goals — supporting context)\n`)
   for (const goal of input.goals) {
-    sections.push([
-      `## ${goal.id}: ${goal.title}`,
-      `Objective: ${goal.objective}`,
-      `Acceptance Specs:\n${renderSpecsAsText(goal.acceptance_specs ?? [])}`,
-      `Responsibility Paths: ${goal.owned_paths.join(", ") || "(none)"}`,
-      `Priority: ${goal.priority}`,
-      `Kind: ${goal.kind}`,
-      goal.exports?.length ? `Exports: ${goal.exports.join("; ")}` : "",
-      goal.imports?.length ? `Imports: ${goal.imports.join("; ")}` : "",
-      goal.depends_on?.length ? `Depends on: ${goal.depends_on.join(", ")}` : "",
-      goal.requirement_ids?.length ? `Requirement IDs: ${goal.requirement_ids.join(", ")}` : "",
-    ].filter(Boolean).join("\n"))
+    sections.push(
+      [
+        `## ${goal.id}: ${goal.title}`,
+        `Objective: ${goal.objective}`,
+        `Acceptance Specs:\n${renderSpecsAsText(goal.acceptance_specs ?? [])}`,
+        `Responsibility Paths: ${goal.owned_paths.join(", ") || "(none)"}`,
+        `Priority: ${goal.priority}`,
+        `Kind: ${goal.kind}`,
+        goal.depends_on?.length ? `Depends on: ${goal.depends_on.join(", ")}` : "",
+        goal.requirement_ids?.length ? `Requirement IDs: ${goal.requirement_ids.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    )
   }
+
+  sections.push(renderContractGraphForPrompt(input.contractGraph))
 
   const dlSection = input.decisionLog?.toPromptSection()
   if (dlSection) sections.push(dlSection)
 
   sections.push(
     "Now review every dimension above. For `requirement_fidelity`, start from the original user " +
-    "request and judge whether requirements extraction was complete; generated REQ rows are " +
-    "evidence, not the audit universe. Then walk captured REQs (and the Requirement Status " +
-    "Snapshot when present) row by row, NOT goal contracts. If an issue maps to an existing REQ, " +
-    "set `requirement_ids`; if the issue is a missing extraction from the original request, leave " +
-    "`requirement_ids` empty and cite the exact user phrase. Post-build issues that point at " +
-    "failing acceptance specs MUST also set `spec_ids`. Cite REQ-N / spec ids / goal ids / " +
-    "verbatim user phrases as evidence in each issue.",
+      "request and judge whether requirements extraction was complete; generated REQ rows are " +
+      "evidence, not the audit universe. Then walk captured REQs (and the Requirement Status " +
+      "Snapshot when present) row by row, NOT goal contracts. If an issue maps to an existing REQ, " +
+      "set `requirement_ids`; if the issue is a missing extraction from the original request, leave " +
+      "`requirement_ids` empty and cite the exact user phrase. Post-build issues that point at " +
+      "failing acceptance specs MUST also set `spec_ids`. Cite REQ-N / spec ids / goal ids / " +
+      "verbatim user phrases as evidence in each issue.",
   )
 
   return sections.join("\n\n")

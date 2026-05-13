@@ -66,35 +66,34 @@ export function normalizeVerifyPageIntegrityInput(args: RuntimeCaptureRequest) {
   return normalizeRuntimeCaptureRequest(args)
 }
 
-function persistDeliveryPreviewSession(input: {
-  taskID: string
-  deliveryID?: string
-  session: ManagedPreviewSession
-}) {
+function persistDeliveryPreviewSession(input: { taskID: string; deliveryID?: string; session: ManagedPreviewSession }) {
   if (!input.deliveryID) return
   const now = Date.now()
   Database.use((db) =>
-    db.insert(EngineArtifactTable).values({
-      id: Identifier.ascending("artifact"),
-      task_id: input.taskID,
-      run_id: null,
-      delivery_id: input.deliveryID,
-      kind: "delivery_preview",
-      label: "delivery-managed-preview",
-      payload: {
-        status: input.session.status,
-        url: input.session.url,
-        reason: input.session.reason,
-        command: input.session.command,
-        workspace_dir: input.session.workspaceDir,
-        evidence: input.session.evidence,
-        session_key: input.session.key,
-        started_at: input.session.startedAt,
-        updated_at: input.session.updatedAt,
-      },
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        run_id: null,
+        delivery_id: input.deliveryID,
+        kind: "delivery_preview",
+        label: "delivery-managed-preview",
+        payload: {
+          status: input.session.status,
+          url: input.session.url,
+          reason: input.session.reason,
+          command: input.session.command,
+          workspace_dir: input.session.workspaceDir,
+          evidence: input.session.evidence,
+          session_key: input.session.key,
+          started_at: input.session.startedAt,
+          updated_at: input.session.updatedAt,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
 }
 
@@ -156,9 +155,18 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "and reference image(s) as multimodal tool-result attachments plus a small JSON inventory. This is " +
         "the only delivery path that loads task image bytes; the startup prompt deliberately does not inline screenshots.",
       inputSchema: z.object({
-        rendered: z.string().optional().describe("Optional rendered output filename or sha. Defaults to the first rendered_output attachment."),
-        reference: z.string().optional().describe("Optional reference filename or sha. Defaults to the first non-rendered image attachment."),
-        include_all_references: z.boolean().default(false).describe("Attach every reference image instead of one selected reference."),
+        rendered: z
+          .string()
+          .optional()
+          .describe("Optional rendered output filename or sha. Defaults to the first rendered_output attachment."),
+        reference: z
+          .string()
+          .optional()
+          .describe("Optional reference filename or sha. Defaults to the first non-rendered image attachment."),
+        include_all_references: z
+          .boolean()
+          .default(false)
+          .describe("Attach every reference image instead of one selected reference."),
       }),
       execute: async ({ rendered, reference, include_all_references }) => {
         const images = deliveryContext.attachments.filter((item) => item.mime.startsWith("image/"))
@@ -169,9 +177,13 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         const renderedMatch = selectVisualArtifact(renderedImages, rendered) ?? renderedImages[0]
         const referenceMatches = include_all_references
           ? referenceImages
-          : [selectVisualArtifact(referenceImages, reference) ?? referenceImages[0]].filter((item): item is DeliveryToolAttachment => Boolean(item))
+          : [selectVisualArtifact(referenceImages, reference) ?? referenceImages[0]].filter(
+              (item): item is DeliveryToolAttachment => Boolean(item),
+            )
 
-        const selected = [renderedMatch, ...referenceMatches].filter((item): item is DeliveryToolAttachment => Boolean(item))
+        const selected = [renderedMatch, ...referenceMatches].filter((item): item is DeliveryToolAttachment =>
+          Boolean(item),
+        )
         if (selected.length === 0) {
           return [
             "compare_visual_artifacts: no selectable visual pair.",
@@ -182,9 +194,13 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
 
         const imageFiles = selected.map((item) => {
           const located = AttachmentStore.nameFromUrl(item.url)
-          if (!located) throw new Error(`compare_visual_artifacts: attachment ${item.filename ?? item.sha} has no resolvable url`)
+          if (!located)
+            throw new Error(`compare_visual_artifacts: attachment ${item.filename ?? item.sha} has no resolvable url`)
           const absPath = AttachmentStore.resolveAbsolute(located.projectID, located.name)
-          if (!absPath) throw new Error(`compare_visual_artifacts: attachment ${located.projectID}/${located.name} is not resolvable on disk`)
+          if (!absPath)
+            throw new Error(
+              `compare_visual_artifacts: attachment ${located.projectID}/${located.name} is not resolvable on disk`,
+            )
           return {
             path: absPath,
             mime: item.mime,
@@ -194,15 +210,19 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
 
         return await buildMultimodalToolResult({
           projectID: projectId,
-          text: JSON.stringify({
-            rendered_output: renderedMatch ? describeVisualArtifact(renderedMatch) : null,
-            references: referenceMatches.map(describeVisualArtifact),
-            instructions: [
-              "Compare rendered output against the reference image(s) directly.",
-              "Reject obvious blank/error/mismatched layouts with category='visual'.",
-              "Cite concrete layout, spacing, color, typography, component, or text differences in rejection_details.",
-            ],
-          }, null, 2),
+          text: JSON.stringify(
+            {
+              rendered_output: renderedMatch ? describeVisualArtifact(renderedMatch) : null,
+              references: referenceMatches.map(describeVisualArtifact),
+              instructions: [
+                "Compare rendered output against the reference image(s) directly.",
+                "Reject obvious blank/error/mismatched layouts with category='visual'.",
+                "Cite concrete layout, spacing, color, typography, component, or text differences in rejection_details.",
+              ],
+            },
+            null,
+            2,
+          ),
           images: imageFiles,
         })
       },
@@ -222,12 +242,8 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
       }),
       execute: async ({ window }) => {
         if (!taskID) return "query_metric_trajectory: no task context available"
-        const {
-          readIterationHistory,
-          readResultsForIteration,
-          readSpecsForTask,
-          readCounterexamplesForTask,
-        } = await import("@/metrics/store")
+        const { readIterationHistory, readResultsForIteration, readSpecsForTask, readCounterexamplesForTask } =
+          await import("@/metrics/store")
         const history = readIterationHistory(taskID)
         const tail = history.slice(-window)
         const currentIter = history.length > 0 ? history[history.length - 1].iteration : 0
@@ -287,10 +303,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
           .describe(
             'Which evidence scope to read. "goal_run" for a specific goal\'s latest at-exit evaluation; "delivery" for the merged-worktree result.',
           ),
-        goal_id: z
-          .string()
-          .optional()
-          .describe('Required when scope="goal_run". Ignored for "delivery".'),
+        goal_id: z.string().optional().describe('Required when scope="goal_run". Ignored for "delivery".'),
         goal_run_id: z
           .string()
           .optional()
@@ -383,11 +396,16 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "This is the only delivery tool that starts the browser-facing app for preview. It requires an explicit package.json packageManager and scripts.dev, accepts only loopback HTTP URLs, and never guesses ports or serves static files.",
       inputSchema: z.object({}),
       execute: async () => {
-        if (!taskID) return JSON.stringify({
-          ok: false,
-          status: "failed",
-          reason: "start_frontend_preview: no task context available",
-        }, null, 2)
+        if (!taskID)
+          return JSON.stringify(
+            {
+              ok: false,
+              status: "failed",
+              reason: "start_frontend_preview: no task context available",
+            },
+            null,
+            2,
+          )
 
         try {
           const task = findTask(taskID)
@@ -399,28 +417,29 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
           })
           const session = preview.session
           persistDeliveryPreviewSession({ taskID, deliveryID, session })
-          return JSON.stringify({
-            ok: session.status === "ready" && !!session.url,
-            status: session.status,
-            url: session.url,
-            command: session.command,
-            project_root: preview.projectRoot,
-            workspace_dir: session.workspaceDir,
-            evidence: session.evidence,
-            board_preview_url: session.status === "ready" ? session.url : undefined,
-            reason: session.reason,
-          }, null, 2)
+          return JSON.stringify(
+            {
+              ok: session.status === "ready" && !!session.url,
+              status: session.status,
+              url: session.url,
+              command: session.command,
+              project_root: preview.projectRoot,
+              workspace_dir: session.workspaceDir,
+              evidence: session.evidence,
+              board_preview_url: session.status === "ready" ? session.url : undefined,
+              reason: session.reason,
+            },
+            null,
+            2,
+          )
         } catch (err) {
           const reason = err instanceof Error ? err.message : String(err)
-          const projectRoot = err instanceof ManagedPreviewStartError
-            ? err.projectRoot
-            : projectDir
-          const evidence = err instanceof ManagedPreviewStartError
-            ? err.evidence
-            : [reason]
-          const command = err instanceof ManagedPreviewStartError
-            ? err.session?.command ?? "start_frontend_preview"
-            : "start_frontend_preview"
+          const projectRoot = err instanceof ManagedPreviewStartError ? err.projectRoot : projectDir
+          const evidence = err instanceof ManagedPreviewStartError ? err.evidence : [reason]
+          const command =
+            err instanceof ManagedPreviewStartError
+              ? (err.session?.command ?? "start_frontend_preview")
+              : "start_frontend_preview"
           const failedSession: ManagedPreviewSession = {
             key: `${taskID}:${projectRoot}`,
             taskID,
@@ -433,14 +452,18 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
             updatedAt: Date.now(),
           }
           persistDeliveryPreviewSession({ taskID, deliveryID, session: failedSession })
-          return JSON.stringify({
-            ok: false,
-            status: "failed",
-            project_root: projectRoot,
-            command,
-            evidence,
-            reason,
-          }, null, 2)
+          return JSON.stringify(
+            {
+              ok: false,
+              status: "failed",
+              project_root: projectRoot,
+              command,
+              evidence,
+              reason,
+            },
+            null,
+            2,
+          )
         }
       },
     }),
@@ -493,10 +516,19 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "inside Puppeteer only; it never changes the host display resolution. The PNG bytes are not attached to the delivery " +
         "context; use compare_visual_artifacts when a visual comparison needs image bytes.",
       inputSchema: z.object({
-        url: z.string().describe("Absolute http(s) URL for an already running app. If this delivery has a frontend surface, call start_frontend_preview first and pass its returned URL; this tool never starts servers or serves static files."),
+        url: z
+          .string()
+          .describe(
+            "Absolute http(s) URL for an already running app. If this delivery has a frontend surface, call start_frontend_preview first and pass its returned URL; this tool never starts servers or serves static files.",
+          ),
         viewport_width: z.number().int().min(100).max(4096).default(1440).describe("Viewport width in CSS pixels."),
         viewport_height: z.number().int().min(100).max(4096).default(1080).describe("Viewport height in CSS pixels."),
-        label: z.string().optional().describe("Short label used in the output filename, e.g. 'after-fix-1' or 'chart-area'. Alphanum / dash only."),
+        label: z
+          .string()
+          .optional()
+          .describe(
+            "Short label used in the output filename, e.g. 'after-fix-1' or 'chart-area'. Alphanum / dash only.",
+          ),
       }),
       execute: async ({ url, viewport_width, viewport_height, label }) => {
         const safeLabel = (label ?? "shot").replace(/[^a-zA-Z0-9-_]/g, "-").slice(0, 40) || "shot"
@@ -529,9 +561,10 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
               viewport_capped: capture.viewport.capped,
               pixel_variance: Number(variance.toFixed(2)),
               degenerate: variance < 25,
-              note: variance < 25
-                ? "Pixel variance < 25 — the screenshot is near-uniform (blank page, JSON error body, or unhydrated shell). Do NOT count as a passed visual check."
-                : undefined,
+              note:
+                variance < 25
+                  ? "Pixel variance < 25 — the screenshot is near-uniform (blank page, JSON error body, or unhydrated shell). Do NOT count as a passed visual check."
+                  : undefined,
             },
             null,
             2,
@@ -563,13 +596,38 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "JSON in submit_verdict.tool_call_evidence with detail=the failure list (or the key numbers " +
         "when passed).",
       inputSchema: z.object({
-        url: z.string().describe("http(s):// URL the app is listening on. For frontend deliveries, call start_frontend_preview first and target the returned managed preview URL."),
+        url: z
+          .string()
+          .describe(
+            "http(s):// URL the app is listening on. For frontend deliveries, call start_frontend_preview first and target the returned managed preview URL.",
+          ),
         viewport_width: z.number().int().min(100).max(4096).default(1440),
         viewport_height: z.number().int().min(100).max(4096).default(1080),
-        min_dom_descendants: z.number().int().min(1).max(10000).default(20).describe("Minimum descendant count under document.body. 20 is a reasonable floor for any non-trivial app shell."),
-        expect_selectors: z.array(z.string()).default([]).describe("CSS selectors that MUST resolve to at least one element. Cite ids/classes from your spec."),
-        expect_texts: z.array(z.string()).default([]).describe("Substrings that MUST appear in document.body.textContent (case-sensitive). Use for headers, visible labels, data markers."),
-        wait_for_selector: z.string().optional().describe("Optional CSS selector to wait for before assertions run (e.g. '.chart canvas'). Default: load + settle without selector wait."),
+        min_dom_descendants: z
+          .number()
+          .int()
+          .min(1)
+          .max(10000)
+          .default(20)
+          .describe(
+            "Minimum descendant count under document.body. 20 is a reasonable floor for any non-trivial app shell.",
+          ),
+        expect_selectors: z
+          .array(z.string())
+          .default([])
+          .describe("CSS selectors that MUST resolve to at least one element. Cite ids/classes from your spec."),
+        expect_texts: z
+          .array(z.string())
+          .default([])
+          .describe(
+            "Substrings that MUST appear in document.body.textContent (case-sensitive). Use for headers, visible labels, data markers.",
+          ),
+        wait_for_selector: z
+          .string()
+          .optional()
+          .describe(
+            "Optional CSS selector to wait for before assertions run (e.g. '.chart canvas'). Default: load + settle without selector wait.",
+          ),
         wait_timeout_ms: z.number().int().min(1000).max(120000).default(30000),
       }),
       execute: async (rawArgs) => {
@@ -606,7 +664,6 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         return JSON.stringify(report, null, 2)
       },
     }),
-
   }
 }
 
@@ -651,7 +708,11 @@ function renderDeliveryContextSection(
 
     case "upstream_context":
       if (!input.taskID) return "No task_id is available; upstream context cannot be loaded."
-      return buildTaskUpstreamAgentContextSections(input.taskID).join("\n\n---\n\n") || "No upstream context found."
+      const sections = buildTaskUpstreamAgentContextSections(input.taskID)
+      if (sections.length === 0) {
+        throw new Error(`Cannot inspect delivery upstream context for task ${input.taskID}: no upstream context sections.`)
+      }
+      return sections.join("\n\n---\n\n")
 
     case "manifest":
       return renderManifestContext(delivery)
@@ -660,10 +721,16 @@ function renderDeliveryContextSection(
       return renderHostGateFailures(delivery)
 
     case "runtime_failures":
-      return "# Runtime Evidence Failures\n\n" + ((delivery?.runtimeEvidenceFailures ?? []).map((item) => `- ${item}`).join("\n") || "(none)")
+      return (
+        "# Runtime Evidence Failures\n\n" +
+        ((delivery?.runtimeEvidenceFailures ?? []).map((item) => `- ${item}`).join("\n") || "(none)")
+      )
 
     case "visual_failures":
-      return "# Visual Metric Failures\n\n" + ((delivery?.visualMetricFailures ?? []).map((item) => `- ${item}`).join("\n") || "(none)")
+      return (
+        "# Visual Metric Failures\n\n" +
+        ((delivery?.visualMetricFailures ?? []).map((item) => `- ${item}`).join("\n") || "(none)")
+      )
 
     case "executor_reports":
       return renderExecutorReports(delivery)
@@ -672,10 +739,13 @@ function renderDeliveryContextSection(
       return "# Changed Files\n\n" + ((delivery?.changedFiles ?? []).map((file) => `- ${file}`).join("\n") || "(none)")
 
     case "diffs":
-      return "# Code Diffs\n\n" + ((delivery?.diffs ?? [])
-        .filter((item) => item.diff)
-        .map((item) => `--- ${item.file} ---\n${item.diff}`)
-        .join("\n\n") || "(none)")
+      return (
+        "# Code Diffs\n\n" +
+        ((delivery?.diffs ?? [])
+          .filter((item) => item.diff)
+          .map((item) => `--- ${item.file} ---\n${item.diff}`)
+          .join("\n\n") || "(none)")
+      )
 
     case "attachments":
       return renderAttachmentToolInventory(input.attachments)
@@ -691,8 +761,6 @@ function renderGoalDetail(goal: GoalInfo): string {
     `acceptance_scenarios=${goal.acceptance_scenarios?.length ?? 0}`,
     goal.requirement_ids.length > 0 ? `requirement_ids=${goal.requirement_ids.join(", ")}` : "requirement_ids=(none)",
     goal.depends_on.length > 0 ? `depends_on=${goal.depends_on.join(", ")}` : "depends_on=(none)",
-    goal.imports.length > 0 ? `imports=${goal.imports.join(", ")}` : "imports=(none)",
-    goal.exports.length > 0 ? `exports=${goal.exports.join(", ")}` : "exports=(none)",
     goal.owned_paths.length > 0 ? `owned_paths=${goal.owned_paths.join(", ")}` : "owned_paths=(none)",
     "",
     "Objective:",
@@ -785,11 +853,16 @@ function renderExecutorReports(delivery: DeliveryInfo | undefined): string {
 
 function renderAttachmentToolInventory(attachments: DeliveryToolAttachment[]): string {
   if (attachments.length === 0) return "No attachments."
-  return "# Attachments\n\n" + attachments.map((item, index) => {
-    const sizeKb = `${Math.max(1, Math.round(item.size / 1024))} KB`
-    const name = AttachmentStore.displayFilename({ filename: item.filename, mime: item.mime, sha: item.sha, index })
-    return `- ${name} mime=${item.mime} intent=${item.intent ?? "(none)"} size=${sizeKb} sha=${item.sha} url=${item.url}`
-  }).join("\n")
+  return (
+    "# Attachments\n\n" +
+    attachments
+      .map((item, index) => {
+        const sizeKb = `${Math.max(1, Math.round(item.size / 1024))} KB`
+        const name = AttachmentStore.displayFilename({ filename: item.filename, mime: item.mime, sha: item.sha, index })
+        return `- ${name} mime=${item.mime} intent=${item.intent ?? "(none)"} size=${sizeKb} sha=${item.sha} url=${item.url}`
+      })
+      .join("\n")
+  )
 }
 
 function selectVisualArtifact(
@@ -815,7 +888,10 @@ function describeVisualArtifact(item: DeliveryToolAttachment) {
 
 function truncateToolText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text
-  return text.slice(0, maxChars) + `\n... (truncated by inspect_delivery_context at ${maxChars} chars; request a narrower section for more detail)`
+  return (
+    text.slice(0, maxChars) +
+    `\n... (truncated by inspect_delivery_context at ${maxChars} chars; request a narrower section for more detail)`
+  )
 }
 
 function forbiddenCheckReason(rawCommand: string): string | undefined {
@@ -827,9 +903,11 @@ function forbiddenCheckReason(rawCommand: string): string | undefined {
     .trim()
   if (/^\[?\s*test\s+-[fdeLhsr]\b/.test(stripped)) return "test -f / file-existence is not acceptance evidence"
   if (/^\[\s+-[fdeLhsr]\b/.test(stripped)) return "[ -f ] / file-existence is not acceptance evidence"
-  if (/^(?:grep|egrep|fgrep|rg|ripgrep)\b/.test(stripped)) return "self-keyword grep on own artifacts is not acceptance evidence"
+  if (/^(?:grep|egrep|fgrep|rg|ripgrep)\b/.test(stripped))
+    return "self-keyword grep on own artifacts is not acceptance evidence"
   if (/^find\b[^|;&]*-name\b/.test(stripped)) return "find -name / file-discovery is not acceptance evidence"
-  if (/^ls\b\s+(-[a-zA-Z]+\s+)?\S+/.test(stripped) && !/[|;&]/.test(stripped)) return "ls / file-listing is not acceptance evidence"
+  if (/^ls\b\s+(-[a-zA-Z]+\s+)?\S+/.test(stripped) && !/[|;&]/.test(stripped))
+    return "ls / file-listing is not acceptance evidence"
   if (/^cat\b/.test(stripped) && !/[|;&]/.test(stripped)) return "cat of own artifact is not acceptance evidence"
   return
 }

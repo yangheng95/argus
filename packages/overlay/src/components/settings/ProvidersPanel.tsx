@@ -3,67 +3,68 @@
 // Allows adding, editing, and removing OpenAI-compatible providers
 // via the opencorvus config system (PATCH /config → provider field).
 
-import { createMemo, createSignal, For, Show } from "solid-js";
-import { t } from "../../utils/i18n";
-import { appStore, setAppStore } from "../../store/app";
-import { updateConfig } from "../../services/config";
-import { apiJson, ApiError } from "../../services/api";
+import { createMemo, createSignal, For, Show } from "solid-js"
+import { t } from "../../utils/i18n"
+import { appStore, setAppStore } from "../../store/app"
+import { updateConfig } from "../../services/config"
+import { apiJson, ApiError } from "../../services/api"
 import {
   authenticateSelectedProvider,
   providerAuthMethods,
+  providerEntry,
   providerState,
   testProviderConnection,
   type AuthDialogCallbacks,
   type ProviderTestResult,
-} from "../../services/llm";
-import { nativeConfirm, nativeOpen, nativePrompt, nativeSelect } from "../../utils/native";
-import { nativeMessage } from "../../services/app-dialog";
-import { Icon } from "../Icon";
-import { Button } from "../ui/Button";
-import { SurfaceHeader } from "../ui/SurfaceHeader";
+} from "../../services/llm"
+import { nativeConfirm, nativeOpen, nativePrompt, nativeSelect } from "../../utils/native"
+import { nativeMessage } from "../../services/app-dialog"
+import { Icon } from "../Icon"
+import { Button } from "../ui/Button"
+import { SurfaceHeader } from "../ui/SurfaceHeader"
 
 function describeFailure(e: unknown): string {
-  if (e instanceof ApiError) return e.message;
-  if (e instanceof Error) return e.message;
-  return String(e);
+  if (e instanceof ApiError) return e.message
+  if (e instanceof Error) return e.message
+  return String(e)
 }
 
 interface ProviderModel {
-  name: string;
-  tool_call: boolean;
+  name: string
+  tool_call: boolean
 }
 
 interface CustomProvider {
-  name: string;
-  api: string;
-  env: string[];
+  name: string
+  api: string
+  env: string[]
   options?: {
-    apiKey?: string;
-    [key: string]: unknown;
-  };
-  models: Record<string, ProviderModel>;
+    apiKey?: string
+    [key: string]: unknown
+  }
+  models: Record<string, ProviderModel>
 }
 
 export default function ProvidersPanel() {
-  const [saving, setSaving] = createSignal(false);
-  const [editing, setEditing] = createSignal<string | null>(null);
-  const [showAdd, setShowAdd] = createSignal(false);
+  const [saving, setSaving] = createSignal(false)
+  const [editing, setEditing] = createSignal<string | null>(null)
+  const [showAdd, setShowAdd] = createSignal(false)
   // Per-provider connectivity-test state. testing/results are keyed by
   // provider id so the operator can run several tests in parallel and
   // see each result tagged to its row. Cleared when the provider is
   // edited or removed (covered by row remount via the For key).
-  const [testing, setTesting] = createSignal<Set<string>>(new Set());
-  const [testResults, setTestResults] = createSignal<Map<string, ProviderTestResult>>(new Map());
-  const [authing, setAuthing] = createSignal<Set<string>>(new Set());
-  const [savingKey, setSavingKey] = createSignal<Set<string>>(new Set());
-  const [apiKeyInputs, setApiKeyInputs] = createSignal<Map<string, string>>(new Map());
+  const [testing, setTesting] = createSignal<Set<string>>(new Set())
+  const [testResults, setTestResults] = createSignal<Map<string, ProviderTestResult>>(new Map())
+  const [authing, setAuthing] = createSignal<Set<string>>(new Set())
+  const [savingKey, setSavingKey] = createSignal<Set<string>>(new Set())
+  const [apiKeyInputs, setApiKeyInputs] = createSignal<Map<string, string>>(new Map())
   // Surface every save / delete / form-validation failure into the UI.
   // Before this signal existed, handleSave/handleDelete only `console.error`d
   // (Tauri WebView users have no devtools), and a silent `return` on missing
   // id / api in handleSave produced a button that did nothing. Anything
   // user-visible writes here; clearForm / startAdd / startEdit / cancel
   // resets it so a new attempt starts clean.
-  const [formError, setFormError] = createSignal<string | null>(null);
+  const [formError, setFormError] = createSignal<string | null>(null)
   // Manual catalog refresh state. The runtime no longer hits models.dev
   // on startup or on a timer — `handleRefreshCatalog` is the only path
   // that touches the network for the registry, so the UI is the
@@ -71,74 +72,74 @@ export default function ProvidersPanel() {
   // to the operator. `null` lastRefreshedAt = never refreshed in this
   // session; we deliberately don't persist across reloads to keep the
   // signal honest about what the running process saw.
-  const [refreshing, setRefreshing] = createSignal(false);
-  const [lastRefreshedAt, setLastRefreshedAt] = createSignal<number | null>(null);
-  const [providerSearch, setProviderSearch] = createSignal("");
+  const [refreshing, setRefreshing] = createSignal(false)
+  const [lastRefreshedAt, setLastRefreshedAt] = createSignal<number | null>(null)
+  const [providerSearch, setProviderSearch] = createSignal("")
 
   function formatRelative(ms: number): string {
-    const diff = Date.now() - ms;
-    if (diff < 60_000) return t("provider.refresh.just_now");
-    const mins = Math.floor(diff / 60_000);
-    if (mins < 60) return t("provider.refresh.minutes_ago", { n: mins });
-    const hours = Math.floor(mins / 60);
-    return t("provider.refresh.hours_ago", { n: hours });
+    const diff = Date.now() - ms
+    if (diff < 60_000) return t("provider.refresh.just_now")
+    const mins = Math.floor(diff / 60_000)
+    if (mins < 60) return t("provider.refresh.minutes_ago", { n: mins })
+    const hours = Math.floor(mins / 60)
+    return t("provider.refresh.hours_ago", { n: hours })
   }
 
   async function handleRefreshCatalog() {
-    if (refreshing()) return;
-    setFormError(null);
-    setRefreshing(true);
+    if (refreshing()) return
+    setFormError(null)
+    setRefreshing(true)
     try {
-      const result = await apiJson("provider/refresh", { method: "POST" }) as {
-        ok: boolean;
-        fetchedAt?: number;
-        error?: string;
-      };
-      if (!result.ok) {
-        setFormError(t("provider.refresh.failed", { reason: result.error || "unknown" }));
-        return;
+      const result = (await apiJson("provider/refresh", { method: "POST" })) as {
+        ok: boolean
+        fetchedAt?: number
+        error?: string
       }
-      setLastRefreshedAt(result.fetchedAt ?? Date.now());
-      const catalog = await apiJson("provider");
-      setAppStore("providerCatalog", catalog ?? null);
+      if (!result.ok) {
+        setFormError(t("provider.refresh.failed", { reason: result.error || "unknown" }))
+        return
+      }
+      setLastRefreshedAt(result.fetchedAt ?? Date.now())
+      const catalog = await apiJson("provider")
+      setAppStore("providerCatalog", catalog ?? null)
     } catch (e) {
-      setFormError(t("provider.refresh.failed", { reason: describeFailure(e) }));
+      setFormError(t("provider.refresh.failed", { reason: describeFailure(e) }))
     } finally {
-      setRefreshing(false);
+      setRefreshing(false)
     }
   }
 
   async function handleTest(providerId: string, models: Record<string, ProviderModel>) {
-    const modelID = Object.keys(models)[0];
+    const modelID = Object.keys(models)[0]
     if (!modelID) {
       setTestResults((prev) => {
-        const next = new Map(prev);
-        next.set(providerId, { ok: false, message: t("provider.test.no_models") });
-        return next;
-      });
-      return;
+        const next = new Map(prev)
+        next.set(providerId, { ok: false, message: t("provider.test.no_models") })
+        return next
+      })
+      return
     }
-    setTesting((prev) => new Set(prev).add(providerId));
+    setTesting((prev) => new Set(prev).add(providerId))
     try {
-      const result = await testProviderConnection(providerId, modelID);
+      const result = await testProviderConnection(providerId, modelID)
       setTestResults((prev) => {
-        const next = new Map(prev);
-        next.set(providerId, result);
-        return next;
-      });
+        const next = new Map(prev)
+        next.set(providerId, result)
+        return next
+      })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : String(err)
       setTestResults((prev) => {
-        const next = new Map(prev);
-        next.set(providerId, { ok: false, message: msg });
-        return next;
-      });
+        const next = new Map(prev)
+        next.set(providerId, { ok: false, message: msg })
+        return next
+      })
     } finally {
       setTesting((prev) => {
-        const next = new Set(prev);
-        next.delete(providerId);
-        return next;
-      });
+        const next = new Set(prev)
+        next.delete(providerId)
+        return next
+      })
     }
   }
 
@@ -155,58 +156,55 @@ export default function ProvidersPanel() {
     nativeConfirm: (message, opts) => nativeConfirm(message, opts),
     nativeOpen,
     showLlmNotice: (message, tone = "info") => {
-      void nativeMessage(message, { title: t("llm.title"), kind: tone });
+      void nativeMessage(message, { title: t("llm.title"), kind: tone })
     },
-  };
+  }
 
   async function refreshAuthState() {
-    const [catalog, auth] = await Promise.all([
-      apiJson("provider"),
-      apiJson("provider/auth"),
-    ]);
+    const [catalog, auth] = await Promise.all([apiJson("provider"), apiJson("provider/auth")])
     setAppStore({
       providerCatalog: catalog ?? null,
       providerAuth: auth ?? null,
-    });
+    })
   }
 
   async function handleAuth(providerId: string) {
-    if (!providerAuthMethods(providerId).length || authing().has(providerId)) return;
-    setFormError(null);
-    setAuthing((prev) => new Set(prev).add(providerId));
+    if (!providerAuthMethods(providerId).length || authing().has(providerId)) return
+    setFormError(null)
+    setAuthing((prev) => new Set(prev).add(providerId))
     try {
-      const ok = await authenticateSelectedProvider(providerId, authCallbacks);
+      const ok = await authenticateSelectedProvider(providerId, authCallbacks)
       if (ok) {
-        await refreshAuthState();
+        await refreshAuthState()
         await nativeMessage(t("llm.status.connected"), {
           title: t("llm.title"),
           kind: "success",
-        });
+        })
       }
     } catch (e) {
-      setFormError(t("provider.auth.failed", { reason: describeFailure(e) }));
+      setFormError(t("provider.auth.failed", { reason: describeFailure(e) }))
     } finally {
       setAuthing((prev) => {
-        const next = new Set(prev);
-        next.delete(providerId);
-        return next;
-      });
+        const next = new Set(prev)
+        next.delete(providerId)
+        return next
+      })
     }
   }
 
   // Form state for add/edit
-  const [formId, setFormId] = createSignal("");
-  const [formName, setFormName] = createSignal("");
-  const [formApi, setFormApi] = createSignal("");
-  const [formEnvKey, setFormEnvKey] = createSignal("");
-  const [formApiKey, setFormApiKey] = createSignal("");
-  const [formModels, setFormModels] = createSignal("");
+  const [formId, setFormId] = createSignal("")
+  const [formName, setFormName] = createSignal("")
+  const [formApi, setFormApi] = createSignal("")
+  const [formEnvKey, setFormEnvKey] = createSignal("")
+  const [formApiKey, setFormApiKey] = createSignal("")
+  const [formModels, setFormModels] = createSignal("")
 
   function providerConfigs(): Record<string, any> {
-    const cfg = appStore.config;
-    const p = cfg?.provider;
-    if (!p || typeof p !== "object" || Array.isArray(p)) return {};
-    return p as Record<string, any>;
+    const cfg = appStore.config
+    const p = cfg?.provider
+    if (!p || typeof p !== "object" || Array.isArray(p)) return {}
+    return p as Record<string, any>
   }
 
   function isCustomProviderConfig(value: any): value is CustomProvider {
@@ -216,209 +214,252 @@ export default function ProvidersPanel() {
       !Array.isArray(value) &&
       (typeof value.api === "string" ||
         (value.models && typeof value.models === "object" && !Array.isArray(value.models)))
-    );
+    )
   }
 
   function configProviders(): Record<string, CustomProvider> {
-    const out: Record<string, CustomProvider> = {};
+    const out: Record<string, CustomProvider> = {}
     for (const [id, value] of Object.entries(providerConfigs())) {
-      if (isCustomProviderConfig(value)) out[id] = value;
+      if (isCustomProviderConfig(value)) out[id] = value
     }
-    return out;
+    return out
   }
 
   function catalogProviders(): any[] {
-    const cat = appStore.providerCatalog as any;
-    return Array.isArray(cat?.all) ? cat.all : [];
+    const cat = appStore.providerCatalog as any
+    return Array.isArray(cat?.all) ? cat.all : []
   }
 
   function normalizeSearch(value: unknown): string {
-    return String(value ?? "").trim().toLowerCase();
+    return String(value ?? "")
+      .trim()
+      .toLowerCase()
   }
 
   function providerModelIds(models: Record<string, unknown> | undefined): string[] {
-    if (!models || typeof models !== "object" || Array.isArray(models)) return [];
-    return Object.keys(models);
+    if (!models || typeof models !== "object" || Array.isArray(models)) return []
+    return Object.keys(models)
   }
 
   function providerMatchesSearch(parts: Array<unknown>): boolean {
-    const q = normalizeSearch(providerSearch());
-    if (!q) return true;
-    return parts.some((part) => normalizeSearch(part).includes(q));
+    const q = normalizeSearch(providerSearch())
+    if (!q) return true
+    return parts.some((part) => normalizeSearch(part).includes(q))
   }
 
   function resetForm() {
-    setFormId("");
-    setFormName("");
-    setFormApi("");
-    setFormEnvKey("");
-    setFormApiKey("");
-    setFormModels("");
-    setFormError(null);
+    setFormId("")
+    setFormName("")
+    setFormApi("")
+    setFormEnvKey("")
+    setFormApiKey("")
+    setFormModels("")
+    setFormError(null)
   }
 
   function startAdd() {
-    resetForm();
-    setEditing(null);
-    setShowAdd(true);
+    resetForm()
+    setEditing(null)
+    setShowAdd(true)
   }
 
   function startEdit(id: string) {
-    const p = configProviders()[id];
-    if (!p) return;
-    setFormId(id);
-    setFormName(p.name || "");
-    setFormApi(p.api || "");
-    setFormEnvKey(p.env?.[0] || "");
-    setFormApiKey("");
+    const p = configProviders()[id]
+    if (!p) return
+    setFormId(id)
+    setFormName(p.name || "")
+    setFormApi(p.api || "")
+    setFormEnvKey(p.env?.[0] || "")
+    setFormApiKey("")
     const modelStr = Object.entries(p.models || {})
       .map(([mid, m]) => `${mid}:${m.name || mid}`)
-      .join("\n");
-    setFormModels(modelStr);
-    setEditing(id);
-    setShowAdd(true);
-    setFormError(null);
+      .join("\n")
+    setFormModels(modelStr)
+    setEditing(id)
+    setShowAdd(true)
+    setFormError(null)
   }
 
   function parseModels(text: string): Record<string, ProviderModel> {
-    const models: Record<string, ProviderModel> = {};
+    const models: Record<string, ProviderModel> = {}
     for (const line of text.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const colonIdx = trimmed.indexOf(":");
-      const id = colonIdx > 0 ? trimmed.slice(0, colonIdx).trim() : trimmed;
-      const name = colonIdx > 0 ? trimmed.slice(colonIdx + 1).trim() : id;
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      const colonIdx = trimmed.indexOf(":")
+      const id = colonIdx > 0 ? trimmed.slice(0, colonIdx).trim() : trimmed
+      const name = colonIdx > 0 ? trimmed.slice(colonIdx + 1).trim() : id
       if (id) {
-        models[id] = { name: name || id, tool_call: true };
+        models[id] = { name: name || id, tool_call: true }
       }
     }
-    return models;
+    return models
   }
 
   async function handleSave() {
-    setFormError(null);
-    const id = editing() || formId().trim().toLowerCase().replace(/[^a-z0-9-_]/g, "-");
+    setFormError(null)
+    const id =
+      editing() ||
+      formId()
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]/g, "-")
     if (!id) {
-      setFormError(t("provider.form.error.id_required"));
-      return;
+      setFormError(t("provider.form.error.id_required"))
+      return
     }
     if (!formApi().trim()) {
-      setFormError(t("provider.form.error.api_required"));
-      return;
+      setFormError(t("provider.form.error.api_required"))
+      return
     }
 
-    setSaving(true);
+    setSaving(true)
     try {
+      const baseConfig = providerConfigWithoutApiKey(id)
       const provider: CustomProvider = {
         name: formName().trim() || id,
         api: formApi().trim().replace(/\/+$/, ""),
         env: formEnvKey().trim() ? [formEnvKey().trim()] : [],
-        options: providerConfigs()[id]?.options || {},
+        options:
+          baseConfig.options && typeof baseConfig.options === "object" && !Array.isArray(baseConfig.options)
+            ? { ...(baseConfig.options as Record<string, unknown>) }
+            : {},
         models: parseModels(formModels()),
-      };
-      const apiKey = formApiKey().trim();
-      if (apiKey) provider.options = { ...(provider.options || {}), apiKey };
-      if (provider.options && Object.keys(provider.options).length === 0) delete provider.options;
+      }
+      const apiKey = formApiKey().trim()
+      if (provider.options && Object.keys(provider.options).length === 0) delete provider.options
 
       await updateConfig((cfg) => {
-        cfg.provider = cfg.provider || {};
-        cfg.provider[id] = provider;
-      });
+        cfg.provider = cfg.provider || {}
+        cfg.provider[id] = provider
+      })
+      if (apiKey) {
+        await apiJson(`auth/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "api", key: apiKey }),
+        })
+        await refreshAuthState()
+      }
 
-      setShowAdd(false);
-      resetForm();
-      setEditing(null);
+      setShowAdd(false)
+      resetForm()
+      setEditing(null)
     } catch (e) {
-      console.error("[providers] save failed", e);
-      setFormError(t("provider.form.error.save_failed", { reason: describeFailure(e) }));
+      console.error("[providers] save failed", e)
+      setFormError(t("provider.form.error.save_failed", { reason: describeFailure(e) }))
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
   }
 
   function providerConfig(id: string): any {
-    return providerConfigs()[id];
+    return providerConfigs()[id]
+  }
+
+  function providerConfigWithoutApiKey(id: string): Record<string, unknown> {
+    const current = providerConfig(id)
+    if (!current || typeof current !== "object" || Array.isArray(current)) return {}
+    const next = { ...current } as Record<string, unknown>
+    const options =
+      next.options && typeof next.options === "object" && !Array.isArray(next.options)
+        ? { ...(next.options as Record<string, unknown>) }
+        : null
+    if (options && Object.hasOwn(options, "apiKey")) delete options.apiKey
+    if (options && Object.keys(options).length > 0) next.options = options
+    else delete next.options
+    return next
+  }
+
+  function removeProjectApiKeyOverride(cfg: Record<string, any>, providerId: string): void {
+    const providers =
+      cfg.provider && typeof cfg.provider === "object" && !Array.isArray(cfg.provider) ? cfg.provider : null
+    if (!providers) return
+    const current =
+      providers[providerId] && typeof providers[providerId] === "object" && !Array.isArray(providers[providerId])
+        ? { ...providers[providerId] }
+        : null
+    if (!current) return
+    const options =
+      current.options && typeof current.options === "object" && !Array.isArray(current.options)
+        ? { ...current.options }
+        : null
+    if (options && Object.hasOwn(options, "apiKey")) delete options.apiKey
+    if (options && Object.keys(options).length > 0) current.options = options
+    else delete current.options
+    if (Object.keys(current).length === 0) delete providers[providerId]
+    else providers[providerId] = current
+    if (Object.keys(providers).length === 0) delete cfg.provider
   }
 
   function providerHasSavedApiKey(id: string): boolean {
-    return typeof providerConfig(id)?.options?.apiKey === "string" && providerConfig(id).options.apiKey.trim() !== "";
+    const override = providerConfig(id)?.options?.apiKey
+    if (typeof override === "string" && override.trim() !== "") return true
+    const entry = providerEntry(id)
+    return typeof entry?.key === "string" && entry.key.trim() !== ""
   }
 
   function apiKeyInput(id: string): string {
-    return apiKeyInputs().get(id) ?? "";
+    return apiKeyInputs().get(id) ?? ""
   }
 
   function setApiKeyInput(id: string, value: string): void {
     setApiKeyInputs((prev) => {
-      const next = new Map(prev);
-      next.set(id, value);
-      return next;
-    });
+      const next = new Map(prev)
+      next.set(id, value)
+      return next
+    })
   }
 
   function clearApiKeyInput(id: string): void {
     setApiKeyInputs((prev) => {
-      const next = new Map(prev);
-      next.delete(id);
-      return next;
-    });
+      const next = new Map(prev)
+      next.delete(id)
+      return next
+    })
   }
 
   async function handleSaveApiKey(providerId: string) {
-    const value = apiKeyInput(providerId).trim();
-    if (!value || savingKey().has(providerId)) return;
-    setFormError(null);
-    setSavingKey((prev) => new Set(prev).add(providerId));
+    const value = apiKeyInput(providerId).trim()
+    if (!value || savingKey().has(providerId)) return
+    setFormError(null)
+    setSavingKey((prev) => new Set(prev).add(providerId))
     try {
+      await apiJson(`auth/${providerId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "api", key: value }),
+      })
       await updateConfig((cfg) => {
-        cfg.provider = cfg.provider || {};
-        const existing =
-          cfg.provider[providerId] && typeof cfg.provider[providerId] === "object"
-            ? cfg.provider[providerId]
-            : {};
-        const existingOptions =
-          existing.options && typeof existing.options === "object" && !Array.isArray(existing.options)
-            ? existing.options
-            : {};
-        cfg.provider[providerId] = {
-          ...existing,
-          options: {
-            ...existingOptions,
-            apiKey: value,
-          },
-        };
-      });
+        removeProjectApiKeyOverride(cfg, providerId)
+      })
       if (providerId === "hexin") {
         try {
-          const refresh = await apiJson("provider/hexin/refresh", { method: "POST" }) as {
-            ok: boolean;
-            error?: string;
-          };
+          const refresh = (await apiJson("provider/hexin/refresh", { method: "POST" })) as {
+            ok: boolean
+            error?: string
+          }
           if (!refresh.ok) {
-            setFormError(t("provider.refresh.failed", { reason: refresh.error || "unknown" }));
+            setFormError(t("provider.refresh.failed", { reason: refresh.error || "unknown" }))
           }
         } catch (error) {
-          setFormError(t("provider.refresh.failed", { reason: describeFailure(error) }));
+          setFormError(t("provider.refresh.failed", { reason: describeFailure(error) }))
         }
       }
-      const catalog = await apiJson("provider");
-      setAppStore({
-        providerCatalog: catalog ?? null,
-      });
-      clearApiKeyInput(providerId);
+      await refreshAuthState()
+      clearApiKeyInput(providerId)
     } catch (e) {
-      setFormError(t("provider.api_key.save_failed", { reason: describeFailure(e) }));
+      setFormError(t("provider.api_key.save_failed", { reason: describeFailure(e) }))
     } finally {
       setSavingKey((prev) => {
-        const next = new Set(prev);
-        next.delete(providerId);
-        return next;
-      });
+        const next = new Set(prev)
+        next.delete(providerId)
+        return next
+      })
     }
   }
 
   function ApiKeyEditor(props: { providerId: string }) {
-    const id = () => props.providerId;
+    const id = () => props.providerId
     return (
       <div class="provider-api-key-row">
         <label class="field provider-api-key-field">
@@ -449,31 +490,31 @@ export default function ProvidersPanel() {
           {savingKey().has(id()) ? t("common.loading") : t("provider.api_key.save")}
         </Button>
       </div>
-    );
+    )
   }
 
   async function handleDelete(id: string) {
-    setFormError(null);
-    setSaving(true);
+    setFormError(null)
+    setSaving(true)
     try {
       await updateConfig((cfg) => {
         if (cfg.provider) {
-          delete cfg.provider[id];
-          if (Object.keys(cfg.provider).length === 0) delete cfg.provider;
+          delete cfg.provider[id]
+          if (Object.keys(cfg.provider).length === 0) delete cfg.provider
         }
-      });
+      })
     } catch (e) {
-      console.error("[providers] delete failed", e);
-      setFormError(t("provider.form.error.delete_failed", { id, reason: describeFailure(e) }));
+      console.error("[providers] delete failed", e)
+      setFormError(t("provider.form.error.delete_failed", { id, reason: describeFailure(e) }))
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
   }
 
   function cancel() {
-    setShowAdd(false);
-    resetForm();
-    setEditing(null);
+    setShowAdd(false)
+    resetForm()
+    setEditing(null)
   }
 
   const providerEntries = createMemo(() =>
@@ -486,9 +527,9 @@ export default function ProvidersPanel() {
         providerModelIds(provider.models).join(" "),
       ]),
     ),
-  );
+  )
   const catalogEntries = createMemo(() => {
-    const custom = new Set(Object.keys(configProviders()));
+    const custom = new Set(Object.keys(configProviders()))
     return catalogProviders()
       .filter((p: any) => p && typeof p.id === "string" && !custom.has(p.id))
       .map((p: any) => ({
@@ -501,29 +542,31 @@ export default function ProvidersPanel() {
         status: providerState(p.id),
       }))
       .filter((p) =>
-        providerMatchesSearch([
-          p.id,
-          p.name,
-          p.source,
-          p.status.label,
-          p.status.detail,
-          p.modelIds.join(" "),
-        ]),
-      );
-  });
-  const totalProviderCount = createMemo(() => Object.keys(configProviders()).length + catalogProviders().length);
-  const visibleProviderCount = createMemo(() => providerEntries().length + catalogEntries().length);
-  const hasProviderSearch = createMemo(() => providerSearch().trim().length > 0);
-  const customProviderCount = createMemo(() => Object.keys(configProviders()).length);
-  const catalogProviderCount = createMemo(() => catalogProviders().length);
+        providerMatchesSearch([p.id, p.name, p.source, p.status.label, p.status.detail, p.modelIds.join(" ")]),
+      )
+  })
+  const totalProviderCount = createMemo(() => Object.keys(configProviders()).length + catalogProviders().length)
+  const visibleProviderCount = createMemo(() => providerEntries().length + catalogEntries().length)
+  const hasProviderSearch = createMemo(() => providerSearch().trim().length > 0)
+  const configuredProviderCount = createMemo(() => {
+    const configured = new Set(Object.keys(providerConfigs()))
+    const connected = appStore.providerCatalog?.connected
+    if (Array.isArray(connected)) {
+      for (const providerId of connected) {
+        if (typeof providerId === "string" && providerId.trim()) configured.add(providerId)
+      }
+    }
+    return configured.size
+  })
+  const catalogProviderCount = createMemo(() => catalogProviders().length)
 
   function modelSummary(modelIds: string[]): string {
-    if (modelIds.length === 0) return t("provider.label.no_models");
-    return modelIds.slice(0, 8).join(", ");
+    if (modelIds.length === 0) return t("provider.label.no_models")
+    return modelIds.slice(0, 8).join(", ")
   }
 
   function hasMoreModels(modelIds: string[]): boolean {
-    return modelIds.length > 8;
+    return modelIds.length > 8
   }
 
   return (
@@ -544,7 +587,7 @@ export default function ProvidersPanel() {
             </div>
             <div class="provider-stat-strip" aria-label={t("provider.stats.label")}>
               <div class="provider-stat">
-                <span class="provider-stat-value">{customProviderCount()}</span>
+                <span class="provider-stat-value">{configuredProviderCount()}</span>
                 <span class="provider-stat-label">{t("provider.stats.configured")}</span>
               </div>
               <div class="provider-stat">
@@ -577,13 +620,7 @@ export default function ProvidersPanel() {
               </span>
               {refreshing() ? t("provider.refresh.refreshing") : t("provider.refresh.button")}
             </Button>
-            <Button
-              type="button"
-              variant="solid"
-              size="sm"
-              tone="accent"
-              onClick={startAdd}
-            >
+            <Button type="button" variant="solid" size="sm" tone="accent" onClick={startAdd}>
               <Icon name="plus" size={13} />
               {t("provider.action.add")}
             </Button>
@@ -649,8 +686,8 @@ export default function ProvidersPanel() {
             <div class="provider-flat-list">
               <For each={providerEntries()}>
                 {([id, provider]) => {
-                  const modelIds = Object.keys(provider.models || {});
-                  const status = providerAuthMethods(id).length > 0 ? providerState(id, undefined) : null;
+                  const modelIds = Object.keys(provider.models || {})
+                  const status = providerAuthMethods(id).length > 0 ? providerState(id, undefined) : null
                   return (
                     <div class="provider-flat-row" data-testid={`provider-custom-row-${id}`}>
                       <div class="provider-row-main">
@@ -659,9 +696,13 @@ export default function ProvidersPanel() {
                           <span class="provider-row-id">{id}</span>
                         </div>
                         <div class="provider-row-meta">
-                          <span>{t("provider.label.api")}: {provider.api}</span>
+                          <span>
+                            {t("provider.label.api")}: {provider.api}
+                          </span>
                           <Show when={provider.env?.length}>
-                            <span>{t("provider.label.env")}: {provider.env.join(", ")}</span>
+                            <span>
+                              {t("provider.label.env")}: {provider.env.join(", ")}
+                            </span>
                           </Show>
                         </div>
                       </div>
@@ -703,13 +744,7 @@ export default function ProvidersPanel() {
                         >
                           {testing().has(id) ? t("provider.test.testing") : t("provider.test.button")}
                         </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          tone="neutral"
-                          onClick={() => startEdit(id)}
-                        >
+                        <Button type="button" variant="outline" size="sm" tone="neutral" onClick={() => startEdit(id)}>
                           {t("common.edit")}
                         </Button>
                         <Button
@@ -739,8 +774,8 @@ export default function ProvidersPanel() {
                             </span>
                             <span class="provider-test-result-msg">
                               {result().ok
-                                ? (result().message || t("provider.test.success"))
-                                : (result().message || t("provider.test.failed"))}
+                                ? result().message || t("provider.test.success")
+                                : result().message || t("provider.test.failed")}
                             </span>
                           </div>
                         )}
@@ -754,7 +789,7 @@ export default function ProvidersPanel() {
                         </Show>
                       </div>
                     </div>
-                  );
+                  )
                 }}
               </For>
             </div>
@@ -765,9 +800,7 @@ export default function ProvidersPanel() {
         <Show when={showAdd()}>
           <div class="config-panel-card provider-add-card">
             <h4 class="provider-add-title">
-              {editing()
-                ? t("provider.form.edit_title", { id: editing() ?? "" })
-                : t("provider.form.add_title")}
+              {editing() ? t("provider.form.edit_title", { id: editing() ?? "" }) : t("provider.form.add_title")}
             </h4>
 
             <Show when={!editing()}>
@@ -805,12 +838,10 @@ export default function ProvidersPanel() {
                 value={formApi()}
                 onInput={(e) => setFormApi(e.currentTarget.value)}
                 onBlur={(e) => {
-                  const v = e.currentTarget.value.trim();
+                  const v = e.currentTarget.value.trim()
                   e.currentTarget.setCustomValidity(
-                    v && !/^https?:\/\/.+/i.test(v)
-                      ? "API base URL must start with http:// or https://"
-                      : "",
-                  );
+                    v && !/^https?:\/\/.+/i.test(v) ? "API base URL must start with http:// or https://" : "",
+                  )
                 }}
               />
             </label>
@@ -874,11 +905,7 @@ export default function ProvidersPanel() {
                 onClick={handleSave}
                 disabled={saving() || (!editing() && !formId().trim()) || !formApi().trim()}
               >
-                {saving()
-                  ? t("common.saving")
-                  : editing()
-                    ? t("provider.form.update")
-                    : t("provider.form.add")}
+                {saving() ? t("common.saving") : editing() ? t("provider.form.update") : t("provider.form.add")}
               </Button>
             </div>
           </div>
@@ -892,9 +919,7 @@ export default function ProvidersPanel() {
                   {t("provider.section.count", { count: catalogEntries().length })}
                 </div>
               </div>
-              <div class="provider-catalog-hint">
-                {t("provider.catalog.hint")}
-              </div>
+              <div class="provider-catalog-hint">{t("provider.catalog.hint")}</div>
             </div>
             <div class="provider-flat-list">
               <For each={catalogEntries()}>
@@ -910,9 +935,7 @@ export default function ProvidersPanel() {
                       </div>
                     </div>
                     <div class="provider-row-summary">
-                      <span class="provider-count-pill">
-                        {t("provider.models.count", { count: p.modelCount })}
-                      </span>
+                      <span class="provider-count-pill">{t("provider.models.count", { count: p.modelCount })}</span>
                       <span class="provider-row-status" data-tone={p.status.tone}>
                         {p.status.label}: {p.status.detail}
                       </span>
@@ -944,5 +967,5 @@ export default function ProvidersPanel() {
         </Show>
       </div>
     </div>
-  );
+  )
 }

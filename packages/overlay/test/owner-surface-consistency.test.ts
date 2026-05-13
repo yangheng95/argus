@@ -54,6 +54,10 @@ test("inspector list rows keep a neutral inset base", () => {
 })
 
 test("message content carriers keep a neutral surface base", () => {
+  expect(MESSAGES_CSS).not.toContain(".msg-tool::before")
+  expect(MESSAGES_CSS).not.toMatch(/\.msg-tool\[data-status="[^\"]+"\]::before/)
+  expect(bodyOf(MESSAGES_CSS, ".msg-tool")).not.toMatch(/position:\s*relative/)
+  expect(bodyOf(MESSAGES_CSS, ".tool-icon")).not.toMatch(/margin-left\s*:/)
   expect(bodyOf(MESSAGES_CSS, ".msg-tool-output-details > summary:hover")).toMatch(/background:\s*var\(--surface-hover\)/)
   expect(bodyOf(MESSAGES_CSS, ".msg-tool-diff-card")).toMatch(/background:\s*transparent/)
   expect(bodyOf(MESSAGES_CSS, ".msg-todo-card")).toMatch(/background:\s*transparent/)
@@ -64,6 +68,8 @@ test("message content carriers keep a neutral surface base", () => {
 })
 
 test("structured card body content does not create nested card chrome", () => {
+  expect(bodyOf(CARD_CSS, ".card:not([data-depth=\"0\"])[data-kind=\"tool\"]")).toMatch(/border-left:\s*0 solid transparent/)
+  expect(CARD_CSS).not.toMatch(/\[data-kind="tool"\][^{]*\{[^}]*border-left-color:\s*var\(--card-stage-info\)/)
   expect(bodyOf(CARD_CSS, ".card__body")).toMatch(/border-top:\s*0 solid transparent/)
   expect(bodyOf(CARD_CSS, ".card__collapsed-preview")).toMatch(/border-left:\s*0 solid transparent/)
   expect(bodyOf(CARD_CSS, ".card__goal-desc")).toMatch(/background:\s*transparent/)

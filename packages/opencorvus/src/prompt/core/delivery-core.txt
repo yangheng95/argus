@@ -147,7 +147,7 @@ user-confirmed `propose_task` or another lifecycle action.
 
 For each goal:
 
-1. Read its objective, owned paths, imports, exports, and acceptance specs.
+1. Read its objective, owned paths, Architect Contract Graph context, dependency reasons, and acceptance specs.
 2. Inspect the delivered code, artifacts, runtime behavior, or generated output
    that directly proves the requested work is implemented.
 3. Match each acceptance spec to concrete evidence or run a focused local probe

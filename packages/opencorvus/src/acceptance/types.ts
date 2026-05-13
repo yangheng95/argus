@@ -55,10 +55,7 @@ const HeuristicScorerSchema = z.object({
 const LlmJudgeScorerSchema = z.object({
   type: z.literal("llm_judge"),
   name: z.string().min(1),
-  criteria: z
-    .string()
-    .min(10)
-    .describe("Single-criterion evaluation question in natural language."),
+  criteria: z.string().min(10).describe("Single-criterion evaluation question in natural language."),
   rubric: z
     .array(RubricLevelSchema)
     .min(2)
@@ -90,8 +87,8 @@ const ContractAuditScorerSchema = z.object({
   type: z.literal("contract_audit"),
   name: z.string().min(1),
   spec: z.object({
-    kind: z.literal("contract_ir"),
-    symbols: z.array(z.string().min(1)).optional(),
+    kind: z.literal("contract_graph"),
+    contract_ids: z.array(z.string().min(1)).min(1),
   }),
   expect: z.object({
     status: z.literal("passed"),
@@ -107,10 +104,7 @@ export const ScorerSchema = z.discriminatedUnion("type", [
 
 export const AcceptanceSpecSchema = z.object({
   id: z.string().min(1).describe("Stable spec ID, e.g. 'acc-login-3s'."),
-  source_requirement_id: z
-    .string()
-    .min(1)
-    .describe("Requirement ID this spec was derived from (REQ-N)."),
+  source_requirement_id: z.string().min(1).describe("Requirement ID this spec was derived from (REQ-N)."),
   goal_id: z
     .string()
     .min(1)
@@ -164,8 +158,9 @@ export function renderSpecsAsText(specs: readonly AcceptanceSpec[]): string {
       } else if (sc.type === "llm_judge") {
         lines.push(`    - [judge] ${sc.name} — ${sc.criteria}`)
       } else if (sc.type === "contract_audit") {
-        const symbols = sc.spec.symbols?.length ? ` symbols=${sc.spec.symbols.join(", ")}` : ""
-        lines.push(`    - [contract_audit] ${sc.name} — ${sc.spec.kind}${symbols} expect=${sc.expect.status}`)
+        lines.push(
+          `    - [contract_audit] ${sc.name} — ${sc.spec.kind} contracts=${sc.spec.contract_ids.join(", ")} expect=${sc.expect.status}`,
+        )
       } else {
         lines.push(`    - [prebuilt:${sc.name}] ${JSON.stringify(sc.config)}`)
       }

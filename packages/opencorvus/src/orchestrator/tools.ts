@@ -29,11 +29,7 @@ import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { renderDesignAnalysisHandoffReference } from "@/design-analyst/handoff"
 import { materializeMcpToolResult } from "@/mcp/materialize"
-import {
-  EngineArtifactTable,
-  EngineGoalTable,
-  EngineTaskTable,
-} from "@/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "@/engine/engine.sql"
 import {
   markDeliveryPublishing,
   finalizeDeliveryResult,
@@ -51,8 +47,8 @@ import {
   findEvaluationByRun,
   findGoal,
   findGoalRun,
+  findLatestArchitectContractGraph,
   findLatestDeliveryVerdictArtifact,
-  findLatestIntegrityAttemptArtifact,
   findLatestTipGoalRun,
   findPlan,
   getGoalRetryCount,
@@ -64,20 +60,20 @@ import {
 } from "@/engine/store"
 import { describeTask, goalStatusByID, renderCollaborationClosure } from "@/engine/describe"
 import { isLiveGoalRunStatus } from "@/engine/catalog"
-import {
-  GoalContractUpdateSchema,
-} from "@/pipeline/goal-contract.schema"
+import { GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
 import { updateRun, updateTask } from "@/engine/state"
 import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
 
-import { createWorkflowState, findStepByTool, WorkflowRegistry, type WorkflowState, type MiniWorkflow } from "@/engine/workflow"
+import {
+  createWorkflowState,
+  findStepByTool,
+  WorkflowRegistry,
+  type WorkflowState,
+  type MiniWorkflow,
+} from "@/engine/workflow"
 import { Question } from "@/question"
 import { renderSpecsAsText, type AcceptanceSpec, type ContractAuditScorer } from "@/acceptance/types"
-import {
-  contractAuditRequired,
-  runContractAudit,
-  type ContractAuditCriteriaResult,
-} from "@/acceptance/contract-audit"
+import { contractAuditRequired, runContractAudit, type ContractAuditCriteriaResult } from "@/acceptance/contract-audit"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan, type RestartStage } from "./scheduler"
 import { OrchestratorEventNote } from "./agent"
 import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
@@ -88,35 +84,11 @@ import {
   SourceCoverageEntrySchema,
   type ArchitectFidelityState,
 } from "@/architect/fidelity"
-import { ContractIRSchema, renderContractIR, type ContractIR } from "@/architect/contract-ir"
-import { linkContracts } from "@/architect/linker"
-import type {
-  GoalCorrection,
-  IntegrityDimensionResult,
-  IntegrityResult,
-  MissingGoal,
-} from "@/integrity"
+import { contractGraphIRIndex } from "@/architect/contract-graph"
+import type { GoalCorrection, IntegrityDimensionResult, IntegrityGraphCorrection, IntegrityResult, MissingGoal } from "@/integrity"
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 
 const log = Log.create({ service: "task-tools" })
-
-function parseArchitectContractDecision(value: string) {
-  try {
-    const parsed = ContractIRSchema.safeParse(JSON.parse(value))
-    return parsed.success ? parsed.data : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function architectContractsFromDecisionLog(taskID: string): Array<{ ir: ContractIR; goalIDs: string[] }> {
-  return createDecisionLog(taskID)
-    .readByPhase("architect")
-    .flatMap((entry) => {
-      const ir = parseArchitectContractDecision(entry.value)
-      return ir ? [{ ir, goalIDs: entry.goalID ? [entry.goalID] : [] }] : []
-    })
-}
 
 async function runGoalContractAuditCriteria(input: {
   taskID: string
@@ -135,54 +107,51 @@ async function runGoalContractAuditCriteria(input: {
   )
   if (contractAuditSpecs.length === 0) return []
 
-  const dbGoals = listGoals(input.taskID)
-  const fidelity = readPersistedArchitectFidelity(input.task)
-  const linked = linkContracts({
-    workDir: input.workDir,
-    sourceCoverage: fidelity.sourceCoverage,
-    contracts: architectContractsFromDecisionLog(input.taskID),
-    goals: dbGoals.map((g) => ({
-      id: g.id,
-      depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
-      exports: Array.isArray(g.exports) ? g.exports as string[] : [],
-      imports: Array.isArray(g.imports) ? g.imports as string[] : [],
-    })),
-  })
-
-  const goalContract = {
-    id: goal.id,
-    kind: typeof goal.kind === "string" ? goal.kind : undefined,
-    imports: Array.isArray(goal.imports) ? goal.imports as string[] : [],
-    exports: Array.isArray(goal.exports) ? goal.exports as string[] : [],
-    owned_paths: Array.isArray(goal.owned_paths) ? goal.owned_paths as string[] : [],
-  }
-  if (linked.issues.length > 0) {
+  const graph = findLatestArchitectContractGraph(input.taskID)
+  if (!graph) {
     return contractAuditSpecs.map(({ spec, scorer }) => ({
       name: `acceptance:${spec.id}:${scorer.name}`,
       label: `${spec.title} / ${scorer.name}`,
       family: "contract_audit",
       status: "failed",
-      evidence: linked.issues.map((issue) =>
-        `${issue.kind}${issue.goalID ? ` goal=${issue.goalID}` : ""}${issue.symbol ? ` symbol=${issue.symbol}` : ""}: ${issue.detail}`,
-      ).join("\n"),
+      evidence: `goal=${goal.id}; contract_audit scorer references graph contracts but no architect_contract_graph artifact exists`,
+      goal_id: goal.id,
+      goal_run_id: input.goalRunID,
+    }))
+  }
+  const graphContractIDs = new Set(graph.contracts.map((contract) => contract.id))
+  const missingContractIDs = contractAuditSpecs.flatMap(({ scorer }) =>
+    scorer.spec.contract_ids.filter((contractID) => !graphContractIDs.has(contractID)),
+  )
+  if (missingContractIDs.length > 0) {
+    return contractAuditSpecs.map(({ spec, scorer }) => ({
+      name: `acceptance:${spec.id}:${scorer.name}`,
+      label: `${spec.title} / ${scorer.name}`,
+      family: "contract_audit",
+      status: "failed",
+      evidence: `goal=${goal.id}; contract_audit references unknown graph contract ids: ${[...new Set(missingContractIDs)].join(", ")}`,
       goal_id: goal.id,
       goal_run_id: input.goalRunID,
     }))
   }
 
-  return contractAuditSpecs.map(({ spec, scorer }) =>
-    ({
-      ...runContractAudit({
+  const goalContract = {
+    id: goal.id,
+    kind: typeof goal.kind === "string" ? goal.kind : undefined,
+    owned_paths: Array.isArray(goal.owned_paths) ? (goal.owned_paths as string[]) : [],
+  }
+
+  return contractAuditSpecs.map(({ spec, scorer }) => ({
+    ...runContractAudit({
       workDir: input.workDir,
-      index: linked.index,
+      index: contractGraphIRIndex(graph),
       goal: goalContract,
       spec,
       scorer,
-      }),
-      goal_id: goal.id,
-      goal_run_id: input.goalRunID,
     }),
-  )
+    goal_id: goal.id,
+    goal_run_id: input.goalRunID,
+  }))
 }
 
 type IntegrityReviewOutcome =
@@ -200,6 +169,7 @@ type IntegrityReviewOutcome =
       goalCount: number
       perDimension: Array<string>
       correctionsCount: number
+      graphCorrectionsCount: number
       missingCount: number
       /** Full per-dimension breakdown including issues / corrections /
        *  missing_goals — kept on the outcome so every consumer (build tool
@@ -211,6 +181,7 @@ type IntegrityReviewOutcome =
       markdown: string
       dimensions: IntegrityDimensionResult[]
       corrections: GoalCorrection[]
+      graphCorrections: IntegrityGraphCorrection[]
       missingGoals: MissingGoal[]
     }
 
@@ -232,7 +203,7 @@ const PersistedArchitectFidelitySchema = z.object({
 function readPersistedArchitectFidelity(task: TaskRow): ArchitectFidelityState {
   const metadata =
     task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
-      ? task.metadata as Record<string, unknown>
+      ? (task.metadata as Record<string, unknown>)
       : {}
   const raw = metadata.architect_fidelity
   const parsed = PersistedArchitectFidelitySchema.safeParse(raw)
@@ -247,14 +218,15 @@ function readPersistedArchitectFidelity(task: TaskRow): ArchitectFidelityState {
 function visualReferenceSignals(task: TaskRow): string[] {
   const signals: string[] = []
   if (/https?:\/\/\S+/i.test(task.request)) signals.push("request_url")
-  const metadata = task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
-    ? task.metadata as Record<string, unknown>
-    : {}
+  const metadata =
+    task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+      ? (task.metadata as Record<string, unknown>)
+      : {}
   if (typeof metadata.figma_url === "string" && metadata.figma_url.trim()) signals.push("figma_url")
 
   const materialAttachments = [
-    ...(Array.isArray(task.attachments) ? task.attachments as any[] : []),
-    ...(Array.isArray(task.system_artifacts) ? task.system_artifacts as any[] : []),
+    ...(Array.isArray(task.attachments) ? (task.attachments as any[]) : []),
+    ...(Array.isArray(task.system_artifacts) ? (task.system_artifacts as any[]) : []),
   ]
   for (const item of materialAttachments) {
     const mime = typeof item?.mime === "string" ? item.mime : ""
@@ -293,7 +265,9 @@ function renderEvidenceSourceManifest(input: {
   lines.push("## PRD/SPEC Source Manifest")
   lines.push("Canonical PRD/SPEC file: .opencorvus/design-analysis/prd-spec.md")
   lines.push("Canonical source manifest file: .opencorvus/design-analysis/evidence-source-manifest.md")
-  lines.push("Canonical decision-log entries: phase=design_analysis keys product_spec, frontend_spec, visual_consistency_spec, backend_spec, prd_iteration_notes, completeness_review.")
+  lines.push(
+    "Canonical decision-log entries: phase=design_analysis keys product_spec, frontend_spec, visual_consistency_spec, backend_spec, prd_iteration_notes, completeness_review.",
+  )
   lines.push("Optional visual anchors: task.design_specs, when present. They are secondary to visual_consistency_spec.")
 
   if (input.materializedFiles && input.materializedFiles.length > 0) {
@@ -327,12 +301,9 @@ function renderEvidenceSourceManifest(input: {
     lines.push("")
     lines.push(`### ${title}`)
     artifacts.forEach((raw, index) => {
-      const item = raw && typeof raw === "object" && !Array.isArray(raw)
-        ? raw as Record<string, unknown>
-        : {}
-      const filename = typeof item.filename === "string" && item.filename.trim()
-        ? item.filename
-        : `attachment-${index + 1}`
+      const item = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+      const filename =
+        typeof item.filename === "string" && item.filename.trim() ? item.filename : `attachment-${index + 1}`
       const mime = typeof item.mime === "string" && item.mime.trim() ? item.mime : "application/octet-stream"
       const source = typeof item.source === "string" && item.source.trim() ? ` source=${item.source}` : ""
       const intent = typeof item.intent === "string" && item.intent.trim() ? ` intent=${item.intent}` : ""
@@ -342,8 +313,14 @@ function renderEvidenceSourceManifest(input: {
     })
   }
 
-  renderArtifactRows("User/task attachments", Array.isArray(input.task.attachments) ? input.task.attachments as unknown[] : [])
-  renderArtifactRows("Design-analysis materialized artifacts", Array.isArray(input.task.system_artifacts) ? input.task.system_artifacts as unknown[] : [])
+  renderArtifactRows(
+    "User/task attachments",
+    Array.isArray(input.task.attachments) ? (input.task.attachments as unknown[]) : [],
+  )
+  renderArtifactRows(
+    "Design-analysis materialized artifacts",
+    Array.isArray(input.task.system_artifacts) ? (input.task.system_artifacts as unknown[]) : [],
+  )
 
   if (input.referenceArtifacts.length > 0) {
     lines.push("")
@@ -446,11 +423,7 @@ async function writeDesignAnalysisArtifacts(input: {
 }): Promise<{ prdRelative: string; manifestRelative: string }> {
   const paths = designAnalysisArtifactPaths(input.projectDir)
   await fs.mkdir(path.dirname(paths.prdAbsolute), { recursive: true })
-  await fs.writeFile(
-    paths.manifestAbsolute,
-    input.evidenceSourceManifest.trimEnd() + "\n",
-    "utf8",
-  )
+  await fs.writeFile(paths.manifestAbsolute, input.evidenceSourceManifest.trimEnd() + "\n", "utf8")
   await fs.writeFile(
     paths.prdAbsolute,
     renderDesignAnalysisPrdSpecDocument({
@@ -476,7 +449,10 @@ function requireDesignAnalysisBefore(stage: string, task: TaskRow) {
       "Downstream agents must consume decision_log phase=design_analysis, including visual_consistency_spec and evidence_source_manifest; they must not infer from the raw URL or attachments.",
     fields: [
       ["next_action", "design_analysis"],
-      ["required_contract", "product_spec + frontend_spec + visual_consistency_spec + backend_spec + prd_iteration_notes + completeness_review + evidence_source_manifest"],
+      [
+        "required_contract",
+        "product_spec + frontend_spec + visual_consistency_spec + backend_spec + prd_iteration_notes + completeness_review + evidence_source_manifest",
+      ],
     ],
     pointer: "design_analysis",
   })
@@ -492,6 +468,71 @@ function acceptanceSpecsToPromptLines(raw: unknown): string[] {
       return JSON.stringify(spec)
     }
   })
+}
+
+const GOAL_UPDATE_SCORER_TYPES = ["heuristic", "llm_judge", "prebuilt", "contract_audit"] as const
+
+const goalUpdateAcceptanceGuidance = [
+  'Legal acceptance scorer type values are "heuristic", "llm_judge", "prebuilt", and "contract_audit".',
+  'Shell checks are heuristic scorers: { "type": "heuristic", "name": "...", "spec": { "kind": "shell", "cmd": "..." }, "expect": { "exit_code": 0 } }.',
+  'Do not use scorer type "shell" or "script_ref"; those are spec.kind values under type="heuristic".',
+].join(" ")
+
+const ModifyGoalInputSchema = z
+  .object({
+    goalID: z.unknown().describe("Required string. The goal ID to modify."),
+    updates: z
+      .unknown()
+      .describe(`Required object containing the goal fields to update; id is immutable. ${goalUpdateAcceptanceGuidance}`),
+    reason: z.unknown().describe("Required string. Why you decided to modify this goal."),
+  })
+  .passthrough()
+
+export function parseModifyGoalUpdates(input: unknown): { ok: true; updates: z.infer<typeof GoalContractUpdateSchema> } | {
+  ok: false
+  message: string
+} {
+  const parsed = GoalContractUpdateSchema.safeParse(input)
+  if (parsed.success) return { ok: true, updates: parsed.data }
+  return {
+    ok: false,
+    message: [
+      "Error: modify_goal output did not match the goal update contract; database unchanged.",
+      ...parsed.error.issues.slice(0, 8).map((issue) => {
+        const pathLabel = issue.path.length > 0 ? `updates.${issue.path.join(".")}` : "updates"
+        return `- ${pathLabel}: ${issue.message}`
+      }),
+      ...modifyGoalAcceptanceHints(input).map((hint) => `- ${hint}`),
+      `Resubmit modify_goal with the corrected update shape. ${goalUpdateAcceptanceGuidance}`,
+    ].join("\n"),
+  }
+}
+
+function modifyGoalAcceptanceHints(input: unknown): string[] {
+  const hints: string[] = []
+  const specs = isObjectRecord(input) && Array.isArray(input.acceptance_specs) ? input.acceptance_specs : []
+  for (const [specIndex, spec] of specs.entries()) {
+    if (!isObjectRecord(spec) || !Array.isArray(spec.scorers)) continue
+    for (const [scorerIndex, scorer] of spec.scorers.entries()) {
+      if (!isObjectRecord(scorer) || typeof scorer.type !== "string") continue
+      if ((GOAL_UPDATE_SCORER_TYPES as readonly string[]).includes(scorer.type)) continue
+      const pathLabel = `updates.acceptance_specs.${specIndex}.scorers.${scorerIndex}.type`
+      if (scorer.type === "shell") {
+        hints.push(`${pathLabel}: "shell" is not a scorer type. Use type="heuristic" with spec.kind="shell".`)
+      } else if (scorer.type === "script_ref") {
+        hints.push(`${pathLabel}: "script_ref" is not a scorer type. Use type="heuristic" with spec.kind="script_ref".`)
+      } else {
+        hints.push(
+          `${pathLabel}: "${scorer.type}" is not a scorer type. Legal values: ${GOAL_UPDATE_SCORER_TYPES.join(", ")}.`,
+        )
+      }
+    }
+  }
+  return [...new Set(hints)]
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 /**
@@ -520,8 +561,6 @@ export function computeContractFieldChanges(
     "acceptance_specs",
     "owned_paths",
     "depends_on",
-    "exports",
-    "imports",
     "priority",
     "kind",
   ] as const
@@ -545,7 +584,7 @@ export function validatePersistedArchitectFidelity(input: {
   return architectFidelityIssues({
     goals: input.goals.map((goal) => ({ id: goal.id, owned_paths: goal.owned_paths ?? [] })),
     fidelity: readPersistedArchitectFidelity(input.task),
-    designSpecs: Array.isArray(input.task.design_specs) ? input.task.design_specs as any : undefined,
+    designSpecs: Array.isArray(input.task.design_specs) ? (input.task.design_specs as any) : undefined,
     workDir: input.workDir ?? Instance.directory,
     requireSourceCoverage: input.executionStarted !== true,
     requireReferenceCoverage: (Array.isArray(input.task.design_specs) ? input.task.design_specs.length : 0) > 0,
@@ -567,18 +606,11 @@ export async function composeLatestDeliveryFeedbackForBuild(input: {
     ? rejectionDetails.filter((detail) => detail.goal_id === input.goalID)
     : rejectionDetails
 
-  const {
-    deliveryManifestFailureDetails,
-    findLatestDeliveryEvidenceManifest,
-    formatDeliveryManifestFailureDetails,
-  } = await import("@/delivery/manifest")
+  const { deliveryManifestFailureDetails, findLatestDeliveryEvidenceManifest, formatDeliveryManifestFailureDetails } =
+    await import("@/delivery/manifest")
   const deliveryID = verdictArtifact.delivery_id ?? undefined
-  const manifest = deliveryID
-    ? findLatestDeliveryEvidenceManifest({ deliveryID })
-    : undefined
-  const manifestFailureDetails = manifest
-    ? formatDeliveryManifestFailureDetails(manifest)
-    : []
+  const manifest = deliveryID ? findLatestDeliveryEvidenceManifest({ deliveryID }) : undefined
+  const manifestFailureDetails = manifest ? formatDeliveryManifestFailureDetails(manifest) : []
   const failedRuntimeFlowIds = new Set(manifest?.finalGate.failedRuntimeFlowIds ?? [])
   const failedReviewIds = new Set(manifest?.finalGate.failedReviewIds ?? [])
   const packet = {
@@ -598,11 +630,11 @@ export async function composeLatestDeliveryFeedbackForBuild(input: {
           iteration: manifest.iteration,
           finalGate: manifest.finalGate,
           failureDetails: deliveryManifestFailureDetails(manifest),
-          runtimeFlows: manifest.runtimeFlows.filter((flow) =>
-            flow.status === "failed" || failedRuntimeFlowIds.has(flow.id)
+          runtimeFlows: manifest.runtimeFlows.filter(
+            (flow) => flow.status === "failed" || failedRuntimeFlowIds.has(flow.id),
           ),
-          reviewEvidence: manifest.reviewEvidence.filter((review) =>
-            review.status === "failed" || failedReviewIds.has(review.id)
+          reviewEvidence: manifest.reviewEvidence.filter(
+            (review) => review.status === "failed" || failedReviewIds.has(review.id),
           ),
         }
       : undefined,
@@ -635,12 +667,15 @@ async function loadLatestRenderedRetryAttachment(input: {
   try {
     const task = requireTask(input.taskID)
     const artifacts = Array.isArray(task.system_artifacts) ? task.system_artifacts : []
-    const rendered = [...artifacts].reverse().find((artifact) =>
-      artifact?.intent === "rendered_output" &&
-      typeof artifact.url === "string" &&
-      typeof artifact.mime === "string" &&
-      artifact.mime.startsWith("image/")
-    )
+    const rendered = [...artifacts]
+      .reverse()
+      .find(
+        (artifact) =>
+          artifact?.intent === "rendered_output" &&
+          typeof artifact.url === "string" &&
+          typeof artifact.mime === "string" &&
+          artifact.mime.startsWith("image/"),
+      )
     if (!rendered) return undefined
     const { AttachmentStore } = await import("@/storage/attachment-store")
     const located = AttachmentStore.nameFromUrl(rendered.url)
@@ -653,11 +688,13 @@ async function loadLatestRenderedRetryAttachment(input: {
     if (!abs) {
       throw new Error(`rendered_output artifact ${located.projectID}/${located.name} is not resolvable on disk`)
     }
-    return [{
-      url: rendered.url,
-      mime: rendered.mime,
-      filename: "previous-attempt-rendered.png",
-    }]
+    return [
+      {
+        url: rendered.url,
+        mime: rendered.mime,
+        filename: "previous-attempt-rendered.png",
+      },
+    ]
   } catch (err) {
     log.warn("build retry: failed to load previous rendered screenshot attachment", {
       taskID: input.taskID,
@@ -677,24 +714,40 @@ async function loadLatestRenderedRetryAttachment(input: {
 function guessMimeFromFilename(filename: string): string {
   const ext = (filename.split(".").pop() || "").toLowerCase()
   const table: Record<string, string> = {
-    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
-    gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml",
-    avif: "image/avif", heic: "image/heic", heif: "image/heif",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    gif: "image/gif",
+    bmp: "image/bmp",
+    svg: "image/svg+xml",
+    avif: "image/avif",
+    heic: "image/heic",
+    heif: "image/heif",
     pdf: "application/pdf",
-    md: "text/markdown", markdown: "text/markdown",
-    txt: "text/plain", log: "text/plain",
-    json: "application/json", jsonc: "application/json",
-    yaml: "text/yaml", yml: "text/yaml",
-    css: "text/css", scss: "text/css", less: "text/css",
-    html: "text/html", htm: "text/html",
-    mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm",
-    mp3: "audio/mpeg", wav: "audio/wav",
+    md: "text/markdown",
+    markdown: "text/markdown",
+    txt: "text/plain",
+    log: "text/plain",
+    json: "application/json",
+    jsonc: "application/json",
+    yaml: "text/yaml",
+    yml: "text/yaml",
+    css: "text/css",
+    scss: "text/css",
+    less: "text/css",
+    html: "text/html",
+    htm: "text/html",
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+    webm: "video/webm",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
   }
   return table[ext] ?? "application/octet-stream"
 }
 
-const FIGMA_URL_PATTERN =
-  /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)\/[^\s)]+/i
+const FIGMA_URL_PATTERN = /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)\/[^\s)]+/i
 
 function isFigmaUrl(value: string): boolean {
   return FIGMA_URL_PATTERN.test(value)
@@ -712,28 +765,20 @@ function parseFigmaMaterialUrl(value: string): { nodeID: string } {
   }
   const node = parsed.searchParams.get("node-id")
   if (!node?.trim()) {
-    throw new Error(
-      `design_analysis Figma MCP materialization requires a node-id query parameter: ${value}`,
-    )
+    throw new Error(`design_analysis Figma MCP materialization requires a node-id query parameter: ${value}`)
   }
   return { nodeID: node.replace(/-/g, ":") }
 }
 
-type FigmaMcpToolName =
-  | "get_design_context"
-  | "get_screenshot"
-  | "get_metadata"
-  | "get_variable_defs"
+type FigmaMcpToolName = "get_design_context" | "get_screenshot" | "get_metadata" | "get_variable_defs"
 
 async function resolveFigmaMcpToolKeys(): Promise<Record<FigmaMcpToolName, string>> {
   const { MCP } = await import("@/mcp")
   const tools = await MCP.serverTools()
 
   const pick = (name: FigmaMcpToolName): string => {
-    const matches = tools.filter((item) =>
-      item.name === name ||
-      item.key === `Figma_${name}` ||
-      item.key === `figma_${name}`,
+    const matches = tools.filter(
+      (item) => item.name === name || item.key === `Figma_${name}` || item.key === `figma_${name}`,
     )
     if (matches.length === 0) {
       throw new Error(
@@ -741,9 +786,7 @@ async function resolveFigmaMcpToolKeys(): Promise<Record<FigmaMcpToolName, strin
       )
     }
     if (matches.length > 1) {
-      throw new Error(
-        `Ambiguous Figma MCP tool ${name}: ${matches.map((item) => item.key).join(", ")}`,
-      )
+      throw new Error(`Ambiguous Figma MCP tool ${name}: ${matches.map((item) => item.key).join(", ")}`)
     }
     return matches[0]!.key
   }
@@ -831,7 +874,9 @@ async function materializeFigmaMcpReference(input: {
       ``,
       materialized.text.trim(),
     ].join("\n")
-    const ref = await (await import("@/storage/attachment-store")).AttachmentStore.write(
+    const ref = await (
+      await import("@/storage/attachment-store")
+    ).AttachmentStore.write(
       input.projectID,
       Buffer.from(body, "utf8"),
       "text/markdown",
@@ -915,49 +960,59 @@ async function persistDeliveryVerificationThrow(input: {
       success: false,
       output: input.error,
     },
-    deferred_checks: [{
-      name: "delivery_verification",
-      result: "failed",
-      evidence: detail,
-    }],
-    tool_call_evidence: [{
-      tool: "DeliveryService.verify",
-      passed: false,
-      detail,
-    }],
-    rejection_details: [{
-      category: "runtime",
-      error: detail,
-      suggestion: "Repair the delivery verification path and run deliver again in the same task context.",
-    }],
+    deferred_checks: [
+      {
+        name: "delivery_verification",
+        result: "failed",
+        evidence: detail,
+      },
+    ],
+    tool_call_evidence: [
+      {
+        tool: "DeliveryService.verify",
+        passed: false,
+        detail,
+      },
+    ],
+    rejection_details: [
+      {
+        category: "runtime",
+        error: detail,
+        suggestion: "Repair the delivery verification path and run deliver again in the same task context.",
+      },
+    ],
   }
   Database.use((db) => {
-    db.insert(EngineArtifactTable).values({
-      id: Identifier.ascending("artifact"),
-      task_id: input.taskID,
-      run_id: input.runID ?? null,
-      delivery_id: input.deliveryID,
-      kind: "delivery_verification_threw",
-      label: "delivery_verification_threw",
-      payload: {
-        error: input.error,
-        iteration: input.iteration,
-        verdict: "rejected",
-      },
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineArtifactTable).values({
-      id: Identifier.ascending("artifact"),
-      task_id: input.taskID,
-      run_id: input.runID ?? null,
-      delivery_id: input.deliveryID,
-      kind: "verdict",
-      label: "delivery-agent-verdict",
-      payload: verdict,
-      time_created: now,
-      time_updated: now,
-    }).run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        run_id: input.runID ?? null,
+        delivery_id: input.deliveryID,
+        kind: "delivery_verification_threw",
+        label: "delivery_verification_threw",
+        payload: {
+          error: input.error,
+          iteration: input.iteration,
+          verdict: "rejected",
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        run_id: input.runID ?? null,
+        delivery_id: input.deliveryID,
+        kind: "verdict",
+        label: "delivery-agent-verdict",
+        payload: verdict,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
   })
   await sinkDeliveryVerdictToCriteria(input.taskID, verdict)
   updateEvaluationFromDeliveryVerdict({
@@ -1078,7 +1133,10 @@ export function createOrchestratorTools(input: {
         ["delivery_id", input.deliveryID],
         ["run_id", input.runID],
         ["publish_gate", input.summary],
-        ["next", "inspect declared changed files vs exported workspace; build/restart_from_stage as needed; then deliver again"],
+        [
+          "next",
+          "inspect declared changed files vs exported workspace; build/restart_from_stage as needed; then deliver again",
+        ],
       ],
       pointer: `delivery ${input.deliveryID}; publish gate failure is rework feedback`,
     })
@@ -1101,7 +1159,9 @@ export function createOrchestratorTools(input: {
     return Number.isSafeInteger(value) && value > 0 ? value : undefined
   }
 
-  function resolveGoalReferenceForBuild(reference: string): { ok: true; goalID: string } | { ok: false; message: string } {
+  function resolveGoalReferenceForBuild(
+    reference: string,
+  ): { ok: true; goalID: string } | { ok: false; message: string } {
     const raw = reference.trim()
     if (!raw) {
       return {
@@ -1208,23 +1268,33 @@ export function createOrchestratorTools(input: {
     if (!step) return
     try {
       EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
-        taskID, stepID: step.id, goalID, status: "running",
+        taskID,
+        stepID: step.id,
+        goalID,
+        status: "running",
         summary: `Step "${step.label}" started`,
       })
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
   }
 
   async function trackStepComplete(toolName: string, goalID?: string, failed = false): Promise<void> {
     if (!input.workflow) return
     const step = findStepByTool(input.workflow, toolName)
     if (!step) return
-    const status = failed ? "failed" as const : "completed" as const
+    const status = failed ? ("failed" as const) : ("completed" as const)
     try {
       EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
-        taskID, stepID: step.id, goalID, status,
+        taskID,
+        stepID: step.id,
+        goalID,
+        status,
         summary: `Step "${step.label}" ${status}`,
       })
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
   }
 
   async function createExecutionRunRecord() {
@@ -1240,8 +1310,7 @@ export function createOrchestratorTools(input: {
     const executor = task.executor
     const sessionID = task.session_id!
     const planID = Identifier.ascending("plan")
-    const { EnginePlanVersionTable, EnginePlanNodeTable, EngineGoalTable } =
-      await import("@/engine/engine.sql")
+    const { EnginePlanVersionTable, EnginePlanNodeTable, EngineGoalTable } = await import("@/engine/engine.sql")
 
     Database.transaction((db) => {
       // Single-active-plan invariant: retire every prior active plan for this
@@ -1252,18 +1321,20 @@ export function createOrchestratorTools(input: {
       // tie (typically the older row, whose goals were re-pointed to the new
       // plan), and the board loads zero goals.
       supersedePriorActivePlansForTask(db, { taskID, now })
-      db.insert(EnginePlanVersionTable).values({
-        id: planID,
-        task_id: taskID,
-        spec_snapshot_id: activeSpec.id,
-        version: 1,
-        status: "active",
-        summary: `${dbGoals.length} goals`,
-        prompt: task.request,
-        metadata: {},
-        time_created: now,
-        time_updated: now,
-      }).run()
+      db.insert(EnginePlanVersionTable)
+        .values({
+          id: planID,
+          task_id: taskID,
+          spec_snapshot_id: activeSpec.id,
+          version: 1,
+          status: "active",
+          summary: `${dbGoals.length} goals`,
+          prompt: task.request,
+          metadata: {},
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
 
       const goalToPlanNode = new Map<string, string>()
       const planNodeIDs: string[] = []
@@ -1286,20 +1357,22 @@ export function createOrchestratorTools(input: {
           return pnID ? [pnID] : []
         })
 
-        db.insert(EnginePlanNodeTable).values({
-          id: planNodeIDs[index],
-          task_id: taskID,
-          plan_version_id: planID,
-          kind: "goal",
-          goal_id: goal.id,
-          title: goal.title,
-          brief: renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]),
-          depends_on_ids: resolvedDeps.length > 0 ? resolvedDeps : undefined,
-          order_index: index,
-          metadata: {},
-          time_created: now,
-          time_updated: now,
-        }).run()
+        db.insert(EnginePlanNodeTable)
+          .values({
+            id: planNodeIDs[index],
+            task_id: taskID,
+            plan_version_id: planID,
+            kind: "goal",
+            goal_id: goal.id,
+            title: goal.title,
+            brief: renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]),
+            depends_on_ids: resolvedDeps.length > 0 ? resolvedDeps : undefined,
+            order_index: index,
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
       }
 
       for (const goal of dbGoals) {
@@ -1414,6 +1487,7 @@ export function createOrchestratorTools(input: {
           ["spec_snapshot_id", outcome.specSnapshotID],
           ["per_dimension", outcome.perDimension],
           ["corrections_count", String(outcome.correctionsCount)],
+          ["graph_corrections_count", String(outcome.graphCorrectionsCount)],
           ["missing_count", String(outcome.missingCount)],
           ["summary", outcome.summary],
           // Full review text — every issue, every correction proposal,
@@ -1491,14 +1565,13 @@ export function createOrchestratorTools(input: {
       objective: g.objective,
       acceptance_specs: (typeof g.acceptance_specs === "string"
         ? JSON.parse(g.acceptance_specs)
-        : g.acceptance_specs ?? []) as AcceptanceSpec[],
-      owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : g.owned_paths ?? [],
-      depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : g.depends_on ?? [],
-      exports: typeof g.exports === "string" ? JSON.parse(g.exports) : g.exports ?? [],
-      imports: typeof g.imports === "string" ? JSON.parse(g.imports) : g.imports ?? [],
+        : (g.acceptance_specs ?? [])) as AcceptanceSpec[],
+      owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : (g.owned_paths ?? []),
+      depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : (g.depends_on ?? []),
       priority: g.priority as "blocking" | "advisory",
       kind: g.kind,
-      requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
+      requirement_ids:
+        typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : (g.requirement_ids ?? []),
     }))
 
     const { reviewIntegrity, computeRequirementStatusSnapshot } = await import("@/integrity")
@@ -1527,6 +1600,13 @@ export function createOrchestratorTools(input: {
     )
       ? "post_build"
       : "pre_build"
+    const contractGraph = findLatestArchitectContractGraph(taskID)
+    if (!contractGraph) {
+      throw new Error(
+        `Cannot run integrity review for task ${taskID}: missing architect_contract_graph artifact. ` +
+          `Run Architect again so graph contracts and dependency reasons are available.`,
+      )
+    }
 
     const verdict = await reviewIntegrity({
       userRequest: task.request,
@@ -1535,9 +1615,10 @@ export function createOrchestratorTools(input: {
       requirements,
       requirementDecisions,
       requirementStatus,
-      designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
+      designSpecs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
+      contractGraph,
       decisionLog,
-      attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
+      attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
       signal: input.signal,
       taskID,
       parentSessionID: input.agentSessionID,
@@ -1557,7 +1638,7 @@ export function createOrchestratorTools(input: {
         phase,
         perDimension: perDimensionRollup,
         issuesCount: verdict.issues.length,
-        correctionsCount: verdict.corrections.length,
+        correctionsCount: verdict.corrections.length + verdict.graphCorrections.length,
         missingCount: verdict.missingGoals.length,
         reason: verdict.summary,
         reviewMarkdown: markdown,
@@ -1565,8 +1646,9 @@ export function createOrchestratorTools(input: {
           action: c.action,
           goalID: c.goalID,
           reason: c.reason,
-          updates: c.updates as Record<string, unknown> | undefined,
-        })),
+            updates: c.updates as Record<string, unknown> | undefined,
+          })),
+        graphCorrections: verdict.graphCorrections,
         missingGoals: verdict.missingGoals,
       })
     } catch (err) {
@@ -1585,17 +1667,18 @@ export function createOrchestratorTools(input: {
     // becomes the cheaper repair (per orchestrator-core.txt's repair ladder).
     try {
       const dimSummary = verdict.dimensions
-        .map((d) => `${d.id}:${d.verdict}(${d.issues.length}i/${d.corrections.length}c/${d.missingGoals.length}m)`)
+        .map(
+          (d) =>
+            `${d.id}:${d.verdict}(${d.issues.length}i/${d.corrections.length}c/${d.graphCorrections.length}gc/${d.missingGoals.length}m)`,
+        )
         .join(", ")
       const topIssues = verdict.issues
         .slice(0, 5)
         .map((i) => `[${i.type}] ${i.description}`)
         .join("; ")
-      const issueTail = verdict.issues.length > 5
-        ? ` (+${verdict.issues.length - 5} more in engine_artifact)`
-        : ""
+      const issueTail = verdict.issues.length > 5 ? ` (+${verdict.issues.length - 5} more in engine_artifact)` : ""
       const value =
-        `verdict=${verdict.verdict} | dims=${dimSummary} | counts=${verdict.issues.length}i/${verdict.corrections.length}c/${verdict.missingGoals.length}m` +
+        `verdict=${verdict.verdict} | dims=${dimSummary} | counts=${verdict.issues.length}i/${verdict.corrections.length}c/${verdict.graphCorrections.length}gc/${verdict.missingGoals.length}m` +
         (verdict.summary ? ` | summary=${verdict.summary}` : "") +
         (topIssues ? ` | top: ${topIssues}${issueTail}` : "")
       decisionLog.append({
@@ -1618,11 +1701,15 @@ export function createOrchestratorTools(input: {
       sessionID: verdict.sessionID,
       goalCount: goalsForReview.length,
       correctionsCount: verdict.corrections.length,
+      graphCorrectionsCount: verdict.graphCorrections.length,
       missingCount: verdict.missingGoals.length,
-      perDimension: perDimensionLabels.map((label, index) => `${label}(${verdict.dimensions[index]?.issues.length ?? 0}issues)`),
+      perDimension: perDimensionLabels.map(
+        (label, index) => `${label}(${verdict.dimensions[index]?.issues.length ?? 0}issues)`,
+      ),
       markdown,
       dimensions: verdict.dimensions,
       corrections: verdict.corrections,
+      graphCorrections: verdict.graphCorrections,
       missingGoals: verdict.missingGoals,
     }
   }
@@ -1643,11 +1730,7 @@ export function createOrchestratorTools(input: {
     const plan = restartStagePlan(stage, Boolean(activePlanAtStart))
     const now = Date.now()
     const runError = `restart_from_stage(${stage}): ${reason}`
-    const {
-      EngineGoalTable,
-      EnginePlanVersionTable,
-      EngineSpecSnapshotTable,
-    } = await import("@/engine/engine.sql")
+    const { EngineGoalTable, EnginePlanVersionTable, EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
     const { abortLiveExecutionForTask, createRun } = await import("@/engine/writer")
 
     const aborted = await abortLiveExecutionForTask({
@@ -1681,9 +1764,7 @@ export function createOrchestratorTools(input: {
           .all()
         deletedGoals = rows.length
         if (deletedGoals > 0) {
-          db.delete(EngineGoalTable)
-            .where(eq(EngineGoalTable.task_id, taskID))
-            .run()
+          db.delete(EngineGoalTable).where(eq(EngineGoalTable.task_id, taskID)).run()
         }
       }
 
@@ -1736,7 +1817,9 @@ export function createOrchestratorTools(input: {
       retiredGoalRuns > 0 ? `${retiredGoalRuns} goal_run(s) aborted` : null,
       retiredRuns > 0 ? `${retiredRuns} run(s) aborted` : null,
       freshRunID ? `fresh queued run=${freshRunID}` : null,
-    ].filter(Boolean).join(", ")
+    ]
+      .filter(Boolean)
+      .join(", ")
 
     return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} NEXT: ${plan.nextAction}${freshRunID ? `(${freshRunID})` : ""}.`
   }
@@ -1799,15 +1882,17 @@ export function createOrchestratorTools(input: {
           const result = await RequirementsAgent.run({
             title: task.title,
             request: task.request,
-            attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
-            designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
+            attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
+            designSpecs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
             designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
             decisionLog,
             onStatus: () => {},
-            onSessionCreated: (id) => { runnerSessionID = id },
+            onSessionCreated: (id) => {
+              runnerSessionID = id
+            },
           })
           if (result.requirements.length === 0) {
             // Same contract the old RequirementsService enforced: an empty
@@ -1815,7 +1900,6 @@ export function createOrchestratorTools(input: {
             // a hard error so the orchestrator can re-run / fail the task.
             throw new Error("requirements agent produced no REQ-N entries")
           }
-
 
           // Persist spec snapshot v1 (requirements + decisions only; the
           // Architect produces v2 with goals/traceability/contracts).
@@ -1836,63 +1920,67 @@ export function createOrchestratorTools(input: {
             ...result.decisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`),
           ].join("\n")
 
-          try { Database.transaction((db) => {
-            // Phase-6-f-5: maintain the "at most one non-superseded spec per
-            // task" invariant explicitly. Previously this was tracked via
-            // task.active_spec_version_id; now findActiveSpecForTask derives
-            // from spec.status != 'superseded', so writers must supersede
-            // prior specs before inserting a new one.
-            db.update(EngineSpecSnapshotTable)
-              .set({ status: "superseded", time_updated: now })
-              .where(
-                and(
-                  eq(EngineSpecSnapshotTable.task_id, taskID),
-                  sql`${EngineSpecSnapshotTable.status} != 'superseded'`,
+          try {
+            Database.transaction((db) => {
+              // Phase-6-f-5: maintain the "at most one non-superseded spec per
+              // task" invariant explicitly. Previously this was tracked via
+              // task.active_spec_version_id; now findActiveSpecForTask derives
+              // from spec.status != 'superseded', so writers must supersede
+              // prior specs before inserting a new one.
+              db.update(EngineSpecSnapshotTable)
+                .set({ status: "superseded", time_updated: now })
+                .where(
+                  and(
+                    eq(EngineSpecSnapshotTable.task_id, taskID),
+                    sql`${EngineSpecSnapshotTable.status} != 'superseded'`,
+                  ),
+                )
+                .run()
+              db.insert(EngineSpecSnapshotTable)
+                .values({
+                  id: specSnapshotID,
+                  task_id: taskID,
+                  version: 1,
+                  status: "ready",
+                  summary: result.summary,
+                  content: specContent,
+                  scope: result.requirements.map((r) => r.description).join("; "),
+                  time_created: now,
+                  time_updated: now,
+                })
+                .run()
+
+              if (result.requirements.length > 0) {
+                insertRequirements(db, {
+                  taskID,
+                  specSnapshotID,
+                  requirements: result.requirements.map((r) => ({
+                    id: r.id,
+                    title: r.description,
+                    description: r.description,
+                    acceptance: [] as string[],
+                    evidence_refs: [] as string[],
+                    priority: r.type === "explicit" ? ("blocking" as const) : ("advisory" as const),
+                  })),
+                  now,
+                })
+              }
+
+              db.update(EngineTaskTable)
+                .set({
+                  time_updated: now,
+                })
+                .where(eq(EngineTaskTable.id, taskID))
+                .run()
+              Database.effect(() =>
+                EngineProtocol.emit(
+                  EngineEvent.TaskUpdated,
+                  { taskID, status: deriveTaskStatus(task), summary: "Requirements parsed" },
+                  { source: "orchestrator.requirements" },
                 ),
               )
-              .run()
-            db.insert(EngineSpecSnapshotTable).values({
-              id: specSnapshotID,
-              task_id: taskID,
-              version: 1,
-              status: "ready",
-              summary: result.summary,
-              content: specContent,
-              scope: result.requirements.map((r) => r.description).join("; "),
-              time_created: now,
-              time_updated: now,
-            }).run()
-
-            if (result.requirements.length > 0) {
-              insertRequirements(db, {
-                taskID,
-                specSnapshotID,
-                requirements: result.requirements.map((r) => ({
-                  id: r.id,
-                  title: r.description,
-                  description: r.description,
-                  acceptance: [] as string[],
-                  evidence_refs: [] as string[],
-                  priority: r.type === "explicit" ? "blocking" as const : "advisory" as const,
-                })),
-                now,
-              })
-            }
-
-            db.update(EngineTaskTable)
-              .set({
-                time_updated: now,
-              })
-              .where(eq(EngineTaskTable.id, taskID))
-              .run()
-            Database.effect(() =>
-              EngineProtocol.emit(
-                EngineEvent.TaskUpdated,
-                { taskID, status: deriveTaskStatus(task), summary: "Requirements parsed" },
-                { source: "orchestrator.requirements" },
-              ),
-            )
-          }) } catch (dbErr) {
+            })
+          } catch (dbErr) {
             log.error("requirements: failed to persist to DB", {
               taskID,
               error: dbErr instanceof Error ? dbErr.message : String(dbErr),
@@ -1987,31 +2075,31 @@ export function createOrchestratorTools(input: {
       ].join("\n"),
       inputSchema: z.object({
         reason: z.string().describe("Why design analysis is needed for this task"),
-        url: z
-          .string()
-          .optional()
-          .describe("Deprecated — use `urls`. Single URL for back-compat; merged into `urls`."),
+        url: z.string().optional().describe("Deprecated — use `urls`. Single URL for back-compat; merged into `urls`."),
         urls: z
           .array(z.string())
           .optional()
           .describe(
             "Any number of design-reference URLs: live pages, design-tool share links " +
-            "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
-            "Non-Figma URLs are available to design-analyst for mirror extraction and may also be materialized " +
-            "as screenshot references. Figma URLs use the connected Figma MCP path. Do not route URL/page extraction to build.",
+              "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
+              "Non-Figma URLs are available to design-analyst for mirror extraction and may also be materialized " +
+              "as screenshot references. Figma URLs use the connected Figma MCP path. Do not route URL/page extraction to build.",
           ),
-        figma_url: z.string().optional().describe(
-          "Figma file URL materialized through the connected Figma MCP server (figma.com/file/... or figma.com/design/...). " +
-          "Requires Figma MCP tools get_design_context, get_screenshot, get_metadata, and get_variable_defs.",
-        ),
+        figma_url: z
+          .string()
+          .optional()
+          .describe(
+            "Figma file URL materialized through the connected Figma MCP server (figma.com/file/... or figma.com/design/...). " +
+              "Requires Figma MCP tools get_design_context, get_screenshot, get_metadata, and get_variable_defs.",
+          ),
         materials: z
           .array(z.string())
           .optional()
           .describe(
             "Local design-material paths (relative to project root, or absolute under it). " +
-            "Supported: images, PDFs, markdown/text style guides, design-tokens JSON, CSS. " +
-            "Each is read from disk and materialized into the attachment store as a visual_reference " +
-            "so it flows through the same multimodal / read_attachment pipeline as user uploads.",
+              "Supported: images, PDFs, markdown/text style guides, design-tokens JSON, CSS. " +
+              "Each is read from disk and materialized into the attachment store as a visual_reference " +
+              "so it flows through the same multimodal / read_attachment pipeline as user uploads.",
           ),
       }),
       execute: async ({ reason, url, urls, figma_url, materials }) => {
@@ -2023,17 +2111,18 @@ export function createOrchestratorTools(input: {
         // treated as a Figma URL (uses Figma MCP instead of screenshot).
         const meta = (task.metadata as Record<string, unknown> | null) ?? {}
         const metaFigma = typeof meta.figma_url === "string" ? meta.figma_url : undefined
-        const inputUrls = [
-          ...(url ? [url] : []),
-          ...(Array.isArray(urls) ? urls : []),
-        ].filter((u) => typeof u === "string" && u.length > 0)
+        const inputUrls = [...(url ? [url] : []), ...(Array.isArray(urls) ? urls : [])].filter(
+          (u) => typeof u === "string" && u.length > 0,
+        )
         const figmaUrls = [
           ...(figma_url ? [figma_url] : []),
           ...(metaFigma ? [metaFigma] : []),
           ...inputUrls.filter((u) => isFigmaUrl(u)),
         ]
         const liveUrls = inputUrls.filter((u) => !isFigmaUrl(u))
-        const materialPaths = Array.isArray(materials) ? materials.filter((m) => typeof m === "string" && m.length > 0) : []
+        const materialPaths = Array.isArray(materials)
+          ? materials.filter((m) => typeof m === "string" && m.length > 0)
+          : []
         if (!hasAttachments && liveUrls.length === 0 && figmaUrls.length === 0 && materialPaths.length === 0) {
           // P4: decision_log entry before throw so downstream stage agents
           // (architect / build) see the abort cause via TaskContext.snapshot
@@ -2045,7 +2134,8 @@ export function createOrchestratorTools(input: {
             createDecisionLog(taskID).append({
               phase: "design_analysis",
               key: "abort_no_visual_input",
-              value: "Design analysis aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
+              value:
+                "Design analysis aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
               reason: "no_visual_input_provided",
             })
           } catch (logErr) {
@@ -2142,7 +2232,13 @@ export function createOrchestratorTools(input: {
                 "gate",
               )
             }
-            const hostname = (() => { try { return new URL(capture.manifest.url).hostname } catch { return "url" } })()
+            const hostname = (() => {
+              try {
+                return new URL(capture.manifest.url).hostname
+              } catch {
+                return "url"
+              }
+            })()
             const slug = hostname.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 60) || "url"
             const ref = await AttachmentStore.write(
               Instance.project.id,
@@ -2190,26 +2286,27 @@ export function createOrchestratorTools(input: {
               : pathMod.normalize(pathMod.resolve(projectRoot, rawPath))
             if (!abs.startsWith(pathMod.normalize(projectRoot))) {
               log.warn("design_analysis: material path escapes project root — skipped", {
-                taskID, rawPath, projectRoot,
+                taskID,
+                rawPath,
+                projectRoot,
               })
               continue
             }
             const bytes = await fsMod.readFile(abs)
             const filename = pathMod.basename(abs)
             const mime = guessMimeFromFilename(filename)
-            const ref = await AttachmentStore.write(
-              Instance.project.id,
-              bytes,
-              mime,
-              filename,
-            )
+            const ref = await AttachmentStore.write(Instance.project.id, bytes, mime, filename)
             await EngineService.appendTaskSystemArtifact(taskID, {
               ...ref,
               intent: "visual_reference",
               source: "material",
             })
             log.info("design_analysis: material materialized", {
-              taskID, path: rawPath, sha: ref.sha, size: ref.size, mime,
+              taskID,
+              path: rawPath,
+              sha: ref.sha,
+              size: ref.size,
+              mime,
             })
             materializedCount++
           } catch (matErr) {
@@ -2296,7 +2393,9 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             signal: input.signal,
             onStatus: () => {},
-            onSessionCreated: (id) => { runnerSessionID = id },
+            onSessionCreated: (id) => {
+              runnerSessionID = id
+            },
           })
 
           // Persist optional visual anchors on task.design_specs (dedicated
@@ -2323,10 +2422,7 @@ export function createOrchestratorTools(input: {
             figmaUrls,
             materialPaths,
             referenceArtifacts: analysis.referenceArtifacts,
-            materializedFiles: [
-              materializedDesignFiles.prdRelative,
-              materializedDesignFiles.manifestRelative,
-            ],
+            materializedFiles: [materializedDesignFiles.prdRelative, materializedDesignFiles.manifestRelative],
           })
           const writtenDesignArtifacts = await writeDesignAnalysisArtifacts({
             projectDir: Instance.directory,
@@ -2371,7 +2467,8 @@ export function createOrchestratorTools(input: {
               phase: "design_analysis",
               key: "recommended_stack",
               value: analysis.techStack.join(", "),
-              reason: "Design-analyst's implementation stack hints grounded in the PRD/SPEC and observed reference behavior.",
+              reason:
+                "Design-analyst's implementation stack hints grounded in the PRD/SPEC and observed reference behavior.",
             })
           }
           decisionLog.append({
@@ -2414,7 +2511,8 @@ export function createOrchestratorTools(input: {
             phase: "design_analysis",
             key: "evidence_source_manifest",
             value: evidenceSourceManifest,
-            reason: "Source manifest naming the PRD/SPEC origin, task files, materialized images, and mirror artifacts downstream agents can read.",
+            reason:
+              "Source manifest naming the PRD/SPEC origin, task files, materialized images, and mirror artifacts downstream agents can read.",
           })
           if (analysis.referenceArtifacts.length > 0) {
             decisionLog.append({
@@ -2513,9 +2611,7 @@ export function createOrchestratorTools(input: {
             summary:
               "Architect decomposition requires the durable REQ-N requirements snapshot. " +
               "No architect session was started because the prior spec has been cleared or has not been created.",
-            fields: [
-              ["next_action", "requirements"],
-            ],
+            fields: [["next_action", "requirements"]],
             pointer: "read_context scope=decisions",
           })
         }
@@ -2553,7 +2649,11 @@ export function createOrchestratorTools(input: {
           const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
 
           const { ArchitectAgent } = await import("@/architect/agent")
-          const { copyRequirementsToSpecSnapshot, upsertGoalsFromArchitect } = await import("@/engine/persist")
+          const { copyRequirementsToSpecSnapshot, persistArchitectContractGraph, upsertGoalsFromArchitect } =
+            await import("@/engine/persist")
+          const { remapArchitectContractGraphGoalIDs, renderContractGraphForPrompt } = await import(
+            "@/architect/contract-graph"
+          )
           const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
 
           const result = await ArchitectAgent.coordinate({
@@ -2563,14 +2663,13 @@ export function createOrchestratorTools(input: {
               objective: g.objective,
               acceptance_specs: (typeof g.acceptance_specs === "string"
                 ? JSON.parse(g.acceptance_specs)
-                : g.acceptance_specs ?? []) as AcceptanceSpec[],
-              owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : g.owned_paths ?? [],
-              depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : g.depends_on ?? [],
-              exports: typeof g.exports === "string" ? JSON.parse(g.exports) : g.exports ?? [],
-              imports: typeof g.imports === "string" ? JSON.parse(g.imports) : g.imports ?? [],
+                : (g.acceptance_specs ?? [])) as AcceptanceSpec[],
+              owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : (g.owned_paths ?? []),
+              depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : (g.depends_on ?? []),
               priority: g.priority as "blocking" | "advisory",
               kind: g.kind,
-              requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
+              requirement_ids:
+                typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : (g.requirement_ids ?? []),
               order_index: g.order_index,
               // Phase E (2026-05-05): retry_count derived from artifact tip.
               retry_count: getGoalRetryCount(g.id),
@@ -2581,13 +2680,15 @@ export function createOrchestratorTools(input: {
             decisionLog,
             requirements,
             requirementDecisions,
-            designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
+            designSpecs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
             designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
-            attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
+            attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
             signal: input.signal,
             parentSessionID: input.agentSessionID,
             onStatus: () => {},
-            onSessionCreated: (id) => { runnerSessionID = id },
+            onSessionCreated: (id) => {
+              runnerSessionID = id
+            },
           })
 
           // Single-pass persist. Architect's goal set is the authoritative
@@ -2599,140 +2700,176 @@ export function createOrchestratorTools(input: {
           const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
           const goalLines = result.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
           const traceLines = result.traceability.map((t) => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`)
-          const sourceCoverageLines = result.fidelity.sourceCoverage.map((row) =>
-            `- **${row.id}** [${row.action}] paths=${row.paths.join(", ")} goals=${row.goal_ids.join(", ")} — ${row.rationale}`,
+          const sourceCoverageLines = result.fidelity.sourceCoverage.map(
+            (row) =>
+              `- **${row.id}** [${row.action}] paths=${row.paths.join(", ")} goals=${row.goal_ids.join(", ")} — ${row.rationale}`,
           )
           const referenceCoverageLines = result.fidelity.referenceCoverage.map((row) => {
             const specIDs = row.visual_spec_ids.length > 0 ? ` visual_specs=${row.visual_spec_ids.join(", ")}` : ""
             return `- **${row.id}** surface=${row.surface} goals=${row.goal_ids.join(", ")}${specIDs} — ${row.expectation}`
           })
-          const assemblyOwnerLines = result.fidelity.assemblyOwners.map((row) =>
-            `- surface=${row.surface} owner=${row.goal_id} — ${row.rationale}`,
+          const assemblyOwnerLines = result.fidelity.assemblyOwners.map(
+            (row) => `- surface=${row.surface} owner=${row.goal_id} — ${row.rationale}`,
           )
-          const contractLines = result.contracts.map((c) => `- **${c.category}** — ${c.title} (goals: ${c.goalIDs.join(", ") || "task-wide"})`)
-          const specContent = [
-            `# ${task.title}`,
-            "",
-            result.summary,
-            "",
-            "## Requirements",
-            ...(reqLines.length > 0 ? reqLines : ["_(none — Requirements produced an empty REQ-N list)_"]),
-            "",
-            "## Decisions",
-            ...(decisionLines.length > 0 ? decisionLines : ["_(none)_"]),
-            "",
-            "## Goals",
-            ...(goalLines.length > 0 ? goalLines : ["_(none)_"]),
-            "",
-            "## Traceability",
-            ...(traceLines.length > 0 ? traceLines : ["_(none)_"]),
-            "",
-            "## Source Coverage",
-            ...(sourceCoverageLines.length > 0 ? sourceCoverageLines : ["_(none)_"]),
-            "",
-            "## Reference Coverage",
-            ...(referenceCoverageLines.length > 0 ? referenceCoverageLines : ["_(none)_"]),
-            "",
-            "## Assembly Ownership",
-            ...(assemblyOwnerLines.length > 0 ? assemblyOwnerLines : ["_(none)_"]),
-            "",
-            "## Architect Contracts",
-            ...(contractLines.length > 0 ? contractLines : ["_(none)_"]),
-          ].join("\n")
-
           let persisted: Array<{ id: string; title: string; llmID: string }> = []
           let llmToDBID = new Map<string, string>()
           let deletedIDs: string[] = []
-          try { Database.transaction((db) => {
-            const now = Date.now()
-            db.insert(EngineSpecSnapshotTable).values({
-              id: newSpecSnapshotID,
-              task_id: taskID,
-              version: 2,
-              status: "ready",
-              summary: result.summary,
-              content: specContent,
-              scope: requirements.map((r) => r.description).join("; "),
-              time_created: now,
-              time_updated: now,
-            }).run()
+          try {
+            Database.transaction((db) => {
+              const now = Date.now()
+              db.insert(EngineSpecSnapshotTable)
+                .values({
+                  id: newSpecSnapshotID,
+                  task_id: taskID,
+                  version: 2,
+                  status: "ready",
+                  summary: result.summary,
+                  content: `${task.title}\n\n${result.summary}`,
+                  scope: requirements.map((r) => r.description).join("; "),
+                  time_created: now,
+                  time_updated: now,
+                })
+                .run()
 
-            if (priorSpecSnapshotID) {
-              copyRequirementsToSpecSnapshot(db, {
+              if (priorSpecSnapshotID) {
+                copyRequirementsToSpecSnapshot(db, {
+                  taskID,
+                  fromSpecSnapshotID: priorSpecSnapshotID,
+                  toSpecSnapshotID: newSpecSnapshotID,
+                  now,
+                })
+
+                db.update(EngineSpecSnapshotTable)
+                  .set({ status: "superseded", time_updated: now })
+                  .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
+                  .run()
+              }
+
+              const out = upsertGoalsFromArchitect(db, {
                 taskID,
-                fromSpecSnapshotID: priorSpecSnapshotID,
-                toSpecSnapshotID: newSpecSnapshotID,
+                specSnapshotID: newSpecSnapshotID,
+                architectGoals: result.goals.map((g) => ({
+                  llmID: g.id,
+                  title: g.title,
+                  objective: g.objective,
+                  acceptance_specs: g.acceptance_specs,
+                  owned_paths: g.owned_paths,
+                  depends_on: g.depends_on,
+                  kind: g.kind,
+                  requirement_ids: g.requirement_ids,
+                  priority: g.priority,
+                  source: g.requirement_ids.length > 0 ? ("spec" as const) : ("system" as const),
+                })),
+                removedLLMIDs: result.removedGoalIDs,
+                now,
+              })
+              persisted = out.persisted
+              llmToDBID = out.llmToDBID
+              deletedIDs = out.deletedIDs
+
+              const mappedContractGraph = remapArchitectContractGraphGoalIDs(
+                result.contractGraph,
+                (goalID) =>
+                  llmToDBID.get(goalID) ?? (existingGoals.some((goal) => goal.id === goalID) ? goalID : undefined),
+              )
+              persistArchitectContractGraph(db, {
+                taskID,
+                graph: mappedContractGraph,
                 now,
               })
 
-              db.update(EngineSpecSnapshotTable)
-                .set({ status: "superseded", time_updated: now })
-                .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
-                .run()
-            }
+              const mappedArchitectFidelity = {
+                sourceCoverage: result.fidelity.sourceCoverage.map((row) => ({
+                  ...row,
+                  goal_ids: row.goal_ids.map((goalID) => llmToDBID.get(goalID) ?? goalID),
+                })),
+                referenceCoverage: result.fidelity.referenceCoverage.map((row) => ({
+                  ...row,
+                  goal_ids: row.goal_ids.map((goalID) => llmToDBID.get(goalID) ?? goalID),
+                })),
+                assemblyOwners: result.fidelity.assemblyOwners.map((row) => ({
+                  ...row,
+                  goal_id: llmToDBID.get(row.goal_id) ?? row.goal_id,
+                })),
+              }
 
-            const out = upsertGoalsFromArchitect(db, {
-              taskID,
-              specSnapshotID: newSpecSnapshotID,
-              architectGoals: result.goals.map((g) => ({
-                llmID: g.id,
-                title: g.title,
-                objective: g.objective,
-                acceptance_specs: g.acceptance_specs,
-                owned_paths: g.owned_paths,
-                depends_on: g.depends_on,
-                exports: g.exports,
-                imports: g.imports,
-                kind: g.kind,
-                requirement_ids: g.requirement_ids,
-                priority: g.priority,
-                source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
-              })),
-              removedLLMIDs: result.removedGoalIDs,
-              now,
-            })
-            persisted = out.persisted
-            llmToDBID = out.llmToDBID
-            deletedIDs = out.deletedIDs
-
-            const mappedArchitectFidelity = {
-              sourceCoverage: result.fidelity.sourceCoverage.map((row) => ({
-                ...row,
-                goal_ids: row.goal_ids.map((goalID) => llmToDBID.get(goalID) ?? goalID),
-              })),
-              referenceCoverage: result.fidelity.referenceCoverage.map((row) => ({
-                ...row,
-                goal_ids: row.goal_ids.map((goalID) => llmToDBID.get(goalID) ?? goalID),
-              })),
-              assemblyOwners: result.fidelity.assemblyOwners.map((row) => ({
-                ...row,
-                goal_id: llmToDBID.get(row.goal_id) ?? row.goal_id,
-              })),
-            }
-            const taskMetadata =
-              task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
-                ? task.metadata as Record<string, unknown>
-                : {}
-
-            db.update(EngineTaskTable)
-              .set({
-                metadata: {
-                  ...taskMetadata,
-                  architect_fidelity: mappedArchitectFidelity,
-                },
-                time_updated: now,
+              const mappedGoalLines = result.goals.map((g) => {
+                const goalID = llmToDBID.get(g.id) ?? g.id
+                return `- **${goalID}** (${g.kind}, ${g.priority}): ${g.title}`
               })
-              .where(eq(EngineTaskTable.id, taskID))
-              .run()
+              const mappedTraceLines = result.traceability.map((t) =>
+                `- ${t.requirementID} → ${t.goalIDs.map((goalID) => llmToDBID.get(goalID) ?? goalID).join(", ")}`,
+              )
+              const mappedSourceCoverageLines = mappedArchitectFidelity.sourceCoverage.map(
+                (row) =>
+                  `- **${row.id}** [${row.action}] paths=${row.paths.join(", ")} goals=${row.goal_ids.join(", ")} — ${row.rationale}`,
+              )
+              const mappedReferenceCoverageLines = mappedArchitectFidelity.referenceCoverage.map((row) => {
+                const specIDs = row.visual_spec_ids.length > 0 ? ` visual_specs=${row.visual_spec_ids.join(", ")}` : ""
+                return `- **${row.id}** surface=${row.surface} goals=${row.goal_ids.join(", ")}${specIDs} — ${row.expectation}`
+              })
+              const mappedAssemblyOwnerLines = mappedArchitectFidelity.assemblyOwners.map(
+                (row) => `- surface=${row.surface} owner=${row.goal_id} — ${row.rationale}`,
+              )
+              const mappedContractLines = renderContractGraphForPrompt(mappedContractGraph).split("\n")
+              const mappedSpecContent = [
+                `# ${task.title}`,
+                "",
+                result.summary,
+                "",
+                "## Requirements",
+                ...(reqLines.length > 0 ? reqLines : ["_(none — Requirements produced an empty REQ-N list)_"]),
+                "",
+                "## Decisions",
+                ...(decisionLines.length > 0 ? decisionLines : ["_(none)_"]),
+                "",
+                "## Goals",
+                ...(mappedGoalLines.length > 0 ? mappedGoalLines : ["_(none)_"]),
+                "",
+                "## Traceability",
+                ...(mappedTraceLines.length > 0 ? mappedTraceLines : ["_(none)_"]),
+                "",
+                "## Source Coverage",
+                ...(mappedSourceCoverageLines.length > 0 ? mappedSourceCoverageLines : ["_(none)_"]),
+                "",
+                "## Reference Coverage",
+                ...(mappedReferenceCoverageLines.length > 0 ? mappedReferenceCoverageLines : ["_(none)_"]),
+                "",
+                "## Assembly Ownership",
+                ...(mappedAssemblyOwnerLines.length > 0 ? mappedAssemblyOwnerLines : ["_(none)_"]),
+                "",
+                "## Architect Contracts",
+                ...(mappedContractLines.length > 0 ? mappedContractLines : ["_(none)_"]),
+              ].join("\n")
+              db.update(EngineSpecSnapshotTable)
+                .set({ content: mappedSpecContent, time_updated: now })
+                .where(eq(EngineSpecSnapshotTable.id, newSpecSnapshotID))
+                .run()
+              const taskMetadata =
+                task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+                  ? (task.metadata as Record<string, unknown>)
+                  : {}
 
-            Database.effect(() =>
-              EngineProtocol.emit(
-                EngineEvent.TaskUpdated,
-                { taskID, status: deriveTaskStatus(task), summary: "Goals decomposed by Architect" },
-                { source: "orchestrator.architect" },
-              ),
-            )
-          }) } catch (dbErr) {
+              db.update(EngineTaskTable)
+                .set({
+                  metadata: {
+                    ...taskMetadata,
+                    architect_fidelity: mappedArchitectFidelity,
+                  },
+                  time_updated: now,
+                })
+                .where(eq(EngineTaskTable.id, taskID))
+                .run()
+
+              Database.effect(() =>
+                EngineProtocol.emit(
+                  EngineEvent.TaskUpdated,
+                  { taskID, status: deriveTaskStatus(task), summary: "Goals decomposed by Architect" },
+                  { source: "orchestrator.architect" },
+                ),
+              )
+            })
+          } catch (dbErr) {
             log.error("architect: failed to persist goals to DB", {
               taskID,
               error: dbErr instanceof Error ? dbErr.message : String(dbErr),
@@ -2747,13 +2884,16 @@ export function createOrchestratorTools(input: {
 
           const summary = SubAgentProtocol.yieldResult({
             headline:
-              `Architect decomposition complete: ${persisted.length} goals, ${result.contracts.length} contracts.` +
+              `Architect decomposition complete: ${persisted.length} goals, ${result.contractGraph.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
               ` NEXT: dispatch eligible per-goal \`build({ goalID })\`; each goal build returns its post-build architecture_review markdown inline — read it and decide modify_goal / build / architect / deliver / fail_task explicitly (no auto-routing).`,
             summary: result.summary,
             fields: [
               ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
-              ["contract_categories", [...new Set(result.contracts.map((c) => c.category))]],
+              [
+                "contract_graph",
+                `${result.contractGraph.contracts.length} contracts / ${result.contractGraph.dependency_contracts.length} dependency reasons`,
+              ],
               ["spec_snapshot_id", newSpecSnapshotID],
             ],
             pointer: `read_context scope=decisions (spec ${newSpecSnapshotID})`,
@@ -2813,7 +2953,7 @@ export function createOrchestratorTools(input: {
         "OPTIONAL architecture-review agent. Multi-dimension review of the active " +
         "architect graph along four " +
         "axes: requirement_fidelity (REQ-N keyed coverage + system completion when " +
-        "post-build evidence is available), technical_feasibility (imports / exports / " +
+        "post-build evidence is available), technical_feasibility (contract graph / " +
         "owned_paths / dep graph viability + user-deliverable tier walk), " +
         "hallucination (ungrounded REQs / specs / contracts), solution_quality " +
         "(granularity, acceptance-spec strength, ownership, ordering). Returns a " +
@@ -2893,12 +3033,7 @@ export function createOrchestratorTools(input: {
           db
             .select()
             .from(EngineArtifactTable)
-            .where(
-              and(
-                eq(EngineArtifactTable.delivery_id, delivery.id),
-                eq(EngineArtifactTable.kind, "verdict"),
-              ),
-            )
+            .where(and(eq(EngineArtifactTable.delivery_id, delivery.id), eq(EngineArtifactTable.kind, "verdict")))
             .orderBy(desc(EngineArtifactTable.time_created))
             .limit(1)
             .get(),
@@ -3009,7 +3144,10 @@ export function createOrchestratorTools(input: {
         "work is a clear single-edit fix where downstream agents have nothing to " +
         "misread.",
       inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
+        reason: z
+          .string()
+          .optional()
+          .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
       }),
       execute: async () => {
         const task = requireTask(taskID)
@@ -3023,7 +3161,7 @@ export function createOrchestratorTools(input: {
             request: task.request,
             title: task.title,
             taskID,
-            attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
+            attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
             onStatus: () => {},
@@ -3075,10 +3213,9 @@ export function createOrchestratorTools(input: {
           decisionLog.append({
             phase: "intent_analysis",
             key: "intent_slots",
-            value: r.extracted_slots
-              .map((s) => `${s.key}=${s.value} (conf=${s.confidence.toFixed(2)})`)
-              .join("; "),
-            reason: "Slots extracted from the user request — downstream REQ-N + goal decomposition should reflect these explicitly.",
+            value: r.extracted_slots.map((s) => `${s.key}=${s.value} (conf=${s.confidence.toFixed(2)})`).join("; "),
+            reason:
+              "Slots extracted from the user request — downstream REQ-N + goal decomposition should reflect these explicitly.",
           })
         }
         if (r.missing_info.length > 0) {
@@ -3086,7 +3223,8 @@ export function createOrchestratorTools(input: {
             phase: "intent_analysis",
             key: "intent_missing_info",
             value: r.missing_info.join(", "),
-            reason: "Information judged missing from the request — downstream agents must infer from repo / decisions or flag explicitly.",
+            reason:
+              "Information judged missing from the request — downstream agents must infer from repo / decisions or flag explicitly.",
           })
         }
         if (blockers.length > 0) {
@@ -3094,7 +3232,8 @@ export function createOrchestratorTools(input: {
             phase: "intent_analysis",
             key: "intent_blocker_clarifications",
             value: blockers.map((c) => c.question).join(" | "),
-            reason: "Blocker clarifications — orchestrator already surfaced or auto-resolved; downstream should not re-ask.",
+            reason:
+              "Blocker clarifications — orchestrator already surfaced or auto-resolved; downstream should not re-ask.",
           })
         }
         if (nices.length > 0) {
@@ -3102,7 +3241,8 @@ export function createOrchestratorTools(input: {
             phase: "intent_analysis",
             key: "intent_nice_clarifications",
             value: nices.map((c) => c.question).join(" | "),
-            reason: "Nice-to-have clarifications — downstream picks the most reasonable answer if a decision hinges on one.",
+            reason:
+              "Nice-to-have clarifications — downstream picks the most reasonable answer if a decision hinges on one.",
           })
         }
 
@@ -3121,7 +3261,7 @@ export function createOrchestratorTools(input: {
             ["blocker_questions", blockers.map((c) => c.question)],
             ["nice_questions", nices.map((c) => c.question)],
           ],
-          pointer: `intent session ${out.sessionID}; decision log keys: intent_summary${r.extracted_slots.length>0?" + intent_slots":""}${r.missing_info.length>0?" + intent_missing_info":""}${blockers.length>0?" + intent_blocker_clarifications":""}${nices.length>0?" + intent_nice_clarifications":""}`,
+          pointer: `intent session ${out.sessionID}; decision log keys: intent_summary${r.extracted_slots.length > 0 ? " + intent_slots" : ""}${r.missing_info.length > 0 ? " + intent_missing_info" : ""}${blockers.length > 0 ? " + intent_blocker_clarifications" : ""}${nices.length > 0 ? " + intent_nice_clarifications" : ""}`,
         })
       },
     }),
@@ -3130,24 +3270,24 @@ export function createOrchestratorTools(input: {
     // Per-goal tools — Orchestrator decides when to call each
     // -----------------------------------------------------------------------
 
-
     modify_goal: tool({
       description:
         "Modify an existing goal's contract. Use when eval feedback suggests " +
         "acceptance_specs need refinement, or owned_paths need adjustment. " +
-        "Updates are validated by the same Zod schema as register_goal — any " +
-        "field that violates min-length / enum constraints is rejected.",
-      inputSchema: z.object({
-        goalID: z.string().describe("The goal ID to modify"),
-        updates: GoalContractUpdateSchema.describe(
-          "Fields to update — id is immutable; all other fields optional but validated when present",
-        ),
-        reason: z.string().describe("Why you decided to modify this goal"),
-      }),
-      execute: async ({ goalID, updates }) => {
+        "If the submitted shape is invalid, the tool returns a correction " +
+        "diagnostic and leaves the database unchanged.",
+      inputSchema: ModifyGoalInputSchema,
+      execute: async (input) => {
+        if (!isObjectRecord(input) || typeof input.goalID !== "string" || input.goalID.trim().length === 0) {
+          return 'Error: modify_goal requires a non-empty string "goalID"; database unchanged.'
+        }
+        const goalID = input.goalID
+        const parsedUpdates = parseModifyGoalUpdates(input.updates)
+        if (!parsedUpdates.ok) return parsedUpdates.message
+        const updates = parsedUpdates.updates
         requireTask(taskID)
         const dbGoals = listGoals(taskID)
-        const goal = dbGoals.find(g => g.id === goalID)
+        const goal = dbGoals.find((g) => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
 
         // Deep-equality no-op detection (rule 2 + rule 7) via the
@@ -3169,7 +3309,8 @@ export function createOrchestratorTools(input: {
 
         const changed = Object.keys(setValues)
         const contractChanged = changed.length > 0
-        const statusReset = contractChanged && (goalStatusByID(goal.id) === "passed" || goalStatusByID(goal.id) === "failed")
+        const statusReset =
+          contractChanged && (goalStatusByID(goal.id) === "passed" || goalStatusByID(goal.id) === "failed")
 
         if (contractChanged) {
           setValues.time_updated = Date.now()
@@ -3195,8 +3336,9 @@ export function createOrchestratorTools(input: {
           //    completed→aborted flip. The new attempt (step 2) supersedes
           //    the tip so dispatchability kicks in; GoalPool is the
           //    authoritative creator of the new goal_run.
-          const toAbort = listGoalRunsForTask(taskID)
-            .filter((row) => row.goal_id === goalID && LIVE_GOAL_RUN_STATUSES.includes(row.status))
+          const toAbort = listGoalRunsForTask(taskID).filter(
+            (row) => row.goal_id === goalID && LIVE_GOAL_RUN_STATUSES.includes(row.status),
+          )
           for (const row of toAbort) {
             updateGoalRun(row.id, { status: "aborted", error: "contract modified" })
           }
@@ -3214,7 +3356,7 @@ export function createOrchestratorTools(input: {
               value:
                 `Goal contract changed by modify_goal. Fields updated: ${changed.join(", ")}. ` +
                 `The prior attempt ran against an outdated contract — re-read acceptance_specs, ` +
-                `owned_paths, exports/imports, and the dependency context before re-implementing. ` +
+                `owned_paths, the Architect Contract Graph, and the dependency context before re-implementing. ` +
                 `Do not assume prior code satisfies the new contract.`,
               reason: `modify_goal: ${changed.length} contract field(s) updated (${changed.join(", ")})`,
             },
@@ -3222,7 +3364,9 @@ export function createOrchestratorTools(input: {
           supersededTipID = result.supersededTipID
         }
 
-        const resetSuffix = statusReset ? ` (status reset: ${goalStatusByID(goal.id)} → pending via goal_run chain)` : ""
+        const resetSuffix = statusReset
+          ? ` (status reset: ${goalStatusByID(goal.id)} → pending via goal_run chain)`
+          : ""
         const abortSuffix = abortedRuns > 0 ? `, ${abortedRuns} prior goal_run(s) marked aborted` : ""
         const supersedeSuffix = supersededTipID ? `, tip ${supersededTipID} superseded` : ""
 
@@ -3243,11 +3387,12 @@ export function createOrchestratorTools(input: {
     }),
 
     query_failed_goals: tool({
-      description: "Query all currently failed goals with their latest delivery info. Returns one block per failed goal (acceptance_specs truncated, only latest run). Use BEFORE re-running build on a failed goal to understand per-goal failure reasons.",
+      description:
+        "Query all currently failed goals with their latest delivery info. Returns one block per failed goal (acceptance_specs truncated, only latest run). Use BEFORE re-running build on a failed goal to understand per-goal failure reasons.",
       inputSchema: z.object({}),
       execute: async () => {
         const dbGoals = listGoals(taskID)
-        const failed = dbGoals.filter(g => goalStatusByID(g.id) === "failed")
+        const failed = dbGoals.filter((g) => goalStatusByID(g.id) === "failed")
         if (failed.length === 0) return "No failed goals."
         const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
         const goalRuns = listGoalRunsForTask(taskID)
@@ -3257,17 +3402,22 @@ export function createOrchestratorTools(input: {
         for (const goal of failed) {
           const label = `#G${goal.order_index + 1}V${getGoalRetryCount(goal.id) + 1}`
           sections.push(`\n### ${label} ${goal.id}: ${goal.title}`)
-          sections.push(`- acceptance_specs:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, ACCEPTANCE_SPEC_CAP)}`)
+          sections.push(
+            `- acceptance_specs:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, ACCEPTANCE_SPEC_CAP)}`,
+          )
           if (goal.owned_paths?.length) sections.push(`- owned_paths: ${goal.owned_paths.join(", ")}`)
           // listGoalRunsForTask is desc by time_created; first match is latest.
-          const latestGr = goalRuns.find(gr => gr.goal_id === goal.id)
+          const latestGr = goalRuns.find((gr) => gr.goal_id === goal.id)
           if (latestGr) {
             const delivery = findDeliveryByGoalRun(latestGr.id)
             if (delivery) {
               sections.push(`- delivery summary: ${delivery.summary}`)
               const diffs = (delivery.result as any)?.diffs as Array<{ file: string }> | undefined
               if (diffs?.length) {
-                const shown = diffs.slice(0, DELIVERY_FILES_CAP).map(f => f.file).join(", ")
+                const shown = diffs
+                  .slice(0, DELIVERY_FILES_CAP)
+                  .map((f) => f.file)
+                  .join(", ")
                 const more = diffs.length > DELIVERY_FILES_CAP ? ` (+${diffs.length - DELIVERY_FILES_CAP} more)` : ""
                 sections.push(`- delivery files: ${shown}${more}`)
               }
@@ -3278,7 +3428,10 @@ export function createOrchestratorTools(input: {
             sections.push(`- current implementation version: ${label}`)
             if (latestGr.error) {
               sections.push(`- goal_run error: ${latestGr.error}`)
-              if (latestGr.error.includes("report_build_result") || latestGr.error.includes("missing_terminal_report")) {
+              if (
+                latestGr.error.includes("report_build_result") ||
+                latestGr.error.includes("missing_terminal_report")
+              ) {
                 sections.push(
                   `- recovery hint: the build session should first stay alive and add report_build_result(files_changed[]) in-place. If same-session recovery already exhausted, retry this goal with explicit report_build_result(files_changed[]) instructions. ` +
                     `Any retained files under .opencorvus/worktrees are diagnostic worktree evidence, not primary workspace pollution; ` +
@@ -3297,9 +3450,13 @@ export function createOrchestratorTools(input: {
     }),
 
     read_context: tool({
-      description: "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries, integrity/prosecutor attempts. Use this to gather information before making decisions. Returns only the latest state per goal / per spec snapshot / per delivery — historical entries older than the latest are omitted to keep prompts bounded.",
+      description:
+        "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries, integrity/prosecutor attempts. Use this to gather information before making decisions. Returns only the latest state per goal / per spec snapshot / per delivery — historical entries older than the latest are omitted to keep prompts bounded.",
       inputSchema: z.object({
-        scope: z.enum(["goals", "evaluations", "decisions", "deliveries", "all"]).default("all").describe("What to read"),
+        scope: z
+          .enum(["goals", "evaluations", "decisions", "deliveries", "all"])
+          .default("all")
+          .describe("What to read"),
       }),
       execute: async ({ scope }) => {
         const task = requireTask(taskID)
@@ -3325,7 +3482,9 @@ export function createOrchestratorTools(input: {
             const label = `#G${g.order_index + 1}V${getGoalRetryCount(g.id) + 1}`
             sections.push(`- [${goalStatusByID(g.id)}] ${label} ${g.id}: ${g.title} [${g.priority}]`)
             sections.push(`  objective: ${g.objective.slice(0, 200)}`)
-            sections.push(`  acceptance_specs:\n${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 400)}`)
+            sections.push(
+              `  acceptance_specs:\n${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 400)}`,
+            )
             if (g.owned_paths?.length) sections.push(`  owned_paths: ${g.owned_paths.join(", ")}`)
             if (g.depends_on?.length) sections.push(`  depends_on: ${g.depends_on.join(", ")}`)
           }
@@ -3351,9 +3510,10 @@ export function createOrchestratorTools(input: {
               latestPerGoal.push(e)
             }
             const omitted = evals.length - latestPerGoal.length
-            const header = omitted > 0
-              ? `\n## Evaluations (latest ${latestPerGoal.length} of ${evals.length}; ${omitted} superseded omitted)`
-              : `\n## Evaluations (${latestPerGoal.length})`
+            const header =
+              omitted > 0
+                ? `\n## Evaluations (latest ${latestPerGoal.length} of ${evals.length}; ${omitted} superseded omitted)`
+                : `\n## Evaluations (${latestPerGoal.length})`
             sections.push(header)
             for (const e of latestPerGoal) {
               sections.push(`- [${e.verdict}] ${e.summary}`)
@@ -3395,7 +3555,12 @@ export function createOrchestratorTools(input: {
           // are historical noise once superseded; the orchestrator decides from
           // current state, not delivery history.
           const seenGoals = new Set<string>()
-          const deliveries: Array<{ goalRunID: string; goalID: string; status: string; delivery: ReturnType<typeof findDeliveryByGoalRun> }> = []
+          const deliveries: Array<{
+            goalRunID: string
+            goalID: string
+            status: string
+            delivery: ReturnType<typeof findDeliveryByGoalRun>
+          }> = []
           for (const gr of goalRuns) {
             if (seenGoals.has(gr.goal_id)) continue
             const delivery = findDeliveryByGoalRun(gr.id)
@@ -3408,7 +3573,7 @@ export function createOrchestratorTools(input: {
             for (const d of deliveries) {
               const diffs = (d.delivery!.result as any)?.diffs as Array<{ file: string }> | undefined
               sections.push(`- goal_run ${d.goalRunID} [${d.status}]: ${d.delivery!.summary}`)
-              if (diffs?.length) sections.push(`  files: ${diffs.map(f => f.file).join(", ")}`)
+              if (diffs?.length) sections.push(`  files: ${diffs.map((f) => f.file).join(", ")}`)
             }
           }
         }
@@ -3427,12 +3592,7 @@ export function createOrchestratorTools(input: {
               db
                 .select()
                 .from(EngineArtifactTable)
-                .where(
-                  and(
-                    eq(EngineArtifactTable.task_id, taskID),
-                    eq(EngineArtifactTable.kind, "integrity_attempt"),
-                  ),
-                )
+                .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "integrity_attempt")))
                 .orderBy(desc(EngineArtifactTable.time_created))
                 .limit(1)
                 .get(),
@@ -3442,8 +3602,8 @@ export function createOrchestratorTools(input: {
               const matchesSnapshot = p.spec_snapshot_id === activeSpec.id
               const perDim = Array.isArray(p.per_dimension)
                 ? (p.per_dimension as Array<{ id: string; verdict: string }>)
-                  .map((d) => `${d.id}=${d.verdict}`)
-                  .join(", ")
+                    .map((d) => `${d.id}=${d.verdict}`)
+                    .join(", ")
                 : ""
               const reviewMarkdown = typeof p.review_markdown === "string" ? p.review_markdown : ""
               sections.push(
@@ -3451,7 +3611,9 @@ export function createOrchestratorTools(input: {
                 `- verdict: ${String(p.verdict ?? "unknown")}` +
                   (perDim ? ` — per-dimension: ${perDim}` : "") +
                   ` — issues=${Number(p.issues_count ?? 0)} corrections=${Number(p.corrections_count ?? 0)} missing=${Number(p.missing_count ?? 0)}` +
-                  (matchesSnapshot ? " (current spec snapshot)" : " (STALE — newer spec snapshot exists; re-run integrity)"),
+                  (matchesSnapshot
+                    ? " (current spec snapshot)"
+                    : " (STALE — newer spec snapshot exists; re-run integrity)"),
               )
               // Surface the full review markdown (issues + corrections +
               // missing-goal proposals) so the orchestrator LLM can act on
@@ -3466,12 +3628,7 @@ export function createOrchestratorTools(input: {
             db
               .select()
               .from(EngineArtifactTable)
-              .where(
-                and(
-                  eq(EngineArtifactTable.task_id, taskID),
-                  eq(EngineArtifactTable.kind, "delivery"),
-                ),
-              )
+              .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "delivery")))
               .orderBy(desc(EngineArtifactTable.time_created))
               .limit(1)
               .get(),
@@ -3539,7 +3696,8 @@ export function createOrchestratorTools(input: {
     }),
 
     cancel_task: tool({
-      description: "Cancel the task immediately. Use when the user explicitly asks to stop or abandon the current work.",
+      description:
+        "Cancel the task immediately. Use when the user explicitly asks to stop or abandon the current work.",
       inputSchema: z.object({
         reason: z.string().describe("Why you are cancelling the task"),
       }),
@@ -3561,7 +3719,8 @@ export function createOrchestratorTools(input: {
     }),
 
     inject_operator_message: tool({
-      description: "Forward the latest operator message into the currently running executor session. Use only when the task should continue under the same active execution, not when strategy must change.",
+      description:
+        "Forward the latest operator message into the currently running executor session. Use only when the task should continue under the same active execution, not when strategy must change.",
       inputSchema: z.object({
         reason: z.string().describe("Why this operator message should be injected into the current execution"),
       }),
@@ -3594,20 +3753,24 @@ export function createOrchestratorTools(input: {
     }),
 
     restart_from_stage: tool({
-      description: "Restart the task from a specific stage. Use when the current approach is fundamentally wrong, the user requests a restart, or you need to redo requirements/plan from scratch. `plan` fully regenerates the goal decomposition while keeping requirements intact — use it after repeated per-goal retry has failed to converge.",
+      description:
+        "Restart the task from a specific stage. Use when the current approach is fundamentally wrong, the user requests a restart, or you need to redo requirements/plan from scratch. `plan` fully regenerates the goal decomposition while keeping requirements intact — use it after repeated per-goal retry has failed to converge.",
       inputSchema: z.object({
-        stage: z.enum(["requirements", "plan", "executor"]).describe(
-          "`requirements`: re-elicit requirements; deletes spec + plan + goals. " +
-          "`plan`: keep requirements; delete plan + goals so the architect fully re-decomposes from scratch. " +
-          "`executor`: keep requirements + plan + goals; reset goal statuses so the executor re-runs each goal.",
-        ),
+        stage: z
+          .enum(["requirements", "plan", "executor"])
+          .describe(
+            "`requirements`: re-elicit requirements; deletes spec + plan + goals. " +
+              "`plan`: keep requirements; delete plan + goals so the architect fully re-decomposes from scratch. " +
+              "`executor`: keep requirements + plan + goals; reset goal statuses so the executor re-runs each goal.",
+          ),
         reason: z.string().describe("Why restarting from this stage"),
       }),
       execute: async ({ stage, reason }) => restartTaskFromStage(stage, reason),
     }),
 
     deliver: tool({
-      description: "FINAL acceptance gate — call ONLY after every dispatchable goal is terminal (passed/failed) and no eligible wave remains uncalled. Aggregates goal deliveries and runs DeliveryAgent for build/test/startup verification. NEVER call while goals are pending/dispatched/running, NEVER call as a progress check, NEVER call before any build has produced material in direct mode. Always read_context first to verify the goal graph is fully resolved.",
+      description:
+        "FINAL acceptance gate — call ONLY after every dispatchable goal is terminal (passed/failed) and no eligible wave remains uncalled. Aggregates goal deliveries and runs DeliveryAgent for build/test/startup verification. NEVER call while goals are pending/dispatched/running, NEVER call as a progress check, NEVER call before any build has produced material in direct mode. Always read_context first to verify the goal graph is fully resolved.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to deliver now"),
       }),
@@ -3642,7 +3805,8 @@ export function createOrchestratorTools(input: {
         const allDiffs: Array<{ file: string; diff?: string; [key: string]: unknown }> = []
         const seenFiles = new Set<string>()
         const summaries: string[] = []
-        const aggregatedGoalReports: Array<{ goalTitle: string; report: import("@/delivery/checks").GoalReportClaim }> = []
+        const aggregatedGoalReports: Array<{ goalTitle: string; report: import("@/delivery/checks").GoalReportClaim }> =
+          []
         for (const gr of goalRuns) {
           const d = findDeliveryByGoalRun(gr.id)
           if (!d) continue
@@ -3681,10 +3845,16 @@ export function createOrchestratorTools(input: {
           try {
             const cwd = Instance.directory
             const statusResult = await runGit(["status", "--porcelain=v1", "-uall"], { cwd, timeoutProfile: "default" })
-            const statusLines = statusResult.stdout.toString().split("\n").filter((line) => line.trim().length > 0)
+            const statusLines = statusResult.stdout
+              .toString()
+              .split("\n")
+              .filter((line) => line.trim().length > 0)
             for (const raw of statusLines) {
               // Porcelain format: "XY file" (X=index status, Y=worktree status). Extract the path.
-              const file = raw.slice(3).trim().replace(/^"(.+)"$/, "$1")
+              const file = raw
+                .slice(3)
+                .trim()
+                .replace(/^"(.+)"$/, "$1")
               if (!file || seenFiles.has(file)) continue
               let diff = ""
               const diffResult = await runGit(["diff", "HEAD", "--", file], { cwd, timeoutProfile: "default" })
@@ -3702,27 +3872,28 @@ export function createOrchestratorTools(input: {
               allDiffs.push({ file, diff })
             }
             if (allDiffs.length > 0) {
-              summaries.push(
-                `Direct build produced ${allDiffs.length} changed file(s) in the main worktree.`,
-              )
+              summaries.push(`Direct build produced ${allDiffs.length} changed file(s) in the main worktree.`)
               log.info("deliver: direct-mode diff captured from main worktree", {
-                taskID, fileCount: allDiffs.length,
+                taskID,
+                fileCount: allDiffs.length,
               })
             } else {
               log.warn("deliver: direct mode with no per-goal deliveries AND empty working tree", {
-                taskID, cwd,
+                taskID,
+                cwd,
               })
             }
           } catch (err) {
             log.warn("deliver: direct-mode diff capture failed (non-fatal)", {
-              taskID, error: err instanceof Error ? err.message : String(err),
+              taskID,
+              error: err instanceof Error ? err.message : String(err),
             })
           }
         }
 
         const allGoals = listGoals(taskID)
         const activeSpecSnapshot = findActiveSpecForTask(taskID)
-        const goalInfos = allGoals.map(g => {
+        const goalInfos = allGoals.map((g) => {
           const acceptanceSpecs = (g.acceptance_specs ?? []) as AcceptanceSpec[]
           const latestGoalRun = findLatestTipGoalRun(g.id)
           return {
@@ -3735,34 +3906,11 @@ export function createOrchestratorTools(input: {
             acceptance_spec_count: acceptanceSpecs.length,
             acceptance_scenarios: acceptanceSpecs.filter((spec) => !!spec.scenario),
             acceptance_specs: acceptanceSpecs,
-            requirement_ids: Array.isArray(g.requirement_ids) ? g.requirement_ids as string[] : [],
-            depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
-            imports: Array.isArray(g.imports) ? g.imports as string[] : [],
-            exports: Array.isArray(g.exports) ? g.exports as string[] : [],
-            owned_paths: Array.isArray(g.owned_paths) ? g.owned_paths as string[] : [],
+            requirement_ids: Array.isArray(g.requirement_ids) ? (g.requirement_ids as string[]) : [],
+            depends_on: Array.isArray(g.depends_on) ? (g.depends_on as string[]) : [],
+            owned_paths: Array.isArray(g.owned_paths) ? (g.owned_paths as string[]) : [],
           }
         })
-
-        const { requiresIntegrityReview } = await import("@/delivery/checks/project-gate")
-        if (requiresIntegrityReview(goalInfos)) {
-          if (!activeSpecSnapshot) {
-            throw new Error("deliver integrity prerequisite failed: required integrity review has no active spec snapshot")
-          }
-          // Phase-aware lookup: delivery requires a POST-BUILD attempt. A
-          // green pre-build attempt (decomposition audit) does NOT satisfy
-          // the system-completion review the delivery gate enforces.
-          const existingIntegrity = findLatestIntegrityAttemptArtifact({
-            taskID,
-            specSnapshotID: activeSpecSnapshot.id,
-            phase: "post_build",
-          })
-          if (!existingIntegrity) {
-            const integrityOutcome = await runIntegrityReview()
-            if (integrityOutcome.status === "blocked") {
-              throw new Error(`deliver integrity prerequisite failed: ${integrityOutcome.headline}`)
-            }
-          }
-        }
 
         // Persist aggregated delivery — task-scoped variant, which is the
         // only path that creates the `scope='delivery'` evaluation row the
@@ -3783,8 +3931,8 @@ export function createOrchestratorTools(input: {
         // Run DeliveryAgent to verify build/test/startup
         const deliveryInfo: import("@/delivery/checks").DeliveryInfo = {
           summary: summaries.join("\n"),
-          changedFiles: allDiffs.map(d => d.file),
-          diffs: allDiffs.map(d => ({ file: d.file, diff: d.diff })),
+          changedFiles: allDiffs.map((d) => d.file),
+          diffs: allDiffs.map((d) => ({ file: d.file, diff: d.diff })),
           goalReports: aggregatedGoalReports,
         }
 
@@ -3801,7 +3949,15 @@ export function createOrchestratorTools(input: {
         // per-goal evaluator because only the merged worktree represents
         // the final artifact users see.
         let renderedAttachment:
-          | { sha: string; url: string; mime: string; size: number; filename?: string; intent: "rendered_output"; source: "runtime_capture" }
+          | {
+              sha: string
+              url: string
+              mime: string
+              size: number
+              filename?: string
+              intent: "rendered_output"
+              source: "runtime_capture"
+            }
           | undefined
         // P0-0.B — for any task that ships visual references (user attachments
         // or design-analysis screenshots), rendering the merged worktree to a
@@ -3822,14 +3978,13 @@ export function createOrchestratorTools(input: {
             ...(Array.isArray(liveTask.attachments) ? (liveTask.attachments as any[]) : []),
             ...(Array.isArray(liveTask.system_artifacts) ? (liveTask.system_artifacts as any[]) : []),
           ].filter((a) => a?.intent !== "rendered_output")
-          const tagged = visualPool.filter((a) =>
-            a?.intent === "visual_reference" && typeof a?.url === "string",
-          )
-          const imageAttachments = tagged.length > 0
-            ? tagged
-            : visualPool.filter((a) =>
-                typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string",
-              )
+          const tagged = visualPool.filter((a) => a?.intent === "visual_reference" && typeof a?.url === "string")
+          const imageAttachments =
+            tagged.length > 0
+              ? tagged
+              : visualPool.filter(
+                  (a) => typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string",
+                )
           if (imageAttachments.length > 0) {
             const { captureRuntimePage } = await import("@/delivery/runtime-capture")
             const { ManagedPreviewStartError, startManagedPreview } = await import("@/preview/managed")
@@ -3878,12 +4033,11 @@ export function createOrchestratorTools(input: {
               // viewport to the primary reference's native size.
               const ref = imageAttachments[0]
               const located = AttachmentStore.nameFromUrl(String(ref.url))
-              const refPath = located
-                ? AttachmentStore.resolveAbsolute(located.projectID, located.name)
-                : undefined
+              const refPath = located ? AttachmentStore.resolveAbsolute(located.projectID, located.name) : undefined
               if (!refPath) {
                 log.warn("deliver: reference attachment could not be resolved — rendering at default viewport", {
-                  taskID, url: ref.url,
+                  taskID,
+                  url: ref.url,
                 })
               }
               const visualOut = path.join(Instance.directory, ".opencorvus", "visual-diff")
@@ -3900,12 +4054,7 @@ export function createOrchestratorTools(input: {
               // the delivery agent's multimodal prompt can inline it the
               // same way it inlines user-provided references.
               const bytes = await (await import("node:fs/promises")).readFile(rendered.path)
-              const written = await AttachmentStore.write(
-                liveTask.project_id,
-                bytes,
-                "image/png",
-                "rendered.png",
-              )
+              const written = await AttachmentStore.write(liveTask.project_id, bytes, "image/png", "rendered.png")
               renderedAttachment = {
                 sha: written.sha,
                 url: written.url,
@@ -3918,13 +4067,12 @@ export function createOrchestratorTools(input: {
               // System-generated visual evidence — lives in system_artifacts,
               // not the user-contract attachments column. Replace-by-intent so
               // reruns don't accumulate stale rendered PNGs.
-              await EngineService.replaceTaskSystemArtifactByIntent(
-                taskID,
-                "rendered_output",
-                renderedAttachment,
-              )
+              await EngineService.replaceTaskSystemArtifactByIntent(taskID, "rendered_output", renderedAttachment)
               log.info("deliver: rendered merged worktree", {
-                taskID, renderedPath: rendered.path, size: rendered.size, sha: renderedAttachment.sha,
+                taskID,
+                renderedPath: rendered.path,
+                size: rendered.size,
+                sha: renderedAttachment.sha,
               })
             }
           }
@@ -3936,9 +4084,7 @@ export function createOrchestratorTools(input: {
         }
 
         if (renderFailure) {
-          deliveryInfo.runtimeEvidenceFailures = [
-            `[render] ${renderFailure.kind}: ${renderFailure.detail}`,
-          ]
+          deliveryInfo.runtimeEvidenceFailures = [`[render] ${renderFailure.kind}: ${renderFailure.detail}`]
           log.warn("deliver: render prerequisite failed — routing through delivery agent", {
             taskID,
             kind: renderFailure.kind,
@@ -3957,10 +4103,20 @@ export function createOrchestratorTools(input: {
           // PNG of the merged worktree). The visual-comparison loop needs
           // both to diff "what we built" against "what the user asked for".
           const taskForDelivery = requireTask(taskID)
-          type AttachmentRef = { sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }
+          type AttachmentRef = {
+            sha: string
+            url: string
+            mime: string
+            size: number
+            filename?: string
+            intent?: string
+            source?: string
+          }
           const deliveryAttachments = [
             ...(Array.isArray(taskForDelivery.attachments) ? (taskForDelivery.attachments as AttachmentRef[]) : []),
-            ...(Array.isArray(taskForDelivery.system_artifacts) ? (taskForDelivery.system_artifacts as AttachmentRef[]) : []),
+            ...(Array.isArray(taskForDelivery.system_artifacts)
+              ? (taskForDelivery.system_artifacts as AttachmentRef[])
+              : []),
           ].filter((a) => typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string")
 
           // Compute current iteration up-front so DeliveryService.verify can
@@ -3980,43 +4136,45 @@ export function createOrchestratorTools(input: {
           // agent reads acceptance_specs as INFORMATION and verifies them
           // itself (Phase 2 / 2.5 in DELIVERY_AGENT_SYSTEM), including per-goal
           // subagent dispatch for adversarial review at scale.
-          const verdict: import("@/delivery/agent").DeliveryVerdictType =
-            await DeliveryService.verify({
-              task: {
-                id: task.id,
-                title: task.title,
-                request: task.request,
-                sessionID: task.session_id ?? undefined,
-                metadata: task.metadata ?? undefined,
-                design_specs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
-              },
-              goals: goalInfos,
-              delivery: deliveryInfo,
-              attachments: deliveryAttachments,
-              signal: input.signal,
-              iteration: deliverIteration,
-              parentSessionID: input.agentSessionID,
-              runID: run?.id,
-              deliveryID,
-              specSnapshotID: activeSpecSnapshot?.id,
-              criteriaResults: Array.isArray(task.criteria_results) ? task.criteria_results as any : [],
-            })
+          const verdict: import("@/delivery/agent").DeliveryVerdictType = await DeliveryService.verify({
+            task: {
+              id: task.id,
+              title: task.title,
+              request: task.request,
+              sessionID: task.session_id ?? undefined,
+              metadata: task.metadata ?? undefined,
+              design_specs: Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined,
+            },
+            goals: goalInfos,
+            delivery: deliveryInfo,
+            attachments: deliveryAttachments,
+            signal: input.signal,
+            iteration: deliverIteration,
+            parentSessionID: input.agentSessionID,
+            runID: run?.id,
+            deliveryID,
+            specSnapshotID: activeSpecSnapshot?.id,
+            criteriaResults: Array.isArray(task.criteria_results) ? (task.criteria_results as any) : [],
+          })
 
           // Persist verdict as artifact
           const { EngineArtifactTable } = await import("@/engine/engine.sql")
           const verdictArtifactId = Identifier.ascending("artifact")
           Database.use((db) =>
-            db.insert(EngineArtifactTable).values({
-              id: verdictArtifactId,
-              task_id: taskID,
-              run_id: run?.id ?? null,
-              delivery_id: deliveryID,
-              kind: "verdict",
-              label: "delivery-agent-verdict",
-              payload: verdict,
-              time_created: Date.now(),
-              time_updated: Date.now(),
-            }).run()
+            db
+              .insert(EngineArtifactTable)
+              .values({
+                id: verdictArtifactId,
+                task_id: taskID,
+                run_id: run?.id ?? null,
+                delivery_id: deliveryID,
+                kind: "verdict",
+                label: "delivery-agent-verdict",
+                payload: verdict,
+                time_created: Date.now(),
+                time_updated: Date.now(),
+              })
+              .run(),
           )
 
           // Sink delivery agent's structured verdict into engine_task.criteria_results.
@@ -4025,8 +4183,8 @@ export function createOrchestratorTools(input: {
           // the agent actually verified, not just a single pass/fail bit.
           await sinkDeliveryVerdictToCriteria(taskID, verdict)
 
-          const passedCount = goals.filter(g => goalStatusByID(g.id) === "passed").length
-          const failedCount = goals.filter(g => goalStatusByID(g.id) === "failed").length
+          const passedCount = goals.filter((g) => goalStatusByID(g.id) === "passed").length
+          const failedCount = goals.filter((g) => goalStatusByID(g.id) === "failed").length
           // ── Run metric executor + record trajectory snapshot ───────────
           // The delivery agent's verdict is the AUTHORITATIVE decision. The
           // old deterministic Arbiter (`metrics/arbiter.ts::arbitrate`) that
@@ -4035,9 +4193,7 @@ export function createOrchestratorTools(input: {
           // overrode the agent's verdict and caused the benchmark deadlock
           // on skipped metrics. The snapshot is still written for
           // observability (LLM reads it via query_metric_trajectory).
-          const {
-            executeMetrics,
-          } = await import("@/metrics/executor")
+          const { executeMetrics } = await import("@/metrics/executor")
           const { computeIterationSnapshot } = await import("@/metrics/score")
           const {
             readCounterexamplesForTask,
@@ -4073,8 +4229,7 @@ export function createOrchestratorTools(input: {
           // be present in this snapshot.
           const specs = readSpecsForTask(taskID)
           const currentResults = readResultsForIteration(taskID, iteration)
-          const previousResults =
-            iteration > 0 ? readResultsForIteration(taskID, iteration - 1) : []
+          const previousResults = iteration > 0 ? readResultsForIteration(taskID, iteration - 1) : []
           const counterexamples = readCounterexamplesForTask(taskID)
           const previousAggregateScore = readPreviousAggregateScore(taskID, iteration)
           const snapshot = computeIterationSnapshot({
@@ -4090,7 +4245,7 @@ export function createOrchestratorTools(input: {
           // that already cite "arbiter_verdict" (delivery/tools, prosecutor,
           // orchestrator summary) keep rendering without churn. accepted →
           // "accept"; anything else → "continue" (rework).
-          const projectedVerdict = verdict.verdict === "accepted" ? "accept" as const : "continue" as const
+          const projectedVerdict = verdict.verdict === "accepted" ? ("accept" as const) : ("continue" as const)
           writeIterationSnapshot({ ...snapshot, arbiter_verdict: projectedVerdict })
           log.info("deliver: agent verdict recorded", {
             taskID,
@@ -4113,7 +4268,11 @@ export function createOrchestratorTools(input: {
             summary: verdict.summary,
             rejection_count: verdict.verdict === "rejected" ? verdict.rejection_details.length : 0,
           }
-          log.info("deliver: round commit, verdict shape built", { taskID, verdict: roundCommitVerdict.verdict, rejection_count: roundCommitVerdict.rejection_count })
+          log.info("deliver: round commit, verdict shape built", {
+            taskID,
+            verdict: roundCommitVerdict.verdict,
+            rejection_count: roundCommitVerdict.rejection_count,
+          })
           const roundCommit = await EngineGit.commitDeliveryRound({
             task: roundCommitTask,
             iteration,
@@ -4121,8 +4280,11 @@ export function createOrchestratorTools(input: {
             declaredChangedFiles: deliveryInfo.changedFiles,
           })
           log.info("deliver: round commit", {
-            taskID, iteration, mode: roundCommit.mode,
-            commit: roundCommit.commit, error: roundCommit.error,
+            taskID,
+            iteration,
+            mode: roundCommit.mode,
+            commit: roundCommit.commit,
+            error: roundCommit.error,
           })
 
           // P0-C.4 — Last-Known-Good rollback. Compute the visual score for
@@ -4138,14 +4300,19 @@ export function createOrchestratorTools(input: {
           let lkgRenderedPath: string | undefined
           try {
             const taskAfterRound = requireTask(taskID)
-            const renderedRef = (taskAfterRound.system_artifacts ?? [])
-              .find((a: any) => a?.intent === "rendered_output" && typeof a?.url === "string") as
-                | { url: string } | undefined
+            const renderedRef = (taskAfterRound.system_artifacts ?? []).find(
+              (a: any) => a?.intent === "rendered_output" && typeof a?.url === "string",
+            ) as { url: string } | undefined
             const referencePool = [
               ...((taskAfterRound.attachments ?? []) as any[]),
               ...((taskAfterRound.system_artifacts ?? []) as any[]),
-            ].filter((a) => a?.intent !== "rendered_output" && typeof a?.mime === "string"
-              && a.mime.startsWith("image/") && typeof a?.url === "string")
+            ].filter(
+              (a) =>
+                a?.intent !== "rendered_output" &&
+                typeof a?.mime === "string" &&
+                a.mime.startsWith("image/") &&
+                typeof a?.url === "string",
+            )
             const tagged = referencePool.filter((a) => a?.intent === "visual_reference")
             const referenceRef = (tagged[0] ?? referencePool[0]) as { url: string } | undefined
 
@@ -4154,8 +4321,12 @@ export function createOrchestratorTools(input: {
               const { computeVisualMetric, loadVisualThresholds } = await import("@/delivery/visual-metric")
               const renderedLoc = AttachmentStore.nameFromUrl(renderedRef.url)
               const referenceLoc = AttachmentStore.nameFromUrl(referenceRef.url)
-              const renderedPath = renderedLoc ? AttachmentStore.resolveAbsolute(renderedLoc.projectID, renderedLoc.name) : undefined
-              const referencePath = referenceLoc ? AttachmentStore.resolveAbsolute(referenceLoc.projectID, referenceLoc.name) : undefined
+              const renderedPath = renderedLoc
+                ? AttachmentStore.resolveAbsolute(renderedLoc.projectID, renderedLoc.name)
+                : undefined
+              const referencePath = referenceLoc
+                ? AttachmentStore.resolveAbsolute(referenceLoc.projectID, referenceLoc.name)
+                : undefined
               if (renderedPath && referencePath) {
                 const metric = await computeVisualMetric({
                   renderedPath,
@@ -4172,7 +4343,9 @@ export function createOrchestratorTools(input: {
                 })
                 lkgOutcome = lkg.outcome
                 log.info("deliver: LKG outcome", {
-                  taskID, iteration, kind: lkg.outcome.kind,
+                  taskID,
+                  iteration,
+                  kind: lkg.outcome.kind,
                   score: metric.score.toFixed(3),
                   best_score: "previous" in lkg.outcome ? lkg.outcome.previous.best_score.toFixed(3) : undefined,
                   rolledBackTo: "rolledBackTo" in lkg.outcome ? lkg.outcome.rolledBackTo : undefined,
@@ -4185,7 +4358,9 @@ export function createOrchestratorTools(input: {
                     value: `score=${metric.score.toFixed(3)} outcome=${lkg.outcome.kind}`,
                     reason: "rolledBackTo" in lkg.outcome ? `rollback_to=${lkg.outcome.rolledBackTo}` : "",
                   })
-                } catch { /* best effort */ }
+                } catch {
+                  /* best effort */
+                }
               }
             }
           } catch (lkgErr) {
@@ -4195,7 +4370,8 @@ export function createOrchestratorTools(input: {
             // (untrustworthy) state, and the orchestrator LLM sees the
             // rollback failure in the decision log on its next turn.
             log.error("deliver: LKG evaluation/rollback failed", {
-              taskID, iteration,
+              taskID,
+              iteration,
               error: lkgErr instanceof Error ? lkgErr.message : String(lkgErr),
             })
             try {
@@ -4206,7 +4382,9 @@ export function createOrchestratorTools(input: {
                 value: lkgErr instanceof Error ? lkgErr.message : String(lkgErr),
                 reason: "lkg_evaluation_threw",
               })
-            } catch { /* best effort */ }
+            } catch {
+              /* best effort */
+            }
           }
 
           // Phase-6-c: engine_delivery_round was an observability side-channel
@@ -4238,9 +4416,7 @@ export function createOrchestratorTools(input: {
               const delivery = findDeliveryByRun(run.id)
               if (!delivery) return `Delivery verified and ACCEPTED but no delivery record found.`
               const verdictArtifact = Database.use((db) =>
-                db.select().from(EngineArtifactTable)
-                  .where(eq(EngineArtifactTable.id, verdictArtifactId))
-                  .get()
+                db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.id, verdictArtifactId)).get(),
               )
               // No host gate veto on an LLM-accepted delivery. If the agent
               // says accepted, we publish — the gate is informational. The
@@ -4255,10 +4431,19 @@ export function createOrchestratorTools(input: {
               const currentTask = requireTask(taskID)
               const publishResult = await Promise.race([
                 Publisher.deliver({ task: currentTask, run, delivery }),
-                new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Publisher.deliver() timeout")), PUBLISH_TIMEOUT_MS)),
+                new Promise<never>((_, reject) =>
+                  setTimeout(() => reject(new Error("Publisher.deliver() timeout")), PUBLISH_TIMEOUT_MS),
+                ),
               ])
               const completed = Date.now()
-              finalizeDeliveryResult({ deliveryId: delivery.id, taskId: taskID, runId: run.id, delivery, result: publishResult, now: completed })
+              finalizeDeliveryResult({
+                deliveryId: delivery.id,
+                taskId: taskID,
+                runId: run.id,
+                delivery,
+                result: publishResult,
+                now: completed,
+              })
               if (publishResult.status === "delivered") {
                 const current = requireTask(taskID)
                 const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
@@ -4270,9 +4455,8 @@ export function createOrchestratorTools(input: {
                   // The persisted verdict carries rejection_details for
                   // rejected verdicts; derive the issues list here so the
                   // schema stays single-source-of-truth (rule 22).
-                  const issues = verdictPayload.verdict === "rejected"
-                    ? verdictPayload.rejection_details.map((d) => d.error)
-                    : []
+                  const issues =
+                    verdictPayload.verdict === "rejected" ? verdictPayload.rejection_details.map((d) => d.error) : []
                   updateEvaluationFromDeliveryVerdict({
                     deliveryID: delivery.id,
                     verdict: verdictPayload.verdict,
@@ -4291,7 +4475,11 @@ export function createOrchestratorTools(input: {
                 }
                 const finalized = await EngineGit.complete(current, currentPlan, published)
                 if (finalized.error) {
-                  await updateTask(current, { status: "failed", error: finalized.error, time_completed: completed }, finalized.error)
+                  await updateTask(
+                    current,
+                    { status: "failed", error: finalized.error, time_completed: completed },
+                    finalized.error,
+                  )
                   return `Git finalization failed: ${finalized.error}`
                 }
                 const cleanedGoalWorkspaces = await cleanupTerminalGoalWorkspaces("deliver auto-publish")
@@ -4301,14 +4489,31 @@ export function createOrchestratorTools(input: {
                   await updateTask(preComplete, { status: "active" }, "Activating for completion")
                 }
                 const readyTask = requireTask(taskID)
-                await updateTask(readyTask, { status: "completed", error: null, time_completed: completed }, "Task completed")
+                await updateTask(
+                  readyTask,
+                  { status: "completed", error: null, time_completed: completed },
+                  "Task completed",
+                )
                 const { Plugin } = await import("@/plugin")
-                await Plugin.trigger("delivery.ready", { taskID, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(err => log.warn("plugin 'delivery.ready' trigger failed (non-fatal)", { error: String(err) }))
+                await Plugin.trigger(
+                  "delivery.ready",
+                  { taskID, runID: run.id, deliveryID: delivery.id },
+                  { actions: [] },
+                ).catch((err) => log.warn("plugin 'delivery.ready' trigger failed (non-fatal)", { error: String(err) }))
                 Promise.race([
-                  EngineMemoryBridge.flushTaskLearnings({ task: currentTask, run, delivery, evaluation: findEvaluationByRun(run.id), plan: currentPlan }),
-                  new Promise<void>((_, reject) => setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000)),
-                ]).catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
-                const cleanupNote = cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
+                  EngineMemoryBridge.flushTaskLearnings({
+                    task: currentTask,
+                    run,
+                    delivery,
+                    evaluation: findEvaluationByRun(run.id),
+                    plan: currentPlan,
+                  }),
+                  new Promise<void>((_, reject) =>
+                    setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000),
+                  ),
+                ]).catch((err) => log.warn("failed to flush task learnings", { error: String(err) }))
+                const cleanupNote =
+                  cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
                 return `Delivery published and task completed successfully.${cleanupNote} You can call refine to analyze the project and suggest improvements for the next iteration.`
               }
               return publishGateReworkResult({
@@ -4319,7 +4524,11 @@ export function createOrchestratorTools(input: {
               })
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
-              log.error("deliver: auto-publish failed", { taskID, error: msg, stack: err instanceof Error ? err.stack : undefined })
+              log.error("deliver: auto-publish failed", {
+                taskID,
+                error: msg,
+                stack: err instanceof Error ? err.stack : undefined,
+              })
               return `Delivery verified and ACCEPTED but publish failed: ${msg}. Call publish_delivery to retry.`
             }
           }
@@ -4372,7 +4581,10 @@ export function createOrchestratorTools(input: {
           const toReset: typeof goals = []
           for (const gid of rejectionAffectedGoalIDs) {
             const g = goalByID.get(gid)
-            if (!g) { unknownAffected.push(gid); continue }
+            if (!g) {
+              unknownAffected.push(gid)
+              continue
+            }
             toReset.push(g)
           }
           if (unknownAffected.length > 0) {
@@ -4383,7 +4595,7 @@ export function createOrchestratorTools(input: {
             // re-runs instead of silently dropping those ids.
             throw new Error(
               `Delivery verdict cites unknown goal_ids in rejection_details: ${unknownAffected.join(", ")}. ` +
-              `Known goals for this task: ${[...goalByID.keys()].join(", ") || "(none)"}.`,
+                `Known goals for this task: ${[...goalByID.keys()].join(", ") || "(none)"}.`,
             )
           }
 
@@ -4394,9 +4606,7 @@ export function createOrchestratorTools(input: {
             repeatedDeliveryFailureSignatures,
           } = await import("@/delivery/manifest")
           const currentManifest = findLatestDeliveryEvidenceManifest({ deliveryID })
-          const manifestFailureDetails = currentManifest
-            ? formatDeliveryManifestFailureDetails(currentManifest)
-            : []
+          const manifestFailureDetails = currentManifest ? formatDeliveryManifestFailureDetails(currentManifest) : []
           const priorManifests = currentManifest?.taskId
             ? findDeliveryEvidenceManifestHistory({
                 taskID: currentManifest.taskId,
@@ -4416,8 +4626,7 @@ export function createOrchestratorTools(input: {
               iteration,
               signatures: repeatedFailure.signatures.length,
             })
-            const { countPriorRepeatedDeliveryFailureSignals } =
-              await import("@/delivery/manifest")
+            const { countPriorRepeatedDeliveryFailureSignals } = await import("@/delivery/manifest")
             const priorSignalCount = countPriorRepeatedDeliveryFailureSignals(
               createDecisionLog(taskID).readByPhase("delivery"),
             )
@@ -4425,7 +4634,8 @@ export function createOrchestratorTools(input: {
               phase: "delivery",
               key: `delivery_repeated_failure_signature_${iteration}`,
               value: `Repeated delivery failure signatures: ${repeatedFailure.signatures.join(" | ")}`,
-              reason: "Current DeliveryEvidenceManifest repeats the prior manifest failure set; the orchestrator must change strategy, ask the operator, or fail_task from evidence instead of blindly repeating the same rework.",
+              reason:
+                "Current DeliveryEvidenceManifest repeats the prior manifest failure set; the orchestrator must change strategy, ask the operator, or fail_task from evidence instead of blindly repeating the same rework.",
             })
             await trackStepComplete("deliver", undefined, true)
             return SubAgentProtocol.yieldResult({
@@ -4479,9 +4689,7 @@ export function createOrchestratorTools(input: {
           // Without this, delivery_rework reworks ran against an unchanged
           // prompt (the root cause we're fixing here).
           for (const g of toReset) {
-            const ownDetails = verdict.rejection_details.filter(
-              (d) => d.goal_id === g.id,
-            )
+            const ownDetails = verdict.rejection_details.filter((d) => d.goal_id === g.id)
             const value = composeDeliveryRetryFeedback({
               iteration,
               verdict: verdict.verdict,
@@ -4555,9 +4763,7 @@ export function createOrchestratorTools(input: {
           // trajectory visibility; do NOT run any deterministic arbiter
           // here. The old `decisionErr.verdict === "abort" | "stalled"`
           // branch was a metric-count state machine and is retired.
-          const {
-            computeIterationSnapshot: computeSnapshotErr,
-          } = await import("@/metrics/score")
+          const { computeIterationSnapshot: computeSnapshotErr } = await import("@/metrics/score")
           const {
             readCounterexamplesForTask: readCeErr,
             readIterationHistory: readHistErr,
@@ -4573,8 +4779,7 @@ export function createOrchestratorTools(input: {
             iteration: iterationErr,
             specs: readSpecsErr(taskID),
             currentResults: readResErr(taskID, iterationErr),
-            previousResults:
-              iterationErr > 0 ? readResErr(taskID, iterationErr - 1) : [],
+            previousResults: iterationErr > 0 ? readResErr(taskID, iterationErr - 1) : [],
             counterexamples: readCeErr(taskID),
             previousAggregateScore: readPrevErr(taskID, iterationErr),
           })
@@ -4644,7 +4849,8 @@ export function createOrchestratorTools(input: {
           const ensured = await ensureDispatchableRunForSingleGoal()
           if (!("error" in ensured)) run = ensured.run
         }
-        if (!run) return "publish_delivery: no coordinator run for this task — call build (with a goal) or deliver first to materialise one."
+        if (!run)
+          return "publish_delivery: no coordinator run for this task — call build (with a goal) or deliver first to materialise one."
 
         const delivery = findDeliveryByRun(run.id)
         if (!delivery) return "No delivery found."
@@ -4652,9 +4858,12 @@ export function createOrchestratorTools(input: {
         // Require delivery to exist before publishing
         const { EngineArtifactTable } = await import("@/engine/engine.sql")
         const verdictArtifact = Database.use((db) =>
-          db.select().from(EngineArtifactTable)
+          db
+            .select()
+            .from(EngineArtifactTable)
             .where(and(eq(EngineArtifactTable.run_id, run.id), eq(EngineArtifactTable.label, "delivery-agent-verdict")))
-            .limit(1).get()
+            .limit(1)
+            .get(),
         )
         if (!verdictArtifact) return "Delivery not verified. Run deliver first to aggregate and verify goal deliveries."
         const verdictPayload = verdictArtifact.payload as
@@ -4679,7 +4888,9 @@ export function createOrchestratorTools(input: {
         try {
           result = await Promise.race([
             Publisher.deliver({ task, run, delivery }),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Publisher.deliver() timeout")), PUBLISH_TIMEOUT_MS)),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("Publisher.deliver() timeout")), PUBLISH_TIMEOUT_MS),
+            ),
           ])
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
@@ -4688,7 +4899,14 @@ export function createOrchestratorTools(input: {
         }
 
         const completed = Date.now()
-        finalizeDeliveryResult({ deliveryId: delivery.id, taskId: task.id, runId: run.id, delivery, result, now: completed })
+        finalizeDeliveryResult({
+          deliveryId: delivery.id,
+          taskId: task.id,
+          runId: run.id,
+          delivery,
+          result,
+          now: completed,
+        })
 
         if (result.status === "delivered") {
           const current = requireTask(task.id)
@@ -4712,14 +4930,26 @@ export function createOrchestratorTools(input: {
 
           const finalized = await EngineGit.complete(current, currentPlan, published)
           if (finalized.error) {
-            await updateTask(current, { status: "failed", error: finalized.error, time_completed: completed }, finalized.error)
+            await updateTask(
+              current,
+              { status: "failed", error: finalized.error, time_completed: completed },
+              finalized.error,
+            )
             return `Git finalization failed: ${finalized.error}`
           }
           const cleanedGoalWorkspaces = await cleanupTerminalGoalWorkspaces("publish_delivery")
           const cleanupNote = cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
-          await updateTask(finalized.task, { status: "completed", error: null, time_completed: completed }, "Task completed")
+          await updateTask(
+            finalized.task,
+            { status: "completed", error: null, time_completed: completed },
+            "Task completed",
+          )
           const { Plugin } = await import("@/plugin")
-          await Plugin.trigger("delivery.ready", { taskID: task.id, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(() => undefined)
+          await Plugin.trigger(
+            "delivery.ready",
+            { taskID: task.id, runID: run.id, deliveryID: delivery.id },
+            { actions: [] },
+          ).catch(() => undefined)
           // Flush task learnings to memory (fire-and-forget). Bound by a
           // 30s timeout so a stuck Memory.write or LLM-backed digestor
           // can't keep the bun event loop busy after the task itself
@@ -4729,17 +4959,17 @@ export function createOrchestratorTools(input: {
           const evaluation = findEvaluationByRun(run.id)
           Promise.race([
             EngineMemoryBridge.flushTaskLearnings({ task, run, delivery, evaluation, plan: currentPlan }),
-            new Promise<void>((_, reject) => setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000)),
-          ]).catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
+            new Promise<void>((_, reject) =>
+              setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000),
+            ),
+          ]).catch((err) => log.warn("failed to flush task learnings", { error: String(err) }))
 
           // Auto-launch the deliverable if the delivery agent recorded a
           // launch command. `launch_command` exists only on AcceptedVerdict
           // (the discriminated-union accepted branch); a published delivery
           // is always accepted, but the verdict could nominally be malformed
           // — narrow defensively without coercion.
-          const launchCmd = verdictPayload?.verdict === "accepted"
-            ? verdictPayload.launch_command
-            : undefined
+          const launchCmd = verdictPayload?.verdict === "accepted" ? verdictPayload.launch_command : undefined
           if (launchCmd) {
             try {
               const { Shell } = await import("@/shell/shell")
@@ -4776,7 +5006,9 @@ export function createOrchestratorTools(input: {
         "After receiving suggestions, surface them in your reply for the user.",
       ].join("\n"),
       inputSchema: z.object({
-        focus: z.enum(["features", "quality", "tests", "performance", "all"]).default("all")
+        focus: z
+          .enum(["features", "quality", "tests", "performance", "all"])
+          .default("all")
           .describe("What aspect to focus the analysis on"),
         reason: z.string().optional().describe("Why you decided to refine"),
       }),
@@ -4792,11 +5024,13 @@ export function createOrchestratorTools(input: {
         const goalSummaries: string[] = []
         const allChangedFiles: string[] = []
         for (const goal of goals) {
-          const gr = goalRuns.find(r => r.goal_id === goal.id)
+          const gr = goalRuns.find((r) => r.goal_id === goal.id)
           const delivery = gr ? findDeliveryByGoalRun(gr.id) : undefined
           const files = (delivery?.result as any)?.diffs?.map((d: any) => d.file) ?? []
           allChangedFiles.push(...files)
-          goalSummaries.push(`- [${goalStatusByID(goal.id)}] ${goal.title}: ${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 300)}`)
+          goalSummaries.push(
+            `- [${goalStatusByID(goal.id)}] ${goal.title}: ${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 300)}`,
+          )
           if (files.length > 0) goalSummaries.push(`  files: ${files.join(", ")}`)
         }
 
@@ -4897,8 +5131,8 @@ export function createOrchestratorTools(input: {
           const preview = resultText.slice(0, 200)
           throw new Error(
             `refine: LLM did not return valid JSON for {summary, suggestions}. ` +
-            `Parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}. ` +
-            `Output preview: ${preview}${resultText.length > 200 ? "…" : ""}`,
+              `Parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}. ` +
+              `Output preview: ${preview}${resultText.length > 200 ? "…" : ""}`,
           )
         }
         if (!Array.isArray(parsed.suggestions)) {
@@ -4907,11 +5141,16 @@ export function createOrchestratorTools(input: {
           )
         }
         const suggestions = parsed.suggestions as Array<{
-          priority?: string; title?: string; category?: string; effort?: string; description?: string
+          priority?: string
+          title?: string
+          category?: string
+          effort?: string
+          description?: string
         }>
         const summaryRaw = typeof parsed.summary === "string" ? parsed.summary : ""
-        const suggestionLines = suggestions.map((s) =>
-          `[${s.priority ?? "?"}] ${s.title ?? "(untitled)"} (${s.category ?? "?"}, ${s.effort ?? "?"}): ${s.description ?? ""}`,
+        const suggestionLines = suggestions.map(
+          (s) =>
+            `[${s.priority ?? "?"}] ${s.title ?? "(untitled)"} (${s.category ?? "?"}, ${s.effort ?? "?"}): ${s.description ?? ""}`,
         )
         return SubAgentProtocol.yieldResult({
           headline:
@@ -4958,10 +5197,7 @@ export function createOrchestratorTools(input: {
           .min(1)
           .max(4)
           .describe("1-4 questions to ask in a single turn."),
-        reason: z
-          .string()
-          .optional()
-          .describe("Why you're asking (short, shown in logs — not to the user)."),
+        reason: z.string().optional().describe("Why you're asking (short, shown in logs — not to the user)."),
       }),
       execute: async ({ questions, reason }) => {
         log.info("question", { taskID, count: questions.length, reason })
@@ -4990,15 +5226,21 @@ export function createOrchestratorTools(input: {
         request: z
           .string()
           .min(1)
-          .describe("Complete, self-contained request for the proposed new task. Include the relation to the current task when relevant."),
+          .describe(
+            "Complete, self-contained request for the proposed new task. Include the relation to the current task when relevant.",
+          ),
         reason: z
           .string()
           .min(1)
           .describe("Why this should be offered as a separate follow-up task instead of changing the current task."),
         priority: z.enum(["critical", "high", "normal", "low"]).default("normal"),
+        queue: z
+          .boolean()
+          .default(false)
+          .describe("Set true when this confirmed follow-up task should wait behind active tasks in the same directory; set false to start immediately."),
         kind: z.enum(["workflow", "build"]).default("workflow"),
       }),
-      execute: async ({ title, request, reason, priority, kind }) => {
+      execute: async ({ title, request, reason, priority, queue, kind }) => {
         const task = requireTask(taskID)
         log.info("propose_task confirmation requested", { taskID, title, priority, kind })
         const { output, answers } = await Question.askAndFormat({
@@ -5035,14 +5277,17 @@ export function createOrchestratorTools(input: {
             pointer: `current task ${taskID}; no new task was created`,
           })
         }
-        const requestID = "orchestrator-proposed-task:" +
-          taskID + ":" +
+        const requestID =
+          "orchestrator-proposed-task:" +
+          taskID +
+          ":" +
           createHash("sha256").update(`${title}\0${request}`).digest("hex").slice(0, 16)
         const newTaskID = await EngineService.createTask({
           requestID,
           title,
           request,
           priority,
+          queue,
           kind,
           executor: task.executor,
           source: "orchestrator:propose_task",
@@ -5065,6 +5310,7 @@ export function createOrchestratorTools(input: {
             ["title", title],
             ["kind", kind],
             ["priority", priority],
+            ["queue", queue === true ? "true" : "false"],
             ["parent_task_id", taskID],
           ],
           pointer: `new task ${newTaskID}; parent task ${taskID}`,
@@ -5208,7 +5454,7 @@ export function createOrchestratorTools(input: {
               `while active spec is ${activeSpec.id}. Re-read the active goal graph before dispatching build.`
             )
           }
-          const dependencyBlockers = (Array.isArray(goal.depends_on) ? goal.depends_on as string[] : [])
+          const dependencyBlockers = (Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : [])
             .map((depID) => ({ depID, status: goalStatusByID(depID) }))
             .filter((dep) => dep.status !== "passed")
           if (dependencyBlockers.length > 0) {
@@ -5256,27 +5502,6 @@ export function createOrchestratorTools(input: {
                 `while active spec is ${activeSpec.id}. Re-read the active goal graph before dispatching build.`
               )
             }
-            // Fidelity gate runs BEFORE any worktree creation or workspace
-            // pointer mutation. Phase A2 (2026-05-05): pre-fix order was
-            // create-worktree → write workspace_dir → validate; on failure
-            // the early return left an orphan worktree on disk and a
-            // poisoned engine_goal column that read as "in-flight" but had
-            // no goal_run_attempt artifact. Bench gemini reproduced this on
-            // 4 dispatches in a row before the LLM gave up. Validating up
-            // front means the rejected dispatch never touches persistent
-            // state.
-            const fidelityIssues = validatePersistedArchitectFidelity({
-              task,
-              goals: listGoals(taskID).map((row) => ({
-                id: row.id,
-                owned_paths: Array.isArray(row.owned_paths) ? row.owned_paths as string[] : [],
-              })),
-              executionStarted: Boolean((await describeTask(taskID)).collaboration_closure?.execution_started),
-            })
-            if (fidelityIssues.length > 0) {
-              return `Build dispatch blocked: architect fidelity contract is incomplete.\n${fidelityIssues.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}`
-            }
-
             // Phase B (2026-05-05): persistent worktree pointer comes from
             // the latest goal_run_attempt artifact, not engine_goal columns.
             // findGoalLatestWorkspace returns the triple from the newest
@@ -5367,8 +5592,6 @@ export function createOrchestratorTools(input: {
               objective: goal.objective,
               acceptance_specs: acceptanceSpecsToPromptLines(goal.acceptance_specs),
               owned_paths: Array.isArray(goal.owned_paths) ? (goal.owned_paths as string[]) : [],
-              exports: Array.isArray(goal.exports) ? (goal.exports as string[]) : [],
-              imports: Array.isArray(goal.imports) ? (goal.imports as string[]) : [],
               depends_on: dependsOn,
             }
 
@@ -5392,29 +5615,25 @@ export function createOrchestratorTools(input: {
 
             const { createDecisionLog } = await import("@/decision-log")
             const decisionLog = createDecisionLog(taskID)
-            const archEntries = decisionLog.readByPhase("architect")
-            const architectContracts = archEntries.flatMap((e) => {
-              const ir = parseArchitectContractDecision(e.value)
-              if (!ir) return []
-              const goalIDs = e.goalID ? [e.goalID] : []
-              return [{
-                category: e.key,
-                title: ir.name,
-                spec: renderContractIR(ir),
-                goalIDs,
-              }]
-            })
+            const contractGraph = findLatestArchitectContractGraph(taskID)
+            if (!contractGraph) {
+              throw new Error(
+                `Cannot build goal ${goal.id}: missing architect_contract_graph artifact for task ${taskID}. ` +
+                  "Re-run architect so dependency reasons and graph contracts are available before build.",
+              )
+            }
 
             const siblingGoals = listGoals(taskID)
-            const dependencies = dependsOn.length > 0
-              ? siblingGoals
-                  .filter((g) => dependsOn.includes(g.id))
-                  .map((g) => ({
-                    id: g.id,
-                    title: g.title,
-                    objective: g.objective,
-                  }))
-              : []
+            const dependencies =
+              dependsOn.length > 0
+                ? siblingGoals
+                    .filter((g) => dependsOn.includes(g.id))
+                    .map((g) => ({
+                      id: g.id,
+                      title: g.title,
+                      objective: g.objective,
+                    }))
+                : []
             const collaborationGoals = siblingGoals.map((g) => ({
               id: g.id,
               title: g.title,
@@ -5422,35 +5641,32 @@ export function createOrchestratorTools(input: {
               kind: g.kind,
               status: goalStatusByID(g.id),
               acceptance_specs: acceptanceSpecsToPromptLines(g.acceptance_specs),
-              owned_paths: Array.isArray(g.owned_paths) ? g.owned_paths as string[] : [],
-              depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
-              exports: Array.isArray(g.exports) ? g.exports as string[] : [],
-              imports: Array.isArray(g.imports) ? g.imports as string[] : [],
+              owned_paths: Array.isArray(g.owned_paths) ? (g.owned_paths as string[]) : [],
+              depends_on: Array.isArray(g.depends_on) ? (g.depends_on as string[]) : [],
             }))
 
-            const designSpecs = Array.isArray(task.design_specs)
-              ? (task.design_specs as any)
-              : undefined
+            const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
 
             // Retry feedback from decision log (per-goal "retry" entries the
             // orchestrator wrote on prior delivery rejection).
             const retryEntries = decisionLog.readByPhase("retry").filter((e) => e.goalID === goal.id)
-            const retryFeedback = retryEntries.length > 0
-              ? [
-                  "## Prior Attempt Failed — Read This Before Implementing",
-                  "",
-                  "The previous attempt was rejected. The worktree still has those files; edit in place rather than start from scratch unless the failure forces a structural rewrite.",
-                  "",
-                  "### Coordinator Root-Cause + Delivery Rejection",
-                  ...retryEntries.map((e) => `- ${e.value}${e.reason ? ` — _why: ${e.reason}_` : ""}`),
-                  "",
-                  "### Required For This Retry",
-                  "- Address each rejection above before changing anything else.",
-                  "- Do NOT repeat an approach that was already tried and rejected.",
-                  "- If the fix touches a shared file, explain the collaboration impact in files_changed[] instead of hiding the cross-goal dependency.",
-                ].join("\n")
-              : undefined
+            const retryFeedback =
+              retryEntries.length > 0
+                ? [
+                    "## Prior Attempt Failed — Read This Before Implementing",
+                    "",
+                    "The previous attempt was rejected. The worktree still has those files; edit in place rather than start from scratch unless the failure forces a structural rewrite.",
+                    "",
+                    "### Coordinator Root-Cause + Delivery Rejection",
+                    ...retryEntries.map((e) => `- ${e.value}${e.reason ? ` — _why: ${e.reason}_` : ""}`),
+                    "",
+                    "### Required For This Retry",
+                    "- Address each rejection above before changing anything else.",
+                    "- Do NOT repeat an approach that was already tried and rejected.",
+                    "- If the fix touches a shared file, explain the collaboration impact in files_changed[] instead of hiding the cross-goal dependency.",
+                  ].join("\n")
+                : undefined
             const deliveryFeedback = await composeLatestDeliveryFeedbackForBuild({
               taskID,
               goalID: goal.id,
@@ -5473,7 +5689,7 @@ export function createOrchestratorTools(input: {
             // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.2.
             context = {
               requirements: requirements.length > 0 ? requirements : undefined,
-              architectContracts: architectContracts.length > 0 ? architectContracts : undefined,
+              contractGraph,
               dependencies: dependencies.length > 0 ? dependencies : undefined,
               collaborationGoals,
               designSpecs,
@@ -5495,18 +5711,17 @@ export function createOrchestratorTools(input: {
               taskID,
               enabled: Boolean(deliveryFeedback),
             })
-            const designSpecs = Array.isArray(task.design_specs)
-              ? (task.design_specs as any)
-              : undefined
+            const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const designAnalysis = renderDesignAnalysisHandoffReference(taskID)
-            context = deliveryFeedback || retryAttachments || designSpecs || designAnalysis.trim().length > 0
-              ? {
-                  designSpecs,
-                  designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
-                  deliveryFeedback,
-                  retryAttachments,
-                }
-              : undefined
+            context =
+              deliveryFeedback || retryAttachments || designSpecs || designAnalysis.trim().length > 0
+                ? {
+                    designSpecs,
+                    designAnalysis: designAnalysis.trim().length > 0 ? designAnalysis : undefined,
+                    deliveryFeedback,
+                    retryAttachments,
+                  }
+                : undefined
           }
 
           // Open the goal_run only after BuildAgent.run has acquired the
@@ -5539,7 +5754,8 @@ export function createOrchestratorTools(input: {
               // update. Surface and let the dispatch fail rather than
               // silently degrade to the old "appear at completion" UX.
               log.error("build: beginBuildAttempt failed", {
-                taskID, goalID: attachedGoalID,
+                taskID,
+                goalID: attachedGoalID,
                 error: beginErr instanceof Error ? beginErr.message : String(beginErr),
               })
               throw beginErr
@@ -5611,7 +5827,8 @@ export function createOrchestratorTools(input: {
                   }
                 } catch (gitErr) {
                   log.warn("build catch: rev-parse HEAD failed (non-fatal)", {
-                    taskID, goalID: attachedGoalID,
+                    taskID,
+                    goalID: attachedGoalID,
                     error: gitErr instanceof Error ? gitErr.message : String(gitErr),
                   })
                 }
@@ -5630,7 +5847,8 @@ export function createOrchestratorTools(input: {
                     }))
                   } catch (diffErr) {
                     log.warn("build catch: collectGoalContributionDiffs failed (non-fatal)", {
-                      taskID, goalID: attachedGoalID,
+                      taskID,
+                      goalID: attachedGoalID,
                       error: diffErr instanceof Error ? diffErr.message : String(diffErr),
                     })
                   }
@@ -5686,7 +5904,8 @@ export function createOrchestratorTools(input: {
                   })
                 } catch (logErr) {
                   log.warn("build: failed to record contract-violation decision_log entry (non-fatal)", {
-                    taskID, goalID: attachedGoalID,
+                    taskID,
+                    goalID: attachedGoalID,
                     error: logErr instanceof Error ? logErr.message : String(logErr),
                   })
                 }
@@ -5725,12 +5944,15 @@ export function createOrchestratorTools(input: {
                 const failedEssential = contractAuditCriteria.filter((criteria) => {
                   if (criteria.status === "passed") return false
                   const goalRow = findGoal(attachedGoalID)
-                  const specs = (Array.isArray(goalRow?.acceptance_specs) ? goalRow.acceptance_specs : []) as AcceptanceSpec[]
+                  const specs = (
+                    Array.isArray(goalRow?.acceptance_specs) ? goalRow.acceptance_specs : []
+                  ) as AcceptanceSpec[]
                   return specs.some((spec) =>
-                    spec.scorers.some((scorer) =>
-                      scorer.type === "contract_audit" &&
-                      contractAuditRequired(spec, scorer) &&
-                      `acceptance:${spec.id}:${scorer.name}` === criteria.name,
+                    spec.scorers.some(
+                      (scorer) =>
+                        scorer.type === "contract_audit" &&
+                        contractAuditRequired(spec, scorer) &&
+                        `acceptance:${spec.id}:${scorer.name}` === criteria.name,
                     ),
                   )
                 })
@@ -5829,7 +6051,8 @@ export function createOrchestratorTools(input: {
               // dropped the orchestrator will see the goal as still pending
               // on its next wake and decide what to do.
               log.error("build: finalizeBuildAttempt failed", {
-                taskID, goalID: attachedGoalID,
+                taskID,
+                goalID: attachedGoalID,
                 error: persistErr instanceof Error ? persistErr.message : String(persistErr),
               })
             }
@@ -5902,12 +6125,16 @@ export function createOrchestratorTools(input: {
           // Return the structured payload so the orchestrator can judge
           // whether build actually addressed the prior rejection before
           // re-dispatching (avoids the build/deliver death spiral).
-          const testLines = result.tests.length > 0
-            ? result.tests.map((t) => `  - ${t.passed ? "✓" : "✗"} ${t.name}${t.detail ? `: ${t.detail}` : ""}`).join("\n")
-            : "  (none reported)"
-          const fileLines = result.files_changed.length > 0
-            ? result.files_changed.map((f) => `  - ${f.path}: ${f.summary} — ${f.reason}`).join("\n")
-            : "  (none reported)"
+          const testLines =
+            result.tests.length > 0
+              ? result.tests
+                  .map((t) => `  - ${t.passed ? "✓" : "✗"} ${t.name}${t.detail ? `: ${t.detail}` : ""}`)
+                  .join("\n")
+              : "  (none reported)"
+          const fileLines =
+            result.files_changed.length > 0
+              ? result.files_changed.map((f) => `  - ${f.path}: ${f.summary} — ${f.reason}`).join("\n")
+              : "  (none reported)"
           const commitLine = result.commit_ref ? `- commit_ref: ${result.commit_ref}` : "- commit_ref: (none)"
           const errorLine = result.status === "failed" ? `\n- error: ${result.error}` : ""
           const worktreeLine = worktreeDir ? `\n- worktreeDir: ${worktreeDir}` : ""
@@ -5916,19 +6143,19 @@ export function createOrchestratorTools(input: {
           // commit_ref / files_changed[] in `result`; below is what actually
           // happened in the worktree from the host's perspective. The
           // orchestrator LLM cross-checks both and decides next.
-          const mergeBackLine = `- merge_back_status: ${mergeBackStatus}` +
+          const mergeBackLine =
+            `- merge_back_status: ${mergeBackStatus}` +
             (lastMergeBackOutcome ? ` (last_outcome: ${lastMergeBackOutcome})` : "")
           const publishedLine = publishedCommitRef
             ? `- published_commit_ref: ${publishedCommitRef} (primary HEAD after merge_back)`
             : `- published_commit_ref: (none — merge_back did not publish)`
-          const worktreeHeadLine = worktreeHead
-            ? `- worktree_head: ${worktreeHead}`
-            : ""
-          const actualFilesLines = actualChangedFiles.length > 0
-            ? actualChangedFiles
-              .map((f) => `  - [${f.status}] ${f.path} (+${f.additions}/-${f.deletions})`)
-              .join("\n")
-            : "  (no changes detected against contribution base)"
+          const worktreeHeadLine = worktreeHead ? `- worktree_head: ${worktreeHead}` : ""
+          const actualFilesLines =
+            actualChangedFiles.length > 0
+              ? actualChangedFiles
+                  .map((f) => `  - [${f.status}] ${f.path} (+${f.additions}/-${f.deletions})`)
+                  .join("\n")
+              : "  (no changes detected against contribution base)"
           const factBlock =
             `\n\n### Worktree facts (host ground truth)\n` +
             `${mergeBackLine}\n` +
@@ -5962,7 +6189,6 @@ export function createOrchestratorTools(input: {
         }
       },
     }),
-
   }
 
   // Phase 5-g: the deprecated dispatch tools (dispatch_goal / exec_goal /

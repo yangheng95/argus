@@ -1,5 +1,4 @@
 import z from "zod"
-import { createDecisionLog } from "@/decision-log"
 import { goalStatusByID } from "@/engine/describe"
 import { deriveTaskStatus, isTaskActive, isTaskQueued } from "@/engine/task-status"
 import {
@@ -14,6 +13,7 @@ import {
   findDeliveryByGoalRun,
   findLatestDeliveryVerdictArtifactForDelivery,
   findLatestEvaluationForGoalRun,
+  findLatestArchitectContractGraph,
   getGoalRetryCount,
   listGoalRunsByGoal,
   type DeliveryRow,
@@ -1281,21 +1281,29 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   return { planNodes, buildSessionID, changedFiles, changedFileDiffs, diffStats, checks, evalSummary, verdict }
 }
 
-/** Build architect summary from Decision Log */
+/** Build architect summary from the Architect Contract Graph artifact. */
 function buildArchitectSummary(taskID: string) {
-  const log = createDecisionLog(taskID)
-  const entries = log.readByPhase("architect")
-  if (entries.length === 0) return undefined
-  const categories = [...new Set(entries.map((e) => e.key))]
+  const graph = findLatestArchitectContractGraph(taskID)
+  if (!graph) return undefined
+  const categories = [...new Set(graph.contracts.map((contract) => contract.kind))]
+  const edgeDecisions = graph.dependency_contracts.map((edge) => ({
+    key: `dependency:${edge.reason}`,
+    value: `${edge.from_goal_id} -> ${edge.to_goal_id}`,
+    reason: edge.summary ?? `contracts=${edge.contract_ids.join(", ") || "(none)"}`,
+    goalID: edge.to_goal_id,
+  }))
   return {
-    summary: `${entries.length} architect decisions across ${categories.length} categories`,
-    contractCount: entries.length,
+    summary: `${graph.contracts.length} architect graph contracts and ${graph.dependency_contracts.length} dependency reasons`,
+    contractCount: graph.contracts.length,
     categories,
-    decisions: entries.map((e) => ({
-      key: e.key,
-      value: e.value,
-      reason: e.reason,
-      goalID: e.goalID,
-    })),
+    decisions: [
+      ...graph.contracts.map((contract) => ({
+        key: contract.kind,
+        value: `${contract.name}: ${contract.summary}`,
+        reason: `producer=${contract.producer_goal_id}; consumers=${contract.consumer_goal_ids.join(", ") || "(none)"}`,
+        goalID: contract.producer_goal_id,
+      })),
+      ...edgeDecisions,
+    ],
   }
 }

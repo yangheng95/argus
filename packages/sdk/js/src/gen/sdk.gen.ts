@@ -4059,6 +4059,7 @@ export class Control2 extends HeyApiClient {
             request: string
             request_id?: string
             executor?: "mirrorcode" | "codex" | "claude-code"
+            queue?: boolean
             checks?: {
               build?: Array<string> | false
               test?: Array<string> | false
@@ -4887,6 +4888,7 @@ export class Task extends HeyApiClient {
         filename?: string
       }>
       priority?: "critical" | "high" | "normal" | "low"
+      queue?: boolean
       kind?: "workflow" | "build"
       budget?: {
         maxExecutorGroups?: number
@@ -5098,8 +5100,8 @@ export class Task extends HeyApiClient {
                 type: "contract_audit"
                 name: string
                 spec: {
-                  kind: "contract_ir"
-                  symbols?: Array<string>
+                  kind: "contract_graph"
+                  contract_ids: Array<string>
                 }
                 expect: {
                   status: "passed"
@@ -5225,8 +5227,8 @@ export class Task extends HeyApiClient {
                   type: "contract_audit"
                   name: string
                   spec: {
-                    kind: "contract_ir"
-                    symbols?: Array<string>
+                    kind: "contract_graph"
+                    contract_ids: Array<string>
                   }
                   expect: {
                     status: "passed"
@@ -5274,6 +5276,7 @@ export class Task extends HeyApiClient {
             { in: "body", key: "request" },
             { in: "body", key: "attachments" },
             { in: "body", key: "priority" },
+            { in: "body", key: "queue" },
             { in: "body", key: "kind" },
             { in: "body", key: "budget" },
             { in: "body", key: "checks" },
@@ -6378,8 +6381,8 @@ export class Goal extends HeyApiClient {
               type: "contract_audit"
               name: string
               spec: {
-                kind: "contract_ir"
-                symbols?: Array<string>
+                kind: "contract_graph"
+                contract_ids: Array<string>
               }
               expect: {
                 status: "passed"

@@ -4,6 +4,7 @@ import { tool } from "ai"
 import z from "zod"
 import { SessionLoop } from "../../src/session/loop"
 import { INTEGRITY_DIMENSIONS } from "../../src/integrity/dimensions"
+import { ArchitectContractRefSchema, GoalDependencyContractSchema } from "../../src/architect/contract-graph"
 
 /**
  * Regression test for specs/new-arch/2026-04-28-structured-output-systemic-fix.md
@@ -30,8 +31,6 @@ describe("integrity reviewer tool payload — provider-normalised budget", () =>
     objective: z.string().optional(),
     owned_paths: z.array(z.string()).optional(),
     depends_on: z.array(z.string()).optional(),
-    exports: z.array(z.string()).optional(),
-    imports: z.array(z.string()).optional(),
     kind: z.enum(["bootstrap", "feature", "verification", "integration", "system"]).optional(),
     priority: z.enum(["blocking", "advisory"]).optional(),
     requirement_ids: z.array(z.string()).optional(),
@@ -51,6 +50,36 @@ describe("integrity reviewer tool payload — provider-normalised budget", () =>
     priority: z.enum(["blocking", "advisory"]),
     reason: z.string().min(1),
   })
+  const GraphContractCorrectionInput = z.object({
+    kind: z.literal("contract"),
+    action: z.enum(["add", "modify", "remove"]),
+    reason: z.string().min(1),
+    contract_id: z.string().min(1).optional(),
+    contract: ArchitectContractRefSchema.optional(),
+  })
+  const GraphDependencyCorrectionInput = z.object({
+    kind: z.literal("dependency"),
+    action: z.enum(["add", "modify", "remove", "reclassify"]),
+    reason: z.string().min(1),
+    from_goal_id: z.string().min(1).optional(),
+    to_goal_id: z.string().min(1).optional(),
+    dependency: GoalDependencyContractSchema.optional(),
+    new_reason: z.enum(["contract", "bootstrap_scaffold", "integration_order"]).optional(),
+    contract_ids: z.array(z.string().min(1)).optional(),
+    summary: z.string().min(1).optional(),
+  })
+  const GraphAuditCriterionCorrectionInput = z.object({
+    kind: z.literal("audit_criterion"),
+    action: z.literal("attach"),
+    reason: z.string().min(1),
+    goal_id: z.string().min(1),
+    contract_ids: z.array(z.string().min(1)).min(1),
+  })
+  const GraphCorrectionInput = z.discriminatedUnion("kind", [
+    GraphContractCorrectionInput,
+    GraphDependencyCorrectionInput,
+    GraphAuditCriterionCorrectionInput,
+  ])
 
   function buildIssueInput(d: (typeof INTEGRITY_DIMENSIONS)[number]) {
     const types = d.issueTypes as readonly string[]
@@ -71,6 +100,7 @@ describe("integrity reviewer tool payload — provider-normalised budget", () =>
         verdict: VerdictEnum,
         issues: z.array(issue),
         corrections: z.array(GoalCorrectionInput),
+        graph_corrections: z.array(GraphCorrectionInput).optional(),
         missing_goals: z.array(MissingGoalInput),
       })
     }

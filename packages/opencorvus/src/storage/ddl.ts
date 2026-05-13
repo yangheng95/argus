@@ -473,8 +473,6 @@ CREATE TABLE IF NOT EXISTS engine_goal (
   acceptance_specs text NOT NULL DEFAULT '[]',
   owned_paths      text NOT NULL DEFAULT '[]',
   depends_on       text NOT NULL DEFAULT '[]',
-  exports          text NOT NULL DEFAULT '[]',
-  imports          text NOT NULL DEFAULT '[]',
   kind             text NOT NULL DEFAULT 'feature',
   requirement_ids  text NOT NULL DEFAULT '[]',
   priority         text NOT NULL DEFAULT 'blocking',
@@ -623,6 +621,8 @@ CREATE TABLE IF NOT EXISTS engine_artifact (
 );
 CREATE INDEX IF NOT EXISTS engine_artifact_run_idx      ON engine_artifact (run_id);
 CREATE INDEX IF NOT EXISTS engine_artifact_delivery_idx ON engine_artifact (delivery_id);
+CREATE INDEX IF NOT EXISTS engine_artifact_task_kind_latest_idx
+  ON engine_artifact (task_id, kind, time_created DESC, id DESC);
 
 -- Phase-6-b: engine_evaluation was removed in favour of engine_artifact rows
 -- with kind='verification-evidence'. See verification/persist.ts for the writer

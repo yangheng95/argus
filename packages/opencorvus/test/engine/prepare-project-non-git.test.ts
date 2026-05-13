@@ -66,6 +66,7 @@ describe("EngineService.createTask in a non-git directory (W2-V32)", () => {
             executor: "claude-code",
             title: "should never get here",
             request: "this task creation must reject",
+            queue: false,
           } as Parameters<typeof EngineService.createTask>[0])
         },
       })

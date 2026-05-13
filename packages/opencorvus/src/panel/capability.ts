@@ -92,6 +92,7 @@ export const PanelCapabilityRegistry = list(
       request: z.string(),
       request_id: z.string().optional(),
       executor: z.enum(["mirrorcode", "codex", "claude-code"]).optional(),
+      queue: z.boolean().optional(),
       checks: CheckConfig.optional(),
       routing: StageRouting.optional(),
       channel: z.string().optional(),

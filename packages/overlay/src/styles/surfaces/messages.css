@@ -15,40 +15,16 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  position: relative;
   padding:
     calc(8px * var(--ui-scale))
     calc(10px * var(--ui-scale))
     calc(8px * var(--ui-scale))
-    calc(12px * var(--ui-scale));
+    calc(10px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   background: color-mix(in srgb, var(--surface-inset) 90%, transparent);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 14%, transparent);
   box-shadow: none;
   font-size: var(--ui-font-control);
-}
-
-.msg-tool::before {
-  content: "";
-  position: absolute;
-  left: calc(10px * var(--ui-scale));
-  top: calc(10px * var(--ui-scale));
-  bottom: calc(10px * var(--ui-scale));
-  width: calc(1px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--subtle-4) 92%, transparent);
-}
-
-.msg-tool[data-status="completed"]::before {
-  background: color-mix(in srgb, var(--good) 78%, transparent);
-}
-
-.msg-tool[data-status="running"]::before {
-  background: color-mix(in srgb, var(--accent) 82%, transparent);
-}
-
-.msg-tool[data-status="error"]::before {
-  background: color-mix(in srgb, var(--bad) 82%, transparent);
 }
 
 .tool-icon {
@@ -57,7 +33,6 @@
   justify-content: center;
   width: calc(22px * var(--ui-scale));
   height: calc(22px * var(--ui-scale));
-  margin-left: calc(6px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   background: color-mix(in srgb, var(--text-muted) 9%, transparent);
   color: var(--text-soft);

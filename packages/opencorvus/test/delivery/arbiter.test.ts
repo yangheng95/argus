@@ -20,13 +20,15 @@ describe("delivery arbiter", () => {
       failedCheckCount: 0,
       failedRuntimeFlowCount: 0,
       failedReviewCount: 0,
-      failureDetails: [{
-        kind: "readiness",
-        id: "runtime-readiness:package-json",
-        name: "package.json",
-        status: "failed",
-        evidence: "package.json missing",
-      }],
+      failureDetails: [
+        {
+          kind: "readiness",
+          id: "runtime-readiness:package-json",
+          name: "package.json",
+          status: "failed",
+          evidence: "package.json missing",
+        },
+      ],
     })
     expect(parsed.success).toBe(true)
   })
@@ -73,10 +75,12 @@ describe("delivery arbiter", () => {
       tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
     }
 
-    expect(arbitrateDeliveryVerdict({
-      manifest: manifestWithFailedBuildCheck(),
-      goalIds: ["gol_auth", "gol_ui"],
-    })).toBeUndefined()
+    expect(
+      arbitrateDeliveryVerdict({
+        manifest: manifestWithFailedBuildCheck(),
+        goalIds: ["gol_auth", "gol_ui"],
+      }),
+    ).toBeUndefined()
 
     const decision = arbitrateDeliveryVerdict({
       manifest: manifestWithFailedBuildCheck(),
@@ -98,12 +102,14 @@ describe("delivery arbiter", () => {
       frontend_check: { attempted: false },
       deferred_checks: [],
       tool_call_evidence: [{ tool: "read_file", passed: true, detail: "inspected package.json" }],
-      rejection_details: [{
-        goal_id: "gol_ui",
-        category: "build",
-        error: "package.json script references a missing UI entry module",
-        suggestion: "Restore the UI entry module or correct the package script.",
-      }],
+      rejection_details: [
+        {
+          goal_id: "gol_ui",
+          category: "build",
+          error: "package.json script references a missing UI entry module",
+          suggestion: "Restore the UI entry module or correct the package script.",
+        },
+      ],
     }
 
     const decision = arbitrateDeliveryVerdict({
@@ -129,11 +135,13 @@ describe("delivery arbiter", () => {
       frontend_check: { attempted: false },
       deferred_checks: [],
       tool_call_evidence: [{ tool: "run_command", passed: false, detail: "bun run build failed" }],
-      rejection_details: [{
-        category: "build",
-        error: "merged worktree build fails before a responsible goal can be isolated",
-        suggestion: "Inspect the integrated build output and adjust the plan or task-level wiring.",
-      }],
+      rejection_details: [
+        {
+          category: "build",
+          error: "merged worktree build fails before a responsible goal can be isolated",
+          suggestion: "Inspect the integrated build output and adjust the plan or task-level wiring.",
+        },
+      ],
     }
 
     const decision = arbitrateDeliveryVerdict({
@@ -173,11 +181,13 @@ describe("delivery arbiter", () => {
       frontend_check: { attempted: false },
       deferred_checks: [],
       tool_call_evidence: [{ tool: "read_file", passed: true, detail: "inspected src/main.ts" }],
-      rejection_details: [{
-        category: "build",
-        error: "src/main.ts imports ./missing which does not exist",
-        suggestion: "Restore the missing module or correct the import.",
-      }],
+      rejection_details: [
+        {
+          category: "build",
+          error: "src/main.ts imports ./missing which does not exist",
+          suggestion: "Restore the missing module or correct the import.",
+        },
+      ],
     }
 
     const decision = arbitrateDeliveryVerdict({
@@ -220,7 +230,7 @@ describe("delivery arbiter", () => {
       expect(verdict.status).toBe("failed")
     })
 
-    test("review:integrity failure is a primary blocker (architect-level soundness)", () => {
+    test("review:contract_audit failure is a primary blocker", () => {
       const verdict = arbitrateDeliveryGate({
         checks: {
           status: "passed",
@@ -232,11 +242,11 @@ describe("delivery arbiter", () => {
         },
         failedCoverageIds: [],
         failedRuntimeFlowIds: [],
-        failedReviewIds: ["review:integrity"],
+        failedReviewIds: ["review:contract_audit"],
         functionalAssessment: {
           status: "incomplete",
-          summary: "integrity failed",
-          primaryFailureIds: ["review:integrity"],
+          summary: "contract audit failed",
+          primaryFailureIds: ["review:contract_audit"],
           auxiliaryFailureIds: [],
         },
       })
@@ -266,7 +276,7 @@ describe("delivery arbiter", () => {
       expect(verdict.status).toBe("failed")
     })
 
-    test("build/test/lint and non-integrity reviews are advisory only", () => {
+    test("build/test/lint and non-contract reviews are advisory only", () => {
       const verdict = arbitrateDeliveryGate({
         checks: {
           status: "passed",
@@ -283,18 +293,13 @@ describe("delivery arbiter", () => {
           status: "complete",
           summary: "ok",
           primaryFailureIds: [],
-          auxiliaryFailureIds: [
-            "check:build",
-            "check:test",
-            "review:workspace_export",
-            "specialist:frontend",
-          ],
+          auxiliaryFailureIds: ["check:build", "check:test", "review:workspace_export", "specialist:frontend"],
         },
       })
       expect(verdict.status).toBe("passed")
     })
 
-    test("integrity failure overrides an LLM accept via host_gate", () => {
+    test("contract audit failure overrides an LLM accept via host_gate", () => {
       const accepted: DeliveryVerdictType = {
         verdict: "accepted",
         summary: "accepted by reviewer",
@@ -304,7 +309,7 @@ describe("delivery arbiter", () => {
         tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
       }
       const decision = arbitrateDeliveryVerdict({
-        manifest: manifestWithFailedIntegrityReview(),
+        manifest: manifestWithFailedContractAuditReview(),
         goalIds: ["gol_one"],
         llmVerdict: accepted,
       })
@@ -334,7 +339,7 @@ describe("delivery arbiter", () => {
     )
   })
 
-  test("final arbiter appends passed manifest review evidence without changing accepted verdict artifact shape", () => {
+  test("final arbiter preserves accepted verdict shape when no review evidence exists", () => {
     const accepted: DeliveryVerdictType = {
       verdict: "accepted",
       summary: "accepted by reviewer",
@@ -353,22 +358,18 @@ describe("delivery arbiter", () => {
     expect(decision?.source).toBe("llm")
     expect(decision?.verdict.verdict).toBe("accepted")
     expect(decision?.verdict.summary).toBe("accepted by reviewer")
-    expect(decision?.verdict.deferred_checks).toEqual(expect.arrayContaining([
-      {
-        name: "review:integrity",
-        result: "skipped",
-        evidence: "goal graph does not require integrity review",
-      },
-    ]))
+    expect(decision?.verdict.deferred_checks).toEqual([])
   })
 
   test("manifest auxiliary failures are projected as advisory_failed", () => {
     const verdict = appendManifestEvidence(acceptedVerdict(), manifestWithAuxiliaryBuildAndReviewFailures())
 
-    expect(verdict.deferred_checks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "check:build", result: "advisory_failed" }),
-      expect.objectContaining({ name: "specialist:frontend", result: "advisory_failed" }),
-    ]))
+    expect(verdict.deferred_checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "check:build", result: "advisory_failed" }),
+        expect.objectContaining({ name: "specialist:frontend", result: "advisory_failed" }),
+      ]),
+    )
   })
 
   test("runtime evidence failure stays advisory and does not override an LLM accept", () => {
@@ -379,12 +380,14 @@ describe("delivery arbiter", () => {
       frontend_check: { attempted: true, renders_correctly: false, issues: ["empty root"] },
       deferred_checks: [],
       tool_call_evidence: [{ tool: "read_file", passed: true, detail: "inspected src/App.tsx" }],
-      rejection_details: [{
-        goal_id: "gol_ui",
-        category: "runtime",
-        error: "UI root never hydrates in the integrated runtime",
-        suggestion: "Fix the UI entrypoint hydration path.",
-      }],
+      rejection_details: [
+        {
+          goal_id: "gol_ui",
+          category: "runtime",
+          error: "UI root never hydrates in the integrated runtime",
+          suggestion: "Fix the UI entrypoint hydration path.",
+        },
+      ],
     }
     const accepted: DeliveryVerdictType = {
       verdict: "accepted",
@@ -444,12 +447,14 @@ describe("delivery arbiter", () => {
       frontend_check: { attempted: true, renders_correctly: false, issues: ["layout mismatch"] },
       deferred_checks: [],
       tool_call_evidence: [{ tool: "screenshot", passed: true, detail: "runtime screenshot" }],
-      rejection_details: [{
-        goal_id: "gol_ui",
-        category: "visual",
-        error: "UI shell layout does not match the reference screenshot",
-        suggestion: "Realign the primary layout regions to the reference.",
-      }],
+      rejection_details: [
+        {
+          goal_id: "gol_ui",
+          category: "visual",
+          error: "UI shell layout does not match the reference screenshot",
+          suggestion: "Realign the primary layout regions to the reference.",
+        },
+      ],
     }
     const accepted: DeliveryVerdictType = {
       verdict: "accepted",
@@ -462,13 +467,15 @@ describe("delivery arbiter", () => {
     const visualMetric = {
       passed: false,
       score: 0.24,
-      gates: [{
-        name: "ssim" as const,
-        passed: false,
-        threshold: 0.9,
-        value: 0.24,
-        note: "layout mismatch",
-      }],
+      gates: [
+        {
+          name: "ssim" as const,
+          passed: false,
+          threshold: 0.9,
+          value: 0.24,
+          note: "layout mismatch",
+        },
+      ],
       renderedPath: "rendered.png",
       referencePath: "reference.png",
       capturedAt: 1,
@@ -504,26 +511,32 @@ describe("delivery arbiter", () => {
 function manifestWithMixedFunctionalAndAuxiliaryFailures(): DeliveryEvidenceManifest {
   return {
     ...manifestWithFailedBuildCheck(),
-    goalCoverage: [{
-      goalId: "gol_ui",
-      title: "UI flow",
-      priority: "blocking",
-      status: "uncovered",
-      acceptanceSpecCount: 0,
-      evidence: ["blocking goal has no functional evidence"],
-    }],
-    runtimeFlows: [{
-      id: "runtime:web:.",
-      name: "Web Runtime Render",
-      status: "failed",
-      evidence: ["no_live_preview: no live frontend preview URL resolved"],
-    }],
-    reviewEvidence: [{
-      id: "specialist:frontend",
-      name: "Specialist Review: frontend",
-      status: "failed",
-      evidence: ["blocking:runtime: Frontend runtime flow failed"],
-    }],
+    goalCoverage: [
+      {
+        goalId: "gol_ui",
+        title: "UI flow",
+        priority: "blocking",
+        status: "uncovered",
+        acceptanceSpecCount: 0,
+        evidence: ["blocking goal has no functional evidence"],
+      },
+    ],
+    runtimeFlows: [
+      {
+        id: "runtime:web:.",
+        name: "Web Runtime Render",
+        status: "failed",
+        evidence: ["no_live_preview: no live frontend preview URL resolved"],
+      },
+    ],
+    reviewEvidence: [
+      {
+        id: "specialist:frontend",
+        name: "Specialist Review: frontend",
+        status: "failed",
+        evidence: ["blocking:runtime: Frontend runtime flow failed"],
+      },
+    ],
     functionalAssessment: {
       status: "incomplete",
       primaryFailureIds: ["check:build", "goal:gol_ui"],
@@ -559,46 +572,43 @@ function acceptedVerdict(): DeliveryVerdictType {
 }
 
 function passedManifest(): DeliveryEvidenceManifest {
-  return {
-    ...baseManifest(),
-    reviewEvidence: [{
-      id: "review:integrity",
-      name: "Integrity Review",
-      status: "skipped",
-      evidence: ["goal graph does not require integrity review"],
-    }],
-  }
+  return baseManifest()
 }
 
 function manifestWithFailedBuildCheck(): DeliveryEvidenceManifest {
   return {
     ...baseManifest(),
-    requiredChecks: [{
-      id: "check:build",
-      name: "build",
-      label: "Build",
-      family: "build",
-      command: "bun run build",
-      commandDigest: "digest:build",
-    }],
-    checkResults: [{
-      id: "check:build",
-      name: "build",
-      label: "Build",
-      family: "build",
-      command: "bun run build",
-      commandDigest: "digest:build",
-      status: "failed",
-      exitCode: 1,
-      executionCwd: ".",
-      outputExcerpt: "tsc exited with code 1",
-      failureReason: "tsc exited with code 1",
-      startedAt: 1,
-      completedAt: 2,
-    }],
+    requiredChecks: [
+      {
+        id: "check:build",
+        name: "build",
+        label: "Build",
+        family: "build",
+        command: "bun run build",
+        commandDigest: "digest:build",
+      },
+    ],
+    checkResults: [
+      {
+        id: "check:build",
+        name: "build",
+        label: "Build",
+        family: "build",
+        command: "bun run build",
+        commandDigest: "digest:build",
+        status: "failed",
+        exitCode: 1,
+        executionCwd: ".",
+        outputExcerpt: "tsc exited with code 1",
+        failureReason: "tsc exited with code 1",
+        startedAt: 1,
+        completedAt: 2,
+      },
+    ],
     finalGate: {
       status: "failed",
-      summary: "Delivery evidence gate failed 1 required check(s), 0 coverage item(s), 0 runtime flow(s), and 0 review item(s).",
+      summary:
+        "Delivery evidence gate failed 1 required check(s), 0 coverage item(s), 0 runtime flow(s), and 0 review item(s).",
       failedCheckIds: ["check:build"],
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
@@ -610,12 +620,14 @@ function manifestWithFailedBuildCheck(): DeliveryEvidenceManifest {
 function manifestWithAuxiliaryBuildAndReviewFailures(): DeliveryEvidenceManifest {
   return {
     ...manifestWithFailedBuildCheck(),
-    reviewEvidence: [{
-      id: "specialist:frontend",
-      name: "Specialist Review: frontend",
-      status: "failed",
-      evidence: ["advisory frontend finding"],
-    }],
+    reviewEvidence: [
+      {
+        id: "specialist:frontend",
+        name: "Specialist Review: frontend",
+        status: "failed",
+        evidence: ["advisory frontend finding"],
+      },
+    ],
     functionalAssessment: {
       status: "complete",
       primaryFailureIds: [],
@@ -643,38 +655,49 @@ function manifestWithSpecialistClientContractFailure(timeCreated: number): Deliv
   return {
     ...baseManifest(),
     timeCreated,
-    reviewEvidence: [{
-      id: "specialist:client_contract",
-      name: "Specialist Review: client_contract",
-      status: "failed",
-      evidence: ["blocking:evidence_quality: Client contract surface was selected without client file or endpoint evidence."],
-    }],
-    specialistReviews: [{
-      id: `artifact_client_contract_${timeCreated}`,
-      taskId: "tsk_arbiter",
-      runId: "run_arbiter",
-      deliveryId: "dlv_arbiter",
-      reviewer: "client_contract",
-      executionStatus: "completed",
-      summary: "Client contract review found 1 issue(s).",
-      findings: [{
-        proposedSeverity: "blocking",
-        category: "evidence_quality",
-        claim: "Client contract surface was selected without client file or endpoint evidence.",
-        evidence: [{
-          kind: "log",
-          ref: "artifact_surface",
-          excerpt: "client_contract selected but client inventory is empty",
-        }],
-        affectedRequirementIDs: [],
-      }],
-      evidenceRefs: ["surface:artifact_surface"],
-      reviewedSurfaces: ["client_contract"],
-      timeCreated,
-    }],
+    reviewEvidence: [
+      {
+        id: "specialist:client_contract",
+        name: "Specialist Review: client_contract",
+        status: "failed",
+        evidence: [
+          "blocking:evidence_quality: Client contract surface was selected without client file or endpoint evidence.",
+        ],
+      },
+    ],
+    specialistReviews: [
+      {
+        id: `artifact_client_contract_${timeCreated}`,
+        taskId: "tsk_arbiter",
+        runId: "run_arbiter",
+        deliveryId: "dlv_arbiter",
+        reviewer: "client_contract",
+        executionStatus: "completed",
+        summary: "Client contract review found 1 issue(s).",
+        findings: [
+          {
+            proposedSeverity: "blocking",
+            category: "evidence_quality",
+            claim: "Client contract surface was selected without client file or endpoint evidence.",
+            evidence: [
+              {
+                kind: "log",
+                ref: "artifact_surface",
+                excerpt: "client_contract selected but client inventory is empty",
+              },
+            ],
+            affectedRequirementIDs: [],
+          },
+        ],
+        evidenceRefs: ["surface:artifact_surface"],
+        reviewedSurfaces: ["client_contract"],
+        timeCreated,
+      },
+    ],
     finalGate: {
       status: "failed",
-      summary: "Delivery evidence gate failed 0 required check(s), 0 coverage item(s), 0 runtime flow(s), and 1 review item(s).",
+      summary:
+        "Delivery evidence gate failed 0 required check(s), 0 coverage item(s), 0 runtime flow(s), and 1 review item(s).",
       failedCheckIds: [],
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
@@ -683,28 +706,30 @@ function manifestWithSpecialistClientContractFailure(timeCreated: number): Deliv
   }
 }
 
-function manifestWithFailedIntegrityReview(): DeliveryEvidenceManifest {
+function manifestWithFailedContractAuditReview(): DeliveryEvidenceManifest {
   return {
     ...baseManifest(),
-    reviewEvidence: [{
-      id: "review:integrity",
-      name: "Integrity Review",
-      status: "failed",
-      evidence: ["verdict=fail", "issues_count=2", "missing_count=1"],
-    }],
+    reviewEvidence: [
+      {
+        id: "review:contract_audit",
+        name: "Contract Audit",
+        status: "failed",
+        evidence: ["missing export contract", "broken import surface"],
+      },
+    ],
     functionalAssessment: {
       status: "incomplete",
-      primaryFailureIds: ["review:integrity"],
+      primaryFailureIds: ["review:contract_audit"],
       auxiliaryFailureIds: [],
-      summary: "Functional completion failed with 1 blocker(s) (coverage and/or integrity).",
+      summary: "Functional completion failed with 1 blocker(s).",
     },
     finalGate: {
       status: "failed",
-      summary: "Functional completion failed with 1 blocker(s) (coverage and/or integrity).",
+      summary: "Functional completion failed with 1 blocker(s).",
       failedCheckIds: [],
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
-      failedReviewIds: ["review:integrity"],
+      failedReviewIds: ["review:contract_audit"],
     },
   }
 }

@@ -4,15 +4,20 @@ import { mkdtemp } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { createDeliveryTools } from "../../src/delivery/tools"
+import { EngineGoalTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { Identifier } from "../../src/id/id"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { stopAllManagedPreviewSessions } from "../../src/preview/session"
 import { AttachmentStore } from "../../src/storage/attachment-store"
+import { Database } from "../../src/storage/db"
+import { resetDatabase } from "../fixture/db"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 
 afterEach(async () => {
   await stopAllManagedPreviewSessions()
+  await resetDatabase()
 })
 
 describe("delivery review-only tool surface", () => {
@@ -65,6 +70,75 @@ describe("delivery review-only tool surface", () => {
     expect(source).not.toContain("submit_next_task")
   })
 
+  test("upstream context hard-fails when architect contract graph is missing", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "opencorvus-delivery-missing-graph-"))
+    try {
+      await Instance.provide({
+        directory: dir,
+        fn: async () => {
+          const now = Date.now()
+          const taskID = Identifier.ascending("task")
+          const specID = Identifier.ascending("spec")
+          const goalID = Identifier.ascending("goal")
+          Database.use((db) => {
+            db.insert(EngineTaskTable)
+              .values({
+                id: taskID,
+                project_id: Instance.project.id,
+                source: "test",
+                title: "Missing delivery graph",
+                request: "Verify delivery graph is mandatory",
+                priority: "normal",
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+            db.insert(EngineSpecSnapshotTable)
+              .values({
+                id: specID,
+                task_id: taskID,
+                version: 1,
+                status: "ready",
+                summary: "Spec",
+                content: "# Spec",
+                scope: "Scope",
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+            db.insert(EngineGoalTable)
+              .values({
+                id: goalID,
+                task_id: taskID,
+                spec_snapshot_id: specID,
+                title: "Goal without graph",
+                slug: "goal-without-graph",
+                objective: "Create a goal row without graph artifact.",
+                acceptance_specs: [],
+                owned_paths: ["src/App.tsx"],
+                depends_on: [],
+                kind: "feature",
+                requirement_ids: [],
+                priority: "blocking",
+                source: "spec",
+                order_index: 0,
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+          })
+
+          const tools = createDeliveryTools({ taskID })
+          await expect(
+            tools.inspect_delivery_context.execute!({ section: "upstream_context", max_chars: 12_000 }, {} as any),
+          ).rejects.toThrow("missing architect_contract_graph artifact")
+        },
+      })
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
   test("delivery agent exposes no registry tools", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "opencorvus-delivery-agent-readonly-"))
     try {
@@ -72,7 +146,7 @@ describe("delivery review-only tool surface", () => {
         directory: dir,
         fn: async () => {
           const agent = await Agent.get("delivery")
-          expect(agent?.description).toContain("without editing deliverables")
+          expect(agent?.description).toContain("semantic accept/reject judgments")
           expect(agent?.tools).toEqual({ include: [] })
         },
       })

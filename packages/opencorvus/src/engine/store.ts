@@ -3,7 +3,21 @@ import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
 import { SessionStatus } from "@/session/status"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
-import { Database, NotFoundError, and, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, sql } from "@/storage/db"
+import {
+  Database,
+  NotFoundError,
+  and,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  lt,
+  sql,
+} from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 import { EvaluationCheck } from "./model"
@@ -31,8 +45,15 @@ import {
   type EngineGoalRunStatus,
   type EngineMetadata,
 } from "./engine.sql"
-import { ACTIVE_GOAL_RUN_STATUSES, DISPATCHABLE_RUN_STATUSES, LIVE_EXECUTOR_SESSION_STATUSES, LIVE_GOAL_RUN_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
+import {
+  ACTIVE_GOAL_RUN_STATUSES,
+  DISPATCHABLE_RUN_STATUSES,
+  LIVE_EXECUTOR_SESSION_STATUSES,
+  LIVE_GOAL_RUN_STATUSES,
+  LIVE_RUN_STATUSES,
+} from "./catalog"
 import { deriveTaskStatus } from "./task-status"
+import { ArchitectContractGraphSchema, type ArchitectContractGraph } from "@/architect/contract-graph"
 
 export type TaskRow = typeof EngineTaskTable.$inferSelect
 export type PlanRow = typeof EnginePlanVersionTable.$inferSelect
@@ -184,14 +205,16 @@ export function findTask(taskID: string) {
 export function sessionIDsForTask(taskID: string): string[] {
   return Database.use((db) =>
     db
-      .all<{ id: string }>(sql`
+      .all<{ id: string }>(
+        sql`
         WITH RECURSIVE session_tree(id) AS (
           SELECT session_id FROM engine_task WHERE id = ${taskID}
           UNION ALL
           SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id
         )
         SELECT id FROM session_tree WHERE id IS NOT NULL
-      `)
+      `,
+      )
       .map((row) => row.id),
   )
 }
@@ -204,6 +227,24 @@ export function findTaskByRequest(projectID: string, requestID: string) {
       .where(and(eq(EngineTaskTable.project_id, projectID), eq(EngineTaskTable.request_id, requestID)))
       .get(),
   )
+}
+
+export function findLatestArchitectContractGraph(taskID: string): ArchitectContractGraph | undefined {
+  const row = findLatestArchitectContractGraphArtifact(taskID)
+  return row ? ArchitectContractGraphSchema.parse(row.payload) : undefined
+}
+
+export function findLatestArchitectContractGraphArtifact(taskID: string): ArtifactRow | undefined {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "architect_contract_graph")))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .limit(1)
+      .get(),
+  )
+  return row
 }
 
 export function findPlan(planID: string) {
@@ -232,12 +273,7 @@ export function findActivePlanForTask(taskID: string): PlanRow | undefined {
     db
       .select()
       .from(EnginePlanVersionTable)
-      .where(
-        and(
-          eq(EnginePlanVersionTable.task_id, taskID),
-          eq(EnginePlanVersionTable.status, "active"),
-        ),
-      )
+      .where(and(eq(EnginePlanVersionTable.task_id, taskID), eq(EnginePlanVersionTable.status, "active")))
       .orderBy(desc(EnginePlanVersionTable.version))
       .get(),
   )
@@ -261,14 +297,20 @@ export function findActiveSpecForTask(taskID: string): SpecSnapshotRow | undefin
     db
       .select()
       .from(EngineSpecSnapshotTable)
-      .where(
-        and(
-          eq(EngineSpecSnapshotTable.task_id, taskID),
-          sql`${EngineSpecSnapshotTable.status} != 'superseded'`,
-        ),
-      )
+      .where(and(eq(EngineSpecSnapshotTable.task_id, taskID), sql`${EngineSpecSnapshotTable.status} != 'superseded'`))
       .orderBy(desc(EngineSpecSnapshotTable.version))
       .get(),
+  )
+}
+
+export function listSpecSnapshots(taskID: string): SpecSnapshotRow[] {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineSpecSnapshotTable)
+      .where(eq(EngineSpecSnapshotTable.task_id, taskID))
+      .orderBy(desc(EngineSpecSnapshotTable.version), desc(EngineSpecSnapshotTable.time_created))
+      .all(),
   )
 }
 
@@ -310,12 +352,7 @@ export function findRun(runID: string): RunRow | undefined {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.run_id, runID),
-          eq(EngineArtifactTable.kind, "run"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.run_id, runID), eq(EngineArtifactTable.kind, "run")))
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .get(),
   )
@@ -366,12 +403,7 @@ export function findLatestDeliveryForRun(runID: string): DeliveryRow | undefined
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.run_id, runID),
-          eq(EngineArtifactTable.kind, "delivery"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.run_id, runID), eq(EngineArtifactTable.kind, "delivery")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
@@ -384,12 +416,7 @@ export function findDeliveriesForTask(taskID: string): DeliveryRow[] {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "delivery"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "delivery")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
@@ -401,12 +428,7 @@ export function findDeliveryByGoalRun(goalRunID: string): DeliveryRow | undefine
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.goal_run_id, goalRunID),
-          eq(EngineArtifactTable.kind, "delivery"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.goal_run_id, goalRunID), eq(EngineArtifactTable.kind, "delivery")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
@@ -460,12 +482,7 @@ export function findLatestEvaluationForGoalRun(goalRunID: string): EvaluationRow
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.goal_run_id, goalRunID),
-          eq(EngineArtifactTable.kind, "verification-evidence"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.goal_run_id, goalRunID), eq(EngineArtifactTable.kind, "verification-evidence")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .limit(1)
       .get(),
@@ -478,12 +495,7 @@ export function listGoalRunsForTask(taskID: string): GoalRunRow[] {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "goal_run_attempt"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "goal_run_attempt")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
@@ -574,9 +586,7 @@ export function getGoalRetryCount(goalID: string): number {
 export function findLatestTipGoalRun(goalID: string): GoalRunRow | undefined {
   const rows = listGoalRunsByGoal(goalID)
   if (rows.length === 0) return undefined
-  const supersededIDs = new Set(
-    rows.map((r) => r.supersede_of).filter((x): x is string => !!x),
-  )
+  const supersededIDs = new Set(rows.map((r) => r.supersede_of).filter((x): x is string => !!x))
   return rows.find((r) => !supersededIDs.has(r.id))
 }
 
@@ -625,12 +635,7 @@ export function findEvaluationByRun(runID: string): EvaluationRow | undefined {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.run_id, runID),
-          eq(EngineArtifactTable.kind, "verification-evidence"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.run_id, runID), eq(EngineArtifactTable.kind, "verification-evidence")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
@@ -639,32 +644,18 @@ export function findEvaluationByRun(runID: string): EvaluationRow | undefined {
 
 export function findExecutorSessionByRun(runID: string) {
   return Database.use((db) =>
-    db
-      .select()
-      .from(EngineExecutorSessionTable)
-      .where(eq(EngineExecutorSessionTable.run_id, runID))
-      .get(),
+    db.select().from(EngineExecutorSessionTable).where(eq(EngineExecutorSessionTable.run_id, runID)).get(),
   )
 }
 
 export function findExecutorSession(executorSessionID: string) {
   return Database.use((db) =>
-    db
-      .select()
-      .from(EngineExecutorSessionTable)
-      .where(eq(EngineExecutorSessionTable.id, executorSessionID))
-      .get(),
+    db.select().from(EngineExecutorSessionTable).where(eq(EngineExecutorSessionTable.id, executorSessionID)).get(),
   )
 }
 
 export function findGoal(goalID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(EngineGoalTable)
-      .where(eq(EngineGoalTable.id, goalID))
-      .get(),
-  )
+  return Database.use((db) => db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get())
 }
 
 export function findGoalRun(goalRunID: string): GoalRunRow | undefined {
@@ -675,12 +666,7 @@ export function findGoalRun(goalRunID: string): GoalRunRow | undefined {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.goal_run_id, goalRunID),
-          eq(EngineArtifactTable.kind, "goal_run_attempt"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.goal_run_id, goalRunID), eq(EngineArtifactTable.kind, "goal_run_attempt")))
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .get(),
   )
@@ -696,11 +682,10 @@ export function findGoalRun(goalRunID: string): GoalRunRow | undefined {
  */
 export function findLatestDeliveryVerdictArtifact(taskID: string) {
   return Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, taskID),
-        eq(EngineArtifactTable.label, "delivery-agent-verdict"),
-      ))
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.label, "delivery-agent-verdict")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
@@ -715,17 +700,19 @@ export function findLatestIntegrityAttemptArtifact(input: {
   phase?: "pre_build" | "post_build"
 }) {
   return Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, input.taskID),
-        eq(EngineArtifactTable.kind, "integrity_attempt"),
-        input.specSnapshotID
-          ? sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotID}`
-          : sql`1 = 1`,
-        input.phase
-          ? sql`json_extract(${EngineArtifactTable.payload}, '$.phase') = ${input.phase}`
-          : sql`1 = 1`,
-      ))
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.kind, "integrity_attempt"),
+          input.specSnapshotID
+            ? sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotID}`
+            : sql`1 = 1`,
+          input.phase ? sql`json_extract(${EngineArtifactTable.payload}, '$.phase') = ${input.phase}` : sql`1 = 1`,
+        ),
+      )
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
@@ -734,9 +721,7 @@ export function findLatestIntegrityAttemptArtifact(input: {
 export function integrityAttemptVerdict(row: ArtifactRow | undefined | null) {
   const payload = row?.payload as { verdict?: unknown } | null | undefined
   const verdict = payload?.verdict
-  return verdict === "pass" || verdict === "concerns" || verdict === "needs_correction"
-    ? verdict
-    : undefined
+  return verdict === "pass" || verdict === "concerns" || verdict === "needs_correction" ? verdict : undefined
 }
 
 /** Latest delivery-agent-verdict artifact bound to a specific delivery row.
@@ -745,11 +730,12 @@ export function integrityAttemptVerdict(row: ArtifactRow | undefined | null) {
  *  stays "candidate" until publish_delivery, regardless of verdict). */
 export function findLatestDeliveryVerdictArtifactForDelivery(deliveryID: string) {
   return Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.delivery_id, deliveryID),
-        eq(EngineArtifactTable.label, "delivery-agent-verdict"),
-      ))
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(eq(EngineArtifactTable.delivery_id, deliveryID), eq(EngineArtifactTable.label, "delivery-agent-verdict")),
+      )
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
@@ -769,18 +755,18 @@ export function findLatestDeliveryVerdictArtifactForDelivery(deliveryID: string)
  * incidents don't follow it forever; the bench / orchestrator pass
  * `task.time_started ?? task.time_created` as the floor.
  */
-export function listOrchestratorStreamErrorArtifacts(
-  taskID: string,
-  sinceMs: number,
-  limit: number,
-) {
+export function listOrchestratorStreamErrorArtifacts(taskID: string, sinceMs: number, limit: number) {
   return Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, taskID),
-        eq(EngineArtifactTable.kind, "orchestrator-stream-error"),
-        sql`${EngineArtifactTable.time_created} >= ${sinceMs}`,
-      ))
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "orchestrator-stream-error"),
+          sql`${EngineArtifactTable.time_created} >= ${sinceMs}`,
+        ),
+      )
       .orderBy(desc(EngineArtifactTable.time_created))
       .limit(limit)
       .all(),
@@ -799,12 +785,7 @@ export function listActiveGoalRunsForRun(coordinatorRunID: string): GoalRunRow[]
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.run_id, coordinatorRunID),
-          eq(EngineArtifactTable.kind, "goal_run_attempt"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.run_id, coordinatorRunID), eq(EngineArtifactTable.kind, "goal_run_attempt")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
@@ -818,12 +799,7 @@ export function listQueuedGoalRunsForRun(coordinatorRunID: string): GoalRunRow[]
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.run_id, coordinatorRunID),
-          eq(EngineArtifactTable.kind, "goal_run_attempt"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.run_id, coordinatorRunID), eq(EngineArtifactTable.kind, "goal_run_attempt")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
@@ -838,12 +814,7 @@ export function listGoalRunsForRun(coordinatorRunID: string): GoalRunRow[] {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.run_id, coordinatorRunID),
-          eq(EngineArtifactTable.kind, "goal_run_attempt"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.run_id, coordinatorRunID), eq(EngineArtifactTable.kind, "goal_run_attempt")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
@@ -907,7 +878,6 @@ export function listPlanNodesByPlan(planID: string) {
   )
 }
 
-
 export function findRequirements(specSnapshotID: string) {
   return Database.use((db) =>
     db
@@ -935,12 +905,7 @@ export function findRuns(taskID: string): RunRow[] {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "run"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "run")))
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .all(),
   )
@@ -953,12 +918,7 @@ export function listLiveRunsForProject(projectID: string): RunRow[] {
       .select({ artifact: EngineArtifactTable })
       .from(EngineArtifactTable)
       .innerJoin(EngineTaskTable, eq(EngineArtifactTable.task_id, EngineTaskTable.id))
-      .where(
-        and(
-          eq(EngineTaskTable.project_id, projectID),
-          eq(EngineArtifactTable.kind, "run"),
-        ),
-      )
+      .where(and(eq(EngineTaskTable.project_id, projectID), eq(EngineArtifactTable.kind, "run")))
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .all()
       .map((row) => row.artifact),
@@ -974,12 +934,7 @@ export function listLiveGoalRunsForProject(projectID: string): GoalRunRow[] {
       .select({ artifact: EngineArtifactTable })
       .from(EngineArtifactTable)
       .innerJoin(EngineTaskTable, eq(EngineArtifactTable.task_id, EngineTaskTable.id))
-      .where(
-        and(
-          eq(EngineTaskTable.project_id, projectID),
-          eq(EngineArtifactTable.kind, "goal_run_attempt"),
-        ),
-      )
+      .where(and(eq(EngineTaskTable.project_id, projectID), eq(EngineArtifactTable.kind, "goal_run_attempt")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all()
       .map((row) => row.artifact),
@@ -999,20 +954,13 @@ export function listLiveGoalRunsForProject(projectID: string): GoalRunRow[] {
  * paths consume both: the goal id keys the cleanup invocation, the directory
  * is the path to delete on disk.
  */
-export function listGoalWorkspacesForProject(
-  projectID: string,
-): Array<{ goal: GoalRow; workspaceDir: string }> {
+export function listGoalWorkspacesForProject(projectID: string): Array<{ goal: GoalRow; workspaceDir: string }> {
   const artifactRows = Database.use((db) =>
     db
       .select({ artifact: EngineArtifactTable })
       .from(EngineArtifactTable)
       .innerJoin(EngineTaskTable, eq(EngineArtifactTable.task_id, EngineTaskTable.id))
-      .where(
-        and(
-          eq(EngineTaskTable.project_id, projectID),
-          eq(EngineArtifactTable.kind, "goal_run_attempt"),
-        ),
-      )
+      .where(and(eq(EngineTaskTable.project_id, projectID), eq(EngineArtifactTable.kind, "goal_run_attempt")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all()
       .map((row) => row.artifact),
@@ -1082,12 +1030,14 @@ export function listActiveSessionsForTask(taskID: string) {
       .all()
       .flatMap((row) =>
         row.sessionID && isSessionActiveInCurrentProcess(row.sessionID)
-          ? [{
-              sessionID: row.sessionID,
-              kind: row.kind as string,
-              goalID: row.goalID,
-              lastActivityMs: row.lastActivityMs,
-            }]
+          ? [
+              {
+                sessionID: row.sessionID,
+                kind: row.kind as string,
+                goalID: row.goalID,
+                lastActivityMs: row.lastActivityMs,
+              },
+            ]
           : [],
       ),
   )
@@ -1195,10 +1145,7 @@ export function listProjectTasks(projectID: string, limit = 50) {
 }
 
 /** 按关键词和/或状态搜索 project 内的 task */
-export function searchProjectTasks(
-  projectID: string,
-  opts: { query?: string; status?: string; limit?: number },
-) {
+export function searchProjectTasks(projectID: string, opts: { query?: string; status?: string; limit?: number }) {
   const conditions = [eq(EngineTaskTable.project_id, projectID)]
   if (opts.status) {
     conditions.push(taskStatusCondition(opts.status))
@@ -1227,15 +1174,9 @@ function taskStatusCondition(status: string): SQL {
   const cancelledMark = sql`json_extract(${EngineTaskTable.metadata}, '$.cancelled') = 1`
   switch (status) {
     case "queued":
-      return and(
-        isNull(EngineTaskTable.time_started),
-        isNull(EngineTaskTable.time_completed),
-      )!
+      return and(isNull(EngineTaskTable.time_started), isNull(EngineTaskTable.time_completed))!
     case "active":
-      return and(
-        isNotNull(EngineTaskTable.time_started),
-        isNull(EngineTaskTable.time_completed),
-      )!
+      return and(isNotNull(EngineTaskTable.time_started), isNull(EngineTaskTable.time_completed))!
     case "completed":
       return and(
         isNotNull(EngineTaskTable.time_completed),
@@ -1308,12 +1249,7 @@ export function findPendingInteractions(runID: string) {
     db
       .select()
       .from(EngineInteractionRequestTable)
-      .where(
-        and(
-          eq(EngineInteractionRequestTable.run_id, runID),
-          eq(EngineInteractionRequestTable.status, "pending"),
-        ),
-      )
+      .where(and(eq(EngineInteractionRequestTable.run_id, runID), eq(EngineInteractionRequestTable.status, "pending")))
       .orderBy(desc(EngineInteractionRequestTable.time_created))
       .all(),
   )
@@ -1330,17 +1266,23 @@ export function findArtifacts(runID: string) {
   )
 }
 
+export function listSpecSnapshotsForTask(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineSpecSnapshotTable)
+      .where(eq(EngineSpecSnapshotTable.task_id, taskID))
+      .orderBy(desc(EngineSpecSnapshotTable.version), desc(EngineSpecSnapshotTable.time_created))
+      .all(),
+  )
+}
+
 export function findEvaluations(runID: string): EvaluationRow[] {
   const rows = Database.use((db) =>
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.run_id, runID),
-          eq(EngineArtifactTable.kind, "verification-evidence"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.run_id, runID), eq(EngineArtifactTable.kind, "verification-evidence")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
@@ -1352,12 +1294,7 @@ export function findEvaluationsByTask(taskID: string): EvaluationRow[] {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "verification-evidence"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "verification-evidence")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
@@ -1397,9 +1334,7 @@ export function activeRunBySession(sessionID: string): RunRow | undefined {
       .map((row) => row.artifact),
   )
   const collapsed = latestPerRun(rows).map(artifactRowToRunRow)
-  return collapsed.find((r) =>
-    (DISPATCHABLE_RUN_STATUSES as readonly string[]).includes(r.status),
-  )
+  return collapsed.find((r) => (DISPATCHABLE_RUN_STATUSES as readonly string[]).includes(r.status))
 }
 
 export function viewTask(row: TaskRow, input?: { directory?: string }) {
@@ -1448,6 +1383,7 @@ export function viewPlan(row: PlanRow) {
   return {
     id: row.id,
     taskID: row.task_id,
+    specSnapshotID: row.spec_snapshot_id,
     version: row.version,
     status: row.status,
     summary: row.summary,
@@ -1475,8 +1411,6 @@ export function viewGoal(row: GoalRow) {
     acceptance_specs: row.acceptance_specs,
     owned_paths: row.owned_paths,
     depends_on: row.depends_on,
-    exports: row.exports,
-    imports: row.imports,
     kind: row.kind,
     requirement_ids: row.requirement_ids,
     priority: row.priority,
@@ -1583,11 +1517,16 @@ export function viewDelivery(row: DeliveryRow) {
       changedFiles: arrayOfStrings(result.changed_files),
       diffs: arrayOfDiffs(result.diffs),
       artifacts: Array.isArray(result.artifacts)
-        ? result.artifacts.filter((item): item is { kind: string; label: string; payload?: Record<string, unknown> } =>
-            !!item && typeof item === "object" && typeof (item as Record<string, unknown>).kind === "string" && typeof (item as Record<string, unknown>).label === "string",
+        ? result.artifacts.filter(
+            (item): item is { kind: string; label: string; payload?: Record<string, unknown> } =>
+              !!item &&
+              typeof item === "object" &&
+              typeof (item as Record<string, unknown>).kind === "string" &&
+              typeof (item as Record<string, unknown>).label === "string",
           )
         : [],
-      publish: result.publish && typeof result.publish === "object" ? result.publish as Record<string, unknown> : undefined,
+      publish:
+        result.publish && typeof result.publish === "object" ? (result.publish as Record<string, unknown>) : undefined,
     },
     time: {
       created: row.time_created,

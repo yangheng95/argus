@@ -1,10 +1,6 @@
 import type { VisualMetricResult } from "./visual-metric"
 import type { RuntimeEvidenceReport } from "./checks/runtime-evidence"
-import type {
-  DeliveryEvidenceManifest,
-  DeliveryGateVerdict,
-  DeliveryManifestFunctionalAssessment,
-} from "./manifest"
+import type { DeliveryEvidenceManifest, DeliveryGateVerdict, DeliveryManifestFunctionalAssessment } from "./manifest"
 import type { DeliveryVerdictType } from "./verdict"
 
 export type DeliveryArbiterDecision = {
@@ -15,7 +11,7 @@ export type DeliveryArbiterDecision = {
 /**
  * Delivery gate semantics:
  *   - Blocking: runtime-readiness failures, acceptance-spec coverage gaps,
- *     failed runtime probes, and required integrity review failures.
+ *     failed runtime probes, and required contract-audit failures.
  *   - Advisory: required checks (build/typecheck/test/lint),
  *     workspace_export reviews, and specialist reviews. The delivery agent
  *     (LLM) reads the full evidence and decides whether they materially block
@@ -95,27 +91,36 @@ export function arbitrateDeliveryVerdict(input: {
   const hostBlocker = hostGateBlockingSummary(input)
   const verdict = hostBlocker
     ? {
-      ...input.llmVerdict,
-      summary: `${input.llmVerdict.summary}\n\nHost gate blockers: ${hostBlocker}`,
-    }
+        ...input.llmVerdict,
+        summary: `${input.llmVerdict.summary}\n\nHost gate blockers: ${hostBlocker}`,
+      }
     : input.llmVerdict
 
   if (hostBlocker && verdict.verdict === "accepted") {
     return {
       source: "host_gate",
-      verdict: appendHostGateEvidence({
-        verdict: "rejected",
-        summary: `Delivery rejected by required host gates: ${hostBlocker}`,
-        startup_verification: verdict.startup_verification,
-        frontend_check: verdict.frontend_check,
-        deferred_checks: verdict.deferred_checks,
-        tool_call_evidence: verdict.tool_call_evidence,
-        rejection_details: [{
-          category: hostBlocker.includes("Visual") ? "visual" : hostBlocker.includes("Runtime") ? "runtime" : "quality",
-          error: hostBlocker,
-          suggestion: "Fix the required delivery evidence gate, then rerun delivery.",
-        }],
-      }, input),
+      verdict: appendHostGateEvidence(
+        {
+          verdict: "rejected",
+          summary: `Delivery rejected by required host gates: ${hostBlocker}`,
+          startup_verification: verdict.startup_verification,
+          frontend_check: verdict.frontend_check,
+          deferred_checks: verdict.deferred_checks,
+          tool_call_evidence: verdict.tool_call_evidence,
+          rejection_details: [
+            {
+              category: hostBlocker.includes("Visual")
+                ? "visual"
+                : hostBlocker.includes("Runtime")
+                  ? "runtime"
+                  : "quality",
+              error: hostBlocker,
+              suggestion: "Fix the required delivery evidence gate, then rerun delivery.",
+            },
+          ],
+        },
+        input,
+      ),
     }
   }
 
@@ -132,13 +137,15 @@ export function appendManifestEvidence(
   const auxiliary = new Set(manifest.functionalAssessment?.auxiliaryFailureIds ?? [])
   const projected = manifest.checkResults.map((item) => ({
     name: item.id,
-    result: item.status === "failed" && auxiliary.has(item.id) ? "advisory_failed" as const : item.status,
+    result: item.status === "failed" && auxiliary.has(item.id) ? ("advisory_failed" as const) : item.status,
     evidence: [
       item.command,
       item.exitCode === undefined ? undefined : `exit_code=${item.exitCode}`,
       item.failureSignature ? `failure_signature=${item.failureSignature.normalizedError}` : undefined,
       item.outputExcerpt,
-    ].filter(Boolean).join("\n"),
+    ]
+      .filter(Boolean)
+      .join("\n"),
   }))
   return {
     ...verdict,
@@ -147,7 +154,7 @@ export function appendManifestEvidence(
       ...projected,
       ...manifest.reviewEvidence.map((item) => ({
         name: item.id,
-        result: item.status === "failed" && auxiliary.has(item.id) ? "advisory_failed" as const : item.status,
+        result: item.status === "failed" && auxiliary.has(item.id) ? ("advisory_failed" as const) : item.status,
         evidence: item.evidence.join("\n"),
       })),
     ],
@@ -180,10 +187,7 @@ function appendHostGateEvidence(
   return next
 }
 
-function appendRuntimeEvidence(
-  verdict: DeliveryVerdictType,
-  report: RuntimeEvidenceReport,
-): DeliveryVerdictType {
+function appendRuntimeEvidence(verdict: DeliveryVerdictType, report: RuntimeEvidenceReport): DeliveryVerdictType {
   const runtimeDetail = report.evidence.previewUrl
     ? `previewUrl=${report.evidence.previewUrl} dom.textLength=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`
     : "no live preview URL"
@@ -195,10 +199,7 @@ function appendRuntimeEvidence(
       {
         name: "runtime_evidence",
         result: report.passed ? "passed" : "failed",
-        evidence: [
-          runtimeDetail,
-          ...violations,
-        ].join("\n"),
+        evidence: [runtimeDetail, ...violations].join("\n"),
       },
     ],
     tool_call_evidence: [
@@ -212,12 +213,10 @@ function appendRuntimeEvidence(
   }
 }
 
-function appendVisualMetricEvidence(
-  verdict: DeliveryVerdictType,
-  metric: VisualMetricResult,
-): DeliveryVerdictType {
-  const gateLines = metric.gates.map((gate) =>
-    `${gate.name}: ${gate.passed ? "passed" : "failed"} value=${gate.value} threshold=${gate.threshold} ${gate.note}`,
+function appendVisualMetricEvidence(verdict: DeliveryVerdictType, metric: VisualMetricResult): DeliveryVerdictType {
+  const gateLines = metric.gates.map(
+    (gate) =>
+      `${gate.name}: ${gate.passed ? "passed" : "failed"} value=${gate.value} threshold=${gate.threshold} ${gate.note}`,
   )
   return {
     ...verdict,

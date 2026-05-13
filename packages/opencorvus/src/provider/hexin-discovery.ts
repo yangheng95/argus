@@ -5,8 +5,9 @@
  *   - Read cache at Global.Path.cache/hexin-models.json
  *   - Normal provider-list reads always use that cache, even when stale
  *   - No cache on normal reads → register hexin with an empty model list
- *   - Only force:true, used by the UI refresh button, calls /v1/models
- *   - Forced fetch writes cache; forced fetch failure with cache uses stale
+ *   - force:true, used by the UI refresh button and provider startup when a
+ *     Hexin credential is already configured, calls /v1/models
+ *   - Forced fetch writes cache; forced fetch failure is returned to caller
  *
  * Gateway only exposes {id, object, created, owned_by}. Capability shape
  * is assigned by hexin-profiles.ts.
@@ -123,9 +124,7 @@ export interface DiscoveryOptions {
  * live IDs and refreshes the cache; if that forced fetch fails and a cache is
  * present, returns the cached IDs with a warning.
  */
-export async function discoverHexinModels(
-  opts: DiscoveryOptions = {},
-): Promise<Record<string, Model>> {
+export async function discoverHexinModels(opts: DiscoveryOptions = {}): Promise<Record<string, Model>> {
   const cached = await readCache()
   const now = Date.now()
 
@@ -143,35 +142,16 @@ export async function discoverHexinModels(
   // only for direct unit callers of this module.
   const apiKey = opts.apiKey?.trim() || process.env.HEXIN_API_KEY?.trim()
   if (!apiKey) {
-    if (cached) {
-      log.info("HEXIN_API_KEY unset — using cached model list", {
-        count: cached.ids.length,
-        age_ms: now - cached.fetched,
-      })
-      return toModelMap(cached.ids)
-    }
-    throw new Error("HEXIN_API_KEY unset and no model cache present")
+    throw new Error("HEXIN_API_KEY unset")
   }
 
-  try {
-    const ids = await fetchModelIDs(apiKey)
-    if (ids.length === 0) {
-      throw new Error("hexin /models returned empty list")
-    }
-    await writeCache(ids)
-    log.info("fetched hexin models", { count: ids.length })
-    return toModelMap(ids)
-  } catch (err) {
-    if (cached) {
-      log.warn("hexin /models fetch failed, using stale cache", {
-        error: err instanceof Error ? err.message : String(err),
-        cache_age_ms: now - cached.fetched,
-        count: cached.ids.length,
-      })
-      return toModelMap(cached.ids)
-    }
-    throw err
+  const ids = await fetchModelIDs(apiKey)
+  if (ids.length === 0) {
+    throw new Error("hexin /models returned empty list")
   }
+  await writeCache(ids)
+  log.info("fetched hexin models", { count: ids.length })
+  return toModelMap(ids)
 }
 
 function toModelMap(ids: string[]): Record<string, Model> {

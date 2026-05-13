@@ -126,7 +126,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   const footActivity = createMemo(() => {
     if (!expanded()) return null
     const counts = collectActivityCounts(props.node)
-    if ((counts.messages + counts.tools + counts.agents + counts.skills) === 0) return null
+    if (counts.messages + counts.tools + counts.agents + counts.skills === 0) return null
     return counts
   })
 
@@ -151,19 +151,16 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     if (!taskID) return
     pruneCardsAfterCursor(cursorTime)
     try {
-      const response = await apiRequest<unknown>(
-        `task/${encodeURIComponent(taskID)}/rewind`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            anchor: { kind: "cursorTime", cursorTime, anchorEventID: anchorID },
-            resetWorktree: opts.resetWorktree,
-            reason: "user rewind card",
-          }),
-          responseKind: "text",
-        },
-      )
+      const response = await apiRequest<unknown>(`task/${encodeURIComponent(taskID)}/rewind`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          anchor: { kind: "cursorTime", cursorTime, anchorEventID: anchorID },
+          resetWorktree: opts.resetWorktree,
+          reason: "user rewind card",
+        }),
+        responseKind: "text",
+      })
       if (!response.ok) {
         console.error("rewind request failed", response.status, response.body)
       }
@@ -240,9 +237,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
       frame = 0
       const nextWidth = Math.ceil(article.getBoundingClientRect().width)
       if (!Number.isFinite(nextWidth) || nextWidth <= 0) return
-      setStickyInlineSize((current) =>
-        typeof current === "number" && current >= nextWidth ? current : nextWidth,
-      )
+      setStickyInlineSize((current) => (typeof current === "number" && current >= nextWidth ? current : nextWidth))
     }
 
     const observer = new ResizeObserver(() => {
@@ -286,7 +281,20 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
           data-status={props.node.status || "none"}
           classList={{ "chat-bubble--collapsed": !expanded() }}
         >
-          <div class="chat-bubble__head" data-align={align()}>
+          <div
+            class="chat-bubble__head"
+            data-align={align()}
+            role="button"
+            tabindex={0}
+            aria-expanded={expanded()}
+            onClick={toggleExpanded}
+            onKeyDown={(event) => {
+              if (event.target !== event.currentTarget) return
+              if (event.key !== "Enter" && event.key !== " ") return
+              event.preventDefault()
+              toggleExpanded()
+            }}
+          >
             <div class="chat-bubble__title-row">
               <div class="chat-bubble__identity" data-align={align()}>
                 <Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />
@@ -360,7 +368,8 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                     )}
                     onClick={(event) => event.stopPropagation()}
                   >
-                    ~{formatTokenCount(props.node.contextTokens as number)} tok{props.node.contextTokensEstimated ? " · est." : ""}
+                    ~{formatTokenCount(props.node.contextTokens as number)} tok
+                    {props.node.contextTokensEstimated ? " · est." : ""}
                   </span>
                 </Show>
                 <Show when={usageVisible()}>
@@ -464,9 +473,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                   </div>
                 </Show>
                 <Show when={directAgentSessionID()}>
-                  <AgentSessionReplyBox
-                    onSend={(message) => onAgentReply(directAgentSessionID()!, message)}
-                  />
+                  <AgentSessionReplyBox onSend={(message) => onAgentReply(directAgentSessionID()!, message)} />
                 </Show>
               </div>
             </div>
@@ -480,25 +487,41 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
               {(counts) => (
                 <>
                   <Show when={counts().tools > 0}>
-                    <span class="card__stat" data-kind="tools" title={t("card.activity.tools", { count: counts().tools })}>
+                    <span
+                      class="card__stat"
+                      data-kind="tools"
+                      title={t("card.activity.tools", { count: counts().tools })}
+                    >
                       <span class="card__stat-label">{t("card.activity.tools_short")}</span>
                       <span class="card__stat-value">{counts().tools}</span>
                     </span>
                   </Show>
                   <Show when={counts().messages > 0}>
-                    <span class="card__stat" data-kind="messages" title={t("card.activity.messages", { count: counts().messages })}>
+                    <span
+                      class="card__stat"
+                      data-kind="messages"
+                      title={t("card.activity.messages", { count: counts().messages })}
+                    >
                       <span class="card__stat-label">{t("card.activity.messages_short")}</span>
                       <span class="card__stat-value">{counts().messages}</span>
                     </span>
                   </Show>
                   <Show when={counts().agents > 0}>
-                    <span class="card__stat" data-kind="agents" title={t("card.activity.agents", { count: counts().agents })}>
+                    <span
+                      class="card__stat"
+                      data-kind="agents"
+                      title={t("card.activity.agents", { count: counts().agents })}
+                    >
                       <span class="card__stat-label">{t("card.activity.agents_short")}</span>
                       <span class="card__stat-value">{counts().agents}</span>
                     </span>
                   </Show>
                   <Show when={counts().skills > 0}>
-                    <span class="card__stat" data-kind="skills" title={t("card.activity.skills", { count: counts().skills })}>
+                    <span
+                      class="card__stat"
+                      data-kind="skills"
+                      title={t("card.activity.skills", { count: counts().skills })}
+                    >
                       <span class="card__stat-label">{t("card.activity.skills_short")}</span>
                       <span class="card__stat-value">{counts().skills}</span>
                     </span>

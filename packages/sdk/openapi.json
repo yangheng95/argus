@@ -9087,6 +9087,9 @@
                           "claude-code"
                         ]
                       },
+                      "queue": {
+                        "type": "boolean"
+                      },
                       "checks": {
                         "type": "object",
                         "properties": {
@@ -10943,6 +10946,10 @@
                       "low"
                     ]
                   },
+                  "queue": {
+                    "default": false,
+                    "type": "boolean"
+                  },
                   "kind": {
                     "type": "string",
                     "enum": [
@@ -11740,9 +11747,10 @@
                                           "properties": {
                                             "kind": {
                                               "type": "string",
-                                              "const": "contract_ir"
+                                              "const": "contract_graph"
                                             },
-                                            "symbols": {
+                                            "contract_ids": {
+                                              "minItems": 1,
                                               "type": "array",
                                               "items": {
                                                 "type": "string",
@@ -11751,7 +11759,8 @@
                                             }
                                           },
                                           "required": [
-                                            "kind"
+                                            "kind",
+                                            "contract_ids"
                                           ]
                                         },
                                         "expect": {
@@ -12152,9 +12161,10 @@
                                                 "properties": {
                                                   "kind": {
                                                     "type": "string",
-                                                    "const": "contract_ir"
+                                                    "const": "contract_graph"
                                                   },
-                                                  "symbols": {
+                                                  "contract_ids": {
+                                                    "minItems": 1,
                                                     "type": "array",
                                                     "items": {
                                                       "type": "string",
@@ -12163,7 +12173,8 @@
                                                   }
                                                 },
                                                 "required": [
-                                                  "kind"
+                                                  "kind",
+                                                  "contract_ids"
                                                 ]
                                               },
                                               "expect": {
@@ -21670,6 +21681,10 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
                     "events": {
                       "type": "array",
                       "items": {
@@ -21718,6 +21733,7 @@
                     }
                   },
                   "required": [
+                    "ok",
                     "events",
                     "traceDir",
                     "enabled"
@@ -21765,6 +21781,10 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
                     "events": {
                       "type": "array",
                       "items": {
@@ -21813,6 +21833,7 @@
                     }
                   },
                   "required": [
+                    "ok",
                     "events",
                     "traceDir",
                     "enabled"
@@ -22808,9 +22829,10 @@
                                     "properties": {
                                       "kind": {
                                         "type": "string",
-                                        "const": "contract_ir"
+                                        "const": "contract_graph"
                                       },
-                                      "symbols": {
+                                      "contract_ids": {
+                                        "minItems": 1,
                                         "type": "array",
                                         "items": {
                                           "type": "string",
@@ -22819,7 +22841,8 @@
                                       }
                                     },
                                     "required": [
-                                      "kind"
+                                      "kind",
+                                      "contract_ids"
                                     ]
                                   },
                                   "expect": {
@@ -23067,6 +23090,10 @@
                       "type": "array",
                       "items": {}
                     },
+                    "specSnapshots": {
+                      "type": "array",
+                      "items": {}
+                    },
                     "deliveries": {
                       "type": "array",
                       "items": {}
@@ -23087,6 +23114,7 @@
                     "runs",
                     "interactions",
                     "snapshots",
+                    "specSnapshots",
                     "deliveries",
                     "evaluations",
                     "artifacts"
@@ -27551,6 +27579,9 @@
                     "correctionCount": {
                       "type": "number"
                     },
+                    "graphCorrectionCount": {
+                      "type": "number"
+                    },
                     "missingGoalCount": {
                       "type": "number"
                     }
@@ -27623,6 +27654,28 @@
                   "required": [
                     "action",
                     "goalID",
+                    "reason"
+                  ]
+                }
+              },
+              "graphCorrections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "action",
                     "reason"
                   ]
                 }
@@ -28159,6 +28212,98 @@
           "data"
         ]
       },
+      "SnapshotIntegrityError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "SnapshotIntegrityError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "operation": {
+                "type": "string"
+              },
+              "cwd": {
+                "type": "string"
+              },
+              "worktree": {
+                "type": "string"
+              },
+              "gitDir": {
+                "type": "string"
+              },
+              "exitCode": {
+                "type": "number"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "stdout": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message",
+              "operation",
+              "cwd",
+              "worktree",
+              "gitDir"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
+      "SnapshotEmptyTreeError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "SnapshotEmptyTreeError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "operation": {
+                "type": "string"
+              },
+              "cwd": {
+                "type": "string"
+              },
+              "worktree": {
+                "type": "string"
+              },
+              "gitDir": {
+                "type": "string"
+              },
+              "fileCount": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "message",
+              "operation",
+              "cwd",
+              "worktree",
+              "gitDir"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
       "ContextOverflowError": {
         "type": "object",
         "properties": {
@@ -28178,6 +28323,102 @@
             },
             "required": [
               "message"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
+      "PromptBudgetOverflowError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "PromptBudgetOverflowError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "systemTokensEst": {
+                "type": "number"
+              },
+              "messagePayloadChars": {
+                "type": "number"
+              },
+              "toolSchemaChars": {
+                "type": "number"
+              },
+              "compressibleMessageChars": {
+                "type": "number"
+              },
+              "nonCompressiblePromptChars": {
+                "type": "number"
+              },
+              "usableBudget": {
+                "type": "number"
+              },
+              "limit": {
+                "type": "number"
+              },
+              "toolNames": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message",
+              "systemTokensEst",
+              "messagePayloadChars",
+              "toolSchemaChars",
+              "compressibleMessageChars",
+              "nonCompressiblePromptChars",
+              "usableBudget",
+              "limit",
+              "toolNames"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
+      "ToolSchemaBudgetError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "ToolSchemaBudgetError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "toolSchemaChars": {
+                "type": "number"
+              },
+              "usableBudget": {
+                "type": "number"
+              },
+              "ratio": {
+                "type": "number"
+              },
+              "toolNames": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message",
+              "toolSchemaChars",
+              "usableBudget",
+              "ratio",
+              "toolNames"
             ]
           }
         },
@@ -28289,7 +28530,19 @@
                 "$ref": "#/components/schemas/TerminalToolMissingError"
               },
               {
+                "$ref": "#/components/schemas/SnapshotIntegrityError"
+              },
+              {
+                "$ref": "#/components/schemas/SnapshotEmptyTreeError"
+              },
+              {
                 "$ref": "#/components/schemas/ContextOverflowError"
+              },
+              {
+                "$ref": "#/components/schemas/PromptBudgetOverflowError"
+              },
+              {
+                "$ref": "#/components/schemas/ToolSchemaBudgetError"
               },
               {
                 "$ref": "#/components/schemas/APIError"
@@ -29516,7 +29769,19 @@
                     "$ref": "#/components/schemas/TerminalToolMissingError"
                   },
                   {
+                    "$ref": "#/components/schemas/SnapshotIntegrityError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SnapshotEmptyTreeError"
+                  },
+                  {
                     "$ref": "#/components/schemas/ContextOverflowError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PromptBudgetOverflowError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ToolSchemaBudgetError"
                   },
                   {
                     "$ref": "#/components/schemas/APIError"

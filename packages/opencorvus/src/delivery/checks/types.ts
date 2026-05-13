@@ -76,8 +76,6 @@ export interface GoalInfo {
   check_selector?: string[]
   requirement_ids: string[]
   depends_on: string[]
-  imports: string[]
-  exports: string[]
   owned_paths: string[]
 }
 
@@ -147,11 +145,13 @@ export const JudgeResult = z.object({
 export const SpecCheckResult = z.object({
   verdict: z.enum(["accepted", "rejected", "inconclusive"]),
   rationale: z.string(),
-  criteria: z.array(z.object({
-    criterion: z.string(),
-    status: z.enum(["passed", "failed", "inconclusive"]),
-    evidence: z.string(),
-  })),
+  criteria: z.array(
+    z.object({
+      criterion: z.string(),
+      status: z.enum(["passed", "failed", "inconclusive"]),
+      evidence: z.string(),
+    }),
+  ),
 })
 
 export const ReviewResultSchema = z.object({
@@ -210,10 +210,7 @@ export type EvaluationOutput = {
 export type PluginCheck = {
   name: string
   mode: "soft" | "strict"
-  run: (ctx: {
-    request?: string
-    delivery: EvaluationDelivery
-  }) => Promise<{
+  run: (ctx: { request?: string; delivery: EvaluationDelivery }) => Promise<{
     status: "passed" | "failed" | "skipped"
     evidence: string
     artifacts?: Array<{ kind: string; label: string; payload: Record<string, unknown> }>
@@ -227,7 +224,11 @@ export type CheckDef = {
 }
 
 export type OptionalCheckDef = CheckDef & {
-  run: (config: z.infer<typeof CheckConfig>, task: EvaluationTask, delivery: EvaluationDelivery) => Promise<EvaluationOutcome>
+  run: (
+    config: z.infer<typeof CheckConfig>,
+    task: EvaluationTask,
+    delivery: EvaluationDelivery,
+  ) => Promise<EvaluationOutcome>
 }
 
 export const CORE_CHECK_DEFS = [
@@ -243,13 +244,9 @@ export const CORE_CHECK_DEFS = [
  * `initBuiltinCheckIndex()` that was never called, leaving the index empty
  * and causing `checkResult()` to always fall through to input.label/family.
  */
-export const BUILTIN_CHECK_INDEX: ReadonlyMap<string, { label: string; family?: string; order: number }> =
-  new Map(
-    CORE_CHECK_DEFS.map((item, index) => [
-      item.name,
-      { label: item.label, family: item.family, order: index },
-    ]),
-  )
+export const BUILTIN_CHECK_INDEX: ReadonlyMap<string, { label: string; family?: string; order: number }> = new Map(
+  CORE_CHECK_DEFS.map((item, index) => [item.name, { label: item.label, family: item.family, order: index }]),
+)
 
 export function checkBase(name: string) {
   return name.replace(/#\d+$/, "")
@@ -284,7 +281,7 @@ export function emptyOptional(): EvaluationOutcome & { artifacts: EvaluationArti
 
 const OUTCOME_BY_MODE = {
   strict: { outcome: "failed" as const, status: "failed" as const },
-  soft:   { outcome: "skipped" as const, status: "skipped" as const },
+  soft: { outcome: "skipped" as const, status: "skipped" as const },
 } as const satisfies Record<"strict" | "soft", { outcome: "failed" | "skipped"; status: "failed" | "skipped" }>
 
 export function softOrStrict(input: {

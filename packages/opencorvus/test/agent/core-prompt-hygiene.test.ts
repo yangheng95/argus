@@ -39,9 +39,8 @@ describe("core prompt hygiene", () => {
     const architect = await readPrompt("architect")
     const orchestrator = await readPrompt("orchestrator")
 
-    expect(architect).toContain("Plan closure before execution")
-    expect(architect).toContain("ordinary shared-file edits are handled by Build sessions")
-    expect(architect).toContain("Do not rely on a later Architect re-run to add shared-file coverage")
+    expect(architect).toContain("Produce the smallest executable goal graph")
+    expect(architect).toContain("do not chase perfection in Architect")
 
     expect(orchestrator).toContain("Plan closure during execution")
     expect(orchestrator).toContain("Treat the active architect goal graph as sealed")
@@ -89,30 +88,24 @@ describe("core prompt hygiene", () => {
     expect(tools).toContain("architecture_review_rework")
   })
 
-  test("architect prompt ships the chat-app worked example so feature-rich SPA briefs have a reference shape", async () => {
+  test("architect prompt documents graph contracts as the only cross-goal handoff shape", async () => {
     const text = await readPrompt("architect")
-    expect(text).toContain("WORKED EXAMPLE — feature-rich frontend (chat-app)")
-    // Goal IDs from the canonical 10-goal decomposition must all be present so the
-    // example stays a coherent set, not a drifting fragment.
-    for (const id of [
-      "goal_bootstrap",
-      "goal_shared_types",
-      "goal_storage",
-      "goal_auth",
-      "goal_sse_manager",
-      "goal_claude_api",
-      "goal_chat_components",
-      "goal_hooks",
-      "goal_pages",
-      "goal_tests",
-    ]) {
-      expect(text).toContain(id)
-    }
-    // The fully-worked register_goal anchor and the cross-goal contract anchor must both survive edits.
-    expect(text).toContain('id: "goal_sse_manager"')
-    expect(text).toContain("register_type_contract({")
-    expect(text).toContain('name: "ChatMessage"')
-    expect(text).toContain('goal_ids: ["goal_shared_types", "goal_storage", "goal_sse_manager", "goal_claude_api", "goal_hooks", "goal_chat_components"]')
+    expect(text).toContain("Cross-goal handoffs, when needed, are represented by graph contracts")
+    expect(text).toContain("register_contract({")
+    expect(text).toContain("producer_goal_id")
+    expect(text).toContain("consumer_goal_ids")
+    expect(text).toContain("register_dependency_contract({")
+    expect(text).toContain('reason: "contract" | "bootstrap_scaffold" | "integration_order"')
+    expect(text).toContain("Use `contract_audit` only with")
+  })
+
+  test("architect prompt pins acceptance scorer discriminator values", async () => {
+    const text = await readPrompt("architect")
+    expect(text).toContain('Scorer `type` is exactly one of `"heuristic"`, `"llm_judge"`, `"prebuilt"`, or `"contract_audit"`')
+    expect(text).toContain('Do not use `type: "shell"` or `type: "script_ref"`')
+    expect(text).toContain('"type": "heuristic"')
+    expect(text).toContain('"kind": "shell"')
+    expect(text).toContain('"kind": "script_ref"')
   })
 
   test("architect prompt and tool surface do not expose duplicate metric or challenge lanes", async () => {
@@ -132,24 +125,21 @@ describe("core prompt hygiene", () => {
     expect(architect).toContain("The verification goal's `acceptance_specs` are the quality contract")
   })
 
-  test("architect prompt pins reference-driven final judge to the single global test goal", async () => {
+  test("architect prompt keeps reference fidelity as downstream concern, not submit gate", async () => {
     const architect = await readPrompt("architect")
 
-    expect(architect).toContain("A materialized PRD/SPEC handoff is itself an authoritative reference surface")
-    expect(architect).toContain("Put this spec on the final `goal_tests` / `goal_e2e` verification goal")
-    expect(architect).toContain("putting that spec on a feature goal will not satisfy `submit_architect`")
-    expect(architect).toContain("Do not create two global test goals")
-    expect(architect).toContain("do not create both `goal_unit_tests` and `goal_tests`")
-    expect(architect).toContain("Single global test goal check")
+    expect(architect).toContain("prefer one final verification/integration goal")
+    expect(architect).toContain("submit the executable graph and leave the fidelity gap as a concern")
+    expect(architect).not.toContain("will not satisfy `submit_architect`")
+    expect(architect).not.toContain("Do not create two global test goals")
   })
 
   test("architect and build prompts carry repository discipline without hidden reminder injection", async () => {
     const architect = await readPrompt("architect")
     const build = await readPrompt("build")
 
-    expect(architect).toContain("grep the full repository")
-    expect(architect).toContain("Keep one source of truth")
-    expect(architect).toContain("include tests that prove the new behavior and the removed behavior")
+    expect(architect).toContain("Produce the smallest executable goal graph")
+    expect(architect).toContain("Do not design fallback, compatibility, parallel implementations")
 
     expect(build).toContain("## Repository discipline")
     expect(build).toContain("search the repository for every call site")
@@ -172,13 +162,13 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("unverified Unix-only helpers")
   })
 
-  test("architect and build prompts require explicit browser dev scripts for delivery preview", async () => {
+  test("build prompt requires explicit browser dev scripts for delivery preview", async () => {
     const architect = await readPrompt("architect")
     const build = await readPrompt("build")
 
-    expect(architect).toContain("For any browser/UI/webpage deliverable")
-    expect(architect).toContain("explicit `packageManager` and `scripts.dev`")
-    expect(architect).toContain("managed preview session")
+    expect(architect).not.toContain("For any browser/UI/webpage deliverable")
+    expect(architect).not.toContain("explicit `packageManager` and `scripts.dev`")
+    expect(architect).not.toContain("managed preview session")
 
     expect(build).toContain("Never deliver a browser/UI/webpage project without")
     expect(build).toContain("declares both `packageManager` and `scripts.dev`")

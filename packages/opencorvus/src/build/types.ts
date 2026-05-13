@@ -16,6 +16,7 @@
  */
 
 import z from "zod"
+import { ArchitectContractGraphSchema } from "@/architect/contract-graph"
 
 /** Free-form request passed through the `direct` workflow — no goal
  *  decomposition, no per-goal acceptance. The build agent does the work
@@ -35,8 +36,6 @@ export const BuildGoalInput = z.object({
   objective: z.string().min(1),
   acceptance_specs: z.array(z.string()).default([]),
   owned_paths: z.array(z.string()).default([]),
-  exports: z.array(z.string()).default([]),
-  imports: z.array(z.string()).default([]),
   depends_on: z.array(z.string()).default([]),
 })
 export type BuildGoalInput = z.infer<typeof BuildGoalInput>
@@ -44,25 +43,26 @@ export type BuildGoalInput = z.infer<typeof BuildGoalInput>
 export const BuildTarget = z.discriminatedUnion("kind", [BuildRequestInput, BuildGoalInput])
 export type BuildTarget = z.infer<typeof BuildTarget>
 
+export const BuildContractGraphContext = ArchitectContractGraphSchema
+export type BuildContractGraphContext = z.infer<typeof BuildContractGraphContext>
+
 /** One line of evidence a test / check was run. Open-ended so the build
  *  agent can report what its acceptance_specs required without the orchestrator
  *  LLM needing to replay it. */
 export const BuildTestResult = z.object({
   name: z.string().min(1).describe("Test / check name, e.g. 'bun test src/note-store.test.ts'"),
   passed: z.boolean(),
-  detail: z
-    .string()
-    .optional()
-    .describe("One-line reproducer-grade detail: exit code, failing assertion, etc."),
+  detail: z.string().optional().describe("One-line reproducer-grade detail: exit code, failing assertion, etc."),
 })
 export type BuildTestResult = z.infer<typeof BuildTestResult>
 
 export const BuildFileChange = z.object({
   path: z.string().min(1).describe("Project-relative file path changed by this build."),
   summary: z.string().min(1).describe("Concrete description of what changed in this file."),
-  reason: z.string().min(1).describe(
-    "Why this file needed to change for the current goal, dependency, or shared integration surface.",
-  ),
+  reason: z
+    .string()
+    .min(1)
+    .describe("Why this file needed to change for the current goal, dependency, or shared integration surface."),
 })
 export type BuildFileChange = z.infer<typeof BuildFileChange>
 
@@ -105,33 +105,30 @@ const BuildResultBase = {
     .describe("Evidence the build actually ran verification; empty when no tests were required."),
 }
 
-export const BuildPassedResultSchema = z.object({
-  status: z.literal("passed"),
-  ...BuildResultBase,
-  // Empty `files_changed` is legal: the build agent may publish a prior
-  // attempt's worktree without further edits, or report passed for a goal
-  // whose acceptance was met by environmental setup. The orchestrator LLM
-  // cross-checks against the host's `actual_changed_files` ground truth
-  // (see RunOutput.actualChangedFiles) and decides if the empty report is
-  // honest. CLAUDE.md rule 13 — host doesn't enforce a minimum here.
-  files_changed: z.array(BuildFileChange),
-}).strict()
+export const BuildPassedResultSchema = z
+  .object({
+    status: z.literal("passed"),
+    ...BuildResultBase,
+    // Empty `files_changed` is legal: the build agent may publish a prior
+    // attempt's worktree without further edits, or report passed for a goal
+    // whose acceptance was met by environmental setup. The orchestrator LLM
+    // cross-checks against the host's `actual_changed_files` ground truth
+    // (see RunOutput.actualChangedFiles) and decides if the empty report is
+    // honest. CLAUDE.md rule 13 — host doesn't enforce a minimum here.
+    files_changed: z.array(BuildFileChange),
+  })
+  .strict()
 
-export const BuildFailedResultSchema = z.object({
-  status: z.literal("failed"),
-  ...BuildResultBase,
-  files_changed: z.array(BuildFileChange).default([]),
-  error: z
-    .string()
-    .trim()
-    .min(1)
-    .describe("Concrete failure reason when status=failed."),
-}).strict()
+export const BuildFailedResultSchema = z
+  .object({
+    status: z.literal("failed"),
+    ...BuildResultBase,
+    files_changed: z.array(BuildFileChange).default([]),
+    error: z.string().trim().min(1).describe("Concrete failure reason when status=failed."),
+  })
+  .strict()
 
-export const BuildResultSchema = z.discriminatedUnion("status", [
-  BuildPassedResultSchema,
-  BuildFailedResultSchema,
-])
+export const BuildResultSchema = z.discriminatedUnion("status", [BuildPassedResultSchema, BuildFailedResultSchema])
 export type BuildResult = z.infer<typeof BuildResultSchema>
 
 export function formatBuildResultSchemaError(error: z.ZodError): string {
@@ -139,10 +136,8 @@ export function formatBuildResultSchemaError(error: z.ZodError): string {
     const path = issue.path.length > 0 ? issue.path.join(".") : "<root>"
     return `${path}: ${issue.message}`
   })
-  const hasPassedWithError = error.issues.some((issue) =>
-    issue.code === "unrecognized_keys" &&
-    Array.isArray(issue.keys) &&
-    issue.keys.includes("error")
+  const hasPassedWithError = error.issues.some(
+    (issue) => issue.code === "unrecognized_keys" && Array.isArray(issue.keys) && issue.keys.includes("error"),
   )
   const guidance = hasPassedWithError
     ? "status='passed' cannot include error. If any blocking verification failed, call report_build_result with status='failed' and put the reason in error; otherwise remove error and keep the caveat in summary."

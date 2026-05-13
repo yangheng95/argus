@@ -157,7 +157,8 @@ export namespace Config {
     const deps: Promise<void>[] = []
 
     for (const dir of unique(directories)) {
-      const isOpencorvusDir = dir.endsWith(".opencorvus") || dir === Flag.OPENCORVUS_CONFIG_DIR || dir === Global.Path.config
+      const isOpencorvusDir =
+        dir.endsWith(".opencorvus") || dir === Flag.OPENCORVUS_CONFIG_DIR || dir === Global.Path.config
       if (isOpencorvusDir) {
         for (const file of ["opencorvus.jsonc", "opencorvus.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
@@ -232,10 +233,7 @@ export namespace Config {
       // in OPENCORVUS_PERMISSION surfaces as an actionable line
       // instead of "Unexpected token in JSON at position N".
       const parsed = parseEnvJson("OPENCORVUS_PERMISSION", Flag.OPENCORVUS_PERMISSION)
-      result.permission = mergeDeep(
-        (result.permission ?? {}) as object,
-        parsed as object,
-      ) as Config.Permission
+      result.permission = mergeDeep((result.permission ?? {}) as object, parsed as object) as Config.Permission
     }
 
     if (!result.username) result.username = os.userInfo().username
@@ -973,8 +971,6 @@ export namespace Config {
       ref: "ChannelConfig",
     })
 
-
-
   export const Provider = ModelsDev.Provider.partial()
     .extend({
       whitelist: z.array(z.string()).optional(),
@@ -1032,7 +1028,11 @@ export namespace Config {
       label: z.string().min(1).describe("Human-readable terminal profile label"),
       command: z.string().min(1).describe("Executable path or command resolved by the configured environment"),
       args: z.array(z.string()).optional().default([]).describe("Executable arguments, not shell-split from a string"),
-      env: z.record(z.string(), z.string()).optional().default({}).describe("Profile-owned terminal environment variables"),
+      env: z
+        .record(z.string(), z.string())
+        .optional()
+        .default({})
+        .describe("Profile-owned terminal environment variables"),
       icon: z
         .enum(["terminal", "powershell", "command-prompt", "bash"])
         .optional()
@@ -1090,9 +1090,7 @@ export namespace Config {
         .array(z.string())
         .optional()
         .describe("When set, ONLY these providers will be enabled. All other providers will be ignored"),
-      model: ModelId.describe(
-        `Model to use in the format of provider/model, eg ${DEFAULT_MODEL}`,
-      ).optional(),
+      model: ModelId.describe(`Model to use in the format of provider/model, eg ${DEFAULT_MODEL}`).optional(),
       small_model: ModelId.describe(
         "Small model to use for tasks like title generation in the format of provider/model",
       ).optional(),
@@ -1201,17 +1199,17 @@ export namespace Config {
       permission: Permission.optional(),
       tool_permissions: z
         .object({
-          websearch:          PermissionAction.optional(),
-          webfetch:           PermissionAction.optional(),
-          skill:              PermissionAction.optional(),
+          websearch: PermissionAction.optional(),
+          webfetch: PermissionAction.optional(),
+          skill: PermissionAction.optional(),
           external_directory: PermissionAction.optional(),
-          task:               PermissionAction.optional(),
-          schedule:           PermissionAction.optional(),
+          task: PermissionAction.optional(),
+          schedule: PermissionAction.optional(),
         })
         .optional()
         .describe(
           "Default tool permission actions for new tasks. When not set, defaults to 'allow'. " +
-          "Set a tool to 'ask' for confirmation, or 'deny' to block it entirely.",
+            "Set a tool to 'ask' for confirmation, or 'deny' to block it entirely.",
         ),
       preview: z
         .object({
@@ -1240,7 +1238,7 @@ export namespace Config {
             .max(1)
             .optional()
             .describe(
-              "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.7 — start compacting at 70% so the agent has room to land its next reply without overflowing.",
+              "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.9 — compact late enough to preserve prompt-cache stability while keeping headroom for the next reply.",
             ),
           tail_turns: z
             .number()
@@ -1264,14 +1262,18 @@ export namespace Config {
               skills: z.array(z.string()).optional().describe("Additional skill paths for requirements agent"),
             })
             .optional()
-            .describe("Requirements agent configuration — analyzes input, extracts requirements, decomposes into goal contracts"),
+            .describe(
+              "Requirements agent configuration — analyzes input, extracts requirements, decomposes into goal contracts",
+            ),
           architect: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for architect agent"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for architect agent"),
             })
             .optional()
-            .describe("Architect agent configuration — cross-goal coordination, interface contracts. Model is configured via agent.architect.model."),
+            .describe(
+              "Architect agent configuration — cross-goal coordination, interface contracts. Model is configured via agent.architect.model.",
+            ),
           delivery: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent"),
@@ -1282,11 +1284,37 @@ export namespace Config {
             .describe("Delivery agent configuration"),
           delivery_visual: z
             .object({
-              phash_hamming_max: z.number().int().min(0).max(64).optional().describe("P0-B hard gate: pHash Hamming distance upper bound (structure)"),
-              ssim_min: z.number().min(0).max(1).optional().describe("P0-B hard gate: mean SSIM lower bound (texture/detail)"),
-              chart_region_density_min_ratio: z.number().min(0).max(1).optional().describe("P0-B hard gate: chart-region non-white density ratio lower bound (anti empty-skeleton)"),
-              unique_color_ratio_min: z.number().min(0).max(1).optional().describe("P0-B hard gate: unique-color ratio lower bound (anti monochrome placeholder)"),
-              text_hit_ratio_min: z.number().min(0).max(1).optional().describe("P0-B hard gate: reference_strings hit ratio lower bound (anti placeholder copy)"),
+              phash_hamming_max: z
+                .number()
+                .int()
+                .min(0)
+                .max(64)
+                .optional()
+                .describe("P0-B hard gate: pHash Hamming distance upper bound (structure)"),
+              ssim_min: z
+                .number()
+                .min(0)
+                .max(1)
+                .optional()
+                .describe("P0-B hard gate: mean SSIM lower bound (texture/detail)"),
+              chart_region_density_min_ratio: z
+                .number()
+                .min(0)
+                .max(1)
+                .optional()
+                .describe("P0-B hard gate: chart-region non-white density ratio lower bound (anti empty-skeleton)"),
+              unique_color_ratio_min: z
+                .number()
+                .min(0)
+                .max(1)
+                .optional()
+                .describe("P0-B hard gate: unique-color ratio lower bound (anti monochrome placeholder)"),
+              text_hit_ratio_min: z
+                .number()
+                .min(0)
+                .max(1)
+                .optional()
+                .describe("P0-B hard gate: reference_strings hit ratio lower bound (anti placeholder copy)"),
               score_weights: z
                 .object({
                   phash: z.number().min(0).max(1).optional(),
@@ -1305,39 +1333,75 @@ export namespace Config {
               skills: z.array(z.string()).optional().describe("Additional skill paths for design analyst agent"),
             })
             .optional()
-            .describe("Design analyst agent configuration — analyzes visual references (images, URLs). Model is configured via agent.\"design-analyst\".model."),
+            .describe(
+              'Design analyst agent configuration — analyzes visual references (images, URLs). Model is configured via agent."design-analyst".model.',
+            ),
           intent_analysis: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for intent-analysis agent"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for intent-analysis agent"),
             })
             .optional()
-            .describe("Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent.\"intent-analysis\".model."),
+            .describe(
+              'Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent."intent-analysis".model.',
+            ),
           build: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for build agent"),
-              skills: z.array(z.string()).optional().describe("Operator-forced build skills. Leave empty for auto_detect-driven skill routing."),
+              skills: z
+                .array(z.string())
+                .optional()
+                .describe("Operator-forced build skills. Leave empty for auto_detect-driven skill routing."),
             })
             .optional()
-            .describe("Build agent configuration — per-goal build session. Model is configured via agent.\"build\".model."),
+            .describe(
+              'Build agent configuration — per-goal build session. Model is configured via agent."build".model.',
+            ),
           activity: z
             .object({
-              session_llm_idle_ms: z.number().int().min(1000).optional().describe("Max idle (no stream chunk) window for session LLM streams, ms"),
-              executor_events_idle_ms: z.number().int().min(1000).optional().describe("Max idle window for the executor event queue, ms"),
-              task_queue_run_timeout_ms: z.number().int().min(1000).optional().describe("Total wall-clock cap for a single queued task run, ms"),
+              session_llm_idle_ms: z
+                .number()
+                .int()
+                .min(1000)
+                .optional()
+                .describe("Max idle (no stream chunk) window for session LLM streams, ms"),
+              executor_events_idle_ms: z
+                .number()
+                .int()
+                .min(1000)
+                .optional()
+                .describe("Max idle window for the executor event queue, ms"),
+              task_queue_run_timeout_ms: z
+                .number()
+                .int()
+                .min(1000)
+                .optional()
+                .describe("Total wall-clock cap for a single queued task run, ms"),
             })
             .optional()
-            .describe("Chunk-driven inactivity gates. Single source of truth for streaming layers (session LLM, executor events, task queue)."),
+            .describe(
+              "Chunk-driven inactivity gates. Single source of truth for streaming layers (session LLM, executor events, task queue).",
+            ),
           debug: z
             .object({
-              fail_on_information_missing: z.boolean().optional().describe(
-                "When true, the host injects an INFORMATION MISSING fallback section into every agent's system prompt and exits the process with code 99 the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.",
-              ),
+              fail_on_information_missing: z
+                .boolean()
+                .optional()
+                .describe(
+                  "When true, the host injects an INFORMATION MISSING fallback section into every agent's system prompt and exits the process with code 99 the moment any agent emits the <INFORMATION MISSING> XML block. Use as a debug toggle to surface upstream-context drops; default false. Toggle from the overlay GeneralPanel.",
+                ),
             })
             .optional()
-            .describe("Operator-toggled debug behaviour. Settings here are diagnostic — they affect host runtime decisions and prompt content."),
+            .describe(
+              "Operator-toggled debug behaviour. Settings here are diagnostic — they affect host runtime decisions and prompt content.",
+            ),
           max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups"),
-          default_workflow: z.string().optional().describe("Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID"),
+          default_workflow: z
+            .string()
+            .optional()
+            .describe(
+              "Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID",
+            ),
           workflows: z
             .array(
               z.object({
@@ -1355,14 +1419,19 @@ export namespace Config {
                     after: z.array(z.string()).optional().describe("Prerequisite step IDs"),
                   }),
                 ),
-                goalLoopStepIDs: z.array(z.string()).optional().describe("Step IDs forming the per-goal loop (for UI grouping)"),
+                goalLoopStepIDs: z
+                  .array(z.string())
+                  .optional()
+                  .describe("Step IDs forming the per-goal loop (for UI grouping)"),
               }),
             )
             .optional()
             .describe("Custom workflow definitions. Override built-in workflows by matching ID."),
         })
         .optional()
-        .describe("Assistant agent configuration — controls requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior"),
+        .describe(
+          "Assistant agent configuration — controls requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior",
+        ),
       experimental: z
         .object({
           disable_paste_summary: z.boolean().optional(),
@@ -1392,10 +1461,7 @@ export namespace Config {
           memory: z
             .object({
               enabled: z.boolean().optional().describe("Enable persistent memory store"),
-              auto_inject: z
-                .boolean()
-                .optional()
-                .describe("Auto-inject relevant memories into system prompt"),
+              auto_inject: z.boolean().optional().describe("Auto-inject relevant memories into system prompt"),
               token_budget: z
                 .number()
                 .int()
@@ -1501,9 +1567,7 @@ export namespace Config {
   }
 
   export function projectConfigFile() {
-    const candidates = ["opencorvus.jsonc", "opencorvus.json"].map((file) =>
-      path.join(projectConfigDirectory(), file),
-    )
+    const candidates = ["opencorvus.jsonc", "opencorvus.json"].map((file) => path.join(projectConfigDirectory(), file))
     for (const file of candidates) {
       if (existsSync(file)) return file
     }

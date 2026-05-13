@@ -53,11 +53,11 @@ code_review · dead_code_review · startup · spec_check
 
 verdict 以 `engine_artifact[kind="verdict"]` 形式落盘：
 
-| verdict | 后续动作 |
-|---|---|
-| `accepted` | 进入 publish（`publish_delivery` tool） |
-| `rejected` | 走 `delivery-retry-feedback.ts` 回修；超过 `delivery.max_retries` 后由 Orchestrator 决定 retry / replan / fail |
-| `inconclusive` | 视为 rejected，但优先 replan（无法判决通常意味着信息不全或 doom-loop） |
+| verdict        | 后续动作                                                                                                       |
+| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| `accepted`     | 进入 publish（`publish_delivery` tool）                                                                        |
+| `rejected`     | 走 `delivery-retry-feedback.ts` 回修；超过 `delivery.max_retries` 后由 Orchestrator 决定 retry / replan / fail |
+| `inconclusive` | 视为 rejected，但优先 replan（无法判决通常意味着信息不全或 doom-loop）                                         |
 
 Delivery agent 只负责 verdict 和证据。启动 / 停止 / retry / cancel / fail 当前 task，以及发布新的 follow-up task，是 Orchestrator 的 lifecycle 权限；Delivery 如果发现应拆成新 task，只能在 verdict evidence 中提出建议，不能直接创建 task。
 
@@ -65,11 +65,11 @@ Delivery agent 只负责 verdict 和证据。启动 / 停止 / retry / cancel / 
 
 benchmark 的 `qualityVerdict === "accepted"` 现在表示 delivery agent 写下的 verdict artifact 为 `accepted` 且 `verification-evidence` 中 `required_check_pass_rate > 0`（`script/benchmark/quality-gates.ts`）。
 
-## Prosecutor / Integrity 二审
+## Prosecutor / Integrity 复核
 
-`accepted` 候选可能再被两个独立 agent 复核：
+`accepted` 候选可能再被两个独立 agent 复核，但它们不是 Delivery 内部步骤，也不是自动交付门：
 
-- **Integrity Reviewer**（`integrity/agent.ts`）：multi-dimension 审查（requirement_fidelity / technical_feasibility / hallucination / solution_quality），结果落 `engine_artifact[kind="integrity_attempt"]`。
+- **Integrity Reviewer**（`integrity/agent.ts`）：Orchestrator 显式调用的 multi-dimension 审查（requirement_fidelity / technical_feasibility / hallucination / solution_quality），结果落 `engine_artifact[kind="integrity_attempt"]`。Delivery 不会自动运行或消费它作为内部 gate；Delivery rejection 的修复证据应直接进入下一轮 build。
 - **Prosecutor**（`prosecutor/agent.ts`）：对抗性复核，结果落 `engine_artifact[kind="prosecutor_attempt"]`。
 
 两个都是 Orchestrator 通过 tool 主动调用，不是自动 pipeline。

@@ -1,6 +1,7 @@
 import { createDecisionLog } from "@/decision-log"
 import { renderDesignAnalysisHandoffReference } from "@/design-analyst/handoff"
-import { findActiveSpecForTask, findRequirements, listGoals } from "@/engine/store"
+import { findActiveSpecForTask, findLatestArchitectContractGraph, findRequirements, listGoals } from "@/engine/store"
+import { renderContractGraphForPrompt } from "@/architect/contract-graph"
 
 const ARCHITECT_CONTRACT_VALUE_CAP = 4_000
 
@@ -18,12 +19,9 @@ export function buildGoalUpstreamAgentContextSections(taskID: string, goalID: st
   return [
     decisionLog.phasePromptSectionForGoal("requirements", goalID, "Requirements Decisions"),
     renderDesignAnalysisHandoffReference(taskID, { valueCap: 300 }),
-    decisionLog.phasePromptSectionForGoal(
-      "architect",
-      goalID,
-      "Architect Consensus",
-      { valueCap: ARCHITECT_CONTRACT_VALUE_CAP },
-    ),
+    decisionLog.phasePromptSectionForGoal("architect", goalID, "Architect Consensus", {
+      valueCap: ARCHITECT_CONTRACT_VALUE_CAP,
+    }),
   ].filter(hasContent)
 }
 
@@ -65,20 +63,18 @@ export function buildRequirementsCatalogSection(taskID: string): string {
   lines.push("")
   lines.push(
     `Authoritative REQ-N list pulled from \`engine_requirement\` (active spec ` +
-    `snapshot v${snapshot.version}). Every entry below is a hard contract: it must ` +
-    `trace to at least one PASSED \`acceptance_spec\` on a goal whose ` +
-    `\`requirement_ids\` includes it. An REQ with no covering spec — or whose ` +
-    `covering specs all FAIL — is a reject with category="missing_requirement", ` +
-    `regardless of how the rest of the goal evaluates. Cite the REQ id in ` +
-    `\`rejection_details[].requirement_id\` when you reject on this basis.`,
+      `snapshot v${snapshot.version}). Every entry below is a hard contract: it must ` +
+      `trace to at least one PASSED \`acceptance_spec\` on a goal whose ` +
+      `\`requirement_ids\` includes it. An REQ with no covering spec — or whose ` +
+      `covering specs all FAIL — is a reject with category="missing_requirement", ` +
+      `regardless of how the rest of the goal evaluates. Cite the REQ id in ` +
+      `\`rejection_details[].requirement_id\` when you reject on this basis.`,
   )
   lines.push("")
   lines.push(`**Total**: ${reqs.length} requirement(s).`)
   for (const r of reqs) {
     lines.push("")
-    lines.push(
-      `## ${r.id} [${r.priority}] ${r.title}`,
-    )
+    lines.push(`## ${r.id} [${r.priority}] ${r.title}`)
     if (r.description.trim().length > 0) {
       lines.push("")
       lines.push(`**Description**: ${r.description}`)
@@ -95,7 +91,7 @@ export function buildRequirementsCatalogSection(taskID: string): string {
 
 /**
  * Ground-truth per-goal architecture contract catalog. Gating: cross-goal
- * contract violations (export/import shape mismatch, owned-path overlap,
+ * contract violations (graph mismatch, owned-path overlap,
  * missing dep) reject regardless of acceptance_specs PASS — those would be
  * "the goal works in isolation but breaks the system" failures.
  */
@@ -107,14 +103,22 @@ export function buildArchitectureContractCatalogSection(taskID: string): string 
   lines.push("")
   lines.push(
     `Authoritative per-goal interface contract pulled from \`engine_goal\`. ` +
-    `Each goal advertises responsibility paths, exports, imports, and dep ordering — these ` +
-    `are CROSS-GOAL gates. A delivery where every \`acceptance_spec\` PASSES but ` +
-    `goal A imports a symbol goal B never exported, or a shared file edit contradicts ` +
-    `another goal's declared responsibility, is still a reject (category="contract_violation"). Verify by reading ` +
-    `the merged worktree, not by trusting goal-local self-reports. Cite the ` +
-    `goal id in \`rejection_details[].goal_id\` and the violated field name ` +
-    `(exports / imports / owned_paths / depends_on) in \`evidence\`.`,
+      `Each goal advertises responsibility paths and dep ordering; cross-goal handoffs live in the Architect Contract Graph — these ` +
+      `are CROSS-GOAL gates. A delivery where every \`acceptance_spec\` PASSES but ` +
+      `a graph contract is missing, or a shared file edit contradicts ` +
+      `another goal's declared responsibility, is still a reject (category="contract_violation"). Verify by reading ` +
+      `the merged worktree, not by trusting goal-local self-reports. Cite the ` +
+      `goal id in \`rejection_details[].goal_id\` and the violated field name ` +
+      `(contract_graph / owned_paths / depends_on) in \`evidence\`.`,
   )
+  const graph = findLatestArchitectContractGraph(taskID)
+  if (!graph) {
+    throw new Error(
+      `Cannot build delivery architecture context for task ${taskID}: missing architect_contract_graph artifact.`,
+    )
+  }
+  lines.push("")
+  lines.push(renderContractGraphForPrompt(graph))
   lines.push("")
   lines.push(`**Total**: ${goals.length} goal(s).`)
   for (const g of goals) {
@@ -130,12 +134,6 @@ export function buildArchitectureContractCatalogSection(taskID: string): string 
     }
     if (g.depends_on.length > 0) {
       lines.push(`**Depends on**: ${g.depends_on.join(", ")}`)
-    }
-    if (g.exports.length > 0) {
-      lines.push(`**Exports**: ${g.exports.join(", ")}`)
-    }
-    if (g.imports.length > 0) {
-      lines.push(`**Imports**: ${g.imports.join(", ")}`)
     }
     if (g.owned_paths.length > 0) {
       lines.push(`**Responsibility paths**: ${g.owned_paths.join(", ")}`)

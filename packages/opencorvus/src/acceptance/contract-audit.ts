@@ -1,12 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import ts from "typescript"
-import {
-  auditEligibleFieldsForSymbols,
-  type AuditEligibleField,
-  type ContractIR,
-} from "@/architect/contract-ir"
-import { parseContractSymbols } from "@/architect/linker"
+import { auditEligibleFieldsForSymbols, type AuditEligibleField, type ContractIR } from "@/architect/contract-ir"
 import { resolveTrigger, type AcceptanceSpec, type ContractAuditScorer } from "./types"
 
 export type ContractAuditStatus = "passed" | "failed" | "skipped" | "inconclusive"
@@ -14,8 +9,6 @@ export type ContractAuditStatus = "passed" | "failed" | "skipped" | "inconclusiv
 export interface ContractAuditGoal {
   id: string
   kind?: string
-  imports: string[]
-  exports: string[]
   owned_paths: string[]
 }
 
@@ -60,13 +53,6 @@ export function contractAuditRequired(spec: AcceptanceSpec, scorer: ContractAudi
   return spec.severity === "essential" && resolveTrigger(spec, scorer) === "on_goal"
 }
 
-export function contractAuditBoundarySymbols(goal: Pick<ContractAuditGoal, "imports" | "exports">): string[] {
-  return [...new Set([
-    ...parseContractSymbols(goal.imports),
-    ...parseContractSymbols(goal.exports),
-  ])]
-}
-
 export function runContractAudit(input: {
   workDir: string
   index: Map<string, ContractIR>
@@ -74,31 +60,10 @@ export function runContractAudit(input: {
   spec: AcceptanceSpec
   scorer: ContractAuditScorer
 }): ContractAuditCriteriaResult {
-  if (input.goal.kind === "bootstrap") {
-    return {
-      name: contractAuditCriteriaName(input.spec, input.scorer),
-      label: `${input.spec.title} / ${input.scorer.name}`,
-      family: "contract_audit",
-      status: "skipped",
-      evidence: `goal=${input.goal.id}; bootstrap goal - contract_audit not applicable because bootstrap declares contracts and does not consume them`,
-    }
-  }
-
-  const boundarySymbols = contractAuditBoundarySymbols(input.goal)
-  if (boundarySymbols.length === 0) {
-    return {
-      name: contractAuditCriteriaName(input.spec, input.scorer),
-      label: `${input.spec.title} / ${input.scorer.name}`,
-      family: "contract_audit",
-      status: "skipped",
-      evidence: `goal=${input.goal.id}; no imports/exports declared, contract_audit no-op`,
-    }
-  }
-
-  const requestedSymbols = input.scorer.spec.symbols?.length ? input.scorer.spec.symbols : boundarySymbols
+  const requestedSymbols = input.scorer.spec.contract_ids
   const fields = auditEligibleFieldsForSymbols({
     index: input.index,
-    symbols: requestedSymbols.filter((symbol) => boundarySymbols.includes(symbol)),
+    symbols: requestedSymbols,
   })
   if (fields.length === 0) {
     return {
@@ -106,7 +71,7 @@ export function runContractAudit(input: {
       label: `${input.spec.title} / ${input.scorer.name}`,
       family: "contract_audit",
       status: "skipped",
-      evidence: `goal=${input.goal.id}; symbols=${requestedSymbols.join(",")}; no literal_union/ref-resolved/branded-resolved fields to audit`,
+      evidence: `goal=${input.goal.id}; contract_ids=${requestedSymbols.join(",")}; no literal_union/ref-resolved/branded-resolved fields to audit`,
     }
   }
 
@@ -170,9 +135,12 @@ export function runContractAudit(input: {
       label: `${input.spec.title} / ${input.scorer.name}`,
       family: "contract_audit",
       status: "failed",
-      evidence: findings.map((finding) =>
-        `${finding.file}:${finding.line} field=${finding.contractName}.${finding.fieldName} literal=${JSON.stringify(finding.literal)} expected=${finding.expectedValues.map((value) => JSON.stringify(value)).join("|")}`,
-      ).join("\n"),
+      evidence: findings
+        .map(
+          (finding) =>
+            `${finding.file}:${finding.line} field=${finding.contractName}.${finding.fieldName} literal=${JSON.stringify(finding.literal)} expected=${finding.expectedValues.map((value) => JSON.stringify(value)).join("|")}`,
+        )
+        .join("\n"),
     }
   }
 
@@ -225,9 +193,7 @@ function passEvidence(input: {
   inconclusiveFindings?: InconclusiveFinding[]
   note?: string
 }): string {
-  const inconclusiveFields = [...new Set((input.inconclusiveFindings ?? [])
-    .map((finding) => finding.fieldName))]
-    .sort()
+  const inconclusiveFields = [...new Set((input.inconclusiveFindings ?? []).map((finding) => finding.fieldName))].sort()
   const parts = [
     `goal=${input.goalID}`,
     `fields=${input.fields.map((field) => `${field.contractName}.${field.fieldName}`).join(",")}`,
@@ -249,8 +215,9 @@ function inconclusiveEvidence(input: {
     `goal=${input.goalID}`,
     `audited_fields=${input.fields.map((field) => `${field.contractName}.${field.fieldName}`).join(",")}`,
     "unable_to_statically_audit:",
-    ...input.findings.map((finding) =>
-      `- field=${finding.fieldName} at ${finding.file}:${finding.line}: Identifier '${finding.identifierName}' ${finding.reason}`,
+    ...input.findings.map(
+      (finding) =>
+        `- field=${finding.fieldName} at ${finding.file}:${finding.line}: Identifier '${finding.identifierName}' ${finding.reason}`,
     ),
     "suggestion:",
     "- inline literal values into the PropertyAssignment to enable static audit, for example { field: 'AllowedValue' }",
@@ -309,7 +276,9 @@ function createAuditProgram(files: readonly string[]): ts.Program {
   })
 }
 
-function groupAuditFieldsByContract(fields: readonly AuditEligibleField[]): Map<string, Map<string, AuditEligibleField>> {
+function groupAuditFieldsByContract(
+  fields: readonly AuditEligibleField[],
+): Map<string, Map<string, AuditEligibleField>> {
   const grouped = new Map<string, Map<string, AuditEligibleField>>()
   for (const field of fields) {
     const contractFields = grouped.get(field.contractName) ?? new Map<string, AuditEligibleField>()
@@ -354,9 +323,8 @@ function contractsForObjectLiteral(
   checker: ts.TypeChecker,
   fieldsByContract: Map<string, Map<string, AuditEligibleField>>,
 ): string[] {
-  const ownerType = checker.getContextualType(node)
-    ?? contextualTypeFromSatisfies(node, checker)
-    ?? checker.getTypeAtLocation(node)
+  const ownerType =
+    checker.getContextualType(node) ?? contextualTypeFromSatisfies(node, checker) ?? checker.getTypeAtLocation(node)
   return contractNamesForType(ownerType, checker, fieldsByContract)
 }
 
@@ -407,7 +375,7 @@ function typeReferencesContract(
   if (type.isUnionOrIntersection()) {
     return type.types.some((part) => typeReferencesContract(part, contractName, checker, seen))
   }
-  const baseTypes = type.isClassOrInterface() ? type.getBaseTypes() ?? [] : []
+  const baseTypes = type.isClassOrInterface() ? (type.getBaseTypes() ?? []) : []
   if (baseTypes.some((base) => typeReferencesContract(base, contractName, checker, seen))) return true
   const rendered = checker.typeToString(type, undefined, ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope)
   return rendered === contractName || rendered.startsWith(`${contractName}<`)

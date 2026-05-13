@@ -244,6 +244,8 @@ export const CreateTaskInput = z.object({
   //  - "high"/"normal"/"low": user-facing levels; also used by iteration /
   //                recommendation follow-ups from `submit_next_task`.
   priority: z.enum(["critical", "high", "normal", "low"]).optional(),
+  /** Queue opt-in. Omitted means false: start immediately. */
+  queue: z.boolean().default(false),
   /** Defaults to "workflow" (full pipeline). Pass "build" to bypass the pipeline
    *  and run the build agent directly — used for one-shot edits. */
   kind: z.enum(["workflow", "build"]).optional(),
@@ -1405,6 +1407,7 @@ export const Event = {
           verdict: z.enum(["pass", "concerns", "needs_correction"]),
           issueCount: z.number(),
           correctionCount: z.number(),
+          graphCorrectionCount: z.number().optional(),
           missingGoalCount: z.number(),
         }),
       ),
@@ -1425,6 +1428,15 @@ export const Event = {
           updatesObjective: z.string().optional(),
         }),
       ),
+      graphCorrections: z
+        .array(
+          z.object({
+            kind: z.string(),
+            action: z.string(),
+            reason: z.string(),
+          }),
+        )
+        .optional(),
       missingGoals: z.array(
         z.object({
           title: z.string(),

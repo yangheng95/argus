@@ -3,18 +3,10 @@ import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { spawn } from "node:child_process"
 import { Instance } from "@/project/instance"
-import { Database, and, desc, eq, sql } from "@/storage/db"
-import { EngineArtifactTable } from "@/engine/engine.sql"
 import { collectMainWorktreeDiff, readBaselineCommitFromMetadata } from "@/engine/workspace-export"
 import { clip } from "./types"
 import { computeRuntimeEvidence } from "./runtime-evidence"
-import {
-  commandGroups,
-  discoverPackageRoot,
-  discoverChecks,
-  resolveConfig,
-  resolvedChecks,
-} from "./discovery"
+import { commandGroups, discoverPackageRoot, discoverChecks, resolveConfig, resolvedChecks } from "./discovery"
 import { detectDeliverySurfaces } from "../surface-detector"
 import type { DeliverySurfaceManifest } from "../surface-detector"
 import { arbitrateDeliveryGate } from "../arbiter"
@@ -74,8 +66,6 @@ export async function buildDeliveryEvidenceManifest(input: {
     acceptance_scenarios?: AcceptanceSpec[]
     acceptance_specs?: AcceptanceSpec[]
     depends_on?: string[]
-    imports?: string[]
-    exports?: string[]
   }>
   criteriaResults?: Array<{
     name: string
@@ -114,25 +104,27 @@ export async function buildDeliveryEvidenceManifest(input: {
     failedReviewIds: [],
     specialistReviews: [],
   })
-  const checkResults = preRuntimeAssessment.status === "complete"
-    ? await runRequiredChecks(requiredChecks)
-    : requiredChecks.map((check) => skipRequiredCheck(
-        check,
-        "Skipped because delivery completion or runtime readiness evidence failed before auxiliary programmatic checks.",
-      ))
-  const runtimeFlows = preRuntimeAssessment.status === "complete"
-    ? await runRuntimeFlows({
-        taskID: input.taskID,
-        iteration: input.iteration ?? 0,
-        surfaceManifest,
-        goals: input.goals,
-        metadata: input.metadata,
-        runtimeReadiness,
-      })
-    : []
-  const failedRuntimeFlowIds = runtimeFlows
-    .filter((item) => item.status === "failed")
-    .map((item) => item.id)
+  const checkResults =
+    preRuntimeAssessment.status === "complete"
+      ? await runRequiredChecks(requiredChecks)
+      : requiredChecks.map((check) =>
+          skipRequiredCheck(
+            check,
+            "Skipped because delivery completion or runtime readiness evidence failed before auxiliary programmatic checks.",
+          ),
+        )
+  const runtimeFlows =
+    preRuntimeAssessment.status === "complete"
+      ? await runRuntimeFlows({
+          taskID: input.taskID,
+          iteration: input.iteration ?? 0,
+          surfaceManifest,
+          goals: input.goals,
+          metadata: input.metadata,
+          runtimeReadiness,
+        })
+      : []
+  const failedRuntimeFlowIds = runtimeFlows.filter((item) => item.status === "failed").map((item) => item.id)
   const specialistReviews = await runSpecialistReviews({
     taskID: input.taskID,
     runID: input.runID,
@@ -157,9 +149,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     }),
     ...specialistReviews.map(specialistReviewEvidence),
   ].filter((item): item is DeliveryReviewEvidence => Boolean(item))
-  const failedReviewIds = reviewEvidence
-    .filter((item) => item.status === "failed")
-    .map((item) => item.id)
+  const failedReviewIds = reviewEvidence.filter((item) => item.status === "failed").map((item) => item.id)
 
   const manifest: DeliveryEvidenceManifest = {
     id: createManifestId(),
@@ -225,13 +215,12 @@ async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
  *   - failedReadinessIds: merged trunk cannot prove its declared runtime.
  *   - failedCoverageIds: blocking goals without acceptance specs.
  *   - failedRuntimeFlowIds: requested frontend/runtime surfaces did not render.
- *   - review:integrity: required architecture integrity evidence is missing or
- *     contains corrections/missing goals.
+ *   - review:contract_audit: declared cross-goal contracts are broken.
  *
  * Advisory criteria — the delivery agent (LLM) weighs these in context and
  * decides whether they materially block acceptance:
  *   - failedCheckIds: build / typecheck / lint / unit-test commands.
- *   - non-integrity review-shaped evidence (review:workspace_export,
+ *   - non-contract review-shaped evidence (review:workspace_export,
  *     specialist:*): the delivery agent reads the full evidence and decides.
  */
 function assessFunctionalCompletion(input: {
@@ -242,9 +231,7 @@ function assessFunctionalCompletion(input: {
   failedReviewIds: string[]
   specialistReviews: DeliverySpecialistReview[]
 }): DeliveryManifestFunctionalAssessment {
-  const blockingReviewIds = input.failedReviewIds.filter((id) =>
-    id === "review:integrity" || id === "review:contract_audit"
-  )
+  const blockingReviewIds = input.failedReviewIds.filter((id) => id === "review:contract_audit")
   const blockingReviewIdSet = new Set<string>(blockingReviewIds)
   const primaryFailureIds = [
     ...input.failedReadinessIds,
@@ -257,12 +244,14 @@ function assessFunctionalCompletion(input: {
     ...input.failedReviewIds.filter((id) => !blockingReviewIdSet.has(id)),
   ]
   const status = primaryFailureIds.length === 0 ? "complete" : "incomplete"
-  const advisoryNote = auxiliaryFailureIds.length > 0
-    ? ` ${auxiliaryFailureIds.length} advisory issue(s) recorded for the delivery agent to weigh.`
-    : ""
-  const summary = status === "complete"
-    ? `Functional completion passed (acceptance-spec coverage satisfied).${advisoryNote}`
-    : `Functional completion failed with ${primaryFailureIds.length} blocker(s).${advisoryNote}`
+  const advisoryNote =
+    auxiliaryFailureIds.length > 0
+      ? ` ${auxiliaryFailureIds.length} advisory issue(s) recorded for the delivery agent to weigh.`
+      : ""
+  const summary =
+    status === "complete"
+      ? `Functional completion passed (acceptance-spec coverage satisfied).${advisoryNote}`
+      : `Functional completion failed with ${primaryFailureIds.length} blocker(s).${advisoryNote}`
   return {
     status,
     primaryFailureIds: [...new Set(primaryFailureIds)].sort(),
@@ -310,9 +299,7 @@ function specialistReviewEvidence(review: DeliverySpecialistReview): DeliveryRev
     artifactId: review.id,
     evidence: [
       review.summary,
-      ...review.findings.map((finding) =>
-        `${finding.proposedSeverity}:${finding.category}: ${finding.claim}`,
-      ),
+      ...review.findings.map((finding) => `${finding.proposedSeverity}:${finding.category}: ${finding.claim}`),
     ],
   }
 }
@@ -325,8 +312,6 @@ function buildReviewEvidence(input: {
     id?: string
     latest_goal_run_id?: string
     depends_on?: string[]
-    imports?: string[]
-    exports?: string[]
     acceptance_specs?: AcceptanceSpec[]
   }>
   criteriaResults?: Array<{
@@ -339,160 +324,10 @@ function buildReviewEvidence(input: {
     goal_run_id?: string
   }>
 }): DeliveryReviewEvidence[] {
-  const required = requiresIntegrityReview(input.goals)
-  const contractAuditEvidence = buildContractAuditReviewEvidence({
+  return buildContractAuditReviewEvidence({
     goals: input.goals,
     criteriaResults: input.criteriaResults ?? [],
   })
-  const id = "review:integrity"
-  if (!required) {
-    return [...contractAuditEvidence, {
-      id,
-      name: "Integrity Review",
-      status: "skipped",
-      evidence: ["goal graph does not require integrity review"],
-      specSnapshotId: input.specSnapshotID,
-    }]
-  }
-  if (!input.taskID || !input.specSnapshotID) {
-    return [...contractAuditEvidence, {
-      id,
-      name: "Integrity Review",
-      status: "failed",
-      evidence: ["non-trivial goal graph requires integrity review, but task or spec snapshot identity is missing"],
-      specSnapshotId: input.specSnapshotID,
-    }]
-  }
-  // Delivery gate requires a POST-BUILD integrity attempt — a pre-build
-  // attempt audits decomposition only and cannot stand in for end-to-end
-  // completion review. A pre-build green attempt that landed before any goal
-  // ran would otherwise let the delivery proceed despite zero build evidence.
-  const row = Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, input.taskID!),
-        eq(EngineArtifactTable.kind, "integrity_attempt"),
-        sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotID}`,
-        sql`json_extract(${EngineArtifactTable.payload}, '$.phase') = 'post_build'`,
-      ))
-      .orderBy(desc(EngineArtifactTable.time_created))
-      .get(),
-  )
-  if (!row) {
-    return [...contractAuditEvidence, {
-      id,
-      name: "Integrity Review",
-      status: "failed",
-      evidence: [
-        `non-trivial goal graph requires a post-build integrity review for spec snapshot ${input.specSnapshotID}`,
-        "pre-build attempts (decomposition audit) do not satisfy the delivery freshness gate",
-      ],
-      specSnapshotId: input.specSnapshotID,
-    }]
-  }
-
-  // Freshness check: a post-build attempt only stands in for "current state"
-  // when no terminal goal_run finished AFTER the attempt was recorded. A new
-  // goal_run completion since the attempt means the merged tree changed and
-  // the prior attempt's evidence is stale.
-  //
-  // Scope to the ACTIVE spec snapshot — a task may carry stale goal_run
-  // artifacts from prior snapshots that the architect has since superseded;
-  // those must NOT trigger false freshness rejection. Join via
-  // `payload.goal_id ∈ engine_goal WHERE spec_snapshot_id = active`.
-  const newerTerminalRun = Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, input.taskID!),
-        eq(EngineArtifactTable.kind, "goal_run_attempt"),
-        sql`json_extract(${EngineArtifactTable.payload}, '$.status') IN ('completed', 'failed', 'aborted')`,
-        sql`${EngineArtifactTable.time_created} > ${row.time_created}`,
-        sql`json_extract(${EngineArtifactTable.payload}, '$.goal_id') IN (
-          SELECT id FROM engine_goal WHERE spec_snapshot_id = ${input.specSnapshotID!}
-        )`,
-      ))
-      .orderBy(desc(EngineArtifactTable.time_created))
-      .get(),
-  )
-  if (newerTerminalRun) {
-    return [...contractAuditEvidence, {
-      id,
-      name: "Integrity Review",
-      status: "failed",
-      artifactId: row.id,
-      specSnapshotId: input.specSnapshotID,
-      evidence: [
-        "stale post-build integrity attempt — a goal_run terminal status was recorded after this review",
-        `attempt time_created=${row.time_created}`,
-        `newer goal_run terminal at time_created=${newerTerminalRun.time_created}`,
-        "rerun integrity to refresh the Requirement Status Snapshot",
-      ],
-    }]
-  }
-  const payload = (row.payload ?? {}) as {
-    verdict?: string
-    phase?: string
-    issues_count?: number
-    corrections_count?: number
-    missing_count?: number
-    reason?: string | null
-    review_markdown?: string | null
-  }
-  const verdict = payload.verdict ?? "unknown"
-  const phase = payload.phase ?? "unknown"
-  const correctionsCount = payload.corrections_count ?? 0
-  const missingCount = payload.missing_count ?? 0
-  const reviewMarkdown = typeof payload.review_markdown === "string" && payload.review_markdown.length > 0
-    ? payload.review_markdown
-    : undefined
-  // Integrity review is mandatory for non-trivial goal graphs. Correction-free
-  // concerns are review notes; missing reviews, unknown verdicts, explicit
-  // correction requests, and missing-goal findings mean architecture soundness
-  // has not been proven and must block delivery.
-  const status: "passed" | "failed" =
-    verdict === "pass" || (verdict === "concerns" && correctionsCount === 0 && missingCount === 0)
-      ? "passed"
-      : "failed"
-  return [...contractAuditEvidence, {
-    id,
-    name: "Integrity Review",
-    status,
-    artifactId: row.id,
-    specSnapshotId: input.specSnapshotID,
-    verdict,
-    evidence: [
-      `verdict=${verdict}`,
-      `phase=${phase}`,
-      `issues_count=${payload.issues_count ?? 0}`,
-      `corrections_count=${correctionsCount}`,
-      `missing_count=${missingCount}`,
-      verdict === "concerns" && correctionsCount === 0 && missingCount === 0
-        ? "concerns_without_corrections_are_advisory"
-        : undefined,
-      payload.reason ? `reason=${payload.reason}` : undefined,
-      // Surface the full review markdown so delivery LLM reads the same
-      // evidence the integrity LLM produced (issues / corrections /
-      // missing_goals as text), not just a count summary. This is the
-      // single source for review feedback across read_context, build tool
-      // return, and delivery — eliminates the prior count-only path.
-      reviewMarkdown,
-    ].filter((item): item is string => Boolean(item)),
-  }]
-}
-
-export function requiresIntegrityReview(goals: Array<{
-  priority?: "blocking" | "advisory"
-  depends_on?: string[]
-  imports?: string[]
-  exports?: string[]
-}>) {
-  return goals.some((goal) => goal.priority !== "advisory")
-    || goals.length >= 3
-    || goals.some((goal) =>
-      (goal.depends_on?.length ?? 0) > 0
-      || (goal.imports?.length ?? 0) > 0
-      || (goal.exports?.length ?? 0) > 0
-    )
 }
 
 async function buildWorkspaceExportEvidence(input: {
@@ -514,16 +349,16 @@ async function buildWorkspaceExportEvidence(input: {
     status: failed ? "failed" : "passed",
     evidence: failed
       ? [
-        `declared_changed_files=${declaredChangedFiles.length}`,
-        `exported_changed_files=${exportedChangedFiles.length}`,
-        `missing_declared_files=${missingDeclaredFiles.join(", ") || "(none)"}`,
-        `baseline=${baseRef}`,
-      ]
+          `declared_changed_files=${declaredChangedFiles.length}`,
+          `exported_changed_files=${exportedChangedFiles.length}`,
+          `missing_declared_files=${missingDeclaredFiles.join(", ") || "(none)"}`,
+          `baseline=${baseRef}`,
+        ]
       : [
-        `declared_changed_files=${declaredChangedFiles.length}`,
-        `exported_changed_files=${exportedChangedFiles.length}`,
-        `baseline=${baseRef}`,
-      ],
+          `declared_changed_files=${declaredChangedFiles.length}`,
+          `exported_changed_files=${exportedChangedFiles.length}`,
+          `baseline=${baseRef}`,
+        ],
   }
 }
 
@@ -570,22 +405,22 @@ async function runRuntimeFlows(input: {
       id,
       name: "Web Runtime Render",
       status: baseViolations.length === 0 ? "passed" : "failed",
-      evidence: baseViolations.length === 0
-        ? [
-            [
-              ...preview.evidence,
-              `rendered ${report.evidence.previewUrl ?? "live preview"}`,
-              `text=${report.evidence.dom?.textLength ?? "n/a"}`,
-              `nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
-              report.evidence.interaction
-                ? `interactions=${report.evidence.interaction.attemptedInteractionCount}/${report.evidence.interaction.visibleControlCount}`
-                : undefined,
-            ].filter(Boolean).join(" "),
-          ]
-        : [
-            ...preview.evidence,
-            ...baseViolations.map((item) => `${item.kind}: ${item.detail}`),
-          ],
+      evidence:
+        baseViolations.length === 0
+          ? [
+              [
+                ...preview.evidence,
+                `rendered ${report.evidence.previewUrl ?? "live preview"}`,
+                `text=${report.evidence.dom?.textLength ?? "n/a"}`,
+                `nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
+                report.evidence.interaction
+                  ? `interactions=${report.evidence.interaction.attemptedInteractionCount}/${report.evidence.interaction.visibleControlCount}`
+                  : undefined,
+              ]
+                .filter(Boolean)
+                .join(" "),
+            ]
+          : [...preview.evidence, ...baseViolations.map((item) => `${item.kind}: ${item.detail}`)],
       screenshotPath: report.evidence.renderedPngPath,
       previewUrl: report.evidence.previewUrl,
       dom: report.evidence.dom,
@@ -650,13 +485,15 @@ async function resolveRuntimeFlowPreview(input: {
   }
 }
 
-function buildCoverage(goals: Array<{
-  id: string
-  title: string
-  priority: "blocking" | "advisory"
-  requirement_ids: string[]
-  acceptance_spec_count?: number
-}>): {
+function buildCoverage(
+  goals: Array<{
+    id: string
+    title: string
+    priority: "blocking" | "advisory"
+    requirement_ids: string[]
+    acceptance_spec_count?: number
+  }>,
+): {
   goalCoverage: DeliveryGoalCoverage[]
   requirementCoverage: DeliveryRequirementCoverage[]
 } {
@@ -667,7 +504,7 @@ function buildCoverage(goals: Array<{
       goalId: goal.id,
       title: goal.title,
       priority: goal.priority,
-      status: covered ? "covered" as const : "uncovered" as const,
+      status: covered ? ("covered" as const) : ("uncovered" as const),
       acceptanceSpecCount,
       evidence: covered
         ? [`acceptance_spec_count=${acceptanceSpecCount}`]
@@ -682,29 +519,24 @@ function buildCoverage(goals: Array<{
       requirementToGoals.set(requirementId, list)
     }
   }
-  const coveredGoals = new Set(
-    goalCoverage
-      .filter((item) => item.status === "covered")
-      .map((item) => item.goalId),
-  )
-  const requirementCoverage: DeliveryRequirementCoverage[] = [...requirementToGoals.entries()]
-    .map(([requirementId, goalIds]) => {
+  const coveredGoals = new Set(goalCoverage.filter((item) => item.status === "covered").map((item) => item.goalId))
+  const requirementCoverage: DeliveryRequirementCoverage[] = [...requirementToGoals.entries()].map(
+    ([requirementId, goalIds]) => {
       const covered = goalIds.some((goalId) => coveredGoals.has(goalId))
       return {
         requirementId,
-        status: covered ? "covered" as const : "uncovered" as const,
+        status: covered ? ("covered" as const) : ("uncovered" as const),
         goalIds,
         evidence: covered
           ? [`covered_by=${goalIds.filter((goalId) => coveredGoals.has(goalId)).join(",")}`]
           : ["linked goals have no structured acceptance_specs"],
       }
-    })
+    },
+  )
   return { goalCoverage, requirementCoverage }
 }
 
-async function requiredChecksFromGroups(
-  groups: ReturnType<typeof commandGroups>,
-): Promise<DeliveryRequiredCheck[]> {
+async function requiredChecksFromGroups(groups: ReturnType<typeof commandGroups>): Promise<DeliveryRequiredCheck[]> {
   const checks: DeliveryRequiredCheck[] = []
   for (const group of groups) {
     for (const [index, rawCommand] of group.commands.entries()) {
@@ -767,13 +599,14 @@ async function runRequiredCheck(check: DeliveryRequiredCheck): Promise<DeliveryC
     startedAt,
     completedAt: Date.now(),
     failureReason: result.exitCode === 0 ? undefined : `exit_code=${result.exitCode}`,
-    failureSignature: status === "failed"
-      ? failureSignatureForCheck({
-          check,
-          output: outputExcerpt,
-          affectedFiles: [],
-        })
-      : undefined,
+    failureSignature:
+      status === "failed"
+        ? failureSignatureForCheck({
+            check,
+            output: outputExcerpt,
+            affectedFiles: [],
+          })
+        : undefined,
   }
 }
 
@@ -788,10 +621,7 @@ function skipRequiredCheck(check: DeliveryRequiredCheck, reason: string): Delive
   }
 }
 
-async function withIsolatedCheckWorkspace<T>(
-  sourceCwd: string,
-  fn: (workspace: string) => Promise<T>,
-): Promise<T> {
+async function withIsolatedCheckWorkspace<T>(sourceCwd: string, fn: (workspace: string) => Promise<T>): Promise<T> {
   const scratchParent = path.join(sourceCwd, ".opencorvus", "delivery-check-workspaces")
   await fs.mkdir(scratchParent, { recursive: true })
   const scratchRoot = await fs.mkdtemp(path.join(scratchParent, `${randomUUID()}-`))
@@ -811,11 +641,7 @@ async function copyTreeIntoCheckWorkspace(source: string, destination: string, s
     await fs.mkdir(destination, { recursive: true })
     const entries = await fs.readdir(source)
     for (const entry of entries) {
-      await copyTreeIntoCheckWorkspace(
-        path.join(source, entry),
-        path.join(destination, entry),
-        sourceRoot,
-      )
+      await copyTreeIntoCheckWorkspace(path.join(source, entry), path.join(destination, entry), sourceRoot)
     }
     return
   }
@@ -842,9 +668,7 @@ async function runShellCommand(input: {
   timeoutMs: number
 }): Promise<{ exitCode: number | undefined; stdout: string; stderr: string }> {
   const isWindows = process.platform === "win32"
-  const [command, ...args] = isWindows
-    ? ["cmd.exe", "/d", "/s", "/c", input.command]
-    : ["sh", "-lc", input.command]
+  const [command, ...args] = isWindows ? ["cmd.exe", "/d", "/s", "/c", input.command] : ["sh", "-lc", input.command]
   const proc = spawn(command, args, {
     cwd: input.cwd,
     windowsHide: true,
@@ -875,9 +699,7 @@ async function runShellCommand(input: {
   return {
     exitCode,
     stdout,
-    stderr: timedOut
-      ? `${stderr}\nCommand timed out after ${input.timeoutMs}ms.`
-      : stderr,
+    stderr: timedOut ? `${stderr}\nCommand timed out after ${input.timeoutMs}ms.` : stderr,
   }
 }
 

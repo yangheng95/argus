@@ -38,27 +38,43 @@ import {
 
 const log = Log.create({ service: "delivery-agent" })
 
-export {
-  DeliveryVerdict,
-  FrontendCheck,
-  StartupVerification,
-  affectedGoalIDs,
-  issuesFound,
-  type DeliveryVerdictType,
-}
+export { DeliveryVerdict, FrontendCheck, StartupVerification, affectedGoalIDs, issuesFound, type DeliveryVerdictType }
 
 // ---------------------------------------------------------------------------
 // DeliveryAgent
 // ---------------------------------------------------------------------------
 
 type VerifyInput = {
-  task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
+  task: {
+    id?: string
+    title: string
+    request: string
+    sessionID?: string
+    metadata?: Record<string, unknown>
+    design_specs?: Array<{
+      id: string
+      category: string
+      title: string
+      requirement: string
+      applies_to: string
+      severity: "must" | "should"
+      rationale?: string
+    }>
+  }
   goals: GoalInfo[]
   delivery: DeliveryInfo
   /** Visual-reference attachments already materialized under the attachment store.
    *  Delivery receives only a small inventory in the startup prompt. The image
    *  bytes are loaded on demand through the visual comparison tool. */
-  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
+  attachments?: Array<{
+    sha: string
+    url: string
+    mime: string
+    size: number
+    filename?: string
+    intent?: string
+    source?: string
+  }>
   /** Explicit model override (provider/model). Skips `resolveAgentModel`. */
   model?: { providerID: string; modelID: string }
   /** Legacy passthrough; not wired after the SessionPrompt migration. */
@@ -186,7 +202,21 @@ async function buildPromptParts(text: string) {
 
 function buildUserPrompt(
   input: {
-    task: { id?: string; title: string; request: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
+    task: {
+      id?: string
+      title: string
+      request: string
+      metadata?: Record<string, unknown>
+      design_specs?: Array<{
+        id: string
+        category: string
+        title: string
+        requirement: string
+        applies_to: string
+        severity: "must" | "should"
+        rationale?: string
+      }>
+    }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     attachments?: Array<{ sha: string; mime: string; filename?: string; intent?: string }>
@@ -204,12 +234,12 @@ function buildUserPrompt(
     if (rendered.trim().length > 0) sections.push(rendered)
   }
 
-  pushRequired("# Delegation", "# Delegation\n\nOrchestrator is asking delivery to verify the integrated result and return an acceptance verdict.")
-
   pushRequired(
-    "# Task",
-    `# Task\n\nTitle: ${input.task.title}\n\nRequest:\n${input.task.request}`,
+    "# Delegation",
+    "# Delegation\n\nOrchestrator is asking delivery to verify the integrated result and return an acceptance verdict.",
   )
+
+  pushRequired("# Task", `# Task\n\nTitle: ${input.task.title}\n\nRequest:\n${input.task.request}`)
 
   pushRequired("# Required Delivery Evidence Facets", renderRequiredEvidenceFacets(input.requiredEvidenceFacets ?? []))
 
@@ -229,8 +259,8 @@ function buildUserPrompt(
     lines.push("")
     lines.push(
       "Design-analyst extracted these visual constraints. Treat them as gating. " +
-      "When visual evidence is needed, call compare_visual_artifacts instead of relying on prompt context. " +
-      "If a spec is unmet, use category='visual' and cite visual_spec_id.",
+        "When visual evidence is needed, call compare_visual_artifacts instead of relying on prompt context. " +
+        "If a spec is unmet, use category='visual' and cite visual_spec_id.",
     )
     for (const cat of order) {
       const group = byCategory.get(cat)
@@ -239,7 +269,9 @@ function buildUserPrompt(
       lines.push(`## ${cat}`)
       for (const s of group) {
         const rat = s.rationale ? ` — ${s.rationale}` : ""
-        lines.push(`- \`${s.id}\` [${s.severity}] ${truncate(s.title, 160)}: ${truncate(s.requirement, 260)} @ ${truncate(s.applies_to, 120)}${truncate(rat, 180)}`)
+        lines.push(
+          `- \`${s.id}\` [${s.severity}] ${truncate(s.title, 160)}: ${truncate(s.requirement, 260)} @ ${truncate(s.applies_to, 120)}${truncate(rat, 180)}`,
+        )
       }
     }
     pushOptional("# Design Contract", lines.join("\n"), 6_000)
@@ -251,11 +283,7 @@ function buildUserPrompt(
       "Design Analysis PRD/SPEC Source",
     )
     if (designAnalysis.trim().length > 0) {
-      pushOptional(
-        "# Design Analysis PRD/SPEC Source",
-        designAnalysis,
-        10_000,
-      )
+      pushOptional("# Design Analysis PRD/SPEC Source", designAnalysis, 10_000)
     }
   }
 
@@ -288,7 +316,7 @@ function buildUserPrompt(
   pushOptional(
     "# Goals",
     `# Goal Index\n\n` +
-    `This is a compact index only. Call inspect_delivery_context with section='goals' before making goal-level attribution.\n\n` +
+      `This is a compact index only. Call inspect_delivery_context with section='goals' before making goal-level attribution.\n\n` +
       input.goals
         .map(
           (g, i) =>
@@ -305,9 +333,10 @@ function buildUserPrompt(
   const CHANGED_FILES_PROMPT_CAP = 30
   const filesShown = input.delivery.changedFiles.slice(0, CHANGED_FILES_PROMPT_CAP)
   const filesOmitted = input.delivery.changedFiles.length - filesShown.length
-  const filesHeader = filesOmitted > 0
-    ? `Changed files (${input.delivery.changedFiles.length} total; first ${filesShown.length} listed, ${filesOmitted} omitted):`
-    : `Changed files (${input.delivery.changedFiles.length}):`
+  const filesHeader =
+    filesOmitted > 0
+      ? `Changed files (${input.delivery.changedFiles.length} total; first ${filesShown.length} listed, ${filesOmitted} omitted):`
+      : `Changed files (${input.delivery.changedFiles.length}):`
   pushOptional(
     "# Delivery",
     `# Delivery\n\nSummary: ${input.delivery.summary}\n\n${filesHeader}\n` +
@@ -335,18 +364,16 @@ function buildUserPrompt(
     pushOptional(
       "# DeliveryEvidenceManifest Gate",
       `# DeliveryEvidenceManifest Gate\n\n` +
-      gateLines.join("\n") +
-      (detailLines.length > 0
-        ? `\n\nFailure details:\n${detailLines.join("\n")}`
-        : "") +
-      (gate.status === "failed"
-        ? `\n\nThe manifest gate failed on required delivery evidence: functional ` +
-          `completion, configured checks, runtime flows, or project integrity review. ` +
-          `You must submit verdict='rejected'. For each rejection_details ` +
-          `entry, include goal_id only when the listed goal's owned_paths, files_changed, or ` +
-          `report evidence identify it as responsible; otherwise leave the entry task-scoped ` +
-          `and explain the project-level blocker.`
-        : ""),
+        gateLines.join("\n") +
+        (detailLines.length > 0 ? `\n\nFailure details:\n${detailLines.join("\n")}` : "") +
+        (gate.status === "failed"
+          ? `\n\nThe manifest gate failed on required delivery evidence: functional ` +
+            `completion, configured checks, runtime flows, or contract audit. ` +
+            `You must submit verdict='rejected'. For each rejection_details ` +
+            `entry, include goal_id only when the listed goal's owned_paths, files_changed, or ` +
+            `report evidence identify it as responsible; otherwise leave the entry task-scoped ` +
+            `and explain the project-level blocker.`
+          : ""),
       8_000,
     )
   }
@@ -359,17 +386,18 @@ function buildUserPrompt(
       if (failure.evidence.length > 0) {
         lines.push("Evidence:")
         for (const item of failure.evidence.slice(0, 3)) lines.push(`- ${truncate(item, 300)}`)
-        if (failure.evidence.length > 3) lines.push(`- ... ${failure.evidence.length - 3} more evidence item(s); call inspect_delivery_context.`)
+        if (failure.evidence.length > 3)
+          lines.push(`- ... ${failure.evidence.length - 3} more evidence item(s); call inspect_delivery_context.`)
       }
       lines.push("")
     }
     pushOptional(
       "# Host Hard Gate Failures",
       `# Host Hard Gate Failures\n\n` +
-      `These are deterministic host observations, not synthetic verdicts. They block acceptance, ` +
-      `but attribution still belongs to your submit_verdict rejection_details. Do not drop any ` +
-      `runtime or visual gate evidence when writing the rejected verdict.\n\n` +
-      lines.join("\n").trim(),
+        `These are deterministic host observations, not synthetic verdicts. They block acceptance, ` +
+        `but attribution still belongs to your submit_verdict rejection_details. Do not drop any ` +
+        `runtime or visual gate evidence when writing the rejected verdict.\n\n` +
+        lines.join("\n").trim(),
       8_000,
     )
   }
@@ -378,9 +406,12 @@ function buildUserPrompt(
     pushOptional(
       "# Runtime Evidence Failures",
       `# Runtime Evidence Failures\n\n` +
-      `The host runtime probe found blocking runtime failures. Analyze them as delivery evidence ` +
-      `and reject with concrete reproduction details unless you can prove the probe is invalid.\n\n` +
-      input.delivery.runtimeEvidenceFailures.slice(0, 10).map((item) => `- ${truncate(item, 400)}`).join("\n"),
+        `The host runtime probe found blocking runtime failures. Analyze them as delivery evidence ` +
+        `and reject with concrete reproduction details unless you can prove the probe is invalid.\n\n` +
+        input.delivery.runtimeEvidenceFailures
+          .slice(0, 10)
+          .map((item) => `- ${truncate(item, 400)}`)
+          .join("\n"),
       5_000,
     )
   }
@@ -389,10 +420,13 @@ function buildUserPrompt(
     pushOptional(
       "# Visual Metric Failures",
       `# Visual Metric Failures\n\n` +
-      `The host visual metric found blocking visual failures. Use these as evidence, inspect the ` +
-      `rendered output and reference yourself, and reject with concrete visual rejection_details ` +
-      `unless you can prove the metric is invalid.\n\n` +
-      input.delivery.visualMetricFailures.slice(0, 10).map((item) => `- ${truncate(item, 400)}`).join("\n"),
+        `The host visual metric found blocking visual failures. Use these as evidence, inspect the ` +
+        `rendered output and reference yourself, and reject with concrete visual rejection_details ` +
+        `unless you can prove the metric is invalid.\n\n` +
+        input.delivery.visualMetricFailures
+          .slice(0, 10)
+          .map((item) => `- ${truncate(item, 400)}`)
+          .join("\n"),
       5_000,
     )
   }
@@ -462,16 +496,18 @@ export function deriveRequiredEvidenceFacets(input: {
   const hasRuntimeScenario = input.goals.some((goal) => (goal.acceptance_scenarios?.length ?? 0) > 0)
   const hasImageReference = (input.attachments ?? []).some((a) => (a.mime ?? "").startsWith("image/"))
   const hasDesignSpecs = (input.task.design_specs ?? []).length > 0
-  const touchesFrontend = files.some((file) =>
-    /(^|\/)(src\/)?(app|pages|components)\//.test(file)
-    || /\.(tsx|jsx|vue|svelte|astro|css|scss)$/.test(file)
-    || /(^|\/)(index\.html|vite\.config\.|next\.config\.)/.test(file)
+  const touchesFrontend = files.some(
+    (file) =>
+      /(^|\/)(src\/)?(app|pages|components)\//.test(file) ||
+      /\.(tsx|jsx|vue|svelte|astro|css|scss)$/.test(file) ||
+      /(^|\/)(index\.html|vite\.config\.|next\.config\.)/.test(file),
   )
-  const touchesRuntime = files.some((file) =>
-    /(^|\/)(api|routes|server|controllers|handlers|bin|cli)\//.test(file)
-    || /(^|\/)app\/api\//.test(file)
-    || /(server|routes|api|cli|main|index)\.[cm]?[jt]sx?$/.test(file)
-    || /^package\.json$/.test(file)
+  const touchesRuntime = files.some(
+    (file) =>
+      /(^|\/)(api|routes|server|controllers|handlers|bin|cli)\//.test(file) ||
+      /(^|\/)app\/api\//.test(file) ||
+      /(server|routes|api|cli|main|index)\.[cm]?[jt]sx?$/.test(file) ||
+      /^package\.json$/.test(file),
   )
 
   if (hasRuntimeScenario || touchesRuntime || touchesFrontend) facets.add("runtime")
@@ -506,9 +542,10 @@ export const DELIVERY_AGENT_SYSTEM = DELIVERY_CORE
 export async function deliveryAgentSystem(input?: VerifyInput): Promise<{ prompt: string; requiredTools: string[] }> {
   const config = await Config.get()
   const userAppend = (config.agent as Record<string, any> | undefined)?.delivery?.prompt
-  const core = typeof userAppend === "string" && userAppend.trim().length > 0
-    ? DELIVERY_AGENT_SYSTEM + "\n\n" + userAppend
-    : DELIVERY_AGENT_SYSTEM
+  const core =
+    typeof userAppend === "string" && userAppend.trim().length > 0
+      ? DELIVERY_AGENT_SYSTEM + "\n\n" + userAppend
+      : DELIVERY_AGENT_SYSTEM
   const orchCfg = await EngineConfig.get()
   const taskSignals: TaskSignals | undefined = input
     ? {

@@ -13,7 +13,7 @@ Both names are lower-camel callable React hook contracts. The validator rejected
 because `isTypeShapeContractName` checks only suffixes:
 
 ```ts
-/(Props|State|Config|Options|Payload|Data|Model|DTO)$/
+;/(Props|State|Config|Options|Payload|Data|Model|DTO)$/
 ```
 
 That suffix-only rule correctly catches `SuggestionChipProps`, but it also catches
@@ -38,7 +38,7 @@ compatibility path or prompt workaround.
 - `packages/opencorvus/src/architect/output-tools.ts`
   - `architectValidationIssues` is the only caller of `isTypeShapeContractName`.
   - `register_function_contract` already encodes callable intent with `kind:
-    "function"`.
+"function"`.
 - Tests:
   - existing reject coverage lives in
     `packages/opencorvus/test/acceptance/contract-audit.test.ts`.

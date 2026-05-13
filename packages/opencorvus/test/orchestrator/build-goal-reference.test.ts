@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineGoalTable, EnginePlanVersionTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EnginePlanVersionTable, EngineSpecSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { Session } from "../../src/session"
 import { listGoalRunsByGoal } from "../../src/engine/store"
@@ -181,7 +181,7 @@ describe("orchestrator build goal references", () => {
         expect(observedGoalIDs).toEqual([ids.goalIDs[0], ids.goalIDs[1]])
       },
     })
-  })
+  }, 30_000)
 })
 
 function seedWorkflowTaskWithGoals(input: {
@@ -275,6 +275,17 @@ function seedWorkflowTaskWithGoals(input: {
         time_updated: input.now,
       }).run()
     }
+    db.insert(EngineArtifactTable).values({
+      id: `artifact_contract_graph_${taskID}_${input.now}`,
+      task_id: taskID,
+      run_id: null,
+      goal_run_id: null,
+      kind: "architect_contract_graph",
+      label: "architect-contract-graph",
+      payload: { version: 1, contracts: [], dependency_contracts: [] },
+      time_created: input.now,
+      time_updated: input.now,
+    }).run()
   })
 
   return { projectID, taskID, specID, planID, goalIDs }

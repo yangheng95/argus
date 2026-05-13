@@ -41,26 +41,30 @@ import { Ownership } from "@/engine/ownership"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { EngineConfig } from "@/engine/config"
 import { ExecutorRegistry } from "@/executor/registry"
-import { record, structuredInput, type CodingEventInfo, type CodingProvider, type CodingProviderOptions } from "@/executor/contract"
+import {
+  record,
+  structuredInput,
+  type CodingEventInfo,
+  type CodingProvider,
+  type CodingProviderOptions,
+} from "@/executor/contract"
 import { extractExecutorSessionRef, persistExecutorSessionRef } from "@/executor/session-ref"
 import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
 import { MCPServe } from "@/mcp/serve"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
-import type {
-  AssemblyOwnerEntry,
-  ReferenceCoverageEntry,
-  SourceCoverageEntry,
-} from "@/architect/fidelity"
+import type { AssemblyOwnerEntry, ReferenceCoverageEntry, SourceCoverageEntry } from "@/architect/fidelity"
 import type { FileDiff } from "@/snapshot/types"
 import {
   BuildAgentContractError,
   BuildResultSchema,
   formatBuildResultSchemaError,
+  type BuildContractGraphContext,
   type BuildResult,
   type BuildTarget,
 } from "./types"
+import { renderContractGraphForPrompt } from "@/architect/contract-graph"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { withStreamActivity } from "@/util/stream-activity"
 import { PermissionNext } from "@/permission/next"
@@ -97,16 +101,10 @@ export namespace BuildAgent {
      *  backend_spec, review notes, completeness audit, reference artifacts, and
      *  evidence_source_manifest. */
     designAnalysis?: string
-    /** Cross-goal interface contracts the architect committed to the
-     *  decision log. Build receives the complete set so every goal sees the
-     *  same architectural consensus, with this goal only highlighted in
-     *  rendering. */
-    architectContracts?: Array<{
-      category: string
-      title: string
-      spec: string
-      goalIDs?: string[]
-    }>
+    /** Task-scoped Architect Contract Graph. Build receives graph contracts
+     *  and dependency reasons by id; it must not infer dependency meaning from
+     *  removed prose contract fields. */
+    contractGraph?: BuildContractGraphContext
     /** Sibling goals listed in `target.depends_on`. The orchestrator gates
      *  dispatch on these having passed and merged, so their files SHOULD be
      *  in the worktree base — surfacing titles + objectives lets the build
@@ -155,8 +153,6 @@ export namespace BuildAgent {
       acceptance_specs: string[]
       owned_paths: string[]
       depends_on: string[]
-      exports: string[]
-      imports: string[]
     }>
     /** Pre-formatted multimodal file parts produced by upstream evidence —
      *  typically the previous attempt's rendered.png from delivery's visual
@@ -284,10 +280,13 @@ export namespace BuildAgent {
     baseSystem?: string
     skillPrompt?: string
   }) {
-    const mcpPrompt = input.executor === "codex"
-      ? MCPServe.codingExecutorPromptSection()
-      : ""
-    const system = [input.baseSystem ?? "", externalBuildSystemContract(input.executor), mcpPrompt, input.skillPrompt ?? ""]
+    const mcpPrompt = input.executor === "codex" ? MCPServe.codingExecutorPromptSection() : ""
+    const system = [
+      input.baseSystem ?? "",
+      externalBuildSystemContract(input.executor),
+      mcpPrompt,
+      input.skillPrompt ?? "",
+    ]
       .map((s) => s.trim())
       .filter(Boolean)
       .join("\n\n")
@@ -408,7 +407,9 @@ export namespace BuildAgent {
       // for every agent — auto-detected, never stuffed into user prompt).
       const { deriveUrlSignals } = await import("@/engine/skill-inject")
       const taskSignals: import("@/engine/skill-inject").TaskSignals = {
-        has_attachment_image: buildReferenceAttachments.some((a) => typeof a?.mime === "string" && a.mime.startsWith("image/")),
+        has_attachment_image: buildReferenceAttachments.some(
+          (a) => typeof a?.mime === "string" && a.mime.startsWith("image/"),
+        ),
         ...deriveUrlSignals(input.task.request ?? ""),
         request_text: input.task.request ?? "",
       }
@@ -424,39 +425,40 @@ export namespace BuildAgent {
         (a) => typeof a?.url === "string" && typeof a?.mime === "string",
       ) as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
       const allMultimodal = [...taskAttachments, ...retryAttachments]
-      const buildUserPartsFn = allMultimodal.length > 0
-        ? async () => {
-            const text = buildPromptText()
-            const inline = await AttachmentStore.inlineFileParts(allMultimodal)
-            // Three layers of context for attachments, each with a different
-            // role and required to coexist (rule 22 — staging doesn't
-            // replace inlining; inlining doesn't replace listing):
-            //   1. inline file parts → the LLM physically sees the pixels
-            //   2. renderStagedList → tells the LLM the worktree-local path
-            //      so it can pass them to sandbox-checked tools
-            //   3. renderAttachmentInventory → textual ledger of EVERY
-            //      attachment (multimodal + reference-only) so the LLM
-            //      anchors its reasoning to "I have these files"
-            //
-            // Plus an UNCONDITIONAL contract preamble (only when this dispatch
-            // actually carries multimodal references): the static system
-            // prompt's reference-fidelity language is conditional ("If the
-            // prompt depends on screenshots…"), and models routinely judge
-            // their way out of the condition. The preamble eliminates that
-            // judgement: when this branch runs, attachments demonstrably
-            // exist; restoration is therefore not optional. Filenames are
-            // listed so the model cannot pretend "no specific image was named".
-            const visualContractPreamble = renderVisualContractPreamble(allMultimodal, {
-              mode: "inlined",
-            })
-            const enrichedText =
-              visualContractPreamble +
-              text +
-              AttachmentStore.renderStagedList(stagedAttachments) +
-              AttachmentStore.renderAttachmentInventory(allMultimodal)
-            return [{ type: "text" as const, text: enrichedText }, ...inline]
-          }
-        : undefined
+      const buildUserPartsFn =
+        allMultimodal.length > 0
+          ? async () => {
+              const text = buildPromptText()
+              const inline = await AttachmentStore.inlineFileParts(allMultimodal)
+              // Three layers of context for attachments, each with a different
+              // role and required to coexist (rule 22 — staging doesn't
+              // replace inlining; inlining doesn't replace listing):
+              //   1. inline file parts → the LLM physically sees the pixels
+              //   2. renderStagedList → tells the LLM the worktree-local path
+              //      so it can pass them to sandbox-checked tools
+              //   3. renderAttachmentInventory → textual ledger of EVERY
+              //      attachment (multimodal + reference-only) so the LLM
+              //      anchors its reasoning to "I have these files"
+              //
+              // Plus an UNCONDITIONAL contract preamble (only when this dispatch
+              // actually carries multimodal references): the static system
+              // prompt's reference-fidelity language is conditional ("If the
+              // prompt depends on screenshots…"), and models routinely judge
+              // their way out of the condition. The preamble eliminates that
+              // judgement: when this branch runs, attachments demonstrably
+              // exist; restoration is therefore not optional. Filenames are
+              // listed so the model cannot pretend "no specific image was named".
+              const visualContractPreamble = renderVisualContractPreamble(allMultimodal, {
+                mode: "inlined",
+              })
+              const enrichedText =
+                visualContractPreamble +
+                text +
+                AttachmentStore.renderStagedList(stagedAttachments) +
+                AttachmentStore.renderAttachmentInventory(allMultimodal)
+              return [{ type: "text" as const, text: enrichedText }, ...inline]
+            }
+          : undefined
       // External coding providers (codex / claude-code) get only a single
       // text prompt — no multimodal file parts, no attachment inventory.
       // The visual contract has to ride on the prompt itself, with the
@@ -464,13 +466,14 @@ export namespace BuildAgent {
       // worktree's references/<filename> on disk (not pretend it saw
       // pixels in the message). Mirrors the mirrorcode path so external
       // executors stop free-styling away from screenshots they were given.
-      const buildExternalPromptText = allMultimodal.length > 0
-        ? () =>
-            renderVisualContractPreamble(allMultimodal, { mode: "staged-only" }) +
-            buildPromptText() +
-            AttachmentStore.renderStagedList(stagedAttachments) +
-            AttachmentStore.renderAttachmentInventory(allMultimodal)
-        : buildPromptText
+      const buildExternalPromptText =
+        allMultimodal.length > 0
+          ? () =>
+              renderVisualContractPreamble(allMultimodal, { mode: "staged-only" }) +
+              buildPromptText() +
+              AttachmentStore.renderStagedList(stagedAttachments) +
+              AttachmentStore.renderAttachmentInventory(allMultimodal)
+          : buildPromptText
 
       // Tracks whether `merge_back` ever returned `merged` for this build
       // session. The post-run guard below uses it to reject "agent claimed
@@ -522,106 +525,116 @@ export namespace BuildAgent {
             // (rule 8 single source — the host knows the truth, not the LLM).
             const commit_ref = mergedHead
               ? mergedHead.slice(0, 12)
-              : (ownsWorktree && worktreeBranch ? "" : parsedResult.data.commit_ref ?? "")
+              : ownsWorktree && worktreeBranch
+                ? ""
+                : (parsedResult.data.commit_ref ?? "")
             buildCollector.result = { ...parsedResult.data, commit_ref }
             return `PASS: build ${result.status} result recorded.`
           },
         }),
       })
 
-      const buildToolKit: { tools: ToolSet; getCollector: () => BuildCollector; buildReport: () => ReturnType<typeof buildBuildReport> } = ownsWorktree && worktreeBranch && worktreeDir
-        ? {
-            tools: {
-              merge_back: tool({
-                description:
-                  "Publish your goal branch's commits onto the project's primary " +
-                  "worktree branch. Runs `git merge <primary>` inside this " +
-                  "worktree, then `git merge --ff-only` on the primary worktree, " +
-                  "atomically under a host-side lock so concurrent goals do not " +
-                  "race each other.\n\n" +
-                  "Call this AFTER you have committed all your changes and your " +
-                  "verification passed, and BEFORE calling report_build_result with status='passed'. It " +
-                  "is the LAST git-affecting action of the session.\n\n" +
-                  "Returns one of:\n" +
-                  "  • {status:'merged', primary_head, primary_branch} — done; emit " +
-                  "    report_build_result with status='passed'.\n" +
-                  "  • {status:'conflict', primary_branch, primary_tip, " +
-                  "    conflict_paths[]} — the merge hit textual conflicts. Your " +
-                  "    worktree is now IN MERGING state: each path in conflict_paths " +
-                  "    has `<<<<<<<`/`=======`/`>>>>>>>` markers in place. Edit each " +
-                  "    path to remove the markers (keep both intentions where " +
-                  "    possible; respect owned_paths), `git add <path>`, then once " +
-                  "    all paths are resolved `git commit` — that finalizes the " +
-                  "    merge. Call merge_back again to ff-publish into primary.\n" +
-                  "  • {status:'blocked', reason, dirty_paths?, merge_head?} — repository state " +
-                  "    prevents merge from starting; fix that exact state in this worktree.\n" +
-                  "  • {status:'infra_error', reason} — infrastructure problem; report it " +
-                  "    via report_build_result with status='failed'.",
-                inputSchema: z.object({}),
-                execute: async () => {
-                  const outcome = await Worktree.mergeSafely({
-                    branch: worktreeBranch!,
-                    worktreeDir: worktreeDir!,
-                  })
-                  if (outcome.status === "merged") {
-                    mergedHead = outcome.primaryHead
-                    return {
-                      status: "merged" as const,
-                      primary_head: outcome.primaryHead,
-                      primary_branch: outcome.primaryBranch,
-                      ...(outcome.primaryRecoveryCommit ? { primary_recovery_commit: outcome.primaryRecoveryCommit } : {}),
+      const buildToolKit: {
+        tools: ToolSet
+        getCollector: () => BuildCollector
+        buildReport: () => ReturnType<typeof buildBuildReport>
+      } =
+        ownsWorktree && worktreeBranch && worktreeDir
+          ? {
+              tools: {
+                merge_back: tool({
+                  description:
+                    "Publish your goal branch's commits onto the project's primary " +
+                    "worktree branch. Runs `git merge <primary>` inside this " +
+                    "worktree, then `git merge --ff-only` on the primary worktree, " +
+                    "atomically under a host-side lock so concurrent goals do not " +
+                    "race each other.\n\n" +
+                    "Call this AFTER you have committed all your changes and your " +
+                    "verification passed, and BEFORE calling report_build_result with status='passed'. It " +
+                    "is the LAST git-affecting action of the session.\n\n" +
+                    "Returns one of:\n" +
+                    "  • {status:'merged', primary_head, primary_branch} — done; emit " +
+                    "    report_build_result with status='passed'.\n" +
+                    "  • {status:'conflict', primary_branch, primary_tip, " +
+                    "    conflict_paths[]} — the merge hit textual conflicts. Your " +
+                    "    worktree is now IN MERGING state: each path in conflict_paths " +
+                    "    has `<<<<<<<`/`=======`/`>>>>>>>` markers in place. Edit each " +
+                    "    path to remove the markers (keep both intentions where " +
+                    "    possible; respect owned_paths), `git add <path>`, then once " +
+                    "    all paths are resolved `git commit` — that finalizes the " +
+                    "    merge. Call merge_back again to ff-publish into primary.\n" +
+                    "  • {status:'blocked', reason, dirty_paths?, merge_head?} — repository state " +
+                    "    prevents merge from starting; fix that exact state in this worktree.\n" +
+                    "  • {status:'infra_error', reason} — infrastructure problem; report it " +
+                    "    via report_build_result with status='failed'.",
+                  inputSchema: z.object({}),
+                  execute: async () => {
+                    const outcome = await Worktree.mergeSafely({
+                      branch: worktreeBranch!,
+                      worktreeDir: worktreeDir!,
+                    })
+                    if (outcome.status === "merged") {
+                      mergedHead = outcome.primaryHead
+                      return {
+                        status: "merged" as const,
+                        primary_head: outcome.primaryHead,
+                        primary_branch: outcome.primaryBranch,
+                        ...(outcome.primaryRecoveryCommit
+                          ? { primary_recovery_commit: outcome.primaryRecoveryCommit }
+                          : {}),
+                      }
                     }
-                  }
-                  if (outcome.status === "conflict") {
-                    lastMergeBackOutcome =
-                      `conflict on ${outcome.primaryBranch} (tip ${outcome.primaryTip.slice(0, 12)}); ` +
-                      `paths: ${outcome.conflictPaths.join(", ")}`
-                    return {
-                      status: "conflict" as const,
-                      primary_branch: outcome.primaryBranch,
-                      primary_tip: outcome.primaryTip,
-                      conflict_paths: outcome.conflictPaths,
-                      hint:
-                        "Worktree is in MERGING state with conflict markers in " +
-                        "the listed paths. Edit each path to resolve the markers, " +
-                        "git add <path>, then `git commit` to finalize the merge. " +
-                        "Then call merge_back again to ff-publish into " +
-                        outcome.primaryBranch + ".",
+                    if (outcome.status === "conflict") {
+                      lastMergeBackOutcome =
+                        `conflict on ${outcome.primaryBranch} (tip ${outcome.primaryTip.slice(0, 12)}); ` +
+                        `paths: ${outcome.conflictPaths.join(", ")}`
+                      return {
+                        status: "conflict" as const,
+                        primary_branch: outcome.primaryBranch,
+                        primary_tip: outcome.primaryTip,
+                        conflict_paths: outcome.conflictPaths,
+                        hint:
+                          "Worktree is in MERGING state with conflict markers in " +
+                          "the listed paths. Edit each path to resolve the markers, " +
+                          "git add <path>, then `git commit` to finalize the merge. " +
+                          "Then call merge_back again to ff-publish into " +
+                          outcome.primaryBranch +
+                          ".",
+                      }
                     }
-                  }
-                  if (outcome.status === "blocked") {
-                    lastMergeBackOutcome = `blocked on ${outcome.branch}: ${outcome.reason}`
+                    if (outcome.status === "blocked") {
+                      lastMergeBackOutcome = `blocked on ${outcome.branch}: ${outcome.reason}`
+                      return {
+                        status: "blocked" as const,
+                        reason: outcome.reason,
+                        branch: outcome.branch,
+                        worktree_dir: outcome.worktreeDir,
+                        ...(outcome.dirtyPaths ? { dirty_paths: outcome.dirtyPaths } : {}),
+                        ...(outcome.mergeHead ? { merge_head: true } : {}),
+                      }
+                    }
+                    lastMergeBackOutcome = `infra_error on ${outcome.branch}: ${outcome.reason}`
                     return {
-                      status: "blocked" as const,
+                      status: "infra_error" as const,
                       reason: outcome.reason,
                       branch: outcome.branch,
-                      worktree_dir: outcome.worktreeDir,
-                      ...(outcome.dirtyPaths ? { dirty_paths: outcome.dirtyPaths } : {}),
-                      ...(outcome.mergeHead ? { merge_head: true } : {}),
+                      ...(outcome.stderr ? { stderr: outcome.stderr } : {}),
                     }
-                  }
-                  lastMergeBackOutcome = `infra_error on ${outcome.branch}: ${outcome.reason}`
-                  return {
-                    status: "infra_error" as const,
-                    reason: outcome.reason,
-                    branch: outcome.branch,
-                    ...(outcome.stderr ? { stderr: outcome.stderr } : {}),
-                  }
-                },
-              }),
-              ...createBuildReportTools(),
-            },
-            getCollector: () => buildCollector,
-            buildReport: buildBuildReport,
-          }
-        : {
-            // Caller-owned worktrees (input.workDir set) skip merge_back — the
-            // caller manages publishing. The agent prompt is gated on the
-            // tool's presence so the LLM does not invent the call.
-            tools: createBuildReportTools(),
-            getCollector: () => buildCollector,
-            buildReport: buildBuildReport,
-          }
+                  },
+                }),
+                ...createBuildReportTools(),
+              },
+              getCollector: () => buildCollector,
+              buildReport: buildBuildReport,
+            }
+          : {
+              // Caller-owned worktrees (input.workDir set) skip merge_back — the
+              // caller manages publishing. The agent prompt is gated on the
+              // tool's presence so the LLM does not invent the call.
+              tools: createBuildReportTools(),
+              getCollector: () => buildCollector,
+              buildReport: buildBuildReport,
+            }
 
       let out: { session: { id: string }; structured?: unknown; collector?: BuildCollector } | undefined
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
@@ -720,7 +733,6 @@ export namespace BuildAgent {
         // actual_changed_files (from `diffs`); the orchestrator LLM
         // cross-checks them and decides if the report is honest. CLAUDE.md
         // rule 13. Spec architecture-rework-loosening-plan-2026-05-06.md (B6).
-
       } catch (err) {
         // B8 compliance: when the mirrorcode build session ends without
         // calling report_build_result, runAgentSession throws an
@@ -839,15 +851,12 @@ export namespace BuildAgent {
       // attribute sibling-goal files to this build.
       const actualChangedFiles = diffs?.map((d) => ({
         path: d.file,
-        status: (d.status === "added" || d.status === "deleted" || d.status === "modified")
-          ? d.status
-          : "modified" as const,
-        additions: typeof (d as { additions?: number }).additions === "number"
-          ? (d as { additions: number }).additions
-          : 0,
-        deletions: typeof (d as { deletions?: number }).deletions === "number"
-          ? (d as { deletions: number }).deletions
-          : 0,
+        status:
+          d.status === "added" || d.status === "deleted" || d.status === "modified" ? d.status : ("modified" as const),
+        additions:
+          typeof (d as { additions?: number }).additions === "number" ? (d as { additions: number }).additions : 0,
+        deletions:
+          typeof (d as { deletions?: number }).deletions === "number" ? (d as { deletions: number }).deletions : 0,
       }))
 
       return {
@@ -893,7 +902,7 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "mir
 // ---------------------------------------------------------------------------
 
 function externalEventMeta(event: CodingEventInfo): Record<string, unknown> {
-  return "meta" in event ? record(event.meta) ?? {} : {}
+  return "meta" in event ? (record(event.meta) ?? {}) : {}
 }
 
 function stringField(value: unknown): string | undefined {
@@ -913,10 +922,7 @@ function externalToolInput(input: unknown): Record<string, unknown> {
 
 function externalToolResultName(event: Extract<CodingEventInfo, { type: "tool_result" }>): string {
   const meta = externalEventMeta(event)
-  const named = event.name
-    || stringField(meta.tool_name)
-    || stringField(meta.tool)
-    || stringField(meta.name)
+  const named = event.name || stringField(meta.tool_name) || stringField(meta.tool) || stringField(meta.name)
   if (named) return named
   const itemType = stringField(meta.item_type)
   if (itemType === "commandExecution") return "Bash"
@@ -937,10 +943,11 @@ function externalToolResultInput(event: Extract<CodingEventInfo, { type: "tool_r
 
 function externalQuestionLine(question: Record<string, unknown>): string {
   const header = stringField(question.header) || stringField(question.id) || "Question"
-  const text = stringField(question.question)
-    || stringField(question.message)
-    || stringField(question.label)
-    || "Additional input required"
+  const text =
+    stringField(question.question) ||
+    stringField(question.message) ||
+    stringField(question.label) ||
+    "Additional input required"
   return `- ${header}: ${text}`
 }
 
@@ -949,7 +956,8 @@ async function resolveExternalApproval(input: {
   sessionID: string
   event: Extract<CodingEventInfo, { type: "approval_request" }>
 }) {
-  if (!input.provider.respond) throw new Error("external executor emitted an approval request but does not support respond()")
+  if (!input.provider.respond)
+    throw new Error("external executor emitted an approval request but does not support respond()")
   const permission = input.event.approval || "external_executor"
   const pattern = input.event.message?.trim() || permission
   try {
@@ -986,7 +994,8 @@ async function resolveExternalInput(input: {
   sessionID: string
   event: Extract<CodingEventInfo, { type: "input_request" }>
 }) {
-  if (!input.provider.respond) throw new Error("external executor emitted an input request but does not support respond()")
+  if (!input.provider.respond)
+    throw new Error("external executor emitted an input request but does not support respond()")
   const result = await Question.askAndFormat({
     sessionID: input.sessionID,
     questions: externalQuestions(input.event),
@@ -1014,12 +1023,16 @@ async function resolveExternalInput(input: {
 }
 
 function externalQuestions(event: Extract<CodingEventInfo, { type: "input_request" }>): Question.Info[] {
-  const raw = event.questions?.length ? event.questions : [{
-    id: event.id,
-    header: "Input",
-    question: "Additional input required",
-    requested_schema: event.meta?.requested_schema,
-  }]
+  const raw = event.questions?.length
+    ? event.questions
+    : [
+        {
+          id: event.id,
+          header: "Input",
+          question: "Additional input required",
+          requested_schema: event.meta?.requested_schema,
+        },
+      ]
   return raw.map((item, index) => {
     // Codex 0.125 elicitations (e.g. mcp_tool_call_approval) carry the choice
     // set inline as `options: [{label,description}, ...]`. Older protocols
@@ -1067,10 +1080,7 @@ function requestedSchemaOptions(question: Record<string, unknown>): Question.Opt
   }))
 }
 
-function externalAnswerContent(
-  event: Extract<CodingEventInfo, { type: "input_request" }>,
-  answers: Question.Answer[],
-) {
+function externalAnswerContent(event: Extract<CodingEventInfo, { type: "input_request" }>, answers: Question.Answer[]) {
   const keys = externalInputKeys(event)
   return Object.fromEntries(keys.map((key, index) => [key, (answers[index] ?? answers[0] ?? []).join(", ")]))
 }
@@ -1353,14 +1363,17 @@ async function runWithExternalProviderImpl(args: {
   // Live tool tracker — external assistant narration is intentionally not
   // materialized as build-card parts. The visible build card is for concrete
   // tool activity, operator decisions, errors, and host terminal outcome.
-  const tools = new Map<string, {
-    id: string
-    name: string
-    input: Record<string, unknown>
-    raw: string
-    metadata: Record<string, unknown>
-    start: number
-  }>()
+  const tools = new Map<
+    string,
+    {
+      id: string
+      name: string
+      input: Record<string, unknown>
+      raw: string
+      metadata: Record<string, unknown>
+      start: number
+    }
+  >()
 
   const appendExternalEventPart = async (event: CodingEventInfo) => {
     const text = externalEventPartText(event, args.executor)
@@ -1475,7 +1488,14 @@ async function runWithExternalProviderImpl(args: {
           const start = existing?.start ?? Date.now()
           const inputObj = externalToolInput(event.input)
           const metadata = { ...(existing?.metadata ?? {}), ...externalToolMetadata(event) }
-          tools.set(event.id, { id: partID, name: event.name, input: inputObj, raw: existing?.raw ?? "", metadata, start })
+          tools.set(event.id, {
+            id: partID,
+            name: event.name,
+            input: inputObj,
+            raw: existing?.raw ?? "",
+            metadata,
+            start,
+          })
           await Session.updatePart({
             id: partID,
             sessionID: session.id,
@@ -1870,7 +1890,8 @@ export async function collectGoalContributionDiffs(worktreeDir: string, baseRef:
 
 export async function resolveGoalContributionBaseRef(worktreeDir: string, baseRef: string): Promise<string> {
   const parentsResult = await runGit(["show", "--no-patch", "--pretty=%P", "HEAD"], {
-    cwd: worktreeDir, timeoutProfile: "fast",
+    cwd: worktreeDir,
+    timeoutProfile: "fast",
   })
   const parentsRaw = parentsResult.exitCode === 0 ? parentsResult.text().trim() : ""
   const parents = parentsRaw.split(/\s+/).filter(Boolean)
@@ -1896,9 +1917,16 @@ async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<F
   const status = new Map<string, "added" | "deleted" | "modified">()
   const statusResult = await runGit(
     [
-      "-c", "core.quotepath=false",
-      "diff", "--no-ext-diff", "--name-status", "--no-renames",
-      baseRef, headRaw, "--", ".",
+      "-c",
+      "core.quotepath=false",
+      "diff",
+      "--no-ext-diff",
+      "--name-status",
+      "--no-renames",
+      baseRef,
+      headRaw,
+      "--",
+      ".",
     ],
     { cwd: worktreeDir, timeoutProfile: "default" },
   )
@@ -1912,11 +1940,7 @@ async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<F
   }
 
   const numstatResult = await runGit(
-    [
-      "-c", "core.quotepath=false",
-      "diff", "--no-ext-diff", "--no-renames", "--numstat",
-      baseRef, headRaw, "--", ".",
-    ],
+    ["-c", "core.quotepath=false", "diff", "--no-ext-diff", "--no-renames", "--numstat", baseRef, headRaw, "--", "."],
     { cwd: worktreeDir, timeoutProfile: "default" },
   )
   const numstatOut = numstatResult.exitCode === 0 ? numstatResult.text().trim() : ""
@@ -1954,10 +1978,18 @@ async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<F
 
 function labelFromTarget(target: BuildTarget): string {
   if (target.kind === "goal") {
-    const slug = target.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32)
+    const slug = target.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 32)
     return slug || target.id.slice(-8)
   }
-  const slug = target.text.toLowerCase().slice(0, 32).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+  const slug = target.text
+    .toLowerCase()
+    .slice(0, 32)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
   return slug || "request"
 }
 
@@ -1985,11 +2017,10 @@ type BuildReferenceAttachment = {
 
 function collectBuildReferenceAttachments(task: TaskRow): BuildReferenceAttachment[] {
   const taskAttachments = Array.isArray(task.attachments)
-    ? task.attachments as Array<Partial<BuildReferenceAttachment>>
+    ? (task.attachments as Array<Partial<BuildReferenceAttachment>>)
     : []
-  const designArtifacts = (Array.isArray(task.system_artifacts)
-    ? task.system_artifacts as Array<Partial<BuildReferenceAttachment>>
-    : []
+  const designArtifacts = (
+    Array.isArray(task.system_artifacts) ? (task.system_artifacts as Array<Partial<BuildReferenceAttachment>>) : []
   ).filter((item) => item.intent === "visual_reference")
 
   const seen = new Set<string>()
@@ -2033,23 +2064,23 @@ export function renderVisualContractPreamble(
   options: { mode?: VisualContractMode } = {},
 ): string {
   if (attachments.length === 0) return ""
-  const visual = attachments.filter((a) =>
-    typeof a?.mime === "string" &&
-    (a.mime.startsWith("image/") || a.mime === "application/pdf"),
+  const visual = attachments.filter(
+    (a) => typeof a?.mime === "string" && (a.mime.startsWith("image/") || a.mime === "application/pdf"),
   )
   if (visual.length === 0) return ""
   const mode = options.mode ?? "inlined"
-  const sourceLine = mode === "inlined"
-    ? "The file(s) below are inlined above as multimodal parts AND staged on disk under `references/`."
-    : "The file(s) below are staged on disk under `references/<filename>`. Your runtime cannot inline them as multimodal message parts — you MUST open each one through the project's read tool / image-viewing tool before producing UI code."
+  const sourceLine =
+    mode === "inlined"
+      ? "The file(s) below are inlined above as multimodal parts AND staged on disk under `references/`."
+      : "The file(s) below are staged on disk under `references/<filename>`. Your runtime cannot inline them as multimodal message parts — you MUST open each one through the project's read tool / image-viewing tool before producing UI code."
   const lines: string[] = [
     "## Visual Reference Contract (binding for this dispatch)",
     "",
     sourceLine,
     "They are the authoritative visual target for this dispatch — restore their pixels 1:1 within stack constraints.",
-    "NOT inspiration. NOT optional. Restoring something that \"looks vaguely similar\" is a verified failure, not partial credit.",
+    'NOT inspiration. NOT optional. Restoring something that "looks vaguely similar" is a verified failure, not partial credit.',
     "",
-    "Reference each file by its `references/<filename>` relative path in the code you emit (`<img src=\"references/foo.png\">`, `<image href=\"references/foo.png\">`, `./references/foo.png` for file reads). When the deliverable's runtime needs a different layout, copy the file into the asset directory with a real `write` / `bash` step — the source bytes still come from `references/`. Never inline a staged asset as `data:<mime>;base64,...` (or any other base64 / hex-encoded form) inside generated SVG, HTML, JSON, PowerShell, shell scripts, or any other emitted artifact. That regression mirrors the `InlineBase64InPartError` the session write-path already rejects and will fail verification just the same.",
+    'Reference each file by its `references/<filename>` relative path in the code you emit (`<img src="references/foo.png">`, `<image href="references/foo.png">`, `./references/foo.png` for file reads). When the deliverable\'s runtime needs a different layout, copy the file into the asset directory with a real `write` / `bash` step — the source bytes still come from `references/`. Never inline a staged asset as `data:<mime>;base64,...` (or any other base64 / hex-encoded form) inside generated SVG, HTML, JSON, PowerShell, shell scripts, or any other emitted artifact. That regression mirrors the `InlineBase64InPartError` the session write-path already rejects and will fail verification just the same.',
     "",
   ]
   for (const att of visual) {
@@ -2100,31 +2131,9 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
-    const contracts = context?.architectContracts ?? []
-    if (contracts.length > 0) {
-      lines.push("## Architect Contracts (cross-goal consensus, must honour)")
+    if (context?.contractGraph) {
+      lines.push(renderContractGraphForPrompt(context.contractGraph, target.id))
       lines.push("")
-      lines.push(
-        "The architect committed these interface contracts to the decision log. This is a budgeted view of the complete architecture consensus: current-goal, dependency, and task-wide contracts are expanded; sibling-only contracts are included compactly so you can preserve them without flooding the prompt.",
-      )
-      lines.push("")
-      for (const c of contracts) {
-        const goalIDs = c.goalIDs ?? []
-        const relevant =
-          goalIDs.length === 0 ||
-          goalIDs.includes(target.id) ||
-          goalIDs.some((goalID) => dependencyIDs.has(goalID))
-        const scope = goalIDs.length === 0
-          ? "(task-wide)"
-          : goalIDs.includes(target.id)
-            ? goalIDs.length === 1 ? "(this goal)" : `(includes this goal: ${goalIDs.join(", ")})`
-            : goalIDs.some((goalID) => dependencyIDs.has(goalID))
-              ? `(dependency contract: ${goalIDs.join(", ")})`
-            : `(sibling contract: ${goalIDs.join(", ")})`
-        lines.push(`### ${c.title} — ${c.category} ${scope}`)
-        lines.push(relevant ? c.spec : compactLine(c.spec))
-        lines.push("")
-      }
     }
 
     const collaborationGoals = context?.collaborationGoals ?? []
@@ -2132,7 +2141,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("## Collaboration State")
       lines.push("")
       lines.push(
-        "These are the sibling goals in the shared milestone. `owned_paths` are responsibility paths, not a file sandbox: shared-file edits are allowed when they are necessary for the integrated deliverable, preserve the other goals' declared contracts, and are explained in `files_changed[]`.",
+        "These are the sibling goals in the shared milestone. `owned_paths` are responsibility paths, not a file sandbox: shared-file edits are allowed when they are necessary for the integrated deliverable, preserve the Architect Contract Graph, and are explained in `files_changed[]`.",
       )
       lines.push("")
       for (const goal of collaborationGoals) {
@@ -2144,12 +2153,12 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
           lines.push("  - acceptance_specs:")
           for (const spec of goal.acceptance_specs) lines.push(`    - ${spec}`)
         } else if (goal.acceptance_specs.length > 0) {
-          lines.push(`  - acceptance_specs_summary: ${goal.acceptance_specs.map((spec) => compactLine(spec, 140)).join(" | ")}`)
+          lines.push(
+            `  - acceptance_specs_summary: ${goal.acceptance_specs.map((spec) => compactLine(spec, 140)).join(" | ")}`,
+          )
         }
         if (goal.owned_paths.length > 0) lines.push(`  - responsibility_paths: ${goal.owned_paths.join(", ")}`)
         if (goal.depends_on.length > 0) lines.push(`  - depends_on: ${goal.depends_on.join(", ")}`)
-        if (goal.exports.length > 0) lines.push(`  - exports: ${goal.exports.join("; ")}`)
-        if (goal.imports.length > 0) lines.push(`  - imports: ${goal.imports.join("; ")}`)
       }
       lines.push("")
     }
@@ -2159,7 +2168,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("## Dependencies (should be merged into your worktree base)")
       lines.push("")
       lines.push(
-        "These goals are listed as prerequisites — the orchestrator is supposed to have waited for them to pass and merge before dispatching you, so their files SHOULD already exist in your base branch. Verify by reading them before you consume their exports. If a declared export is missing or the file is absent, do NOT re-implement it: call `report_build_result` with status='failed' and a concrete error naming the missing dependency so the orchestrator can fix the dispatch order.",
+        "These goals are listed as prerequisites — the orchestrator is supposed to have waited for them to pass and merge before dispatching you, so their files SHOULD already exist in your base branch. Verify by reading the files named by the Contract Graph before consuming a dependency. If a graph contract is missing or the file is absent, do NOT re-implement it: call `report_build_result` with status='failed' and a concrete error naming the missing dependency so the orchestrator can fix the graph or dispatch order.",
       )
       lines.push("")
       for (const d of deps) {
@@ -2176,13 +2185,15 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     }
 
     if (context?.designSpecs && context.designSpecs.length > 0) {
-      lines.push(renderVisualContractPromptSection({
-        specs: context.designSpecs,
-        instructions: [
-          "The optional visual anchors below came from design_analysis. The PRD/SPEC above remains authoritative for the referenced UI/web target: restore the relevant subset 1:1 as closely as the stack allows.",
-          "Use the subset relevant to this goal's responsibility paths, UI surface, and interactions; ignore anchors targeting unrelated regions.",
-        ],
-      }))
+      lines.push(
+        renderVisualContractPromptSection({
+          specs: context.designSpecs,
+          instructions: [
+            "The optional visual anchors below came from design_analysis. The PRD/SPEC above remains authoritative for the referenced UI/web target: restore the relevant subset 1:1 as closely as the stack allows.",
+            "Use the subset relevant to this goal's responsibility paths, UI surface, and interactions; ignore anchors targeting unrelated regions.",
+          ],
+        }),
+      )
       lines.push("")
     }
 
@@ -2252,7 +2263,9 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     lines.push(`**Objective**: ${target.objective}`)
     if (target.acceptance_specs.length > 0) {
       lines.push("")
-      lines.push("**Acceptance Specs** (every one MUST be observably satisfied before report_build_result status='passed'):")
+      lines.push(
+        "**Acceptance Specs** (every one MUST be observably satisfied before report_build_result status='passed'):",
+      )
       for (const spec of target.acceptance_specs) lines.push(`- ${spec}`)
     }
     if (target.owned_paths.length > 0) {
@@ -2265,18 +2278,14 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
         `**Depends on**: ${target.depends_on.join(", ")} — those goals are merged into your worktree base branch already.`,
       )
     }
-    if (target.imports.length > 0) {
-      lines.push("")
-      lines.push(`**Imports**: ${target.imports.join(", ")}`)
-    }
-    if (target.exports.length > 0) {
-      lines.push("")
-      lines.push(`**Exports this goal must provide**: ${target.exports.join(", ")}`)
-    }
     lines.push("")
-    lines.push("**Reference Fidelity**: If this goal depends on screenshots, webpage captures, staged `references/` files, or visual contract specs, treat them as binding source material and reproduce the relevant surface 1:1. Do not approximate or redesign.")
+    lines.push(
+      "**Reference Fidelity**: If this goal depends on screenshots, webpage captures, staged `references/` files, or visual contract specs, treat them as binding source material and reproduce the relevant surface 1:1. Do not approximate or redesign.",
+    )
     lines.push("")
-    lines.push("**File Change Report**: Before reporting success, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.")
+    lines.push(
+      "**File Change Report**: Before reporting success, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.",
+    )
     lines.push("")
     lines.push("Orchestrator is asking build to implement this goal, verify it, and report the result.")
     return lines.join("\n")
@@ -2305,13 +2314,15 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     contextLines.push("")
   }
   if (context?.designSpecs && context.designSpecs.length > 0) {
-    contextLines.push(renderVisualContractPromptSection({
-      specs: context.designSpecs,
-      instructions: [
-        "The visual contract below came from design_analysis. It is authoritative for this direct build request.",
-        "Use the decision-log evidence_source_manifest and staged references for any source file/image named by the PRD/SPEC.",
-      ],
-    }))
+    contextLines.push(
+      renderVisualContractPromptSection({
+        specs: context.designSpecs,
+        instructions: [
+          "The visual contract below came from design_analysis. It is authoritative for this direct build request.",
+          "Use the decision-log evidence_source_manifest and staged references for any source file/image named by the PRD/SPEC.",
+        ],
+      }),
+    )
     contextLines.push("")
   }
   return [
@@ -2319,7 +2330,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "",
     "Orchestrator is asking build to implement this request, verify it, and report the result.",
     "If the request depends on screenshots, webpage references, uploaded visuals, or staged `references/` files, those references are authoritative and the implementation must restore them 1:1 rather than treating them as inspiration.",
-    "If this request explicitly asks only for exploration, investigation, or analysis and says not to generate code, keep the worktree clean, skip commit / merge_back, and report the findings through the terminal build report with `status=\"passed\"` and `files_changed: []`.",
+    'If this request explicitly asks only for exploration, investigation, or analysis and says not to generate code, keep the worktree clean, skip commit / merge_back, and report the findings through the terminal build report with `status="passed"` and `files_changed: []`.',
     "",
     ...contextLines,
     "# Request",

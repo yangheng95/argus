@@ -12,7 +12,13 @@ interface Context {
   project: Project.Info
 }
 
-type StateFactory = <S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) => (() => S) & { reset(): void }
+type StateFactory = <S>(
+  init: () => S,
+  dispose?: (state: Awaited<S>) => Promise<void>,
+) => (() => S) & {
+  reset(): void
+  resetAll(): void
+}
 
 type InstanceApi = {
   provide<R>(input: { directory: string; init?: () => Promise<unknown>; fn: () => R }): Promise<R>
@@ -139,7 +145,13 @@ export const Instance: InstanceApi = {
     if (Instance.worktree === "/") return false
     return Filesystem.contains(Instance.worktree, filepath)
   },
-  state<S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>): (() => S) & { reset(): void } {
+  state<S>(
+    init: () => S,
+    dispose?: (state: Awaited<S>) => Promise<void>,
+  ): (() => S) & {
+    reset(): void
+    resetAll(): void
+  } {
     return State.create(() => Instance.directory, init, dispose)
   },
   async dispose() {
@@ -211,14 +223,18 @@ export const Instance: InstanceApi = {
 export function lazyInstanceState<S>(
   init: () => S,
   dispose?: (state: Awaited<S>) => Promise<void>,
-): (() => S) & { reset(): void } {
-  let cached: ((() => S) & { reset(): void }) | undefined
+): (() => S) & { reset(): void; resetAll(): void } {
+  let cached: ((() => S) & { reset(): void; resetAll(): void }) | undefined
   const get = ((): S => {
     if (!cached) cached = Instance.state(init, dispose)
     return cached()
-  }) as (() => S) & { reset(): void }
+  }) as (() => S) & { reset(): void; resetAll(): void }
   get.reset = () => {
     cached?.reset()
+  }
+  get.resetAll = () => {
+    if (!cached) cached = Instance.state(init, dispose)
+    cached.resetAll()
   }
   return get
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { computeContractFieldChanges } from "../../src/orchestrator/tools"
+import { computeContractFieldChanges, parseModifyGoalUpdates } from "../../src/orchestrator/tools"
 
 /**
  * Spec build-missing-terminal-signal-restore-2026-05-07.md §5.3.
@@ -27,8 +27,6 @@ describe("computeContractFieldChanges", () => {
     acceptance_specs: ["MessageList renders streaming", "Sidebar collapses on mobile"],
     owned_paths: ["src/components"],
     depends_on: ["gol_a", "gol_b"],
-    exports: ["MessageList"],
-    imports: ["ChatMessage"],
     priority: "high",
     kind: "feature",
   }
@@ -45,8 +43,6 @@ describe("computeContractFieldChanges", () => {
       acceptance_specs: [...baseGoal.acceptance_specs],
       owned_paths: [...baseGoal.owned_paths],
       depends_on: [...baseGoal.depends_on],
-      exports: [...baseGoal.exports],
-      imports: [...baseGoal.imports],
       priority: baseGoal.priority,
       kind: baseGoal.kind,
     }
@@ -123,10 +119,10 @@ describe("computeContractFieldChanges", () => {
 
   test("array length change (added element) → counted as changed", () => {
     const result = computeContractFieldChanges(
-      { exports: ["MessageList", "MessageBubble"] },
+      { owned_paths: ["src/components", "src/message-bubble.tsx"] },
       baseGoal,
     )
-    expect(result.exports).toEqual(["MessageList", "MessageBubble"])
+    expect(result.owned_paths).toEqual(["src/components", "src/message-bubble.tsx"])
   })
 
   test("array shrunk → counted as changed (intentional removal must propagate)", () => {
@@ -145,5 +141,35 @@ describe("computeContractFieldChanges", () => {
   test("priority transition counted when actually different", () => {
     const result = computeContractFieldChanges({ priority: "medium" }, baseGoal)
     expect(result.priority).toBe("medium")
+  })
+})
+
+describe("parseModifyGoalUpdates", () => {
+  test("malformed acceptance scorer returns actionable guidance instead of throwing", () => {
+    const result = parseModifyGoalUpdates({
+      acceptance_specs: [
+        {
+          id: "acc-bad",
+          source_requirement_id: "REQ-1",
+          goal_id: "goal_ui",
+          title: "Bad scorer",
+          severity: "essential",
+          scorers: [
+            {
+              type: "shell",
+              name: "files-exist",
+              spec: { kind: "shell", cmd: "bun test" },
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toContain("database unchanged")
+      expect(result.message).toContain('"shell" is not a scorer type')
+      expect(result.message).toContain('type="heuristic" with spec.kind="shell"')
+    }
   })
 })

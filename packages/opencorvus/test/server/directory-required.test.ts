@@ -64,6 +64,17 @@ describe("project-scope middleware: directory required", () => {
     expect(await response.json()).toBe(true)
   })
 
+  test("cross-project PUT /auth/:providerID works without ?directory=", async () => {
+    const app = Server.App()
+    const response = await app.request("/auth/test-provider", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "api", key: "test-key" }),
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toBe(true)
+  })
+
   // The assertion that the header (or query) directory is accepted by
   // the middleware is covered by full-engine integration tests; we
   // intentionally do NOT exercise that branch here because it would
