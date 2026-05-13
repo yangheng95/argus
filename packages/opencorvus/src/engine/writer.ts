@@ -18,12 +18,15 @@
  * task/run).
  */
 import { Log } from "@/util/log"
-import { Database, and, eq, inArray } from "@/storage/db"
+import { Database, and, eq, inArray, isNotNull, isNull } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
 import { EngineArtifactTable, EngineTaskTable, type EngineRunStatus } from "./engine.sql"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
+import { Message } from "@/session/message"
+import { Session } from "@/session"
+import { SessionPrompt } from "@/session/prompt"
 import {
   updateExecutorSessionStatus,
   updateExecutorSessionStatusByID,
@@ -46,7 +49,7 @@ import {
   type RunRow,
   type TaskRow,
 } from "./store"
-import { updateRun } from "./state"
+import { updateRun, updateTask } from "./state"
 import { updateGoalWorkspace } from "./persist"
 
 const log = Log.create({ service: "engine-writer" })
@@ -258,6 +261,93 @@ export interface AbortLiveResult {
   goalRuns: number
   runs: number
   executorSessions: number
+}
+
+export interface AbortActiveTasksResult {
+  tasks: number
+  sessions: number
+  toolParts: number
+}
+
+async function sessionTree(sessionID: string): Promise<string[]> {
+  const children = await Session.children(sessionID)
+  const nested = await Promise.all(children.map((item) => sessionTree(item.id)))
+  return [sessionID, ...nested.flat()]
+}
+
+async function abortOpenToolParts(sessionID: string, reason: string): Promise<number> {
+  const messages = await Session.messages({ sessionID })
+  let updated = 0
+  for (const message of messages) {
+    const parts = await Message.parts(message.info.id)
+    for (const part of parts) {
+      if (part.type !== "tool") continue
+      if (part.state.status === "completed" || part.state.status === "error") continue
+      const now = Date.now()
+      const start = part.state.status === "running" ? part.state.time.start : now
+      await Session.updatePart({
+        ...part,
+        state: {
+          ...part.state,
+          status: "error",
+          error: reason,
+          time: {
+            start,
+            end: now,
+          },
+        },
+      })
+      updated += 1
+    }
+  }
+  return updated
+}
+
+function listActiveTasksForProject(projectID: string): TaskRow[] {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineTaskTable)
+      .where(and(
+        eq(EngineTaskTable.project_id, projectID),
+        isNotNull(EngineTaskTable.time_started),
+        isNull(EngineTaskTable.time_completed),
+      ))
+      .all(),
+  )
+}
+
+/**
+ * Terminate task-owned session trees for every active task in a project.
+ * Run / goal_run / executor_session rows are aborted by the existing writers;
+ * this closes the task-owned layer that direct in-process builds rely on.
+ * Without it, shutdown can leave a stale `active` task with a pending tool
+ * part even though the process that owned the session is gone.
+ */
+export async function abortActiveTasksForProject(input: {
+  projectID: string
+  reason: string
+}): Promise<AbortActiveTasksResult> {
+  let tasks = 0
+  let sessions = 0
+  let toolParts = 0
+  const activeTasks = listActiveTasksForProject(input.projectID)
+  for (const task of activeTasks) {
+    if (task.session_id) {
+      const ids = await sessionTree(task.session_id)
+      for (const sessionID of ids.slice().reverse()) {
+        toolParts += await abortOpenToolParts(sessionID, input.reason)
+        SessionPrompt.cancel(sessionID)
+        sessions += 1
+      }
+    }
+    await updateTask(task, {
+      status: "failed",
+      error: input.reason,
+    }, input.reason)
+    tasks += 1
+  }
+  return { tasks, sessions, toolParts }
 }
 
 /**

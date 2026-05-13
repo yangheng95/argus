@@ -112,7 +112,7 @@ export const ServeCommand = cmd({
       const { InstanceBootstrap } = await import("../../project/bootstrap")
       const { Instance } = await import("../../project/instance")
       const { listLiveRunsForProject } = await import("../../engine/store")
-      const { abortLiveExecutionForProject, abortRuns } = await import("../../engine/writer")
+      const { abortActiveTasksForProject, abortLiveExecutionForProject, abortRuns } = await import("../../engine/writer")
 
       return Instance.provide({
         directory,
@@ -126,7 +126,11 @@ export const ServeCommand = cmd({
             cleanupGoalWorkspaces: false,
           })
           const abortedRuns = await abortRuns(liveRuns, reason)
-          return { projectID, abortedRuns, ...execution }
+          const abortedTasks = await abortActiveTasksForProject({
+            projectID,
+            reason,
+          })
+          return { projectID, abortedRuns, abortedTasks, ...execution }
         },
       })
     }
@@ -154,7 +158,7 @@ export const ServeCommand = cmd({
         try {
           const aborted = await abortLiveExecutionOnShutdown(shutdownDirectory, reason)
           console.log(
-            `[serve] aborted live execution project=${aborted.projectID} runs=${aborted.abortedRuns} goalRuns=${aborted.goalRuns} executorSessions=${aborted.executorSessions}`,
+            `[serve] aborted live execution project=${aborted.projectID} runs=${aborted.abortedRuns} goalRuns=${aborted.goalRuns} executorSessions=${aborted.executorSessions} tasks=${aborted.abortedTasks.tasks} sessions=${aborted.abortedTasks.sessions} toolParts=${aborted.abortedTasks.toolParts}`,
           )
         } catch (error) {
           console.error("[serve] graceful shutdown abort failed:", error)
