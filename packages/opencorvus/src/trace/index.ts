@@ -126,15 +126,16 @@ export namespace AgentTrace {
     seenSessions.add(event.sessionID)
     try {
       ensureDir()
-      const line = safeStringify({
-        ts: Date.now(),
-        kind: "session_open",
-        sessionID: event.sessionID,
-        parentSessionID: event.parentSessionID,
-        taskID: event.taskID,
-        agentName: event.agentName,
-        firstEvent: event.kind,
-      }) + "\n"
+      const line =
+        safeStringify({
+          ts: Date.now(),
+          kind: "session_open",
+          sessionID: event.sessionID,
+          parentSessionID: event.parentSessionID,
+          taskID: event.taskID,
+          agentName: event.agentName,
+          firstEvent: event.kind,
+        }) + "\n"
       fs.appendFileSync(indexFile(), line, { encoding: "utf-8" })
     } catch (err) {
       log.warn("trace index append failed", {
@@ -216,6 +217,8 @@ export namespace AgentTrace {
   /** Capture the LLM request at `LLM.stream` entry. */
   export function recordLLMRequest(input: {
     sessionID: string
+    parentSessionID?: string
+    taskID?: string
     agentName: string
     agentMode?: string
     model: { providerID: string; modelID: string }
@@ -231,6 +234,8 @@ export namespace AgentTrace {
       ts: Date.now(),
       kind: "llm_request",
       sessionID: input.sessionID,
+      parentSessionID: input.parentSessionID,
+      taskID: input.taskID,
       agentName: input.agentName,
       agentMode: input.agentMode,
       payload: {
@@ -306,32 +311,19 @@ export namespace AgentTrace {
     return parseJsonl(raw)
   }
 
-  /** Read all events for a task by scanning `_index.jsonl` for sessionIDs
-   *  whose `taskID` matches, then merging each session's full event stream
-   *  in chronological order. Helper sessions (no taskID) are excluded. The
-   *  per-task rollup file (`_task-<id>.jsonl`) only receives `agent_report`
-   *  events, so for the overlay's "Show all session trace" view we re-derive
-   *  from the per-session files to surface llm_request payloads too. */
+  /** Read all events for a task from the task rollup. The rollup is the
+   *  single task-level trace source: every event with taskID is appended
+   *  there at write time, including llm_request and terminal reports. */
   export function readTaskEvents(taskID: string): TraceEvent[] {
     if (!taskID) return []
-    const indexPath = indexFile()
-    let indexRaw: string
+    const file = taskFile(taskID)
+    let raw: string
     try {
-      indexRaw = fs.readFileSync(indexPath, { encoding: "utf-8" })
+      raw = fs.readFileSync(file, { encoding: "utf-8" })
     } catch {
       return []
     }
-    const indexEntries = parseJsonl(indexRaw)
-    const sessionIDs = new Set<string>()
-    for (const entry of indexEntries) {
-      if (typeof entry.taskID !== "string" || entry.taskID !== taskID) continue
-      const sid = entry.sessionID
-      if (typeof sid === "string" && sid.length > 0) sessionIDs.add(sid)
-    }
-    const all: TraceEvent[] = []
-    for (const sid of sessionIDs) {
-      for (const event of readSessionEvents(sid)) all.push(event)
-    }
+    const all = parseJsonl(raw)
     all.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0))
     return all
   }
@@ -359,7 +351,12 @@ export namespace AgentTrace {
     parentSessionID?: string
     taskID?: string
     agentName: string
-    kind: "agent_report" | "agent_report_retry_final" | "agent_report_failure" | "orchestrator_wake" | "orchestrator_wake_failure"
+    kind:
+      | "agent_report"
+      | "agent_report_retry_final"
+      | "agent_report_failure"
+      | "orchestrator_wake"
+      | "orchestrator_wake_failure"
     collector?: unknown
     structured?: unknown
     streamErrors?: Array<{ reason: string; name?: string }>

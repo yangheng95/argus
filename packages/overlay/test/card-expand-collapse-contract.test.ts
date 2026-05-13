@@ -89,7 +89,7 @@ describe("card expand and collapse contract", () => {
 
   test("top-level structured cards no longer hard-lock to full thread width", () => {
     const css = read("src/styles/surfaces/card.css")
-    expect(css).toContain('var(--card-sticky-inline-size, 0px)')
+    expect(css).toContain('var(--card-sticky-inline-size, calc(0px * var(--ui-scale)))')
     expect(css).toContain('.card[data-depth="0"][data-kind="step"]')
     expect(css).toContain('width: min(84%, calc(980px * var(--ui-scale)));')
   })

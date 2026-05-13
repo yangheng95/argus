@@ -1,5 +1,5 @@
-import { expect, test } from "bun:test";
-import { buildAgentWorkflow, traceReport } from "../src/utils/agent-workflow";
+import { expect, test } from "bun:test"
+import { buildAgentWorkflow, traceReport } from "../src/utils/agent-workflow"
 
 test("traceReport reads only payload.report and does not invent fallback summaries", () => {
   const report = traceReport({
@@ -16,13 +16,13 @@ test("traceReport reads only payload.report and does not invent fallback summari
         detail: "## Requirements\n- REQ-1",
       },
     },
-  } as any);
+  } as any)
 
-  expect(report?.summary).toBe("Parsed the user-facing requirements.");
-  expect(report?.detail).toBe("## Requirements\n- REQ-1");
-  expect(report?.summary).not.toBe("(no summary)");
-  expect(report?.summary).not.toContain("3 requirements");
-});
+  expect(report?.summary).toBe("Parsed the user-facing requirements.")
+  expect(report?.detail).toBe("## Requirements\n- REQ-1")
+  expect(report?.summary).not.toBe("(no summary)")
+  expect(report?.summary).not.toContain("3 requirements")
+})
 
 test("traceReport returns undefined when report payload is absent", () => {
   const report = traceReport({
@@ -35,10 +35,10 @@ test("traceReport returns undefined when report payload is absent", () => {
         requirements: [{ id: "REQ-1" }, { id: "REQ-2" }, { id: "REQ-3" }],
       },
     },
-  } as any);
+  } as any)
 
-  expect(report).toBeUndefined();
-});
+  expect(report).toBeUndefined()
+})
 
 test("card text does not overwrite an existing trace report", () => {
   const projection = buildAgentWorkflow({
@@ -70,8 +70,9 @@ test("card text does not overwrite an existing trace report", () => {
         time: 90,
       } as any,
     },
-  });
+  })
 
-  expect(projection.records[0]?.report?.summary).toBe("Trace report summary");
-  expect(projection.records[0]?.report?.summary).not.toBe("Card text should not replace trace report");
-});
+  expect(projection.records[0]?.traceReport?.summary).toBe("Trace report summary")
+  expect(projection.records[0]?.displaySummary?.text).toBe("Trace report summary")
+  expect(projection.records[0]?.traceReport?.summary).not.toBe("Card text should not replace trace report")
+})

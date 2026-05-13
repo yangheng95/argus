@@ -24,6 +24,7 @@ import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
 import { AgentTrace } from "@/trace"
+import { sessionParentID, taskIDForSession } from "@/orchestrator/task-event"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -201,8 +202,12 @@ export namespace LLM {
     const requestMessages = input.messages
 
     if (AgentTrace.isEnabled()) {
+      const parentSessionID = sessionParentID(input.sessionID)
+      const taskID = taskIDForSession(input.sessionID)
       AgentTrace.recordLLMRequest({
         sessionID: input.sessionID,
+        parentSessionID,
+        taskID,
         agentName: input.agent.name,
         agentMode: input.agent.mode,
         model: { providerID: input.model.providerID, modelID: input.model.id },

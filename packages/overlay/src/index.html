@@ -21,7 +21,6 @@
   <link rel="stylesheet" href="styles/surfaces/inspector.css">
   <link rel="stylesheet" href="styles/surfaces/settings.css">
   <link rel="stylesheet" href="styles/surfaces/workspace.css">
-  <link rel="stylesheet" href="styles/surfaces/agent-workflow.css">
   <link rel="stylesheet" href="styles/surfaces/markdown.css">
   <link rel="stylesheet" href="styles/surfaces/messages.css">
   <link rel="stylesheet" href="styles/surfaces/agent-card.css">
@@ -213,8 +212,13 @@
             >Copy All</button>
           </div>
         </header>
-        <div class="chat-goals-strip" id="chatGoalsStrip"></div>
-        <div class="chat-scroll session-content" id="chatScroll"></div>
+        <div class="conversation-body" id="conversationBody">
+          <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
+          <div class="conversation-scroll-shell">
+            <div class="chat-goals-strip" id="chatGoalsStrip"></div>
+            <div class="chat-scroll session-content" id="chatScroll"></div>
+          </div>
+        </div>
         <!-- Workspace resizer (row-resize, between chat-scroll and workspace) -->
         <div class="pane-resizer pane-resizer-workspace" id="workspaceResizer" role="separator" aria-orientation="horizontal" aria-label="Resize workspace panel" hidden></div>
         <!-- Workspace panel (Build + Diff) — stacked above composer, not a right column -->
@@ -232,9 +236,6 @@
             <div id="solidRightPanelHeaderCollapseControl" class="panel-header-collapse-mount"></div>
           </div>
         </header>
-        <div class="sections-tab-body" id="rightPanelWorkflow" data-panel-tab="workflow" data-active="false">
-          <div id="solidAgentWorkflowMount"></div>
-        </div>
         <div class="sections-tab-body" id="rightPanelInspector" data-panel-tab="inspector" data-active="true">
           <div class="sections-stack">
 

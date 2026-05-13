@@ -8,7 +8,6 @@ const SIDEBAR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces",
 const INSPECTOR_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "inspector.css"), "utf8")
 const MESSAGES_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "messages.css"), "utf8")
 const CARD_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "card.css"), "utf8")
-const AGENT_WORKFLOW_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "agent-workflow.css"), "utf8")
 const CONVERSATION_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "conversation.css"), "utf8")
 const COMPOSER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "composer.css"), "utf8")
 
@@ -75,12 +74,12 @@ test("structured card body content does not create nested card chrome", () => {
   expect(bodyOf(CARD_CSS, ".card[data-kind=\"step\"] > .card__body > .msg-text::before")).toMatch(/content:\s*none/)
 })
 
-test("workflow and conversation owner surfaces stay flat", () => {
-  expect(bodyOf(AGENT_WORKFLOW_CSS, ".agent-workflow-panel")).toMatch(/background:\s*transparent/)
-  expect(bodyOf(AGENT_WORKFLOW_CSS, ".agent-workflow-card")).toMatch(/border:\s*0 solid transparent/)
-  expect(bodyOf(AGENT_WORKFLOW_CSS, ".agent-workflow-card")).toMatch(/border-radius:\s*0/)
-  expect(bodyOf(AGENT_WORKFLOW_CSS, ".agent-workflow-card")).toMatch(/box-shadow:\s*none/)
-  expect(bodyOf(AGENT_WORKFLOW_CSS, ".agent-workflow-card:hover, .agent-workflow-card:focus-visible")).toMatch(/background:\s*var\(--surface-hover\)/)
+test("conversation agent rail and conversation owner surfaces stay flat", () => {
+  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail")).toMatch(/overflow:\s*hidden/)
+  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__row")).toMatch(/display:\s*grid/)
+  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__run")).toMatch(/background:\s*transparent/)
+  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__run")).toMatch(/border:\s*0/)
+  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__avatar-button:hover,\n.conversation-agent-rail__stack:hover,\n.conversation-agent-rail__report:hover")).toMatch(/background:\s*var\(--subtle-2\)/)
   expect(bodyOf(CONVERSATION_CSS, ".goal-chip")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(CONVERSATION_CSS, ".goal-chip")).toMatch(/background:\s*transparent/)
   expect(bodyOf(COMPOSER_CSS, ".chat-empty--task")).toMatch(/border:\s*0 solid transparent/)
