@@ -8,6 +8,7 @@ import { applyOpacity, applyTheme, applyZoom, sanitizeOpacity, sanitizeZoom, tog
 import { themeOptionsForCurrentHost } from "../../services/theme-registry";
 import {
   browseDirectory,
+  closeProject,
   createDirectory,
   loadRecentDirectories,
   openDirectory,
@@ -384,6 +385,9 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                     <MenuItem onClick={() => void browseDirectory().finally(closeMenu)}>{t("cwd.browse")}</MenuItem>
                     <MenuItem onClick={() => void createDirectory().finally(closeMenu)}>{t("cwd.create")}</MenuItem>
                     <MenuItem onClick={() => void openDirectory().finally(closeMenu)} disabled={!settingsStore.directory}>{t("cwd.open")}</MenuItem>
+                    <MenuItem onClick={() => { closeProject(); closeMenu(); }} disabled={!settingsStore.directory} testid="titlebar-close-project">
+                      {t("project.close")}
+                    </MenuItem>
                     <MenuItem onClick={() => openConfig("general")}>{t("config.title")}</MenuItem>
                   </MenuGroup>
                   <Show when={recentDirs().length > 0}>
