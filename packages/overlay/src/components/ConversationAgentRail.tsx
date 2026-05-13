@@ -11,10 +11,10 @@ import { Avatar } from "./Avatar"
 import { Icon } from "./Icon"
 import { AgentReportDialog } from "./AgentReportDialog"
 
-const NARROW_WIDTH = 42
-const WIDE_THRESHOLD = 150
-const MAX_WIDTH = 320
-const MIN_WIDTH = 42
+const NARROW_HEIGHT = 42
+const WIDE_THRESHOLD = 88
+const MAX_HEIGHT = 220
+const MIN_HEIGHT = 42
 
 function compactLabel(record: AgentWorkflowRecord): string {
   const parts = [record.agentName, record.status]
@@ -154,9 +154,9 @@ function AgentRailRow(props: {
 export function ConversationAgentRail() {
   const taskID = createMemo(() => boardStore.selectedTaskID || boardStore.board?.task?.id || "")
   const [refreshTick, setRefreshTick] = createSignal(0)
-  const [width, setWidth] = createSignal(NARROW_WIDTH)
+  const [height, setHeight] = createSignal(NARROW_HEIGHT)
   const [selectedReport, setSelectedReport] = createSignal<AgentWorkflowRecord | null>(null)
-  const wide = createMemo(() => width() >= WIDE_THRESHOLD)
+  const wide = createMemo(() => height() >= WIDE_THRESHOLD)
 
   const [trace] = createResource(
     () => ({ taskID: taskID(), tick: refreshTick() }),
@@ -192,11 +192,11 @@ export function ConversationAgentRail() {
 
   const beginResize = (event: PointerEvent) => {
     event.preventDefault()
-    const startX = event.clientX
-    const startWidth = width()
+    const startY = event.clientY
+    const startHeight = height()
     const onMove = (move: PointerEvent) => {
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + move.clientX - startX))
-      setWidth(next)
+      const next = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight + startY - move.clientY))
+      setHeight(next)
     }
     const onUp = () => {
       window.removeEventListener("pointermove", onMove)
@@ -210,7 +210,7 @@ export function ConversationAgentRail() {
     <aside
       class="conversation-agent-rail"
       data-wide={wide() ? "true" : "false"}
-      style={{ "--conversation-agent-rail-width": String(width()) }}
+      style={{ "--conversation-agent-rail-height": String(height()) }}
       aria-label="Agent workflow"
     >
       <Show when={traceError()}>

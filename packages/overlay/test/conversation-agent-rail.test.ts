@@ -17,6 +17,20 @@ test("ConversationAgentRail locates cards through renderedCardID and CSS.escape"
   expect(source).toContain("setCardExpanded(parentID, true")
 })
 
+test("ConversationAgentRail uses bottom-strip height resizing instead of left-column width", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
+  const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
+  const html = readFileSync(join(import.meta.dir, "../src/index.html"), "utf8")
+  expect(source).toContain("--conversation-agent-rail-height")
+  expect(source).toContain("startY - move.clientY")
+  expect(source).not.toContain("--conversation-agent-rail-width")
+  expect(css).toContain("border-top: var(--oc-border-width) solid var(--border)")
+  expect(css).toContain("height: calc(var(--conversation-agent-rail-height, 42) * 1px * var(--ui-scale))")
+  expect(css).toContain("flex-direction: row")
+  expect(css).toContain("overflow-x: auto")
+  expect(html.indexOf('id="conversationBody"')).toBeLessThan(html.indexOf('id="solidConversationAgentRailMount"'))
+})
+
 test("AgentReportDialog renders markdown report content through the central renderer", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/AgentReportDialog.tsx"), "utf8")
   expect(source).toContain("renderMarkdown")
