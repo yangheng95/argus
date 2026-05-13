@@ -29,6 +29,8 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble[data-align="right"]')
   expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__identity")
   expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__title-line")
+  expect(CHAT_BUBBLE_CSS).toContain("font-size: calc(15px * var(--ui-scale));")
+  expect(CHAT_BUBBLE_CSS).toContain("font-weight: var(--ui-font-weight-strong);")
   expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__head[data-align=\"right\"] .chat-bubble__title-row")
   expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble--collapsed")
   expect(CHAT_BUBBLE_CSS).toContain("border-inline-start: calc(3px * var(--ui-scale)) solid color-mix(in srgb, var(--card-stage, var(--card-stage-info)) 84%, transparent);")
