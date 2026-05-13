@@ -4,6 +4,8 @@
 
 > 2026-05-13 修正：左侧竖 rail 在真实界面中过度抢占消息视觉主轴，用户明确要求“改到放到底部”。最终 owner surface 仍是 Conversation，但形态改为 chat-scroll 下方、composer 上方的底部横向 agent strip；默认窄态 42px 高，拖动上边缘增高后展示摘要和 report 操作。
 
+> 2026-05-13 修正：没有 agent workflow lane 时不显示底部 rail。空 rail 不应占用 42px 高度，也不应留下 host 边线；只有存在真实 agent workflow record 时才挂载 rail。
+
 ## 现状证据
 
 - `packages/overlay/src/index.html` 仍保留右栏三 tab：`rightPanelWorkflow` / `rightPanelInspector` / `rightPanelPreview`，Workflow 挂载点是 `solidAgentWorkflowMount`。
@@ -64,6 +66,8 @@ Conversation 内部拆为聊天滚动区 + 底部 agent strip：
 ### 窄态 bottom strip
 
 默认高度：`calc(42px * var(--ui-scale))`。
+
+无 agent workflow lane 时不渲染 strip；`solidConversationAgentRailMount` 空挂载点必须隐藏，不能留下空边框或占位高度。
 
 窄态只显示：
 

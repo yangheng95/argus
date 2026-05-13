@@ -38,6 +38,16 @@ test("ConversationAgentRail uses bottom-strip height resizing instead of left-co
   expect(html.indexOf('id="conversationBody"')).toBeLessThan(html.indexOf('id="solidConversationAgentRailMount"'))
 })
 
+test("ConversationAgentRail hides the bottom strip when there are no workflow lanes", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
+  const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
+  expect(source).toContain("const hasLanes = createMemo(() => lanes().length > 0)")
+  expect(source).toContain("<Show when={hasLanes()}>")
+  expect(source).not.toContain("conversation-agent-rail__empty")
+  expect(css).toContain(".conversation-agent-rail-host:empty")
+  expect(css).toContain("display: none;")
+})
+
 test("AgentReportDialog renders markdown report content through the central renderer", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/AgentReportDialog.tsx"), "utf8")
   expect(source).toContain("renderMarkdown")

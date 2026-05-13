@@ -195,6 +195,7 @@ export function ConversationAgentRail() {
     }),
   )
   const lanes = createMemo(() => buildAgentWorkflowLanes(projection().records))
+  const hasLanes = createMemo(() => lanes().length > 0)
   const traceError = createMemo(() => {
     const result = trace()
     return result?.ok === false ? result.error : ""
@@ -228,6 +229,7 @@ export function ConversationAgentRail() {
   }
 
   return (
+    <Show when={hasLanes()}>
     <aside
       class="conversation-agent-rail"
       data-wide={wide() ? "true" : "false"}
@@ -239,28 +241,26 @@ export function ConversationAgentRail() {
           !
         </div>
       </Show>
-      <Show when={lanes().length > 0} fallback={<div class="conversation-agent-rail__empty" aria-hidden="true" />}>
-        <div class="conversation-agent-rail__lanes" role="list">
-          <For each={lanes()}>
-            {(lane) => (
-              <div class="conversation-agent-rail__lane" data-kind={lane.kind} role="listitem">
-                <Show when={wide()} fallback={<LaneAvatarStack lane={lane} onLocate={locateRecord} />}>
-                  <For each={lane.records}>
-                    {(record) => (
-                      <AgentRailRow
-                        record={record}
-                        wide={wide()}
-                        onLocate={locateRecord}
-                        onReport={setSelectedReport}
-                      />
-                    )}
-                  </For>
-                </Show>
-              </div>
-            )}
-          </For>
-        </div>
-      </Show>
+      <div class="conversation-agent-rail__lanes" role="list">
+        <For each={lanes()}>
+          {(lane) => (
+            <div class="conversation-agent-rail__lane" data-kind={lane.kind} role="listitem">
+              <Show when={wide()} fallback={<LaneAvatarStack lane={lane} onLocate={locateRecord} />}>
+                <For each={lane.records}>
+                  {(record) => (
+                    <AgentRailRow
+                      record={record}
+                      wide={wide()}
+                      onLocate={locateRecord}
+                      onReport={setSelectedReport}
+                    />
+                  )}
+                </For>
+              </Show>
+            </div>
+          )}
+        </For>
+      </div>
       <button
         type="button"
         class="conversation-agent-rail__resize"
@@ -274,5 +274,6 @@ export function ConversationAgentRail() {
         {(record) => <AgentReportDialog record={record()} onClose={() => setSelectedReport(null)} />}
       </Show>
     </aside>
+    </Show>
   )
 }
