@@ -105,7 +105,7 @@ body {
 .card {
   position: relative;
   display: block;
-  min-width: max(var(--card-min-inline-size), min(100%, var(--card-sticky-inline-size, 0px)));
+  min-width: max(var(--card-min-inline-size), min(100%, var(--card-sticky-inline-size, calc(0px * var(--ui-scale)))));
   max-width: 100%;
   border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid var(--card-border);

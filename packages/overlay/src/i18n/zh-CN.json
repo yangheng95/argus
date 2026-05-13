@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "eba4e9d19cd44e76"
+    "panel_revision": "3b4edd7fae2a6709"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -583,24 +583,10 @@
   "section.criteria": "评估标准",
   "section.files": "文件变更",
   "right_panel.tabs": "Inspector 和预览标签",
-  "right_panel.workflow": "工作流",
   "right_panel.inspector": "Inspector",
   "right_panel.preview": "预览",
   "right_panel.close": "收起 Inspector",
   "right_panel.open": "展开 Inspector",
-  "agent_workflow.title": "Agent 工作流",
-  "agent_workflow.count": "{{count}} 个 Agent",
-  "agent_workflow.refresh": "刷新 Agent 工作流 trace",
-  "agent_workflow.loading": "正在加载 Agent 工作流...",
-  "agent_workflow.empty": "当前任务还没有记录任何 Agent 工作流。",
-  "agent_workflow.trace_disabled": "服务端未开启 Agent trace，因此这里只能展示实时卡片。",
-  "agent_workflow.no_report": "这张卡片尚未记录输出报告。",
-  "agent_workflow.attempt": "第 {{current}}/{{total}} 次",
-  "agent_workflow.report_title": "Agent 输出报告",
-  "agent_workflow.report_meta": "{{status}} · {{time}}",
-  "agent_workflow.output_report": "报告",
-  "agent_workflow.goal_round": "#G{{round}}",
-  "agent_workflow.goal_attempt": "V{{attempt}}",
   "frontend_preview.title": "前端预览",
   "frontend_preview.loading": "正在解析运行中的前端预览...",
   "frontend_preview.empty": "未检测到属于当前工作区的本地前端页面。",

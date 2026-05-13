@@ -1,7 +1,7 @@
-import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { buildAgentWorkflow } from "../src/utils/agent-workflow";
+import { expect, test } from "bun:test"
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+import { buildAgentWorkflow } from "../src/utils/agent-workflow"
 
 test("agent workflow projection stacks repeated retry sessions by parent and agent", () => {
   const projection = buildAgentWorkflow({
@@ -36,7 +36,10 @@ test("agent workflow projection stacks repeated retry sessions by parent and age
         sessionID: "ses_delivery_a",
         parentSessionID: "ses_root",
         agentName: "delivery",
-        payload: { error: "missing runtime evidence", report: { summary: "missing runtime evidence", detail: "missing runtime evidence" } },
+        payload: {
+          error: "missing runtime evidence",
+          report: { summary: "missing runtime evidence", detail: "missing runtime evidence" },
+        },
       },
       {
         ts: 1400,
@@ -61,18 +64,15 @@ test("agent workflow projection stacks repeated retry sessions by parent and age
         },
       },
     ],
-  });
+  })
 
-  expect(projection.records).toHaveLength(3);
-  const deliveryStack = projection.stacks.find((stack) => stack.agentName === "delivery");
-  expect(deliveryStack?.records.map((record) => record.sessionID)).toEqual([
-    "ses_delivery_a",
-    "ses_delivery_b",
-  ]);
-  expect(deliveryStack?.records[0]?.status).toBe("error");
-  expect(deliveryStack?.records[1]?.attempts).toBe(2);
-  expect(deliveryStack?.records[1]?.report?.summary).toBe("Accepted after runtime evidence was attached");
-});
+  expect(projection.records).toHaveLength(3)
+  const deliveryStack = projection.stacks.find((stack) => stack.agentName === "delivery")
+  expect(deliveryStack?.records.map((record) => record.sessionID)).toEqual(["ses_delivery_a", "ses_delivery_b"])
+  expect(deliveryStack?.records[0]?.status).toBe("error")
+  expect(deliveryStack?.records[1]?.attempts).toBe(2)
+  expect(deliveryStack?.records[1]?.traceReport?.summary).toBe("Accepted after runtime evidence was attached")
+})
 
 test("agent workflow projection uses live phase cards when trace is not available yet", () => {
   const projection = buildAgentWorkflow({
@@ -91,29 +91,61 @@ test("agent workflow projection uses live phase cards when trace is not availabl
         time: 2000,
       } as any,
     },
-  });
+  })
 
-  expect(projection.records).toHaveLength(1);
-  expect(projection.records[0]?.sessionID).toBe("ses_build_live");
-  expect(projection.records[0]?.status).toBe("running");
-  expect(projection.records[0]?.report?.summary).toBe("Editing the component");
-});
+  expect(projection.records).toHaveLength(1)
+  expect(projection.records[0]?.sessionID).toBe("ses_build_live")
+  expect(projection.records[0]?.status).toBe("running")
+  expect(projection.records[0]?.displaySummary?.text).toBe("Editing the component")
+  expect(projection.records[0]?.traceReport).toBeUndefined()
+})
 
-test("agent workflow panel renders one current card per retry stack", () => {
-  const source = readFileSync(join(import.meta.dir, "../src/components/AgentWorkflowPanel.tsx"), "utf8");
+test("right-panel AgentWorkflowPanel is retired in favor of ConversationAgentRail", () => {
+  expect(existsSync(join(import.meta.dir, "../src/components/AgentWorkflowPanel.tsx"))).toBe(false)
+  expect(existsSync(join(import.meta.dir, "../src/styles/surfaces/agent-workflow.css"))).toBe(false)
 
-  expect(source).toContain("currentStackRecord");
-  expect(source).toContain("stackAttemptTotal");
-  expect(source).not.toContain("<For each={stack.records}>");
-  expect(source).toContain('current: String(attemptTotal())');
-  expect(source).toContain('trace.loading && records().length === 0 ? t("common.loading") : t("common.refresh")');
-  expect(source).toContain("agent-workflow-card-subtitle");
-  expect(source).toContain("goalIdentityLabel(current)");
-  expect(source).toContain("agent-workflow-report-goal");
-  expect(source).toContain('t("agent_workflow.output_report")');
-  expect(source).not.toContain('t("agent_workflow.output_summary")');
-  expect(source).not.toContain('t("agent_workflow.model")');
-});
+  const html = readFileSync(join(import.meta.dir, "../src/index.html"), "utf8")
+  const main = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
+  expect(html).not.toContain("solidAgentWorkflowMount")
+  expect(html).not.toContain("rightPanelWorkflow")
+  expect(html).not.toContain("styles/surfaces/agent-workflow.css")
+  expect(main).not.toContain("AgentWorkflowPanel")
+  expect(main).toContain("ConversationAgentRail")
+})
+
+test("agent workflow projection maps hidden build phase to the rendered owner step", () => {
+  const projection = buildAgentWorkflow({
+    traceEvents: [],
+    order: ["step:goal:run:execute"],
+    cards: {
+      "step:goal:run:execute": {
+        id: "step:goal:run:execute",
+        kind: "step",
+        stage: "executor",
+        status: "running",
+        title: "Execute",
+        parts: [],
+        childIDs: ["step:goal:run:execute:phase:build"],
+        time: 1900,
+      } as any,
+      "step:goal:run:execute:phase:build": {
+        id: "step:goal:run:execute:phase:build",
+        kind: "phase",
+        stage: "build",
+        status: "running",
+        title: "Build",
+        parts: [{ type: "text", text: "Editing the component" }],
+        childIDs: [],
+        phaseID: "build",
+        phaseSessionID: "ses_build_live",
+        time: 2000,
+      } as any,
+    },
+  })
+
+  expect(projection.records[0]?.cardID).toBe("step:goal:run:execute:phase:build")
+  expect(projection.records[0]?.renderedCardID).toBe("step:goal:run:execute")
+})
 
 test("agent workflow projection carries goal identity for same-stage cards", () => {
   const projection = buildAgentWorkflow({
@@ -151,13 +183,13 @@ test("agent workflow projection carries goal identity for same-stage cards", () 
         attempt: 2,
       } as any,
     },
-  });
+  })
 
-  expect(projection.records.map((record) => record.round)).toEqual([1, 2]);
+  expect(projection.records.map((record) => record.round)).toEqual([1, 2])
   expect(projection.records.map((record) => record.goalDescription)).toEqual([
     "Implement account dashboard cards",
     "Implement billing history cards",
-  ]);
-  expect(projection.records[0]?.phaseID).toBe("build");
-  expect(projection.records[1]?.attempt).toBe(2);
-});
+  ])
+  expect(projection.records[0]?.phaseID).toBe("build")
+  expect(projection.records[1]?.attempt).toBe(2)
+})

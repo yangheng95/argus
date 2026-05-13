@@ -5,7 +5,6 @@
 //   - ArchitectPanel    -> .arch-empty
 //   - RequirementsPanel -> .req-empty
 //   - IntegrityCard     -> .integrity__empty
-//   - AgentWorkflowPanel-> .agent-workflow-empty (also used for loading)
 //   - DeliveryPanel     -> .delivery-empty-hint
 //
 // Each rolled its own font, padding, color, italic-or-not, bordered-card-
@@ -62,7 +61,6 @@ describe("right-panel components emit the shared empty-hint primitive", () => {
     { panel: "ArchitectPanel", file: "ArchitectPanel.tsx", legacyClass: "arch-empty" },
     { panel: "RequirementsPanel", file: "RequirementsPanel.tsx", legacyClass: "req-empty" },
     { panel: "IntegrityCard", file: "IntegrityCard.tsx", legacyClass: "integrity__empty" },
-    { panel: "AgentWorkflowPanel", file: "AgentWorkflowPanel.tsx", legacyClass: "agent-workflow-empty" },
     { panel: "Board (DeliveryPanel)", file: "Board.tsx", legacyClass: "delivery-empty-hint" },
   ]
 
@@ -95,10 +93,6 @@ describe("surface CSS declares .empty-hint--card on the shared card-chrome group
     expect(STYLES).not.toMatch(/^\s*\.arch-empty\s*\{/m)
     expect(STYLES).not.toMatch(/^\s*\.req-empty\s*\{/m)
     expect(STYLES).not.toMatch(/^\s*\.integrity__empty\s*\{/m)
-    // .agent-workflow-empty is allowed to remain ONLY if combined with
-    // .agent-workflow-warning (warning is a separate state we keep). But
-    // a standalone .agent-workflow-empty rule means the migration was
-    // incomplete.
     expect(STYLES).not.toMatch(/^\s*\.agent-workflow-empty\s*\{/m)
     expect(STYLES).not.toMatch(/^\s*\.delivery-empty-hint\s*\{/m)
   })

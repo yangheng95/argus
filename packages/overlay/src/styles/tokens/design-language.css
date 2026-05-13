@@ -238,6 +238,7 @@ body {
   --oc-control-border: var(--border);
   --oc-control-border-hover: var(--border-hover);
   --oc-control-focus-ring: color-mix(in srgb, var(--accent) 18%, transparent);
+  --surface-elevated: var(--surface-strong);
   --oc-header-bg: var(--surface-strong);
   --oc-titlebar-menu-text: var(--text-strong);
 

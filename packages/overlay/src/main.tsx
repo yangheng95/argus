@@ -3,48 +3,41 @@
 // Mounts all Solid components and initialises the application.
 // Self-sufficient — no external script dependencies.
 
-import { render } from "solid-js/web";
-import { createEffect, createRoot, createSignal } from "solid-js";
-import { Conversation } from "./components/Conversation";
-import { TaskList } from "./components/TaskList";
-import { Board } from "./components/Board";
-import { TaskStatusHeader } from "./components/TaskStatusHeader";
-import { TaskDirContent, VcsBadge } from "./components/TaskDirBar";
-import { ChatComposer } from "./components/ChatComposer";
-import { WindowControls } from "./components/WindowControls";
-import { WorkspaceEditorLaunchers } from "./components/WorkspaceEditorLaunchers";
-import { WorkspaceCodingCliLaunchers } from "./components/WorkspaceCodingCliLaunchers";
-import { WorkspaceLayoutControls } from "./components/WorkspaceLayoutControls";
-import { LeftPanelHeaderCollapseControl, RightPanelHeaderCollapseControl } from "./components/PanelHeaderCollapseControl";
-import { TitlebarMenubar } from "./components/titlebar/TitlebarMenubar";
-import { ConnectionBadge } from "./components/ConnectionBadge";
-import { FrontendPreviewPanel } from "./components/FrontendPreviewPanel";
-import { AgentWorkflowPanel } from "./components/AgentWorkflowPanel";
-import { LogViewer } from "./components/LogViewer";
+import { render } from "solid-js/web"
+import { createEffect, createRoot, createSignal } from "solid-js"
+import { Conversation } from "./components/Conversation"
+import { TaskList } from "./components/TaskList"
+import { Board } from "./components/Board"
+import { TaskStatusHeader } from "./components/TaskStatusHeader"
+import { TaskDirContent, VcsBadge } from "./components/TaskDirBar"
+import { ChatComposer } from "./components/ChatComposer"
+import { WindowControls } from "./components/WindowControls"
+import { WorkspaceEditorLaunchers } from "./components/WorkspaceEditorLaunchers"
+import { WorkspaceCodingCliLaunchers } from "./components/WorkspaceCodingCliLaunchers"
+import { WorkspaceLayoutControls } from "./components/WorkspaceLayoutControls"
 import {
-  WorkspacePanel,
-  type WorkspaceView,
-} from "./components/WorkspacePanel";
-import type { DiffTarget } from "./services/diff";
-import { initApp } from "./services/init";
-import { loadTasks, boardStore, loadBoard } from "./store/board";
-import { messageStore } from "./store/messages";
-import { appStore } from "./store/app";
-import {
-  selectTask,
-  retryTask,
-  replanTask,
-  cancelTask,
-  createTask,
-  deleteTask,
-} from "./services/task";
-import { canComposeChat, stopChatRequest } from "./services/chat";
-import { isTaskInterruptable } from "./store/board";
-import { setLocale } from "./utils/i18n";
-import { apiJson, apiRequest, configure as configureApi } from "./services/api";
-import { t } from "./utils/i18n";
-import { renderMarkdown, escapeHtml } from "./utils/markdown";
-import { copyChatConversation } from "./utils/transcript";
+  LeftPanelHeaderCollapseControl,
+  RightPanelHeaderCollapseControl,
+} from "./components/PanelHeaderCollapseControl"
+import { TitlebarMenubar } from "./components/titlebar/TitlebarMenubar"
+import { ConnectionBadge } from "./components/ConnectionBadge"
+import { FrontendPreviewPanel } from "./components/FrontendPreviewPanel"
+import { ConversationAgentRail } from "./components/ConversationAgentRail"
+import { LogViewer } from "./components/LogViewer"
+import { WorkspacePanel, type WorkspaceView } from "./components/WorkspacePanel"
+import type { DiffTarget } from "./services/diff"
+import { initApp } from "./services/init"
+import { loadTasks, boardStore, loadBoard } from "./store/board"
+import { messageStore } from "./store/messages"
+import { appStore } from "./store/app"
+import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask } from "./services/task"
+import { canComposeChat, stopChatRequest } from "./services/chat"
+import { isTaskInterruptable } from "./store/board"
+import { setLocale } from "./utils/i18n"
+import { apiJson, apiRequest, configure as configureApi } from "./services/api"
+import { t } from "./utils/i18n"
+import { renderMarkdown, escapeHtml } from "./utils/markdown"
+import { copyChatConversation } from "./utils/transcript"
 import {
   applyTheme,
   applyZoom,
@@ -53,26 +46,26 @@ import {
   handleZoomHotkey,
   installSystemThemeListener,
   toggleDevtools,
-} from "./services/theme";
-import { settingsStore, setSettingsStore, saveSettings } from "./store/settings";
-import { initPaneResizers, cancelPaneResize, currentUIScale, renderPaneLayout } from "./services/pane";
-import { panelMessage } from "./services/chat";
-import { ConnectionBanner } from "./components/ConnectionBanner";
-import { CommandPalette } from "./components/CommandPalette";
-import { NotificationCenter } from "./components/NotificationCenter";
-import { AppDialogHost } from "./components/AppDialogHost";
-import { SessionDialogHost } from "./components/SessionDialogHost";
-import { GoalDialogHost } from "./components/GoalDialogHost";
-import { ConfigDialogHost } from "./components/ConfigDialogHost";
-import { WorkspaceOnboardingDialog } from "./components/WorkspaceOnboardingDialog";
-import { Tab, Tabs } from "./components/ui/Tabs";
-import { waitForLogDrain, AppLog } from "./utils/log";
-import { teardownApp } from "./services/init";
-import { stopTimers } from "./services/sync";
-import { nativeOpen, nativePrompt } from "./utils/native";
-import { eventClosest } from "./utils/dom-utils";
-import { shortPath } from "./utils/tool";
-import { notifyError, notifyWarning } from "./services/notify";
+} from "./services/theme"
+import { settingsStore, setSettingsStore, saveSettings } from "./store/settings"
+import { initPaneResizers, cancelPaneResize, currentUIScale, renderPaneLayout } from "./services/pane"
+import { panelMessage } from "./services/chat"
+import { ConnectionBanner } from "./components/ConnectionBanner"
+import { CommandPalette } from "./components/CommandPalette"
+import { NotificationCenter } from "./components/NotificationCenter"
+import { AppDialogHost } from "./components/AppDialogHost"
+import { SessionDialogHost } from "./components/SessionDialogHost"
+import { GoalDialogHost } from "./components/GoalDialogHost"
+import { ConfigDialogHost } from "./components/ConfigDialogHost"
+import { WorkspaceOnboardingDialog } from "./components/WorkspaceOnboardingDialog"
+import { Tab, Tabs } from "./components/ui/Tabs"
+import { waitForLogDrain, AppLog } from "./utils/log"
+import { teardownApp } from "./services/init"
+import { stopTimers } from "./services/sync"
+import { nativeOpen, nativePrompt } from "./utils/native"
+import { eventClosest } from "./utils/dom-utils"
+import { shortPath } from "./utils/tool"
+import { notifyError, notifyWarning } from "./services/notify"
 import {
   applyDirectory,
   browseDirectory,
@@ -82,75 +75,78 @@ import {
   activeDirectory,
   loadRecentDirectories,
   removeRecentDirectory,
-} from "./services/workspace";
-import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog";
-import { loadConversation } from "./store/messages";
-import { cardTreeStore } from "./store/card-tree";
+} from "./services/workspace"
+import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
+import { loadConversation } from "./store/messages"
+import { cardTreeStore } from "./store/card-tree"
 import {
   nextTabForPreviewResolution,
   previewRequestKey,
   resolveFrontendPreviewFromBoard,
   type FrontendPreviewResolution,
   type RightPanelTab,
-} from "./services/frontend-preview";
+} from "./services/frontend-preview"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
 // Triggered on beforeunload and on Vite HMR dispose so subsequent module
 // re-executions don't stack duplicate handlers and effects.
-const moduleTeardown = new AbortController();
-const disposers: Array<() => void> = [];
+const moduleTeardown = new AbortController()
+const disposers: Array<() => void> = []
 function runModuleTeardown() {
-  if (!moduleTeardown.signal.aborted) moduleTeardown.abort();
+  if (!moduleTeardown.signal.aborted) moduleTeardown.abort()
   for (const d of disposers.splice(0)) {
-    try { d(); } catch { /* best-effort cleanup */ }
+    try {
+      d()
+    } catch {
+      /* best-effort cleanup */
+    }
   }
 }
 if ((import.meta as any).hot) {
-  (import.meta as any).hot.dispose(runModuleTeardown);
+  ;(import.meta as any).hot.dispose(runModuleTeardown)
 }
-const listenerOpts = { signal: moduleTeardown.signal } as const;
+const listenerOpts = { signal: moduleTeardown.signal } as const
 
 // ── Application-level signals (shared across mount points) ──
 
-const [logOpen, setLogOpen] = createSignal(false);
-const [rightPanelTab, setRightPanelTab] = createSignal<RightPanelTab>("inspector");
-const [rightPanelManualKey, setRightPanelManualKey] = createSignal("");
-const [frontendPreviewResolution, setFrontendPreviewResolution] =
-  createSignal<FrontendPreviewResolution | null>(null);
-const [frontendPreviewLoading, setFrontendPreviewLoading] = createSignal(false);
-const [frontendPreviewError, setFrontendPreviewError] = createSignal("");
-let frontendPreviewRequest = 0;
+const [logOpen, setLogOpen] = createSignal(false)
+const [rightPanelTab, setRightPanelTab] = createSignal<RightPanelTab>("inspector")
+const [rightPanelManualKey, setRightPanelManualKey] = createSignal("")
+const [frontendPreviewResolution, setFrontendPreviewResolution] = createSignal<FrontendPreviewResolution | null>(null)
+const [frontendPreviewLoading, setFrontendPreviewLoading] = createSignal(false)
+const [frontendPreviewError, setFrontendPreviewError] = createSignal("")
+let frontendPreviewRequest = 0
 
 // ── Workspace (secondary panel, stacked above composer) state ──
 // workspaceOpen drives layout visibility; workspaceView is remembered across
 // open/close cycles so reopening restores the last active view.
-const [workspaceOpen, setWorkspaceOpen] = createSignal(false);
+const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
   kind: "diff",
   target: { filePath: "" },
-});
+})
 
 function currentPreviewKey(): string {
-  return previewRequestKey(boardStore.selectedTaskID || boardStore.board?.task?.id, boardStore.snapshotVersion);
+  return previewRequestKey(boardStore.selectedTaskID || boardStore.board?.task?.id, boardStore.snapshotVersion)
 }
 
 function selectRightPanelTab(tab: RightPanelTab): void {
-  setRightPanelManualKey(currentPreviewKey());
-  setRightPanelTab(tab);
+  setRightPanelManualKey(currentPreviewKey())
+  setRightPanelTab(tab)
 }
 
 function refreshFrontendPreview(options: { manual?: boolean } = {}): void {
-  const key = currentPreviewKey();
-  const board = boardStore.board;
-  const request = ++frontendPreviewRequest;
-  if (options.manual) setRightPanelManualKey(key);
-  setFrontendPreviewLoading(true);
-  setFrontendPreviewError("");
+  const key = currentPreviewKey()
+  const board = boardStore.board
+  const request = ++frontendPreviewRequest
+  if (options.manual) setRightPanelManualKey(key)
+  setFrontendPreviewLoading(true)
+  setFrontendPreviewError("")
   void resolveFrontendPreviewFromBoard(board)
     .then((resolution) => {
-      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return;
-      setFrontendPreviewResolution(resolution);
+      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return
+      setFrontendPreviewResolution(resolution)
       setRightPanelTab((tab) =>
         nextTabForPreviewResolution({
           activeTab: tab,
@@ -158,29 +154,32 @@ function refreshFrontendPreview(options: { manual?: boolean } = {}): void {
           requestKey: key,
           resolution,
         }),
-      );
+      )
     })
     .catch((err) => {
-      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return;
-      setFrontendPreviewError(err instanceof Error ? err.message : String(err));
-      setFrontendPreviewResolution(null);
+      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return
+      setFrontendPreviewError(err instanceof Error ? err.message : String(err))
+      setFrontendPreviewResolution(null)
     })
     .finally(() => {
-      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return;
-      setFrontendPreviewLoading(false);
-    });
+      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return
+      setFrontendPreviewLoading(false)
+    })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
+  return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
 /** Format a millisecond timestamp for the debug blob. Returns "—" for
  *  missing / zero values so the blob stays aligned when fields are empty. */
 function formatDebugTime(ms: unknown): string {
-  const n = typeof ms === "number" ? ms : Number(ms);
-  if (!Number.isFinite(n) || n <= 0) return "—";
-  return new Date(n).toISOString().replace("T", " ").replace(/\.\d{3}Z$/, "Z");
+  const n = typeof ms === "number" ? ms : Number(ms)
+  if (!Number.isFinite(n) || n <= 0) return "—"
+  return new Date(n)
+    .toISOString()
+    .replace("T", " ")
+    .replace(/\.\d{3}Z$/, "Z")
 }
 
 /**
@@ -190,12 +189,12 @@ function formatDebugTime(ms: unknown): string {
  * SQL. Returns `""` when no task is selected so the caller can show a hint.
  */
 function buildTaskDebugBlob(board: any): string {
-  const task = board?.task;
-  const id = typeof task?.id === "string" ? task.id : "";
-  if (!id) return "";
-  const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : [];
-  const lines: string[] = [];
-  const push = (...l: string[]) => lines.push(...l);
+  const task = board?.task
+  const id = typeof task?.id === "string" ? task.id : ""
+  if (!id) return ""
+  const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : []
+  const lines: string[] = []
+  const push = (...l: string[]) => lines.push(...l)
 
   push(
     `# Task Debug Info (double-click 任务 → clipboard)`,
@@ -211,26 +210,26 @@ function buildTaskDebugBlob(board: any): string {
     `task.time.updated: ${formatDebugTime(task?.time?.updated ?? task?.time?.created)}`,
     ``,
     `Goals (${goalWorkflows.length}):`,
-  );
+  )
   if (goalWorkflows.length === 0) {
-    push(`  (none — task has not produced goals yet)`);
+    push(`  (none — task has not produced goals yet)`)
   } else {
     for (const gw of goalWorkflows) {
-      const gid = String(gw?.goalID ?? "?");
-      const n = typeof gw?.orderIndex === "number" ? gw.orderIndex + 1 : "?";
+      const gid = String(gw?.goalID ?? "?")
+      const n = typeof gw?.orderIndex === "number" ? gw.orderIndex + 1 : "?"
       push(
         `  #${n}  ${gid}  ${String(gw?.goalStatus ?? "?")}  ${String(gw?.goalTitle ?? "").slice(0, 80)}`,
         `      retry:     ${gw?.retryCount ?? 0}`,
         `      workspace: ${String(gw?.workspaceDir ?? "—")}`,
         `      branch:    ${String(gw?.workspaceBranch ?? "—")}`,
-      );
+      )
     }
   }
   push(
     ``,
     `Notes:`,
     `  - engine_goal stores the goal contract only. workspace_dir / workspace_branch / workspace_base_ref / retry_count / status / cascade_state were retired (2026-05-05); workspace + retry live on the latest engine_artifact[kind='goal_run_attempt'].payload row, goal status is derived live via engine/describe.ts::goalStatusByID from the goal_run chain.`,
-    `  - engine_artifact is the append-only single source: run / goal_run_attempt / delivery / verification-evidence / integrity_attempt / prosecutor_attempt / orchestrator-stream-error all live here. Latest-per-id wins by time_created desc.`,
+    `  - engine_artifact is the append-only single source: run / goal_run_attempt / delivery / verification-evidence / architect_contract_graph / integrity_attempt / prosecutor_attempt / orchestrator-stream-error all live here. Latest-per-id wins by time_created desc.`,
     `  - Empty engine_executor_session does NOT mean nothing is running — that table is only populated when the executor protocol formally registers a lease; in-process executors emit only via session.bridge.`,
     `  - LLM stream stalls bound through llm/activity.ts (withLLMActivity): first-byte gate, idle gate (default 180s = session_llm_idle_ms), total deadline (default 30 min). Exactly one terminal event per call — done | failed | aborted. Board "running" past the total deadline with no events ⇒ bug at withLLMActivity or its sink wiring, NOT a missing stalled-detection heuristic elsewhere.`,
     ``,
@@ -240,11 +239,17 @@ function buildTaskDebugBlob(board: any): string {
     `-- Task snapshot (no status column — derive via deriveTaskStatus from (time_started, time_completed, error, metadata.cancelled))`,
     `SELECT * FROM engine_task WHERE id = '${id}';`,
     ``,
-    `-- Goal contracts (LLM-autonomous redesign: slug/objective/depends_on/owned_paths/exports/imports/requirement_ids are the dispatch & integrity inputs)`,
+    `-- Goal contracts (LLM-autonomous redesign: slug/objective/depends_on/owned_paths/requirement_ids are goal inputs; cross-goal handoffs live in architect_contract_graph)`,
     `SELECT id, slug, title, kind, source, priority, plan_version_id, milestone_id, order_index,`,
-    `       objective, depends_on, owned_paths, exports, imports, requirement_ids, acceptance_specs,`,
+    `       objective, depends_on, owned_paths, requirement_ids, acceptance_specs,`,
     `       time_updated`,
     `FROM engine_goal WHERE task_id = '${id}' ORDER BY order_index;`,
+    ``,
+    `-- Active architect contract graph (task-scoped artifact; latest by time_created desc, id desc)`,
+    `SELECT id, label, payload, time_created, time_updated`,
+    `FROM engine_artifact`,
+    `WHERE task_id = '${id}' AND kind='architect_contract_graph'`,
+    `ORDER BY time_created DESC, id DESC LIMIT 1;`,
     ``,
     `-- Plan versions promoted by the planner (goals link via plan_version_id; status='active' is the live one)`,
     `SELECT id, version, status, summary, spec_snapshot_id, time_created, time_updated`,
@@ -356,8 +361,8 @@ function buildTaskDebugBlob(board: any): string {
     `SELECT type, source, emitted_at, run_id, goal_run_id FROM protocol_event`,
     `WHERE task_id = '${id}' AND source <> 'session.bridge'`,
     `ORDER BY emitted_at DESC LIMIT 60;`,
-  );
-  return lines.join("\n");
+  )
+  return lines.join("\n")
 }
 
 /**
@@ -365,211 +370,221 @@ function buildTaskDebugBlob(board: any): string {
  * supplied, the last-used view is restored.
  */
 function openWorkspace(view?: WorkspaceView): void {
-  if (view) setWorkspaceView(view);
-  setWorkspaceOpen(true);
+  if (view) setWorkspaceView(view)
+  setWorkspaceOpen(true)
 }
 
 /** Close the workspace panel. */
 function closeWorkspace(): void {
-  setWorkspaceOpen(false);
+  setWorkspaceOpen(false)
 }
 
 /** Open (or switch to) a diff file in the workspace. */
 function openWorkspaceDiff(target: DiffTarget): void {
-  openWorkspace({ kind: "diff", target });
+  openWorkspace({ kind: "diff", target })
 }
 
 /** Open (or switch to) a file preview in the workspace. */
 function openWorkspaceFile(filePath: string): void {
-  openWorkspace({ kind: "file", filePath });
+  openWorkspace({ kind: "file", filePath })
 }
 
 // Exposed for services and window-level bridges that need to trigger the
 // workspace from outside this module (e.g. ChangesPanel clicks).
-(window as any).openWorkspaceDiff = openWorkspaceDiff;
-(window as any).openWorkspaceFile = openWorkspaceFile;
+;(window as any).openWorkspaceDiff = openWorkspaceDiff
+;(window as any).openWorkspaceFile = openWorkspaceFile
 
 // Delegate clicks on rendered-markdown file links (see utils/markdown.ts —
 // codespans that look like file paths are emitted with data-file-path).
 // A single document-level listener keeps this decoupled from the message
 // rendering path, which re-runs on every stream tick.
-document.addEventListener("click", (ev) => {
-  const target = ev.target as HTMLElement | null;
-  if (!target) return;
-  const link = target.closest<HTMLElement>("[data-file-path]");
-  if (!link) return;
-  const path = link.getAttribute("data-file-path");
-  if (!path) return;
-  ev.preventDefault();
-  openWorkspaceFile(path);
-}, listenerOpts);
+document.addEventListener(
+  "click",
+  (ev) => {
+    const target = ev.target as HTMLElement | null
+    if (!target) return
+    const link = target.closest<HTMLElement>("[data-file-path]")
+    if (!link) return
+    const path = link.getAttribute("data-file-path")
+    if (!path) return
+    ev.preventDefault()
+    openWorkspaceFile(path)
+  },
+  listenerOpts,
+)
 
-document.addEventListener("click", (ev) => {
-  const target = ev.target as HTMLElement | null;
-  if (!target) return;
-  const anchor = target.closest<HTMLAnchorElement>("a[href]");
-  if (!anchor || anchor.hasAttribute("data-file-path")) return;
-  const href = anchor.getAttribute("href") || "";
-  if (!/^https?:\/\//i.test(href)) return;
-  ev.preventDefault();
-  void nativeOpen(href).catch((error) => {
-    console.error("[ui] Failed to open external link", error);
-  });
-}, listenerOpts);
+document.addEventListener(
+  "click",
+  (ev) => {
+    const target = ev.target as HTMLElement | null
+    if (!target) return
+    const anchor = target.closest<HTMLAnchorElement>("a[href]")
+    if (!anchor || anchor.hasAttribute("data-file-path")) return
+    const href = anchor.getAttribute("href") || ""
+    if (!/^https?:\/\//i.test(href)) return
+    ev.preventDefault()
+    void nativeOpen(href).catch((error) => {
+      console.error("[ui] Failed to open external link", error)
+    })
+  },
+  listenerOpts,
+)
 
 // Code-block copy buttons rendered by utils/markdown.ts wrapCodeBlock.
 // markdown HTML lives inside innerHTML on streamed text — wiring per-button
 // click handlers in Solid would require re-binding on every stream tick,
 // so a single document-level listener keeps the renderer pure.
-document.addEventListener("click", (ev) => {
-  const target = ev.target as HTMLElement | null;
-  if (!target) return;
-  const btn = target.closest<HTMLButtonElement>("button[data-md-copy]");
-  if (!btn) return;
-  ev.preventDefault();
-  ev.stopPropagation();
-  const source = btn.getAttribute("data-md-copy") || "";
-  if (!source) return;
-  const flash = (text: string) => {
-    btn.dataset.copied = "true";
-    const prev = btn.getAttribute("aria-label") || "";
-    btn.setAttribute("aria-label", text);
-    btn.title = text;
-    setTimeout(() => {
-      delete btn.dataset.copied;
-      btn.setAttribute("aria-label", prev || "Copy code");
-      btn.title = prev || "Copy code";
-    }, 1400);
-  };
-  const decoded = source
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-  void (async () => {
-    try {
-      await navigator.clipboard.writeText(decoded);
-      flash("Copied");
-    } catch (err) {
-      console.error("[md-copy] clipboard write failed", err);
-      flash("Copy failed");
+document.addEventListener(
+  "click",
+  (ev) => {
+    const target = ev.target as HTMLElement | null
+    if (!target) return
+    const btn = target.closest<HTMLButtonElement>("button[data-md-copy]")
+    if (!btn) return
+    ev.preventDefault()
+    ev.stopPropagation()
+    const source = btn.getAttribute("data-md-copy") || ""
+    if (!source) return
+    const flash = (text: string) => {
+      btn.dataset.copied = "true"
+      const prev = btn.getAttribute("aria-label") || ""
+      btn.setAttribute("aria-label", text)
+      btn.title = text
+      setTimeout(() => {
+        delete btn.dataset.copied
+        btn.setAttribute("aria-label", prev || "Copy code")
+        btn.title = prev || "Copy code"
+      }, 1400)
     }
-  })();
-}, listenerOpts);
+    const decoded = source
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+    void (async () => {
+      try {
+        await navigator.clipboard.writeText(decoded)
+        flash("Copied")
+      } catch (err) {
+        console.error("[md-copy] clipboard write failed", err)
+        flash("Copy failed")
+      }
+    })()
+  },
+  listenerOpts,
+)
 
 function installGlobalBridges(): void {
-  (window as any).renderMarkdown = renderMarkdown;
-  (window as any).persistOverlaySettings = async () => {
-    saveSettings();
-  };
-  (window as any).stepZoom = (delta: number) => {
-    const next = sanitizeZoom((settingsStore.zoom || 1) + delta);
-    setSettingsStore("zoom", next);
-    applyZoom(next);
-    saveSettings();
-  };
+  ;(window as any).renderMarkdown = renderMarkdown
+  ;(window as any).persistOverlaySettings = async () => {
+    saveSettings()
+  }
+  ;(window as any).stepZoom = (delta: number) => {
+    const next = sanitizeZoom((settingsStore.zoom || 1) + delta)
+    setSettingsStore("zoom", next)
+    applyZoom(next)
+    saveSettings()
+  }
   // Test hook: snapshot the current card tree as a flat JSON shape. Used by
   // Playwright / integration tests to read the live store-backed tree.
-  (window as any).renderConversation = () =>
-    cardTreeStore.order.map((id) => cardTreeStore.cards[id]).filter(Boolean);
-  (window as any).cardTree = cardTreeStore;
+  ;(window as any).renderConversation = () => cardTreeStore.order.map((id) => cardTreeStore.cards[id]).filter(Boolean)
+  ;(window as any).cardTree = cardTreeStore
   // Benchmark hook: expose named stores so external probes do not depend on
   // the legacy aggregate `state` bridge.
-  (window as any).appStore = appStore;
-  (window as any).boardStore = boardStore;
-  (window as any).settingsStore = settingsStore;
-  (window as any).applyDirectory = applyDirectory;
-  (window as any).loadTasks = loadTasks;
-  (window as any).selectTask = selectTask;
-  (window as any).loadBoard = loadBoard;
-  (window as any).loadConversation = loadConversation;
+  ;(window as any).appStore = appStore
+  ;(window as any).boardStore = boardStore
+  ;(window as any).settingsStore = settingsStore
+  ;(window as any).applyDirectory = applyDirectory
+  ;(window as any).loadTasks = loadTasks
+  ;(window as any).selectTask = selectTask
+  ;(window as any).loadBoard = loadBoard
+  ;(window as any).loadConversation = loadConversation
 }
 
-installGlobalBridges();
-setupDialogBackdropClose();
+installGlobalBridges()
+setupDialogBackdropClose()
 
 // ── Mount: NotificationCenter ──
 // Keep the in-app notification layer alive before any async boot work, so
 // startup and operator-action failures can surface even when OS-level
 // notifications are unavailable or permission has not been granted.
-const notificationHost = document.createElement("div");
-notificationHost.id = "notificationCenterHost";
-document.body.appendChild(notificationHost);
-render(() => <NotificationCenter />, notificationHost);
+const notificationHost = document.createElement("div")
+notificationHost.id = "notificationCenterHost"
+document.body.appendChild(notificationHost)
+render(() => <NotificationCenter />, notificationHost)
 
 // ── Mount: Conversation ──
 
-const chatScroll = document.getElementById("chatScroll");
+const chatScroll = document.getElementById("chatScroll")
 if (chatScroll) {
-  chatScroll.innerHTML = "";
-  render(() => <Conversation container={chatScroll} />, chatScroll);
+  chatScroll.innerHTML = ""
+  render(() => <Conversation container={chatScroll} />, chatScroll)
+}
+const conversationAgentRailMount = document.getElementById("solidConversationAgentRailMount")
+if (conversationAgentRailMount) {
+  conversationAgentRailMount.innerHTML = ""
+  render(() => <ConversationAgentRail />, conversationAgentRailMount)
 }
 
 // ── Mount: WorkspacePanel (Diff / File) ──
 
-const workspaceMountEl = document.getElementById("solidWorkspaceMount");
+const workspaceMountEl = document.getElementById("solidWorkspaceMount")
 if (workspaceMountEl) {
-  workspaceMountEl.innerHTML = "";
+  workspaceMountEl.innerHTML = ""
   render(
-    () => (
-      <WorkspacePanel
-        view={workspaceView()}
-        onSelectView={setWorkspaceView}
-        onClose={closeWorkspace}
-      />
-    ),
+    () => <WorkspacePanel view={workspaceView()} onSelectView={setWorkspaceView} onClose={closeWorkspace} />,
     workspaceMountEl,
-  );
+  )
 }
 
 // ── Sidebar title backdoor: double-click resets DB ──
 // Hidden operator escape hatch. Confirms before invoking POST /global/db/reset,
 // then reloads to repopulate from a clean schema.
-const sidebarTitleEl = document.querySelector<HTMLElement>(".sidebar-title");
+const sidebarTitleEl = document.querySelector<HTMLElement>(".sidebar-title")
 if (sidebarTitleEl) {
   sidebarTitleEl.addEventListener("dblclick", async (ev) => {
-    ev.preventDefault();
-    if (!window.confirm(t("sidebar.reset_db_confirm"))) return;
+    ev.preventDefault()
+    if (!window.confirm(t("sidebar.reset_db_confirm"))) return
     try {
       const res = await apiRequest<unknown>("global/db/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         responseKind: "text",
-      });
+      })
       if (res.status === 409) {
         notifyWarning({
           id: "system:reset-db",
           title: t("sidebar.reset_db_blocked_title"),
           message: t("sidebar.reset_db_blocked"),
-        });
-        return;
+        })
+        return
       }
       if (!res.ok) {
-        const text = typeof res.body === "string" && res.body ? res.body : `HTTP ${res.status}`;
+        const text = typeof res.body === "string" && res.body ? res.body : `HTTP ${res.status}`
         notifyError({
           id: "system:reset-db",
           title: t("sidebar.reset_db_failed_title"),
           message: t("sidebar.reset_db_failed", { error: text }),
-        });
-        return;
+        })
+        return
       }
-      window.location.reload();
+      window.location.reload()
     } catch (err) {
       notifyError({
         id: "system:reset-db",
         title: t("sidebar.reset_db_failed_title"),
         message: t("sidebar.reset_db_failed", { error: err instanceof Error ? err.message : String(err) }),
-      });
+      })
     }
-  });
+  })
 }
 
 // ── Mount: TaskList ──
 
-const taskListEl = document.getElementById("taskListPanel");
+const taskListEl = document.getElementById("taskListPanel")
 if (taskListEl) {
-  taskListEl.innerHTML = "";
+  taskListEl.innerHTML = ""
   render(
     () => (
       <TaskList
@@ -579,42 +594,42 @@ if (taskListEl) {
       />
     ),
     taskListEl,
-  );
+  )
 }
 
 function retrySelectedTask(): void {
-  const id = boardStore.selectedTaskID;
-  if (!id) return;
-  void retryTask(id);
+  const id = boardStore.selectedTaskID
+  if (!id) return
+  void retryTask(id)
 }
 
 function replanSelectedTask(): void {
-  const id = boardStore.selectedTaskID;
-  if (id) void replanTask(id);
+  const id = boardStore.selectedTaskID
+  if (id) void replanTask(id)
 }
 
 function cancelSelectedTask(): void {
-  const id = boardStore.selectedTaskID;
-  if (id) void cancelTask(id);
+  const id = boardStore.selectedTaskID
+  if (id) void cancelTask(id)
 }
 
 function editGoal(goalId: string, title: string, detail: string): void {
-  openGoalDialog(goalId || "", title || "", detail || "");
+  openGoalDialog(goalId || "", title || "", detail || "")
 }
 
 function deleteGoal(goalId: string): void {
-  if (!goalId || !boardStore.selectedTaskID) return;
+  if (!goalId || !boardStore.selectedTaskID) return
   void (async () => {
     try {
       await panelMessage(`Delete goal ${goalId}.`, {
         goalID: goalId,
         taskID: boardStore.selectedTaskID || undefined,
-      });
-      await loadBoard({ sync: true });
+      })
+      await loadBoard({ sync: true })
     } catch (e) {
-      console.error("Failed to delete goal", e);
+      console.error("Failed to delete goal", e)
     }
-  })();
+  })()
 }
 
 // ── Mount: ChatComposer ──
@@ -622,41 +637,40 @@ function deleteGoal(goalId: string): void {
 // One-shot follow-up suggestion the composer should pre-fill after a task
 // finishes. Populated by a busy→idle effect below; cleared by the composer
 // via onSuggestionConsumed after it either injects or drops the value.
-const [pendingSuggestion, setPendingSuggestion] = createSignal("");
+const [pendingSuggestion, setPendingSuggestion] = createSignal("")
 // Track the previous task-busy state so we only fire once per finish edge.
-let lastTaskBusy = false;
-let lastSuggestionTaskID: string | null = null;
+let lastTaskBusy = false
+let lastSuggestionTaskID: string | null = null
 createEffect(() => {
-  const busyNow =
-    !!messageStore.chatRequest || isTaskInterruptable();
-  const wasBusy = lastTaskBusy;
-  lastTaskBusy = busyNow;
+  const busyNow = !!messageStore.chatRequest || isTaskInterruptable()
+  const wasBusy = lastTaskBusy
+  lastTaskBusy = busyNow
   // Each busy→true edge resets the guard so the next finish is eligible for
   // a fresh suggestion even if it's the same task.
   if (busyNow && !wasBusy) {
-    lastSuggestionTaskID = null;
-    return;
+    lastSuggestionTaskID = null
+    return
   }
-  if (!wasBusy || busyNow) return;
-  const taskID = boardStore.selectedTaskID;
-  if (!taskID) return;
-  if (lastSuggestionTaskID === taskID) return;
-  lastSuggestionTaskID = taskID;
+  if (!wasBusy || busyNow) return
+  const taskID = boardStore.selectedTaskID
+  if (!taskID) return
+  if (lastSuggestionTaskID === taskID) return
+  lastSuggestionTaskID = taskID
   void apiJson(`task/${encodeURIComponent(taskID)}/followup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
   })
     .then((data: any) => {
-      const text = typeof data?.suggestion === "string" ? data.suggestion.trim() : "";
-      if (text) setPendingSuggestion(text);
+      const text = typeof data?.suggestion === "string" ? data.suggestion.trim() : ""
+      if (text) setPendingSuggestion(text)
     })
     .catch((err) => {
-      AppLog.warn("main", "followup suggestion failed", err);
-    });
-});
+      AppLog.warn("main", "followup suggestion failed", err)
+    })
+})
 
-const composerEl = document.getElementById("solidChatComposer");
+const composerEl = document.getElementById("solidChatComposer")
 if (composerEl) {
   render(
     () => (
@@ -679,80 +693,75 @@ if (composerEl) {
           // interrupt is an explicit action on the task row's CancelButton so a
           // stray composer stop never tears down the underlying task.
           if (messageStore.chatRequest) {
-            void stopChatRequest({ remote: false });
+            void stopChatRequest({ remote: false })
           }
         }}
       />
     ),
     composerEl,
-  );
+  )
 }
 
 // ── Wire: Terminate button ──
 
-const btnTerminateRun = document.getElementById("btnTerminateRun");
+const btnTerminateRun = document.getElementById("btnTerminateRun")
 if (btnTerminateRun) {
   btnTerminateRun.addEventListener("click", () => {
     // If there's an active chat request (SSE stream), stop it first
     if (messageStore.chatRequest) {
-      void stopChatRequest();
-      return;
+      void stopChatRequest()
+      return
     }
     // Otherwise cancel the active task
-    const taskID = boardStore.selectedTaskID;
-    if (taskID) void cancelTask(taskID);
-  });
+    const taskID = boardStore.selectedTaskID
+    if (taskID) void cancelTask(taskID)
+  })
 }
 
 // ── Mount: WindowControls ──
 
-const windowControlsEl = document.getElementById("solidWindowControls");
+const windowControlsEl = document.getElementById("solidWindowControls")
 if (windowControlsEl) {
-  render(() => <WindowControls />, windowControlsEl);
+  render(() => <WindowControls />, windowControlsEl)
 }
 
 // ── Mount: TitlebarMenubar ──
 
-const titlebarMenuEl = document.getElementById("solidTitlebarMenu");
+const titlebarMenuEl = document.getElementById("solidTitlebarMenu")
 if (titlebarMenuEl) {
-  render(
-    () => (
-      <TitlebarMenubar onOpenLog={() => setLogOpen(true)} />
-    ),
-    titlebarMenuEl,
-  );
+  render(() => <TitlebarMenubar onOpenLog={() => setLogOpen(true)} />, titlebarMenuEl)
 }
 
-const workspaceLayoutControlsEl = document.getElementById("solidWorkspaceLayoutControls");
+const workspaceLayoutControlsEl = document.getElementById("solidWorkspaceLayoutControls")
 if (workspaceLayoutControlsEl) {
-  render(() => <WorkspaceLayoutControls />, workspaceLayoutControlsEl);
+  render(() => <WorkspaceLayoutControls />, workspaceLayoutControlsEl)
 }
 
-const workspaceCodingCliLaunchersEl = document.getElementById("solidWorkspaceCodingCliLaunchers");
+const workspaceCodingCliLaunchersEl = document.getElementById("solidWorkspaceCodingCliLaunchers")
 if (workspaceCodingCliLaunchersEl) {
-  render(() => <WorkspaceCodingCliLaunchers />, workspaceCodingCliLaunchersEl);
+  render(() => <WorkspaceCodingCliLaunchers />, workspaceCodingCliLaunchersEl)
 }
 
-const workspaceEditorLaunchersEl = document.getElementById("solidWorkspaceEditorLaunchers");
+const workspaceEditorLaunchersEl = document.getElementById("solidWorkspaceEditorLaunchers")
 if (workspaceEditorLaunchersEl) {
-  render(() => <WorkspaceEditorLaunchers />, workspaceEditorLaunchersEl);
+  render(() => <WorkspaceEditorLaunchers />, workspaceEditorLaunchersEl)
 }
 
-const leftPanelHeaderCollapseEl = document.getElementById("solidLeftPanelHeaderCollapseControl");
+const leftPanelHeaderCollapseEl = document.getElementById("solidLeftPanelHeaderCollapseControl")
 if (leftPanelHeaderCollapseEl) {
-  render(() => <LeftPanelHeaderCollapseControl />, leftPanelHeaderCollapseEl);
+  render(() => <LeftPanelHeaderCollapseControl />, leftPanelHeaderCollapseEl)
 }
 
-const rightPanelHeaderCollapseEl = document.getElementById("solidRightPanelHeaderCollapseControl");
+const rightPanelHeaderCollapseEl = document.getElementById("solidRightPanelHeaderCollapseControl")
 if (rightPanelHeaderCollapseEl) {
-  render(() => <RightPanelHeaderCollapseControl />, rightPanelHeaderCollapseEl);
+  render(() => <RightPanelHeaderCollapseControl />, rightPanelHeaderCollapseEl)
 }
 
 // ── Mount: ConnectionBadge ──
 
-const connBadgeEl = document.getElementById("solidConnBadge");
+const connBadgeEl = document.getElementById("solidConnBadge")
 if (connBadgeEl) {
-  render(() => <ConnectionBadge />, connBadgeEl);
+  render(() => <ConnectionBadge />, connBadgeEl)
 }
 
 // ── Mount: TaskDirContent / VcsBadge ──
@@ -760,14 +769,14 @@ if (connBadgeEl) {
 // owns breadcrumb selection; the VCS badge is mounted beside it as a
 // sibling project-surface indicator.
 
-const taskDirMountEl = document.getElementById("solidTaskDirMount");
+const taskDirMountEl = document.getElementById("solidTaskDirMount")
 if (taskDirMountEl) {
-  render(() => <TaskDirContent />, taskDirMountEl);
+  render(() => <TaskDirContent />, taskDirMountEl)
 }
 
-const taskVcsMountEl = document.getElementById("solidTaskVcsMount");
+const taskVcsMountEl = document.getElementById("solidTaskVcsMount")
 if (taskVcsMountEl) {
-  render(() => <VcsBadge />, taskVcsMountEl);
+  render(() => <VcsBadge />, taskVcsMountEl)
 }
 
 // ── Mount: TaskStatusHeader ──
@@ -776,32 +785,18 @@ if (taskVcsMountEl) {
 // #statusLabel textContent and ticked #taskElapsed via getElementById each
 // frame. Owns its own visibility-gated 1Hz interval via Solid lifecycle.
 
-const taskStatusMountEl = document.getElementById("solidTaskStatusMount");
+const taskStatusMountEl = document.getElementById("solidTaskStatusMount")
 if (taskStatusMountEl) {
-  render(() => <TaskStatusHeader />, taskStatusMountEl);
+  render(() => <TaskStatusHeader />, taskStatusMountEl)
 }
 
 // ── Mount: Right panel Inspector / Preview tabs ──
 
-const rightPanelTabsEl = document.getElementById("solidRightPanelTabs");
+const rightPanelTabsEl = document.getElementById("solidRightPanelTabs")
 if (rightPanelTabsEl) {
   render(
     () => (
-      <Tabs
-        size="sm"
-        tone="neutral"
-        aria-label={t("right_panel.tabs")}
-        data-ui="right-tabs"
-      >
-        <Tab
-          active={rightPanelTab() === "workflow"}
-          size="sm"
-          tone="neutral"
-          onClick={() => selectRightPanelTab("workflow")}
-          data-ui="right-tab"
-        >
-          {t("right_panel.workflow")}
-        </Tab>
+      <Tabs size="sm" tone="neutral" aria-label={t("right_panel.tabs")} data-ui="right-tabs">
         <Tab
           active={rightPanelTab() === "inspector"}
           size="sm"
@@ -823,10 +818,10 @@ if (rightPanelTabsEl) {
       </Tabs>
     ),
     rightPanelTabsEl,
-  );
+  )
 }
 
-const frontendPreviewMountEl = document.getElementById("solidFrontendPreviewMount");
+const frontendPreviewMountEl = document.getElementById("solidFrontendPreviewMount")
 if (frontendPreviewMountEl) {
   render(
     () => (
@@ -838,44 +833,37 @@ if (frontendPreviewMountEl) {
       />
     ),
     frontendPreviewMountEl,
-  );
+  )
 }
 
 createEffect(() => {
-  const active = rightPanelTab();
-  const workflow = document.getElementById("rightPanelWorkflow");
-  const inspector = document.getElementById("rightPanelInspector");
-  const preview = document.getElementById("rightPanelPreview");
-  workflow?.setAttribute("data-active", active === "workflow" ? "true" : "false");
-  inspector?.setAttribute("data-active", active === "inspector" ? "true" : "false");
-  preview?.setAttribute("data-active", active === "preview" ? "true" : "false");
-});
+  const active = rightPanelTab()
+  const inspector = document.getElementById("rightPanelInspector")
+  const preview = document.getElementById("rightPanelPreview")
+  inspector?.setAttribute("data-active", active === "inspector" ? "true" : "false")
+  preview?.setAttribute("data-active", active === "preview" ? "true" : "false")
+})
 
-const agentWorkflowMountEl = document.getElementById("solidAgentWorkflowMount");
-if (agentWorkflowMountEl) {
-  render(() => <AgentWorkflowPanel />, agentWorkflowMountEl);
-}
-
-let lastFrontendPreviewKey = "";
+let lastFrontendPreviewKey = ""
 createEffect(() => {
-  const taskID = boardStore.selectedTaskID || boardStore.board?.task?.id || "";
-  const snapshot = boardStore.snapshotVersion || "";
-  const key = previewRequestKey(taskID, snapshot);
+  const taskID = boardStore.selectedTaskID || boardStore.board?.task?.id || ""
+  const snapshot = boardStore.snapshotVersion || ""
+  const key = previewRequestKey(taskID, snapshot)
   if (!taskID) {
-    lastFrontendPreviewKey = key;
-    setFrontendPreviewResolution(null);
-    setFrontendPreviewError("");
-    setFrontendPreviewLoading(false);
-    return;
+    lastFrontendPreviewKey = key
+    setFrontendPreviewResolution(null)
+    setFrontendPreviewError("")
+    setFrontendPreviewLoading(false)
+    return
   }
-  if (key === lastFrontendPreviewKey) return;
-  lastFrontendPreviewKey = key;
-  refreshFrontendPreview();
-});
+  if (key === lastFrontendPreviewKey) return
+  lastFrontendPreviewKey = key
+  refreshFrontendPreview()
+})
 
 // ── Mount: Board (right-panel task workflow sections) ──
 
-const boardMountEl = document.getElementById("solidBoardMount");
+const boardMountEl = document.getElementById("solidBoardMount")
 if (boardMountEl) {
   render(
     () => (
@@ -888,261 +876,245 @@ if (boardMountEl) {
       />
     ),
     boardMountEl,
-  );
+  )
 }
 
 // ── Mount: LogViewer (renders its own <dialog id="logDialog">) ──
 
-const logViewerEl = document.getElementById("solidLogViewer");
+const logViewerEl = document.getElementById("solidLogViewer")
 if (logViewerEl) {
-  render(
-    () => (
-      <LogViewer
-        open={logOpen()}
-        onClose={() => setLogOpen(false)}
-      />
-    ),
-    logViewerEl,
-  );
+  render(() => <LogViewer open={logOpen()} onClose={() => setLogOpen(false)} />, logViewerEl)
 }
 
 document.addEventListener("DOMContentLoaded", () => {
- // ── Workspace panel resizer ──
- // Drag the horizontal divider above the workspace to adjust its height.
- // Height is persisted to settings.workspacePanelHeight and applied as an
- // inline style on #solidWorkspaceMount. The workspace is stacked inside
- // #chatSection between #chatScroll and #solidChatComposer.
+  // ── Workspace panel resizer ──
+  // Drag the horizontal divider above the workspace to adjust its height.
+  // Height is persisted to settings.workspacePanelHeight and applied as an
+  // inline style on #solidWorkspaceMount. The workspace is stacked inside
+  // #chatSection between #chatScroll and #solidChatComposer.
   {
-    const resizer = document.getElementById("workspaceResizer");
-    const mount = document.getElementById("solidWorkspaceMount");
+    const resizer = document.getElementById("workspaceResizer")
+    const mount = document.getElementById("solidWorkspaceMount")
     const applyHeight = (px: number) => {
-      if (!mount) return;
-      mount.style.height = px + "px";
-      mount.style.minHeight = px + "px";
-      mount.style.maxHeight = px + "px";
-    };
+      if (!mount) return
+      mount.style.height = px + "px"
+      mount.style.minHeight = px + "px"
+      mount.style.maxHeight = px + "px"
+    }
     // Restore persisted height on startup.
     if (settingsStore.workspacePanelHeight != null) {
-      applyHeight(settingsStore.workspacePanelHeight);
+      applyHeight(settingsStore.workspacePanelHeight)
     }
     resizer?.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0 || !mount) return;
-      resizer.dataset.active = "true";
+      if (e.button !== 0 || !mount) return
+      resizer.dataset.active = "true"
       // "row" — use row-resize cursor globally during the drag, distinct
       // from column resizers which set data-resizing="true".
-      document.body.dataset.resizing = "row";
-      e.preventDefault();
-      const chatSection = document.getElementById("chatSection");
-      const composer = document.getElementById("solidChatComposer");
+      document.body.dataset.resizing = "row"
+      e.preventDefault()
+      const chatSection = document.getElementById("chatSection")
+      const composer = document.getElementById("solidChatComposer")
       function onMove(ev: PointerEvent) {
-        if (!chatSection) return;
-        const rect = chatSection.getBoundingClientRect();
-        const scale = currentUIScale();
+        if (!chatSection) return
+        const rect = chatSection.getBoundingClientRect()
+        const scale = currentUIScale()
         // Leave room for chat-scroll (minimum) and the composer above/below.
-        const composerH = composer?.getBoundingClientRect().height ?? 0;
-        const chatScrollMin = 160 * scale;
-        const min = 160 * scale;
-        const max = Math.max(
-          min + 40,
-          rect.height - chatScrollMin - composerH,
-        );
+        const composerH = composer?.getBoundingClientRect().height ?? 0
+        const chatScrollMin = 160 * scale
+        const min = 160 * scale
+        const max = Math.max(min + 40, rect.height - chatScrollMin - composerH)
         // Workspace is directly above the composer — its height is measured
         // from the top edge of the composer upward to the pointer.
-        const composerTop = composer
-          ? composer.getBoundingClientRect().top
-          : rect.bottom;
-        const next = Math.round(
-          Math.min(max, Math.max(min, composerTop - ev.clientY)),
-        );
-        applyHeight(next);
+        const composerTop = composer ? composer.getBoundingClientRect().top : rect.bottom
+        const next = Math.round(Math.min(max, Math.max(min, composerTop - ev.clientY)))
+        applyHeight(next)
       }
       function onUp() {
-        delete resizer!.dataset.active;
-        delete document.body.dataset.resizing;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        window.removeEventListener("pointercancel", onUp);
+        delete resizer!.dataset.active
+        delete document.body.dataset.resizing
+        window.removeEventListener("pointermove", onMove)
+        window.removeEventListener("pointerup", onUp)
+        window.removeEventListener("pointercancel", onUp)
         // Persist the final height.
-        const height = mount && mount.style.height
-          ? parseInt(mount.style.height, 10)
-          : null;
+        const height = mount && mount.style.height ? parseInt(mount.style.height, 10) : null
         if (Number.isFinite(height) && height! > 0) {
-          setSettingsStore("workspacePanelHeight", height);
-          saveSettings();
+          setSettingsStore("workspacePanelHeight", height)
+          saveSettings()
         }
       }
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-      window.addEventListener("pointercancel", onUp);
-    });
+      window.addEventListener("pointermove", onMove)
+      window.addEventListener("pointerup", onUp)
+      window.addEventListener("pointercancel", onUp)
+    })
   }
 
- // ── Sidebar buttons ──
+  // ── Sidebar buttons ──
   document.getElementById("btnCreateTask")?.addEventListener("click", () => {
     // Deselect current task and focus the composer — the user types their
     // request directly in the ChatComposer, no modal dialog needed.
-    void selectTask("");
-    const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea");
-    textarea?.focus();
-  });
+    void selectTask("")
+    const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")
+    textarea?.focus()
+  })
 
   // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer
   // (chat-compose-meta-left). The component owns its own dropdown, click-out
   // dismissal and Escape handling — Solid lifecycle disposes both on unmount.
-});
+})
 
 // ── Initialise application ──
 
 document.getElementById("btnChatCopyAll")?.addEventListener("click", () => {
-  void copyChatConversation();
-});
+  void copyChatConversation()
+})
 
-const [settingsHydrated, setSettingsHydrated] = createSignal(false);
+const [settingsHydrated, setSettingsHydrated] = createSignal(false)
 
-disposers.push(createRoot((dispose) => {
-  // body.dataset.workspace / .connection writes were dead — no CSS or JS in
-  // the codebase reads either attribute. Removed (rule 10). The static
-  // initial `data-workspace="offline"` in index.html is also stripped.
+disposers.push(
+  createRoot((dispose) => {
+    // body.dataset.workspace / .connection writes were dead — no CSS or JS in
+    // the codebase reads either attribute. Removed (rule 10). The static
+    // initial `data-workspace="offline"` in index.html is also stripped.
 
-  createEffect(() => {
-    if (!settingsHydrated()) return;
-    applyTheme(settingsStore.theme);
-    applyZoom(settingsStore.zoom);
-    applyOpacity(settingsStore.opacity);
-  });
+    createEffect(() => {
+      if (!settingsHydrated()) return
+      applyTheme(settingsStore.theme)
+      applyZoom(settingsStore.zoom)
+      applyOpacity(settingsStore.opacity)
+    })
 
-  createEffect(() => {
-    configureApi({
-      serverUrl: settingsStore.serverUrl,
-      username: settingsStore.username,
-      password: settingsStore.password,
-      directory: activeDirectory(),
-    });
-  });
+    createEffect(() => {
+      configureApi({
+        serverUrl: settingsStore.serverUrl,
+        username: settingsStore.username,
+        password: settingsStore.password,
+        directory: activeDirectory(),
+      })
+    })
 
-  createEffect(() => {
-    void setLocale(settingsStore.locale);
-  });
+    createEffect(() => {
+      void setLocale(settingsStore.locale)
+    })
 
-  createEffect(() => {
-    const count = messageStore.messages.length;
-    const chatCount = document.getElementById("chatCount");
-    const copyBtn = document.getElementById("btnChatCopyAll") as HTMLButtonElement | null;
-    if (chatCount) chatCount.textContent = count > 0 ? String(count) : "";
-    if (copyBtn) copyBtn.disabled = count === 0;
-  });
+    createEffect(() => {
+      const count = messageStore.messages.length
+      const chatCount = document.getElementById("chatCount")
+      const copyBtn = document.getElementById("btnChatCopyAll") as HTMLButtonElement | null
+      if (chatCount) chatCount.textContent = count > 0 ? String(count) : ""
+      if (copyBtn) copyBtn.disabled = count === 0
+    })
 
-  // ── Debug-copy (double-click `任务` header) ──
-  // Dumps a plain-text debug blob with everything a human needs to diagnose a
-  // stuck / mis-merged task from the DB: task id, project dir, session, active
-  // run, per-goal worktree path + branch + retry count, plus ready-to-paste
-  // SQL queries keyed on the task id. Reads `boardStore.board` — the live
-  // projection for the currently selected task — so no extra fetch.
-  //
-  // Triggered by a double-click on `.chat-title` (the "任务" label). Single
-  // click remains free for future use. The same button flashes a "已复制"
-  // hint via a transient `data-copied` attribute.
-  {
-    const title = document.querySelector(".chat-title") as HTMLElement | null;
-    if (title) {
-      title.style.cursor = "copy";
-      title.title =
-        "双击复制调试信息 (task id / directory / session / run / worktrees + SQL)";
-      const flash = (text: string) => {
-        title.dataset.copied = "true";
-        const prev = title.textContent ?? "";
-        title.textContent = text;
-        setTimeout(() => {
-          delete title.dataset.copied;
-          title.textContent = prev;
-        }, 1400);
-      };
-      title.addEventListener("dblclick", async (ev) => {
-        ev.preventDefault();
-        const blob = buildTaskDebugBlob(boardStore.board);
-        if (!blob) {
-          flash("无任务");
-          return;
+    // ── Debug-copy (double-click `任务` header) ──
+    // Dumps a plain-text debug blob with everything a human needs to diagnose a
+    // stuck / mis-merged task from the DB: task id, project dir, session, active
+    // run, per-goal worktree path + branch + retry count, plus ready-to-paste
+    // SQL queries keyed on the task id. Reads `boardStore.board` — the live
+    // projection for the currently selected task — so no extra fetch.
+    //
+    // Triggered by a double-click on `.chat-title` (the "任务" label). Single
+    // click remains free for future use. The same button flashes a "已复制"
+    // hint via a transient `data-copied` attribute.
+    {
+      const title = document.querySelector(".chat-title") as HTMLElement | null
+      if (title) {
+        title.style.cursor = "copy"
+        title.title = "双击复制调试信息 (task id / directory / session / run / worktrees + SQL)"
+        const flash = (text: string) => {
+          title.dataset.copied = "true"
+          const prev = title.textContent ?? ""
+          title.textContent = text
+          setTimeout(() => {
+            delete title.dataset.copied
+            title.textContent = prev
+          }, 1400)
         }
-        try {
-          await navigator.clipboard.writeText(blob);
-          flash("已复制");
-        } catch (err) {
-          console.error("[chat-title dblclick] clipboard write failed", err);
-          flash("复制失败");
-        }
-      });
-    }
-  }
-
-  // ── Task-switch progress bar (non-blocking) ──
-  // Reflects boardStore.taskSwitching (set synchronously at selectTask entry,
-  // cleared when the async load chain completes). The bar lives in a fixed
-  // slot above the chat header so user input is never gated on load.
-  createEffect(() => {
-    const active = boardStore.taskSwitching;
-    const bar = document.getElementById("taskSwitchProgress");
-    if (!bar) return;
-    bar.setAttribute("data-active", active ? "true" : "false");
-    bar.setAttribute("aria-busy", active ? "true" : "false");
-  });
-
-  // ── Workspace visibility ──
-  // Drives the show/hide of the workspace mount + resizer.
-  createEffect(() => {
-    const open = workspaceOpen();
-
-    const mount = document.getElementById("solidWorkspaceMount");
-    const resizer = document.getElementById("workspaceResizer");
-    if (mount) (mount as HTMLElement).hidden = !open;
-    if (resizer) (resizer as HTMLElement).hidden = !open;
-  });
-
-  createEffect(() => {
-    const sidebarCollapsed = settingsStore.sidebarCollapsed;
-    const rightPanelCollapsed = settingsStore.rightPanelCollapsed;
-
-    const sidebar = document.getElementById("sidebar");
-    const sections = document.getElementById("sections");
-    const leftResizer = document.getElementById("leftPaneResizer") as HTMLElement | null;
-    const rightResizer = document.getElementById("rightPaneResizer") as HTMLElement | null;
-
-    if (sidebar) {
-      sidebar.dataset.collapsed = String(sidebarCollapsed);
-      sidebar.hidden = false;
-    }
-    if (sections) {
-      sections.dataset.collapsed = String(rightPanelCollapsed);
-      sections.hidden = false;
-    }
-    if (leftResizer) {
-      leftResizer.hidden = sidebarCollapsed;
-      leftResizer.dataset.disabled = String(sidebarCollapsed);
-    }
-    if (rightResizer) {
-      rightResizer.hidden = rightPanelCollapsed;
-      rightResizer.dataset.disabled = String(rightPanelCollapsed);
+        title.addEventListener("dblclick", async (ev) => {
+          ev.preventDefault()
+          const blob = buildTaskDebugBlob(boardStore.board)
+          if (!blob) {
+            flash("无任务")
+            return
+          }
+          try {
+            await navigator.clipboard.writeText(blob)
+            flash("已复制")
+          } catch (err) {
+            console.error("[chat-title dblclick] clipboard write failed", err)
+            flash("复制失败")
+          }
+        })
+      }
     }
 
-    renderPaneLayout({
-      sidebarCollapsed,
-      rightPanelCollapsed,
-      sidebarWidth: settingsStore.sidebarWidth,
-      sectionsWidth: settingsStore.sectionsWidth,
-    });
-  });
+    // ── Task-switch progress bar (non-blocking) ──
+    // Reflects boardStore.taskSwitching (set synchronously at selectTask entry,
+    // cleared when the async load chain completes). The bar lives in a fixed
+    // slot above the chat header so user input is never gated on load.
+    createEffect(() => {
+      const active = boardStore.taskSwitching
+      const bar = document.getElementById("taskSwitchProgress")
+      if (!bar) return
+      bar.setAttribute("data-active", active ? "true" : "false")
+      bar.setAttribute("aria-busy", active ? "true" : "false")
+    })
 
-  // Task status header + elapsed timer moved to <TaskStatusHeader/> component
-  // (mounted into #solidTaskStatusMount above). The component owns its own
-  // visibility-gated 1Hz interval and renders all four spans (status-icon,
-  // status-label, elapsed) via Solid's reactive graph instead of four
-  // getElementById writes per board update.
+    // ── Workspace visibility ──
+    // Drives the show/hide of the workspace mount + resizer.
+    createEffect(() => {
+      const open = workspaceOpen()
 
- // interactionBridge.renderInteractions removed — the unified InteractionCard
- // renders the UI in both inline conversation and sidebar surfaces, and
+      const mount = document.getElementById("solidWorkspaceMount")
+      const resizer = document.getElementById("workspaceResizer")
+      if (mount) (mount as HTMLElement).hidden = !open
+      if (resizer) (resizer as HTMLElement).hidden = !open
+    })
 
-  return dispose;
-}));
+    createEffect(() => {
+      const sidebarCollapsed = settingsStore.sidebarCollapsed
+      const rightPanelCollapsed = settingsStore.rightPanelCollapsed
+
+      const sidebar = document.getElementById("sidebar")
+      const sections = document.getElementById("sections")
+      const leftResizer = document.getElementById("leftPaneResizer") as HTMLElement | null
+      const rightResizer = document.getElementById("rightPaneResizer") as HTMLElement | null
+
+      if (sidebar) {
+        sidebar.dataset.collapsed = String(sidebarCollapsed)
+        sidebar.hidden = false
+      }
+      if (sections) {
+        sections.dataset.collapsed = String(rightPanelCollapsed)
+        sections.hidden = false
+      }
+      if (leftResizer) {
+        leftResizer.hidden = sidebarCollapsed
+        leftResizer.dataset.disabled = String(sidebarCollapsed)
+      }
+      if (rightResizer) {
+        rightResizer.hidden = rightPanelCollapsed
+        rightResizer.dataset.disabled = String(rightPanelCollapsed)
+      }
+
+      renderPaneLayout({
+        sidebarCollapsed,
+        rightPanelCollapsed,
+        sidebarWidth: settingsStore.sidebarWidth,
+        sectionsWidth: settingsStore.sectionsWidth,
+      })
+    })
+
+    // Task status header + elapsed timer moved to <TaskStatusHeader/> component
+    // (mounted into #solidTaskStatusMount above). The component owns its own
+    // visibility-gated 1Hz interval and renders all four spans (status-icon,
+    // status-label, elapsed) via Solid's reactive graph instead of four
+    // getElementById writes per board update.
+
+    // interactionBridge.renderInteractions removed — the unified InteractionCard
+    // renders the UI in both inline conversation and sidebar surfaces, and
+
+    return dispose
+  }),
+)
 
 const paneCallbacks = {
   getState: () => ({
@@ -1155,30 +1127,41 @@ const paneCallbacks = {
     setSettingsStore({
       ...(sidebarWidth != null ? { sidebarWidth } : {}),
       ...(sectionsWidth != null ? { sectionsWidth } : {}),
-    });
-    saveSettings();
+    })
+    saveSettings()
   },
-};
-initPaneResizers(paneCallbacks);
+}
+initPaneResizers(paneCallbacks)
 
 // ── Global event listeners (
 
-window.addEventListener("keydown", handleZoomHotkey, listenerOpts);
-window.addEventListener("keydown", (e: KeyboardEvent) => {
-  if (e.key === "F12") { e.preventDefault(); void toggleDevtools(); }
-}, listenerOpts);
-const onResize = () => applyZoom(settingsStore.zoom);
-window.addEventListener("resize", onResize, listenerOpts);
-if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize, listenerOpts);
-window.addEventListener("blur", () => {
-  void cancelPaneResize(paneCallbacks);
-}, listenerOpts);
+window.addEventListener("keydown", handleZoomHotkey, listenerOpts)
+window.addEventListener(
+  "keydown",
+  (e: KeyboardEvent) => {
+    if (e.key === "F12") {
+      e.preventDefault()
+      void toggleDevtools()
+    }
+  },
+  listenerOpts,
+)
+const onResize = () => applyZoom(settingsStore.zoom)
+window.addEventListener("resize", onResize, listenerOpts)
+if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize, listenerOpts)
+window.addEventListener(
+  "blur",
+  () => {
+    void cancelPaneResize(paneCallbacks)
+  },
+  listenerOpts,
+)
 window.addEventListener("beforeunload", () => {
-  runModuleTeardown();
-  teardownApp();
-  stopTimers();
-});
-installSystemThemeListener(() => applyTheme(settingsStore.theme));
+  runModuleTeardown()
+  teardownApp()
+  stopTimers()
+})
+installSystemThemeListener(() => applyTheme(settingsStore.theme))
 
 // Dev-only hook used by `script/snap-settings.ts` to drive the config
 // dialog open from puppeteer. Vite dev does not happily serve the
@@ -1193,29 +1176,29 @@ installSystemThemeListener(() => applyTheme(settingsStore.theme));
 // script calls `ensureConfigHost()` first so it can open the dialog
 // even when the rest of the app is offline.
 if (import.meta.env.DEV) {
-  let configHostMounted = false;
+  let configHostMounted = false
   function ensureConfigHost(): void {
-    if (configHostMounted) return;
+    if (configHostMounted) return
     if (document.getElementById("configDialogHost")) {
-      configHostMounted = true;
-      return;
+      configHostMounted = true
+      return
     }
-    const host = document.createElement("div");
-    host.id = "configDialogHost";
-    document.body.appendChild(host);
-    render(() => <ConfigDialogHost />, host);
-    configHostMounted = true;
+    const host = document.createElement("div")
+    host.id = "configDialogHost"
+    document.body.appendChild(host)
+    render(() => <ConfigDialogHost />, host)
+    configHostMounted = true
   }
-  (window as any).__OC_DEV__ = { openConfigDialog, ensureConfigHost };
+  ;(window as any).__OC_DEV__ = { openConfigDialog, ensureConfigHost }
 }
 
 // ── Directory action buttons (#taskDir, #recentDirPanel) ──
 
 function renderRecentDirPanel(): void {
-  const panel = document.getElementById("recentDirPanel");
-  if (!panel) return;
-  const dirs = loadRecentDirectories();
-  const current = activeDirectory();
+  const panel = document.getElementById("recentDirPanel")
+  if (!panel) return
+  const dirs = loadRecentDirectories()
+  const current = activeDirectory()
   const head = [
     `<div class="recent-dir-panel-head">`,
     `<div class="recent-dir-panel-title">${escapeHtml(t("cwd.recent"))}</div>`,
@@ -1223,15 +1206,15 @@ function renderRecentDirPanel(): void {
       ? `<div class="recent-dir-panel-meta" title="${escapeHtml(current)}">${escapeHtml(shortPath(current))}</div>`
       : "",
     `</div>`,
-  ].join("");
+  ].join("")
   if (!dirs.length) {
     panel.innerHTML = [
       `<div class="recent-dir-panel-shell">`,
       head,
       `<div class="recent-dir-empty">${escapeHtml(t("cwd.recent_empty"))}</div>`,
       `</div>`,
-    ].join("");
-    return;
+    ].join("")
+    return
   }
   panel.innerHTML = [
     `<div class="recent-dir-panel-shell">`,
@@ -1239,7 +1222,7 @@ function renderRecentDirPanel(): void {
     `<div class="recent-dir-list">`,
     dirs
       .map((dir) => {
-        const isActive = !!current && dir.toLowerCase() === current.toLowerCase();
+        const isActive = !!current && dir.toLowerCase() === current.toLowerCase()
         return [
           `<div class="recent-dir-row" data-active="${isActive}">`,
           `<button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml(dir)}" title="${escapeHtml(dir)}">`,
@@ -1257,99 +1240,119 @@ function renderRecentDirPanel(): void {
           // source — no `×` character anywhere in the codebase.
           `<button type="button" class="recent-dir-remove" data-recent-remove="${escapeHtml(dir)}" title="${escapeHtml(t("common.delete"))}" aria-label="${escapeHtml(t("common.delete"))}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>`,
           `</div>`,
-        ].join("");
+        ].join("")
       })
       .join(""),
     `</div>`,
     `</div>`,
-  ].join("");
+  ].join("")
 }
 
 function openRecentDirPanel(): void {
-  const panel = document.getElementById("recentDirPanel");
-  if (!panel) return;
-  if (!panel.hidden) { closeRecentDirPanel(); return; }
-  renderRecentDirPanel();
-  const wrap = document.getElementById("taskCwdDropdown");
-  if (wrap) {
-    const rect = wrap.getBoundingClientRect();
-    panel.style.top = Math.round(rect.bottom + 6) + "px";
-    panel.style.left = Math.round(Math.max(4, rect.left)) + "px";
-    panel.style.width = Math.round(rect.width) + "px";
-    wrap.dataset.open = "true";
-    wrap.setAttribute("aria-expanded", "true");
+  const panel = document.getElementById("recentDirPanel")
+  if (!panel) return
+  if (!panel.hidden) {
+    closeRecentDirPanel()
+    return
   }
-  panel.hidden = false;
+  renderRecentDirPanel()
+  const wrap = document.getElementById("taskCwdDropdown")
+  if (wrap) {
+    const rect = wrap.getBoundingClientRect()
+    panel.style.top = Math.round(rect.bottom + 6) + "px"
+    panel.style.left = Math.round(Math.max(4, rect.left)) + "px"
+    panel.style.width = Math.round(rect.width) + "px"
+    wrap.dataset.open = "true"
+    wrap.setAttribute("aria-expanded", "true")
+  }
+  panel.hidden = false
 }
 
 function closeRecentDirPanel(): void {
-  const panel = document.getElementById("recentDirPanel");
-  if (panel) panel.hidden = true;
-  const wrap = document.getElementById("taskCwdDropdown");
+  const panel = document.getElementById("recentDirPanel")
+  if (panel) panel.hidden = true
+  const wrap = document.getElementById("taskCwdDropdown")
   if (wrap) {
-    wrap.dataset.open = "false";
-    wrap.setAttribute("aria-expanded", "false");
+    wrap.dataset.open = "false"
+    wrap.setAttribute("aria-expanded", "false")
   }
 }
 
 document.getElementById("taskCwdDropdown")?.addEventListener("click", (event) => {
-  const target = event.target as HTMLElement | null;
-  if (!target) return;
-  if (target.closest("[data-path-action],[data-path-open],[data-path-set]")) return;
-  event.stopPropagation();
-  openRecentDirPanel();
-});
+  const target = event.target as HTMLElement | null
+  if (!target) return
+  if (target.closest("[data-path-action],[data-path-open],[data-path-set]")) return
+  event.stopPropagation()
+  openRecentDirPanel()
+})
 document.getElementById("taskCwdDropdown")?.addEventListener("keydown", (event) => {
-  const e = event as KeyboardEvent;
-  if (e.key !== "Enter" && e.key !== " ") return;
-  const target = event.target as HTMLElement | null;
-  if (target && target.closest("[data-path-action],[data-path-open],[data-path-set]")) return;
-  e.preventDefault();
-  openRecentDirPanel();
-});
+  const e = event as KeyboardEvent
+  if (e.key !== "Enter" && e.key !== " ") return
+  const target = event.target as HTMLElement | null
+  if (target && target.closest("[data-path-action],[data-path-open],[data-path-set]")) return
+  e.preventDefault()
+  openRecentDirPanel()
+})
 
 document.getElementById("taskDir")?.addEventListener("click", async (event) => {
-  const button = eventClosest(event, "[data-path-action],[data-path-open],[data-path-set]");
-  if (!button || (button as HTMLButtonElement).disabled) return;
-  const el = button as HTMLElement;
-  const action = el.dataset.pathAction || "";
-  if (action === "browse") { await browseDirectory(); return; }
-  if (action === "create") { await createDirectory(); return; }
-  if (el.dataset.pathOpen) { await openDirectory(el.dataset.pathOpen); return; }
-  const target = el.dataset.pathSet || "";
-  if (!target) return;
-  try { await setDirectory(target); } catch (e) {
-    AppLog.error("ui", "Failed to set working directory", { error: String(e) });
+  const button = eventClosest(event, "[data-path-action],[data-path-open],[data-path-set]")
+  if (!button || (button as HTMLButtonElement).disabled) return
+  const el = button as HTMLElement
+  const action = el.dataset.pathAction || ""
+  if (action === "browse") {
+    await browseDirectory()
+    return
   }
-});
+  if (action === "create") {
+    await createDirectory()
+    return
+  }
+  if (el.dataset.pathOpen) {
+    await openDirectory(el.dataset.pathOpen)
+    return
+  }
+  const target = el.dataset.pathSet || ""
+  if (!target) return
+  try {
+    await setDirectory(target)
+  } catch (e) {
+    AppLog.error("ui", "Failed to set working directory", { error: String(e) })
+  }
+})
 
 document.getElementById("recentDirPanel")?.addEventListener("click", async (event) => {
-  const removeBtn = eventClosest(event, "[data-recent-remove]");
+  const removeBtn = eventClosest(event, "[data-recent-remove]")
   if (removeBtn) {
-    const dir = (removeBtn as HTMLElement).dataset.recentRemove;
+    const dir = (removeBtn as HTMLElement).dataset.recentRemove
     if (dir) {
-      removeRecentDirectory(dir);
-      renderRecentDirPanel();
+      removeRecentDirectory(dir)
+      renderRecentDirPanel()
       // Close panel when list becomes empty
-      if (!loadRecentDirectories().length) closeRecentDirPanel();
+      if (!loadRecentDirectories().length) closeRecentDirPanel()
     }
-    return;
+    return
   }
-  const item = eventClosest(event, "[data-recent-dir]");
-  if (!item) return;
-  const dir = (item as HTMLElement).dataset.recentDir;
-  if (!dir) return;
-  closeRecentDirPanel();
-  try { await setDirectory(dir); } catch (e) {
-    AppLog.error("ui", "Failed to switch to recent directory", { dir, error: String(e) });
+  const item = eventClosest(event, "[data-recent-dir]")
+  if (!item) return
+  const dir = (item as HTMLElement).dataset.recentDir
+  if (!dir) return
+  closeRecentDirPanel()
+  try {
+    await setDirectory(dir)
+  } catch (e) {
+    AppLog.error("ui", "Failed to switch to recent directory", { dir, error: String(e) })
   }
-});
+})
 
-document.addEventListener("click", (e) => {
-  const target = e.target as HTMLElement | null;
-  if (target?.closest?.("#taskCwdDropdown") || target?.closest?.(".recent-dir-panel")) return;
-  closeRecentDirPanel();
-}, listenerOpts);
+document.addEventListener(
+  "click",
+  (e) => {
+    const target = e.target as HTMLElement | null
+    if (target?.closest?.("#taskCwdDropdown") || target?.closest?.(".recent-dir-panel")) return
+    closeRecentDirPanel()
+  },
+  listenerOpts,
+)
 
 // Global Esc: close any non-HTML5-dialog popovers the operator might
 // have opened. HTML5 <dialog>.showModal() already handles Esc natively
@@ -1357,58 +1360,62 @@ document.addEventListener("click", (e) => {
 // custom popovers (recent-directory dropdown today; future panels can
 // hook the same channel by listening for the bubbling key event and
 // preventDefault'ing if they handle it).
-document.addEventListener("keydown", (ev) => {
-  if (ev.key !== "Escape") return;
-  const dirPanel = document.getElementById("recentDirPanel");
-  if (dirPanel && !dirPanel.hidden) {
-    ev.preventDefault();
-    closeRecentDirPanel();
-  }
-}, listenerOpts);
+document.addEventListener(
+  "keydown",
+  (ev) => {
+    if (ev.key !== "Escape") return
+    const dirPanel = document.getElementById("recentDirPanel")
+    if (dirPanel && !dirPanel.hidden) {
+      ev.preventDefault()
+      closeRecentDirPanel()
+    }
+  },
+  listenerOpts,
+)
 
 // ── Init ──
 
-(window as any).__overlayInitSettled = false;
+;(window as any).__overlayInitSettled = false
 void (async () => {
   try {
     await initApp({
       onSettingsLoaded: () => {
-        setSettingsHydrated(true);
+        setSettingsHydrated(true)
       },
-    });
-    renderAboutVersion();
-    const connBannerHost = document.createElement("div");
-    connBannerHost.id = "connectionBannerHost";
-    document.body.appendChild(connBannerHost);
-    render(() => <ConnectionBanner />, connBannerHost);
-    const cmdkHost = document.createElement("div");
-    cmdkHost.id = "commandPaletteHost";
-    document.body.appendChild(cmdkHost);
-    render(() => <CommandPalette />, cmdkHost);
-    const sessionDialogHost = document.createElement("div");
-    sessionDialogHost.id = "sessionDialogHost";
-    document.body.appendChild(sessionDialogHost);
-    render(() => <SessionDialogHost />, sessionDialogHost);
-    const appDialogHost = document.createElement("div");
-    appDialogHost.id = "appDialogHost";
-    document.body.appendChild(appDialogHost);
-    render(() => <AppDialogHost />, appDialogHost);
-    const goalDialogHost = document.createElement("div");
-    goalDialogHost.id = "goalDialogHost";
-    document.body.appendChild(goalDialogHost);
-    render(() => <GoalDialogHost />, goalDialogHost);
-    const configDialogHost = document.createElement("div");
-    configDialogHost.id = "configDialogHost";
-    document.body.appendChild(configDialogHost);
-    render(() => <ConfigDialogHost />, configDialogHost);
-    const onboardingHost = document.createElement("div");
-    onboardingHost.id = "workspaceOnboardingHost";
-    document.body.appendChild(onboardingHost);
-    render(() => <WorkspaceOnboardingDialog />, onboardingHost);
+    })
+    renderAboutVersion()
+    const connBannerHost = document.createElement("div")
+    connBannerHost.id = "connectionBannerHost"
+    document.body.appendChild(connBannerHost)
+    render(() => <ConnectionBanner />, connBannerHost)
+    const cmdkHost = document.createElement("div")
+    cmdkHost.id = "commandPaletteHost"
+    document.body.appendChild(cmdkHost)
+    render(() => <CommandPalette />, cmdkHost)
+    const sessionDialogHost = document.createElement("div")
+    sessionDialogHost.id = "sessionDialogHost"
+    document.body.appendChild(sessionDialogHost)
+    render(() => <SessionDialogHost />, sessionDialogHost)
+    const appDialogHost = document.createElement("div")
+    appDialogHost.id = "appDialogHost"
+    document.body.appendChild(appDialogHost)
+    render(() => <AppDialogHost />, appDialogHost)
+    const goalDialogHost = document.createElement("div")
+    goalDialogHost.id = "goalDialogHost"
+    document.body.appendChild(goalDialogHost)
+    render(() => <GoalDialogHost />, goalDialogHost)
+    const configDialogHost = document.createElement("div")
+    configDialogHost.id = "configDialogHost"
+    document.body.appendChild(configDialogHost)
+    render(() => <ConfigDialogHost />, configDialogHost)
+    const onboardingHost = document.createElement("div")
+    onboardingHost.id = "workspaceOnboardingHost"
+    document.body.appendChild(onboardingHost)
+    render(() => <WorkspaceOnboardingDialog />, onboardingHost)
   } catch (error) {
-    console.error(error);
+    console.error(error)
   } finally {
-    await waitForLogDrain();
-    (window as any).__overlayInitSettled = true;
+    await waitForLogDrain()
+    ;(window as any).__overlayInitSettled = true
   }
-})();
+})()

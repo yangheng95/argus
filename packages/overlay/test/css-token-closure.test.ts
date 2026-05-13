@@ -6,6 +6,7 @@ const STYLES_ROOT = join(import.meta.dir, "..", "src", "styles")
 
 const RUNTIME_STYLE_VARS = new Set([
   "--card-sticky-inline-size",
+  "--conversation-agent-rail-width",
   "--pct",
   "--progress-failed",
   "--progress-passed",

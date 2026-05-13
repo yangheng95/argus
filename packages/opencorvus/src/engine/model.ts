@@ -98,9 +98,9 @@ export const CheckConfig = z.object({
       target: z.literal("web"),
       url: z.string().url(),
       require_text: z.array(z.string()).optional(),
-        require_title: z.string().optional(),
-        timeout_ms: z.number().int().positive().optional(),
-        mode: z.enum(["soft", "strict"]).optional(),
+      require_title: z.string().optional(),
+      timeout_ms: z.number().int().positive().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
     })
     .optional(),
   puppeteer: z
@@ -269,10 +269,12 @@ export const Task = z.object({
   request: z.string(),
   status: z.enum(["queued", "active", "completed", "failed", "cancelled"]),
   priority: z.enum(["critical", "high", "normal", "low"]),
-  queue: z.object({
-    order: z.number(),
-    revision: z.string().optional(),
-  }).optional(),
+  queue: z
+    .object({
+      order: z.number(),
+      revision: z.string().optional(),
+    })
+    .optional(),
   /** "workflow" — runs the full requirements→design→architect→execute→deliver pipeline.
    *  "build" — bypasses the pipeline and runs the build agent directly. Used for
    *  one-shot edits / Q&A / quick fixes. Both kinds share the same task table
@@ -679,29 +681,45 @@ export const TaskBoardArchitect = z.object({
   summary: z.string(),
   contractCount: z.number(),
   categories: z.array(z.string()),
-  decisions: z.array(z.object({
-    key: z.string(),
-    value: z.string(),
-    reason: z.string(),
-    goalID: z.string().nullable(),
-  })).optional(),
+  decisions: z
+    .array(
+      z.object({
+        key: z.string(),
+        value: z.string(),
+        reason: z.string(),
+        goalID: z.string().nullable(),
+      }),
+    )
+    .optional(),
 })
 
 export const TaskBoardGoalStepPayload = z.object({
-  planNodes: z.array(z.object({
-    id: z.string(),
-    title: z.string(),
-    brief: z.string(),
-    orderIndex: z.number(),
-    fileActions: z.array(z.object({
-      path: z.string(),
-      intent: z.string(),
-    })).optional(),
-    verificationCommands: z.array(z.object({
-      command: z.string(),
-      purpose: z.string(),
-    })).optional(),
-  })).optional(),
+  planNodes: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        brief: z.string(),
+        orderIndex: z.number(),
+        fileActions: z
+          .array(
+            z.object({
+              path: z.string(),
+              intent: z.string(),
+            }),
+          )
+          .optional(),
+        verificationCommands: z
+          .array(
+            z.object({
+              command: z.string(),
+              purpose: z.string(),
+            }),
+          )
+          .optional(),
+      }),
+    )
+    .optional(),
   /** The build worker session ID (SessionTable kind="build") — the LLM
    *  session that actually wrote code for this goal. Used by the overlay
    *  to surface a "jump to build session" affordance in the sidebar.
@@ -714,23 +732,33 @@ export const TaskBoardGoalStepPayload = z.object({
    *  +N/-N immediately from the board payload — no second `goal-run/<id>/delivery`
    *  fetch needed (rule 22: single source for the per-file numbers).
    *  Sibling to `changedFiles`; one row per file in the same order. */
-  changedFileDiffs: z.array(z.object({
-    file: z.string(),
-    additions: z.number(),
-    deletions: z.number(),
-    status: z.enum(["added", "deleted", "modified"]),
-  })).optional(),
-  diffStats: z.object({
-    files: z.number().optional(),
-    additions: z.number().optional(),
-    deletions: z.number().optional(),
-  }).optional(),
-  checks: z.array(z.object({
-    name: z.string(),
-    status: z.string(),
-    evidence: z.string().optional(),
-    family: z.string().optional(),
-  })).optional(),
+  changedFileDiffs: z
+    .array(
+      z.object({
+        file: z.string(),
+        additions: z.number(),
+        deletions: z.number(),
+        status: z.enum(["added", "deleted", "modified"]),
+      }),
+    )
+    .optional(),
+  diffStats: z
+    .object({
+      files: z.number().optional(),
+      additions: z.number().optional(),
+      deletions: z.number().optional(),
+    })
+    .optional(),
+  checks: z
+    .array(
+      z.object({
+        name: z.string(),
+        status: z.string(),
+        evidence: z.string().optional(),
+        family: z.string().optional(),
+      }),
+    )
+    .optional(),
   evalSummary: z.string().optional(),
   verdict: z.string().optional(),
 })
@@ -751,14 +779,16 @@ export const TaskBoardGoalWorkflowStep = z.object({
    *
    *  Absent when the step has no phases, or when no goal_run data is
    *  available yet. */
-  phases: z.record(
-    z.string(),
-    z.object({
-      status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
-      startedAt: z.number().optional(),
-      completedAt: z.number().optional(),
-    }),
-  ).optional(),
+  phases: z
+    .record(
+      z.string(),
+      z.object({
+        status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+        startedAt: z.number().optional(),
+        completedAt: z.number().optional(),
+      }),
+    )
+    .optional(),
 })
 
 export const TaskBoardGoalContract = z.object({
@@ -970,6 +1000,7 @@ export const TraceEvent = z.object({
 })
 
 export const TraceEventList = z.object({
+  ok: z.literal(true),
   events: TraceEvent.array(),
   /** Resolved trace directory the server reads from. Surfaced so the overlay's
    *  empty state can show the operator WHICH directory was scanned — the
@@ -1019,63 +1050,240 @@ export const RunMetrics = z.object({
 export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "architect" | "evaluator" | "delivery"
 
 export const Event = {
-  TaskCreated: BusEvent.define("task.created", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
-  TaskUpdated: BusEvent.define("task.updated", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
+  TaskCreated: BusEvent.define(
+    "task.created",
+    z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() }),
+  ),
+  TaskUpdated: BusEvent.define(
+    "task.updated",
+    z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() }),
+  ),
   /** Terminal task transition events. Emitted alongside TaskUpdated when the
    *  derived status (`deriveTaskStatus`) crosses from non-terminal to one of
    *  the three terminal verbs. Consumers that surface OS-level "task
    *  succeeded / failed / cancelled" toasts (overlay, channel-runtime) read
    *  these instead of re-deriving from `task.updated.status` to avoid every
    *  consumer reimplementing the transition predicate (rule 8: single source). */
-   TaskCompleted: BusEvent.define("task.completed", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
-   TaskFailed: BusEvent.define("task.failed", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string(), error: z.string().optional() })),
-   TaskCancelled: BusEvent.define("task.cancelled", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
-  SpecCreated: BusEvent.define("spec.created", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
-  SpecUpdated: BusEvent.define("spec.updated", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), status: z.string(), summary: z.string() })),
-  SpecApproved: BusEvent.define("spec.approved", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
-  PlanCreated: BusEvent.define("plan.created", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
-  PlanActivated: BusEvent.define("plan.activated", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
-  GoalProgress: BusEvent.define("goal.progress", z.object({ taskID: Identifier.schema("task"), goalRunID: z.string(), summary: z.string() })),
-  GoalRunUpdated: BusEvent.define("goal_run.updated", z.object({
-    taskID: Identifier.schema("task"),
-    goalRunID: Identifier.schema("goal_run"),
-    goalID: Identifier.schema("goal"),
-    status: z.string(),
-    previousStatus: z.string(),
-    summary: z.string(),
-  })),
-  GoalPassed: BusEvent.define("goal.passed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
-  GoalFailed: BusEvent.define("goal.failed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
+  TaskCompleted: BusEvent.define(
+    "task.completed",
+    z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() }),
+  ),
+  TaskFailed: BusEvent.define(
+    "task.failed",
+    z.object({
+      taskID: Identifier.schema("task"),
+      status: Task.shape.status,
+      summary: z.string(),
+      error: z.string().optional(),
+    }),
+  ),
+  TaskCancelled: BusEvent.define(
+    "task.cancelled",
+    z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() }),
+  ),
+  SpecCreated: BusEvent.define(
+    "spec.created",
+    z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() }),
+  ),
+  SpecUpdated: BusEvent.define(
+    "spec.updated",
+    z.object({
+      taskID: Identifier.schema("task"),
+      specID: Identifier.schema("spec"),
+      status: z.string(),
+      summary: z.string(),
+    }),
+  ),
+  SpecApproved: BusEvent.define(
+    "spec.approved",
+    z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() }),
+  ),
+  PlanCreated: BusEvent.define(
+    "plan.created",
+    z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() }),
+  ),
+  PlanActivated: BusEvent.define(
+    "plan.activated",
+    z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() }),
+  ),
+  GoalProgress: BusEvent.define(
+    "goal.progress",
+    z.object({ taskID: Identifier.schema("task"), goalRunID: z.string(), summary: z.string() }),
+  ),
+  GoalRunUpdated: BusEvent.define(
+    "goal_run.updated",
+    z.object({
+      taskID: Identifier.schema("task"),
+      goalRunID: Identifier.schema("goal_run"),
+      goalID: Identifier.schema("goal"),
+      status: z.string(),
+      previousStatus: z.string(),
+      summary: z.string(),
+    }),
+  ),
+  GoalPassed: BusEvent.define(
+    "goal.passed",
+    z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() }),
+  ),
+  GoalFailed: BusEvent.define(
+    "goal.failed",
+    z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() }),
+  ),
   /** User rewound the task timeline to a specific anchor event. Events
    *  with time_created > cursorTime are filtered from UI-facing queries.
    *  Overlay subscribers reload their filtered view on receipt. */
-  TaskRewound: BusEvent.define("task.rewound", z.object({
-    taskID: Identifier.schema("task"),
-    cursorTime: z.number().int().nonnegative(),
-    anchorEventID: z.string().optional(),
-    reason: z.string().optional(),
-    rewindCount: z.number().int().nonnegative(),
-    resetWorktree: z.boolean(),
-    anchorKind: z.enum(["cursorTime", "message"]),
-  })),
-  MilestoneActivated: BusEvent.define("milestone.activated", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
-  MilestonePassed: BusEvent.define("milestone.passed", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
-  MilestoneFailed: BusEvent.define("milestone.failed", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
-  RunCreated: BusEvent.define("run.created", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), status: Run.shape.status, summary: z.string() })),
-  RunUpdated: BusEvent.define("run.updated", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), status: Run.shape.status, summary: z.string() })),
-  InteractionRequested: BusEvent.define("interaction.requested", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run").optional(), interactionID: Identifier.schema("interaction"), requestType: Interaction.shape.type, summary: z.string() })),
-  InteractionResolved: BusEvent.define("interaction.resolved", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run").optional(), interactionID: Identifier.schema("interaction"), status: Interaction.shape.status, summary: z.string() })),
-  DeliveryReady: BusEvent.define("delivery.ready", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), deliveryID: Identifier.schema("delivery"), summary: z.string() })),
-  EvaluationCompleted: BusEvent.define("evaluation.completed", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), evaluationID: Identifier.schema("evaluation"), status: Evaluation.shape.status, verdict: Evaluation.shape.verdict, summary: z.string() })),
-  TaskMessageRecorded: BusEvent.define("task.message", z.object({ taskID: Identifier.schema("task"), kind: TaskMessageResult.shape.kind, source: z.string(), text: z.string(), summary: z.string() })),
-  RunProgress: BusEvent.define("run.progress", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), type: z.string(), summary: z.string(), payload: z.record(z.string(), z.any()).optional() })),
-  RunOutput: BusEvent.define("run.output", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), type: z.string(), text: z.string() })),
-  MessageInjected: BusEvent.define("message.injected", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), text: z.string(), summary: z.string() })),
+  TaskRewound: BusEvent.define(
+    "task.rewound",
+    z.object({
+      taskID: Identifier.schema("task"),
+      cursorTime: z.number().int().nonnegative(),
+      anchorEventID: z.string().optional(),
+      reason: z.string().optional(),
+      rewindCount: z.number().int().nonnegative(),
+      resetWorktree: z.boolean(),
+      anchorKind: z.enum(["cursorTime", "message"]),
+    }),
+  ),
+  MilestoneActivated: BusEvent.define(
+    "milestone.activated",
+    z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() }),
+  ),
+  MilestonePassed: BusEvent.define(
+    "milestone.passed",
+    z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() }),
+  ),
+  MilestoneFailed: BusEvent.define(
+    "milestone.failed",
+    z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() }),
+  ),
+  RunCreated: BusEvent.define(
+    "run.created",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run"),
+      status: Run.shape.status,
+      summary: z.string(),
+    }),
+  ),
+  RunUpdated: BusEvent.define(
+    "run.updated",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run"),
+      status: Run.shape.status,
+      summary: z.string(),
+    }),
+  ),
+  InteractionRequested: BusEvent.define(
+    "interaction.requested",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run").optional(),
+      interactionID: Identifier.schema("interaction"),
+      requestType: Interaction.shape.type,
+      summary: z.string(),
+    }),
+  ),
+  InteractionResolved: BusEvent.define(
+    "interaction.resolved",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run").optional(),
+      interactionID: Identifier.schema("interaction"),
+      status: Interaction.shape.status,
+      summary: z.string(),
+    }),
+  ),
+  DeliveryReady: BusEvent.define(
+    "delivery.ready",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run"),
+      deliveryID: Identifier.schema("delivery"),
+      summary: z.string(),
+    }),
+  ),
+  EvaluationCompleted: BusEvent.define(
+    "evaluation.completed",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run"),
+      evaluationID: Identifier.schema("evaluation"),
+      status: Evaluation.shape.status,
+      verdict: Evaluation.shape.verdict,
+      summary: z.string(),
+    }),
+  ),
+  TaskMessageRecorded: BusEvent.define(
+    "task.message",
+    z.object({
+      taskID: Identifier.schema("task"),
+      kind: TaskMessageResult.shape.kind,
+      source: z.string(),
+      text: z.string(),
+      summary: z.string(),
+    }),
+  ),
+  RunProgress: BusEvent.define(
+    "run.progress",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run"),
+      type: z.string(),
+      summary: z.string(),
+      payload: z.record(z.string(), z.any()).optional(),
+    }),
+  ),
+  RunOutput: BusEvent.define(
+    "run.output",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run"),
+      type: z.string(),
+      text: z.string(),
+    }),
+  ),
+  MessageInjected: BusEvent.define(
+    "message.injected",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run"),
+      text: z.string(),
+      summary: z.string(),
+    }),
+  ),
 
   // ── MiniWorkflow events ──
-  WorkflowSelected: BusEvent.define("workflow.selected", z.object({ taskID: Identifier.schema("task"), workflowID: z.string(), workflowName: z.string(), summary: z.string() })),
-  WorkflowStepUpdated: BusEvent.define("workflow.step.updated", z.object({ taskID: Identifier.schema("task"), stepID: z.string(), goalID: z.string().optional(), status: z.enum(["pending", "running", "completed", "skipped", "failed"]), summary: z.string() })),
-  GoalWorkflowProgress: BusEvent.define("goal.workflow.progress", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), completedSteps: z.number(), totalSteps: z.number(), currentStep: z.string().optional(), summary: z.string() })),
+  WorkflowSelected: BusEvent.define(
+    "workflow.selected",
+    z.object({
+      taskID: Identifier.schema("task"),
+      workflowID: z.string(),
+      workflowName: z.string(),
+      summary: z.string(),
+    }),
+  ),
+  WorkflowStepUpdated: BusEvent.define(
+    "workflow.step.updated",
+    z.object({
+      taskID: Identifier.schema("task"),
+      stepID: z.string(),
+      goalID: z.string().optional(),
+      status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+      summary: z.string(),
+    }),
+  ),
+  GoalWorkflowProgress: BusEvent.define(
+    "goal.workflow.progress",
+    z.object({
+      taskID: Identifier.schema("task"),
+      goalID: Identifier.schema("goal"),
+      completedSteps: z.number(),
+      totalSteps: z.number(),
+      currentStep: z.string().optional(),
+      summary: z.string(),
+    }),
+  ),
 
   /** Integrity review lifecycle markers. The review makes a non-streaming LLM
    *  call that can take 60–180s; without these events the SSE stream falls
@@ -1143,10 +1351,12 @@ export const Event = {
       taskID: Identifier.schema("task"),
       iteration: z.number(),
       summary: z.string(),
-      violations: z.array(z.object({
-        kind: z.string(),
-        detail: z.string(),
-      })),
+      violations: z.array(
+        z.object({
+          kind: z.string(),
+          detail: z.string(),
+        }),
+      ),
     }),
   ),
   DeliveryEvidenceUpdated: BusEvent.define(
@@ -1162,15 +1372,17 @@ export const Event = {
       failedCheckCount: z.number(),
       failedRuntimeFlowCount: z.number(),
       failedReviewCount: z.number(),
-      failureDetails: z.array(z.object({
-        kind: z.enum(["readiness", "check", "coverage", "runtime", "review"]),
-        id: z.string(),
-        name: z.string(),
-        status: z.string().optional(),
-        command: z.string().optional(),
-        exitCode: z.number().optional(),
-        evidence: z.string(),
-      })),
+      failureDetails: z.array(
+        z.object({
+          kind: z.enum(["readiness", "check", "coverage", "runtime", "review"]),
+          id: z.string(),
+          name: z.string(),
+          status: z.string().optional(),
+          command: z.string().optional(),
+          exitCode: z.number().optional(),
+          evidence: z.string(),
+        }),
+      ),
     }),
   ),
   IntegrityReviewCompleted: BusEvent.define(
@@ -1187,31 +1399,39 @@ export const Event = {
       sessionID: z.string(),
       verdict: z.enum(["pass", "concerns", "needs_correction"]),
       summary: z.string(),
-      dimensions: z.array(z.object({
-        id: z.enum(["requirement_fidelity", "technical_feasibility", "hallucination", "solution_quality"]),
-        verdict: z.enum(["pass", "concerns", "needs_correction"]),
-        issueCount: z.number(),
-        correctionCount: z.number(),
-        missingGoalCount: z.number(),
-      })),
-      issues: z.array(z.object({
-        type: z.string(),
-        description: z.string(),
-        requirement_ids: z.array(z.string()).optional(),
-        spec_ids: z.array(z.string()).optional(),
-      })),
-      corrections: z.array(z.object({
-        action: z.enum(["modify", "split", "remove"]),
-        goalID: z.string(),
-        reason: z.string(),
-        updatesTitle: z.string().optional(),
-        updatesObjective: z.string().optional(),
-      })),
-      missingGoals: z.array(z.object({
-        title: z.string(),
-        objective: z.string(),
-        reason: z.string().optional(),
-      })),
+      dimensions: z.array(
+        z.object({
+          id: z.enum(["requirement_fidelity", "technical_feasibility", "hallucination", "solution_quality"]),
+          verdict: z.enum(["pass", "concerns", "needs_correction"]),
+          issueCount: z.number(),
+          correctionCount: z.number(),
+          missingGoalCount: z.number(),
+        }),
+      ),
+      issues: z.array(
+        z.object({
+          type: z.string(),
+          description: z.string(),
+          requirement_ids: z.array(z.string()).optional(),
+          spec_ids: z.array(z.string()).optional(),
+        }),
+      ),
+      corrections: z.array(
+        z.object({
+          action: z.enum(["modify", "split", "remove"]),
+          goalID: z.string(),
+          reason: z.string(),
+          updatesTitle: z.string().optional(),
+          updatesObjective: z.string().optional(),
+        }),
+      ),
+      missingGoals: z.array(
+        z.object({
+          title: z.string(),
+          objective: z.string(),
+          reason: z.string().optional(),
+        }),
+      ),
       attempts: z.number(),
     }),
   ),

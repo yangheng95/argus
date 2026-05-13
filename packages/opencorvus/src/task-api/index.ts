@@ -49,12 +49,7 @@ import {
   UpdateGoalInput,
   UpdateTaskChecksInput,
 } from "@/engine/model"
-import {
-  ORCHESTRATOR_POLL_INTERVAL_MS,
-  budgetRow,
-  deriveTitle,
-  progressStatus,
-} from "@/engine/helpers"
+import { ORCHESTRATOR_POLL_INTERVAL_MS, budgetRow, deriveTitle, progressStatus } from "@/engine/helpers"
 import { orchestratorState } from "@/engine/orchestrator-state"
 import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
 import { dispatchTaskLoop, reorderQueuedTasksForCwd } from "@/engine/queue"
@@ -242,21 +237,23 @@ async function appendDirectAgentSessionReply(input: {
       targetSessionID: target.session.id,
     },
   }
-  const parts: Message.Part[] = [{
-    id: Identifier.ascending("part"),
-    messageID,
-    sessionID: target.session.id,
-    type: "text",
-    text,
-    kind: "user_content",
-    source: "user",
-    metadata: {
-      overlay_direct_reply: true,
-      source: "overlay_direct_reply",
-      taskID: input.taskID,
-      targetSessionID: target.session.id,
+  const parts: Message.Part[] = [
+    {
+      id: Identifier.ascending("part"),
+      messageID,
+      sessionID: target.session.id,
+      type: "text",
+      text,
+      kind: "user_content",
+      source: "user",
+      metadata: {
+        overlay_direct_reply: true,
+        source: "overlay_direct_reply",
+        taskID: input.taskID,
+        targetSessionID: target.session.id,
+      },
     },
-  }]
+  ]
   for (const attachment of input.attachments ?? []) {
     parts.push({
       id: Identifier.ascending("part"),
@@ -287,11 +284,7 @@ async function appendDirectAgentSessionReply(input: {
   }
 }
 
-async function continueTaskMessage(
-  taskID: string,
-  text: string,
-  attachments: AttachmentStore.Reference[] = [],
-) {
+async function continueTaskMessage(taskID: string, text: string, attachments: AttachmentStore.Reference[] = []) {
   const task = requireTask(taskID)
 
   // Append the user message to session history — the describe layer and
@@ -302,15 +295,21 @@ async function continueTaskMessage(
   // synthetic placeholder; rule 22 single source).
   const persisted = await appendTaskSessionMessage(task, text, attachments)
 
-  const attachmentSummary = attachments.length > 0
-    ? [
-        "Attachments:",
-        ...attachments.map((ref, index) => {
-          const name = AttachmentStore.displayFilename({ filename: ref.filename, mime: ref.mime, sha: ref.sha, index })
-          return `- ${name} — ${ref.mime} — url: ${ref.url}`
-        }),
-      ].join("\n")
-    : undefined
+  const attachmentSummary =
+    attachments.length > 0
+      ? [
+          "Attachments:",
+          ...attachments.map((ref, index) => {
+            const name = AttachmentStore.displayFilename({
+              filename: ref.filename,
+              mime: ref.mime,
+              sha: ref.sha,
+              index,
+            })
+            return `- ${name} — ${ref.mime} — url: ${ref.url}`
+          }),
+        ].join("\n")
+      : undefined
   const openedTask = await openTaskForOperatorMessage(task)
 
   // User messages must re-enter the task lifecycle shell. Calling the
@@ -358,12 +357,16 @@ async function injectRunningTaskMessage(task: TaskRow, run: RunRow, message: str
       "Message injected into running session",
     )
   }
-  await EngineProtocol.emit(Event.MessageInjected, {
-    taskID: task.id,
-    runID: run.id,
-    text: message,
-    summary: "Operator message injected into running session",
-  }, { taskID: task.id, runID: run.id, source: "service.inject" })
+  await EngineProtocol.emit(
+    Event.MessageInjected,
+    {
+      taskID: task.id,
+      runID: run.id,
+      text: message,
+      summary: "Operator message injected into running session",
+    },
+    { taskID: task.id, runID: run.id, source: "service.inject" },
+  )
   return true
 }
 
@@ -487,12 +490,14 @@ async function prepareProject(project?: string) {
   throw new Error(`project mismatch: expected ${Instance.project.id}, got ${project}`)
 }
 
-function taskSummary(rows: Array<{
-  time_started: number | null
-  time_completed: number | null
-  error?: string | null
-  metadata?: Record<string, unknown> | null
-}>) {
+function taskSummary(
+  rows: Array<{
+    time_started: number | null
+    time_completed: number | null
+    error?: string | null
+    metadata?: Record<string, unknown> | null
+  }>,
+) {
   const completed = rows
     .filter((row) => typeof row.time_started === "number" && typeof row.time_completed === "number")
     .map((row) => (row.time_completed ?? 0) - (row.time_started ?? 0))
@@ -507,8 +512,7 @@ function taskSummary(rows: Array<{
     completed_tasks: rows.filter((row) => isTaskCompleted(row)).length,
     failed_tasks: rows.filter((row) => isTaskFailed(row)).length,
     cancelled_tasks: rows.filter((row) => isTaskCancelled(row)).length,
-    median_completion_ms:
-      completed.length === 0 ? undefined : completed[Math.floor((completed.length - 1) / 2)],
+    median_completion_ms: completed.length === 0 ? undefined : completed[Math.floor((completed.length - 1) / 2)],
   }
 }
 
@@ -561,9 +565,7 @@ function taskItems(rows: TaskListRow[]) {
 
 async function taskChecks(checks?: z.input<typeof CheckConfig>) {
   const found = await discoverChecks()
-  const next = structuredClone(
-    resolvedChecks(await resolveConfig(checks ? { checks } : undefined), found),
-  )
+  const next = structuredClone(resolvedChecks(await resolveConfig(checks ? { checks } : undefined), found))
 
   if (found.lint.length > 0 && next.lint === false) {
     next.lint = found.lint.map((item) => item.command)
@@ -724,11 +726,19 @@ export namespace EngineService {
     // Async pipeline: persist task immediately, run stages in background
     try {
       persistQueuedTask({
-        taskID, sessionID: session.id, now, executor, title,
+        taskID,
+        sessionID: session.id,
+        now,
+        executor,
+        title,
         request: input.request,
         attachments: attachmentRefs.length ? attachmentRefs : undefined,
-        requestID, source: input.source,
-        priority: input.priority, kind: input.kind, budget: input.budget, metadata,
+        requestID,
+        source: input.source,
+        priority: input.priority,
+        kind: input.kind,
+        budget: input.budget,
+        metadata,
         channelBinding: input.channelBinding,
         projectID: Instance.project.id,
       })
@@ -788,21 +798,15 @@ export namespace EngineService {
     const task = requireTask(taskID)
     const located = AttachmentStore.nameFromUrl(file.url)
     if (!located) {
-      throw new Error(
-        `${column}: file.url is not a valid /attachment/<projectID>/<name> reference: ${file.url}`,
-      )
+      throw new Error(`${column}: file.url is not a valid /attachment/<projectID>/<name> reference: ${file.url}`)
     }
     const abs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
     if (!abs) {
-      throw new Error(
-        `${column}: cannot resolve attachment path for project ${located.projectID}/${located.name}`,
-      )
+      throw new Error(`${column}: cannot resolve attachment path for project ${located.projectID}/${located.name}`)
     }
     const stat = await fs.stat(abs).catch(() => null)
     if (!stat || stat.size === 0) {
-      throw new Error(
-        `${column}: file missing or empty on disk — refusing to register dangling reference: ${abs}`,
-      )
+      throw new Error(`${column}: file missing or empty on disk — refusing to register dangling reference: ${abs}`)
     }
     const prev = Array.isArray((task as any)[column]) ? ((task as any)[column] as FileRef[]) : []
     const result = merge(prev)
@@ -901,10 +905,15 @@ export namespace EngineService {
     return {
       task: viewTask(task, { directory: item?.directory }),
       plan: plan ? viewPlan(plan) : undefined,
-      goals: (plan ? listGoalsByPlan(plan.id) : listGoals(taskID)).map((g) => ({ ...viewGoal(g), status: goalStatusByID(g.id) })),
+      goals: (plan ? listGoalsByPlan(plan.id) : listGoals(taskID)).map((g) => ({
+        ...viewGoal(g),
+        status: goalStatusByID(g.id),
+      })),
       milestones: milestones.length > 0 ? milestones.map(viewMilestone) : undefined,
       run: run ? viewRun(run) : undefined,
-      pendingInteractions: listInteractions(taskID).filter((item) => item.status === "pending").map(viewInteraction),
+      pendingInteractions: listInteractions(taskID)
+        .filter((item) => item.status === "pending")
+        .map(viewInteraction),
       delivery: delivery ? viewDelivery(delivery) : undefined,
       evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
       snapshots: listSnapshots(taskID).map(viewSnapshot),
@@ -951,9 +960,10 @@ export namespace EngineService {
   export async function getProjectBoard(opts?: { limit?: number; query?: string; status?: string }) {
     const project = Project.get(Instance.project.id) ?? Instance.project
     const limit = opts?.limit ?? 50
-    const rows = (opts?.query || opts?.status)
-      ? searchProjectTasks(Instance.project.id, { query: opts.query, status: opts.status, limit })
-      : listProjectTasks(Instance.project.id, limit)
+    const rows =
+      opts?.query || opts?.status
+        ? searchProjectTasks(Instance.project.id, { query: opts.query, status: opts.status, limit })
+        : listProjectTasks(Instance.project.id, limit)
     const tasks = taskItems(listTaskRows(rows))
 
     return {
@@ -987,23 +997,25 @@ export namespace EngineService {
     }
   }
 
-  export async function reorderTaskQueue(input: {
-    directory: string
-    orderedTaskIDs: string[]
-    revision?: string
-  }) {
+  export async function reorderTaskQueue(input: { directory: string; orderedTaskIDs: string[]; revision?: string }) {
     const result = reorderQueuedTasksForCwd({
       cwd: input.directory,
       orderedTaskIDs: input.orderedTaskIDs,
       revision: input.revision,
     })
-    await Promise.all(result.queuedTaskIDs.map((taskID) =>
-      EngineProtocol.emit(Event.TaskUpdated, {
-        taskID,
-        status: "queued",
-        summary: "Task queue reordered",
-      }, { source: "task.queue.reorder" }),
-    ))
+    await Promise.all(
+      result.queuedTaskIDs.map((taskID) =>
+        EngineProtocol.emit(
+          Event.TaskUpdated,
+          {
+            taskID,
+            status: "queued",
+            summary: "Task queue reordered",
+          },
+          { source: "task.queue.reorder" },
+        ),
+      ),
+    )
     return result
   }
 
@@ -1038,12 +1050,14 @@ export namespace EngineService {
    *  because "agent ran but trace was disabled / pre-trace session" is a
    *  legitimate state the UI distinguishes from "session not found". */
   export async function getSessionTrace(sessionID: string): Promise<{
+    ok: true
     events: import("@/trace").AgentTrace.TraceEvent[]
     traceDir: string
     enabled: boolean
   }> {
     const { AgentTrace } = await import("@/trace")
     return {
+      ok: true,
       events: AgentTrace.readSessionEvents(sessionID),
       traceDir: AgentTrace.getTraceDir(),
       enabled: AgentTrace.isEnabled(),
@@ -1051,9 +1065,8 @@ export namespace EngineService {
   }
 
   /** Aggregate all sessions belonging to a task into one chronological event
-   *  stream. Used for the overlay's panel-level "Show all session trace"
-   *  affordance. Includes llm_request events that the per-task rollup file
-   *  (`_task-<id>.jsonl`) skips by design.
+   *  stream. Task trace reads the `_task-<id>.jsonl` rollup directly; the
+   *  writer appends every task-tagged llm_request and terminal report there.
    *
    *  Also surfaces the resolved trace directory + the enabled flag so the
    *  overlay's empty state can call out path-mismatch and disabled-tracing
@@ -1063,6 +1076,7 @@ export namespace EngineService {
    *  benchmark temp dir gets a "no trace yet" message that hides the real
    *  problem (different Instance.directory). */
   export async function getTaskTrace(taskID: string): Promise<{
+    ok: true
     events: import("@/trace").AgentTrace.TraceEvent[]
     traceDir: string
     enabled: boolean
@@ -1070,6 +1084,7 @@ export namespace EngineService {
     requireTask(taskID)
     const { AgentTrace } = await import("@/trace")
     return {
+      ok: true,
       events: AgentTrace.readTaskEvents(taskID),
       traceDir: AgentTrace.getTraceDir(),
       enabled: AgentTrace.isEnabled(),
@@ -1108,10 +1123,7 @@ export namespace EngineService {
     return listInteractions(taskID).map(viewInteraction)
   }
 
-  export async function selectTaskChecks(
-    taskID: string,
-    selection: Record<string, boolean>,
-  ) {
+  export async function selectTaskChecks(taskID: string, selection: Record<string, boolean>) {
     const task = requireTask(taskID)
     const next = mergeTaskChecks(task.metadata?.checks, selection)
     return writeTaskChecks(task, next)
@@ -1127,9 +1139,7 @@ export namespace EngineService {
 
   export async function updateGoal(goalID: string, input: z.input<typeof UpdateGoalInput>) {
     const body = UpdateGoalInput.parse(input)
-    const row = Database.use((db) =>
-      db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get(),
-    )
+    const row = Database.use((db) => db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get())
     if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
     updateGoalRow({
       goalID,
@@ -1140,9 +1150,7 @@ export namespace EngineService {
   }
 
   export async function deleteGoal(goalID: string) {
-    const row = Database.use((db) =>
-      db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get(),
-    )
+    const row = Database.use((db) => db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get())
     if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
     deleteGoalRow(goalID)
     return true
@@ -1176,13 +1184,7 @@ export namespace EngineService {
   export async function updateTaskBudget(taskID: string, budget: z.input<typeof Budget> | null) {
     const task = requireTask(taskID)
     const parsed = budget ? budgetRow(budget) : null
-    Database.use((db) =>
-      db
-        .update(EngineTaskTable)
-        .set({ budget: parsed })
-        .where(eq(EngineTaskTable.id, taskID))
-        .run(),
-    )
+    Database.use((db) => db.update(EngineTaskTable).set({ budget: parsed }).where(eq(EngineTaskTable.id, taskID)).run())
     await Bus.publish(Event.TaskUpdated, {
       taskID,
       status: deriveTaskStatus(task),
@@ -1200,29 +1202,32 @@ function recoverTaskByRequest(requestID: string, error: unknown) {
 }
 
 function recoverTaskByChannelBinding(
-  binding: {
-    platform: string
-    channel: string
-    thread: string
-  } | undefined,
+  binding:
+    | {
+        platform: string
+        channel: string
+        thread: string
+      }
+    | undefined,
   error: unknown,
 ) {
   if (!binding) return
   const message = error instanceof Error ? error.message : String(error)
   if (!message.includes("UNIQUE constraint failed")) return
   if (!message.includes("engine_channel_binding")) return
-  return Database.use((db) =>
-    db
-      .select({ task_id: EngineChannelBindingTable.task_id })
-      .from(EngineChannelBindingTable)
-      .where(
-        and(
-          eq(EngineChannelBindingTable.platform, binding.platform),
-          eq(EngineChannelBindingTable.channel, binding.channel),
-          eq(EngineChannelBindingTable.thread, binding.thread),
-        ),
-      )
-      .get()?.task_id,
+  return Database.use(
+    (db) =>
+      db
+        .select({ task_id: EngineChannelBindingTable.task_id })
+        .from(EngineChannelBindingTable)
+        .where(
+          and(
+            eq(EngineChannelBindingTable.platform, binding.platform),
+            eq(EngineChannelBindingTable.channel, binding.channel),
+            eq(EngineChannelBindingTable.thread, binding.thread),
+          ),
+        )
+        .get()?.task_id,
   )
 }
 
@@ -1313,10 +1318,15 @@ export namespace EngineService {
           phase: "cancel",
           key: "abort_timeout",
           value: JSON.stringify({ label, ms: err.ms, ...refs }),
-          reason: "executor.abort or cleanup did not respond within deadline; cancel proceeded so UI unblocks. Possible zombie child — investigate before another task starts in the same workspace.",
+          reason:
+            "executor.abort or cleanup did not respond within deadline; cancel proceeded so UI unblocks. Possible zombie child — investigate before another task starts in the same workspace.",
         })
       } else {
-        log.warn(`${label} failed during cancelTask`, { taskID, ...refs, error: err instanceof Error ? err.message : String(err) })
+        log.warn(`${label} failed during cancelTask`, {
+          taskID,
+          ...refs,
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
 
@@ -1327,27 +1337,29 @@ export namespace EngineService {
     for (const sessionID of sessionIDs.reverse()) {
       SessionPrompt.cancel(sessionID)
     }
-    const liveGoalRuns = listGoalRunsForTask(taskID).filter((row) =>
-      !["completed", "failed", "aborted"].includes(row.status),
+    const liveGoalRuns = listGoalRunsForTask(taskID).filter(
+      (row) => !["completed", "failed", "aborted"].includes(row.status),
     )
-    await Promise.all(liveGoalRuns.map(async (row) => {
-      const refs = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-        ? row.metadata as Record<string, unknown>
-        : undefined
-      // goal_run executor follows its coordinator run — the separate column
-      // was dead (written only, never read). Resolve via the parent run.
-      const coordinatorRun = findRun(row.coordinator_run_id)
-      if (!coordinatorRun) return
-      const abortP = ExecutorRegistry.require(coordinatorRun.executor).abort({
-        sessionID:
-          typeof refs?.provider_session_id === "string"
-            ? refs.provider_session_id
-            : row.session_id ?? undefined,
-        queueTaskID: typeof refs?.queue_task_id === "string" ? refs.queue_task_id : undefined,
-      })
-      await withTimeout(abortP, abortTimeoutMs, "executor.abort liveGoalRun")
-        .catch((err) => onAbortTimeout("executor.abort liveGoalRun", err, { goalRunID: row.id, runID: coordinatorRun.id }))
-    }))
+    await Promise.all(
+      liveGoalRuns.map(async (row) => {
+        const refs =
+          row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+            ? (row.metadata as Record<string, unknown>)
+            : undefined
+        // goal_run executor follows its coordinator run — the separate column
+        // was dead (written only, never read). Resolve via the parent run.
+        const coordinatorRun = findRun(row.coordinator_run_id)
+        if (!coordinatorRun) return
+        const abortP = ExecutorRegistry.require(coordinatorRun.executor).abort({
+          sessionID:
+            typeof refs?.provider_session_id === "string" ? refs.provider_session_id : (row.session_id ?? undefined),
+          queueTaskID: typeof refs?.queue_task_id === "string" ? refs.queue_task_id : undefined,
+        })
+        await withTimeout(abortP, abortTimeoutMs, "executor.abort liveGoalRun").catch((err) =>
+          onAbortTimeout("executor.abort liveGoalRun", err, { goalRunID: row.id, runID: coordinatorRun.id }),
+        )
+      }),
+    )
     const { abortLiveExecutionForTask } = await import("@/engine/writer")
     await withTimeout(
       abortLiveExecutionForTask({
@@ -1393,10 +1405,7 @@ export namespace EngineService {
     )
     // Clean up channel bindings so the thread is not reused
     Database.use((db) =>
-      db
-        .delete(EngineChannelBindingTable)
-        .where(eq(EngineChannelBindingTable.task_id, taskID))
-        .run(),
+      db.delete(EngineChannelBindingTable).where(eq(EngineChannelBindingTable.task_id, taskID)).run(),
     )
     return true
   }
@@ -1408,12 +1417,7 @@ export namespace EngineService {
         db
           .select()
           .from(EngineTaskTable)
-          .where(
-            and(
-              eq(EngineTaskTable.project_id, Instance.project.id),
-              inArray(EngineTaskTable.session_id, ids),
-            ),
-          )
+          .where(and(eq(EngineTaskTable.project_id, Instance.project.id), inArray(EngineTaskTable.session_id, ids)))
           .all(),
       )
       for (const item of tasks) {
@@ -1421,14 +1425,8 @@ export namespace EngineService {
         await cancelTask(item.id)
       }
       Database.use((db) => {
-        db
-          .delete(EngineTaskTable)
-          .where(
-            and(
-              eq(EngineTaskTable.project_id, Instance.project.id),
-              inArray(EngineTaskTable.session_id, ids),
-            ),
-          )
+        db.delete(EngineTaskTable)
+          .where(and(eq(EngineTaskTable.project_id, Instance.project.id), inArray(EngineTaskTable.session_id, ids)))
           .run()
         Database.effect(() => Database.incrementalVacuum())
       })
@@ -1527,17 +1525,19 @@ export namespace EngineService {
       source: input.source ?? "user_message",
       userID: input.user_id,
     })
-    await EngineProtocol.emit(Event.TaskMessageRecorded, {
-      taskID,
-      kind: "note",
-      source: input.source ?? "user_message",
-      text: input.text,
-      summary: "Operator note recorded",
-    }, { taskID, source: "service.message" })
+    await EngineProtocol.emit(
+      Event.TaskMessageRecorded,
+      {
+        taskID,
+        kind: "note",
+        source: input.source ?? "user_message",
+        text: input.text,
+        summary: "Operator note recorded",
+      },
+      { taskID, source: "service.message" },
+    )
     const note = await continueTaskMessage(taskID, input.text, attachmentRefs)
-    const message = note.resumed
-      ? "Operator note recorded. Scheduler notified."
-      : "Operator note recorded."
+    const message = note.resumed ? "Operator note recorded. Scheduler notified." : "Operator note recorded."
     return {
       kind: "note" as const,
       message,
@@ -1597,9 +1597,7 @@ export namespace EngineService {
     const language = await Provider.getLanguage(model)
 
     const sessionID = task.session_id ?? undefined
-    const messages = sessionID
-      ? await Session.messages({ sessionID, limit: 6 })
-      : []
+    const messages = sessionID ? await Session.messages({ sessionID, limit: 6 }) : []
     const transcript = messages
       .flatMap((msg) => {
         const role = msg.info.role
@@ -1687,10 +1685,14 @@ export namespace EngineService {
           phase: "cancel",
           key: "abort_timeout",
           value: JSON.stringify({ label: "executor.abort run", ms: err.ms, runID }),
-          reason: "abortRun's executor.abort exceeded deadline; run will still be marked aborted so the API unblocks. Possible zombie child.",
+          reason:
+            "abortRun's executor.abort exceeded deadline; run will still be marked aborted so the API unblocks. Possible zombie child.",
         })
       } else {
-        log.warn("executor.abort failed during abortRun", { runID, error: err instanceof Error ? err.message : String(err) })
+        log.warn("executor.abort failed during abortRun", {
+          runID,
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     })
     await updateRun(
@@ -1753,10 +1755,15 @@ async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<ty
         decision: input.reply === "always" ? "acceptForSession" : "accept",
       },
     })
-    markProtocolInteraction(row, "answered", {
-      reply: input.reply ?? "once",
-      message: input.message,
-    }, now)
+    markProtocolInteraction(
+      row,
+      "answered",
+      {
+        reply: input.reply ?? "once",
+        message: input.message,
+      },
+      now,
+    )
     return
   }
 
@@ -1782,10 +1789,15 @@ async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<ty
       answers: response,
     },
   })
-  markProtocolInteraction(row, "answered", {
-    answers: response,
-    message: input.message,
-  }, now)
+  markProtocolInteraction(
+    row,
+    "answered",
+    {
+      answers: response,
+      message: input.message,
+    },
+    now,
+  )
 }
 
 async function rejectProtocolInteraction(row: InteractionRow, message?: string) {
@@ -1841,13 +1853,17 @@ function markProtocolInteraction(
     if (row.run_id) {
       const runID = row.run_id
       Database.effect(() =>
-        EngineProtocol.emit(Event.InteractionResolved, {
-          taskID: row.task_id,
-          runID,
-          interactionID: row.id,
-          status,
-          summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-        }, { taskID: row.task_id, runID, interactionID: row.id, source: "service.interaction" }),
+        EngineProtocol.emit(
+          Event.InteractionResolved,
+          {
+            taskID: row.task_id,
+            runID,
+            interactionID: row.id,
+            status,
+            summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
+          },
+          { taskID: row.task_id, runID, interactionID: row.id, source: "service.interaction" },
+        ),
       )
     }
   })
