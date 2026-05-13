@@ -550,6 +550,23 @@ describe("contract_audit acceptance scorer", () => {
     expect(issues).toContain("Contract \"SuggestionChipProps\": props/data shape contracts must be registered as type_contract")
   })
 
+  test("architect validation allows lower-camel callable hooks ending with data or config", () => {
+    const collector = collectorWithExportOnlyBootstrap()
+    collector.contracts.push({
+      ir: hookFunctionContract("useKeyStatisticsData"),
+      goalIDs: ["goal_bootstrap"],
+    })
+    collector.contracts.push({
+      ir: hookFunctionContract("useKeyStatisticsConfig"),
+      goalIDs: ["goal_bootstrap"],
+    })
+
+    const issues = architectValidationIssues(collector, { workDir: process.cwd() }).join("\n")
+
+    expect(issues).not.toContain("Contract \"useKeyStatisticsData\": props/data shape contracts")
+    expect(issues).not.toContain("Contract \"useKeyStatisticsConfig\": props/data shape contracts")
+  })
+
   test("architect validation rejects verification goals that own feature source files", () => {
     const collector = collectorWithExportOnlyBootstrap()
     collector.goals.push({
@@ -693,6 +710,21 @@ function payloadContract(): ContractIR {
       typeExpr: "string",
       valueDomain: { kind: "literal_union", values: ["ok"] },
     }],
+  }
+}
+
+function hookFunctionContract(name: string): ContractIR {
+  return {
+    kind: "function",
+    name,
+    params: [],
+    returns: {
+      typeExpr: "unknown",
+      valueDomain: {
+        kind: "open",
+        reason: "Hook return shape is callable API output owned by the hook contract.",
+      },
+    },
   }
 }
 

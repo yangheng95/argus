@@ -312,7 +312,7 @@ function isEssentialDeliveryJudgeSpec(spec: AcceptanceSpec): boolean {
 }
 
 function isTypeShapeContractName(name: string): boolean {
-  return /(Props|State|Config|Options|Payload|Data|Model|DTO)$/.test(name)
+  return /^[A-Z]/.test(name) && /(Props|State|Config|Options|Payload|Data|Model|DTO)$/.test(name)
 }
 
 function isVerificationOwnedPath(ownedPath: string): boolean {
