@@ -2195,6 +2195,7 @@ export class Session extends HeyApiClient {
       providerID?: string
       modelID?: string
       auto?: boolean
+      focus?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2208,6 +2209,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "providerID" },
             { in: "body", key: "modelID" },
             { in: "body", key: "auto" },
+            { in: "body", key: "focus" },
           ],
         },
       ],

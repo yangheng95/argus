@@ -3934,6 +3934,9 @@
                   "auto": {
                     "default": false,
                     "type": "boolean"
+                  },
+                  "focus": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -29327,6 +29330,9 @@
           },
           "tail_start_id": {
             "type": "string"
+          },
+          "focus": {
+            "type": "string"
           }
         },
         "required": [
@@ -30282,6 +30288,50 @@
           "properties"
         ]
       },
+      "Event.task_plan.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task_plan.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "sessionID": {
+                    "type": "string"
+                  },
+                  "goal": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "sessionID",
+                  "goal",
+                  "status"
+                ]
+              }
+            },
+            "required": [
+              "task"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.session.compacted": {
         "type": "object",
         "properties": {
@@ -30375,50 +30425,6 @@
             "required": [
               "sessionID",
               "todos"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task_plan.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task_plan.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "task": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "sessionID": {
-                    "type": "string"
-                  },
-                  "goal": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id",
-                  "sessionID",
-                  "goal",
-                  "status"
-                ]
-              }
-            },
-            "required": [
-              "task"
             ]
           }
         },
@@ -31124,6 +31130,9 @@
             "$ref": "#/components/schemas/Event.command.executed"
           },
           {
+            "$ref": "#/components/schemas/Event.task_plan.updated"
+          },
+          {
             "$ref": "#/components/schemas/Event.session.compacted"
           },
           {
@@ -31131,9 +31140,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.todo.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task_plan.updated"
           },
           {
             "$ref": "#/components/schemas/Event.goal.report"
@@ -32414,7 +32420,7 @@
             }
           },
           "model": {
-            "description": "Model to use in the format of provider/model, eg alibaba-coding-plan-cn/kimi-k2.5",
+            "description": "Model to use in the format of provider/model, eg deepseek/deepseek-v4-pro",
             "type": "string"
           },
           "small_model": {
@@ -32700,7 +32706,7 @@
                 "maximum": 9007199254740991
               },
               "threshold": {
-                "description": "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.7 — start compacting at 70% so the agent has room to land its next reply without overflowing.",
+                "description": "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.9 — compact late enough to preserve prompt-cache stability while keeping headroom for the next reply.",
                 "type": "number",
                 "minimum": 0.1,
                 "maximum": 1

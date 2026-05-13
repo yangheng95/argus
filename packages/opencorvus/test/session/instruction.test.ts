@@ -5,6 +5,26 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
 describe("InstructionPrompt.resolve", () => {
+  test("loads project AGENTS.md and CLAUDE.md as authoritative system paths", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "AGENTS.md"), "# Agent Instructions")
+        await Bun.write(path.join(dir, "CLAUDE.md"), "# Claude Instructions")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const paths = Array.from(await InstructionPrompt.systemPaths())
+        expect(paths).toContain(path.join(tmp.path, "AGENTS.md"))
+        expect(paths).toContain(path.join(tmp.path, "CLAUDE.md"))
+        expect(paths.indexOf(path.join(tmp.path, "AGENTS.md"))).toBeLessThan(
+          paths.indexOf(path.join(tmp.path, "CLAUDE.md")),
+        )
+      },
+    })
+  })
+
   test("returns empty when AGENTS.md is at project root (already in systemPaths)", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

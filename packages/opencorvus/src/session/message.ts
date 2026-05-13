@@ -15,6 +15,7 @@ import { isDecodableText } from "./text-mime"
 import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/orchestrator/stateful-tool-names"
 import { normalizeToolInput } from "./tool-input-norm"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { CompactionHandoff } from "./compaction-handoff"
 
 /** Coerce a persisted tool_use.input into a dict for outbound AI-SDK messages.
  *  Downstream gateways (notably hexin → litellm → Bedrock) reject tool_use
@@ -267,6 +268,7 @@ export namespace Message {
     auto: z.boolean(),
     overflow: z.boolean().optional(),
     tail_start_id: z.string().optional(),
+    focus: z.string().optional(),
   }).meta({
     ref: "CompactionPart",
   })
@@ -577,6 +579,8 @@ export namespace Message {
   export interface ToModelMessagesOptions {
     stripMedia?: boolean
     toolOutputMaxChars?: number
+    preserveAssistantErrors?: boolean
+    omitAssistantReasoning?: boolean
   }
 
   function compactToolOutput(text: string, maxChars: number | undefined): string {
@@ -588,6 +592,24 @@ export namespace Message {
       `[Tool output truncated for compaction: ${text.length} chars total, ${text.length - maxChars} chars omitted]`,
       text.slice(text.length - tail).trimStart(),
     ].join("\n")
+  }
+
+  function assistantErrorText(error: unknown): string {
+    const serialized = (() => {
+      try {
+        return JSON.stringify(error)
+      } catch {
+        return String(error)
+      }
+    })()
+    if (typeof error === "object" && error !== null) {
+      const record = error as Record<string, unknown>
+      const name = typeof record.name === "string" ? record.name : "AssistantError"
+      const message = typeof record.message === "string" ? record.message : serialized
+      const status = typeof record.statusCode === "number" ? ` status=${record.statusCode}` : ""
+      return `[Assistant error preserved for compaction: ${name}${status}: ${message}]\n${serialized}`
+    }
+    return `[Assistant error preserved for compaction: ${serialized}]`
   }
 
   export async function toModelMessages(
@@ -779,7 +801,8 @@ export namespace Message {
           if (part.type === "compaction") {
             userMessage.parts.push({
               type: "text",
-              text: "What did we do so far?",
+              text:
+                "Context compaction checkpoint. This is not a new user request; continue the same task from the validated handoff summary that follows.",
             })
           }
           if (part.type === "subtask") {
@@ -795,19 +818,25 @@ export namespace Message {
         const differentModel = `${model.providerID}/${model.id}` !== `${msg.info.providerID}/${msg.info.modelID}`
         const media: Array<{ mime: string; url: string }> = []
 
-        if (
+        const shouldSkipErroredAssistant =
           msg.info.error &&
           !(
             Message.AbortedError.isInstance(msg.info.error) &&
             msg.parts.some((part) => part.type !== "step-start" && part.type !== "reasoning")
           )
-        ) {
+        if (shouldSkipErroredAssistant && !options.preserveAssistantErrors) {
           continue
         }
         const assistantMessage: UIMessage = {
           id: msg.info.id,
           role: "assistant",
           parts: [],
+        }
+        if (msg.info.error && options.preserveAssistantErrors) {
+          assistantMessage.parts.push({
+            type: "text",
+            text: assistantErrorText(msg.info.error),
+          })
         }
         for (const part of msg.parts) {
           if (part.type === "text")
@@ -893,11 +922,17 @@ export namespace Message {
                 ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
               })
           }
-          if (part.type === "reasoning") {
+          if (part.type === "reasoning" && !options.omitAssistantReasoning) {
             assistantMessage.parts.push({
               type: "reasoning",
               text: part.text,
               ...(differentModel ? {} : { providerMetadata: part.metadata }),
+            })
+          }
+          if (part.type === "patch") {
+            assistantMessage.parts.push({
+              type: "text",
+              text: `[Patch evidence: ${part.hash}: ${part.files.join(", ") || "(no files)"}]`,
             })
           }
         }
@@ -1071,7 +1106,7 @@ export namespace Message {
         if (msg.info.id === retain) break
         continue
       }
-      if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish && !msg.info.error)
+      if (msg.info.role === "assistant" && CompactionHandoff.isValidSummaryMessage(msg.info))
         completed.add(msg.info.parentID)
     }
     result.reverse()

@@ -69,22 +69,19 @@ export namespace InstructionPrompt {
     const config = await Config.get()
     const paths = new Set<string>()
 
-    if (!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG) {
-      for (const file of FILES) {
-        const matches = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
-        if (matches.length > 0) {
-          matches.forEach((p) => {
-            paths.add(path.resolve(p))
-          })
-          break
-        }
-      }
-    }
-
     for (const file of globalFiles()) {
       if (await Filesystem.exists(file)) {
         paths.add(path.resolve(file))
         break
+      }
+    }
+
+    if (!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG) {
+      for (const file of FILES) {
+        const matches = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
+        matches.forEach((p) => {
+          paths.add(path.resolve(p))
+        })
       }
     }
 

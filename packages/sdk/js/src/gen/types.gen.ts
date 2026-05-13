@@ -960,6 +960,7 @@ export type CompactionPart = {
   auto: boolean
   overflow?: boolean
   tail_start_id?: string
+  focus?: string
 }
 
 export type Part =
@@ -1264,6 +1265,18 @@ export type EventCommandExecuted = {
   }
 }
 
+export type EventTaskPlanUpdated = {
+  type: "task_plan.updated"
+  properties: {
+    task: {
+      id: string
+      sessionID: string
+      goal: string
+      status: string
+    }
+  }
+}
+
 export type EventSessionCompacted = {
   type: "session.compacted"
   properties: {
@@ -1298,18 +1311,6 @@ export type EventTodoUpdated = {
   properties: {
     sessionID: string
     todos: Array<Todo>
-  }
-}
-
-export type EventTaskPlanUpdated = {
-  type: "task_plan.updated"
-  properties: {
-    task: {
-      id: string
-      sessionID: string
-      goal: string
-      status: string
-    }
   }
 }
 
@@ -1550,10 +1551,10 @@ export type Event =
   | EventWorktreeReady
   | EventWorktreeFailed
   | EventCommandExecuted
+  | EventTaskPlanUpdated
   | EventSessionCompacted
   | EventFileEdited
   | EventTodoUpdated
-  | EventTaskPlanUpdated
   | EventGoalReport
   | EventSessionCreated
   | EventSessionUpdated
@@ -2303,7 +2304,7 @@ export type Config = {
    */
   enabled_providers?: Array<string>
   /**
-   * Model to use in the format of provider/model, eg alibaba-coding-plan-cn/kimi-k2.5
+   * Model to use in the format of provider/model, eg deepseek/deepseek-v4-pro
    */
   model?: string
   /**
@@ -2428,7 +2429,7 @@ export type Config = {
      */
     reserved?: number
     /**
-     * Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.7 — start compacting at 70% so the agent has room to land its next reply without overflowing.
+     * Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.9 — compact late enough to preserve prompt-cache stability while keeping headroom for the next reply.
      */
     threshold?: number
     /**
@@ -4875,6 +4876,7 @@ export type SessionSummarizeData = {
     providerID: string
     modelID: string
     auto?: boolean
+    focus?: string
   }
   path: {
     /**
