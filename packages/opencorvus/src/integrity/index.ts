@@ -6,6 +6,7 @@ export {
   type IntegrityVerdict,
   type IntegrityIssue,
   type GoalCorrection,
+  type IntegrityGraphCorrection,
   type MissingGoal,
 } from "./agent"
 export {
