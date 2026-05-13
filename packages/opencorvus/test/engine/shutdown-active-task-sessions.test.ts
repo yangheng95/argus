@@ -1,0 +1,125 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { abortActiveTasksForProject } from "../../src/engine/writer"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { deriveTaskStatus } from "../../src/engine/task-status"
+import { ensureTaskMessageProtocolBridge } from "../../src/orchestrator/protocol/message-bridge"
+import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { Message } from "../../src/session/message"
+import { SessionStatus } from "../../src/session/status"
+import { Database, eq } from "../../src/storage/db"
+import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
+
+describe("shutdown aborts active task-owned sessions", () => {
+  beforeEach(() => {
+    resetDatabase()
+  })
+
+  afterEach(async () => {
+    await Instance.disposeAll()
+  })
+
+  test("terminates a run-less direct build task and errors pending tool parts", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ensureTaskMessageProtocolBridge()
+
+        const now = Date.now()
+        const taskID = "tsk_shutdown_direct_build"
+        const root = await Session.create({
+          kind: "root",
+          title: "task root",
+        })
+        const orchestrator = await Session.create({
+          kind: "orchestrator",
+          parentID: root.id,
+          title: "orchestrator",
+        })
+        const build = await Session.create({
+          kind: "build",
+          parentID: orchestrator.id,
+          title: "build",
+        })
+        const messageID = "msg_shutdown_pending_write"
+        await Session.updateMessage({
+          id: messageID,
+          sessionID: build.id,
+          role: "assistant",
+          time: { created: now },
+          parentID: "msg_shutdown_user",
+          agent: "build",
+          providerID: "hexin",
+          modelID: "kimi-k2.6",
+          path: { cwd: tmp.path, root: tmp.path },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        })
+        await Session.updatePart({
+          id: "prt_shutdown_pending_write",
+          messageID,
+          sessionID: build.id,
+          type: "tool",
+          callID: "write:43",
+          tool: "write",
+          state: {
+            status: "pending",
+            input: {},
+            raw: "",
+          },
+        })
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "direct build shutdown",
+            request: "direct build shutdown",
+            kind: "workflow",
+            priority: "normal",
+            time_started: now,
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+        SessionStatus.set(root.id, { type: "streaming" })
+        SessionStatus.set(orchestrator.id, { type: "streaming" })
+        SessionStatus.set(build.id, { type: "streaming" })
+
+        const reason = "Server shutdown: http.shutdown"
+        const result = await abortActiveTasksForProject({
+          projectID: Instance.project.id,
+          reason,
+        })
+
+        expect(result).toEqual({ tasks: 1, sessions: 3, toolParts: 1 })
+        expect(SessionStatus.get(root.id)).toEqual({ type: "terminal", reason: "aborted" })
+        expect(SessionStatus.get(orchestrator.id)).toEqual({ type: "terminal", reason: "aborted" })
+        expect(SessionStatus.get(build.id)).toEqual({ type: "terminal", reason: "aborted" })
+
+        const task = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+        )
+        expect(task).toBeDefined()
+        expect(deriveTaskStatus(task!)).toBe("failed")
+        expect(task?.error).toBe(reason)
+
+        const part = (await Message.parts(messageID))[0]
+        expect(part?.type).toBe("tool")
+        if (part?.type !== "tool") throw new Error("expected tool part")
+        expect(part.state.status).toBe("error")
+        expect(part.state.error).toBe(reason)
+      },
+    })
+  })
+})
