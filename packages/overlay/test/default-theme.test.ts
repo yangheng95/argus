@@ -59,8 +59,8 @@ describe("overlay default theme", () => {
       "utf8",
     );
     expect(source).toContain("const [settingsHydrated, setSettingsHydrated] = createSignal(false)");
-    expect(source).toContain("if (!settingsHydrated()) return;");
+    expect(source).toContain("if (!settingsHydrated()) return");
     expect(source).toContain("onSettingsLoaded:");
-    expect(source).toContain("setSettingsHydrated(true);");
+    expect(source).toContain("setSettingsHydrated(true)");
   });
 });

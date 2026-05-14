@@ -70,6 +70,13 @@ export interface CreateTaskOptions {
   attachments?: Attachment[];
   metadata?: Record<string, unknown>;
   queue?: boolean;
+  kind?: "workflow" | "build";
+  /** Optional priority override; the server defaults to "normal". */
+  priority?: "critical" | "high" | "normal" | "low";
+  /** Optional executor override. The server defaults to the project executor. */
+  executor?: "opencorvus" | "codex" | "claude-code";
+  /** Title override. Server falls back to the request body when omitted. */
+  title?: string;
   signal?: AbortSignal;
   budget?: {
     maxExecutorGroups?: number;
@@ -182,6 +189,7 @@ export function panelRequestBody(
 // field polluted with a filesystem path. Fail loudly so the call stack points
 // directly at the source instead of triggering silent 400-request floods.
 const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const TASK_DECISION_COUNTDOWN_SECONDS = 8;
 
 export async function selectTask(
   taskID: string,
@@ -443,18 +451,17 @@ async function resolveTaskQueueDecision(input: { queue?: boolean; signal?: Abort
     throw input.signal.reason instanceof Error ? input.signal.reason : new DOMException("Task creation aborted", "AbortError");
   }
   const result = await showAppDialog({
+    kind: "task-queue-decision",
     title: t("task.queue_decision.title"),
     message: t("task.queue_decision.message"),
-    select: true,
     selectLabel: t("task.queue_decision.label"),
     selectValue: "start",
+    recommendedValue: "start",
+    countdownSeconds: TASK_DECISION_COUNTDOWN_SECONDS,
     selectOptions: [
       { value: "start", label: t("task.queue_decision.start") },
       { value: "queue", label: t("task.queue_decision.queue") },
     ],
-    cancel: true,
-    okLabel: t("common.ok"),
-    cancelLabel: t("common.cancel"),
   });
   if (!result.confirmed) {
     throw new DOMException("Task creation cancelled before queue decision", "AbortError");
@@ -464,6 +471,32 @@ async function resolveTaskQueueDecision(input: { queue?: boolean; signal?: Abort
   throw new Error(`Unknown task queue decision: ${String(result.value)}`);
 }
 
+async function resolveTaskKindDecision(input: { kind?: "workflow" | "build"; signal?: AbortSignal }): Promise<"workflow" | "build"> {
+  if (input.kind === "workflow" || input.kind === "build") return input.kind;
+  if (input.signal?.aborted) {
+    throw input.signal.reason instanceof Error ? input.signal.reason : new DOMException("Task creation aborted", "AbortError");
+  }
+  const recommended = "workflow" as const;
+  const result = await showAppDialog({
+    kind: "task-route-decision",
+    title: t("task.route_decision.title"),
+    message: t("task.route_decision.message"),
+    selectLabel: t("task.route_decision.label"),
+    selectValue: recommended,
+    recommendedValue: recommended,
+    countdownSeconds: TASK_DECISION_COUNTDOWN_SECONDS,
+    selectOptions: [
+      { value: "workflow", label: t("task.route_decision.agent_team") },
+      { value: "build", label: t("task.route_decision.direct_build") },
+    ],
+  });
+  if (!result.confirmed) {
+    throw new DOMException("Task creation cancelled before workflow route decision", "AbortError");
+  }
+  if (result.value === "workflow" || result.value === "build") return result.value;
+  throw new Error(`Unknown task workflow route decision: ${String(result.value)}`);
+}
+
 /**
  * Create a new task via direct API. Returns the task_id immediately.
  * No LLM round-trip — the backend persists the task in ~10ms.
@@ -471,16 +504,25 @@ async function resolveTaskQueueDecision(input: { queue?: boolean; signal?: Abort
 export async function createTask(options: CreateTaskOptions): Promise<string> {
   const { text, attachments = [], metadata = {}, signal, budget } = options;
   if (!text) throw new Error("createTask: text is required");
+  const kind = await resolveTaskKindDecision({ kind: options.kind, signal });
   const queue = await resolveTaskQueueDecision({ queue: options.queue, signal });
   const requestID = crypto.randomUUID();
-  const executor = sanitizeExecutor(settingsStore.executor);
+  // Caller-provided executor wins when supplied (e.g. Gateway proposal
+  // candidate carries its own executor pick); otherwise inherit the
+  // project setting so panel-driven creation behaves as before.
+  const executor = options.executor
+    ? sanitizeExecutor(options.executor)
+    : sanitizeExecutor(settingsStore.executor);
   const body = JSON.stringify({
     request: text,
     executor,
     requestID,
+    kind,
     queue,
     metadata,
     source: "panel",
+    ...(options.priority ? { priority: options.priority } : {}),
+    ...(options.title ? { title: options.title } : {}),
     ...(budget ? { budget } : {}),
     ...(attachments.length > 0
       ? {

@@ -10,7 +10,6 @@ import {
 } from "../store/board";
 import {
   mergeLoadedConversationMessages,
-  setMessages,
 } from "../store/messages";
 
 function boardSnapshot(board: any): string {
@@ -81,6 +80,23 @@ function assertActiveReplay(taskID: string, epoch: number, signal: AbortSignal):
   if (boardStore.selectedTaskID !== taskID) throw new DOMException("Conversation replay task changed", "AbortError");
 }
 
+function linkedReplayController(signal?: AbortSignal): AbortController {
+  const controller = new AbortController();
+  if (!signal) return controller;
+  if (signal.aborted) {
+    controller.abort(signal.reason ?? new DOMException("Conversation replay aborted", "AbortError"));
+    return controller;
+  }
+  signal.addEventListener(
+    "abort",
+    () => {
+      controller.abort(signal.reason ?? new DOMException("Conversation replay aborted", "AbortError"));
+    },
+    { once: true },
+  );
+  return controller;
+}
+
 function waitForReplayTurn(signal: AbortSignal): Promise<void> {
   if (signal.aborted) throw signal.reason ?? new DOMException("Conversation replay aborted", "AbortError");
   return new Promise((resolve, reject) => {
@@ -103,7 +119,7 @@ async function continueConversationReplay(
   initialReplay: EventReplay,
   epoch: number,
   signal: AbortSignal,
-): Promise<void> {
+): Promise<EventReplay> {
   let replay = initialReplay;
   while (!replay.complete) {
     assertActiveReplay(taskID, epoch, signal);
@@ -125,39 +141,45 @@ async function continueConversationReplay(
     }
     replay = nextReplay;
   }
+  return replay;
 }
 
-export async function hydrateTaskConversation(taskID: string): Promise<number> {
+export async function hydrateTaskConversation(
+  taskID: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<number> {
   cancelConversationReplay();
-  const data = await apiJson(`task/${encodeURIComponent(taskID)}/conversation`);
-  const board = requireObject(data?.board, "board");
-  const transcript = requireArray(data?.transcript, "transcript");
-  const timeline = requireArray(data?.timeline, "timeline");
-  const events = requireArray(data?.events, "events");
-  const view = requireObject(data?.view, "view");
-  const replay = parseEventReplay(data?.eventReplay);
-  const mergedMessages = mergeLoadedConversationMessages(timeline, transcript);
-  const lastSequence = requireNonnegativeInteger(data?.lastSequence, "lastSequence");
-
-  resetWriter();
-  setMessages(mergedMessages);
-  setBoardData(board);
-  setSnapshotVersion(boardSnapshot(board));
-  setTaskSequence(Number.isFinite(lastSequence) && lastSequence > 0 ? lastSequence : 0);
-  setBoardUpdatedAt(Date.now());
-  hydrateConversationView(view, mergedMessages);
-
-  for (const event of events) {
-    replayTaskEventToTree(event);
-  }
-
-  const controller = new AbortController();
+  const controller = linkedReplayController(options.signal);
   replayAbort = controller;
   const epoch = replayEpoch;
-  void continueConversationReplay(taskID, replay, epoch, controller.signal).catch((error) => {
-    if (error instanceof DOMException && error.name === "AbortError") return;
-    console.error("[conversation] replay failed", error);
-  });
+  const signal = controller.signal;
+  try {
+    const data = await apiJson(`task/${encodeURIComponent(taskID)}/conversation`, { signal });
+    assertActiveReplay(taskID, epoch, signal);
+    const board = requireObject(data?.board, "board");
+    const transcript = requireArray(data?.transcript, "transcript");
+    const timeline = requireArray(data?.timeline, "timeline");
+    const events = requireArray(data?.events, "events");
+    const view = requireObject(data?.view, "view");
+    const replay = parseEventReplay(data?.eventReplay);
+    const mergedMessages = mergeLoadedConversationMessages(timeline, transcript);
+    const lastSequence = requireNonnegativeInteger(data?.lastSequence, "lastSequence");
 
-  return lastSequence;
+    resetWriter();
+    setBoardData(board);
+    setSnapshotVersion(boardSnapshot(board));
+    setTaskSequence(Number.isFinite(lastSequence) && lastSequence > 0 ? lastSequence : 0);
+    setBoardUpdatedAt(Date.now());
+    hydrateConversationView(view, mergedMessages);
+
+    for (const event of events) {
+      assertActiveReplay(taskID, epoch, signal);
+      replayTaskEventToTree(event);
+    }
+
+    const finalReplay = await continueConversationReplay(taskID, replay, epoch, signal);
+    return Math.max(lastSequence, finalReplay.latestSequence);
+  } finally {
+    if (replayAbort === controller) replayAbort = null;
+  }
 }

@@ -10,7 +10,7 @@ import { Show, createEffect, createSignal } from "solid-js";
 import { Board } from "./Board";
 import { Conversation } from "./Conversation";
 import { selectTask } from "../services/task";
-import { messageStore } from "../store/messages";
+import { boardStore } from "../store/board";
 import { t } from "../utils/i18n";
 import { useHotkey } from "../solid/hotkey";
 
@@ -24,7 +24,7 @@ export function TaskDetailOverlay(props: TaskDetailOverlayProps) {
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string>("");
 
-  // Keep the overlay's state in sync with the underlying messageStore: when
+  // Keep the overlay's state in sync with the selected board task: when
   // the route ID changes (or on first mount), drive selectTask so the rest
   // of the app (board, conversation, agent stream) follows.
   function loadActiveTask(id: string) {
@@ -43,7 +43,7 @@ export function TaskDetailOverlay(props: TaskDetailOverlayProps) {
   createEffect(() => {
     const id = props.taskID;
     if (!id) return;
-    if (messageStore.selectedTaskID === id) {
+    if (boardStore.selectedTaskID === id) {
       setError("");
       return;
     }

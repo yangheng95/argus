@@ -78,7 +78,7 @@ export function getServerUrl(): string {
  * (the bypass list at the middleware) and `routes/global.ts` (the
  * GlobalRoutes mount). Adding a new /global route there means deciding
  * here whether overlay should inject directory: routes that go through
- * Instance.provide need it; routes mounted in GlobalRoutes do not.
+ * Instance.provide need it; GlobalRoutes and explicit middleware bypasses do not.
  *
  * Rule 36 test coverage: api-directory-injection.test.ts enumerates
  * every route in this set so any drift trips a unit test.
@@ -92,6 +92,7 @@ const NO_DIRECTORY_PATHS = new Set<string>([
   "global/config",
   "global/dispose",
   "global/db/reset",
+  "global/tasks",
 ]);
 const NO_DIRECTORY_PREFIXES = ["auth/"];
 

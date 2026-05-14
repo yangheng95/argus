@@ -13,8 +13,16 @@
 .chat-bubble-shell {
   display: flex;
   justify-content: flex-start;
-  width: min(100%, var(--card-sticky-inline-size, 100%));
+  width: var(--conversation-card-inline-size);
   max-width: 100%;
+}
+
+.chat-bubble-row[data-role="user"] .chat-bubble-shell {
+  width: var(--conversation-user-card-inline-size);
+}
+
+.chat-bubble-row[data-role="system"] .chat-bubble-shell {
+  width: var(--conversation-system-card-inline-size);
 }
 
 .chat-bubble-shell[data-align="right"] {
@@ -61,7 +69,7 @@
   display: flex;
   flex-direction: column;
   gap: calc(10px * var(--ui-scale));
-  width: min(74%, calc(720px * var(--ui-scale)));
+  width: 100%;
   max-width: 100%;
   border-radius: var(--oc-radius-large);
   padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
@@ -80,12 +88,14 @@
   transition: transform var(--ui-duration-fast) var(--ui-timing-standard);
 }
 
-.chat-bubble[data-align="right"] {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 12%, var(--surface-elevated, var(--surface)) 88%),
-    color-mix(in srgb, var(--accent) 8%, var(--surface) 92%)
-  );
+.chat-bubble-row[data-kind="agent"] .chat-bubble {
+  gap: 0;
+  padding: 0;
+  border-color: var(--card-border);
+  border-left: calc(3px * var(--ui-scale)) solid var(--card-stage);
+  border-radius: var(--oc-radius-soft);
+  box-shadow: none;
+  transform: none;
 }
 
 .chat-bubble--collapsed {
@@ -97,6 +107,16 @@
   padding-top: 0;
   padding-bottom: 0;
   border-top: 0;
+  border-bottom: 0;
+}
+
+.chat-bubble-row[data-kind="agent"] .chat-bubble--collapsed .chat-bubble__head {
+  border-top: 0;
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--card-line-dim) 84%, transparent);
+}
+
+.chat-bubble-row[data-kind="agent"] .chat-bubble--collapsed .chat-bubble__foot {
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--card-border) 60%, transparent);
   border-bottom: 0;
 }
 
@@ -114,6 +134,12 @@
   user-select: none;
 }
 
+.chat-bubble-row[data-kind="agent"] .chat-bubble__head {
+  padding: calc(var(--card-pad-y) + 1px) calc(var(--card-pad-x) + 1px);
+  min-height: calc(42px * var(--ui-scale));
+  border-bottom-color: color-mix(in srgb, var(--card-line-dim) 84%, transparent);
+}
+
 .chat-bubble__title-row {
   min-width: 0;
   display: flex;
@@ -123,6 +149,12 @@
 
 .chat-bubble__head[data-align="right"] .chat-bubble__title-row {
   flex-direction: row-reverse;
+}
+
+.chat-bubble-row[data-role="user"] .chat-bubble__title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
 }
 
 .chat-bubble__identity {
@@ -140,6 +172,10 @@
 .chat-bubble__identity[data-align="right"] {
   flex-direction: row-reverse;
   text-align: right;
+}
+
+.chat-bubble-row[data-role="user"] .chat-bubble__identity {
+  display: contents;
 }
 
 .chat-bubble__identity-copy {
@@ -160,6 +196,17 @@
 
 .chat-bubble__title-line[data-align="right"] {
   justify-content: flex-end;
+}
+
+.chat-bubble-row[data-role="user"] .chat-bubble__identity-copy {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: stretch;
+  text-align: left;
+}
+
+.chat-bubble-row[data-role="user"] .chat-bubble__title-line {
+  justify-content: flex-start;
 }
 
 .chat-bubble__title {
@@ -185,8 +232,28 @@
   justify-content: flex-start;
 }
 
+.chat-bubble-row[data-role="user"] .chat-bubble__actions {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  justify-content: flex-end;
+}
+
+.chat-bubble-row[data-role="user"] .chat-bubble__head-avatar {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
 .chat-bubble__body {
   min-width: 0;
+}
+
+.chat-bubble-row[data-kind="agent"] .chat-bubble__body {
+  padding: calc(var(--card-pad-y) + calc(4px * var(--ui-scale)))
+    calc(var(--card-pad-x) + calc(1px * var(--ui-scale)))
+    calc(var(--card-pad-y) + calc(6px * var(--ui-scale)));
+  line-height: 1.62;
 }
 
 .chat-bubble__body-inner {
@@ -226,6 +293,14 @@
   color: color-mix(in srgb, var(--text-muted) 92%, transparent);
 }
 
+.chat-bubble-row[data-kind="agent"] .chat-bubble__foot {
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-top-color: color-mix(in srgb, var(--card-border) 60%, transparent);
+  font-size: calc(var(--card-sub-size) - calc(1px * var(--ui-scale)));
+  font-variant-numeric: tabular-nums;
+}
+
 .chat-bubble[data-align="right"] .chat-bubble__foot {
   justify-content: flex-end;
 }
@@ -238,6 +313,12 @@
 
 .chat-bubble:hover {
   transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+.chat-bubble-row[data-kind="agent"] .chat-bubble:hover {
+  border-color: var(--card-border-strong);
+  border-left-color: var(--card-stage);
+  transform: none;
 }
 
 @keyframes chat-bubble-enter {

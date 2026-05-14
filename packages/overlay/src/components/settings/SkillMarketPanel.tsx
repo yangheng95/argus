@@ -16,7 +16,7 @@ import {
 import { createStore } from "solid-js/store";
 import { t } from "../../utils/i18n";
 import { apiJson } from "../../services/api";
-import { pickDirectory } from "../../services/workspace";
+import { activeDirectory, pickDirectory } from "../../services/workspace";
 import { appStore } from "../../store/app";
 import { updateConfig } from "../../services/config";
 import { nativeOpen } from "../../utils/native";
@@ -91,9 +91,10 @@ function policyLabel(policy: string): string {
 
 type ExtensionPanelMode = "skill" | "mcp" | "skill-market";
 
-function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode }) {
+function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode; active?: boolean }) {
   const [notice, setNotice] = createSignal("");
   const [loading, setLoading] = createSignal(false);
+  const [loadedMarketDirectory, setLoadedMarketDirectory] = createSignal("");
 
   // Reactive data from appStore (populated by loadExtensions/loadSkillMarket after connect)
   const skills = createMemo((): SkillItem[] => {
@@ -116,8 +117,11 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode }) {
 
   async function reloadAll() {
     setLoading(true);
+    setNotice("");
     try {
       await Promise.all([loadExtensions(), loadSkillMarket()]);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -255,11 +259,21 @@ function ExtensionSettingsPanel(props: { mode: ExtensionPanelMode }) {
     await reloadAll();
   }
 
-  // Ensure market data is loaded when the marketplace tab is mounted.
+  // Ensure market data is loaded once per active project directory.
   createEffect(() => {
-    if (props.mode === "skill-market" && market().length === 0) {
-      loadSkillMarket().catch(() => {});
+    const directory = activeDirectory();
+    if (props.mode !== "skill-market" || props.active !== true) return;
+    if (!directory) {
+      setLoadedMarketDirectory("");
+      setNotice(t("workspace.no_directory"));
+      return;
     }
+    if (loadedMarketDirectory() === directory) return;
+    setLoadedMarketDirectory(directory);
+    setNotice("");
+    loadSkillMarket().catch((e) => {
+      setNotice(e instanceof Error ? e.message : String(e));
+    });
   });
 
   async function handleOpenSkillDir() {
@@ -697,8 +711,8 @@ export function McpPanel() {
   return <ExtensionSettingsPanel mode="mcp" />;
 }
 
-export function SkillMarketPanel() {
-  return <ExtensionSettingsPanel mode="skill-market" />;
+export function SkillMarketPanel(props: { active?: boolean }) {
+  return <ExtensionSettingsPanel mode="skill-market" active={props.active} />;
 }
 
 export default SkillMarketPanel;

@@ -336,7 +336,7 @@ export function ConfigDialogHost() {
           </div>
           <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "skill-market" }} data-config-panel="skill-market">
             <div class="config-section-body" id="skillMarketConfigBody">
-              <SkillMarketPanel />
+              <SkillMarketPanel active={dialogStore.config.activeTab === "skill-market"} />
             </div>
           </div>
           <div classList={{ "config-tab-panel": true, active: dialogStore.config.activeTab === "mcp" }} data-config-panel="mcp">

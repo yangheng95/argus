@@ -44,23 +44,13 @@ import { escapeHtml } from "./markdown";
  * events that land within `PROGRAM_TOLERANCE` px of that position are
  * treated as program-echo and never fire `onUserScrollUp`.
  *
- * Follow-lock should only drop on likely user-driven upward scrolls. Reflow,
- * focus management, or other programmatic scrollTop changes must not disable
- * tracking, so we also require a recent scroll intent signal.
+ * Program-owned scroll jumps are suppressed explicitly. Any other upward
+ * scroll that leaves the viewport away from the bottom is treated as operator
+ * intent, because WebView2 can synthesize scroll events without a preceding
+ * wheel/key marker.
  */
 const BOTTOM_TOLERANCE = 8;
 const PROGRAM_TOLERANCE = 2;
-const USER_SCROLL_INTENT_WINDOW_MS = 250;
-const USER_SCROLL_KEYS = new Set([
-  "ArrowUp",
-  "ArrowDown",
-  "PageUp",
-  "PageDown",
-  "Home",
-  "End",
-  " ",
-  "Spacebar",
-]);
 
 export interface AutoScrollOptions {
   isTracking: () => boolean;
@@ -80,37 +70,7 @@ export function setupAutoScroll(
   let rafPending = false;
   let expectedTop = el.scrollTop;
   const observedChildren = new Set<Element>();
-  let lastUserScrollIntentAt = Number.NEGATIVE_INFINITY;
-
-  function nowMs(): number {
-    return typeof performance !== "undefined" ? performance.now() : Date.now();
-  }
-
-  function markUserScrollIntent() {
-    lastUserScrollIntentAt = nowMs();
-  }
-
-  function hasRecentUserScrollIntent(): boolean {
-    return nowMs() - lastUserScrollIntentAt <= USER_SCROLL_INTENT_WINDOW_MS;
-  }
-
-  function onWheel() {
-    markUserScrollIntent();
-  }
-
-  function onTouchMove() {
-    markUserScrollIntent();
-  }
-
-  function onPointerDown(event: PointerEvent) {
-    if (event.target === el) markUserScrollIntent();
-  }
-
-  function onKeyDown(event: KeyboardEvent) {
-    if (event.defaultPrevented) return;
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    if (USER_SCROLL_KEYS.has(event.key)) markUserScrollIntent();
-  }
+  let programScrollTarget: number | null = null;
 
   function distanceFromBottom(): number {
     return el.scrollHeight - el.clientHeight - el.scrollTop;
@@ -133,6 +93,14 @@ export function setupAutoScroll(
   function onScroll() {
     const nextTop = el.scrollTop;
     const delta = nextTop - expectedTop;
+    if (
+      programScrollTarget !== null &&
+      Math.abs(nextTop - programScrollTarget) <= PROGRAM_TOLERANCE
+    ) {
+      programScrollTarget = null;
+      expectedTop = nextTop;
+      return;
+    }
     if (Math.abs(delta) <= PROGRAM_TOLERANCE) {
       expectedTop = nextTop;
       return;
@@ -142,7 +110,6 @@ export function setupAutoScroll(
     if (
       opts.isTracking() &&
       movedUp &&
-      hasRecentUserScrollIntent() &&
       distanceFromBottom() > BOTTOM_TOLERANCE
     ) {
       opts.onUserScrollUp();
@@ -156,14 +123,11 @@ export function setupAutoScroll(
       rafPending = false;
       if (!opts.isTracking()) return;
       el.scrollTop = el.scrollHeight;
+      programScrollTarget = el.scrollTop;
       expectedTop = el.scrollTop;
     });
   }
 
-  el.addEventListener("wheel", onWheel, { passive: true });
-  el.addEventListener("touchmove", onTouchMove, { passive: true });
-  el.addEventListener("pointerdown", onPointerDown, { passive: true });
-  el.addEventListener("keydown", onKeyDown);
   el.addEventListener("scroll", onScroll, { passive: true });
 
   const resizeObserver = new ResizeObserver(scrollDown);
@@ -189,15 +153,12 @@ export function setupAutoScroll(
 
   requestAnimationFrame(() => {
     el.scrollTop = el.scrollHeight;
+    programScrollTarget = el.scrollTop;
     expectedTop = el.scrollTop;
   });
 
   return {
     cleanup: () => {
-      el.removeEventListener("wheel", onWheel);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("pointerdown", onPointerDown);
-      el.removeEventListener("keydown", onKeyDown);
       el.removeEventListener("scroll", onScroll);
       mutationObserver.disconnect();
       resizeObserver.disconnect();
@@ -205,10 +166,12 @@ export function setupAutoScroll(
     },
     scrollToBottom: () => {
       el.scrollTop = el.scrollHeight;
+      programScrollTarget = el.scrollTop;
       expectedTop = el.scrollTop;
     },
     scrollToTop: () => {
       el.scrollTop = 0;
+      programScrollTarget = el.scrollTop;
       expectedTop = el.scrollTop;
     },
   };

@@ -534,14 +534,11 @@
   color: var(--text);
 }
 
-/* Tool output, reasoning trace, and inline patch blobs share the
- * same scrollable container contract. The 128px ceiling is denser
- * than the inspector's 112px (.sections .plan-summary et al.)
- * because tool output and reasoning are dense text that the
- * operator scans, while inspector summaries are narrative they
- * read line-by-line. */
+/* Tool output and inline patch blobs share the same scrollable
+ * container contract. Reasoning text is intentionally excluded:
+ * it is conversation content, so it stays full-height unless the
+ * operator explicitly collapses the reasoning block. */
 .msg-tool-output,
-.msg-reasoning,
 .msg-patch {
   max-width: 100%;
   max-height: calc(128px * var(--ui-scale));
@@ -612,6 +609,10 @@
   min-width: 0;
 }
 
+.msg-reasoning[data-expanded="false"] .reasoning-text {
+  display: none;
+}
+
 @media (max-width: 520px) { /* breakpoint: --ui-breakpoint-sm */
   .msg-reasoning {
     gap: calc(4px * var(--ui-scale));
@@ -678,9 +679,9 @@
 
 /* ─────────────────────────────────────────────────────────────
    Message overflow guards (extracted 2026-05-04): the cross-class
-   min-width: 0 + max-height/overflow chain that prevents long
-   tool-output / reasoning blocks from ballooning their parent
-   card's intrinsic size.
+   min-width: 0 / max-width: 100% reset that prevents long message
+   content from ballooning its parent card's intrinsic size. Height
+   limits stay scoped to tool output and inline patch blobs only.
    ───────────────────────────────────────────────────────────── */
 
 .change-row,
@@ -714,15 +715,8 @@
   overscroll-behavior: contain;
 }
 
-.msg-reasoning,
 .msg-patch {
   max-height: calc(128px * var(--ui-scale));
   overflow: auto;
   overscroll-behavior: contain;
-}
-
-.msg-reasoning[data-expanded="true"] {
-  max-height: none;
-  overflow: visible;
-  overscroll-behavior: auto;
 }

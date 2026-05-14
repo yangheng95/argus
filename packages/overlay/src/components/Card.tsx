@@ -22,6 +22,7 @@ import { StepPayloadBody } from "./StepPayloadBody";
 import { IntegrityBody } from "./IntegrityCard";
 import { TracePanel } from "./TracePanel";
 import { t } from "../utils/i18n";
+import { StoreCardNode } from "./StoreCardNode";
 
 /**
  * Recursive structured-card primitive for non-bubble conversation items.
@@ -49,13 +50,12 @@ export function Card(props: { node: CardNode; depth: number }) {
   const headerNode = createMemo(() => stepHeaderNodeWithBuildPhase(props.node));
   const visibleChildIDs = createMemo(() => visibleChildIDsForCard(props.node));
 
-  // Foot stats: tool / message / agent / skill activity rolled up from the
-  // card's descendants. Surface on stage cards (agent/phase/step) regardless
-  // of expand state — when collapsed they back-fill what the body would
-  // have shown; when expanded they sit at the bottom as a quick summary
-  // of "how much happened in this step".
+  // Foot stats are collapsed-only. Expanded stage cards render their actual
+  // body and children, so a recursive descendant scan here would only add
+  // per-delta work on the streaming hot path.
   const footActivity = createMemo(() => {
     if (!isStageCard() || props.node.kind === "tool") return null;
+    if (expanded()) return null;
     const counts = collectActivityCounts(props.node);
     if ((counts.messages + counts.tools + counts.agents + counts.skills) === 0) return null;
     return counts;
@@ -139,7 +139,7 @@ export function Card(props: { node: CardNode; depth: number }) {
     const taskID = boardStore.selectedTaskID;
     if (!taskID) return;
     // Optimistic local prune — user feels instant feedback. If the HTTP
-    // call fails the cards are gone until a syncTask() reload, which is
+    // call fails the cards are gone until selected-task recovery reloads, which is
     // acceptable (worst case: user reloads). We avoid a full-refresh
     // because that was the source of the "user message → overlay 卡顿"
     // symptom the operator flagged.
@@ -343,7 +343,11 @@ export function Card(props: { node: CardNode; depth: number }) {
           >
             <div class="card__children">
               <For each={visibleChildIDs()}>
-                {(id) => <Card node={cardTreeStore.cards[id]!} depth={props.depth + 1} />}
+                {(id) => (
+                  <StoreCardNode id={id} ownerID={props.node.id}>
+                    {(node) => <Card node={node} depth={props.depth + 1} />}
+                  </StoreCardNode>
+                )}
               </For>
             </div>
           </Show>

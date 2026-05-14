@@ -549,6 +549,13 @@ describe("overlay architecture guards", () => {
       "sidebar-list-group",
       "sidebar-list-heading",
       "sidebar-list-cluster",
+      "project-group",
+      "project-group-heading",
+      "project-group-copy",
+      "project-group-name",
+      "project-group-parent",
+      "project-group-count",
+      "project-group-body",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(sidebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -556,6 +563,9 @@ describe("overlay architecture guards", () => {
 
     expect(sidebarSurface).toMatch(/\.sidebar-footer a:hover\s*\{/)
     expect(sidebarSurface).toMatch(/\.sidebar-list\.session-list-panel\s*\{/)
+    expect(sidebarSurface).toMatch(/\.project-group-icon,\s*\.project-group-chevron\s*\{/)
+    expect(sidebarSurface).toMatch(/@keyframes project-group-body-reveal\s*\{/)
+    expect(sidebarSurface).not.toMatch(/data-active-project/)
   })
 
   test("sidebar shell + tool family are owned by surfaces/sidebar.css", () => {
@@ -1024,9 +1034,12 @@ describe("overlay architecture guards", () => {
       "prompt-grid",
       "prompt-card",
       "prompt-card-copy",
+      "prompt-editor",
+      "prompt-editor-head",
+      "prompt-editor-actions",
+      "prompt-view-tabs",
+      "prompt-view-tab",
       "prompt-textarea",
-      "prompt-diff-details",
-      "prompt-diff-summary",
       "prompt-preview-card",
       "prompt-preview-body",
     ]) {
@@ -1034,10 +1047,13 @@ describe("overlay architecture guards", () => {
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(settingsSurface).toMatch(/\.prompt-card-head,\s*\.prompt-toolbar\s*\{/)
-    expect(settingsSurface).toMatch(/\.prompt-card-copy span,\s*\.prompt-card-copy small,\s*\.prompt-preview-head\s*\{/)
-    expect(settingsSurface).toMatch(/\.prompt-diff-details\[open\] \> \.prompt-diff-summary::before\s*\{/)
-    expect(settingsSurface).toMatch(/\.prompt-preview-card--default\s*\{/)
+    expect(settingsSurface).toMatch(/\.prompt-card-head\s*\{/)
+    expect(settingsSurface).toMatch(/\.prompt-card-copy span,\s*\.prompt-card-copy small\s*\{/)
+    expect(settingsSurface).not.toMatch(/\.prompt-preview-head\s*\{/)
+    expect(settingsSurface).toMatch(/\.prompt-view-tab\[data-active="true"\]\s*\{/)
+    expect(settingsSurface).not.toMatch(/\.prompt-diff-details\s*\{/)
+    expect(settingsSurface).not.toMatch(/\.prompt-diff-summary\s*\{/)
+    expect(settingsSurface).not.toMatch(/\.prompt-preview-card--default\s*\{/)
     expect(settingsSurface).toMatch(/\.prompt-preview-card--attached\s*\{/)
   })
 
@@ -1187,6 +1203,9 @@ describe("overlay architecture guards", () => {
     expect(layoutBody).toContain("overflow: hidden")
 
     expect(settingsSurface).toMatch(/\.config-close-btn:hover\s*\{/)
+    const sidebarBody =
+      settingsSurface.match(/(^|\n)\.config-sidebar\s*\{([^}]*)\}/)?.[2] ?? ""
+    expect(sidebarBody).toContain("background: transparent")
     expect(settingsSurface).toMatch(/\.config-nav-item\.active\s*\{/)
     expect(settingsSurface).toMatch(/\.config-nav-item\.active::before\s*\{/)
     expect(settingsSurface).toMatch(/\.config-nav-item\.active \.config-nav-icon\s*\{/)
@@ -2437,13 +2456,13 @@ describe("overlay architecture guards", () => {
       "width: 100%",
       "height: calc(var(--conversation-agent-rail-height, 42) * 1px * var(--ui-scale))",
       "min-height: calc(42px * var(--ui-scale))",
-      "max-height: calc(220px * var(--ui-scale))",
       "display: flex",
       "flex-direction: row",
       "overflow: hidden",
     ]) {
       expect(railBody).toContain(declaration)
     }
+    expect(railBody).not.toContain("max-height:")
 
     const laneBody = soloRuleBody(surface, ".conversation-agent-rail__lanes")
     expect(laneBody).toContain("overflow-x: auto")
@@ -2617,6 +2636,21 @@ describe("overlay architecture guards", () => {
     const sectionsBody = sectionsBodies.at(-1) ?? ""
     expect(sectionsBody).toContain("gap: var(--ui-gap-sm)")
     expect(sectionsBody).toContain("padding: var(--ui-gap-sm)")
+  })
+
+  test("narrow overlay layout keeps non-chat panes scrollable", () => {
+    const workspace = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
+    )
+    const narrowStart = workspace.indexOf("@media (max-width: 1120px)")
+    expect(narrowStart).toBeGreaterThan(-1)
+    const narrow = workspace.slice(narrowStart)
+
+    expect(narrow).toMatch(/\.sidebar\s*\{[\s\S]*flex:\s*0 0 min\(26vh, calc\(240px \* var\(--ui-scale\)\)\)/)
+    expect(narrow).toMatch(/\.sidebar\s*\{[\s\S]*min-height:\s*min\(18vh, calc\(160px \* var\(--ui-scale\)\)\)/)
+    expect(narrow).toMatch(/\.chat\s*\{[\s\S]*flex:\s*1 1 auto/)
+    expect(narrow).toMatch(/\.sections\s*\{[\s\S]*flex:\s*0 0 min\(34vh, calc\(360px \* var\(--ui-scale\)\)\)/)
+    expect(narrow).toMatch(/\.sections\s*\{[\s\S]*min-height:\s*min\(28vh, calc\(260px \* var\(--ui-scale\)\)\)/)
   })
 
   test("right panel card radius and body padding are canonical, not theme scoped", () => {
@@ -3130,11 +3164,17 @@ describe("overlay architecture guards", () => {
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
   })
 
-  test("chat bubbles do not add theme-colored side rails", () => {
+  test("agent chat bubbles use the execution rail while message roles stay rail-free", () => {
     const css = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/chat-bubble.css")))
+    expect(css).toContain('.chat-bubble-row[data-kind="agent"] .chat-bubble')
+    expect(css).toContain("border-left: calc(3px * var(--ui-scale)) solid var(--card-stage);")
+    expect(css).not.toMatch(/\.chat-bubble-row\[data-kind="agent"\] \.chat-bubble\s*\{[^}]*background:/)
+    expect(css).not.toMatch(/\.chat-bubble-row\[data-kind="agent"\] \.chat-bubble:hover\s*\{[^}]*background:/)
     expect(css).not.toMatch(/border-inline-(?:start|end)\s*:/)
     expect(css).not.toContain("--card-system-rail")
     expect(css).not.toContain("--card-stage-user) 84%")
+    expect(css).not.toMatch(/\[data-role="user"\][^{]*\{[^}]*border-left:/)
+    expect(css).not.toMatch(/\[data-role="system"\][^{]*\{[^}]*border-left:/)
   })
 
   test("tool cards do not add theme-colored side rails", () => {

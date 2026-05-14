@@ -7,6 +7,7 @@ import { boardStore } from "../store/board";
 import { t } from "../utils/i18n";
 import { renderAsBubble } from "../utils/chat-bubble";
 import { setupAutoScroll } from "../utils/dom-utils";
+import { StoreCardNode } from "./StoreCardNode";
 
 function clipText(value: string, limit = 96): string {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -148,11 +149,13 @@ export function Conversation(props: { container: HTMLElement }) {
       </Show>
       <For each={cardTreeStore.order}>
         {(id) => (
-          <Show when={cardTreeStore.cards[id]}>
-            {renderAsBubble(cardTreeStore.cards[id]!)
-              ? <ChatBubble node={cardTreeStore.cards[id]!} depth={0} />
-              : <Card node={cardTreeStore.cards[id]!} depth={0} />}
-          </Show>
+          <StoreCardNode id={id}>
+            {(node) =>
+              renderAsBubble(node)
+                ? <ChatBubble node={node} depth={0} />
+                : <Card node={node} depth={0} />
+            }
+          </StoreCardNode>
         )}
       </For>
     </>

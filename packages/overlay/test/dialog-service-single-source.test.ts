@@ -72,4 +72,17 @@ describe("app/session dialog single source", () => {
     expect(configHost).toContain('id="configSidebar"');
     expect(configHost).toContain('id="btnCloseConfigDialog"');
   });
+
+  test("task route and queue decisions use card choices instead of select UI", () => {
+    expect(appHost).toContain('dialogStore.app.kind === "task-queue-decision"');
+    expect(appHost).toContain('class="app-dialog-decision__choice"');
+    expect(appHost).toContain("isTaskCardDecision()");
+    expect(appHost).toContain("chooseTaskDecision(option.value)");
+    expect(appHost).toContain("settleAppDialog(true, dialogStore.app.epoch, value)");
+    expect(appHost).toContain("isTaskCardDecision() ? undefined");
+    expect(appHost).toContain("hidden: dialogStore.app.select !== true || isTaskCardDecision()");
+    expect(appHost).toContain("hasTaskDecisionCountdown()");
+    expect(appHost).toContain('t("task.queue_decision.countdown"');
+    expect(appHost).not.toContain("!isTaskRouteDecision()) return");
+  });
 });

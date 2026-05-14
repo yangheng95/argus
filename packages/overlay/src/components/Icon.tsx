@@ -105,7 +105,10 @@ export type IconName =
   | "status-active"
   | "status-completed"
   | "status-failed"
-  | "status-cancelled";
+  | "status-cancelled"
+  // Gateway entry / control room glyph
+  | "gateway"
+  | "channel-link";
 
 interface IconRecord {
   /** Inner SVG markup. Must be self-contained (no external defs). */
@@ -898,6 +901,29 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       <>
         <circle cx="8" cy="8" r="4.5" />
         <path d="M5.2 10.8l5.6-5.6" />
+      </>
+    ),
+  },
+  // Gateway: a hub-and-spokes glyph — a central node with three radials
+  // suggesting "control room that fans out to many runners / channels".
+  gateway: {
+    body: () => (
+      <>
+        <circle cx="8" cy="8" r="2.4" />
+        <line x1="8" y1="2.5" x2="8" y2="5" />
+        <line x1="8" y1="11" x2="8" y2="13.5" />
+        <line x1="2.5" y1="8" x2="5" y2="8" />
+        <line x1="11" y1="8" x2="13.5" y2="8" />
+      </>
+    ),
+  },
+  // Channel link: two link rings, used for channel binding badges.
+  "channel-link": {
+    body: () => (
+      <>
+        <path d="M6 9.5L4.5 11a2 2 0 0 1-2.8-2.8L3 7" />
+        <path d="M10 6.5L11.5 5a2 2 0 0 1 2.8 2.8L13 9" />
+        <line x1="6" y1="10" x2="10" y2="6" />
       </>
     ),
   },

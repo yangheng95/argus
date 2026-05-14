@@ -2,13 +2,14 @@
    The `.chat-empty--task` shell lives in composer.css because that file
    already owns the task-aware composer/empty-state chrome. */
 
-/* Chat scroll: the message column flow. The canonical here folds in
-   the late `--card-min-inline-size`, gap, padding, and background
-   overrides that previously lived in styles.css as rule-8 duplicates;
-   the wider 1040px cap on cards (vs the historical 960px) was the
-   actually-rendered value. */
+/* Chat scroll: the message column flow. Conversation owns the inline
+   card contract so ordinary agent bubbles and structured execution
+   cards cannot drift into separate widths. */
 .chat-scroll {
-  --card-min-inline-size: 46%;
+  --conversation-card-inline-size: 100%;
+  --conversation-user-card-inline-size: min(72%, calc(720px * var(--ui-scale)));
+  --conversation-system-card-inline-size: min(86%, calc(760px * var(--ui-scale)));
+  --card-min-inline-size: min(100%, var(--conversation-card-inline-size));
   flex: 1;
   overflow-y: auto;
   overflow-anchor: none;
@@ -57,7 +58,6 @@
   width: 100%;
   height: calc(var(--conversation-agent-rail-height, 42) * 1px * var(--ui-scale));
   min-height: calc(42px * var(--ui-scale));
-  max-height: calc(220px * var(--ui-scale));
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -69,6 +69,10 @@
     linear-gradient(180deg, color-mix(in srgb, var(--surface-inset) 76%, transparent), transparent 88%),
     var(--chat-canvas);
   overflow: hidden;
+  transition:
+    height var(--ui-duration-base) var(--ui-timing-standard),
+    padding var(--ui-duration-base) var(--ui-timing-standard),
+    background var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .conversation-agent-rail[data-wide="true"] {
@@ -82,6 +86,7 @@
   border-color: color-mix(in srgb, var(--card-stage, var(--accent)) 34%, transparent);
   background: color-mix(in srgb, var(--card-stage, var(--accent)) 8%, var(--surface-inset));
   box-shadow: none;
+  animation: none;
 }
 
 .conversation-agent-rail .chat-avatar::after {
@@ -104,10 +109,15 @@
   gap: calc(6px * var(--ui-scale));
   padding: 0 calc(1px * var(--ui-scale));
   scrollbar-width: thin;
+  transition:
+    gap var(--ui-duration-base) var(--ui-timing-standard),
+    padding var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .conversation-agent-rail[data-wide="true"] .conversation-agent-rail__lanes {
   align-items: stretch;
+  overflow-x: auto;
+  overflow-y: auto;
   gap: calc(8px * var(--ui-scale));
 }
 
@@ -149,6 +159,14 @@
   box-shadow:
     inset 0 calc(1px * var(--ui-scale)) 0 color-mix(in srgb, var(--text-strong) 8%, transparent),
     0 calc(1px * var(--ui-scale)) calc(4px * var(--ui-scale)) color-mix(in srgb, var(--shadow, var(--text)) 16%, transparent);
+  transition:
+    width var(--ui-duration-base) var(--ui-timing-standard),
+    min-height var(--ui-duration-base) var(--ui-timing-standard),
+    padding var(--ui-duration-base) var(--ui-timing-standard),
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    background var(--ui-duration-base) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 
 .conversation-agent-rail[data-wide="false"] .conversation-agent-rail__row {
@@ -180,6 +198,7 @@
 
 .conversation-agent-rail__run {
   appearance: none;
+  position: relative;
   min-width: 0;
   display: grid;
   gap: calc(2px * var(--ui-scale));
@@ -189,11 +208,29 @@
   color: var(--text-soft);
   text-align: left;
   cursor: pointer;
+  opacity: var(--ui-opacity-hidden);
+  transform: translateY(calc(3px * var(--ui-scale)));
+  transition:
+    opacity var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-base) var(--ui-timing-standard);
+}
+
+.conversation-agent-rail[data-wide="true"] .conversation-agent-rail__run {
+  opacity: var(--ui-opacity-full);
+  transform: translateY(0);
+}
+
+.conversation-agent-rail[data-wide="false"] .conversation-agent-rail__run,
+.conversation-agent-rail[data-wide="false"] .conversation-agent-rail__report {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .conversation-agent-rail__run-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: calc(6px * var(--ui-scale));
   min-width: 0;
   color: var(--text-strong);
@@ -204,9 +241,9 @@
 .conversation-agent-rail__run-head strong,
 .conversation-agent-rail__summary {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .conversation-agent-rail__run-head span {
@@ -226,10 +263,12 @@
 .conversation-agent-rail__summary {
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
-  line-height: 1.25;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .conversation-agent-rail__report {
+  position: relative;
   width: calc(24px * var(--ui-scale));
   height: calc(24px * var(--ui-scale));
   display: inline-flex;
@@ -237,6 +276,18 @@
   justify-content: center;
   border-radius: var(--oc-radius-soft);
   color: var(--text-muted);
+  opacity: var(--ui-opacity-hidden);
+  transform: translateY(calc(3px * var(--ui-scale)));
+  transition:
+    opacity var(--ui-duration-base) var(--ui-timing-standard),
+    transform var(--ui-duration-base) var(--ui-timing-standard),
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+}
+
+.conversation-agent-rail[data-wide="true"] .conversation-agent-rail__report {
+  opacity: var(--ui-opacity-full);
+  transform: translateY(0);
 }
 
 .conversation-agent-rail__resize {
@@ -373,18 +424,18 @@
 
 .chat-scroll > .card,
 .chat-scroll > .interaction-card {
-  width: auto;
-  max-width: min(100%, calc(1040px * var(--ui-scale)));
-  align-self: flex-start;
+  width: var(--conversation-card-inline-size);
+  max-width: 100%;
+  align-self: stretch;
 }
 
 .chat-scroll > .card[data-kind="message"][data-role="user"] {
-  width: min(72%, calc(720px * var(--ui-scale)));
+  width: var(--conversation-user-card-inline-size);
   align-self: flex-end;
 }
 
 .chat-scroll > .card[data-kind="message"][data-role="system"] {
-  width: min(86%, calc(760px * var(--ui-scale)));
+  width: var(--conversation-system-card-inline-size);
   align-self: center;
 }
 
@@ -487,17 +538,12 @@
 }
 
 .chat-task-status .status-copy {
-  /* center, not baseline. baseline alignment depended on identical
-     line-heights between `.status-label` and `.elapsed`, which they
-     don't have at the chat density (label inherits, elapsed sets 1).
-     Center + matching line-height: 1 on both spans below makes the
-     icon, label and elapsed all share the same midline. */
   display: flex;
   min-width: 0;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(2px * var(--ui-scale));
   line-height: 1;
 }
 
@@ -1393,9 +1439,7 @@
   flex-shrink: 0;
   padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface-inset);
-  box-shadow: none;
+  background: transparent;
 }
 
 .status-label {

@@ -39,7 +39,7 @@ import { setLocale } from "./utils/i18n"
 import { apiJson, apiRequest, configure as configureApi, getServerUrl } from "./services/api"
 import { t } from "./utils/i18n"
 import { renderMarkdown, escapeHtml } from "./utils/markdown"
-import { copyChatConversation } from "./utils/transcript"
+import { conversationTranscriptMessageCount, copyChatConversation } from "./utils/transcript"
 import {
   applyTheme,
   applyZoom,
@@ -79,7 +79,6 @@ import {
   removeRecentDirectory,
 } from "./services/workspace"
 import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
-import { loadConversation } from "./store/messages"
 import { cardTreeStore } from "./store/card-tree"
 import {
   nextTabForPreviewResolution,
@@ -607,7 +606,6 @@ function installGlobalBridges(): void {
   ;(window as any).loadTasks = loadTasks
   ;(window as any).selectTask = selectTask
   ;(window as any).loadBoard = loadBoard
-  ;(window as any).loadConversation = loadConversation
   ;(window as any).setPageMode = setPageMode
 }
 
@@ -1123,6 +1121,7 @@ disposers.push(
     })
 
     createEffect(() => {
+      if (!settingsHydrated()) return
       configureApi({
         serverUrl: settingsStore.serverUrl,
         username: settingsStore.username,
@@ -1136,7 +1135,7 @@ disposers.push(
     })
 
     createEffect(() => {
-      const count = messageStore.messages.length
+      const count = conversationTranscriptMessageCount()
       const chatCount = document.getElementById("chatCount")
       const copyBtn = document.getElementById("btnChatCopyAll") as HTMLButtonElement | null
       if (chatCount) chatCount.textContent = count > 0 ? String(count) : ""

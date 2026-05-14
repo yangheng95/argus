@@ -1,6 +1,7 @@
 import { Show, createMemo, createSignal } from "solid-js";
 import { displayToolIcon } from "../utils/tool";
 import {
+  collapsedActivityPreviewText,
   collectLatestActivityText,
   collectTodoSummary,
   type CardNode,
@@ -41,45 +42,6 @@ function formatCostUSD(n: number): string {
   if (n < 1) return "$" + n.toFixed(3);
   return "$" + n.toFixed(2);
 }
-
-function previewPlainText(text: string): string {
-  return String(text || "")
-    .replace(/```[\s\S]*?```/g, (block) =>
-      block
-        .replace(/^```[^\n]*\n?/, "")
-        .replace(/\n?```$/, "")
-        .trim(),
-    )
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/<\/?[A-Za-z][\w:-]*>/g, " ");
-}
-
-/** Sanitize markdown noise but PRESERVE line breaks — the operator wants
- *  to read the latest message in full (line-clamped to N lines by CSS,
- *  not by string truncation). Only collapses runs of horizontal
- *  whitespace inside a line; newlines stay intact. */
-function collapsedPreviewText(text: string, title?: string): string {
-  const sanitized = previewPlainText(text)
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/^\s+|\s+$/g, "");
-  if (!sanitized) return "";
-  const normalizedTitle = String(title || "").replace(/\s+/g, " ").trim();
-  let preview = sanitized;
-  // Strip a leading title duplication only when it sits on the very first
-  // line — preserves intentional repetition deeper in the body.
-  if (normalizedTitle) {
-    const firstLine = preview.split("\n", 1)[0];
-    if (firstLine.toLowerCase().startsWith(normalizedTitle.toLowerCase())) {
-      const stripped = firstLine.slice(normalizedTitle.length).replace(/^[\s:：-]+/, "");
-      preview = (stripped + preview.slice(firstLine.length)).replace(/^\s+/, "");
-    }
-  }
-  return preview;
-}
-
 
 async function writeClipboard(text: string): Promise<boolean> {
   if (!text) return false;
@@ -127,7 +89,7 @@ export function CardHeader(props: {
     !props.expanded && isStageCard(props.node) && props.node.kind !== "tool";
   const collapsedPreview = () =>
     collapsedActive()
-      ? collapsedPreviewText(collectLatestActivityText(props.node), props.node.title)
+      ? collapsedActivityPreviewText(collectLatestActivityText(props.node), props.node.title)
       : "";
   const todoSummary = () => (collapsedActive() ? collectTodoSummary(props.node) : null);
   const todoProgressPct = () => {

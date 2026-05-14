@@ -87,10 +87,19 @@ describe("card expand and collapse contract", () => {
     expect(inspector).not.toContain(".gwg-chevron")
   })
 
-  test("top-level structured cards no longer hard-lock to full thread width", () => {
-    const css = read("src/styles/surfaces/card.css")
-    expect(css).toContain('var(--card-sticky-inline-size, calc(0px * var(--ui-scale)))')
-    expect(css).toContain('.card[data-depth="0"][data-kind="step"]')
-    expect(css).toContain('width: min(84%, calc(980px * var(--ui-scale)));')
+  test("agent bubbles and structured execution cards share one conversation width source", () => {
+    const cardCss = read("src/styles/surfaces/card.css")
+    const bubbleCss = read("src/styles/surfaces/chat-bubble.css")
+    const conversationCss = read("src/styles/surfaces/conversation.css")
+
+    expect(conversationCss).toContain("--conversation-card-inline-size: 100%;")
+    expect(conversationCss).toContain("width: var(--conversation-card-inline-size);")
+    expect(cardCss).toContain("width: var(--conversation-card-inline-size);")
+    expect(bubbleCss).toContain("width: var(--conversation-card-inline-size);")
+    expect(bubbleCss).toContain("width: 100%;")
+    expect(bubbleCss).not.toContain("--card-sticky-inline-size")
+    expect(cardCss).not.toContain("width: min(84%, calc(980px * var(--ui-scale)));")
+    expect(bubbleCss).not.toContain("width: min(74%, calc(720px * var(--ui-scale)));")
+    expect(conversationCss).not.toContain("max-width: min(100%, calc(1040px * var(--ui-scale)));")
   })
 })

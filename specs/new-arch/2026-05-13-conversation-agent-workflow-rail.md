@@ -8,6 +8,10 @@
 
 > 2026-05-13 修正：窄态不合并 agent run。不同职责 agent 不能因为时间关系或 role 归一化进入同一个窄态按钮；并行和顺序历史都按真实 run 单独显示，窄态只隐藏文字，不隐藏身份。
 
+> 2026-05-14 修正：用户拉开底部 rail 后，agent 文本必须自动从窄态隐藏切换为宽态展开；rail 不再设置 220px 上限；宽窄切换需要有高度、行卡片和详情显隐动画。
+
+> 2026-05-14 修正：rail icon 不能在 workflow 投影刷新时闪烁。lane / record 渲染必须稳定复用 DOM，不能按每次新建的对象引用重新挂载头像；rail 作用域内禁用 `.chat-avatar` 入场动画，只保留 running 状态 halo。
+
 ## 现状证据
 
 - `packages/overlay/src/index.html` 仍保留右栏三 tab：`rightPanelWorkflow` / `rightPanelInspector` / `rightPanelPreview`，Workflow 挂载点是 `solidAgentWorkflowMount`。
@@ -82,7 +86,7 @@ Conversation 内部拆为聊天滚动区 + 底部 agent strip：
 
 ### 宽态 bottom strip
 
-用户拖动 strip 上侧 handle，高度进入 `calc(88px * var(--ui-scale))` 到 `calc(220px * var(--ui-scale))` 区间。
+用户拖动 strip 上侧 handle，高度超过 `calc(88px * var(--ui-scale))` 后进入宽态；rail 不设置固定最大高度，用户继续拉开时文本和行高应自然展开。
 
 宽态每个 agent run 一行：
 
@@ -91,7 +95,7 @@ Conversation 内部拆为聊天滚动区 + 底部 agent strip：
 - status
 - duration
 - goal/attempt identity
-- report summary 第一行
+- report summary 自动换行展开，不使用单行省略作为宽态默认表现
 - report button
 
 宽态下并行 stack 摊开成多行；同一个 parallel group 保留一个轻量 group heading 或 shared connector，不再头像叠压。
@@ -259,16 +263,17 @@ type TraceFetchResult =
 2. Conversation 底部出现非常窄的 agent strip。
 3. agent running 时 rail 实时更新状态。
 4. 点击单 agent avatar 滚动到对应真实消息卡片，并有短暂高亮。
-5. 并行 agent 窄态显示 avatar stack。
+5. 并行和顺序 agent 窄态都按真实 run 单独显示头像，不合并成 avatar stack。
 6. 拉宽 rail 后，并行 agent 按行摊开。
-7. 拉宽 rail 后每行展示 agent report summary。
-8. 点击 report 打开 markdown 渲染 dialog，不是 `<pre>` 原文。
-9. trace fetch 失败显示错误态，不显示“空 workflow”。
-10. user message 不被 rail 误识别为 agent run。
-11. phase-absorbed agent 可定位到真实 phase card。
-12. 移动端 bottom strip 不挤爆聊天区；小屏保持 42px 横向 strip 或隐藏到 explicit toggle，但不能丢失状态。
-13. `card_output` 只能作为摘要来源，不能进入 report dialog。
-14. markdown report 不允许 raw HTML / script / javascript link 执行。
+7. 拉宽 rail 后每行展示 agent report summary，文本自动换行展开，不继续单行省略。
+8. workflow 投影刷新、trace 轮询和宽窄切换时，已有 agent icon 不重新播放入场动画、不闪烁。
+9. 点击 report 打开 markdown 渲染 dialog，不是 `<pre>` 原文。
+10. trace fetch 失败显示错误态，不显示“空 workflow”。
+11. user message 不被 rail 误识别为 agent run。
+12. phase-absorbed agent 可定位到真实 phase card。
+13. 移动端 bottom strip 不挤爆聊天区；小屏保持 42px 横向 strip 或隐藏到 explicit toggle，但不能丢失状态。
+14. `card_output` 只能作为摘要来源，不能进入 report dialog。
+15. markdown report 不允许 raw HTML / script / javascript link 执行。
 
 ## 测试计划
 

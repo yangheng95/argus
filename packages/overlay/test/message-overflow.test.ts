@@ -12,18 +12,20 @@ function lastRuleBody(selector: string): string {
   return last[1] || ""
 }
 
-test("dense agent message blocks keep their own scroll container", () => {
+test("dense tool and patch blocks keep their own scroll container while reasoning stays full-height", () => {
   const toolOutput = lastRuleBody(".msg-tool-output")
-  const reasoningAndPatch = lastRuleBody(".msg-reasoning,\n.msg-patch")
-  const expandedReasoning = lastRuleBody('.msg-reasoning[data-expanded="true"]')
+  const patch = lastRuleBody(".msg-patch")
+  const collapsedReasoningText = lastRuleBody('.msg-reasoning[data-expanded="false"] .reasoning-text')
 
   expect(toolOutput).toContain("max-height: calc(128px * var(--ui-scale));")
   expect(toolOutput).toContain("overflow: auto;")
   expect(toolOutput).toContain("overscroll-behavior: contain;")
-  expect(reasoningAndPatch).toContain("max-height: calc(128px * var(--ui-scale));")
-  expect(reasoningAndPatch).toContain("overflow: auto;")
-  expect(reasoningAndPatch).toContain("overscroll-behavior: contain;")
-  expect(expandedReasoning).toContain("max-height: none;")
-  expect(expandedReasoning).toContain("overflow: visible;")
+  expect(patch).toContain("max-height: calc(128px * var(--ui-scale));")
+  expect(patch).toContain("overflow: auto;")
+  expect(patch).toContain("overscroll-behavior: contain;")
+  expect(collapsedReasoningText).toContain("display: none;")
+  expect(MESSAGES_CSS).not.toContain("tool-output / reasoning blocks")
+  expect(MESSAGES_CSS).not.toMatch(/\.msg-reasoning\s*\{[^}]*max-height:/)
+  expect(MESSAGES_CSS).not.toMatch(/\.msg-reasoning\s*\{[^}]*overflow:\s*auto/)
   expect(MESSAGES_CSS).not.toContain("overflow-y: visible;")
 })

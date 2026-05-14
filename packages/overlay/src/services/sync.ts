@@ -2,8 +2,8 @@
 // Coordinates loading board, tasks, and transcript in one shot.
 
 import { loadBoard, loadTasks, setBoardStore, boardStore, setBoardRetryCount, setBoardSyncPending } from "../store/board";
-import { syncTask } from "../store/messages";
 import { stopSSE } from "./sse";
+import { recoverSelectedTaskConversation } from "./selected-task-recovery";
 
 /**
  * Sync board data, task list, and (optionally) a specific task's transcript.
@@ -14,7 +14,7 @@ export async function syncBoardAndTasks(taskID?: string): Promise<void> {
   await Promise.all([loadBoard(), loadTasks()]);
   if (taskID) {
     setBoardStore("selectedTaskID", taskID);
-    await syncTask(taskID);
+    await recoverSelectedTaskConversation("sync board and selected task", taskID);
   }
 }
 

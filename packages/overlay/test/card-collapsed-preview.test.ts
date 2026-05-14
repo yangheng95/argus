@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
+  collapsedActivityPreviewText,
   collectLatestActivityText,
   collectTodoSummary,
   collectActivityCounts,
@@ -189,6 +190,18 @@ describe("collectLatestActivityText", () => {
       ],
     };
     expect(collectLatestActivityText(node)).toBe("Implement /api/data");
+  });
+});
+
+describe("collapsedActivityPreviewText", () => {
+  test("strips leading duplicated title while preserving message line breaks", () => {
+    const preview = collapsedActivityPreviewText("需求：第一行\n第二行\n\n\n第三行", "需求");
+    expect(preview).toBe("第一行\n第二行\n\n第三行");
+  });
+
+  test("removes markdown chrome without truncating the latest message", () => {
+    const preview = collapsedActivityPreviewText("```ts\nconst x = 1\n```\n[doc](./a.md)", "x");
+    expect(preview).toBe("const x = 1\ndoc");
   });
 });
 

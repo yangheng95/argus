@@ -7,7 +7,6 @@
 // code in the Solid.js world and are superseded by declarative components.
 
 import { appStore, setSkills, setMcp, setSkillMarket } from "../store/app";
-import { AppLog } from "../utils/log";
 import { apiJson } from "./api";
 
 // ── Types ──
@@ -53,20 +52,18 @@ export function skillRemovable(item: SkillDescriptor): boolean {
  * react to store updates via Solid reactivity.
  */
 export async function loadExtensions(): Promise<void> {
-  try {
-    const [skills, mcp] = await Promise.all([
-      apiJson("skill/installed").catch(() => apiJson("skill")),
-      apiJson("mcp"),
-    ]);
-    setSkills(Array.isArray(skills) ? skills : []);
-    setMcp(mcp && typeof mcp === "object" ? mcp : {});
-  } catch (e) {
-    AppLog.debug("extensions", "loadExtensions failed, resetting to empty", {
-      error: String(e),
-    });
-    setSkills([]);
-    setMcp({});
+  const [skills, mcp] = await Promise.all([
+    apiJson("skill/installed"),
+    apiJson("mcp"),
+  ]);
+  if (!Array.isArray(skills)) {
+    throw new Error("skill/installed returned a non-array payload");
   }
+  if (!mcp || typeof mcp !== "object" || Array.isArray(mcp)) {
+    throw new Error("mcp returned a non-object payload");
+  }
+  setSkills(skills);
+  setMcp(mcp);
 }
 
 /**
@@ -76,13 +73,11 @@ export async function loadExtensions(): Promise<void> {
  * — callers should open the marketplace dialog and react to store updates.
  */
 export async function loadSkillMarket(): Promise<void> {
-  try {
-    const items = await apiJson("skill/market");
-    setSkillMarket(Array.isArray(items) ? items : []);
-  } catch (e) {
-    AppLog.error("ui", "Failed to load skill market", { error: String(e) });
-    setSkillMarket([]);
+  const items = await apiJson("skill/market");
+  if (!Array.isArray(items)) {
+    throw new Error("skill/market returned a non-array payload");
   }
+  setSkillMarket(items);
 }
 
 // ── Mutations ──

@@ -10,7 +10,7 @@ export function isEmptyReasoning(s: string): boolean {
 }
 
 export function ReasoningPart(props: { part: any }) {
-  const [expanded, setExpanded] = createSignal(false);
+  const [expanded, setExpanded] = createSignal(true);
   const text = () => String(props.part?.text || "");
   const hidden = createMemo(() => {
     reasoningRevision();

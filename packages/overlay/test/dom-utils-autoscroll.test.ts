@@ -77,7 +77,7 @@ function createScrollElement() {
   return el;
 }
 
-test("programmatic upward scroll does not disable follow lock", () => {
+test("controller upward scroll does not disable follow lock", () => {
   const el = createScrollElement();
   let tracking = true;
   let disabled = 0;
@@ -90,7 +90,7 @@ test("programmatic upward scroll does not disable follow lock", () => {
     },
   });
 
-  el.scrollTop = 140;
+  ctrl.scrollToTop();
   el.dispatchEvent(new Event("scroll"));
 
   expect(disabled).toBe(0);
@@ -98,7 +98,7 @@ test("programmatic upward scroll does not disable follow lock", () => {
   ctrl.cleanup();
 });
 
-test("user-intended upward scroll disables follow lock", () => {
+test("upward scroll away from bottom disables follow lock without intent heuristics", () => {
   const el = createScrollElement();
   let tracking = true;
   let disabled = 0;
@@ -111,7 +111,6 @@ test("user-intended upward scroll disables follow lock", () => {
     },
   });
 
-  el.dispatchEvent(new Event("wheel"));
   el.scrollTop = 140;
   el.dispatchEvent(new Event("scroll"));
 
@@ -132,5 +131,26 @@ test("resize-driven content growth keeps the view pinned to bottom while trackin
   resizeObservers[0]?.trigger();
 
   expect(el.scrollTop).toBe(320);
+  ctrl.cleanup();
+});
+
+test("resize-driven content growth preserves manual scroll position when tracking is disabled", () => {
+  const el = createScrollElement();
+  let tracking = true;
+
+  const ctrl = setupAutoScroll(el as any, {
+    isTracking: () => tracking,
+    onUserScrollUp: () => {
+      tracking = false;
+    },
+  });
+
+  el.scrollTop = 140;
+  el.dispatchEvent(new Event("scroll"));
+  el.scrollHeight = 420;
+  resizeObservers[0]?.trigger();
+
+  expect(tracking).toBe(false);
+  expect(el.scrollTop).toBe(140);
   ctrl.cleanup();
 });

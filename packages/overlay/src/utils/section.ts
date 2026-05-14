@@ -7,7 +7,7 @@
 // values.
 
 import { getDomRefs } from "../dom";
-import { messageStore } from "../store/messages";
+import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { normalizeAgentRole, agentRoleToSectionPhase } from "./message";
 
 // ── Internal: phaseSections ──
@@ -40,22 +40,39 @@ function markSectionPhase(kind: string, value: string): void {
 }
 
 // ── Internal: liveConversationPhase ──
-// Scans messages in reverse to find the currently active agent phase.
+// Scans cards in reverse to find the currently active agent phase.
 
-function liveConversationPhase(messages: any[]): string {
-  const list = Array.isArray(messages) ? messages : [];
-  for (let index = list.length - 1; index >= 0; index -= 1) {
-    const message = list[index];
-    const parts = Array.isArray(message?.parts) ? message.parts : [];
-    const running = parts.some(
-      (part: any) =>
-        part?.type === "tool" && ["running", "pending"].includes(part?.state?.status || ""),
-    );
-    const incomplete =
-      message?.info?.role === "assistant" && !message?.info?.time?.completed;
-    if (!running && !incomplete) continue;
-    const agent = String(message?.info?.agent || "").trim().toLowerCase();
-    const phase = agentRoleToSectionPhase(normalizeAgentRole(agent));
+function cardIsActive(node: CardNode): boolean {
+  if (node.status === "running" || node.status === "pending") return true;
+  return (node.parts ?? []).some(
+    (part: any) =>
+      part?.type === "tool" && ["running", "pending"].includes(part?.state?.status || ""),
+  );
+}
+
+function cardPhase(node: CardNode): string {
+  const agent = String(node.role || node.stage || "").trim().toLowerCase();
+  return agentRoleToSectionPhase(normalizeAgentRole(agent));
+}
+
+function visitCardReverse(id: string, seen: Set<string>): string {
+  if (seen.has(id)) return "";
+  seen.add(id);
+  const node = cardTreeStore.cards[id];
+  if (!node) throw new Error(`section phase: missing card ${id}`);
+  const childIDs = node.childIDs ?? [];
+  for (let index = childIDs.length - 1; index >= 0; index -= 1) {
+    const childPhase = visitCardReverse(childIDs[index]!, seen);
+    if (childPhase) return childPhase;
+  }
+  if (!cardIsActive(node)) return "";
+  return cardPhase(node);
+}
+
+function liveConversationPhase(): string {
+  const seen = new Set<string>();
+  for (let index = cardTreeStore.order.length - 1; index >= 0; index -= 1) {
+    const phase = visitCardReverse(cardTreeStore.order[index]!, seen);
     if (phase) return phase;
   }
   return "";
@@ -112,8 +129,7 @@ export function clearSectionPhases(): void {
 
 export function syncSectionPhases(board: any, changesCount = 0): void {
   clearSectionPhases();
-  const messages = Array.isArray(messageStore.messages) ? (messageStore.messages as any[]) : [];
-  const live = liveConversationPhase(messages);
+  const live = liveConversationPhase();
   if (!board?.task && !live) return;
 
   const goals = board?.goalWorkflows || [];

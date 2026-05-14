@@ -78,6 +78,7 @@ export interface LoadBoardOptions {
 let _boardRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let _boardLoading: Promise<void> | null = null;
 let _boardQueued = false;
+let _tasksLoading: Promise<void> | null = null;
 
 // Invariant handler: fires when the current `selectedTaskID` no longer refers
 // to any task in the merged (tasks + pendingTasks) list. Registered by
@@ -349,18 +350,62 @@ export function applyTasks(
   tasks: any[],
   nextPending?: any[],
 ): void {
-  const list = Array.isArray(tasks) ? tasks : [];
-  const pending = Array.isArray(nextPending) ? nextPending : boardStore.pendingTasks;
+  const list = reconcileTaskItems(Array.isArray(tasks) ? tasks : [], boardStore.tasks);
+  const pending = Array.isArray(nextPending)
+    ? reconcileTaskItems(nextPending, boardStore.pendingTasks)
+    : boardStore.pendingTasks;
   // batch coalesces both setBoardStore writes when both fire — without it,
   // every consumer of either `tasks` or `pendingTasks` reruns twice on
   // applyTasks(list, pending) (the common path in loadTasks).
   batch(() => {
-    setBoardStore("tasks", list);
-    if (Array.isArray(nextPending)) setBoardStore("pendingTasks", pending);
+    if (list !== boardStore.tasks) setBoardStore("tasks", list);
+    if (Array.isArray(nextPending) && pending !== boardStore.pendingTasks) {
+      setBoardStore("pendingTasks", pending);
+    }
   });
   if (selectionIsOrphaned(list, pending) && _orphanedSelectionHandler) {
     _orphanedSelectionHandler();
   }
+}
+
+function taskStableKey(item: any): string {
+  const task = item?.task ?? item;
+  const key = task?.id || task?.requestID || item?.requestID;
+  if (typeof key === "string" && key.trim()) return key;
+  throw new Error("task list item is missing stable id/requestID");
+}
+
+function taskContentSignature(item: any): string {
+  const signature = JSON.stringify(item);
+  if (typeof signature === "string") return signature;
+  throw new Error(`task list item ${taskStableKey(item)} is not JSON serializable`);
+}
+
+function reconcileTaskItems(next: any[], previous: any[]): any[] {
+  const previousByKey = new Map<string, { item: any; signature: string }>();
+  for (const item of previous) {
+    const key = taskStableKey(item);
+    if (previousByKey.has(key)) throw new Error(`duplicate task list item id/requestID: ${key}`);
+    previousByKey.set(key, { item, signature: taskContentSignature(item) });
+  }
+
+  const seen = new Set<string>();
+  const reconciled = next.map((item) => {
+    const key = taskStableKey(item);
+    if (seen.has(key)) throw new Error(`duplicate task list item id/requestID: ${key}`);
+    seen.add(key);
+    const previousItem = previousByKey.get(key);
+    if (previousItem?.signature === taskContentSignature(item)) return previousItem.item;
+    return item;
+  });
+
+  if (
+    reconciled.length === previous.length &&
+    reconciled.every((item, index) => item === previous[index])
+  ) {
+    return previous;
+  }
+  return reconciled;
 }
 
 export function clearTasksForMissingDirectory(): void {
@@ -370,6 +415,16 @@ export function clearTasksForMissingDirectory(): void {
 }
 
 export async function loadTasks(): Promise<void> {
+  if (_tasksLoading) return _tasksLoading;
+  _tasksLoading = loadTasksOnce();
+  try {
+    await _tasksLoading;
+  } finally {
+    _tasksLoading = null;
+  }
+}
+
+async function loadTasksOnce(): Promise<void> {
   // Let-it-crash: any fetch/parse error lands in boardStore.tasksError so the
   // UI surfaces the failure explicitly. The previous silent catch left the UI
   // stuck on an empty list with no indication that the backend was unreachable.

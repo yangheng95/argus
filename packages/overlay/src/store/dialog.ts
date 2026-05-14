@@ -64,6 +64,8 @@ const DEFAULT_DIALOG_STATE: DialogState = {
     selectLabel: "",
     selectValue: "",
     selectOptions: [],
+    recommendedValue: "",
+    countdownSeconds: 0,
   },
   session: {
     open: false,

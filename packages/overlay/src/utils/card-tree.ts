@@ -133,6 +133,39 @@ function partText(part: any): string {
   return "";
 }
 
+function previewPlainText(text: string): string {
+  return String(text || "")
+    .replace(/```[\s\S]*?```/g, (block) =>
+      block
+        .replace(/^```[^\n]*\n?/, "")
+        .replace(/\n?```$/, "")
+        .trim(),
+    )
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/<\/?[A-Za-z][\w:-]*>/g, " ");
+}
+
+/** Sanitize markdown noise but preserve line breaks; CSS owns clamping. */
+export function collapsedActivityPreviewText(text: string, title?: string): string {
+  const sanitized = previewPlainText(text)
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\s+|\s+$/g, "");
+  if (!sanitized) return "";
+  const normalizedTitle = String(title || "").replace(/\s+/g, " ").trim();
+  let preview = sanitized;
+  if (normalizedTitle) {
+    const firstLine = preview.split("\n", 1)[0];
+    if (firstLine.toLowerCase().startsWith(normalizedTitle.toLowerCase())) {
+      const stripped = firstLine.slice(normalizedTitle.length).replace(/^[\s:：-]+/, "");
+      preview = (stripped + preview.slice(firstLine.length)).replace(/^\s+/, "");
+    }
+  }
+  return preview;
+}
+
 export function collectCardText(node: CardNode): string {
   if (!node) return "";
   const chunks: string[] = [];

@@ -792,7 +792,7 @@
    * full nav read as one block instead of a sparse list. */
   padding: calc(8px * var(--ui-scale)) calc(6px * var(--ui-scale));
   border-right: var(--oc-border-width) solid var(--divider-soft);
-  background: var(--settings-surface-base);
+  background: transparent;
   overflow-y: auto;
   flex-shrink: 0;
 }
@@ -1423,8 +1423,7 @@
   box-shadow: none;
 }
 
-.prompt-card-head,
-.prompt-toolbar {
+.prompt-card-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1445,63 +1444,68 @@
 }
 
 .prompt-card-copy span,
-.prompt-card-copy small,
-.prompt-preview-head {
+.prompt-card-copy small {
   font-size: var(--ui-font-control);
   line-height: 1.4;
   color: var(--text-soft);
 }
 
+.prompt-editor {
+  display: grid;
+  gap: calc(7px * var(--ui-scale));
+}
+
+.prompt-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+  flex-wrap: wrap;
+}
+
+.prompt-editor-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(6px * var(--ui-scale));
+  margin-left: auto;
+}
+
+.prompt-view-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  background: var(--settings-surface-muted);
+}
+
+.prompt-view-tab {
+  min-height: calc(24px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(9px * var(--ui-scale));
+  border: 0 solid transparent;
+  border-radius: calc(var(--oc-radius-soft) - calc(2px * var(--ui-scale)));
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: var(--ui-font-control);
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.prompt-view-tab:hover {
+  color: var(--text-strong);
+  background: var(--settings-surface-hover);
+}
+
+.prompt-view-tab[data-active="true"] {
+  color: var(--text-strong);
+  background: var(--surface);
+}
+
 .prompt-textarea {
   min-height: calc(160px * var(--ui-scale));
   font-family: "Iosevka Term", "JetBrains Mono", monospace;
-}
-
-/* Diff <details> shell. The Unicode-glyph chevron here is the
-   single source — no late CSS-drawn rewrite shadows it. */
-.prompt-diff-details {
-  border-radius: 0;
-  border: 0 solid transparent;
-  overflow: visible;
-}
-
-.prompt-diff-summary {
-  cursor: pointer;
-  list-style: none;
-  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-  user-select: none;
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  transition:
-    background var(--ui-duration-base),
-    color var(--ui-duration-base);
-}
-
-.prompt-diff-summary::-webkit-details-marker {
-  display: none;
-}
-
-.prompt-diff-summary::marker {
-  content: "";
-}
-
-.prompt-diff-summary::before {
-  content: "▸";
-  font-size: var(--ui-font-meta);
-  color: var(--text-muted);
-  transition: transform var(--ui-duration-base);
-}
-
-.prompt-diff-details[open] > .prompt-diff-summary::before {
-  transform: rotate(90deg);
-}
-
-.prompt-diff-summary:hover {
-  color: var(--text-strong);
-  background: var(--settings-surface-hover);
 }
 
 .prompt-preview-card {
@@ -1517,15 +1521,8 @@
   min-height: calc(72px * var(--ui-scale));
 }
 
-.prompt-preview-card--default {
-  margin-top: 0;
-  border-top: none;
-  opacity: var(--ui-opacity-dim);
-}
-
 .prompt-preview-card--attached {
-  border-top: none;
-  border-radius: 0 0 var(--oc-radius-soft) var(--oc-radius-soft);
+  min-height: calc(160px * var(--ui-scale));
 }
 
 .agent-models-info {
