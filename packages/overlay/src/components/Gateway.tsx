@@ -66,6 +66,7 @@ import {
   compactDirectory,
   composeTaskText,
   filterMatches,
+  humanizeApiError,
   pendingInteractions,
   runtimeLabel,
   statusIconFor,
@@ -99,27 +100,14 @@ function errorMessage(err: unknown): string {
   return String(err)
 }
 
-// Translates a raw server error message into the operator-facing copy
-// the Gateway should render. Server errors arrive as
-// "<ErrorClass>: <detail>" (e.g. "DirectoryRequiredError: gateway/stats
-// requires ?directory=…"); leaking the class + decoded query param at
-// the operator (round-2 P0-2 visual review) exposed both an internal
-// protocol detail and an actionless raw message. The fix is a small
-// registry of known error classes keyed to i18n entries — anything
-// outside the registry falls through to the trimmed raw message so we
-// do not silently swallow unknown failures (rule 7 no fallback applies
-// to data integrity, not to user-facing copy quality).
-function humanizeApiError(err: unknown): string {
-  const raw = errorMessage(err).trim()
-  const match = /^([A-Z][a-zA-Z]+(?:Error|Exception)):/.exec(raw)
-  if (match) {
-    const translated = t(`gateway.error.class.${match[1]}`)
-    if (translated !== `gateway.error.class.${match[1]}`) return translated
-  }
-  // Cap the unknown-error message length so a long stack trace cannot
-  // blow out the banner; the full message is still logged server-side.
-  return raw.length > 240 ? `${raw.slice(0, 240)}…` : raw
-}
+// humanizeApiError now lives in utils/gateway-helpers.ts so the unit
+// test can exercise it directly with a real ApiError instance — round-2
+// shipped a regex variant here that grepped only for `^<Class>:` and
+// never matched the wrapped `API <code> <path>: <Class>: …` shape
+// ApiError actually produces. The round-3 visual review caught the
+// regression precisely because the test file only grepped for the
+// function name's presence (rule 28 / 36 — tests must guard behaviour,
+// not source structure).
 
 // `actionBusy` and `actionError.action` carry an internal key of the form
 // `<verb>:<id>` (e.g. `cancel:tsk_01HZ…`) or a verb-only key for
@@ -1478,7 +1466,14 @@ function GatewayComposer(props: { onClose: () => void }) {
   }
 
   function handleProposalCleared() {
+    // "Discard proposal" from the proposal-preview surface returns the
+    // operator to an empty composer — pre-fix the proposal cleared but
+    // the textarea kept the previous requirement, so re-opening the
+    // composer surfaced stale draft (round-3 visual review P1-1). Both
+    // discard paths now mean the same thing: throw the iteration away.
+    cancelActive()
     setProposal(null)
+    setRequirement("")
     setError("")
   }
 
