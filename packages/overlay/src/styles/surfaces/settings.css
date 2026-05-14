@@ -2389,7 +2389,7 @@
   flex: 1;
 }
 
-.delivery-panel-header {
+.delivery-panel-meta {
   display: flex;
   min-height: calc(26px * var(--ui-scale));
   gap: calc(4px * var(--ui-scale));

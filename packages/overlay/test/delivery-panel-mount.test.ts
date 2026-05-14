@@ -126,8 +126,13 @@ test("DeliveryPanel has an in-flight projection while the run is in deliver befo
 
 test("DeliveryPanel drives chrome via [data-verdict] (not the lifecycle status mapping)", async () => {
   const board = await readSrc("src/components/Board.tsx")
-  // Single attribute hook — both <section> and verdict-pill read the same tone.
+  // Single attribute hook for delivery body chrome. Verdict text belongs to
+  // the Section badge owner, not a second verdict pill inside the body.
   expect(board).toContain("data-verdict={tone()}")
+  expect(board).not.toContain('class="delivery-panel-header"')
+  expect(board).not.toContain('<span class="verdict-pill" data-verdict={tone()}>')
+  expect(board).not.toContain('<span class="verdict-pill" data-verdict="empty">')
+  expect(board).toContain('class="delivery-panel-meta"')
   // The buggy lifecycle-as-verdict mapping must be gone — `delivery.status.*`
   // i18n keys belonged to the deleted `deliveryStatusLabel` helper.
   expect(board).not.toContain("delivery.status.candidate")
