@@ -317,6 +317,7 @@ describe("memory multi-stage lifecycle", () => {
           projectID: projectId,
           sessionID: "ses_later_stage",
           query: "CSS custom properties",
+          memoryToolAvailable: true,
         })
         expect(injected).toContain("Auto-Recalled Memory")
         expect(injected).toContain("Memory Policy")

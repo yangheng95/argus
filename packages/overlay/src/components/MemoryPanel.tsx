@@ -319,7 +319,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
   });
 
   return (
-    <>
+    <div class="memory-panel">
       {/* Search toolbar */}
       <div class="knowledge-toolbar">
         <input
@@ -435,6 +435,6 @@ export function MemoryPanel(props: MemoryPanelProps) {
           }}
         />
       </Show>
-    </>
+    </div>
   );
 }

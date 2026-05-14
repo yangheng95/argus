@@ -51,6 +51,7 @@ Write \`kind: "profile"\` for:
     projectID: string
     sessionID: string
     query: string
+    memoryToolAvailable: boolean
   }): Promise<string | null> {
     const config = await Config.get()
     if (config.experimental?.memory?.enabled === false) return null
@@ -69,6 +70,7 @@ Write \`kind: "profile"\` for:
       sessionID: input.sessionID,
       recalled: Boolean(section),
     })
+    if (!input.memoryToolAvailable) return section
     if (!section) return MEMORY_RECALL_INSTRUCTION
     return [section, "", MEMORY_RECALL_INSTRUCTION].join("\n")
   }

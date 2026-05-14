@@ -1187,6 +1187,7 @@ export namespace SessionLoop {
       projectID: Instance.project.id,
       sessionID: input.sessionID,
       query: memoryQuery || input.session.title || input.lastUser.id,
+      memoryToolAvailable: Object.prototype.hasOwnProperty.call(tools, "memory"),
     })
     const scratchpadSection = Scratchpad.systemPromptSection(input.sessionID)
     const taskPlanSection = TaskPlan.toMarkdown(input.sessionID)

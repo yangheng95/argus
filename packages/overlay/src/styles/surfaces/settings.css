@@ -117,6 +117,14 @@
 
 /* ── MemoryPanel.tsx (Knowledge tab) ─────────────────────── */
 
+.memory-panel {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--ui-gap-md);
+}
+
 /* Toolbar above the knowledge list. Settings uses a flat toolbar:
    controls own their chrome, the toolbar itself does not draw a card. */
 .knowledge-toolbar {
@@ -172,10 +180,37 @@
    per rule 8. */
 .knowledge-list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--ui-gap-sm);
-  max-height: calc(300px * var(--ui-scale));
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
+  padding-right: calc(4px * var(--ui-scale));
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb) var(--session-scrollbar-track);
+}
+
+.knowledge-list::-webkit-scrollbar {
+  width: var(--session-scrollbar-size);
+}
+
+.knowledge-list::-webkit-scrollbar-track {
+  background: var(--session-scrollbar-track);
+  border-radius: var(--oc-radius-pill);
+}
+
+.knowledge-list::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--oc-radius-pill);
+  border: calc(2px * var(--ui-scale)) solid transparent;
+  background-clip: padding-box;
+}
+
+.knowledge-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  border: calc(2px * var(--ui-scale)) solid transparent;
+  background-clip: padding-box;
 }
 
 /* Memory item row in the list. The original solo declared a
@@ -875,6 +910,19 @@
 
 .config-tab-panel.active {
   display: block;
+}
+
+.config-tab-panel[data-config-panel="memory"].active {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+#memoryBody {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .config-tab-panel > .config-section-body {

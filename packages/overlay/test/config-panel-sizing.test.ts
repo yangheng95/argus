@@ -103,6 +103,19 @@ describe("config panel sizing", () => {
     expect(PROVIDERS_TSX).toContain('data-ui="provider-refresh-button"')
   })
 
+  test("memory tab owns a full-height scrollable list", () => {
+    expect(bodyOf(".memory-panel")).toMatch(/flex\s*:\s*1 1 auto/)
+    expect(bodyOf('.config-tab-panel[data-config-panel="memory"].active')).toMatch(/display:\s*flex/)
+    expect(bodyOf("#memoryBody")).toMatch(/flex\s*:\s*1 1 auto/)
+
+    const list = bodyOf(".knowledge-list")
+    expect(list).toMatch(/flex\s*:\s*1 1 auto/)
+    expect(list).toMatch(/max-height:\s*none/)
+    expect(list).toMatch(/overflow-y:\s*auto/)
+    expect(list).toMatch(/scrollbar-width:\s*auto/)
+    expect(bodyOf(".knowledge-list::-webkit-scrollbar")).toContain("width: var(--session-scrollbar-size)")
+  })
+
   test("providers panel renders stable height and equal same-row buttons", async () => {
     const server = Bun.serve({
       idleTimeout: 255,
